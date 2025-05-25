@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>Create Team – Project X</title>
+  <title>{{ "Edit Team" if edit else "Create Team" }} – Project X</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Reset + Icons -->
@@ -124,6 +124,19 @@
       border: var(--border);
     }
 
+    .btn {
+      border-radius: 0.5rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .btn.secondary {
+      background: transparent;
+      border: 2px solid var(--accent);
+      color: var(--accent);
+    }
+
+
     #player-count {
       margin-left: auto;
       align-self: center;
@@ -213,9 +226,16 @@
   <!-- Dark/Light Toggle -->
   <button class="toggle" id="theme-toggle">🌙</button>
 
-  <div class="card">
-    <!-- Dynamic Gradient Title -->
-    <h1 id="dynamic-title">Team Creation</h1>
+  <div class="card" style="position:relative;">
+    <!-- Home icon -->
+    <a href="{{ url_for('home') }}" style="
+        position:absolute; top:1rem; left:1rem;
+        color:var(--accent); font-size:1.3rem;
+      " title="Home">
+      <i class="fa-solid fa-house"></i>
+    </a>
+
+    <h1 id="dynamic-title">{{ team.team_name if edit else 'Team Creation' }}</h1>
 
     <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -226,7 +246,37 @@
     {% endif %}
     {% endwith %}
 
-    <form id="team-form" method="POST" action="/team/create">
+    <form id="team-form" method="POST"
+      action="{{ url_for('edit_team', short_code=team.short_code) if edit else url_for('create_team') }}">
+
+      <div class="submit-row"
+        style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap;">
+        {% if edit %}
+        <a href="{{ url_for('manage_teams') }}" class="btn secondary" style="
+      display: inline-flex;
+      align-items: center;
+      padding: 0.4rem 0.9rem;
+      font-size: 0.85rem;
+      gap: 0.4rem;
+    ">
+          <i class="fa-solid fa-xmark-circle"></i> Cancel
+        </a>
+        {% endif %}
+        <button type="submit" class="btn" style="
+    display: inline-flex;
+    align-items: center;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.85rem;
+    gap: 0.4rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+  ">
+          <i class="fa-solid fa-cloud-upload-alt"></i>
+          {{ 'Update Team' if edit else 'Save Team' }}
+        </button>
+      </div>
+
       <!-- Team Details Grid -->
       <div class="form-grid">
         <input id="team_name" name="team_name" placeholder="Team Name" required>
@@ -285,17 +335,35 @@
         </select>
       </div>
 
-      <!-- Submit -->
-      <div style="text-align:right;">
+      <!-- Save / Cancel -->
+      <div class="submit-row"
+        style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap;">
+        {% if edit %}
+        <a href="{{ url_for('manage_teams') }}" class="btn secondary" style="
+      display: inline-flex;
+      align-items: center;
+      padding: 0.4rem 0.9rem;
+      font-size: 0.85rem;
+      gap: 0.4rem;
+    ">
+          <i class="fa-solid fa-xmark-circle"></i> Cancel
+        </a>
+        {% endif %}
         <button type="submit" class="btn" style="
-  width:100%; padding:1rem; font-size:1.1rem;
-  display:flex; justify-content:center; align-items:center;
-  gap:0.5rem;
-">
-          <i class="fa-solid fa-floppy-disk"></i> Save Team
+    display: inline-flex;
+    align-items: center;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.85rem;
+    gap: 0.4rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+  ">
+          <i class="fa-solid fa-cloud-upload-alt"></i>
+          {{ 'Update Team' if edit else 'Save Team' }}
         </button>
-
       </div>
+
     </form>
   </div>
 
@@ -339,6 +407,7 @@
   </template>
 
   <script>
+
     // Dynamic Title
     const teamInput = document.getElementById('team_name');
     const titleEl = document.getElementById('dynamic-title');
@@ -380,24 +449,28 @@
 
     function refreshRoleSelectors() {
       const cards = [...document.querySelectorAll('.player-card')];
-      const allNames = cards
-        .map(c => c.querySelector('input[name=player_name]').value)
-        .filter(n => n);
-
-      // build captain list from allNames
       const cap = document.getElementById('select-captain');
-      cap.innerHTML = `<option value="">Select Captain</option>`;
-      allNames.forEach(n => cap.innerHTML += `<option>${n}</option>`);
-
-      // build wicketkeeper list *only* from cards whose role is WK
       const wk = document.getElementById('select-wk');
-      wk.innerHTML = `<option value="">Select Wicketkeeper</option>`;
+
+      // rebuild captain list from *all* player names
+      cap.innerHTML = '<option value="">Select Captain</option>';
+      cards.forEach(c => {
+        const name = c.querySelector('[name=player_name]').value;
+        if (name) cap.innerHTML += `<option>${name}</option>`;
+      });
+
+      // rebuild wicketkeeper list *only* from keeper-role cards
+      wk.innerHTML = '<option value="">Select Wicketkeeper</option>';
       cards
-        .filter(c => c.querySelector('select[name=player_role]').value === 'Wicketkeeper')
-        .map(c => c.querySelector('input[name=player_name]').value)
-        .forEach(n => wk.innerHTML += `<option>${n}</option>`);
+        .filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper')
+        .forEach(c => {
+          const name = c.querySelector('[name=player_name]').value;
+          wk.innerHTML += `<option>${name}</option>`;
+        });
     }
 
+    const EDIT_MODE = {{ 'true' if edit else 'false' }};
+    const TEAM_DATA = {{ team | tojson | safe if edit else 'null' }};
 
     function updateCount() {
       countEl.textContent = `${container.children.length} / ${MAX}`;
@@ -428,42 +501,85 @@
     // Manual add
     document.getElementById('add-player').onclick = () => addPlayer();
 
-    // Random generate respecting rules
-    document.getElementById('generate-team').onclick = () => {
+    // Bind the generate-team button
+    const genBtn = document.getElementById('generate-team');
+
+    genBtn.onclick = () => {
       const current = container.children.length;
-      // How many more we need to reach the minimum
       const needed = Math.max(0, MIN - current);
-      for (let i = 0; i < needed; i++) {
-        addPlayer({
-          name: rand(NAMES) + " " + randInt(1, 99),
-          role: (() => {
-            // ensure >=1 WK & >=6 bowlers/allrounders by checking counts first
-            const wkCount = [...container.children]
-              .map(c => c.querySelector('[name=player_role]').value)
-              .filter(r => r === "Wicketkeeper").length;
-            const bowlCount = [...container.children]
-              .map(c => c.querySelector('[name=player_role]').value)
-              .filter(r => r === "Bowler" || r === "All-rounder").length;
-            if (wkCount < 1) return "Wicketkeeper";
-            if (bowlCount < 6) return rand(["Bowler", "All-rounder"]);
-            return rand(ROLES);
-          })(),
+
+      let roles = [];
+      if (![...container.children].some(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper'))
+        roles.push("Wicketkeeper");
+      while (roles.filter(r => r !== "Wicketkeeper" && r !== "Batsman").length < 6)
+        roles.push(rand(["Bowler", "All-rounder"]));
+      while (roles.length < needed) roles.push(rand(ROLES));
+      roles = roles.sort(() => Math.random() - 0.5);
+
+      roles.forEach(r => {
+        const data = {
+          name: `${rand(NAMES)} ${randInt(1, 99)}`,
+          role: r,
           bat: randInt(40, 95),
           bowl: randInt(40, 95),
           field: randInt(40, 95),
           bhand: rand(HANDS),
-          btype: (r => (r === "Bowler" || r === "All-rounder") ? rand(TYPES) : "")(this.role),
-          bhand2: rand(HANDS)
-        });
-      }
+          btype: (r === "Bowler" || r === "All-rounder") ? rand(TYPES) : "",
+          bhand2: (r === "Bowler" || r === "All-rounder") ? rand(HANDS) : ""
+        };
+        addPlayer(data);
+      });
     };
 
 
-    // Color swatch wiring
+
+    // ─── Prefill on Edit Mode ───────────────────────────────────
+    if (EDIT_MODE) {
+      // 1. Basic fields
+      document.getElementById('team_name').value = TEAM_DATA.team_name;
+      document.querySelector('[name=short_code]').value = TEAM_DATA.short_code;
+      document.querySelector('[name=home_ground]').value = TEAM_DATA.home_ground;
+      document.querySelector('[name=pitch_preference]').value = TEAM_DATA.pitch_preference;
+
+      // 2. Color swatch
+      document.getElementById('team_color').value = TEAM_DATA.team_color;
+      document.getElementById('color-swatch').style.background = TEAM_DATA.team_color;
+
+      // 3. Clear container, then add each player
+      container.innerHTML = "";
+      TEAM_DATA.players.forEach(p => addPlayer({
+        name: p.name,
+        role: p.role,
+        bat: p.batting_rating,
+        bowl: p.bowling_rating,
+        field: p.fielding_rating,
+        bhand: p.batting_hand,
+        btype: p.bowling_type,
+        bhand2: p.bowling_hand
+      }));
+
+      // ⭐ Step 4: initialize count & selectors
+      updateCount();
+
+      // 5. Populate captain & wicketkeeper selects
+      document.getElementById('select-captain').value = TEAM_DATA.captain;
+      document.getElementById('select-wk').value = TEAM_DATA.wicketkeeper;
+    }
+    // ──────────────────────────────────────────────────────────
+
+    // Color swatch wiring (replace existing swatch.onclick / oninput)
     const swatch = document.getElementById('color-swatch');
     const colorInput = document.getElementById('team_color');
+
+    // initialize swatch to current value
+    swatch.style.background = colorInput.value;
+
+    // open picker when swatch clicked
     swatch.onclick = () => colorInput.click();
-    colorInput.oninput = () => swatch.style.background = colorInput.value;
+
+    // update on both input and change events
+    colorInput.addEventListener('input', e => swatch.style.background = e.target.value);
+    colorInput.addEventListener('change', e => swatch.style.background = e.target.value);
 
   </script>
 </body>

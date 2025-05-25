@@ -127,3 +127,153 @@
 2025-05-25 13:53:24,983 INFO: 192.168.254.131 POST /team/create [in D:\project_x\app.py:78]
 2025-05-25 13:53:24,995 INFO: Team 'Mumbai indians' created by admin@projectx.com (40fbc280-ddd4-4104-9975-d158ba2f96b3) [in D:\project_x\app.py:240]
 2025-05-25 13:53:25,004 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:78]
+2025-05-25 14:52:01,076 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:78]
+2025-05-25 14:52:04,020 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:78]
+2025-05-25 15:50:12,657 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 15:50:39,431 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 15:52:52,187 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 15:52:52,190 ERROR: Error loading team file RCB.json: Expecting ',' delimiter: line 161 column 3 (char 3800) [in D:\project_x\app.py:271]
+Traceback (most recent call last):
+  File "D:\project_x\app.py", line 266, in manage_teams
+    data = json.load(f)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+json.decoder.JSONDecodeError: Expecting ',' delimiter: line 161 column 3 (char 3800)
+2025-05-25 15:52:52,194 ERROR: Error loading team file SRH.json: Expecting ',' delimiter: line 161 column 3 (char 3800) [in D:\project_x\app.py:271]
+Traceback (most recent call last):
+  File "D:\project_x\app.py", line 266, in manage_teams
+    data = json.load(f)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+json.decoder.JSONDecodeError: Expecting ',' delimiter: line 161 column 3 (char 3800)
+2025-05-25 15:53:17,246 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 15:53:18,651 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 15:53:18,653 ERROR: Error loading team file RCB.json: Expecting ',' delimiter: line 161 column 3 (char 3800) [in D:\project_x\app.py:271]
+Traceback (most recent call last):
+  File "D:\project_x\app.py", line 266, in manage_teams
+    data = json.load(f)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+json.decoder.JSONDecodeError: Expecting ',' delimiter: line 161 column 3 (char 3800)
+2025-05-25 15:53:18,655 ERROR: Error loading team file SRH.json: Expecting ',' delimiter: line 161 column 3 (char 3800) [in D:\project_x\app.py:271]
+Traceback (most recent call last):
+  File "D:\project_x\app.py", line 266, in manage_teams
+    data = json.load(f)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+json.decoder.JSONDecodeError: Expecting ',' delimiter: line 161 column 3 (char 3800)
+2025-05-25 15:54:47,692 INFO: 192.168.254.131 GET /team/MI/edit [in D:\project_x\app.py:79]
+2025-05-25 15:55:32,815 INFO: 192.168.254.131 POST /team/MI/edit [in D:\project_x\app.py:79]
+2025-05-25 15:55:32,826 INFO: Team 'MU' updated by admin@projectx.com [in D:\project_x\app.py:414]
+2025-05-25 15:55:32,832 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 15:55:32,833 ERROR: Error loading team file SRH.json: Expecting ',' delimiter: line 161 column 3 (char 3800) [in D:\project_x\app.py:271]
+Traceback (most recent call last):
+  File "D:\project_x\app.py", line 266, in manage_teams
+    data = json.load(f)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+json.decoder.JSONDecodeError: Expecting ',' delimiter: line 161 column 3 (char 3800)
+2025-05-25 15:58:36,841 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 15:58:45,873 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:10:48,407 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:10:51,795 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:11:49,198 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:11:50,851 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:14:57,378 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:14:58,864 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:15:30,040 INFO: 192.168.254.131 GET /team/MU/edit [in D:\project_x\app.py:79]
+2025-05-25 16:15:30,064 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:16:10,902 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:16:12,797 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:16:17,808 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:16:19,564 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:16:22,097 INFO: 192.168.254.131 GET /team/MU/edit [in D:\project_x\app.py:79]
+2025-05-25 16:29:11,169 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:29:26,098 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:29:27,482 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:29:28,409 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:29:29,419 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:29:30,245 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:29:32,849 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:29:34,246 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:29:36,776 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:29:37,450 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:29:40,761 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:29:42,237 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:29:52,365 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:30:00,014 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:30:11,288 INFO: 192.168.254.131 GET /team/MU/edit [in D:\project_x\app.py:79]
+2025-05-25 16:30:26,984 INFO: 192.168.254.131 POST /team/MU/edit [in D:\project_x\app.py:79]
+2025-05-25 16:30:27,067 INFO: Team 'MIK' updated by admin@projectx.com [in D:\project_x\app.py:434]
+2025-05-25 16:30:27,098 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:30:42,128 INFO: 192.168.254.131 GET /team/MIK/edit [in D:\project_x\app.py:79]
+2025-05-25 16:32:05,922 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:32:08,674 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:33:39,559 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:34:18,167 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:34:20,323 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:34:21,251 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:34:42,445 INFO: 192.168.254.131 POST /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:34:42,460 INFO: Team 'Sunrisers Hyderabad' created by admin@projectx.com (40fbc280-ddd4-4104-9975-d158ba2f96b3) [in D:\project_x\app.py:242]
+2025-05-25 16:34:42,476 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:34:54,257 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:35:47,114 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:40:40,783 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:40:45,383 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:40:48,571 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:40:49,309 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:40:50,678 INFO: 192.168.254.131 GET /team/MIK/edit [in D:\project_x\app.py:79]
+2025-05-25 16:41:04,237 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:41:06,210 INFO: 192.168.254.131 GET /team/MIK/edit [in D:\project_x\app.py:79]
+2025-05-25 16:41:08,773 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:41:13,026 INFO: 192.168.254.131 POST /team/delete [in D:\project_x\app.py:79]
+2025-05-25 16:41:13,031 INFO: Team 'MIK' deleted by admin@projectx.com [in D:\project_x\app.py:309]
+2025-05-25 16:41:13,050 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:41:23,522 INFO: 192.168.254.131 GET /team/SRH/edit [in D:\project_x\app.py:79]
+2025-05-25 16:44:19,692 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:44:23,149 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:44:27,651 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:44:28,609 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:44:30,039 INFO: 192.168.254.131 GET /team/SRH/edit [in D:\project_x\app.py:79]
+2025-05-25 16:44:39,154 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:44:51,050 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:44:52,366 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:44:55,716 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:45:01,931 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:45:03,651 INFO: 192.168.254.131 GET /team/SRH/edit [in D:\project_x\app.py:79]
+2025-05-25 16:46:51,918 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:46:53,750 INFO: 192.168.254.131 GET /team/create [in D:\project_x\app.py:79]
+2025-05-25 16:46:56,836 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]
+2025-05-25 16:46:57,683 INFO: 192.168.254.131 GET /teams/manage [in D:\project_x\app.py:79]
+2025-05-25 16:46:59,450 INFO: 192.168.254.131 GET /team/SRH/edit [in D:\project_x\app.py:79]
+2025-05-25 16:47:02,868 INFO: 192.168.254.131 GET / [in D:\project_x\app.py:79]

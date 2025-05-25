@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import yaml
 from logging.handlers import RotatingFileHandler
@@ -21,14 +22,14 @@ from auth.user_auth import (
 from flask import Flask, render_template, redirect, url_for, flash
 from flask_login import LoginManager, login_required, logout_user, current_user
 from flask import session
-
 from flask import request, render_template, flash, redirect, url_for
-from flask_login import login_required
+from flask_login import login_required, current_user
 from engine.team import Team, save_team, PITCH_PREFERENCES
 from engine.player import Player, PLAYER_ROLES, BATTING_HANDS, BOWLING_TYPES, BOWLING_HANDS
 from auth.user_auth import load_credentials  # adjust import path if needed
 
-
+# Make sure PROJECT_ROOT is defined near the top of app.py:
+PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 def load_app_config():
     base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -178,6 +179,7 @@ def create_app():
                         players.append(player)
                     except Exception as e:
                         flash(f"❌ Error in player {i+1}: {e}", "danger")
+                        app.logger.error(f"Error in player creation: {e}", exc_info=True)
                         return render_template("team_create.html")
 
                 # Validate player count
@@ -243,12 +245,204 @@ def create_app():
 
             except Exception as e:
                 app.logger.error(f"Unexpected error saving team '{name}': {e}", exc_info=True)
-                flash(f"❌ Unexpected error: {e}", "danger")
+                flash(f"❌ Unexpected error saving team: {e}", "danger")
                 return render_template("team_create.html")
 
         # GET: Show form
         return render_template("team_create.html")
     
+    @app.route("/teams/manage")
+    @login_required
+    def manage_teams():
+        teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
+        user_email = current_user.id
+
+        teams = []
+        if os.path.exists(teams_dir):
+            for fn in os.listdir(teams_dir):
+                if fn.endswith(".json"):
+                    path = os.path.join(teams_dir, fn)
+                    try:
+                        with open(path, "r") as f:
+                            data = json.load(f)
+                        # Only include teams created by this user
+                        if data.get("created_by_email") == user_email:
+                            teams.append(data)
+                    except Exception as e:
+                        app.logger.error(f"Error loading team file {fn}: {e}", exc_info=True)
+        return render_template("manage_teams.html", teams=teams)
+
+
+    @app.route("/team/delete", methods=["POST"])
+    @login_required
+    def delete_team():
+        short_code = request.form.get("short_code")
+        if not short_code:
+            flash("❌ No team specified for deletion.", "danger")
+            return redirect(url_for("manage_teams"))
+
+        # Build the path to the JSON file
+        team_path = os.path.join(PROJECT_ROOT, "data", "teams", f"{short_code}.json")
+
+        # Check file exists
+        if not os.path.exists(team_path):
+            flash(f"❌ Team '{short_code}' not found.", "danger")
+            return redirect(url_for("manage_teams"))
+
+        # Verify ownership
+        try:
+            with open(team_path, "r") as f:
+                data = json.load(f)
+            owner = data.get("created_by_email")
+            if owner != current_user.id:
+                flash("❌ You don’t have permission to delete this team.", "danger")
+                app.logger.warning(f"Unauthorized delete attempt by {current_user.id} on {short_code}")
+                return redirect(url_for("manage_teams"))
+        except Exception as e:
+            app.logger.error(f"Error reading team file for deletion: {e}", exc_info=True)
+            flash("❌ Could not verify team ownership.", "danger")
+            return redirect(url_for("manage_teams"))
+
+        # Perform deletion
+        try:
+            os.remove(team_path)
+            app.logger.info(f"Team '{short_code}' deleted by {current_user.id}")
+            flash(f"✅ Team '{short_code}' has been deleted.", "success")
+        except Exception as e:
+            app.logger.error(f"Error deleting team file: {e}", exc_info=True)
+            flash("❌ Error deleting the team. Please try again.", "danger")
+
+        return redirect(url_for("manage_teams"))
+
+
+    @app.route("/team/<short_code>/edit", methods=["GET", "POST"])
+    @login_required
+    def edit_team(short_code):
+        teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
+        team_path = os.path.join(teams_dir, f"{short_code}.json")
+
+        # 1. Must exist
+        if not os.path.exists(team_path):
+            flash(f"❌ Team '{short_code}' not found.", "danger")
+            return redirect(url_for("manage_teams"))
+
+        # 2. Load & verify ownership
+        try:
+            with open(team_path, "r") as f:
+                raw = json.load(f)
+        except Exception as e:
+            app.logger.error(f"Error reading team for edit: {e}", exc_info=True)
+            flash("❌ Could not load team.", "danger")
+            return redirect(url_for("manage_teams"))
+
+        if raw.get("created_by_email") != current_user.id:
+            flash("❌ You don’t have permission to edit this team.", "danger")
+            app.logger.warning(f"Unauthorized edit attempt by {current_user.id} on {short_code}")
+            return redirect(url_for("manage_teams"))
+
+        # POST: process the edited form
+        if request.method == "POST":
+            # (Reuse your create logic, but overwrite the same file)
+            name  = request.form["team_name"].strip()
+            code  = request.form["short_code"].strip().upper()
+            home  = request.form["home_ground"].strip()
+            pitch = request.form["pitch_preference"]
+            color = request.form["team_color"]
+            
+            # Gather players from form
+            names = request.form.getlist("player_name")
+            roles = request.form.getlist("player_role")
+            bats  = request.form.getlist("batting_rating")
+            bowls = request.form.getlist("bowling_rating")
+            fields= request.form.getlist("fielding_rating")
+            bhands= request.form.getlist("batting_hand")
+            btypes= request.form.getlist("bowling_type")
+            bhand2s = request.form.getlist("bowling_hand")
+
+            players = []
+            for i in range(len(names)):
+                try:
+                    p = Player(
+                        name=names[i],
+                        role=roles[i],
+                        batting_rating=int(bats[i]),
+                        bowling_rating=int(bowls[i]),
+                        fielding_rating=int(fields[i]),
+                        batting_hand=bhands[i],
+                        bowling_type=btypes[i] or "",
+                        bowling_hand=bhand2s[i] or ""
+                    )
+                    players.append(p)
+                except Exception as e:
+                    flash(f"❌ Error in player {i+1}: {e}", "danger")
+                    app.logger.error(f"Team creation failed: {e}", exc_info=True)
+                    return render_template("team_create.html", team=raw, edit=True)
+
+            # Validate counts
+            if not (15 <= len(players) <= 18):
+                flash("❌ You must have between 15 and 18 players.", "danger")
+                return render_template("team_create.html", team=raw, edit=True)
+            if sum(1 for p in players if p.role == "Wicketkeeper") < 1:
+                flash("❌ You need at least one Wicketkeeper.", "danger")
+                return render_template("team_create.html", team=raw, edit=True)
+            if sum(1 for p in players if p.role in ["Bowler","All-rounder"]) < 6:
+                flash("❌ You need at least six Bowlers/All-rounders.", "danger")
+                return render_template("team_create.html", team=raw, edit=True)
+
+            # Determine captain & wicketkeeper from dropdowns
+            captain     = request.form.get("captain")
+            wicketkeeper= request.form.get("wicketkeeper")
+
+            # Build new team dict
+            new_team = Team(
+                name=name,
+                short_code=code,
+                home_ground=home,
+                pitch_preference=pitch,
+                team_color=color,
+                players=players,
+                captain=captain,
+                wicketkeeper=wicketkeeper
+            ).to_dict()
+
+            # Preserve creator metadata
+            new_team["created_by_email"]   = raw["created_by_email"]
+            new_team["created_by_user_id"] = raw["created_by_user_id"]
+
+            # inside if request.method=="POST":, after reading form short_code:
+            orig_code = short_code             # the URL‐param code
+            new_code  = code                   # the form‐submitted code
+
+            teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
+            old_path  = os.path.join(teams_dir, f"{orig_code}.json")
+            new_path  = os.path.join(teams_dir, f"{new_code}.json")
+
+            # 1️⃣ If the short code changed, rename the file on disk
+            if orig_code != new_code:
+                try:
+                    os.rename(old_path, new_path)
+                    app.logger.info(f"Renamed team file {orig_code}.json → {new_code}.json")
+                except Exception as rename_err:
+                    app.logger.error(f"Error renaming team file: {rename_err}", exc_info=True)
+                    flash("❌ Could not rename team file on short code change.", "danger")
+                    return redirect(url_for("manage_teams"))
+
+            # Overwrite JSON file
+            try:
+                with open(new_path if orig_code != new_code else old_path, "w") as f:
+                    json.dump(new_team, f, indent=2)
+                app.logger.info(f"Team '{code}' updated by {current_user.id}")
+                flash("✅ Team updated successfully!", "success")
+            except Exception as e:
+                app.logger.error(f"Error saving edited team: {e}", exc_info=True)
+                flash("❌ Error saving team. Please try again.", "danger")
+
+            return redirect(url_for("manage_teams"))
+
+        # GET: render the same form, passing raw JSON and an edit flag
+        return render_template("team_create.html", team=raw, edit=True)
+
+
     return app
 
 # ────── Run Server ──────
