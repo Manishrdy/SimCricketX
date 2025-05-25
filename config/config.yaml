@@ -1,0 +1,6 @@
+google_sheets:
+  spreadsheet_id: 1eGdTZDdWfuQqh0GzcrsCaDIKNql0zgt7PvK5bBZMBfc
+  credentials_file: auth/google_service_account.json
+
+app:
+  secret_key: 8d136d792dd08084c2e396181cf62a2fe7388917c97e5cfce0694e48b0ffe3af
