@@ -1,0 +1,20 @@
+{
+  "team_name": "Mumbai Indians",
+  "short_code": "MI",
+  "home_ground": "Wankhede",
+  "pitch_preference": "Flat",
+  "players": [
+    {
+      "name": "Rohit Sharma",
+      "role": "Batsman",
+      "batting_rating": 90,
+      "bowling_rating": 15,
+      "fielding_rating": 80,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    }
+  ],
+  "captain": "Rohit Sharma",
+  "wicketkeeper": "Ishan Kishan"
+}
