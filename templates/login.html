@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Login – Project X</title>
@@ -13,16 +14,18 @@
       --card-bg: #fff;
       --input-bg: #eaeaea;
       --accent: #005fcc;
-      --shadow: rgba(0,0,0,0.1);
+      --shadow: rgba(0, 0, 0, 0.1);
     }
+
     [data-theme="dark"] {
       --bg: #121212;
       --fg: #e0e0e0;
       --card-bg: #1e1e1e;
       --input-bg: #2a2a2a;
       --accent: #3399ff;
-      --shadow: rgba(0,0,0,0.5);
+      --shadow: rgba(0, 0, 0, 0.5);
     }
+
     body {
       background: var(--bg);
       color: var(--fg);
@@ -32,13 +35,18 @@
       justify-content: center;
       height: 100vh;
     }
+
     .toggle {
       position: absolute;
-      top: 1rem; right: 1rem;
-      background: none; border: none;
-      font-size: 1.25rem; cursor: pointer;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      font-size: 1.25rem;
+      cursor: pointer;
       color: var(--fg);
     }
+
     .card {
       background: var(--card-bg);
       padding: 2rem;
@@ -47,18 +55,22 @@
       width: 100%;
       max-width: 360px;
     }
+
     h2 {
       margin-bottom: 1.5rem;
       font-weight: 500;
     }
+
     .form-group {
       margin-bottom: 1rem;
     }
+
     .form-group label {
       display: block;
       margin-bottom: 0.25rem;
       font-size: 0.9rem;
     }
+
     .form-group input {
       width: 100%;
       padding: 0.75rem;
@@ -68,6 +80,7 @@
       color: var(--fg);
       font-size: 1rem;
     }
+
     .btn {
       width: 100%;
       padding: 0.75rem;
@@ -79,28 +92,57 @@
       cursor: pointer;
       margin-top: 1rem;
     }
+
     .meta {
       text-align: center;
       margin-top: 1rem;
       font-size: 0.9rem;
     }
+
     .meta a {
       color: var(--accent);
       text-decoration: none;
     }
+
+    .alert {
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+      border-radius: 0.375rem;
+      font-size: 0.9rem;
+      background-color: #d1e7dd;
+      /* default green for success */
+      color: #0f5132;
+    }
+
+    .alert-danger {
+      background-color: #f8d7da;
+      color: #842029;
+    }
+
+    .alert-info {
+      background-color: #cff4fc;
+      color: #055160;
+    }
+
+    .alert-success {
+      background-color: #d1e7dd;
+      color: #0f5132;
+    }
   </style>
 </head>
+
 <body>
   <button class="toggle" id="theme-toggle">🌙</button>
   <div class="card">
     <h2>Welcome Back</h2>
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
     {% endwith %}
+
     <form method="POST" action="/login">
       <div class="form-group">
         <label for="email">Email</label>
@@ -132,4 +174,5 @@
     toggle.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
   </script>
 </body>
+
 </html>

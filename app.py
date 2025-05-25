@@ -18,6 +18,16 @@ from auth.user_auth import (
     delete_user,
     load_credentials
 )
+from flask import Flask, render_template, redirect, url_for, flash
+from flask_login import LoginManager, login_required, logout_user, current_user
+from flask import session
+
+from flask import request, render_template, flash, redirect, url_for
+from flask_login import login_required
+from engine.team import Team, save_team, PITCH_PREFERENCES
+from engine.player import Player, PLAYER_ROLES, BATTING_HANDS, BOWLING_TYPES, BOWLING_HANDS
+from auth.user_auth import load_credentials  # adjust import path if needed
+
 
 
 def load_app_config():
@@ -97,10 +107,11 @@ def create_app():
             if verify_user(email, password):
                 user = User(email)
                 login_user(user)
+                session.pop('_flashes', None)  # 🧼 clear any prior flashes
                 flash("✅ Logged in successfully!", "success")
                 return redirect(url_for("home"))
             else:
-                flash("❌ Invalid credentials!", "danger")
+                flash("❌ Invalid email or password.", "danger")
         return render_template("login.html")
 
     @app.route("/delete_account", methods=["POST"])
@@ -121,9 +132,123 @@ def create_app():
     def logout():
         app.logger.info(f"Logout for {current_user.id}")
         logout_user()
-        flash("You have been logged out.", "info")
+        session.pop('_flashes', None)  # ⬅️ Clear previous flash messages
+        flash("✅ You have been logged out.", "success")
         return redirect(url_for("login"))
 
+    @app.route("/team/create", methods=["GET", "POST"])
+    @login_required
+    def create_team():
+        if request.method == "POST":
+            try:
+                # 1. Basic team info
+                name = request.form["team_name"].strip()
+                short_code = request.form["short_code"].strip().upper()
+                home_ground = request.form["home_ground"].strip()
+                pitch = request.form["pitch_preference"]
+
+                # Validate required fields
+                if not (name and short_code and home_ground and pitch):
+                    flash("❌ All team fields are required.", "danger")
+                    return render_template("team_create.html")
+
+                # 2. Collect player fields from form data
+                player_names = request.form.getlist("player_name")
+                roles = request.form.getlist("player_role")
+                bat_ratings = request.form.getlist("batting_rating")
+                bowl_ratings = request.form.getlist("bowling_rating")
+                field_ratings = request.form.getlist("fielding_rating")
+                bat_hands = request.form.getlist("batting_hand")
+                bowl_types = request.form.getlist("bowling_type")
+                bowl_hands = request.form.getlist("bowling_hand")
+
+                players = []
+                for i in range(len(player_names)):
+                    try:
+                        player = Player(
+                            name=player_names[i],
+                            role=roles[i],
+                            batting_rating=int(bat_ratings[i]),
+                            bowling_rating=int(bowl_ratings[i]),
+                            fielding_rating=int(field_ratings[i]),
+                            batting_hand=bat_hands[i],
+                            bowling_type=bowl_types[i] if bowl_types[i] else "",
+                            bowling_hand=bowl_hands[i] if bowl_hands[i] else ""
+                        )
+                        players.append(player)
+                    except Exception as e:
+                        flash(f"❌ Error in player {i+1}: {e}", "danger")
+                        return render_template("team_create.html")
+
+                # Validate player count
+                if len(players) < 15 or len(players) > 18:
+                    flash("❌ You must enter between 15 and 18 players.", "danger")
+                    return render_template("team_create.html")
+                
+                # Validate at least 1 wicketkeeper
+                wk_count = sum(1 for p in players if p.role == "Wicketkeeper")
+                if wk_count < 1:
+                    flash("❌ You need at least one Wicketkeeper.", "danger")
+                    return render_template("team_create.html")
+
+                # Validate minimum 6 bowlers/all-rounders
+                bowl_count = sum(1 for p in players if p.role in ["Bowler", "All-rounder"])
+                if bowl_count < 6:
+                    flash("❌ You need at least six Bowler/All-rounder roles.", "danger")
+                    return render_template("team_create.html")
+                
+                # Read team color
+                color = request.form["team_color"]
+
+                # For now: auto-pick captain and wicketkeeper as first ones matching
+                captain = next((p.name for p in players if p.role in ["Batsman", "All-rounder", "Wicketkeeper"]), players[0].name)
+                wicketkeeper = next((p.name for p in players if p.role == "Wicketkeeper"), None)
+                if not wicketkeeper:
+                    flash("❌ At least one player must be a Wicketkeeper.", "danger")
+                    return render_template("team_create.html")
+
+                # 3. Create and save team
+                team = Team(
+                    name=name,
+                    short_code=short_code,
+                    home_ground=home_ground,
+                    pitch_preference=pitch,
+                    team_color=color,
+                    players=players,
+                    captain=captain,
+                    wicketkeeper=wicketkeeper
+                )
+
+                # 3a. Load local credentials and grab user_id & email
+                creds = load_credentials()
+                user_record = creds.get(current_user.id, {})
+                user_id = user_record.get("user_id")
+                email   = current_user.id
+
+                # 3b. Build the raw dict and inject the metadata
+                data = team.to_dict()
+                data["created_by_user_id"] = user_id
+                data["created_by_email"]   = email
+
+                # 3c. Write it manually instead of save_team()
+                import os, json
+                path = os.path.join("data", "teams", f"{team.short_code}.json")
+                with open(path, "w") as f:
+                    json.dump(data, f, indent=2)
+
+                # 3d. Log, flash, redirect
+                app.logger.info(f"Team '{team.name}' created by {email} ({user_id})")
+                flash(f"✅ Team '{team.name}' saved!", "success")
+                return redirect(url_for("home"))
+
+            except Exception as e:
+                app.logger.error(f"Unexpected error saving team '{name}': {e}", exc_info=True)
+                flash(f"❌ Unexpected error: {e}", "danger")
+                return render_template("team_create.html")
+
+        # GET: Show form
+        return render_template("team_create.html")
+    
     return app
 
 # ────── Run Server ──────

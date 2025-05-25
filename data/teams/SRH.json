@@ -1,0 +1,161 @@
+{
+  "team_name": "Sunrisers Hyderabad",
+  "short_code": "SRH",
+  "home_ground": "RGIS",
+  "pitch_preference": "Green",
+  "team_color": "#e1ff00",
+  "players": [
+    {
+      "name": "Manish",
+      "role": "Bowler",
+      "batting_rating": 35,
+      "bowling_rating": 87,
+      "fielding_rating": 100,
+      "batting_hand": "Left",
+      "bowling_type": "Fast",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Bumrah 28",
+      "role": "Wicketkeeper",
+      "batting_rating": 55,
+      "bowling_rating": 57,
+      "fielding_rating": 44,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Bumrah 34",
+      "role": "All-rounder",
+      "batting_rating": 89,
+      "bowling_rating": 50,
+      "fielding_rating": 63,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Anderson 90",
+      "role": "All-rounder",
+      "batting_rating": 94,
+      "bowling_rating": 65,
+      "fielding_rating": 77,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Anderson 84",
+      "role": "All-rounder",
+      "batting_rating": 85,
+      "bowling_rating": 86,
+      "fielding_rating": 41,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Dhoni 98",
+      "role": "All-rounder",
+      "batting_rating": 55,
+      "bowling_rating": 69,
+      "fielding_rating": 70,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Jadeja 24",
+      "role": "All-rounder",
+      "batting_rating": 70,
+      "bowling_rating": 76,
+      "fielding_rating": 87,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Dhoni 60",
+      "role": "All-rounder",
+      "batting_rating": 93,
+      "bowling_rating": 86,
+      "fielding_rating": 95,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Jadeja 25",
+      "role": "Batsman",
+      "batting_rating": 57,
+      "bowling_rating": 94,
+      "fielding_rating": 59,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Virat 25",
+      "role": "Bowler",
+      "batting_rating": 66,
+      "bowling_rating": 44,
+      "fielding_rating": 80,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Warner 64",
+      "role": "Batsman",
+      "batting_rating": 66,
+      "bowling_rating": 57,
+      "fielding_rating": 73,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Rohit 2",
+      "role": "Wicketkeeper",
+      "batting_rating": 69,
+      "bowling_rating": 58,
+      "fielding_rating": 90,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Dhoni 76",
+      "role": "Batsman",
+      "batting_rating": 44,
+      "bowling_rating": 88,
+      "fielding_rating": 44,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Anderson 67",
+      "role": "All-rounder",
+      "batting_rating": 45,
+      "bowling_rating": 87,
+      "fielding_rating": 92,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Virat 51",
+      "role": "Bowler",
+      "batting_rating": 75,
+      "bowling_rating": 50,
+      "fielding_rating": 58,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": "Left"
+    }
+  ],
+  "captain": "Bumrah 28",
+  "wicketkeeper": "Bumrah 28"
+}

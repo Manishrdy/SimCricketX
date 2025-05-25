@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Create Team – Project X</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Reset + Icons -->
+  <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+  <style>
+    :root {
+      --bg: #f0f4f9;
+      --fg: #333;
+      --card-bg: #fff;
+      --accent: #005fcc;
+      --shadow: rgba(0, 0, 0, 0.1);
+      --gradient: linear-gradient(135deg, #6a11cb, #2575fc);
+      --border: 1px solid var(--accent);
+      --input-bg: #eaeaea;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0d1117;
+      --fg: #eaeaea;
+      --card-bg: #161b22;
+      --accent: #00bcd4;
+      --shadow: rgba(0, 0, 0, 0.6);
+      --gradient: linear-gradient(135deg, #00bcd4, #8bc34a);
+      --border: 1px solid var(--accent);
+      --input-bg: #2a2a2a;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .toggle {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--fg);
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 1rem;
+      box-shadow: 0 10px 30px var(--shadow);
+      padding: 2rem;
+      width: 100%;
+      max-width: 900px;
+      animation: fadeIn 0.8s ease;
+    }
+
+    h1 {
+      font-size: 2rem;
+      text-align: center;
+      margin-bottom: 1.5rem;
+      background: var(--gradient);
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    form>.form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .form-grid input,
+    .form-grid select {
+      padding: 0.6rem;
+      border-radius: 0.5rem;
+      border: var(--border);
+      background: var(--input-bg);
+      color: var(--fg);
+      font-size: 1rem;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .color-picker {
+      width: 2rem;
+      height: 2rem;
+      padding: 0;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.25rem;
+    }
+
+    .buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    .buttons .btn {
+      padding: 0.6rem 1.2rem;
+      border-radius: 0.5rem;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+
+    .buttons .btn.secondary {
+      background: transparent;
+      color: var(--accent);
+      border: var(--border);
+    }
+
+    #player-count {
+      margin-left: auto;
+      align-self: center;
+      font-size: 0.9rem;
+    }
+
+    #players-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .player-card {
+      background: var(--card-bg);
+      border: var(--border);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .player-card .remove {
+      position: absolute;
+      top: -8px;
+      /* pull it outside the card a bit */
+      right: -8px;
+      /* same on the right */
+      background: var(--accent);
+      color: #fff;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px var(--shadow);
+      cursor: pointer;
+      z-index: 1;
+    }
+
+    .player-card input,
+    .player-card select {
+      width: 100%;
+      padding: 0.4rem;
+      border-radius: 0.4rem;
+      border: var(--border);
+      background: var(--input-bg);
+      color: var(--fg);
+      font-size: 0.9rem;
+    }
+
+    .flash {
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .alert-success {
+      background: #d1e7dd;
+      color: #0f5132;
+    }
+
+    .alert-danger {
+      background: #f8d7da;
+      color: #842029;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Dark/Light Toggle -->
+  <button class="toggle" id="theme-toggle">🌙</button>
+
+  <div class="card">
+    <!-- Dynamic Gradient Title -->
+    <h1 id="dynamic-title">Team Creation</h1>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, msg in messages %}
+    <div class="flash alert-{{category}}">{{msg}}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <form id="team-form" method="POST" action="/team/create">
+      <!-- Team Details Grid -->
+      <div class="form-grid">
+        <input id="team_name" name="team_name" placeholder="Team Name" required>
+        <input name="short_code" placeholder="Short Code (2-3 chars)" minlength="2" maxlength="3" required>
+        <input name="home_ground" placeholder="Home Ground" required>
+        <select name="pitch_preference" required>
+          <option value="">Pitch Preference</option>
+          <option>Green</option>
+          <option>Flat</option>
+          <option>Dry</option>
+          <option>Hard</option>
+          <option>Dead</option>
+        </select>
+
+        <!-- Replace your current “Color Swatch” block with this -->
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <label style="margin:0;" for="team_color">Team Color</label>
+          <div style="position:relative; width:24px; height:24px;">
+            <input type="color" id="team_color" name="team_color" value="#ff4500" required style="
+        position:absolute;
+        top:0; left:0;
+        width:100%; height:100%;
+        opacity:0;
+        cursor:pointer;
+      ">
+            <div id="color-swatch" style="
+        width:100%; height:100%;
+        border:2px solid var(--accent);
+        border-radius:4px;
+        background:#ff4500;
+        pointer-events:none;
+      "></div>
+          </div>
+        </div>
+
+
+      </div>
+
+      <!-- Action Buttons & Counter -->
+      <div class="buttons">
+        <button type="button" class="btn secondary" id="add-player">+ Add Player</button>
+        <button type="button" class="btn secondary" id="generate-team">⚙️ Generate Team</button>
+        <span id="player-count">0 / 18</span>
+      </div>
+
+      <!-- Players Grid -->
+      <div id="players-container"></div>
+
+      <!-- Select captain & wicket-keeperr -->
+      <div class="form-grid" style="margin-top:1rem;">
+        <select name="captain" id="select-captain" required>
+          <option value="">Select Captain</option>
+        </select>
+        <select name="wicketkeeper" id="select-wk" required>
+          <option value="">Select Wicketkeeper</option>
+        </select>
+      </div>
+
+      <!-- Submit -->
+      <div style="text-align:right;">
+        <button type="submit" class="btn" style="
+  width:100%; padding:1rem; font-size:1.1rem;
+  display:flex; justify-content:center; align-items:center;
+  gap:0.5rem;
+">
+          <i class="fa-solid fa-floppy-disk"></i> Save Team
+        </button>
+
+      </div>
+    </form>
+  </div>
+
+  <!-- Player Template -->
+  <template id="player-template">
+    <div class="player-card">
+      <span class="remove"><i class="fa-solid fa-xmark"></i></span>
+      <input name="player_name" placeholder="Player Name" required>
+      <select name="player_role" required>
+        <option value="">Role</option>
+        <option>Batsman</option>
+        <option>Bowler</option>
+        <option>All-rounder</option>
+        <option>Wicketkeeper</option>
+      </select>
+      <input type="number" name="batting_rating" placeholder="Batting (0-100)" min="0" max="100" required>
+      <input type="number" name="bowling_rating" placeholder="Bowling (0-100)" min="0" max="100" required>
+      <input type="number" name="fielding_rating" placeholder="Fielding (0-100)" min="0" max="100" required>
+      <select name="batting_hand" required>
+        <option value="">Batting Hand</option>
+        <option>Left</option>
+        <option>Right</option>
+      </select>
+      <select name="bowling_type">
+        <option value="">Bowling Type</option>
+        <option>Fast</option>
+        <option>Fast-medium</option>
+        <option>Medium-fast</option>
+        <option>Medium</option>
+        <option>Off spin</option>
+        <option>Leg spin</option>
+        <option>Finger spin</option>
+        <option>Wrist spin</option>
+      </select>
+      <select name="bowling_hand">
+        <option value="">Bowling Hand</option>
+        <option>Left</option>
+        <option>Right</option>
+      </select>
+    </div>
+  </template>
+
+  <script>
+    // Dynamic Title
+    const teamInput = document.getElementById('team_name');
+    const titleEl = document.getElementById('dynamic-title');
+    teamInput.oninput = () => {
+      titleEl.textContent = teamInput.value || 'Team Creation';
+    };
+
+    // Dark/Light Toggle
+    const toggle = document.getElementById('theme-toggle');
+    const root = document.documentElement;
+    if (localStorage.theme) root.setAttribute('data-theme', localStorage.theme);
+    toggle.onclick = () => {
+      const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      localStorage.theme = next;
+      toggle.textContent = next === 'dark' ? '☀️' : '🌙';
+    };
+    toggle.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+
+    // Player Logic
+    const container = document.getElementById('players-container');
+    const countEl = document.getElementById('player-count');
+    const MAX = 18, MIN = 15;
+
+    // Helpers
+    const rand = arr => arr[Math.floor(Math.random() * arr.length)];
+    const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+    // Sample data
+    const NAMES = ["Virat", "Rohit", "Dhoni", "Smith", "Warner", "Anderson", "Bumrah", "Jadeja", "Stokes", "Root"];
+    const ROLES = ["Batsman", "Bowler", "All-rounder", "Wicketkeeper"];
+    const HANDS = ["Left", "Right"];
+    const TYPES = ["Fast", "Fast-medium", "Medium-fast", "Medium", "Off spin", "Leg spin", "Finger spin", "Wrist spin"];
+
+    // Update count
+    function updateCount() {
+      countEl.textContent = `${container.children.length} / ${MAX}`;
+    }
+
+    function refreshRoleSelectors() {
+      const cards = [...document.querySelectorAll('.player-card')];
+      const allNames = cards
+        .map(c => c.querySelector('input[name=player_name]').value)
+        .filter(n => n);
+
+      // build captain list from allNames
+      const cap = document.getElementById('select-captain');
+      cap.innerHTML = `<option value="">Select Captain</option>`;
+      allNames.forEach(n => cap.innerHTML += `<option>${n}</option>`);
+
+      // build wicketkeeper list *only* from cards whose role is WK
+      const wk = document.getElementById('select-wk');
+      wk.innerHTML = `<option value="">Select Wicketkeeper</option>`;
+      cards
+        .filter(c => c.querySelector('select[name=player_role]').value === 'Wicketkeeper')
+        .map(c => c.querySelector('input[name=player_name]').value)
+        .forEach(n => wk.innerHTML += `<option>${n}</option>`);
+    }
+
+
+    function updateCount() {
+      countEl.textContent = `${container.children.length} / ${MAX}`;
+      refreshRoleSelectors();
+    }
+
+
+    // Add one player card
+    function addPlayer(data) {
+      if (container.children.length >= MAX) return;
+      const tpl = document.getElementById('player-template').content.cloneNode(true);
+      if (data) {
+        tpl.querySelector('[name=player_name]').value = data.name;
+        tpl.querySelector('[name=player_role]').value = data.role;
+        tpl.querySelector('[name=batting_rating]').value = data.bat;
+        tpl.querySelector('[name=bowling_rating]').value = data.bowl;
+        tpl.querySelector('[name=fielding_rating]').value = data.field;
+        tpl.querySelector('[name=batting_hand]').value = data.bhand;
+        tpl.querySelector('[name=bowling_type]').value = data.btype;
+        tpl.querySelector('[name=bowling_hand]').value = data.bhand2;
+      }
+      const card = tpl.querySelector('.player-card');
+      card.querySelector('.remove').onclick = () => { card.remove(); updateCount(); };
+      container.appendChild(card);
+      updateCount();
+    }
+
+    // Manual add
+    document.getElementById('add-player').onclick = () => addPlayer();
+
+    // Random generate respecting rules
+    document.getElementById('generate-team').onclick = () => {
+      const current = container.children.length;
+      // How many more we need to reach the minimum
+      const needed = Math.max(0, MIN - current);
+      for (let i = 0; i < needed; i++) {
+        addPlayer({
+          name: rand(NAMES) + " " + randInt(1, 99),
+          role: (() => {
+            // ensure >=1 WK & >=6 bowlers/allrounders by checking counts first
+            const wkCount = [...container.children]
+              .map(c => c.querySelector('[name=player_role]').value)
+              .filter(r => r === "Wicketkeeper").length;
+            const bowlCount = [...container.children]
+              .map(c => c.querySelector('[name=player_role]').value)
+              .filter(r => r === "Bowler" || r === "All-rounder").length;
+            if (wkCount < 1) return "Wicketkeeper";
+            if (bowlCount < 6) return rand(["Bowler", "All-rounder"]);
+            return rand(ROLES);
+          })(),
+          bat: randInt(40, 95),
+          bowl: randInt(40, 95),
+          field: randInt(40, 95),
+          bhand: rand(HANDS),
+          btype: (r => (r === "Bowler" || r === "All-rounder") ? rand(TYPES) : "")(this.role),
+          bhand2: rand(HANDS)
+        });
+      }
+    };
+
+
+    // Color swatch wiring
+    const swatch = document.getElementById('color-swatch');
+    const colorInput = document.getElementById('team_color');
+    swatch.onclick = () => colorInput.click();
+    colorInput.oninput = () => swatch.style.background = colorInput.value;
+
+  </script>
+</body>
+
+</html>
