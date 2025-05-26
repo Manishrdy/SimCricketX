@@ -136,6 +136,28 @@ def create_app():
         session.pop('_flashes', None)  # ⬅️ Clear previous flash messages
         flash("✅ You have been logged out.", "success")
         return redirect(url_for("login"))
+    
+    def load_user_teams(user_email):
+        """Return list of team dicts created by this user."""
+        teams = []
+        teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
+        if os.path.isdir(teams_dir):
+            for fn in os.listdir(teams_dir):
+                if not fn.endswith(".json"): continue
+                # Expecting filenames like SHORT_user@example.com.json
+                if not fn.endswith(f"_{user_email}.json"):
+                    continue
+                path = os.path.join(teams_dir, fn)
+                try:
+                    with open(path) as f:
+                        data = json.load(f)
+                    # Override short_code for UI
+                    data["short_code"] = fn.rsplit("_",1)[0]
+                    teams.append(data)
+                except Exception as e:
+                    app.logger.error(f"Error loading team {fn}: {e}", exc_info=True)
+        return teams
+
 
     @app.route("/team/create", methods=["GET", "POST"])
     @login_required
@@ -457,6 +479,23 @@ def create_app():
 
         # GET: render the same form, passing raw JSON and an edit flag
         return render_template("team_create.html", team=raw, edit=True)
+    
+    @app.route("/match/setup", methods=["GET", "POST"])
+    @login_required
+    def match_setup():
+        # Load the logged-in user’s teams
+        teams = load_user_teams(current_user.id)
+
+        if request.method == "POST":
+            # TODO: handle the posted match-setup JSON to /match/start
+            # e.g. form data available via request.form or request.get_json()
+            # For now just flash and redirect back
+            flash("✅ Match setup received! (backend stub)", "success")
+            return redirect(url_for("home"))
+
+        # GET: render the match setup & XI selection page
+        return render_template("match_setup.html", teams=teams)
+
 
 
     return app
