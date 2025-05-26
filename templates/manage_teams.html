@@ -2,6 +2,10 @@
 <html lang="en">
 
 <head>
+    <script>
+        const saved = localStorage.getItem('theme');
+        if (saved) document.documentElement.setAttribute('data-theme', saved);
+    </script>
     <meta charset="UTF-8">
     <title>Manage Teams – Project X</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -28,6 +32,126 @@
             --shadow: rgba(0, 0, 0, 0.5);
             --gradient: linear-gradient(135deg, #00bcd4, #8bc34a);
         }
+
+        /* ─── Light Themes ───────────────────────────────── */
+        :root[data-theme="nord"] {
+            --bg: #eceff4;
+            --fg: #2e3440;
+            --card-bg: #e5e9f0;
+            --input-bg: #dde1e8;
+            --accent: #88c0d0;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        :root[data-theme="retro"] {
+            --bg: #fdf0d5;
+            --fg: #4b3621;
+            --card-bg: #fff7e6;
+            --input-bg: #f7e6c5;
+            --accent: #d97706;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        :root[data-theme="cupcake"] {
+            --bg: #fffaf0;
+            --fg: #4b2995;
+            --card-bg: #faf5ff;
+            --input-bg: #f3e8ff;
+            --accent: #d946ef;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        /* ─── Dark Themes ────────────────────────────────── */
+        :root[data-theme="dim"] {
+            --bg: #1f1f1f;
+            --fg: #e0e0e0;
+            --card-bg: #2a2a2a;
+            --input-bg: #333;
+            --accent: #6366f1;
+            --shadow: rgba(0, 0, 0, 0.5);
+        }
+
+        :root[data-theme="dracula"] {
+            --bg: #282a36;
+            --fg: #f8f8f2;
+            --card-bg: #44475a;
+            --input-bg: #373844;
+            --accent: #6272a4;
+            --shadow: rgba(0, 0, 0, 0.6);
+        }
+
+        :root[data-theme="sunset"] {
+            --bg: #2d182d;
+            --fg: #f5e0dc;
+            --card-bg: #3c1f1f;
+            --input-bg: #5f3d3d;
+            --accent: #f28fb6;
+            --shadow: rgba(0, 0, 0, 0.6);
+        }
+
+        /* ─── Light Themes ─────────────── */
+        :root[data-theme="nord"] {
+            --bg: #eceff4;
+            --fg: #2e3440;
+            --card-bg: #e5e9f0;
+            --input-bg: #dde1e8;
+            --accent: #88c0d0;
+            --icon-color: #5e81ac;
+            --gradient: linear-gradient(135deg, #8fbcbb, #88c0d0);
+        }
+
+        :root[data-theme="retro"] {
+            --bg: #fdf0d5;
+            --fg: #4b3621;
+            --card-bg: #fff7e6;
+            --input-bg: #f7e6c5;
+            --accent: #d97706;
+            --icon-color: #b45309;
+            --gradient: linear-gradient(135deg, #d97706, #f59e0b);
+        }
+
+        :root[data-theme="cupcake"] {
+            --bg: #fffaf0;
+            --fg: #4b2995;
+            --card-bg: #faf5ff;
+            --input-bg: #f3e8ff;
+            --accent: #d946ef;
+            --icon-color: #a21caf;
+            --gradient: linear-gradient(135deg, #f472b6, #d946ef);
+        }
+
+        /* ─── Dark Themes ──────────────── */
+        :root[data-theme="dim"] {
+            --bg: #1f1f1f;
+            --fg: #e0e0e0;
+            --card-bg: #2a2a2a;
+            --input-bg: #333;
+            --accent: #6366f1;
+            --icon-color: #818cf8;
+            --gradient: linear-gradient(135deg, #4f46e5, #6366f1);
+        }
+
+        :root[data-theme="dracula"] {
+            --bg: #282a36;
+            --fg: #f8f8f2;
+            --card-bg: #44475a;
+            --input-bg: #373844;
+            --accent: #6272a4;
+            --icon-color: #8be9fd;
+            --gradient: linear-gradient(135deg, #6272a4, #8be9fd);
+        }
+
+        :root[data-theme="sunset"] {
+            --bg: #2d182d;
+            --fg: #f5e0dc;
+            --card-bg: #3c1f1f;
+            --input-bg: #5f3d3d;
+            --accent: #f28fb6;
+            --icon-color: #ff9ede;
+            --gradient: linear-gradient(135deg, #fb7185, #f28fb6);
+        }
+
+
 
         body {
             background: var(--bg);
@@ -200,6 +324,8 @@
 
 <body>
     <button class="toggle" id="theme-toggle">🌙</button>
+
+
     <div style="display:flex; align-items:center; gap:1rem; margin-bottom:2rem;">
         <a href="{{ url_for('home') }}" title="Home">
             <i class="fa-solid fa-house" style="font-size:1.4rem; color:var(--accent);"></i>
@@ -260,6 +386,7 @@
         };
         toggle.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
 
+
         // Edit & Delete handlers
         function editTeam(code) {
             window.location.href = `/team/${code}/edit`;
@@ -272,7 +399,7 @@
             document.getElementById('confirmModal').classList.remove('active');
         }
     </script>
-    
+
     <script>
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
