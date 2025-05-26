@@ -234,7 +234,9 @@ def create_app():
 
                 # 3c. Write it manually instead of save_team()
                 import os, json
-                path = os.path.join("data", "teams", f"{team.short_code}.json")
+                filename = f"{team.short_code}_{current_user.id}.json"
+                path = os.path.join("data", "teams", filename)
+
                 with open(path, "w") as f:
                     json.dump(data, f, indent=2)
 
@@ -266,7 +268,10 @@ def create_app():
                         with open(path, "r") as f:
                             data = json.load(f)
                         # Only include teams created by this user
-                        if data.get("created_by_email") == user_email:
+                        if data.get("created_by_email") == current_user.id:
+                            # Extract just short_code from filename
+                            short_code = fn.rsplit("_", 1)[0].replace(".json", "")
+                            data["short_code"] = short_code
                             teams.append(data)
                     except Exception as e:
                         app.logger.error(f"Error loading team file {fn}: {e}", exc_info=True)
@@ -282,7 +287,10 @@ def create_app():
             return redirect(url_for("manage_teams"))
 
         # Build the path to the JSON file
-        team_path = os.path.join(PROJECT_ROOT, "data", "teams", f"{short_code}.json")
+        # Find matching file for this user
+        teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
+        filename = f"{short_code}_{current_user.id}.json"
+        team_path = os.path.join(PROJECT_ROOT, "data", "teams", filename)
 
         # Check file exists
         if not os.path.exists(team_path):
@@ -319,7 +327,13 @@ def create_app():
     @login_required
     def edit_team(short_code):
         teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
-        team_path = os.path.join(teams_dir, f"{short_code}.json")
+        user_id = current_user.id
+        filename = f"{short_code}_{current_user.id}.json"
+        team_path = os.path.join(teams_dir, filename)
+
+        app.logger.info(f"user_id: {user_id}", exc_info=True)
+        app.logger.info(f"filename: {filename}", exc_info=True)
+
 
         # 1. Must exist
         if not os.path.exists(team_path):
@@ -414,8 +428,10 @@ def create_app():
             new_code  = code                   # the form‐submitted code
 
             teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
-            old_path  = os.path.join(teams_dir, f"{orig_code}.json")
-            new_path  = os.path.join(teams_dir, f"{new_code}.json")
+            user_id = raw.get("created_by_user_id")
+            new_path = os.path.join(teams_dir, f"{new_code}_{current_user.id}.json")
+            old_path = os.path.join(teams_dir, f"{orig_code}_{current_user.id}.json")
+
 
             # 1️⃣ If the short code changed, rename the file on disk
             if orig_code != new_code:

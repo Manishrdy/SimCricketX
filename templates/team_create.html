@@ -608,21 +608,34 @@
     function addPlayer(data) {
       if (container.children.length >= MAX) return;
       const tpl = document.getElementById('player-template').content.cloneNode(true);
-      if (data) {
-        tpl.querySelector('[name=player_name]').value = data.name;
-        tpl.querySelector('[name=player_role]').value = data.role;
-        tpl.querySelector('[name=batting_rating]').value = data.bat;
-        tpl.querySelector('[name=bowling_rating]').value = data.bowl;
-        tpl.querySelector('[name=fielding_rating]').value = data.field;
-        tpl.querySelector('[name=batting_hand]').value = data.bhand;
-        tpl.querySelector('[name=bowling_type]').value = data.btype;
-        tpl.querySelector('[name=bowling_hand]').value = data.bhand2;
-      }
       const card = tpl.querySelector('.player-card');
-      card.querySelector('.remove').onclick = () => { card.remove(); updateCount(); };
+
+      // Fill if data passed (used in generate/edit)
+      if (data) {
+        card.querySelector('[name=player_name]').value = data.name;
+        card.querySelector('[name=player_role]').value = data.role;
+        card.querySelector('[name=batting_rating]').value = data.bat;
+        card.querySelector('[name=bowling_rating]').value = data.bowl;
+        card.querySelector('[name=fielding_rating]').value = data.field;
+        card.querySelector('[name=batting_hand]').value = data.bhand;
+        card.querySelector('[name=bowling_type]').value = data.btype;
+        card.querySelector('[name=bowling_hand]').value = data.bhand2;
+      }
+
+      // Hook into name or role changes → refresh captain/WK selectors
+      ["player_name", "player_role"].forEach(field => {
+        card.querySelector(`[name=${field}]`).addEventListener('input', refreshRoleSelectors);
+      });
+
+      card.querySelector('.remove').onclick = () => {
+        card.remove();
+        updateCount();
+      };
+
       container.appendChild(card);
       updateCount();
     }
+
 
     // Manual add
     document.getElementById('add-player').onclick = () => addPlayer();
