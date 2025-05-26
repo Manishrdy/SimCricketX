@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Simulate Match – Project X</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <!-- Fetch saved theme or default to light -->
+    <script>
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        window.appTheme = savedTheme;
+    </script>
+    <style>
+        /* ─── VARIABLES ───────────────────────────────────────────────────────── */
+        :root {
+            --bg: #f0f2f5;
+            --fg: #333;
+            --card-bg: #fff;
+            --input-bg: #e4e6eb;
+            --accent: #0069d9;
+            --gradient: linear-gradient(135deg, #0069d9, #42a5f5);
+            --shadow: rgba(0, 0, 0, 0.1);
+            --danger: #dc3545;
+        }
+
+        [data-theme="dark"] {
+            --bg: #181a1f;
+            --fg: #e4e6eb;
+            --card-bg: #242526;
+            --input-bg: #3a3b3c;
+            --accent: #66b2ff;
+            --gradient: linear-gradient(135deg, #66b2ff, #004080);
+            --shadow: rgba(0, 0, 0, 0.5);
+            --danger: #ff6b6b;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            transition: background .3s, color .3s;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        button {
+            font: inherit;
+        }
+
+        /* ─── HEADER ─────────────────────────────────────────────────────────────── */
+        .page-header {
+            display: flex;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: var(--card-bg);
+            box-shadow: 0 2px 8px var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .page-header .home {
+            margin-right: 1rem;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .page-header h1 {
+            flex: 1;
+            font-size: 1.25rem;
+            text-align: center;
+            /* centered title */
+        }
+
+        .theme-toggle {
+            font-size: 1.25rem;
+            cursor: pointer;
+        }
+
+        /* ─── FLASH / ALERT ──────────────────────────────────────────────────────── */
+        .flash {
+            padding: 1rem;
+            border-radius: .5rem;
+            background: var(--card-bg);
+            color: var(--fg);
+            border-left: 4px solid var(--danger);
+            text-align: center;
+            animation: slideDown .3s ease;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* ─── TEAM SELECTION ─────────────────────────────────────────────────────── */
+        .teams-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            padding: 2rem;
+        }
+
+        .teams-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .team-card {
+            background: var(--card-bg);
+            border-radius: .75rem;
+            box-shadow: 0 4px 12px var(--shadow);
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: transform .2s, box-shadow .2s;
+        }
+
+        .team-card.selected {
+            outline: 3px solid var(--accent);
+            transform: translateY(-4px);
+            box-shadow: 0 6px 16px var(--shadow);
+        }
+
+        .team-card h3 {
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+        }
+
+        .team-card h3 .color-dot {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .team-card label {
+            font-size: .95rem;
+        }
+
+        #next-btn {
+            align-self: center;
+            padding: .75rem 2rem;
+            font-size: 1rem;
+            background: var(--gradient);
+            color: #fff;
+            border: none;
+            border-radius: .5rem;
+            cursor: pointer;
+            opacity: .5;
+            transform: scale(.95);
+            transition: all .3s ease;
+        }
+
+        #next-btn.enabled {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        #next-btn.enabled:hover {
+            transform: scale(1.05);
+        }
+
+        /* ─── XI SECTION ─────────────────────────────────────────────────────────── */
+        #xi-section {
+            display: none;
+            flex-direction: column;
+            gap: 2rem;
+            padding: 2rem;
+            animation: fadeIn .5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .xi-header h2 {
+            margin-bottom: .5rem;
+        }
+
+        .xi-grid {
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .pane {
+            flex: 1;
+            min-width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .pane h3 {
+            text-align: center;
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .bars {
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: .5rem;
+            padding: .5rem;
+            border: 2px dashed var(--accent);
+            border-radius: .5rem;
+            background: var(--card-bg);
+        }
+
+        .bars.drag-over {
+            border-color: var(--success);
+            background: rgba(40, 167, 69, 0.1);
+        }
+
+        .player-bar {
+            padding: .75rem;
+            background: var(--card-bg);
+            border-radius: .5rem;
+            box-shadow: 0 2px 6px var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: grab;
+            border: 1px solid var(--accent);
+            /* added border */
+        }
+
+        .player-bar.dragging {
+            opacity: .5;
+        }
+
+        /* ─── BOTTOM CONTROLS & TOSS / PITCH UI ─────────────────────────────────── */
+        .bottom-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            align-items: center;
+            padding: 1.5rem;
+            background: var(--input-bg);
+            border-radius: .75rem;
+        }
+
+        .pitch-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .pitch-section label {
+            font-weight: 500;
+            color: var(--accent);
+        }
+
+        .pitch-section select {
+            padding: .5rem 1rem;
+            border: 2px solid var(--accent);
+            border-radius: .5rem;
+            background: var(--card-bg);
+            color: var(--fg);
+            font-size: .95rem;
+            min-width: 120px;
+        }
+
+        .toss-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .toss-label {
+            font-weight: 500;
+            font-size: 1.1rem;
+            color: var(--accent);
+        }
+
+        .toss-options {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .toss-options label {
+            cursor: pointer;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .5rem 1rem;
+            border-radius: .5rem;
+            transition: all .2s ease;
+        }
+
+        .toss-options label:hover {
+            background: rgba(74, 144, 226, 0.2);
+        }
+
+        .toss-options input[type="radio"] {
+            accent-color: var(--accent);
+            width: 18px;
+            height: 18px;
+        }
+
+        #simulate-btn {
+            padding: 1rem 2.5rem;
+            font-size: 1.1rem;
+            background: var(--gradient);
+            color: #fff;
+            border: none;
+            border-radius: .5rem;
+            cursor: pointer;
+            opacity: .5;
+            transform: scale(.95);
+            transition: all .3s ease;
+            font-weight: 600;
+        }
+
+        #simulate-btn.enabled {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        #simulate-btn.enabled:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 16px var(--shadow);
+        }
+
+        @media (max-width: 768px) {
+            .xi-grid {
+                flex-direction: column;
+            }
+
+            .teams-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .bottom-controls {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .pitch-section {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- HEADER -->
+    <div class="page-header">
+        <a href="{{ url_for('home') }}" class="home"><i class="fa fa-home"></i></a>
+        <h1 id="page-title">Select Teams</h1>
+        <div id="theme-toggle" class="theme-toggle">🌙</div>
+    </div>
+
+    <!-- TEAM SELECTION -->
+    <div class="teams-section">
+        <div class="teams-grid">
+            {% for team in teams %}
+            <div class="team-card" data-index="{{ loop.index0 }}">
+                <h3>
+                    <span class="color-dot" style="background: {{ team.team_color }}"></span>
+                    {{ team.team_name }}
+                </h3>
+                <label><input type="checkbox" class="team-select" /> Select</label>
+            </div>
+            {% endfor %}
+        </div>
+        <button id="next-btn" disabled>Pick Playing XI</button>
+    </div>
+
+    <!-- PLAYING XI -->
+    <div id="xi-section">
+        <div class="xi-header">
+            <h2>Select Playing XI</h2>
+            <p>Drag players between Available and Selected. Each team needs exactly 11 players.</p>
+        </div>
+        <div class="xi-grid">
+            <div class="pane" id="home-pane">
+                <h3 id="home-name"></h3>
+                <div class="bars" id="home-selected" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
+                    ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)"></div>
+                <div class="bars" id="home-available" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
+                    ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)"></div>
+            </div>
+            <div class="pane" id="away-pane">
+                <h3 id="away-name"></h3>
+                <div class="bars" id="away-selected" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
+                    ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)"></div>
+                <div class="bars" id="away-available" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
+                    ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)"></div>
+            </div>
+        </div>
+        <div class="bottom-controls">
+            <div class="pitch-section">
+                <label for="pitch-select">Pitch Type:</label>
+                <select id="pitch-select"></select>
+            </div>
+            <div class="toss-section">
+                <div class="toss-label" id="toss-label">Toss Choice</div>
+                <div class="toss-options">
+                    <label><input type="radio" name="toss" value="Heads"><i class="fa fa-coins"></i> Heads</label>
+                    <label><input type="radio" name="toss" value="Tails"><i class="fa fa-coins"></i> Tails</label>
+                </div>
+            </div>
+            <button id="simulate-btn" disabled>🚀 Simulate Match</button>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script>
+        // Teams JSON
+        const TEAMS = {{ teams| tojson }};
+
+        // Theme toggle
+        const root = document.documentElement, ttl = document.getElementById('theme-toggle');
+
+        function applyTheme(t) {
+            root.setAttribute('data-theme', t);
+            ttl.textContent = t === 'dark' ? '☀️' : '🌙';
+            // Persist exactly the same key your homepage and other pages read:
+            localStorage.setItem('theme', t);
+        }
+        applyTheme(window.appTheme);
+        ttl.onclick = () => applyTheme(window.appTheme = window.appTheme === 'dark' ? 'light' : 'dark');
+
+        // Team selection logic (locks after XI)
+        const cards = document.querySelectorAll('.team-card'),
+            nextBtn = document.getElementById('next-btn'),
+            pageTitle = document.getElementById('page-title');
+        let selected = [];
+        cards.forEach(card => {
+            const cb = card.querySelector('.team-select');
+            card.onclick = e => {
+                if (document.getElementById('xi-section').style.display === 'flex') return;
+                if (e.target !== cb) {
+                    if (!cb.checked && selected.length >= 2) return;
+                    cb.checked = !cb.checked;
+                }
+                const idx = +card.dataset.index;
+                cb.checked ? selected.push(idx) : selected.splice(selected.indexOf(idx), 1);
+                cards.forEach((c, i) => c.classList.toggle('selected', selected.includes(i)));
+                nextBtn.disabled = selected.length !== 2;
+                nextBtn.classList.toggle('enabled', selected.length === 2);
+                if (selected.length === 2) {
+                    const t1 = cards[selected[0]].querySelector('h3').textContent.trim();
+                    const t2 = cards[selected[1]].querySelector('h3').textContent.trim();
+                    pageTitle.textContent = `${t1} vs ${t2}`;
+                } else {
+                    pageTitle.textContent = 'Select Teams';
+                }
+            };
+        });
+
+        // Show XI & render players
+        nextBtn.onclick = () => {
+            if (selected.length !== 2) return;
+            cards.forEach(c => c.style.pointerEvents = 'none');
+            document.getElementById('xi-section').style.display = 'flex';
+            const [h, a] = selected.map(i => TEAMS[i]);
+            document.getElementById('home-name').textContent = h.team_name;
+            document.getElementById('away-name').textContent = a.team_name;
+            document.getElementById('toss-label').textContent = `${a.team_name} Toss Choice`;
+
+            // Pitch options
+            const psel = document.getElementById('pitch-select');
+            psel.innerHTML = `<option>${h.pitch_preference}</option>` +
+                ['Green', 'Flat', 'Dry', 'Hard', 'Dead']
+                    .filter(x => x !== h.pitch_preference)
+                    .map(x => `<option>${x}</option>`).join('');
+
+            // Icons mapping
+            const roleIcons = {
+                'Batsman': '🏏',
+                'Bowler': '🎳',
+                'Wicketkeeper': '🧤',
+                'All-rounder': '🏏🎳'
+            };
+
+            ['home', 'away'].forEach(side => {
+                const team = side === 'home' ? h : a;
+                const avail = document.getElementById(`${side}-available`);
+                avail.innerHTML = '';
+                team.players.forEach(p => {
+                    const bar = document.createElement('div');
+                    bar.className = 'player-bar';
+                    bar.draggable = true;
+                    bar.dataset.role = p.role;
+                    bar.innerHTML = `<span class="info">${roleIcons[p.role] || ''} ${p.name}</span>` +
+                        ((['Bowler', 'All-rounder'].includes(p.role))
+                            ? `<span class="controls">
+                                   <label>
+                                     <input type="checkbox" class="will-bowl">
+                                     <i class="fa fa-baseball"></i> Bowl
+                                   </label>
+                               </span>`
+                            : '');
+                    bar.addEventListener('dragstart', () => bar.classList.add('dragging'));
+                    bar.addEventListener('dragend', () => { bar.classList.remove('dragging'); validateAll(); });
+                    avail.appendChild(bar);
+                });
+            });
+
+            updatePlayerCounts();
+            validateAll();
+        };
+
+        // Drag & drop handlers
+        function dragEnterHandler(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+        function dragLeaveHandler(e) { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); }
+        function dragOverHandler(e) { e.preventDefault(); }
+        function dropHandler(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            const bar = document.querySelector('.player-bar.dragging');
+            if (!bar) return;
+            const dst = e.currentTarget;
+            const after = getDragAfterElement(dst, e.clientY);
+            after ? dst.insertBefore(bar, after) : dst.appendChild(bar);
+            updatePlayerCounts();
+            validateAll();
+        }
+        function getDragAfterElement(container, y) {
+            return [...container.querySelectorAll('.player-bar:not(.dragging)')]
+                .reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    return (offset < 0 && offset > closest.offset)
+                        ? { offset, element: child }
+                        : closest;
+                }, { offset: -Infinity }).element;
+        }
+
+        // Live selected count
+        function updatePlayerCounts() {
+            ['home', 'away'].forEach(side => {
+                const sel = document.getElementById(`${side}-selected`);
+                const old = sel.querySelector('.selected-count');
+                if (old) old.remove();
+                const count = sel.querySelectorAll('.player-bar').length;
+                const header = document.createElement('div');
+                header.className = 'selected-count';
+                header.style.cssText = "text-align:center;padding:1rem;color:var(--accent);opacity:0.7;";
+                header.textContent = `Selected Players (${count}/11)`;
+                sel.prepend(header);
+            });
+        }
+
+        // Validation (show all rules)
+        const tosses = document.getElementsByName('toss'),
+            simBtn = document.getElementById('simulate-btn');
+        function validateAll() {
+            const errors = [];
+            ['home', 'away'].forEach((side, i) => {
+                const name = side === 'home' ? 'Team 1' : 'Team 2';
+                const players = document.getElementById(`${side}-selected`)
+                    .querySelectorAll('.player-bar');
+                if (players.length !== 11)
+                    errors.push(`${name}: Need exactly 11 players (${players.length}/11)`);
+                if ([...players].filter(b => b.dataset.role === 'Wicketkeeper').length < 1)
+                    errors.push(`${name}: Need at least 1 Wicketkeeper`);
+                if ([...players].filter(b => {
+                    const cb = b.querySelector('.will-bowl');
+                    return cb && cb.checked;
+                }).length < 5)
+                    errors.push(`${name}: Need at least 5 bowlers`);
+            });
+            if (![...tosses].some(r => r.checked))
+                errors.push('Select toss choice (Heads or Tails)');
+
+            const old = document.querySelector('.flash');
+            if (old) old.remove();
+
+            if (errors.length) {
+                const div = document.createElement('div');
+                div.className = 'flash';
+                div.innerHTML = `<i class="fa fa-exclamation-triangle"></i> `
+                    + errors.join('<br><i class="fa fa-exclamation-triangle"></i> ');
+                document.getElementById('xi-section').prepend(div);
+                simBtn.disabled = true;
+                simBtn.classList.remove('enabled');
+            } else {
+                simBtn.disabled = false;
+                simBtn.classList.add('enabled');
+            }
+        }
+        tosses.forEach(r => r.addEventListener('change', validateAll));
+        document.addEventListener('DOMContentLoaded', validateAll);
+    </script>
+</body>
+
+</html>

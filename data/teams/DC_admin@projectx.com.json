@@ -1,0 +1,163 @@
+{
+  "team_name": "Deccan Chargers",
+  "short_code": "DC",
+  "home_ground": "Hyd",
+  "pitch_preference": "Dead",
+  "team_color": "#787878",
+  "players": [
+    {
+      "name": "Dhoni 75",
+      "role": "Bowler",
+      "batting_rating": 77,
+      "bowling_rating": 56,
+      "fielding_rating": 74,
+      "batting_hand": "Left",
+      "bowling_type": "Fast-medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Bumrah 80",
+      "role": "Wicketkeeper",
+      "batting_rating": 84,
+      "bowling_rating": 53,
+      "fielding_rating": 44,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Jadeja 24",
+      "role": "Bowler",
+      "batting_rating": 88,
+      "bowling_rating": 70,
+      "fielding_rating": 88,
+      "batting_hand": "Right",
+      "bowling_type": "Finger spin",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Stokes 99",
+      "role": "Wicketkeeper",
+      "batting_rating": 63,
+      "bowling_rating": 48,
+      "fielding_rating": 43,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Warner 44",
+      "role": "Bowler",
+      "batting_rating": 55,
+      "bowling_rating": 42,
+      "fielding_rating": 90,
+      "batting_hand": "Right",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Rohit 2",
+      "role": "Batsman",
+      "batting_rating": 84,
+      "bowling_rating": 51,
+      "fielding_rating": 55,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Warner 42",
+      "role": "All-rounder",
+      "batting_rating": 86,
+      "bowling_rating": 45,
+      "fielding_rating": 90,
+      "batting_hand": "Left",
+      "bowling_type": "Fast",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Rohit 40",
+      "role": "All-rounder",
+      "batting_rating": 80,
+      "bowling_rating": 51,
+      "fielding_rating": 74,
+      "batting_hand": "Left",
+      "bowling_type": "Leg spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Warner 89",
+      "role": "Wicketkeeper",
+      "batting_rating": 47,
+      "bowling_rating": 51,
+      "fielding_rating": 92,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Smith 90",
+      "role": "Batsman",
+      "batting_rating": 41,
+      "bowling_rating": 84,
+      "fielding_rating": 61,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Smith 41",
+      "role": "Wicketkeeper",
+      "batting_rating": 86,
+      "bowling_rating": 81,
+      "fielding_rating": 43,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Smith 50",
+      "role": "Bowler",
+      "batting_rating": 72,
+      "bowling_rating": 40,
+      "fielding_rating": 57,
+      "batting_hand": "Left",
+      "bowling_type": "Wrist spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Virat 89",
+      "role": "Bowler",
+      "batting_rating": 77,
+      "bowling_rating": 62,
+      "fielding_rating": 68,
+      "batting_hand": "Left",
+      "bowling_type": "Wrist spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Virat 2",
+      "role": "All-rounder",
+      "batting_rating": 93,
+      "bowling_rating": 89,
+      "fielding_rating": 42,
+      "batting_hand": "Right",
+      "bowling_type": "Medium",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Jadeja 71",
+      "role": "All-rounder",
+      "batting_rating": 42,
+      "bowling_rating": 72,
+      "fielding_rating": 67,
+      "batting_hand": "Right",
+      "bowling_type": "Fast",
+      "bowling_hand": "Left"
+    }
+  ],
+  "captain": "Bumrah 80",
+  "wicketkeeper": "Bumrah 80",
+  "created_by_user_id": "40fbc280-ddd4-4104-9975-d158ba2f96b3",
+  "created_by_email": "admin@projectx.com"
+}
