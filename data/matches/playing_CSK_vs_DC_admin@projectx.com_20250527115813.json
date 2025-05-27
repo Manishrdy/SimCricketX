@@ -1,0 +1,260 @@
+{
+  "team_home": "CSK_admin@projectx.com",
+  "team_away": "DC_admin@projectx.com",
+  "stadium": "Chennai",
+  "pitch": "Green",
+  "playing_xi": {
+    "home": [
+      {
+        "name": "Bumrah 80",
+        "role": "Batsman",
+        "batting_rating": 74,
+        "bowling_rating": 58,
+        "fielding_rating": 67,
+        "batting_hand": "Left",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Dhoni 19",
+        "role": "Wicketkeeper",
+        "batting_rating": 90,
+        "bowling_rating": 93,
+        "fielding_rating": 40,
+        "batting_hand": "Left",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Warner 2",
+        "role": "Wicketkeeper",
+        "batting_rating": 84,
+        "bowling_rating": 59,
+        "fielding_rating": 49,
+        "batting_hand": "Left",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Jadeja 4",
+        "role": "Batsman",
+        "batting_rating": 69,
+        "bowling_rating": 79,
+        "fielding_rating": 56,
+        "batting_hand": "Right",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Dhoni 7",
+        "role": "Batsman",
+        "batting_rating": 72,
+        "bowling_rating": 77,
+        "fielding_rating": 95,
+        "batting_hand": "Left",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Virat 91",
+        "role": "Bowler",
+        "batting_rating": 88,
+        "bowling_rating": 68,
+        "fielding_rating": 52,
+        "batting_hand": "Right",
+        "bowling_type": "Medium",
+        "bowling_hand": "Left",
+        "will_bowl": true
+      },
+      {
+        "name": "Rohit 16",
+        "role": "All-rounder",
+        "batting_rating": 51,
+        "bowling_rating": 79,
+        "fielding_rating": 78,
+        "batting_hand": "Right",
+        "bowling_type": "Medium",
+        "bowling_hand": "Left",
+        "will_bowl": true
+      },
+      {
+        "name": "Virat 77",
+        "role": "All-rounder",
+        "batting_rating": 67,
+        "bowling_rating": 64,
+        "fielding_rating": 68,
+        "batting_hand": "Right",
+        "bowling_type": "Fast-medium",
+        "bowling_hand": "Right",
+        "will_bowl": true
+      },
+      {
+        "name": "Bumrah 88",
+        "role": "Bowler",
+        "batting_rating": 88,
+        "bowling_rating": 44,
+        "fielding_rating": 56,
+        "batting_hand": "Right",
+        "bowling_type": "Finger spin",
+        "bowling_hand": "Left",
+        "will_bowl": true
+      },
+      {
+        "name": "Bumrah 99",
+        "role": "All-rounder",
+        "batting_rating": 76,
+        "bowling_rating": 62,
+        "fielding_rating": 95,
+        "batting_hand": "Left",
+        "bowling_type": "Wrist spin",
+        "bowling_hand": "Right",
+        "will_bowl": true
+      },
+      {
+        "name": "Rohit 34",
+        "role": "All-rounder",
+        "batting_rating": 42,
+        "bowling_rating": 60,
+        "fielding_rating": 70,
+        "batting_hand": "Right",
+        "bowling_type": "Leg spin",
+        "bowling_hand": "Left",
+        "will_bowl": true
+      }
+    ],
+    "away": [
+      {
+        "name": "Bumrah 80",
+        "role": "Wicketkeeper",
+        "batting_rating": 84,
+        "bowling_rating": 53,
+        "fielding_rating": 44,
+        "batting_hand": "Right",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Stokes 99",
+        "role": "Wicketkeeper",
+        "batting_rating": 63,
+        "bowling_rating": 48,
+        "fielding_rating": 43,
+        "batting_hand": "Left",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Warner 89",
+        "role": "Wicketkeeper",
+        "batting_rating": 47,
+        "bowling_rating": 51,
+        "fielding_rating": 92,
+        "batting_hand": "Left",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Smith 90",
+        "role": "Batsman",
+        "batting_rating": 41,
+        "bowling_rating": 84,
+        "fielding_rating": 61,
+        "batting_hand": "Left",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Smith 41",
+        "role": "Wicketkeeper",
+        "batting_rating": 86,
+        "bowling_rating": 81,
+        "fielding_rating": 43,
+        "batting_hand": "Left",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Rohit 2",
+        "role": "Batsman",
+        "batting_rating": 84,
+        "bowling_rating": 51,
+        "fielding_rating": 55,
+        "batting_hand": "Left",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
+      {
+        "name": "Dhoni 75",
+        "role": "Bowler",
+        "batting_rating": 77,
+        "bowling_rating": 56,
+        "fielding_rating": 74,
+        "batting_hand": "Left",
+        "bowling_type": "Fast-medium",
+        "bowling_hand": "Right",
+        "will_bowl": true
+      },
+      {
+        "name": "Jadeja 24",
+        "role": "Bowler",
+        "batting_rating": 88,
+        "bowling_rating": 70,
+        "fielding_rating": 88,
+        "batting_hand": "Right",
+        "bowling_type": "Finger spin",
+        "bowling_hand": "Right",
+        "will_bowl": true
+      },
+      {
+        "name": "Smith 50",
+        "role": "Bowler",
+        "batting_rating": 72,
+        "bowling_rating": 40,
+        "fielding_rating": 57,
+        "batting_hand": "Left",
+        "bowling_type": "Wrist spin",
+        "bowling_hand": "Left",
+        "will_bowl": true
+      },
+      {
+        "name": "Virat 89",
+        "role": "Bowler",
+        "batting_rating": 77,
+        "bowling_rating": 62,
+        "fielding_rating": 68,
+        "batting_hand": "Left",
+        "bowling_type": "Wrist spin",
+        "bowling_hand": "Left",
+        "will_bowl": true
+      },
+      {
+        "name": "Warner 44",
+        "role": "Bowler",
+        "batting_rating": 55,
+        "bowling_rating": 42,
+        "fielding_rating": 90,
+        "batting_hand": "Right",
+        "bowling_type": "Medium-fast",
+        "bowling_hand": "Left",
+        "will_bowl": true
+      }
+    ]
+  },
+  "toss": "Heads",
+  "match_id": "7c1921c6",
+  "created_by": "admin@projectx.com",
+  "timestamp": "20250527115813",
+  "toss_winner": "CSK",
+  "toss_decision": "Bat"
+}

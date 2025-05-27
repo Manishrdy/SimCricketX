@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ match.team_home.split('_')[0] }} vs {{ match.team_away.split('_')[0] }} – Project X</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+    <script>
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        window.appTheme = savedTheme;
+    </script>
+
+    <style>
+        /* Theme Variables (reuse from match_setup.html exactly) */
+        :root {
+            --bg: #f0f2f5;
+            --fg: #1a1a1a;
+            --card-bg: #ffffff;
+            --input-bg: #e4e6eb;
+            --accent: #4a90e2;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --gradient: linear-gradient(135deg, #4a90e2, #357ab7);
+        }
+
+        [data-theme="dark"] {
+            --bg: #18191a;
+            --fg: #e4e6eb;
+            --card-bg: #242526;
+            --input-bg: #3a3b3c;
+            --accent: #4a90e2;
+            --shadow: rgba(0, 0, 0, 0.5);
+            --gradient: linear-gradient(135deg, #4a90e2, #357ab7);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: var(--card-bg);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .header .home {
+            font-size: 1.5rem;
+            margin-right: 1rem;
+            cursor: pointer;
+            color: var(--accent);
+        }
+
+        .header h1 {
+            flex: 1;
+            font-size: 1.6rem;
+            text-align: center;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        .toggle-theme {
+            font-size: 1.5rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: var(--fg);
+        }
+
+        /* Main Card */
+        .card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            background: var(--card-bg);
+            padding: 2rem;
+            max-width: 1200px;
+            width: 100%;
+            margin: 2rem auto;
+            border-radius: 1rem;
+            box-shadow: 0 6px 24px var(--shadow);
+        }
+
+        /* Panels */
+        .panels {
+            display: flex;
+            flex-direction: row;
+            gap: 2rem;
+            flex: 1;
+        }
+
+        .panel {
+            flex: 1;
+            background: var(--input-bg);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px var(--shadow);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel h2 {
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+            text-align: center;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        /* Player List */
+        .xi-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .xi-list li {
+            padding: .5rem;
+            border-bottom: 1px solid var(--shadow);
+        }
+
+        .xi-list li:last-child {
+            border: none;
+        }
+
+        /* Commentary */
+        /* Commentary */
+        .commentary {
+            flex: 1;
+            background: var(--card-bg);
+            border-radius: .75rem;
+            padding: 1rem;
+            overflow-y: auto;
+            font-family: monospace;
+            line-height: 1.5;
+            height: 900px;
+            max-height: 900px;
+        }
+
+        /* Info Fields */
+        .match-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+            margin-bottom: 1rem;
+        }
+
+        .info {
+            background: var(--card-bg);
+            border-radius: .5rem;
+            padding: .5rem 1rem;
+            box-shadow: 0 2px 8px var(--shadow);
+            font-size: .9rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .info i {
+            margin-right: .5rem;
+            color: var(--accent);
+        }
+
+        /* Scoreboard */
+        .scoreboard {
+            background: var(--gradient);
+            border-radius: 1rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .score-display,
+        .over-display {
+            text-align: center;
+            color: white;
+        }
+
+        .score-display span:first-child,
+        .over-display span:first-child {
+            display: block;
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 0.2rem;
+        }
+
+        .score-label {
+            font-size: 0.75rem;
+            opacity: 0.9;
+            letter-spacing: 1px;
+        }
+
+        .team-name {
+            color: white;
+            font-weight: bold;
+            font-size: 1.8rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <a href="{{ url_for('home') }}" class="home"><i class="fa fa-home"></i></a>
+        <h1>{{ match.team_home.split('_')[0] }} vs {{ match.team_away.split('_')[0] }}</h1>
+        <button class="toggle-theme" id="theme-toggle">🌙</button>
+    </div>
+
+    <div class="card" style="width:100%;max-width:100%;margin:0;padding:2rem;">
+        <div class="match-info">
+            <div class="info"><i class="fa fa-fingerprint"></i><strong>Match ID: </strong> {{ match.match_id }}</div>
+            <div class="info"><i class="fa fa-calendar-alt"></i><strong>Date: </strong> {{ match.timestamp }}</div>
+            <div class="info"><i class="fa fa-user"></i><strong>Created by: </strong> {{ match.created_by }}</div>
+            <div class="info"><i class="fa fa-stadium"></i><strong>Stadium: </strong> {{ match.stadium }}</div>
+            <div class="info"><i class="fa fa-paint-roller"></i><strong>Pitch: </strong> {{ match.pitch }}</div>
+            <div class="info"><strong>Toss:</strong> <span id="toss-result">Pending...</span></div>
+        </div>
+
+        <div style="text-align:center; margin-bottom:1rem;">
+            <button id="spin-toss"
+                style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:0.5rem; cursor:pointer;">
+                Spin the Coin!
+            </button>
+            <div id="toss-outcome" style="margin-top:0.75rem; font-size:1rem; font-weight:bold;"></div>
+
+            <div id="decision-area" style="margin-top:1rem; display:none;">
+                <span id="winner-choice"></span>
+                <button class="decision-btn" data-choice="Bat"
+                    style="margin-left:1rem; padding:0.5rem 1rem;">Bat</button>
+                <button class="decision-btn" data-choice="Bowl"
+                    style="margin-left:0.5rem; padding:0.5rem 1rem;">Bowl</button>
+            </div>
+        </div>
+
+
+        <div class="panels">
+            <div class="panel">
+                <h2>{{ match.team_home.split('_')[0] }} Playing XI</h2>
+                <ul class="xi-list">
+                    {% for p in match.playing_xi.home %}
+                    <li>{{ p.name }} – {{ p.role }}{% if p.will_bowl %} (Bowling){% endif %}</li>
+                    {% endfor %}
+                </ul>
+                <h2>{{ match.team_away.split('_')[0] }} Playing XI</h2>
+                <ul class="xi-list">
+                    {% for p in match.playing_xi.away %}
+                    <li>{{ p.name }} – {{ p.role }}{% if p.will_bowl %} (Bowling){% endif %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="panel">
+                <h2>Live Commentary</h2>
+                <!-- <div id="commentary-log" class="commentary" style="height:75vh;overflow-y:auto;"> -->
+                <div id="commentary-log" class="commentary">
+                    <p><em>Match starts soon...</em></p>
+                </div>
+
+
+                <div class="scoreboard" id="scoreboard">
+                    <!-- <div class="team-name">
+                        <span id="batting-team">{{ match.team_home.split('_')[0] }}</span>
+                    </div> -->
+                    <div class="score-display">
+                        <span id="score">0/0</span>
+                        <span class="score-label">RUNS/WKTS</span>
+                    </div>
+                    <div class="over-display">
+                        <span id="over-info">0.0</span>
+                        <span class="score-label">OVERS</span>
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+    </div>
+
+    <script>
+        let matchOver = false;
+        let delay = 300;  // default 1x pace
+
+        document.querySelectorAll('.pace-btn').forEach(btn => {
+            btn.onclick = () => delay = parseInt(btn.dataset.pace);
+        });
+
+        const commentaryLog = document.getElementById('commentary-log');
+        const scoreElem = document.getElementById('score');
+        const overInfoElem = document.getElementById('over-info');
+        const strikerInfoElem = document.getElementById('striker-info');
+        const bowlerInfoElem = document.getElementById('bowler-info');
+
+        // Spin the coin, update Toss:…, then log intros and start the match
+        function spinTossAndStartMatch() {
+            const resultEl = document.getElementById('toss-result');
+            fetch(`${window.location.pathname}/spin-toss`)
+                .then(r => r.json())
+                .then(d => {
+                    // ① Update the “Toss:” label
+                    resultEl.textContent = `${d.toss_winner} chose to ${d.toss_decision}`;
+                    // ② Log toss commentary and intros
+                    commentaryLog.innerHTML += `<p>${d.toss_commentary}</p>`;
+                    commentaryLog.innerHTML += `<br>`;
+                    commentaryLog.innerHTML += `<p>🧢 <strong>Striker:</strong> ${d.striker}</p>`;
+                    commentaryLog.innerHTML += `<p>🎯 <strong>Non-striker:</strong> ${d.non_striker}</p>`;
+                    commentaryLog.innerHTML += `<p>🎳 <strong>Bowler:</strong> ${d.bowler}</p>`;
+                    commentaryLog.innerHTML += `<br>`;
+                    commentaryLog.innerHTML += `<br>`;
+                    // ③ Kick off the match
+                    startMatch();
+                })
+                .catch(err =>
+                    commentaryLog.innerHTML += `<p style="color:red;">Toss error: ${err}</p>`
+                );
+        }
+
+        // Match simulation logic
+        function startMatch() {
+            if (matchOver) return;
+
+            fetch(window.location.pathname + "/next-ball")
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        commentaryLog.innerHTML += `<p style="color:red;">${data.error}</p>`;
+                        return;
+                    }
+
+                    if (data.match_over) {
+                        commentaryLog.innerHTML +=
+                            `<p style="color:green;"><b>Match Over! ${data.result}</b></p>`;
+
+                        // Update scoreboard to show match result
+                        document.getElementById('scoreboard').innerHTML = `
+        <div class="match-result">
+            <span style="font-size: 1.4rem; font-weight: bold; color: white; text-align: center;">
+                ${data.result}
+            </span>
+        </div>
+    `;
+
+                        matchOver = true;
+                        return;
+                    }
+
+                    commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+
+
+                    commentaryLog.scrollTop = commentaryLog.scrollHeight;
+
+                    scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
+                    overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
+                    // strikerInfoElem.textContent = `Striker: ${data.current_striker}`;
+                    // bowlerInfoElem.textContent = `Bowler: ${data.current_bowler}`;
+
+                    // End of over summary
+                    if (data.ball === 0) {
+                        commentaryLog.innerHTML += `<br>`;
+                        commentaryLog.innerHTML += `<p><strong>End of over ${data.over}</strong> (Score: ${data.score}/${data.wickets})</p>`;
+                        commentaryLog.innerHTML += `<br>`;
+                    }
+
+                    setTimeout(startMatch, delay);
+                })
+                .catch(err => commentaryLog.innerHTML += `<p style="color:red;">Match error: ${err}</p>`);
+        }
+
+        // Start toss & simulation immediately upon loading
+        // replace the auto-call with this:
+        document.getElementById('spin-toss').onclick = () => {
+            spinTossAndStartMatch();
+        };
+
+        // Theme toggle (consistent with match_setup.html)
+        const root = document.documentElement, ttl = document.getElementById('theme-toggle');
+
+        function applyTheme(t) {
+            root.setAttribute('data-theme', t);
+            ttl.textContent = t === 'dark' ? '☀️' : '🌙';
+            localStorage.setItem('theme', t);
+        }
+
+        applyTheme(window.appTheme);
+        ttl.onclick = () => applyTheme(window.appTheme = window.appTheme === 'dark' ? 'light' : 'dark');
+    </script>
+
+
+</body>
+
+</html>
