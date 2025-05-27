@@ -2,9 +2,12 @@ import os
 import json
 import logging
 import yaml
+import uuid
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from engine.match import Match
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -27,6 +30,12 @@ from flask_login import login_required, current_user
 from engine.team import Team, save_team, PITCH_PREFERENCES
 from engine.player import Player, PLAYER_ROLES, BATTING_HANDS, BOWLING_TYPES, BOWLING_HANDS
 from auth.user_auth import load_credentials  # adjust import path if needed
+from flask import send_from_directory
+import random
+
+
+MATCH_INSTANCES = {}
+
 
 # Make sure PROJECT_ROOT is defined near the top of app.py:
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -480,24 +489,221 @@ def create_app():
         # GET: render the same form, passing raw JSON and an edit flag
         return render_template("team_create.html", team=raw, edit=True)
     
+    
     @app.route("/match/setup", methods=["GET", "POST"])
     @login_required
     def match_setup():
-        # Load the logged-in user’s teams
         teams = load_user_teams(current_user.id)
 
         if request.method == "POST":
-            # TODO: handle the posted match-setup JSON to /match/start
-            # e.g. form data available via request.form or request.get_json()
-            # For now just flash and redirect back
-            flash("✅ Match setup received! (backend stub)", "success")
-            return redirect(url_for("home"))
+            data = request.get_json()
 
-        # GET: render the match setup & XI selection page
+            # Step 1: Extract base team short codes
+            home_code = data["team_home"].split("_")[0]
+            away_code = data["team_away"].split("_")[0]
+
+            # Step 2: Load full team data from disk
+            def load_team(full_filename):
+                path = os.path.join(PROJECT_ROOT, "data", "teams", full_filename + ".json")
+                with open(path) as f:
+                    return json.load(f)
+
+            full_home = load_team(data["team_home"])
+            full_away = load_team(data["team_away"])
+
+            # Step 3: Replace playing_xi with full player data + will_bowl flag
+            def enrich_xi(selected, full_team):
+                enriched = []
+                for sel in selected:
+                    match = next((p for p in full_team["players"] if p["name"] == sel["name"]), None)
+                    if match:
+                        enriched_player = match.copy()
+                        enriched_player["will_bowl"] = sel.get("will_bowl", False)
+                        enriched.append(enriched_player)
+                return enriched
+
+            data["playing_xi"]["home"] = enrich_xi(data["playing_xi"]["home"], full_home)
+            data["playing_xi"]["away"] = enrich_xi(data["playing_xi"]["away"], full_away)
+
+            # Step 4: Generate metadata and save file
+            match_id = uuid.uuid4().hex[:8]
+            ts = datetime.now().strftime("%Y%m%d%H%M%S")
+            user = current_user.id
+            fname = f"playing_{home_code}_vs_{away_code}_{user}_{ts}.json"
+
+            match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+            os.makedirs(match_dir, exist_ok=True)
+            path = os.path.join(match_dir, fname)
+
+            data.update({
+                "match_id": match_id,
+                "created_by": user,
+                "timestamp": ts
+            })
+
+            with open(path, "w") as f:
+                json.dump(data, f, indent=2)
+
+            app.logger.info(f"[MatchSetup] Saved {fname} for {user}")
+            return jsonify(match_id=match_id), 200
+
         return render_template("match_setup.html", teams=teams)
 
+    @app.route("/match/<match_id>")
+    @login_required
+    def match_detail(match_id):
+        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+        match_data = None
+
+        # Search for the JSON whose match_id field matches
+        for fn in os.listdir(match_dir):
+            if not fn.endswith(".json"):
+                continue
+            path = os.path.join(match_dir, fn)
+            try:
+                with open(path, "r") as f:
+                    data = json.load(f)
+                if data.get("match_id") == match_id and data.get("created_by") == current_user.id:
+                    match_data = data
+                    break
+            except Exception as e:
+                app.logger.error(f"[MatchDetail] error loading {fn}: {e}", exc_info=True)
+
+        if not match_data:
+            flash("❌ Match not found or access denied.", "danger")
+            return redirect(url_for("home"))
+
+        # Render the detail page, passing the loaded JSON
+        return render_template("match_detail.html", match=match_data)
+    
+    @app.route("/match/<match_id>/set-toss", methods=["POST"])
+    @login_required
+    def set_toss(match_id):
+        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+        data = request.get_json()
+        toss_winner = data.get("winner")
+        decision = data.get("decision")
+
+        # Locate match file by match_id
+        for fn in os.listdir(match_dir):
+            path = os.path.join(match_dir, fn)
+            with open(path, "r") as f:
+                match_data = json.load(f)
+            if match_data.get("match_id") == match_id:
+                match_data["toss_winner"] = toss_winner
+                match_data["toss_decision"] = decision
+                # Save updated file
+                with open(path, "w") as f:
+                    json.dump(match_data, f, indent=2)
+                app.logger.info(f"[MatchToss] {toss_winner} chose to {decision} (Match: {match_id})")
+                return jsonify({"status":"success"}), 200
+
+        return jsonify({"error":"Match not found"}), 404
+    
+    @app.route("/match/<match_id>/spin-toss")
+    @login_required
+    def spin_toss(match_id):
+        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+        match_data = None
+        match_path = None
+
+        for fn in os.listdir(match_dir):
+            if not fn.endswith(".json"):
+                continue
+            path = os.path.join(match_dir, fn)
+            with open(path) as f:
+                try:
+                    data = json.load(f)
+                    if data.get("match_id") == match_id:
+                        match_data = data
+                        match_path = path
+                        break
+                except Exception as e:
+                    app.logger.error(f"Error reading match file {fn}: {e}")
+
+        if not match_data:
+            return jsonify({"error": "Match not found"}), 404
+
+        toss_choice = match_data["toss"]
+        toss_result = random.choice(["Heads", "Tails"])
+
+        team_home = match_data["team_home"].split('_')[0]
+        team_away = match_data["team_away"].split('_')[0]
+        home_captain = match_data["playing_xi"]["home"][0]["name"]
+        away_captain = match_data["playing_xi"]["away"][0]["name"]
+
+        toss_winner = team_away if toss_choice == toss_result else team_home
+        toss_decision = random.choice(["Bat", "Bowl"])
+
+        match_data["toss_winner"] = toss_winner
+        match_data["toss_decision"] = toss_decision
+
+        with open(match_path, "w") as f:
+            json.dump(match_data, f, indent=2)
+        
+        # ───── NEW: update the in-memory Match, if created
+        if match_id in MATCH_INSTANCES:
+            inst = MATCH_INSTANCES[match_id]
+            inst.toss_winner   = toss_winner
+            inst.toss_decision = toss_decision
+            inst.batting_team  = inst.home_xi if toss_decision=="Bat" else inst.away_xi
+            inst.bowling_team  = inst.away_xi if inst.batting_team==inst.home_xi else inst.home_xi
+
+        commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
+                    f"{toss_winner} won the toss and choose to {toss_decision} first."
+        commentary = commentary +"\n"
+
+        return jsonify({
+            "toss_commentary": commentary,
+            "toss_winner":     toss_winner,
+            "toss_decision":   toss_decision,
+            "striker": match_data["playing_xi"]["home"][0]["name"],
+            "non_striker": match_data["playing_xi"]["home"][1]["name"],
+            "bowler": next((p["name"] for p in match_data["playing_xi"]["away"]
+                            if p["will_bowl"] and p["bowling_type"] in ["Fast", "Fast-medium", "Medium-fast"]),
+                            match_data["playing_xi"]["away"][0]["name"])
+        })
 
 
+    @app.route("/match/<match_id>/next-ball")
+    @login_required
+    def next_ball(match_id):
+        if match_id not in MATCH_INSTANCES:
+            match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+            match_data = None
+            for fn in os.listdir(match_dir):
+                with open(os.path.join(match_dir, fn)) as f:
+                    data = json.load(f)
+                    if data["match_id"] == match_id:
+                        match_data = data
+                        break
+            if not match_data:
+                return jsonify({"error": "Match not found"}), 404
+            MATCH_INSTANCES[match_id] = Match(match_data)
+
+        match = MATCH_INSTANCES[match_id]
+        outcome = match.next_ball()
+
+        # Explicitly send final score and wickets clearly
+        if outcome.get("match_over"):
+            result = outcome.get("result", "Match ended")
+            return jsonify({
+                "match_over": True,
+                "result": result
+            })
+
+        # if outcome.get("match_over"):
+        #     final_score = outcome.get("final_score", match.score)
+        #     wickets = outcome.get("wickets", match.wickets)
+        #     result = outcome.get("result", "Match ended")
+        #     return jsonify({
+        #         "match_over": True,
+        #         "final_score": final_score,
+        #         "wickets": wickets,
+        #         "result": result
+        #     })
+
+        return jsonify(outcome)
     return app
 
 # ────── Run Server ──────

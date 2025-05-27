@@ -518,6 +518,7 @@
                     const bar = document.createElement('div');
                     bar.className = 'player-bar';
                     bar.draggable = true;
+                    bar.dataset.playerName = p.name;
                     bar.dataset.role = p.role;
                     bar.innerHTML = `<span class="info">${roleIcons[p.role] || ''} ${p.name}</span>` +
                         ((['Bowler', 'All-rounder'].includes(p.role))
@@ -619,6 +620,55 @@
         }
         tosses.forEach(r => r.addEventListener('change', validateAll));
         document.addEventListener('DOMContentLoaded', validateAll);
+
+
+        // FINAL: Handle “Simulate Match” click
+        const simulateBtn = document.getElementById('simulate-btn');
+        simulateBtn.addEventListener('click', async () => {
+            // 1️⃣ Gather data
+            const [hIdx, aIdx] = selected;
+            const home = TEAMS[hIdx], away = TEAMS[aIdx];
+            const payload = {
+                team_home: `${home.short_code}_${home.created_by_email}`,
+                team_away: `${away.short_code}_${away.created_by_email}`,
+                stadium: home.home_ground,
+                pitch: document.getElementById('pitch-select').value,
+                playing_xi: {
+                    home: [...document.getElementById('home-selected').children]
+                        // only bars that have a real playerName
+                        .filter(bar => bar.dataset.playerName)
+                        .map(bar => ({
+                            name: bar.dataset.playerName,
+                            role: bar.dataset.role,
+                            will_bowl: Boolean(bar.querySelector('.will-bowl')?.checked)
+                        })),
+                    away: [...document.getElementById('away-selected').children]
+                        .filter(bar => bar.dataset.playerName)
+                        .map(bar => ({
+                            name: bar.dataset.playerName,
+                            role: bar.dataset.role,
+                            will_bowl: Boolean(bar.querySelector('.will-bowl')?.checked)
+                        }))
+                },
+                toss: document.querySelector('input[name="toss"]:checked').value
+            };
+
+            // 2️⃣ POST
+            const res = await fetch("/match/setup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            // 3️⃣ Redirect or alert
+            if (res.ok) {
+                const { match_id } = await res.json();
+                window.location.href = `/match/${match_id}`;
+            } else {
+                const err = await res.json();
+                alert("❌ " + (err.error || "Could not save match"));
+            }
+        });
     </script>
 </body>
 
