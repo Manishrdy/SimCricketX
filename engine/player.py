@@ -1,9 +1,15 @@
 # engine/player.py
 
-BOWLING_TYPES = [t.lower() for t in [
+# BOWLING_TYPES = [t.lower() for t in [
+#   "Fast","Fast-medium","Medium-fast","Medium",
+#   "Off spin","Leg spin","Finger spin","Wrist spin"
+# ]]
+
+# CORRECT:
+BOWLING_TYPES = [
   "Fast","Fast-medium","Medium-fast","Medium",
   "Off spin","Leg spin","Finger spin","Wrist spin"
-]]
+]
 
 BOWLING_HANDS = ["Left", "Right"]
 BATTING_HANDS = ["Left", "Right"]

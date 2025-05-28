@@ -653,15 +653,32 @@ def create_app():
                     f"{toss_winner} won the toss and choose to {toss_decision} first."
         commentary = commentary +"\n"
 
+        # Determine batting and bowling teams based on toss result
+        if toss_winner == team_home:
+            if toss_decision == "Bat":
+                batting_team = match_data["playing_xi"]["home"]
+                bowling_team = match_data["playing_xi"]["away"]
+            else:  # Bowl
+                batting_team = match_data["playing_xi"]["away"]
+                bowling_team = match_data["playing_xi"]["home"]
+        else:  # toss_winner == team_away
+            if toss_decision == "Bat":
+                batting_team = match_data["playing_xi"]["away"]
+                bowling_team = match_data["playing_xi"]["home"]
+            else:  # Bowl
+                batting_team = match_data["playing_xi"]["home"]
+                bowling_team = match_data["playing_xi"]["away"]
+
+        # Build complete toss commentary with correct batsmen
+        full_commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
+                        f"{toss_winner} won the toss and choose to {toss_decision} first.<br>" \
+                        f"<br>🧢 <strong>Striker:</strong> {batting_team[0]['name']}<br>" \
+                        f"🎯 <strong>Non-striker:</strong> {batting_team[1]['name']}"
+        
         return jsonify({
-            "toss_commentary": commentary,
+            "toss_commentary": full_commentary,
             "toss_winner":     toss_winner,
-            "toss_decision":   toss_decision,
-            "striker": match_data["playing_xi"]["home"][0]["name"],
-            "non_striker": match_data["playing_xi"]["home"][1]["name"],
-            "bowler": next((p["name"] for p in match_data["playing_xi"]["away"]
-                            if p["will_bowl"] and p["bowling_type"] in ["Fast", "Fast-medium", "Medium-fast"]),
-                            match_data["playing_xi"]["away"][0]["name"])
+            "toss_decision":   toss_decision
         })
 
 
@@ -710,4 +727,4 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     # debug=False for production
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=2624, debug=False)
