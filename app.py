@@ -704,21 +704,20 @@ def create_app():
         # Explicitly send final score and wickets clearly
         if outcome.get("match_over"):
             result = outcome.get("result", "Match ended")
+            # After
+            app.logger.info(f"Result in main.py {outcome.get("result",  "Match ended")}")
+
             return jsonify({
-                "match_over": True,
-                "result": result
+                "innings_end":     True,                              # ← flag it as an innings end
+                "innings_number":  2,                                 # ← second innings
+                "match_over":      True,
+                "commentary":      outcome.get("commentary", "<b>Match Over!</b>"),
+                "scorecard_data":  outcome.get("scorecard_data"),     # ← your detailed card
+                "score":           outcome.get("final_score", match.score),
+                "wickets":         outcome.get("wickets",  match.wickets),
+                "result":          outcome.get("result",  "Match ended")
             })
 
-        # if outcome.get("match_over"):
-        #     final_score = outcome.get("final_score", match.score)
-        #     wickets = outcome.get("wickets", match.wickets)
-        #     result = outcome.get("result", "Match ended")
-        #     return jsonify({
-        #         "match_over": True,
-        #         "final_score": final_score,
-        #         "wickets": wickets,
-        #         "result": result
-        #     })
 
         return jsonify(outcome)
     return app

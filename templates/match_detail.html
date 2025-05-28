@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ match.team_home.split('_')[0] }} vs {{ match.team_away.split('_')[0] }} – Project X</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
     <script>
         const savedTheme = localStorage.getItem('theme') || 'light';
@@ -288,7 +289,13 @@
             margin: 1rem 0;
         }
 
-        .close-scorecard {
+        .save-scorecard {
+            margin-right: 8px;
+            /* adds ~2ch of space */
+        }
+
+        .close-scorecard,
+        .save-scorecard {
             background: var(--accent);
             color: white;
             border: none;
@@ -297,6 +304,11 @@
             cursor: pointer;
             float: right;
             margin-top: 1rem;
+        }
+
+        .close-scorecard:hover,
+        .save-scorecard:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
@@ -408,7 +420,13 @@
                 Team needs X runs from Y overs at Z.ZZ runs per over
             </div>
 
-            <button class="close-scorecard" onclick="closeScorecard()">Close</button>
+            <!-- <button class="save-scorecard" onclick="saveScorecardImage()">Save</button>
+            <button class="close-scorecard" onclick="closeScorecard()">Close</button> -->
+
+            <div class="scorecard-actions">
+                <button class="close-scorecard" onclick="closeScorecard()">Close</button>
+                <button class="save-scorecard" onclick="saveScorecardImage()">Save</button>
+            </div>
         </div>
     </div>
 
@@ -511,31 +529,69 @@
                     }
 
                     // Check for innings end (1st innings)
+                    // if (data.innings_end && data.innings_number === 1) {
+                    //     // Show scorecard for 1st innings
+                    //     if (data.scorecard_data) {
+                    //         showScorecard(data.scorecard_data);
+                    //         // Auto-close after 5 seconds and continue to 2nd innings
+                    //         setTimeout(() => {
+                    //             closeScorecard();
+                    //             commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+                    //             commentaryLog.scrollTop = commentaryLog.scrollHeight;
+                    //             scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
+                    //             overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
+                    //             setTimeout(startMatch, delay);
+                    //         }, 5000);
+                    //         return;
+                    //     }
+                    // }
+
+                    // ① First‐innings end
                     if (data.innings_end && data.innings_number === 1) {
-                        // Show scorecard for 1st innings
                         if (data.scorecard_data) {
+                            // Show the 1st-innings scorecard
                             showScorecard(data.scorecard_data);
-                            // Auto-close after 5 seconds and continue to 2nd innings
-                            setTimeout(() => {
+
+                            // Don’t auto-close—wait for the user to click “Close”
+                            const closeBtn = document.querySelector('.close-scorecard');
+                            closeBtn.onclick = () => {
+                                // 1) Hide the overlay
                                 closeScorecard();
+
+                                // 2) Append any final commentary
                                 commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
                                 commentaryLog.scrollTop = commentaryLog.scrollHeight;
+
+                                // 3) Update the live scoreboard for ball-by-ball view
                                 scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
                                 overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
+
+                                // 4) Now kick off 2nd innings
                                 setTimeout(startMatch, delay);
-                            }, 5000);
+                            };
+
+                            // Don’t proceed until the user clicks
                             return;
                         }
                     }
 
+                    console.log("DEBUG INFO:", {
+                        "data": data,
+                        scorecard: data.scorecard_data,
+                        inningsEnd: data.innings_end,
+                        inningsNumber: data.innings_number
+                    });
+
+
                     if (data.innings_end && data.innings_number === 2) {
+                        console.log("Inside 2nd innings scoreboard")
                         if (data.scorecard_data) {
                             showScorecard(data.scorecard_data);
                         }
 
                         commentaryLog.innerHTML += `<p>${data.commentary || "<b>Match Over!</b>"}</p>`;
                         matchOver = true;
-                        return
+                        return;
                     }
 
                     if (data.match_over) {
@@ -547,12 +603,13 @@
                         }
 
                         // Update scoreboard with result
+                        // Show the result in the bottom bar instead of Score/Overs
                         document.getElementById('scoreboard').innerHTML = `
-                    <div class="match-result">
-                        <span style="font-size: 1.4rem; font-weight: bold; color: white; text-align: center;">
+                        <div class="score-display">
+                            <span style="font-size:1.4rem; font-weight:bold; color:white; text-align:center;">
                             ${data.result}
-                        </span>
-                    </div>`;
+                            </span>
+                        </div>`;
 
                         // Show scorecard after a short delay
                         console.log("match finish")
@@ -577,6 +634,25 @@
                 })
                 .catch(err => commentaryLog.innerHTML += `<p style="color:red;">Match error: ${err}</p>`);
         }
+
+        // snapshot & download the #scorecard-overlay as a PNG
+        function saveScorecardImage() {
+            const overlay = document.getElementById('scorecard-overlay');
+            html2canvas(overlay).then(canvas => {
+                canvas.toBlob(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'scorecard.png';
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                });
+            });
+        }
+
 
         // Theme toggle (consistent with match_setup.html)
         const root = document.documentElement, ttl = document.getElementById('theme-toggle');

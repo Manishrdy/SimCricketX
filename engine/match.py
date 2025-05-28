@@ -172,6 +172,7 @@ class Match:
     def next_ball(self):
         if self.innings == 3:
             return {
+                "test": "Manish1",
                 "match_over": True,
                 "final_score": self.score,
                 "wickets": self.wickets,
@@ -208,6 +209,7 @@ class Match:
 
                 # ✅ Return with scorecard data and innings_end flag
                 return {
+                    "Test": "Manish2",
                     "innings_end": True,  # New flag to indicate innings end
                     "innings_number": 1,
                     "match_over": False,
@@ -224,6 +226,7 @@ class Match:
 
             else:  # 2nd innings ending
                 # ✅ Generate 2nd innings scorecard
+                print("Inside end of 2nd innings, I am here.")
                 scorecard_data = self._generate_detailed_scorecard()
                 
                 # ✅ Calculate match result
@@ -262,7 +265,25 @@ class Match:
                 final_commentary += f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
 
                 self.innings = 3
+
+                end_debug = {
+                    "Test": "Manish3",
+                    "innings_end": True,          # ← add this
+                    "innings_number": 2,  
+                    "match_over": True,
+                    "scorecard_data": scorecard_data,  # ✅ SCORECARD INCLUDED
+                    "final_score": self.score,
+                    "wickets": self.wickets,
+                    "result": self.result,
+                    "commentary": final_commentary  # ✅ FINAL STATS INCLUDED
+                }
+
+                print("Final result printing at the end of second innings - {}".format(end_debug))
+
                 return {
+                    "Test": "Manish4",
+                    "innings_end": True,          # ← add this
+                    "innings_number": 2,  
                     "match_over": True,
                     "scorecard_data": scorecard_data,  # ✅ SCORECARD INCLUDED
                     "final_score": self.score,
@@ -327,6 +348,7 @@ class Match:
                 self.commentary.append(commentary_line)
                 self.commentary.append("<br><strong>All Out!</strong>")
                 return {
+                    "Test": "Manish5",
                     "match_over": True,
                     "scorecard_data": scorecard_data,  # ✅ ADD SCORECARD
                     "final_score": self.score,
@@ -413,6 +435,7 @@ class Match:
                 
                 self.innings = 3
                 return {
+                    "Test": "Manish6",
                     "match_over": True,
                     "scorecard_data": scorecard_data,  # ✅ ADD SCORECARD
                     "final_score": self.score,
@@ -499,6 +522,7 @@ class Match:
             self.batter_idx.reverse()
 
         return {
+            "Test": "Manish7",
             "match_over": False,
             "score": self.score,  # ✅ ADD MISSING SCORE
             "wickets": self.wickets,
