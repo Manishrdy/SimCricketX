@@ -214,6 +214,90 @@
             font-weight: bold;
             font-size: 1.8rem;
         }
+
+        /* Scorecard Modal/Panel */
+        .scorecard-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .scorecard-panel {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 2rem;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .scorecard-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            color: transparent;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .scorecard-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+            font-family: monospace;
+        }
+
+        .scorecard-table th,
+        .scorecard-table td {
+            padding: 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid var(--shadow);
+        }
+
+        .scorecard-table th {
+            background: var(--input-bg);
+            font-weight: bold;
+        }
+
+        .scorecard-summary {
+            background: var(--input-bg);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .target-info {
+            background: var(--accent);
+            color: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            font-weight: bold;
+            margin: 1rem 0;
+        }
+
+        .close-scorecard {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            float: right;
+            margin-top: 1rem;
+        }
     </style>
 </head>
 
@@ -294,6 +378,40 @@
         </div>
     </div>
 
+    <!-- Scorecard Overlay -->
+    <div class="scorecard-overlay" id="scorecard-overlay">
+        <div class="scorecard-panel">
+            <div class="scorecard-header" id="scorecard-title">TEAM SCORECARD</div>
+
+            <table class="scorecard-table" id="scorecard-table">
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Status</th>
+                        <th>Runs</th>
+                        <th>Balls</th>
+                        <th>4s</th>
+                        <th>6s</th>
+                        <th>S/R</th>
+                    </tr>
+                </thead>
+                <tbody id="scorecard-tbody">
+                    <!-- Players will be populated here -->
+                </tbody>
+            </table>
+
+            <div class="scorecard-summary" id="scorecard-summary">
+                Total: 0/0 | Overs: 0.0 | Run Rate: 0.00 | Extras: 0
+            </div>
+
+            <div class="target-info" id="target-info" style="display: none;">
+                Team needs X runs from Y overs at Z.ZZ runs per over
+            </div>
+
+            <button class="close-scorecard" onclick="closeScorecard()">Close</button>
+        </div>
+    </div>
+
     <script>
         let matchOver = false;
         let delay = 300;  // default 1x pace
@@ -319,9 +437,9 @@
                     // ② Log toss commentary and intros
                     commentaryLog.innerHTML += `<p>${d.toss_commentary}</p>`;
                     commentaryLog.innerHTML += `<br>`;
-                    commentaryLog.innerHTML += `<p>🧢 <strong>Striker:</strong> ${d.striker}</p>`;
-                    commentaryLog.innerHTML += `<p>🎯 <strong>Non-striker:</strong> ${d.non_striker}</p>`;
-                    commentaryLog.innerHTML += `<p>🎳 <strong>Bowler:</strong> ${d.bowler}</p>`;
+                    // commentaryLog.innerHTML += `<p>🧢 <strong>Striker:</strong> ${d.striker}</p>`;
+                    // commentaryLog.innerHTML += `<p>🎯 <strong>Non-striker:</strong> ${d.non_striker}</p>`;
+                    // commentaryLog.innerHTML += `<p>🎳 <strong>Bowler:</strong> ${d.bowler}</p>`;
                     commentaryLog.innerHTML += `<br>`;
                     commentaryLog.innerHTML += `<br>`;
                     // ③ Kick off the match
@@ -332,7 +450,55 @@
                 );
         }
 
-        // Match simulation logic
+        // Start toss & simulation immediately upon loading
+        // replace the auto-call with this:
+        document.getElementById('spin-toss').onclick = () => {
+            spinTossAndStartMatch();
+        };
+
+
+        // Add these functions to your script section
+
+        function showScorecard(data) {
+            document.getElementById('scorecard-overlay').style.display = 'flex';
+
+            // Update title
+            document.getElementById('scorecard-title').textContent =
+                `${data.team_name} ${data.innings} INNINGS SCORECARD`;
+
+            // Populate table
+            const tbody = document.getElementById('scorecard-tbody');
+            tbody.innerHTML = '';
+
+            data.players.forEach(player => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+            <td>${player.name}</td>
+            <td>${player.status}</td>
+            <td>${player.runs}</td>
+            <td>${player.balls}</td>
+            <td>${player.fours}</td>
+            <td>${player.sixes}</td>
+            <td>${player.strike_rate}%</td>
+        `;
+            });
+
+            // Update summary
+            document.getElementById('scorecard-summary').textContent =
+                `Total: ${data.total_score}/${data.wickets} | Overs: ${data.overs} | Run Rate: ${data.run_rate} | Extras: ${data.extras}`;
+
+            // Show target info if 2nd innings
+            if (data.target_info) {
+                document.getElementById('target-info').style.display = 'block';
+                document.getElementById('target-info').textContent = data.target_info;
+            }
+        }
+
+        function closeScorecard() {
+            document.getElementById('scorecard-overlay').style.display = 'none';
+        }
+
+
         function startMatch() {
             if (matchOver) return;
 
@@ -344,50 +510,73 @@
                         return;
                     }
 
-                    if (data.match_over) {
-                        commentaryLog.innerHTML +=
-                            `<p style="color:green;"><b>Match Over! ${data.result}</b></p>`;
+                    // Check for innings end (1st innings)
+                    if (data.innings_end && data.innings_number === 1) {
+                        // Show scorecard for 1st innings
+                        if (data.scorecard_data) {
+                            showScorecard(data.scorecard_data);
+                            // Auto-close after 5 seconds and continue to 2nd innings
+                            setTimeout(() => {
+                                closeScorecard();
+                                commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+                                commentaryLog.scrollTop = commentaryLog.scrollHeight;
+                                scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
+                                overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
+                                setTimeout(startMatch, delay);
+                            }, 5000);
+                            return;
+                        }
+                    }
 
-                        // Update scoreboard to show match result
+                    if (data.innings_end && data.innings_number === 2) {
+                        if (data.scorecard_data) {
+                            showScorecard(data.scorecard_data);
+                        }
+
+                        commentaryLog.innerHTML += `<p>${data.commentary || "<b>Match Over!</b>"}</p>`;
+                        matchOver = true;
+                        return
+                    }
+
+                    if (data.match_over) {
+                        // Show match result commentary first
+                        if (data.commentary) {
+                            commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+                        } else {
+                            commentaryLog.innerHTML += `<br><p style="color:green;"><b>Match Over! ${data.result}</b></p>`;
+                        }
+
+                        // Update scoreboard with result
                         document.getElementById('scoreboard').innerHTML = `
-        <div class="match-result">
-            <span style="font-size: 1.4rem; font-weight: bold; color: white; text-align: center;">
-                ${data.result}
-            </span>
-        </div>
-    `;
+                    <div class="match-result">
+                        <span style="font-size: 1.4rem; font-weight: bold; color: white; text-align: center;">
+                            ${data.result}
+                        </span>
+                    </div>`;
+
+                        // Show scorecard after a short delay
+                        console.log("match finish")
+                        if (data.scorecard_data) {
+                            setTimeout(() => {
+                                showScorecard(data.scorecard_data);
+                            }, 1000);
+                        }
 
                         matchOver = true;
                         return;
                     }
 
+                    // Normal ball-by-ball update
                     commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
-
-
                     commentaryLog.scrollTop = commentaryLog.scrollHeight;
 
                     scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
                     overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
-                    // strikerInfoElem.textContent = `Striker: ${data.current_striker}`;
-                    // bowlerInfoElem.textContent = `Bowler: ${data.current_bowler}`;
-
-                    // End of over summary
-                    if (data.ball === 0) {
-                        commentaryLog.innerHTML += `<br>`;
-                        commentaryLog.innerHTML += `<p><strong>End of over ${data.over}</strong> (Score: ${data.score}/${data.wickets})</p>`;
-                        commentaryLog.innerHTML += `<br>`;
-                    }
 
                     setTimeout(startMatch, delay);
                 })
                 .catch(err => commentaryLog.innerHTML += `<p style="color:red;">Match error: ${err}</p>`);
         }
-
-        // Start toss & simulation immediately upon loading
-        // replace the auto-call with this:
-        document.getElementById('spin-toss').onclick = () => {
-            spinTossAndStartMatch();
-        };
 
         // Theme toggle (consistent with match_setup.html)
         const root = document.documentElement, ttl = document.getElementById('theme-toggle');
