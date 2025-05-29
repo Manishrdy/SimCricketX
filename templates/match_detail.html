@@ -234,9 +234,9 @@
             background: var(--card-bg);
             border-radius: 1rem;
             padding: 2rem;
-            max-width: 800px;
-            width: 90%;
-            max-height: 80vh;
+            max-width: 1200px;
+            width: 95%;
+            max-height: 90vh;
             overflow-y: auto;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         }
@@ -309,6 +309,19 @@
         .close-scorecard:hover,
         .save-scorecard:hover {
             background-color: #0056b3;
+        }
+
+        .match-result {
+            text-align: center;
+            color: white;
+            width: 100%;
+        }
+
+        .match-result span {
+            font-size: 1.4rem;
+            font-weight: bold;
+            display: block;
+            line-height: 1.3;
         }
     </style>
 </head>
@@ -395,23 +408,54 @@
         <div class="scorecard-panel">
             <div class="scorecard-header" id="scorecard-title">TEAM SCORECARD</div>
 
-            <table class="scorecard-table" id="scorecard-table">
-                <thead>
-                    <tr>
-                        <th>Player</th>
-                        <th>Status</th>
-                        <th>Runs</th>
-                        <th>Balls</th>
-                        <th>4s</th>
-                        <th>6s</th>
-                        <th>S/R</th>
-                    </tr>
-                </thead>
-                <tbody id="scorecard-tbody">
-                    <!-- Players will be populated here -->
-                </tbody>
-            </table>
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                <!-- Batsmen Table -->
+                <div style="flex: 1;">
+                    <h3 style="text-align: center; margin-bottom: 0.5rem; font-size: 1.1rem;">BATTING</h3>
+                    <table class="scorecard-table" id="scorecard-table">
+                        <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th></th>
+                                <th>R</th>
+                                <th>B</th>
+                                <th>4s</th>
+                                <th>6s</th>
+                                <th>S/R</th>
+                                <th>Bowler</th>
+                                <th>Fielder</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scorecard-tbody">
+                            <!-- Players will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
 
+                <!-- Bowlers Table -->
+                <div style="flex: 1;">
+                    <h3 style="text-align: center; margin-bottom: 0.5rem; font-size: 1.1rem;">BOWLING</h3>
+                    <table class="scorecard-table" id="bowling-table">
+                        <thead>
+                            <tr>
+                                <th>Bowler</th>
+                                <th>O</th>
+                                <th>M</th>
+                                <th>R</th>
+                                <th>W</th>
+                                <th>NB</th>
+                                <th>WD</th>
+                                <th>ECO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bowling-tbody">
+                            <!-- Bowlers will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Move these INSIDE the scorecard-panel -->
             <div class="scorecard-summary" id="scorecard-summary">
                 Total: 0/0 | Overs: 0.0 | Run Rate: 0.00 | Extras: 0
             </div>
@@ -419,9 +463,6 @@
             <div class="target-info" id="target-info" style="display: none;">
                 Team needs X runs from Y overs at Z.ZZ runs per over
             </div>
-
-            <!-- <button class="save-scorecard" onclick="saveScorecardImage()">Save</button>
-            <button class="close-scorecard" onclick="closeScorecard()">Close</button> -->
 
             <div class="scorecard-actions">
                 <button class="close-scorecard" onclick="closeScorecard()">Close</button>
@@ -484,10 +525,9 @@
             document.getElementById('scorecard-title').textContent =
                 `${data.team_name} ${data.innings} INNINGS SCORECARD`;
 
-            // Populate table
+            // Populate batsmen table
             const tbody = document.getElementById('scorecard-tbody');
             tbody.innerHTML = '';
-
             data.players.forEach(player => {
                 const row = tbody.insertRow();
                 row.innerHTML = `
@@ -497,8 +537,27 @@
             <td>${player.balls}</td>
             <td>${player.fours}</td>
             <td>${player.sixes}</td>
-            <td>${player.strike_rate}%</td>
-        `;
+            <td>${player.strike_rate ? player.strike_rate + '%' : ''}</td>
+            <td>${player.bowler_out || ''}</td>
+            <td>${player.fielder_out || ''}</td>
+            `;
+            });
+
+            // Populate bowlers table
+            const bowlingTbody = document.getElementById('bowling-tbody');
+            bowlingTbody.innerHTML = '';
+            data.bowlers.forEach(bowler => {
+                const row = bowlingTbody.insertRow();
+                row.innerHTML = `
+            <td>${bowler.name}</td>
+            <td>${bowler.overs}</td>
+            <td>${bowler.maidens}</td>
+            <td>${bowler.runs}</td>
+            <td>${bowler.wickets}</td>
+            <td>${bowler.noballs}</td>
+            <td>${bowler.wides}</td>
+            <td>${bowler.economy}</td>
+            `;
             });
 
             // Update summary
@@ -528,24 +587,6 @@
                         return;
                     }
 
-                    // Check for innings end (1st innings)
-                    // if (data.innings_end && data.innings_number === 1) {
-                    //     // Show scorecard for 1st innings
-                    //     if (data.scorecard_data) {
-                    //         showScorecard(data.scorecard_data);
-                    //         // Auto-close after 5 seconds and continue to 2nd innings
-                    //         setTimeout(() => {
-                    //             closeScorecard();
-                    //             commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
-                    //             commentaryLog.scrollTop = commentaryLog.scrollHeight;
-                    //             scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
-                    //             overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
-                    //             setTimeout(startMatch, delay);
-                    //         }, 5000);
-                    //         return;
-                    //     }
-                    // }
-
                     // ① First‐innings end
                     if (data.innings_end && data.innings_number === 1) {
                         if (data.scorecard_data) {
@@ -559,7 +600,7 @@
                                 closeScorecard();
 
                                 // 2) Append any final commentary
-                                commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+                                // commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
                                 commentaryLog.scrollTop = commentaryLog.scrollHeight;
 
                                 // 3) Update the live scoreboard for ball-by-ball view
@@ -602,14 +643,10 @@
                             commentaryLog.innerHTML += `<br><p style="color:green;"><b>Match Over! ${data.result}</b></p>`;
                         }
 
-                        // Update scoreboard with result
-                        // Show the result in the bottom bar instead of Score/Overs
                         document.getElementById('scoreboard').innerHTML = `
-                        <div class="score-display">
-                            <span style="font-size:1.4rem; font-weight:bold; color:white; text-align:center;">
-                            ${data.result}
-                            </span>
-                        </div>`;
+    <div class="match-result">
+        <span>${data.result}</span>
+    </div>`;
 
                         // Show scorecard after a short delay
                         console.log("match finish")

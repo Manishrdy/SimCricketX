@@ -47,6 +47,70 @@ class Match:
         self.current_non_striker = self.batting_team[1]
         self.current_bowler = None
 
+    def _select_fielder_for_wicket(self, wicket_type):
+        """Select a fielder based on fielding ratings and wicket type"""
+        
+        # For wicket keeper dismissals (common in caught behind, stumpings)
+        wicket_keeper = next((p for p in self.bowling_team if p["role"] == "Wicketkeeper"), None)
+        
+        # Weight-based selection based on fielding ratings
+        fielders = []
+        weights = []
+        
+        for player in self.bowling_team:
+            # Skip the current bowler for caught dismissals (fielder can't be bowler)
+            if wicket_type == "Caught" and player["name"] == self.current_bowler["name"]:
+                continue
+                
+            fielders.append(player)
+            
+            # Weight calculation based on fielding rating and position
+            base_weight = player["fielding_rating"]
+            
+            # Wicket keeper gets higher weight for catches
+            if player["role"] == "Wicketkeeper" and wicket_type == "Caught":
+                base_weight *= 1.5
+            
+            # All-rounders and good fielders get slight boost
+            if player["role"] in ["All-rounder"] and player["fielding_rating"] > 70:
+                base_weight *= 1.2
+                
+            weights.append(base_weight)
+        
+        # Random selection based on weights
+        if fielders and weights:
+            selected_fielder = random.choices(fielders, weights=weights)[0]
+            return selected_fielder["name"]
+        
+        # Fallback to any fielder
+        return random.choice(self.bowling_team)["name"]
+    
+    def _generate_wicket_commentary(self, outcome, fielder_name=None):
+        """Generate enhanced commentary for wickets including fielder details"""
+        wicket_type = outcome["wicket_type"]
+        bowler_name = self.current_bowler["name"]
+        batsman_name = self.current_striker["name"]
+        
+        if wicket_type == "Caught":
+            if fielder_name:
+                return f"Wicket! {batsman_name} caught by {fielder_name} off {bowler_name}! Excellent catch!"
+            else:
+                return f"Wicket! {batsman_name} caught! {outcome['description']}"
+                
+        elif wicket_type == "Bowled":
+            return f"Wicket! {batsman_name} bowled by {bowler_name}! {outcome['description']}"
+            
+        elif wicket_type == "LBW":
+            return f"Wicket! {batsman_name} LBW to {bowler_name}! {outcome['description']}"
+            
+        elif wicket_type == "Run Out":
+            if fielder_name:
+                return f"Wicket! {batsman_name} run out by {fielder_name}! Brilliant fielding!"
+            else:
+                return f"Wicket! {batsman_name} run out! {outcome['description']}"
+        
+        # Fallback
+        return f"Wicket! {outcome['description']}"
 
     def pick_bowler(self):
         # Get all bowlers who can bowl
@@ -224,9 +288,7 @@ class Match:
                     "bowler": ""
                 }
 
-            else:  # 2nd innings ending
-                # ✅ Generate 2nd innings scorecard
-                print("Inside end of 2nd innings, I am here.")
+            else:
                 scorecard_data = self._generate_detailed_scorecard()
                 
                 # ✅ Calculate match result
@@ -266,20 +328,6 @@ class Match:
 
                 self.innings = 3
 
-                end_debug = {
-                    "Test": "Manish3",
-                    "innings_end": True,          # ← add this
-                    "innings_number": 2,  
-                    "match_over": True,
-                    "scorecard_data": scorecard_data,  # ✅ SCORECARD INCLUDED
-                    "final_score": self.score,
-                    "wickets": self.wickets,
-                    "result": self.result,
-                    "commentary": final_commentary  # ✅ FINAL STATS INCLUDED
-                }
-
-                print("Final result printing at the end of second innings - {}".format(end_debug))
-
                 return {
                     "Test": "Manish4",
                     "innings_end": True,          # ← add this
@@ -317,9 +365,6 @@ class Match:
         ball_number = f"{self.current_over}.{self.current_ball + 1}"
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
 
-        #Commentary for overs begin here
-        commentary_line = f"{ball_number} {self.current_bowler['name']} to {self.current_striker['name']} - "
-
         # Initialize current over runs if not exists
         if not hasattr(self, 'current_over_runs'):
             self.current_over_runs = 0
@@ -330,13 +375,25 @@ class Match:
             self.wickets += 1
             self.bowler_stats[self.current_bowler["name"]]["wickets"] += 1
             
-            # Update batsman wicket details
-            self.batsman_stats[self.current_striker["name"]]["wicket_type"] = outcome["wicket_type"]
-            self.batsman_stats[self.current_striker["name"]]["bowler_out"] = self.current_bowler["name"]
-            if outcome["wicket_type"] in ["Caught", "Run Out"]:
-                self.batsman_stats[self.current_striker["name"]]["fielder_out"] = "Fielder"  # Simplified
+            # ✅ NEW: Enhanced wicket handling with fielder selection
+            wicket_type = outcome["wicket_type"]
+            fielder_name = None
             
-            commentary_line += f"Wicket! {outcome['description']}"
+            # Update batsman wicket details
+            self.batsman_stats[self.current_striker["name"]]["wicket_type"] = wicket_type
+            self.batsman_stats[self.current_striker["name"]]["bowler_out"] = self.current_bowler["name"]
+            
+            # Select fielder based on wicket type
+            if wicket_type in ["Caught", "Run Out"]:
+                fielder_name = self._select_fielder_for_wicket(wicket_type)
+                self.batsman_stats[self.current_striker["name"]]["fielder_out"] = fielder_name
+            elif wicket_type in ["Bowled", "LBW"]:
+                # Only bowler involved
+                self.batsman_stats[self.current_striker["name"]]["fielder_out"] = ""
+            
+            # Generate enhanced commentary
+            commentary_line = f"{ball_number} {self.current_bowler['name']} to {self.current_striker['name']} - "
+            commentary_line += self._generate_wicket_commentary(outcome, fielder_name)
 
             self.batter_idx[0] = max(self.batter_idx) + 1
 
@@ -390,6 +447,7 @@ class Match:
                 elif runs == 6:
                     self.batsman_stats[self.current_striker["name"]]["sixes"] += 1
 
+            commentary_line = f"{ball_number} {self.current_bowler['name']} to {self.current_striker['name']} - "
             commentary_line += f"{runs} run(s), {outcome['description']}"
 
             # Strike rotation logic (only for odd runs and legal deliveries)
@@ -418,7 +476,8 @@ class Match:
                 final_commentary += f"<strong>Final Stats:</strong><br>"
                 final_commentary += f"{self.current_striker['name']}\t\t{striker_stats['runs']}({striker_stats['balls']}b) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
                 final_commentary += f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
-                
+
+
                 # Add extras display for final stats
                 extras_str = ""
                 if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
@@ -613,21 +672,108 @@ class Match:
             team_name = self.data["team_away"].split("_")[0]
         
         players = []
-        for player_name, stats in self.batsman_stats.items():
-            if stats["balls"] > 0 or stats["wicket_type"]:
-                strike_rate = (stats["runs"] * 100) / stats["balls"] if stats["balls"] > 0 else 0
-                status = stats["wicket_type"] if stats["wicket_type"] else "not out"
+
+        # Loop through ALL players in batting order, not just those who batted
+        for player in self.batting_team:
+            player_name = player["name"]
+            
+            if player_name in self.batsman_stats:
+                stats = self.batsman_stats[player_name]
                 
+                # Check if player actually batted (faced balls or got out)
+                if stats["balls"] > 0 or stats["wicket_type"]:
+                    strike_rate = (stats["runs"] * 100) / stats["balls"] if stats["balls"] > 0 else 0
+                    status = stats["wicket_type"] if stats["wicket_type"] else "not out"
+                    
+                    players.append({
+                        "name": player_name,
+                        "status": status,
+                        "runs": stats["runs"],
+                        "balls": stats["balls"],
+                        "fours": stats["fours"],
+                        "sixes": stats["sixes"],
+                        "strike_rate": f"{strike_rate:.1f}",
+                        "bowler_out": stats["bowler_out"],
+                        "fielder_out": stats["fielder_out"]
+                    })
+                else:
+                    # Player didn't bat - show with empty stats
+                    players.append({
+                        "name": player_name,
+                        "status": "-",
+                        "runs": "",
+                        "balls": "",
+                        "fours": "",
+                        "sixes": "",
+                        "strike_rate": "",
+                        "bowler_out": "",
+                        "fielder_out": ""
+                    })
+            else:
+                # Player not in stats at all - didn't bat
                 players.append({
                     "name": player_name,
-                    "status": status,
-                    "runs": stats["runs"],
-                    "balls": stats["balls"],
-                    "fours": stats["fours"],
-                    "sixes": stats["sixes"],
-                    "strike_rate": f"{strike_rate:.1f}"
+                    "status": "-",
+                    "runs": "",
+                    "balls": "",
+                    "fours": "",
+                    "sixes": "",
+                    "strike_rate": "",
+                    "bowler_out": "",
+                    "fielder_out": ""
                 })
-        
+
+        # Generate bowler stats - all players marked will_bowl
+        bowlers = []
+        for player in self.bowling_team:
+            if player.get("will_bowl", False):
+                player_name = player["name"]
+                
+                if player_name in self.bowler_stats:
+                    stats = self.bowler_stats[player_name]
+                    
+                    # Check if bowler actually bowled
+                    if stats["balls_bowled"] > 0 or stats["overs"] > 0:
+                        # Calculate economy rate
+                        total_balls = stats["overs"] * 6 + (stats["balls_bowled"] % 6)
+                        economy = (stats["runs"] * 6) / total_balls if total_balls > 0 else 0
+                        overs_display = f"{stats['overs']}.{stats['balls_bowled'] % 6}" if stats['balls_bowled'] % 6 > 0 else str(stats['overs'])
+                        
+                        bowlers.append({
+                            "name": player_name,
+                            "overs": overs_display,
+                            "maidens": stats["maidens"],
+                            "runs": stats["runs"],
+                            "wickets": stats["wickets"],
+                            "noballs": stats["noballs"],
+                            "wides": stats["wides"],
+                            "economy": f"{economy:.2f}"
+                        })
+                    else:
+                        # Bowler didn't bowl - empty stats
+                        bowlers.append({
+                            "name": player_name,
+                            "overs": "",
+                            "maidens": "",
+                            "runs": "",
+                            "wickets": "",
+                            "noballs": "",
+                            "wides": "",
+                            "economy": ""
+                        })
+                else:
+                    # Bowler not in stats - didn't bowl
+                    bowlers.append({
+                        "name": player_name,
+                        "overs": "",
+                        "maidens": "",
+                        "runs": "",
+                        "wickets": "",
+                        "noballs": "",
+                        "wides": "",
+                        "economy": ""
+                    })
+
         # Calculate extras
         individual_runs = sum(stats["runs"] for stats in self.batsman_stats.values())
         extras = self.score - individual_runs
@@ -640,10 +786,11 @@ class Match:
             "team_name": team_name,
             "innings": "1st" if self.innings == 1 else "2nd",
             "players": players,
+            "bowlers": bowlers,  # ← ADD THIS LINE
             "total_score": self.score,
             "wickets": self.wickets,
             "overs": overs_display,
             "run_rate": f"{run_rate:.2f}",
             "extras": extras,
-            "target_info": None  # Will be set for 2nd innings
+            "target_info": None
         }
