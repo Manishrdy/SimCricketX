@@ -567,7 +567,16 @@
             // Show target info if 2nd innings
             if (data.target_info) {
                 document.getElementById('target-info').style.display = 'block';
-                document.getElementById('target-info').textContent = data.target_info;
+
+                if(data.inningsNumber != 2) {
+                    console.log('Innnings 1 identified')
+                    document.getElementById('target-info').textContent = data.target_info;
+                }
+                else{
+                    // console.log("Innings 2 identified")
+                    // document.getElementById('target-info').textContent = data.result;
+                }
+                
             }
         }
 
