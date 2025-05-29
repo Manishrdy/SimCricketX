@@ -471,7 +471,8 @@ class Match:
                 required_rr = self.target / self.overs
                 chasing_team = self.data["team_away"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_home"].split("_")[0]
                 scorecard_data["target_info"] = f"{chasing_team} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
-
+                
+                
                 # ✅ Reset for 2nd innings
                 self.innings = 2
                 self.batting_team, self.bowling_team = self.bowling_team, self.batting_team
@@ -545,6 +546,9 @@ class Match:
                 final_commentary += f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
 
                 self.innings = 3
+
+                # Replace target_info with match result for 2nd innings scorecard
+                scorecard_data["target_info"] = self.result
 
                 return {
                     "Test": "Manish4",
@@ -999,6 +1003,12 @@ class Match:
         total_balls = self.current_over * 6 + self.current_ball
         overs_display = f"{self.current_over}.{self.current_ball}" if self.current_ball > 0 else str(self.current_over)
         run_rate = (self.score * 6) / total_balls if total_balls > 0 else 0
+
+        # Determine target_info based on innings
+        target_info_value = None
+        if self.innings == 2 and hasattr(self, 'result') and self.result:
+            # For 2nd innings end, show the match result
+            target_info_value = self.result
         
         return {
             "team_name": team_name,
@@ -1010,5 +1020,5 @@ class Match:
             "overs": overs_display,
             "run_rate": f"{run_rate:.2f}",
             "extras": extras,
-            "target_info": None
+            "target_info": target_info_value
         }
