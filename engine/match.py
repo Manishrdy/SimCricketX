@@ -46,6 +46,206 @@ class Match:
         self.current_striker = self.batting_team[0]
         self.current_non_striker = self.batting_team[1]
         self.current_bowler = None
+        # Add bowling pattern detection
+        self.bowling_pattern = self._detect_bowling_pattern()
+
+        # ✅ ADD THIS - Initialize over tracking for fatigue management
+        self.over_bowler_log = {}
+
+
+    def _get_pattern_info(self):
+        """Get information about the current bowling pattern for debugging"""
+        bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
+        fast_count = len([b for b in bowlers if self._categorize_bowler(b) == "fast"])
+        spin_count = len([b for b in bowlers if self._categorize_bowler(b) == "spin"])
+        
+        return {
+            "pattern": self.bowling_pattern,
+            "total_bowlers": len(bowlers),
+            "fast_bowlers": fast_count,
+            "spin_bowlers": spin_count,
+            "pitch": self.pitch
+        }
+
+    def _get_strategy_commentary(self, bowler):
+        """Generate commentary about bowling strategy"""
+        preferred_type = self._get_preferred_bowler_type(self.current_over)
+        bowler_type = self._categorize_bowler(bowler)
+        
+        # Strategic commentary based on over phase
+        if self.current_over < 6:  # Powerplay
+            if bowler_type == "fast":
+                return f"Strategic bowling change - bringing in the pace of {bowler['name']} for the powerplay!"
+        elif self.current_over >= 16:  # Death overs
+            if bowler_type == "fast":
+                return f"Death overs specialist {bowler['name']} brought into the attack!"
+        elif 6 <= self.current_over < 16:  # Middle overs
+            if bowler_type == "spin":
+                return f"Spin to win! {bowler['name']} introduced to control the run rate."
+        
+        return None
+
+    def _apply_form_consideration(self, eligible_bowlers):
+        """Prioritize better bowlers for crucial overs (1st, 6th, 17-20th)"""
+        # Define crucial overs
+        crucial_overs = [0, 5] + list(range(16, 20))  # Overs 1, 6, 17-20
+        
+        if self.current_over in crucial_overs:
+            # Sort bowlers by bowling rating (descending)
+            sorted_bowlers = sorted(
+                eligible_bowlers, 
+                key=lambda b: b["bowling_rating"], 
+                reverse=True
+            )
+            
+            # Take top 50% of bowlers for crucial overs
+            crucial_count = max(1, len(sorted_bowlers) // 2)
+            return sorted_bowlers[:crucial_count]
+        
+        # For non-crucial overs, return all eligible
+        return eligible_bowlers
+    
+    def _reset_innings_state(self):
+        """Reset all innings-specific state for clean 2nd innings"""
+        self.bowling_pattern = self._detect_bowling_pattern()
+        self.over_bowler_log = {}
+        # Restore any modified bowler ratings
+        self._restore_bowler_ratings()
+
+
+    def _apply_matchup_strategy(self, eligible_bowlers):
+        """Apply left-arm vs right-hand batsman strategy with rating bonuses"""
+        
+        # Get current striker's batting hand
+        # Make sure we handle missing batting_hand gracefully
+        striker_hand = self.current_striker.get("batting_hand", "Right")
+        if not striker_hand:  # Handle None or empty string
+            striker_hand = "Right"
+        
+        # Find left-arm bowlers
+        left_arm_bowlers = [
+            b for b in eligible_bowlers 
+            if b.get("bowling_hand", "Right") == "Left"
+        ]
+        
+        # Strategy: Left-arm bowlers get advantage against right-hand batsmen
+        if striker_hand == "Right" and left_arm_bowlers:
+            # Give left-arm bowlers higher priority
+            matchup_bowlers = left_arm_bowlers
+            
+            # Apply temporary rating bonus for favorable matchup
+            for bowler in matchup_bowlers:
+                # Store original rating for later restoration
+                if not hasattr(bowler, 'original_bowling_rating'):
+                    bowler['original_bowling_rating'] = bowler['bowling_rating']
+                # Boost rating by 10% for favorable matchup
+                bowler['bowling_rating'] = min(100, int(bowler['bowling_rating'] * 1.1))
+            
+            return matchup_bowlers
+        
+        # If no favorable matchups available, return all eligible
+        return eligible_bowlers
+
+    def _restore_bowler_ratings(self):
+        """Restore original bowling ratings after matchup bonuses"""
+        for player in self.bowling_team:
+            if hasattr(player, 'original_bowling_rating'):
+                player['bowling_rating'] = player['original_bowling_rating']
+                del player['original_bowling_rating']
+                
+    def _apply_bowler_fatigue_rules(self, eligible_bowlers):
+        """Enhanced fatigue management - prevent consecutive overs and manage workload"""
+        
+        # Rule 1: No consecutive overs (stronger enforcement)
+        if self.current_bowler:
+            non_consecutive = [
+                b for b in eligible_bowlers 
+                if b["name"] != self.current_bowler["name"]
+            ]
+            # Only allow consecutive if absolutely no choice (emergency)
+            if len(non_consecutive) > 0:
+                eligible_bowlers = non_consecutive
+        
+        # Rule 2: Avoid back-to-back spells (bowler who bowled 2 overs ago gets lower priority)
+        if len(self.bowler_history) >= 2 and self.current_over >= 2:
+            # Get who bowled 2 overs ago
+            two_overs_ago_bowler = None
+            over_log = getattr(self, 'over_bowler_log', {})
+            if (self.current_over - 2) in over_log:
+                two_overs_ago_bowler = over_log[self.current_over - 2]
+            
+            if two_overs_ago_bowler:
+                preferred_bowlers = [
+                    b for b in eligible_bowlers 
+                    if b["name"] != two_overs_ago_bowler
+                ]
+                if len(preferred_bowlers) > 0:
+                    eligible_bowlers = preferred_bowlers
+        
+        return eligible_bowlers
+
+    def _log_bowler_for_over(self, bowler):
+        """Track which bowler bowled which over for fatigue management"""
+        if not hasattr(self, 'over_bowler_log'):
+            self.over_bowler_log = {}
+        self.over_bowler_log[self.current_over] = bowler["name"]
+
+    def _detect_bowling_pattern(self):
+        """Automatically detect the best bowling pattern based on team composition and pitch"""
+        bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
+        
+        # Categorize bowlers
+        fast_bowlers = [b for b in bowlers if b["bowling_type"] in ["Fast", "Fast-medium", "Medium-fast"]]
+        spin_bowlers = [b for b in bowlers if b["bowling_type"] in ["Off spin", "Leg spin", "Finger spin", "Wrist spin"]]
+        
+        # Pattern selection logic
+        if len(fast_bowlers) >= 4:
+            return "fast_heavy"  # 4+ fast bowlers
+        elif len(spin_bowlers) >= 3 and self.pitch in ["Dry"]:
+            return "spin_heavy"  # 3+ spinners on spin-friendly pitch
+        else:
+            return "traditional"  # Balanced approach
+
+
+    def _get_preferred_bowler_type(self, over_number):
+        """Get the preferred bowler type for a specific over based on pattern"""
+        pattern = self.bowling_pattern
+        
+        if pattern == "traditional":
+            if over_number < 6:  # Powerplay (overs 1-6)
+                return "fast"
+            elif over_number < 16:  # Middle overs (7-16)
+                return "spin"
+            else:  # Death overs (17-20)
+                return "fast"
+        
+        elif pattern == "fast_heavy":
+            if over_number < 6:  # Powerplay
+                return "fast"
+            elif over_number < 14:  # Middle overs with some spin
+                return "mixed"  # Allow both, but prefer fast
+            else:  # Death overs
+                return "fast"
+        
+        elif pattern == "spin_heavy":
+            if over_number < 3:  # Early overs
+                return "fast"
+            elif over_number < 17:  # Long spin phase
+                return "spin"
+            else:  # Death overs
+                return "fast"
+        
+        return "mixed"  # Fallback
+
+    def _categorize_bowler(self, bowler):
+        """Categorize a bowler as fast, spin, or medium"""
+        bowling_type = bowler["bowling_type"]
+        if bowling_type in ["Fast", "Fast-medium", "Medium-fast"]:
+            return "fast"
+        elif bowling_type in ["Off spin", "Leg spin", "Finger spin", "Wrist spin"]:
+            return "spin"
+        else:
+            return "medium"  # Medium pacers
 
     def _select_fielder_for_wicket(self, wicket_type):
         """Select a fielder based on fielding ratings and wicket type"""
@@ -126,14 +326,6 @@ class Match:
             if self.bowler_history.get(p["name"], 0) < 4
         ]
 
-        # Remove previous bowler to prevent consecutive overs (if possible)
-        if self.current_bowler and len(eligible_bowlers) > 1:
-            non_consecutive = [
-                b for b in eligible_bowlers if b["name"] != self.current_bowler["name"]
-            ]
-            if non_consecutive:  # Only apply rule if we have alternatives
-                eligible_bowlers = non_consecutive
-
         # Emergency fallback: if no eligible bowlers, allow anyone with overs left
         if not eligible_bowlers:
             eligible_bowlers = [
@@ -141,26 +333,49 @@ class Match:
                 if self.bowler_history.get(p["name"], 0) < 4
             ]
             
-        # Critical fallback: if still no one (shouldn't happen with proper logic)
+        # Critical fallback: if still no one
         if not eligible_bowlers:
-            # Allow the bowler with minimum overs to bowl again
             min_overs = min(self.bowler_history.get(p["name"], 0) for p in all_bowlers)
             eligible_bowlers = [
                 p for p in all_bowlers 
                 if self.bowler_history.get(p["name"], 0) == min_overs
             ]
 
-        # Prioritize fast bowlers in powerplay (first 6) and death overs (last 4)
-        if self.current_over < 6 or self.current_over >= 16:
-            fast_types = ["Fast", "Fast-medium", "Medium-fast"]
-            fast_bowlers = [
-                b for b in eligible_bowlers if b["bowling_type"] in fast_types
-            ]
-            if fast_bowlers:
-                eligible_bowlers = fast_bowlers
+        # ✅ STEP 1: Apply bowling pattern strategy
+        preferred_type = self._get_preferred_bowler_type(self.current_over)
+        if preferred_type == "fast":
+            pattern_bowlers = [b for b in eligible_bowlers if self._categorize_bowler(b) == "fast"]
+        elif preferred_type == "spin":
+            pattern_bowlers = [b for b in eligible_bowlers if self._categorize_bowler(b) == "spin"]
+        else:
+            pattern_bowlers = eligible_bowlers  # mixed or fallback
+        
+        if pattern_bowlers:
+            eligible_bowlers = pattern_bowlers
 
-        # Select randomly from eligible bowlers
+        # ✅ STEP 2: Apply enhanced fatigue rules
+        eligible_bowlers = self._apply_bowler_fatigue_rules(eligible_bowlers)
+
+        # ✅ STEP 3: Apply form consideration for crucial overs
+        eligible_bowlers = self._apply_form_consideration(eligible_bowlers)
+
+        # ✅ STEP 4: Apply match-up strategy
+        eligible_bowlers = self._apply_matchup_strategy(eligible_bowlers)
+
+        # ✅ ADD THIS BLOCK - Final safety check
+        if not eligible_bowlers:
+            # Emergency fallback - get any bowler who can bowl
+            eligible_bowlers = [p for p in all_bowlers if p.get("will_bowl", False)]
+            if not eligible_bowlers:
+                # This should never happen, but safety first
+                eligible_bowlers = all_bowlers[:1]  # Take first available player
+
+        # Select randomly from final eligible bowlers
         bowler = random.choice(eligible_bowlers)
+
+        # ✅ STEP 5: Log bowler and restore ratings
+        self._log_bowler_for_over(bowler)
+        self._restore_bowler_ratings()
 
         # Track overs
         self.bowler_history[bowler["name"]] = self.bowler_history.get(bowler["name"], 0) + 1
@@ -270,6 +485,9 @@ class Match:
                 self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": ""} for p in self.batting_team}
                 self.bowler_history = {}
                 self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p["will_bowl"]}
+
+                # ✅ Reset bowling state for new innings
+                self._reset_innings_state()
 
                 # ✅ Return with scorecard data and innings_end flag
                 return {
