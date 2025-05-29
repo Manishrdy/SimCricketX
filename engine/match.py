@@ -460,20 +460,13 @@ class Match:
 
         if self.current_over >= self.overs or self.wickets >= 10:
             if self.innings == 1:
-                # ✅ Generate scorecard data BEFORE resetting
                 scorecard_data = self._generate_detailed_scorecard()
-                
-                # ✅ Set target
                 self.first_innings_score = self.score
                 self.target = self.score + 1
-
-                # ✅ Calculate required run rate and add to scorecard
                 required_rr = self.target / self.overs
                 chasing_team = self.data["team_away"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_home"].split("_")[0]
                 scorecard_data["target_info"] = f"{chasing_team} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
                 
-                
-                # ✅ Reset for 2nd innings
                 self.innings = 2
                 self.batting_team, self.bowling_team = self.bowling_team, self.batting_team
                 self.score = 0
@@ -486,14 +479,11 @@ class Match:
                 self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": ""} for p in self.batting_team}
                 self.bowler_history = {}
                 self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p["will_bowl"]}
-
-                # ✅ Reset bowling state for new innings
                 self._reset_innings_state()
 
-                # ✅ Return with scorecard data and innings_end flag
                 return {
                     "Test": "Manish2",
-                    "innings_end": True,  # New flag to indicate innings end
+                    "innings_end": True,
                     "innings_number": 1,
                     "match_over": False,
                     "scorecard_data": scorecard_data,
@@ -509,8 +499,6 @@ class Match:
 
             else:
                 scorecard_data = self._generate_detailed_scorecard()
-                
-                # ✅ Calculate match result
                 if self.score >= self.target:
                     winner_code = self.data["team_home"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_away"].split("_")[0]
                     wkts_left = 10 - self.wickets
@@ -522,13 +510,11 @@ class Match:
                     run_diff = self.target - self.score - 1
                     self.result = f"{winner_code} won by {run_diff} run(s)."
 
-                # ✅ Generate final stats for commentary
                 striker_stats = self.batsman_stats[self.current_striker["name"]]
                 non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
                 bowler_stats = self.bowler_stats[self.current_bowler["name"]]
                 overs_bowled = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
                 
-                # Add extras display for final stats
                 extras_str = ""
                 if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
                     extras_parts = []
@@ -546,20 +532,18 @@ class Match:
                 final_commentary += f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
 
                 self.innings = 3
-
-                # Replace target_info with match result for 2nd innings scorecard
                 scorecard_data["target_info"] = self.result
 
                 return {
                     "Test": "Manish4",
-                    "innings_end": True,          # ← add this
-                    "innings_number": 2,  
+                    "innings_end": True,
+                    "innings_number": 2,
                     "match_over": True,
-                    "scorecard_data": scorecard_data,  # ✅ SCORECARD INCLUDED
+                    "scorecard_data": scorecard_data,
                     "final_score": self.score,
                     "wickets": self.wickets,
                     "result": self.result,
-                    "commentary": final_commentary  # ✅ FINAL STATS INCLUDED
+                    "commentary": final_commentary
                 }
 
         if self.current_ball == 0:
@@ -567,7 +551,7 @@ class Match:
             self.commentary.append(
                 f"<strong>The New bowler is</strong> {self.current_bowler['name']}<br>"
             )
-            if self.current_over == 0:  # Only show striker/non-striker info for the very first over
+            if self.current_over == 0:
                 self.commentary.append(
                     f"🧢 <strong>Striker:</strong> {self.current_striker['name']}"
                 )
@@ -587,75 +571,63 @@ class Match:
         ball_number = f"{self.current_over}.{self.current_ball + 1}"
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
 
-        # Initialize current over runs if not exists
         if not hasattr(self, 'current_over_runs'):
             self.current_over_runs = 0
         if self.current_ball == 0:
             self.current_over_runs = 0
 
+        commentary_line = f"{ball_number} {self.current_bowler['name']} to {self.current_striker['name']} - "
+
         if wicket:
             self.wickets += 1
             self.bowler_stats[self.current_bowler["name"]]["wickets"] += 1
             
-            # ✅ NEW: Enhanced wicket handling with fielder selection
             wicket_type = outcome["wicket_type"]
             fielder_name = None
             
-            # Update batsman wicket details
             self.batsman_stats[self.current_striker["name"]]["wicket_type"] = wicket_type
             self.batsman_stats[self.current_striker["name"]]["bowler_out"] = self.current_bowler["name"]
             
-            # Select fielder based on wicket type
             if wicket_type in ["Caught", "Run Out"]:
                 fielder_name = self._select_fielder_for_wicket(wicket_type)
                 self.batsman_stats[self.current_striker["name"]]["fielder_out"] = fielder_name
-            elif wicket_type in ["Bowled", "LBW"]:
-                # Only bowler involved
-                self.batsman_stats[self.current_striker["name"]]["fielder_out"] = ""
             
-            # Generate enhanced commentary
-            commentary_line = f"{ball_number} {self.current_bowler['name']} to {self.current_striker['name']} - "
             commentary_line += self._generate_wicket_commentary(outcome, fielder_name)
+            self.commentary.append(commentary_line)
 
             self.batter_idx[0] = max(self.batter_idx) + 1
 
-            #All out scenario
             if self.batter_idx[0] >= len(self.batting_team):
-                # ✅ Generate scorecard for all out
                 scorecard_data = self._generate_detailed_scorecard()
-                
-                self.commentary.append(commentary_line)
                 self.commentary.append("<br><strong>All Out!</strong>")
                 return {
                     "Test": "Manish5",
                     "match_over": True,
-                    "scorecard_data": scorecard_data,  # ✅ ADD SCORECARD
+                    "scorecard_data": scorecard_data,
                     "final_score": self.score,
                     "wickets": self.wickets,
-                    "result": f"All out for {self.score}"
+                    "result": f"All out for {self.score}",
+                    "commentary": "<br>".join(self.commentary[-2:])  # Include last ball and all-out message
                 }
 
             self.current_striker = self.batting_team[self.batter_idx[0]]
-            # Initialize new batsman stats
             if self.current_striker["name"] not in self.batsman_stats:
                 self.batsman_stats[self.current_striker["name"]] = {
                     "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0,
                     "wicket_type": "", "bowler_out": "", "fielder_out": ""
                 }
-            commentary_line += f"<br><strong>New batsman:</strong> {self.current_striker['name']}"
-            commentary_line += f"<br>"
+            commentary_line += f"<br><strong>New batsman:</strong> {self.current_striker['name']}<br>"
+            self.commentary.append(commentary_line)
 
         else:
             self.score += runs
             self.current_over_runs += runs
             self.bowler_stats[self.current_bowler["name"]]["runs"] += runs
             
-            # Update batsman stats (only for legal deliveries)
             if not extra:
                 self.batsman_stats[self.current_striker["name"]]["runs"] += runs
                 self.batsman_stats[self.current_striker["name"]]["balls"] += 1
                 
-                # Update specific run counts
                 if runs == 0:
                     self.batsman_stats[self.current_striker["name"]]["dots"] += 1
                 elif runs == 1:
@@ -669,38 +641,26 @@ class Match:
                 elif runs == 6:
                     self.batsman_stats[self.current_striker["name"]]["sixes"] += 1
 
-            commentary_line = f"{ball_number} {self.current_bowler['name']} to {self.current_striker['name']} - "
             commentary_line += f"{runs} run(s), {outcome['description']}"
+            self.commentary.append(commentary_line)
 
-            # Strike rotation logic (only for odd runs and legal deliveries)
             if runs in [1, 3] and not extra:
                 self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
                 self.batter_idx.reverse()
 
             if self.innings == 2 and self.score >= self.target:
-                # ✅ Generate 2nd innings scorecard
                 scorecard_data = self._generate_detailed_scorecard()
-                
-                # ✅ Calculate match result
                 winner_code = self.data["team_home"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_away"].split("_")[0]
                 wkts_left = 10 - self.wickets
                 balls_left = (self.overs - self.current_over) * 6 - (self.current_ball + 1)
                 overs_left = balls_left / 6
                 self.result = f"{winner_code} won by {wkts_left} wicket(s) with {overs_left:.1f} overs remaining."
                 
-                # ✅ Generate final stats for commentary
                 striker_stats = self.batsman_stats[self.current_striker["name"]]
                 non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
                 bowler_stats = self.bowler_stats[self.current_bowler["name"]]
                 overs_bowled = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
                 
-                final_commentary = f"<br><strong>Match Over!</strong> {self.result}<br><br>"
-                final_commentary += f"<strong>Final Stats:</strong><br>"
-                final_commentary += f"{self.current_striker['name']}\t\t{striker_stats['runs']}({striker_stats['balls']}b) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
-                final_commentary += f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
-
-
-                # Add extras display for final stats
                 extras_str = ""
                 if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
                     extras_parts = []
@@ -711,29 +671,30 @@ class Match:
                     if extras_parts:
                         extras_str = f" ({', '.join(extras_parts)})"
 
+                final_commentary = f"{commentary_line}<br><strong>Match Over!</strong> {self.result}<br><br>"
+                final_commentary += f"<strong>Final Stats:</strong><br>"
+                final_commentary += f"{self.current_striker['name']}\t\t{striker_stats['runs']}({striker_stats['balls']}b) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
+                final_commentary += f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
                 final_commentary += f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
 
-                
                 self.innings = 3
+                scorecard_data["target_info"] = self.result
+
                 return {
                     "Test": "Manish6",
                     "match_over": True,
-                    "scorecard_data": scorecard_data,  # ✅ ADD SCORECARD
+                    "scorecard_data": scorecard_data,
                     "final_score": self.score,
                     "wickets": self.wickets,
                     "result": self.result,
-                    "commentary": final_commentary  # ✅ ADD FINAL STATS
+                    "commentary": final_commentary
                 }
 
-        self.commentary.append(commentary_line)
-
-        # Only increment ball count for legal deliveries
         if not extra:
             self.current_ball += 1
             self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
 
         if extra:
-            # Track different types of extras for bowlers
             if "Wide" in outcome['description']:
                 self.bowler_stats[self.current_bowler["name"]]["wides"] += 1
             elif "No Ball" in outcome['description']:
@@ -743,43 +704,29 @@ class Match:
             elif "Byes" in outcome['description']:
                 self.bowler_stats[self.current_bowler["name"]]["byes"] += 1
 
-        # Collect all commentary for this ball
         all_commentary = [commentary_line]
-
-        # Check if over is complete BEFORE resetting current_ball
         over_complete = self.current_ball == 6
 
         if over_complete:
-            # Check for maiden over
             if self.current_over_runs == 0:
                 self.bowler_stats[self.current_bowler["name"]]["maidens"] += 1
-                
-            # Update bowler overs
             self.bowler_stats[self.current_bowler["name"]]["overs"] += 1
             
-            # Get current stats BEFORE rotating strike
             striker_stats = self.batsman_stats[self.current_striker["name"]]
             non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
             bowler_stats = self.bowler_stats[self.current_bowler["name"]]
             
-            # Calculate bowler overs in decimal format
-            overs_bowled = bowler_stats["overs"]
-            
-            # Add run rate calculation
-            balls_played = (self.current_over + 1) * 6  # +1 because over just completed
+            balls_played = (self.current_over + 1) * 6
             current_rr = (self.score * 6) / balls_played if balls_played > 0 else 0
             
-            # Build end-of-over stats
             all_commentary.append(f"<br><strong>End of over {self.current_over + 1}</strong> (Score: {self.score}/{self.wickets}, RR: {current_rr:.2f})<br>")
             
-            # Required run rate for 2nd innings
             if self.innings == 2:
                 balls_remaining = (self.overs - self.current_over - 1) * 6
                 if balls_remaining > 0:
                     required_rr = ((self.target - self.score) * 6) / balls_remaining
                     all_commentary.append(f"Required: {self.target - self.score} runs from {balls_remaining} balls (RRR: {required_rr:.2f})")
             
-            # Add extras display for end-of-over
             extras_str = ""
             if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
                 extras_parts = []
@@ -792,10 +739,9 @@ class Match:
             
             all_commentary.append(f"{self.current_striker['name']}\t\t{striker_stats['runs']}({striker_stats['balls']}b) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]")
             all_commentary.append(f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]")
-            all_commentary.append(f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}")
+            all_commentary.append(f"{self.current_bowler['name']}\t\t{bowler_stats['overs']:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}")
             all_commentary.append(f"<br>")
 
-            # Reset for next over
             self.current_ball = 0
             self.current_over += 1
             self.current_over_runs = 0
@@ -805,7 +751,7 @@ class Match:
         return {
             "Test": "Manish7",
             "match_over": False,
-            "score": self.score,  # ✅ ADD MISSING SCORE
+            "score": self.score,
             "wickets": self.wickets,
             "over": self.current_over,
             "ball": self.current_ball,
@@ -813,7 +759,6 @@ class Match:
             "striker": self.current_striker["name"],
             "non_striker": self.current_non_striker["name"],
             "bowler": self.current_bowler["name"] if self.current_bowler else ""
-            # ✅ REMOVE scorecard_data from here - only for innings end
         }
 
 
