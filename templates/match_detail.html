@@ -335,11 +335,13 @@
 
     <div class="card" style="width:100%;max-width:100%;margin:0;padding:2rem;">
         <div class="match-info">
-            <div class="info"><i class="fa fa-fingerprint"></i><strong>Match ID: </strong> {{ match.match_id }}</div>
-            <div class="info"><i class="fa fa-calendar-alt"></i><strong>Date: </strong> {{ match.timestamp }}</div>
-            <div class="info"><i class="fa fa-user"></i><strong>Created by: </strong> {{ match.created_by }}</div>
-            <div class="info"><i class="fa fa-stadium"></i><strong>Stadium: </strong> {{ match.stadium }}</div>
-            <div class="info"><i class="fa fa-paint-roller"></i><strong>Pitch: </strong> {{ match.pitch }}</div>
+            <div class="info"><i class="fa fa-fingerprint"></i><strong>Match ID:&nbsp;</strong> {{ match.match_id }}</div>
+            <div class="info"><i class="fa fa-calendar-alt"></i><strong>Date:&nbsp;</strong> {{ match.timestamp }}</div>
+            <div class="info"><i class="fa fa-user"></i><strong>Created by:&nbsp;</strong> {{ match.created_by }}</div>
+            <div class="info"><i class="fa fa-stadium"></i><strong>Stadium:&nbsp;</strong> {{ match.stadium }}</div>
+            <div class="info"><i class="fa fa-paint-roller"></i><strong>Pitch:&nbsp;</strong> {{ match.pitch }}</div>
+            <div class="info"><i class="fa fa-cloud-rain"></i><strong>Rain Chance:&nbsp;</strong> {{ ((match.rain_probability or 0)
+                * 100)|int }}%</div>
             <div class="info"><strong>Toss:</strong> <span id="toss-result">Pending...</span></div>
         </div>
 
@@ -598,6 +600,13 @@
 
                     // ① First‐innings end
                     if (data.innings_end && data.innings_number === 1) {
+
+                        if (data.commentary) {
+                            commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+                            commentaryLog.scrollTop = commentaryLog.scrollHeight;
+                        }
+
+
                         if (data.scorecard_data) {
                             // Show the 1st-innings scorecard
                             showScorecard(data.scorecard_data);
