@@ -436,12 +436,24 @@
                     <label><input type="radio" name="toss" value="Tails"><i class="fa fa-coins"></i> Tails</label>
                 </div>
             </div>
+
+            <div class="pitch-section">
+                <label for="rain-probability">Rain Probability: <span id="rain-display">0%</span></label>
+                <input type="range" id="rain-probability" min="0" max="0.1" step="0.001" value="0" style="width: 150px;"
+                    oninput="updateRainDisplay(this.value)">
+            </div>
+
             <button id="simulate-btn" disabled>🚀 Simulate Match</button>
         </div>
     </div>
 
     <!-- SCRIPTS -->
     <script>
+
+        function updateRainDisplay(value) {
+            const percentage = Math.round(parseFloat(value) * 100);
+            document.getElementById('rain-display').textContent = `${percentage}%`;
+        }
         // Teams JSON
         const TEAMS = {{ teams| tojson }};
 
@@ -585,6 +597,7 @@
             simBtn = document.getElementById('simulate-btn');
         function validateAll() {
             const errors = [];
+
             ['home', 'away'].forEach((side, i) => {
                 const name = side === 'home' ? 'Team 1' : 'Team 2';
                 const players = document.getElementById(`${side}-selected`)
@@ -633,6 +646,7 @@
                 team_away: `${away.short_code}_${away.created_by_email}`,
                 stadium: home.home_ground,
                 pitch: document.getElementById('pitch-select').value,
+                rain_probability: parseFloat(document.getElementById('rain-probability').value), // ADD THIS
                 playing_xi: {
                     home: [...document.getElementById('home-selected').children]
                         // only bars that have a real playerName

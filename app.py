@@ -538,7 +538,8 @@ def create_app():
             data.update({
                 "match_id": match_id,
                 "created_by": user,
-                "timestamp": ts
+                "timestamp": ts,
+                "rain_probability": data.get("rain_probability", 0.0)  # ADD THIS
             })
 
             with open(path, "w") as f:

@@ -3,8 +3,20 @@
   "team_away": "MI_admin@projectx.com",
   "stadium": "Rajiv Gandhi Stadium, Hyderabad",
   "pitch": "Flat",
+  "rain_probability": 0.1,
   "playing_xi": {
     "home": [
+      {
+        "name": "Abhishek Sharma",
+        "role": "Batsman",
+        "batting_rating": 90,
+        "bowling_rating": 0,
+        "fielding_rating": 75,
+        "batting_hand": "Left",
+        "bowling_type": "",
+        "bowling_hand": "",
+        "will_bowl": false
+      },
       {
         "name": "David Warner",
         "role": "Batsman",
@@ -28,12 +40,12 @@
         "will_bowl": false
       },
       {
-        "name": "Abhishek Sharma",
-        "role": "Batsman",
-        "batting_rating": 90,
+        "name": "Heinrich Klaasen",
+        "role": "Wicketkeeper",
+        "batting_rating": 95,
         "bowling_rating": 0,
-        "fielding_rating": 75,
-        "batting_hand": "Left",
+        "fielding_rating": 95,
+        "batting_hand": "Right",
         "bowling_type": "",
         "bowling_hand": "",
         "will_bowl": false
@@ -44,17 +56,6 @@
         "batting_rating": 75,
         "bowling_rating": 0,
         "fielding_rating": 80,
-        "batting_hand": "Right",
-        "bowling_type": "",
-        "bowling_hand": "",
-        "will_bowl": false
-      },
-      {
-        "name": "Heinrich Klaasen",
-        "role": "Wicketkeeper",
-        "batting_rating": 95,
-        "bowling_rating": 0,
-        "fielding_rating": 95,
         "batting_hand": "Right",
         "bowling_type": "",
         "bowling_hand": "",
@@ -105,9 +106,9 @@
         "will_bowl": true
       },
       {
-        "name": "Manish Reddy",
+        "name": "Dale Steyn",
         "role": "Bowler",
-        "batting_rating": 65,
+        "batting_rating": 20,
         "bowling_rating": 95,
         "fielding_rating": 90,
         "batting_hand": "Right",
@@ -116,9 +117,9 @@
         "will_bowl": true
       },
       {
-        "name": "Dale Steyn",
+        "name": "Manish Reddy",
         "role": "Bowler",
-        "batting_rating": 20,
+        "batting_rating": 65,
         "bowling_rating": 95,
         "fielding_rating": 90,
         "batting_hand": "Right",
@@ -151,6 +152,17 @@
         "will_bowl": false
       },
       {
+        "name": "Sachin Tendulkar",
+        "role": "Batsman",
+        "batting_rating": 68,
+        "bowling_rating": 66,
+        "fielding_rating": 59,
+        "batting_hand": "Right",
+        "bowling_type": "Off spin",
+        "bowling_hand": "Right",
+        "will_bowl": false
+      },
+      {
         "name": "Will Jacks",
         "role": "Batsman",
         "batting_rating": 61,
@@ -162,13 +174,13 @@
         "will_bowl": false
       },
       {
-        "name": "Sachin Tendulkar",
-        "role": "Batsman",
-        "batting_rating": 68,
-        "bowling_rating": 66,
-        "fielding_rating": 59,
-        "batting_hand": "Right",
-        "bowling_type": "Off spin",
+        "name": "Santner",
+        "role": "All-rounder",
+        "batting_rating": 59,
+        "bowling_rating": 50,
+        "fielding_rating": 53,
+        "batting_hand": "Left",
+        "bowling_type": "Medium",
         "bowling_hand": "Right",
         "will_bowl": false
       },
@@ -184,17 +196,6 @@
         "will_bowl": false
       },
       {
-        "name": "Pollard",
-        "role": "All-rounder",
-        "batting_rating": 79,
-        "bowling_rating": 84,
-        "fielding_rating": 88,
-        "batting_hand": "Right",
-        "bowling_type": "Medium-fast",
-        "bowling_hand": "Right",
-        "will_bowl": true
-      },
-      {
         "name": "H Pandya",
         "role": "All-rounder",
         "batting_rating": 85,
@@ -206,15 +207,15 @@
         "will_bowl": true
       },
       {
-        "name": "Santner",
+        "name": "Pollard",
         "role": "All-rounder",
-        "batting_rating": 59,
-        "bowling_rating": 50,
-        "fielding_rating": 53,
-        "batting_hand": "Left",
-        "bowling_type": "Medium",
+        "batting_rating": 79,
+        "bowling_rating": 84,
+        "fielding_rating": 88,
+        "batting_hand": "Right",
+        "bowling_type": "Medium-fast",
         "bowling_hand": "Right",
-        "will_bowl": false
+        "will_bowl": true
       },
       {
         "name": "Bumrah",
@@ -223,17 +224,6 @@
         "bowling_rating": 74,
         "fielding_rating": 90,
         "batting_hand": "Right",
-        "bowling_type": "Fast",
-        "bowling_hand": "Left",
-        "will_bowl": true
-      },
-      {
-        "name": "Boult",
-        "role": "Bowler",
-        "batting_rating": 91,
-        "bowling_rating": 48,
-        "fielding_rating": 57,
-        "batting_hand": "Left",
         "bowling_type": "Fast",
         "bowling_hand": "Left",
         "will_bowl": true
@@ -248,13 +238,24 @@
         "bowling_type": "Finger spin",
         "bowling_hand": "Right",
         "will_bowl": true
+      },
+      {
+        "name": "Boult",
+        "role": "Bowler",
+        "batting_rating": 91,
+        "bowling_rating": 48,
+        "fielding_rating": 57,
+        "batting_hand": "Left",
+        "bowling_type": "Fast",
+        "bowling_hand": "Left",
+        "will_bowl": true
       }
     ]
   },
   "toss": "Heads",
-  "match_id": "6991269d",
+  "match_id": "ead8a3dd",
   "created_by": "admin@projectx.com",
-  "timestamp": "20250529130105",
+  "timestamp": "20250530114126",
   "toss_winner": "MI",
   "toss_decision": "Bowl"
 }
