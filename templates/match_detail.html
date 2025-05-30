@@ -568,15 +568,15 @@
             if (data.target_info) {
                 document.getElementById('target-info').style.display = 'block';
 
-                if(data.inningsNumber != 2) {
+                if (data.inningsNumber != 2) {
                     console.log('Innnings 1 identified')
                     document.getElementById('target-info').textContent = data.target_info;
                 }
-                else{
+                else {
                     // console.log("Innings 2 identified")
                     // document.getElementById('target-info').textContent = data.result;
                 }
-                
+
             }
         }
 
@@ -644,6 +644,28 @@
                         return;
                     }
 
+                    // ✅ ADD THIS - Check for super over
+                    if (data.match_tied) {
+                        commentaryLog.innerHTML += `<p style="color:green;"><b>MATCH TIED! Super Over Required!</b></p>`;
+                        commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+
+                        // Show super over options
+                        commentaryLog.innerHTML += `
+                <div style="margin: 1rem 0; text-align: center;">
+                    <h3>Choose which team bats first in Super Over:</h3>
+                    <button onclick="startSuperOver('home')" style="margin: 0.5rem; padding: 0.5rem 1rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem;">
+                        ${data.home_team} bats first
+                    </button>
+                    <button onclick="startSuperOver('away')" style="margin: 0.5rem; padding: 0.5rem 1rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem;">
+                        ${data.away_team} bats first
+                    </button>
+                </div>
+            `;
+
+                        matchOver = true; // ✅ STOP the loop
+                        return;
+                    }
+
                     if (data.match_over) {
                         // Show match result commentary first
                         if (data.commentary) {
@@ -697,6 +719,56 @@
                     URL.revokeObjectURL(url);
                 });
             });
+        }
+
+        function startSuperOver(firstBattingTeam) {
+            fetch(`${window.location.pathname}/start-super-over`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ first_batting_team: firstBattingTeam })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+                    commentaryLog.innerHTML += `
+            <div style="margin: 1rem 0; text-align: center;">
+                <button onclick="startSuperOverSimulation()" style="padding: 0.5rem 1rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem;">
+                    Start Super Over Simulation
+                </button>
+            </div>
+        `;
+                    commentaryLog.scrollTop = commentaryLog.scrollHeight;
+                });
+        }
+
+        function startSuperOverSimulation() {
+            if (matchOver) return;
+
+            fetch(`${window.location.pathname}/next-super-over-ball`)
+                .then(res => res.json())
+                .then(data => {
+                    commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+                    commentaryLog.scrollTop = commentaryLog.scrollHeight;
+
+                    // Update score display
+                    scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
+                    overInfoElem.textContent = `Ball: ${data.ball}/6`;
+
+                    if (data.super_over_complete) {
+                        commentaryLog.innerHTML += `<p style="color:green;"><b>SUPER OVER COMPLETE!</b></p>`;
+                        matchOver = true;
+                        return;
+                    }
+
+                    if (data.innings_complete) {
+                        if (data.target) {
+                            commentaryLog.innerHTML += `<p><b>Target: ${data.target} runs</b></p>`;
+                        }
+                        setTimeout(() => startSuperOverSimulation(), 1000); // Continue with next innings
+                    } else {
+                        setTimeout(() => startSuperOverSimulation(), delay); // Next ball
+                    }
+                });
         }
 
 
