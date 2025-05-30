@@ -720,6 +720,33 @@ def create_app():
 
 
         return jsonify(outcome)
+    
+
+    @app.route("/match/<match_id>/start-super-over", methods=["POST"])
+    @login_required
+    def start_super_over(match_id):
+        if match_id not in MATCH_INSTANCES:
+            return jsonify({"error": "Match not found"}), 404
+        
+        data = request.get_json()
+        first_batting_team = data.get("first_batting_team")
+        
+        match = MATCH_INSTANCES[match_id]
+        result = match.start_super_over(first_batting_team)
+        
+        return jsonify(result)
+
+    @app.route("/match/<match_id>/next-super-over-ball")
+    @login_required
+    def next_super_over_ball(match_id):
+        if match_id not in MATCH_INSTANCES:
+            return jsonify({"error": "Match not found"}), 404
+        
+        match = MATCH_INSTANCES[match_id]
+        result = match.next_super_over_ball()
+        
+        return jsonify(result)
+    
     return app
 
 # ────── Run Server ──────
