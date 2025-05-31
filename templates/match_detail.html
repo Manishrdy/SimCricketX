@@ -335,21 +335,28 @@
 
     <div class="card" style="width:100%;max-width:100%;margin:0;padding:2rem;">
         <div class="match-info">
-            <div class="info"><i class="fa fa-fingerprint"></i><strong>Match ID:&nbsp;</strong> {{ match.match_id }}</div>
+            <div class="info"><i class="fa fa-fingerprint"></i><strong>Match ID:&nbsp;</strong> {{ match.match_id }}
+            </div>
             <div class="info"><i class="fa fa-calendar-alt"></i><strong>Date:&nbsp;</strong> {{ match.timestamp }}</div>
             <div class="info"><i class="fa fa-user"></i><strong>Created by:&nbsp;</strong> {{ match.created_by }}</div>
             <div class="info"><i class="fa fa-stadium"></i><strong>Stadium:&nbsp;</strong> {{ match.stadium }}</div>
             <div class="info"><i class="fa fa-paint-roller"></i><strong>Pitch:&nbsp;</strong> {{ match.pitch }}</div>
-            <div class="info"><i class="fa fa-cloud-rain"></i><strong>Rain Chance:&nbsp;</strong> {{ ((match.rain_probability or 0)
+            <div class="info"><i class="fa fa-cloud-rain"></i><strong>Rain Chance:&nbsp;</strong> {{
+                ((match.rain_probability or 0)
                 * 100)|int }}%</div>
             <div class="info"><strong>Toss:</strong> <span id="toss-result">Pending...</span></div>
         </div>
 
-        <div style="text-align:center; margin-bottom:1rem;">
+        <div style="text-align:center; margin-bottom:2.5rem;">
             <button id="spin-toss"
                 style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:0.5rem; cursor:pointer;">
                 Spin the Coin!
             </button>
+            <button id="save-report" onclick="saveMatchReport()"
+                style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:0.5rem; cursor:pointer;">
+                Save Report
+            </button>
+
             <div id="toss-outcome" style="margin-top:0.75rem; font-size:1rem; font-weight:bold;"></div>
 
             <div id="decision-area" style="margin-top:1rem; display:none;">
@@ -675,7 +682,50 @@
                         return;
                     }
 
+
+                    // Add this TEMPORARY debug function
+                    function debugCommentaryCapture() {
+                        const commentaryElement = document.getElementById('commentary-log');
+                        const fullCommentary = commentaryElement.innerHTML;
+
+                        console.log("🐛 DEBUG: Commentary HTML length:", fullCommentary.length);
+                        console.log("🐛 DEBUG: First 500 chars:", fullCommentary.substring(0, 500));
+                        console.log("🐛 DEBUG: Contains 'End of over':", fullCommentary.includes('End of over'));
+                        console.log("🐛 DEBUG: Contains 'end of over':", fullCommentary.includes('end of over'));
+
+                        // Check what's actually in the commentary
+                        const paragraphs = commentaryElement.querySelectorAll('p');
+                        console.log("🐛 DEBUG: Number of paragraphs:", paragraphs.length);
+
+                        // Look for end-of-over patterns
+                        paragraphs.forEach((p, index) => {
+                            const text = p.innerHTML;
+                            if (text.includes('End of over') || text.includes('end of over') || text.includes('**End')) {
+                                console.log(`🐛 DEBUG: Found end-of-over in paragraph ${index}:`, text);
+                            }
+                        });
+                    }
+
+
+                    // Add this function to capture complete webpage
+                    function saveCompleteWebpage() {
+                        // Get the complete HTML of the current page
+                        const completeHTML = document.documentElement.outerHTML;
+
+                        // Send to backend
+                        return fetch(`${window.location.pathname}/save-complete-webpage`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                html_content: completeHTML,
+                                match_id: window.location.pathname.split('/').pop()
+                            })
+                        });
+                    }
+
+                    // Modify your match completion handler:
                     if (data.match_over) {
+                        console.log("🏏 Match over - enabling Save Report");
                         // Show match result commentary first
                         if (data.commentary) {
                             commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
@@ -684,16 +734,15 @@
                         }
 
                         document.getElementById('scoreboard').innerHTML = `
-    <div class="match-result">
-        <span>${data.result}</span>
-    </div>`;
+<div class="match-result">
+    <span>${data.result}</span>
+</div>`;
 
                         // Show scorecard after a short delay
-                        console.log("match finish")
                         if (data.scorecard_data) {
                             setTimeout(() => {
                                 showScorecard(data.scorecard_data);
-                            }, 1000);
+                            }, 1500);
                         }
 
                         matchOver = true;
@@ -780,6 +829,46 @@
                 });
         }
 
+        // Add this function somewhere in your script section
+        function captureFullCommentary() {
+            const commentaryElement = document.getElementById('commentary-log');
+            const fullCommentary = commentaryElement.innerHTML;
+
+            // Send the complete commentary to backend for archiving
+            return fetch(`${window.location.pathname}/save-commentary`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    commentary_html: fullCommentary,
+                    match_id: window.location.pathname.split('/').pop()
+                })
+            });
+        }
+
+        // Function to save match report
+        function saveMatchReport() {
+            console.log("💾 Saving match report...");
+            const teams = document.querySelector('h1').textContent.replace(' – Project X', '');
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+            const filename = `match_report_${teams.replace(' vs ', '_vs_')}_${timestamp}.html`;
+
+            const blob = new Blob([document.documentElement.outerHTML], {
+                type: 'text/html;charset=utf-8'
+            });
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.style.display = 'none';
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            URL.revokeObjectURL(link.href);
+
+            console.log(`✅ Match report saved as: ${filename}`);
+        }
 
         // Theme toggle (consistent with match_setup.html)
         const root = document.documentElement, ttl = document.getElementById('theme-toggle');

@@ -108,6 +108,12 @@ class Match:
         
         print(f"✅ Saved second innings stats - {second_batting_team} batting: {len(self.second_innings_batting_stats)} players, {second_bowling_team} bowling: {len(self.second_innings_bowling_stats)} bowlers")
 
+    def set_frontend_commentary(self, frontend_commentary):
+        """Set the frontend commentary for archiving"""
+        self.frontend_commentary_captured = frontend_commentary
+        print(f"📺 Frontend commentary set: {len(frontend_commentary)} items")
+
+
     def _create_match_archive(self):
         """Create complete match archive when match ends"""
         try:
@@ -118,9 +124,17 @@ class Match:
                 print(f"⚠️ Could not find original JSON file for match {self.match_data['match_id']}")
                 return False
             
-            # Create archiver and generate archive - use existing self.commentary
+            # Use frontend commentary if captured, otherwise use backend commentary
+            commentary_to_archive = getattr(self, 'frontend_commentary_captured', self.commentary)
+            
+            if hasattr(self, 'frontend_commentary_captured'):
+                print(f"📺 Using frontend commentary ({len(commentary_to_archive)} items)")
+            else:
+                print(f"🔧 Using backend commentary ({len(commentary_to_archive)} items)")
+            
+            # Create archiver and generate archive
             archiver = MatchArchiver(self.match_data, self)
-            success = archiver.create_archive(original_json_path, self.commentary)
+            success = archiver.create_archive(original_json_path, commentary_to_archive)
             
             if success:
                 print(f"🎉 Match archive created successfully!")
@@ -132,6 +146,10 @@ class Match:
         except Exception as e:
             print(f"❌ Error creating match archive: {e}")
             return False
+
+    def _create_match_archive_with_frontend_commentary(self):
+        """Alternative method called when frontend commentary is captured"""
+        return self._create_match_archive()
             
 
     def _check_for_rain(self):

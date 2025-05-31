@@ -42,6 +42,8 @@ class MatchArchiver:
             # 3. Create all CSV files
             self._create_all_csv_files()
             
+            # NOTE: HTML report is now handled by frontend "Save Report" button
+            
             print(f"✅ Match archive created successfully: {self.folder_name}")
             return True
             
@@ -431,29 +433,62 @@ class MatchArchiver:
         
         return clean.strip()
 
+    def _create_html_report(self, commentary_log: List[str]):
+        """This will be called by frontend to save complete webpage"""
+        # This method will be called when frontend sends the complete HTML
+        print(f"🌐 HTML report will be created by frontend capture")
+
+    def save_complete_webpage(self, html_content: str):
+        """Save the complete webpage HTML as sent from frontend"""
+        html_path = os.path.join(self.archive_path, self.html_filename)
+        
+        try:
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            print(f"🌐 Saved complete webpage: {self.html_filename}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error saving webpage: {e}")
+            return False
+
     def _fix_end_of_over_formatting(self, text: str) -> str:
         """Fix end-of-over statistics formatting"""
         import re
         
-        # Pattern 1: End of over followed by player stats
-        # Matches: "End of over 3** (Score: 26/1, RR: 8.67)Player Name"
-        pattern1 = r'(\*\*End of over \d+\*\* \([^)]+\))([A-Za-z])'
-        text = re.sub(pattern1, r'\1<br>\2', text)
+        # DEBUG: Print original text to see what we're working with
+        if "End of over" in text:
+            print(f"🐛 BEFORE formatting: {text[:200]}...")
         
-        # Pattern 2: Player stats concatenated (no spaces between player lines)
-        # Matches: "Player1 7(8b) [1x4, 0x6]Player2 5(3b)"
-        pattern2 = r'(\]\s*)([A-Za-z][^0-9]*\d+\(\d+b\))'
-        text = re.sub(pattern2, r'\1<br>\2', text)
+        original_text = text
         
-        # Pattern 3: Bowler stats after batsman stats
-        # Matches: "Player 5(3b) [0x4, 0x6]Bowler 2.0-0-17-0"
-        pattern3 = r'(\]\s*)([A-Za-z][^0-9]*\d+\.\d+-\d+-\d+-\d+)'
-        text = re.sub(pattern3, r'\1<br>\2', text)
+        # Pattern 1: After "End of over X** (Score: ...)" add line break before player name
+        # Matches: ")PlayerName" where PlayerName starts with capital letter
+        text = re.sub(r'(\*\*End of over \d+\*\* \([^)]+\))([A-Z][a-z])', r'\1<br>\2', text)
         
-        # Pattern 4: Add line break before statistics that start with player names
-        # This catches any remaining concatenated player/bowler stats
-        pattern4 = r'(\d+\)\s*)([A-Z][a-z]+\s+[A-Z])'
-        text = re.sub(pattern4, r'\1<br>\2', text)
+        # Pattern 2: After player stats "]PlayerName" add line break
+        # Matches: "] PlayerName" or "]PlayerName"
+        text = re.sub(r'(\]\s*)([A-Z][a-z]+\s+[A-Z])', r'\1<br>\2', text)
+        
+        # Pattern 3: After player stats with no space "]PlayerName"
+        text = re.sub(r'(\])([A-Z][a-z]+)', r'\1<br>\2', text)
+        
+        # Pattern 4: Before bowler stats (has pattern like "X.X-X-X-X")
+        # Matches: "PlayerName 2.0-0-17-0"
+        text = re.sub(r'(\]\s*)([A-Z][a-z]+[^0-9]*\d+\.\d+-\d+-\d+-\d+)', r'\1<br>\2', text)
+        
+        # Pattern 5: Specific fix for your exact format - between stats and player names
+        # Matches things like "6]Manish" or "0]Bumrah"
+        text = re.sub(r'(\d\])([A-Z][a-z]+)', r'\1<br>\2', text)
+        
+        # Pattern 6: Between player stats ending with ") [" and next player
+        text = re.sub(r'(\)\s*\[[^\]]+\])([A-Z][a-z]+)', r'\1<br>\2', text)
+        
+        # DEBUG: Show if any changes were made
+        if text != original_text and "End of over" in text:
+            print(f"🐛 AFTER formatting: {text[:300]}...")
+            print(f"🐛 Changes made: {text != original_text}")
         
         return text
 

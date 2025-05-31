@@ -748,6 +748,110 @@ def create_app():
         
         return jsonify(result)
     
+    # Add this endpoint to your app.py
+
+    @app.route("/match/<match_id>/save-commentary", methods=["POST"])
+    @login_required
+    def save_commentary(match_id):
+        """Receive and store the complete frontend commentary for archiving"""
+        try:
+            print(f"🐛 DEBUG: Received commentary request for match {match_id}")
+            
+            data = request.get_json()
+            commentary_html = data.get('commentary_html', '')
+            
+            print(f"🐛 DEBUG: Commentary HTML length: {len(commentary_html)}")
+            print(f"🐛 DEBUG: Contains 'End of over': {'End of over' in commentary_html}")
+            print(f"🐛 DEBUG: First 300 chars: {commentary_html[:300]}")
+            
+            if not commentary_html:
+                return jsonify({"error": "No commentary provided"}), 400
+            
+            # Store commentary for the match instance
+            if match_id in MATCH_INSTANCES:
+                match_instance = MATCH_INSTANCES[match_id]
+                
+                # Convert HTML to clean text list for archiving
+                frontend_commentary = html_to_commentary_list(commentary_html)
+                print(f"🐛 DEBUG: Converted to {len(frontend_commentary)} commentary items")
+                
+                # Replace the backend commentary with frontend commentary
+                match_instance.frontend_commentary_captured = frontend_commentary
+                
+                # DON'T trigger archive creation here - it already happened
+                # Just store the commentary for next time
+                print(f"🐛 DEBUG: Stored frontend commentary for future use")
+                
+                app.logger.info(f"[Commentary] Captured {len(frontend_commentary)} items for match {match_id}")
+                return jsonify({"message": "Commentary captured successfully"}), 200
+            else:
+                print(f"🐛 DEBUG: Match instance {match_id} not found in MATCH_INSTANCES")
+                return jsonify({"error": "Match instance not found"}), 404
+                
+        except Exception as e:
+            print(f"🐛 DEBUG: Error in save_commentary: {e}")
+            app.logger.error(f"Error saving commentary: {e}", exc_info=True)
+            return jsonify({"error": "Failed to save commentary"}), 500
+
+    def html_to_commentary_list(html_content):
+        """Convert HTML commentary to clean text list"""
+        from bs4 import BeautifulSoup
+        import re
+        
+        # Parse HTML
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Extract all paragraph texts
+        paragraphs = soup.find_all('p')
+        commentary_items = []
+        
+        for p in paragraphs:
+            text = p.get_text().strip()
+            if text and text != "Match starts soon...":  # Skip placeholder text
+                commentary_items.append(str(p))  # Keep HTML structure for archiver
+        
+        return commentary_items
+
+
+    @app.route("/match/<match_id>/save-complete-webpage", methods=["POST"])
+    @login_required
+    def save_complete_webpage(match_id):
+        """Save the complete webpage HTML with all commentary"""
+        try:
+            data = request.get_json()
+            html_content = data.get('html_content', '')
+            
+            if not html_content:
+                return jsonify({"error": "No HTML content provided"}), 400
+            
+            # Find the match archive folder
+            match_dir = os.path.join(PROJECT_ROOT, "data")
+            archive_folder = None
+            
+            for folder in os.listdir(match_dir):
+                if folder.startswith("playing_") and match_id in folder:
+                    archive_folder = os.path.join(match_dir, folder)
+                    break
+            
+            if not archive_folder:
+                return jsonify({"error": "Archive folder not found"}), 404
+            
+            # Generate filename
+            parts = os.path.basename(archive_folder).split('_')
+            html_filename = f"playing_{parts[1]}_vs_{parts[3]}_{parts[4]}_{parts[5]}.html"
+            html_path = os.path.join(archive_folder, html_filename)
+            
+            # Save the complete webpage
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            print(f"🌐 Saved complete webpage: {html_filename}")
+            return jsonify({"message": "Webpage saved successfully"}), 200
+            
+        except Exception as e:
+            app.logger.error(f"Error saving webpage: {e}", exc_info=True)
+            return jsonify({"error": "Failed to save webpage"}), 500
+    
     return app
 
 # ────── Run Server ──────
