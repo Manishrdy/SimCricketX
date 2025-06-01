@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <!-- ──────────────────────────────────────────────────────────────────────────── -->
+    <!--                         my_matches.html (Production)                          -->
+    <!-- ──────────────────────────────────────────────────────────────────────────── -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Matches</title>
+
+    <!-- Preserve saved theme -->
+    <script>
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+    </script>
+
+    <!-- Modern CSS Reset -->
+    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        integrity="sha512-Cw1PhL2WQ1U3xNlO7lY2kh8AJX9nhRg+aP5Ux8pFv0FukcSDvg5jyUL/MyQtkIpQGfrDp7ImeXj7tU6W2puqEA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <style>
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                          CSS VARIABLES & THEMES                              */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        :root {
+            --bg: #f0f4f9;
+            --fg: #333;
+            --card-bg: #fff;
+            --accent: #005fcc;
+            --accent-hover: #0041a8;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --gradient: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            --icon-color: #005fcc;
+            --danger: #e53e3e;
+            --danger-hover: #c53030;
+            --modal-bg: rgba(0, 0, 0, 0.5);
+            --modal-content-bg: #fff;
+        }
+
+        [data-theme="dark"] {
+            --bg: #0d1117;
+            --fg: #eaeaea;
+            --card-bg: #161b22;
+            --accent: #00bcd4;
+            --accent-hover: #028f9c;
+            --shadow: rgba(0, 0, 0, 0.6);
+            --gradient: linear-gradient(135deg, #00bcd4 0%, #8bc34a 100%);
+            --icon-color: #00bcd4;
+            --danger: #e53e3e;
+            --danger-hover: #c53030;
+            --modal-content-bg: #222;
+        }
+
+        /* Additional themes omitted for brevity */
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                              GLOBAL STYLES                                    */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        body {
+            background: var(--bg);
+            color: var(--fg);
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            color: transparent;
+            animation: fadeIn 1.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Theme toggle button */
+        .toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--fg);
+            z-index: 100;
+        }
+
+        /* Flash messages */
+        .flash {
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        .flash-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .flash-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .flash-info {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .flash.fade-out {
+            opacity: 0;
+        }
+
+        /* Container for cards */
+        .container {
+            width: 100%;
+            max-width: 960px;
+            margin-top: 2rem;
+        }
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                              FILE CARD GRID                                   */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        .grid-files {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .file-card {
+            background: var(--card-bg);
+            border-radius: 0.75rem;
+            box-shadow: 0 6px 20px var(--shadow);
+            padding: 1.5rem 1.25rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            overflow: hidden;
+        }
+
+        .file-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 10px 25px var(--shadow);
+        }
+
+        /* Improved Delete (X) Button */
+        .delete-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: var(--danger);
+            border: none;
+            color: #fff;
+            font-size: 0.9rem;
+            width: 1.8rem;
+            height: 1.8rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0.85;
+            transition: background 0.2s ease, opacity 0.2s ease;
+        }
+
+        .delete-btn:hover {
+            background: var(--danger-hover);
+            opacity: 1;
+        }
+
+        .file-icon {
+            font-size: 3.5rem;
+            color: var(--accent);
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .file-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 0.5rem;
+            color: var(--fg);
+            word-break: break-word;
+        }
+
+        .file-info {
+            font-size: 0.9rem;
+            line-height: 1.4;
+            color: var(--fg);
+            margin-bottom: 1rem;
+        }
+
+        .file-info p {
+            margin: 0.25rem 0;
+        }
+
+        .countdown {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--danger);
+        }
+
+        .download-btn {
+            display: block;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 0.65rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 0.95rem;
+            text-align: center;
+            transition: background 0.2s ease;
+            text-decoration: none;
+        }
+
+        .download-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .no-files {
+            text-align: center;
+            color: var(--fg);
+            opacity: 0.7;
+            margin-top: 3rem;
+            font-size: 1.1rem;
+        }
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                             CONFIRMATION MODAL                                 */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--modal-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+
+        .modal.hidden {
+            display: none;
+        }
+
+        .modal-content {
+            background: var(--modal-content-bg);
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 8px 30px var(--shadow);
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            color: var(--fg);
+        }
+
+        .modal-content p {
+            margin-bottom: 1.5rem;
+            font-size: 1rem;
+        }
+
+        .modal-btns {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .modal-btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: background 0.2s ease;
+        }
+
+        .btn-cancel {
+            background: #ccc;
+            color: #333;
+        }
+
+        .btn-cancel:hover {
+            background: #bbb;
+        }
+
+        .btn-delete {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .btn-delete:hover {
+            background: var(--danger-hover);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Theme toggle -->
+    <button class="toggle" id="theme-toggle" aria-label="Toggle theme">🌙</button>
+
+    <!-- Page title -->
+    <h1>📂 My Matches</h1>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="container">
+        <div id="files-grid" class="grid-files">
+            {% if files %}
+            {% for file in files %}
+            <div class="file-card" id="card-{{ loop.index }}" data-filename="{{ file.filename }}"
+                data-delete-url="{{ file.delete_url }}">
+                <!-- Improved Delete Button -->
+                <button class="delete-btn" aria-label="Delete {{ file.filename }}"
+                    onclick="promptDelete('card-{{ loop.index }}')">
+                    &times;
+                </button>
+
+                <!-- File Icon -->
+                <div class="file-icon">
+                    <i class="fa-solid fa-file-zipper"></i>
+                </div>
+
+                <!-- Title: Team1 vs Team2 -->
+                <div class="file-title" id="title-{{ loop.index }}">Loading...</div>
+
+                <!-- File Info: Created Date, Creator, Expiry -->
+                <div class="file-info">
+                    <p class="created-info" id="created-{{ loop.index }}">Created Date: --</p>
+                    <p class="creator-info" id="creator-{{ loop.index }}">Creator: --</p>
+                    <p class="expiry-info" id="expiry-{{ loop.index }}">Expiry: --</p>
+                    <p class="countdown" id="countdown-{{ loop.index }}">Time Left: --</p>
+                </div>
+
+                <!-- Download Button -->
+                <a href="{{ file.download_url }}" class="download-btn" download>
+                    <i class="fa-solid fa-download" style="margin-right: 0.4rem;"></i>
+                    Download
+                </a>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div id="no-files" class="no-files">
+                No archives found in the last 7 days.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal hidden">
+        <div class="modal-content">
+            <p>Are you sure you want to delete this archive?</p>
+            <div class="modal-btns">
+                <button class="modal-btn btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="modal-btn btn-delete" id="confirm-delete-btn">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ────────────────────────────────────────────────────────────────────────────
+        //                         THEME TOGGLE LOGIC (same as home.html)
+        // ────────────────────────────────────────────────────────────────────────────
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const root = document.documentElement;
+
+        function applySavedTheme() {
+            const theme = localStorage.getItem('theme') || 'light';
+            root.setAttribute('data-theme', theme);
+            themeToggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
+
+        themeToggleBtn.addEventListener('click', () => {
+            const current = root.getAttribute('data-theme') || 'light';
+            const nextTheme = current === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-theme', nextTheme);
+            localStorage.setItem('theme', nextTheme);
+            themeToggleBtn.textContent = nextTheme === 'dark' ? '☀️' : '🌙';
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            applySavedTheme();
+
+            // Auto-dismiss flash messages after 3 seconds
+            setTimeout(() => {
+                document.querySelectorAll('.flash').forEach(el => {
+                    el.classList.add('fade-out');
+                    setTimeout(() => el.remove(), 300);
+                });
+            }, 3000);
+
+            // Populate file card details and start countdown timers
+            document.querySelectorAll('.file-card').forEach(card => {
+                const filename = card.dataset.filename; // e.g. "playing_SRH_vs_MI_admin@projectx.com_20250530154936.zip"
+                // Strip ".zip"
+                const base = filename.slice(0, -4);
+                const parts = base.split('_');
+                // parts = ["playing", "SRH", "vs", "MI", "admin@projectx.com", "20250530154936"]
+                const team1 = parts[1];
+                const team2 = parts[3];
+                const creator = parts[4];
+                const timestampStr = parts[5]; // "20250530154936"
+
+                // Format Created Date (DD-MM-YYYY)
+                const year = parseInt(timestampStr.slice(0, 4), 10);
+                const month = parseInt(timestampStr.slice(4, 6), 10) - 1; // zero-based
+                const day = parseInt(timestampStr.slice(6, 8), 10);
+                const hour = parseInt(timestampStr.slice(8, 10), 10);
+                const minute = parseInt(timestampStr.slice(10, 12), 10);
+                const second = parseInt(timestampStr.slice(12, 14), 10);
+                const createdDate = new Date(year, month, day, hour, minute, second);
+
+                // Expiry date: +7 days
+                const expiryDate = new Date(createdDate);
+                expiryDate.setDate(expiryDate.getDate() + 7);
+
+                // Populate Title and Info Elements
+                const idx = card.id.split('-')[1];
+                document.getElementById(`title-${idx}`).textContent = `${team1} vs ${team2}`;
+                document.getElementById(`created-${idx}`).textContent =
+                    `Created Date: ${String(day).padStart(2, '0')}-${String(month + 1).padStart(2, '0')}-${year}`;
+                document.getElementById(`creator-${idx}`).textContent = `Creator: ${creator}`;
+                document.getElementById(`expiry-${idx}`).textContent =
+                    `Expiry: ${String(expiryDate.getDate()).padStart(2, '0')}-${String(expiryDate.getMonth() + 1).padStart(2, '0')}-${expiryDate.getFullYear()}`;
+
+                // Start countdown
+                const countdownElem = document.getElementById(`countdown-${idx}`);
+                function updateCountdown() {
+                    const now = new Date();
+                    const diffMs = expiryDate - now;
+                    if (diffMs <= 0) {
+                        countdownElem.textContent = 'Expired';
+                        countdownElem.style.color = 'var(--danger)';
+                        clearInterval(intervalId);
+                        return;
+                    }
+                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                    const diffHrs = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                    const diffSecs = Math.floor((diffMs % (1000 * 60)) / 1000);
+                    countdownElem.textContent = `Time Left: ${diffDays}d ${diffHrs}h ${diffMins}m ${diffSecs}s`;
+                }
+                updateCountdown();
+                const intervalId = setInterval(updateCountdown, 1000);
+            });
+        });
+
+        // ────────────────────────────────────────────────────────────────────────────
+        //                  DELETE ARCHIVE WITH IN-PAGE CONFIRMATION
+        // ────────────────────────────────────────────────────────────────────────────
+        let pendingDeleteCardId = null;
+
+        function promptDelete(cardId) {
+            pendingDeleteCardId = cardId;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            pendingDeleteCardId = null;
+            document.getElementById('confirm-modal').classList.add('hidden');
+        }
+
+        document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
+            if (!pendingDeleteCardId) return;
+            const card = document.getElementById(pendingDeleteCardId);
+            const deleteUrl = card.dataset.deleteUrl;
+
+            try {
+                const response = await fetch(deleteUrl, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    alert("Failed to delete: " + (err.error || response.statusText));
+                    closeModal();
+                    return;
+                }
+                card.remove();
+                closeModal();
+                if (document.querySelectorAll('.file-card').length === 0) {
+                    const noFiles = document.createElement('div');
+                    noFiles.id = 'no-files';
+                    noFiles.className = 'no-files';
+                    noFiles.textContent = 'No archives found in the last 7 days.';
+                    document.getElementById('files-grid').appendChild(noFiles);
+                }
+            } catch (error) {
+                console.error("Error deleting archive:", error);
+                alert("Unexpected error occurred while deleting.");
+                closeModal();
+            }
+        });
+    </script>
+</body>
+
+</html>
