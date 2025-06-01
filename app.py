@@ -32,13 +32,38 @@ from engine.player import Player, PLAYER_ROLES, BATTING_HANDS, BOWLING_TYPES, BO
 from auth.user_auth import load_credentials  # adjust import path if needed
 from flask import send_from_directory
 import random
+import shutil
+from flask import send_file
+from flask import Flask, request, jsonify, send_file
+import time
 
 
 MATCH_INSTANCES = {}
 
+# How old is “too old”? 7 days → 7*24*3600 seconds
+PROD_MAX_AGE = 7 * 24 * 3600
 
 # Make sure PROJECT_ROOT is defined near the top of app.py:
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
+
+def load_match_metadata(match_id):
+    """
+    Look in data/matches for a JSON whose "match_id" field equals match_id.
+    Return the parsed dict if found, else None.
+    """
+    matches_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+    for fn in os.listdir(matches_dir):
+        if not fn.lower().endswith(".json"):
+            continue
+        path = os.path.join(matches_dir, fn)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if d.get("match_id") == match_id:
+                return d
+        except Exception:
+            continue
+    return None
 
 def load_app_config():
     base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -493,6 +518,10 @@ def create_app():
     @app.route("/match/setup", methods=["GET", "POST"])
     @login_required
     def match_setup():
+
+        # ① Clean up old ZIPs before doing anything else
+        clean_old_archives(PROD_MAX_AGE)
+
         teams = load_user_teams(current_user.id)
 
         if request.method == "POST":
@@ -744,9 +773,12 @@ def create_app():
             return jsonify({"error": "Match not found"}), 404
         
         match = MATCH_INSTANCES[match_id]
-        result = match.next_super_over_ball()
-        
-        return jsonify(result)
+        try:
+            result = match.next_super_over_ball()
+            return jsonify(result)
+        except Exception as e:
+            print(f"Error in super over: {e}")  # Debug print
+            return jsonify({"error": str(e)}), 500
     
     # Add this endpoint to your app.py
 
@@ -813,44 +845,190 @@ def create_app():
         return commentary_items
 
 
-    @app.route("/match/<match_id>/save-complete-webpage", methods=["POST"])
+    @app.route("/match/<match_id>/download-archive", methods=["POST"])
     @login_required
-    def save_complete_webpage(match_id):
-        """Save the complete webpage HTML with all commentary"""
+    def download_archive(match_id):
+        """
+        1) Expect JSON body: { "html_content": "<html>…</html>" }.
+        2) Recompute folder_name from match metadata (team_home, team_away, username, timestamp).
+        3) Write the HTML into data/<folder_name>/<folder_name>.html.
+        4) ZIP the entire data/<folder_name> directory.
+        5) send_file(...) the ZIP back to the client.
+        """
         try:
-            data = request.get_json()
-            html_content = data.get('html_content', '')
-            
+            payload = request.get_json() or {}
+            html_content = payload.get("html_content", "")
             if not html_content:
-                return jsonify({"error": "No HTML content provided"}), 400
-            
-            # Find the match archive folder
-            match_dir = os.path.join(PROJECT_ROOT, "data")
-            archive_folder = None
-            
-            for folder in os.listdir(match_dir):
-                if folder.startswith("playing_") and match_id in folder:
-                    archive_folder = os.path.join(match_dir, folder)
-                    break
-            
-            if not archive_folder:
-                return jsonify({"error": "Archive folder not found"}), 404
-            
-            # Generate filename
-            parts = os.path.basename(archive_folder).split('_')
-            html_filename = f"playing_{parts[1]}_vs_{parts[3]}_{parts[4]}_{parts[5]}.html"
-            html_path = os.path.join(archive_folder, html_filename)
-            
-            # Save the complete webpage
-            with open(html_path, 'w', encoding='utf-8') as f:
+                return jsonify({"error": "No HTML provided"}), 400
+
+            # ── Step A: Load match metadata JSON ──────────────────────────
+            match_meta = load_match_metadata(match_id)
+            if not match_meta:
+                return jsonify({"error": "Match metadata not found"}), 404
+
+            # Extract the four fields that MatchArchiver used to build folder_name:
+            #   team_home, team_away come in the form "<TEAM>_…", so split on "_" first.
+            team_home = match_meta.get("team_home", "").split("_")[0]
+            team_away = match_meta.get("team_away", "").split("_")[0]
+            username  = match_meta.get("created_by", "")
+            timestamp = match_meta.get("timestamp", "")
+
+            if not (team_home and team_away and username and timestamp):
+                return jsonify({"error": "Insufficient metadata to find archive folder"}), 400
+
+            # Reconstruct the exact folder_name:
+            folder_name = f"playing_{team_home}_vs_{team_away}_{username}_{timestamp}"
+            archive_dir = os.path.join(PROJECT_ROOT, "data", folder_name)
+
+            if not os.path.isdir(archive_dir):
+                return jsonify({"error": f"Archive folder not found: {folder_name}"}), 404
+
+            # ── Step B: Write the HTML file into that folder ──────────────
+            html_filename = f"{folder_name}.html"
+            html_path = os.path.join(archive_dir, html_filename)
+            with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
-            
-            print(f"🌐 Saved complete webpage: {html_filename}")
-            return jsonify({"message": "Webpage saved successfully"}), 200
-            
+
+            # ── Step C: ZIP the entire folder (data/<folder_name>) ────────
+            base_data = os.path.join(PROJECT_ROOT, "data")
+            zip_base  = os.path.join(base_data, folder_name)
+            zip_path  = shutil.make_archive(zip_base, 'zip', root_dir=archive_dir)
+
+            # ── Step D: send the ZIP back as an attachment ───────────────
+            return send_file(
+                zip_path,
+                mimetype="application/zip",
+                as_attachment=True,
+                download_name=f"{folder_name}.zip"
+            )
+
         except Exception as e:
-            app.logger.error(f"Error saving webpage: {e}", exc_info=True)
-            return jsonify({"error": "Failed to save webpage"}), 500
+            app.logger.error(f"Error in download_archive: {e}", exc_info=True)
+            return jsonify({"error": "Failed to create archive ZIP"}), 500
+
+
+    @app.route("/my-matches")
+    @login_required
+    def my_matches():
+        """
+        Display all ZIP archives in data/files/ matching current_user.id,
+        regardless of subfolders. Only show files up to 7 days old.
+        """
+        username    = current_user.id
+        files_dir   = os.path.join(PROJECT_ROOT, "data")
+        valid_files = []
+
+        app.logger.info(f"User '{username}' requested /my-matches")
+
+        try:
+            if not os.path.isdir(files_dir):
+                app.logger.warning(f"'{files_dir}' does not exist for user '{username}'")
+            else:
+                now = time.time()
+                max_age = 7 * 24 * 3600  # 7 days in seconds
+
+                for fn in os.listdir(files_dir):
+                    # Only consider ".zip" and filenames containing "_<username>_"
+                    if not fn.lower().endswith(".zip"):
+                        continue
+                    if f"_{username}_" not in fn:
+                        continue
+
+                    full_path = os.path.join(files_dir, fn)
+                    if not os.path.isfile(full_path):
+                        app.logger.debug(f"Skipping '{fn}' (not a regular file)")
+                        continue
+
+                    age = now - os.path.getmtime(full_path)
+                    if age > max_age:
+                        app.logger.info(f"Skipping old archive '{fn}' (age {age//3600}h > 7d)")
+                        continue
+
+                    # Build URLs for download & delete
+                    download_url = f"/archives/{username}/{fn}"
+                    delete_url   = f"/archives/{username}/{fn}"
+
+                    valid_files.append({
+                        "filename":     fn,
+                        "download_url": download_url,
+                        "delete_url":   delete_url
+                    })
+
+                app.logger.info(f"User '{username}' has {len(valid_files)} valid archives")
+
+        except Exception as e:
+            app.logger.error(f"Error listing archives in '{files_dir}' for '{username}': {e}", exc_info=True)
+
+        return render_template("my_matches.html", files=valid_files)
+
+
+    @app.route("/archives/<username>/<filename>", methods=["GET"])
+    @login_required
+    def serve_archive(username, filename):
+        """
+        Serve a ZIP file stored under PROJECT_ROOT/data/<filename>
+        Only the user whose email == username can download it.
+        """
+        # 1) Authorization check: current_user.id holds the email
+        if current_user.id != username:
+            app.logger.warning(f"Unauthorized download attempt by '{current_user.id}' for '{username}/{filename}'")
+            return jsonify({"error": "Unauthorized"}), 403
+
+        # 2) Prevent directory-traversal (reject anything with a slash)
+        if "/" in filename or "\\" in filename:
+            app.logger.warning(f"Invalid filename in download: {filename}")
+            return jsonify({"error": "Invalid filename"}), 400
+
+        # 3) Build the absolute path to the ZIP under data/
+        zip_path = os.path.join(PROJECT_ROOT, "data", filename)
+        if not os.path.isfile(zip_path):
+            app.logger.warning(f"Attempt to download non-existent file: {zip_path}")
+            return jsonify({"error": "File not found"}), 404
+
+        # 4) Stream the file back
+        try:
+            app.logger.info(f"Sending archive '{filename}' to user '{username}'")
+            return send_file(
+                zip_path,
+                mimetype="application/zip",
+                as_attachment=True,
+                download_name=filename
+            )
+        except Exception as e:
+            app.logger.error(f"Error sending archive {zip_path}: {e}", exc_info=True)
+            return jsonify({"error": "Failed to send file"}), 500
+
+
+    def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
+        """
+        Walk through PROJECT_ROOT/data/, find any .zip files,
+        and delete those whose modification time is older than max_age_seconds.
+        """
+        data_dir = os.path.join(PROJECT_ROOT, "data")
+        now = time.time()
+
+        if not os.path.isdir(data_dir):
+            app.logger.warning(f"clean_old_archives: data directory does not exist: {data_dir}")
+            return
+
+        for filename in os.listdir(data_dir):
+            if not filename.lower().endswith(".zip"):
+                continue
+
+            full_path = os.path.join(data_dir, filename)
+            if not os.path.isfile(full_path):
+                continue
+
+            age = now - os.path.getmtime(full_path)
+            if age > max_age_seconds:
+                try:
+                    os.remove(full_path)
+                    app.logger.info(f"Deleted old archive: {filename} (age {age//3600}h)")
+                except Exception as e:
+                    app.logger.error(f"Failed to delete {full_path}: {e}", exc_info=True)
+
+
+
     
     return app
 

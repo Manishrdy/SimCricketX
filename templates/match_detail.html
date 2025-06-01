@@ -8,6 +8,119 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
+    <!-- <script>
+        /**
+         * ① Capture the entire page HTML, POST it to the new Flask endpoint,
+         * and then download the ZIP returned by Flask.
+         */
+        async function saveMatchArchive() {
+            try {
+                // Capture the full DOM HTML
+                const html_content = document.documentElement.outerHTML;
+
+                // POST to our new /download-archive route
+                const response = await fetch(`${window.location.pathname}/download-archive`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ html_content })
+                });
+
+                if (!response.ok) {
+                    // If Flask responded with an error JSON, show it
+                    let errMsg = "Unknown error";
+                    try {
+                        const errJson = await response.json();
+                        errMsg = errJson.error || response.statusText;
+                    } catch { }
+                    alert("❌ Failed to create/download archive:\n" + errMsg);
+                    return;
+                }
+
+                // Read the ZIP file as a Blob
+                const blob = await response.blob();
+                // Extract filename from Content-Disposition header
+                const contentDisp = response.headers.get('Content-Disposition') || '';
+                let filename = "match_archive.zip";
+                const match = /filename="?([^"]+)"?/.exec(contentDisp);
+                if (match && match[1]) {
+                    filename = match[1];
+                }
+
+                // Trigger browser download of the ZIP
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+
+                console.log("✅ Archive ZIP downloaded:", filename);
+            } catch (e) {
+                console.error("Exception in saveMatchArchive:", e);
+                alert("❌ Unexpected error while downloading archive");
+            }
+        }
+
+        // ② Change the Save Report button to call saveMatchArchive() instead of saveMatchReport()
+        document.addEventListener("DOMContentLoaded", () => {
+            const saveBtn = document.getElementById("save-report");
+            if (saveBtn) {
+                saveBtn.onclick = saveMatchArchive;
+            }
+        });
+    </script> -->
+
+    <script>
+        // Capture entire HTML → POST to /download-archive → receive ZIP blob → force-download
+        async function saveMatchArchive() {
+            try {
+                const html_content = document.documentElement.outerHTML;
+                const response = await fetch(`${window.location.pathname}/download-archive`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ html_content })
+                });
+
+                if (!response.ok) {
+                    const errJson = await response.json().catch(() => ({}));
+                    alert("❌ Failed to create/download archive:\n" + (errJson.error || response.statusText));
+                    return;
+                }
+
+                const blob = await response.blob();
+                const cd = response.headers.get('Content-Disposition') || "";
+                let filename = "match_archive.zip";
+                const m = /filename="?([^"]+)"?/.exec(cd);
+                if (m && m[1]) filename = m[1];
+
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename.replace(/\"/g, '');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+
+            } catch (e) {
+                console.error("Error in saveMatchArchive:", e);
+                alert("❌ Unexpected error while downloading archive");
+            }
+        }
+
+        // Bind the button (remove any existing onclick="saveMatchReport()")
+        document.addEventListener("DOMContentLoaded", () => {
+            const saveBtn = document.getElementById("save-report");
+            if (saveBtn) saveBtn.onclick = saveMatchArchive;
+        });
+    </script>
+
+
+
     <script>
         const savedTheme = localStorage.getItem('theme') || 'light';
         window.appTheme = savedTheme;
@@ -352,10 +465,12 @@
                 style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:0.5rem; cursor:pointer;">
                 Spin the Coin!
             </button>
-            <button id="save-report" onclick="saveMatchReport()"
-                style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:0.5rem; cursor:pointer;">
+            <button id="save-report" style="padding: 0.6rem 1.5rem; font-size:1rem;
+               background:var(--accent); color:#fff;
+               border:none; border-radius:0.5rem; cursor:pointer;">
                 Save Report
             </button>
+
 
             <div id="toss-outcome" style="margin-top:0.75rem; font-size:1rem; font-weight:bold;"></div>
 
@@ -845,7 +960,6 @@
             });
         }
 
-        // Function to save match report
         function saveMatchReport() {
             console.log("💾 Saving match report...");
             const teams = document.querySelector('h1').textContent.replace(' – Project X', '');
@@ -869,6 +983,7 @@
 
             console.log(`✅ Match report saved as: ${filename}`);
         }
+
 
         // Theme toggle (consistent with match_setup.html)
         const root = document.documentElement, ttl = document.getElementById('theme-toggle');
