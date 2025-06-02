@@ -352,7 +352,7 @@
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         }
 
-        .scorecard-header {
+        /* .scorecard-header {
             text-align: center;
             margin-bottom: 1.5rem;
             background: var(--gradient);
@@ -360,6 +360,20 @@
             color: transparent;
             font-size: 1.5rem;
             font-weight: bold;
+        } */
+
+        .scorecard-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            background: white;
+            /* Change this from: background: var(--gradient); */
+            color: var(--accent);
+            /* Change this from: color: transparent; */
+            /* Remove this line: -webkit-background-clip: text; */
+            font-size: 1.5rem;
+            font-weight: bold;
+            padding: 1rem;
+            /* Add this for better spacing */
         }
 
         .scorecard-table {
@@ -463,11 +477,11 @@
                 style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:0.5rem; cursor:pointer;">
                 Spin the Coin!
             </button>
-            <button id="save-report" style="padding: 0.6rem 1.5rem; font-size:1rem;
+            <!-- <button id="save-report" style="padding: 0.6rem 1.5rem; font-size:1rem;
                background:var(--accent); color:#fff;
                border:none; border-radius:0.5rem; cursor:pointer;">
                 Save Report
-            </button>
+            </button> -->
 
 
             <div id="toss-outcome" style="margin-top:0.75rem; font-size:1rem; font-weight:bold;"></div>
@@ -539,13 +553,15 @@
                             <tr>
                                 <th>Player</th>
                                 <th></th>
+                                <th>Fielder</th>
+                                <th>Bowler</th>
                                 <th>R</th>
                                 <th>B</th>
                                 <th>4s</th>
                                 <th>6s</th>
                                 <th>S/R</th>
-                                <th>Bowler</th>
-                                <th>Fielder</th>
+
+
                             </tr>
                         </thead>
                         <tbody id="scorecard-tbody">
@@ -656,13 +672,13 @@
                 row.innerHTML = `
             <td>${player.name}</td>
             <td>${player.status}</td>
+            <td>${player.fielder_out || ''}</td>
+            <td>${player.bowler_out || ''}</td>
             <td>${player.runs}</td>
             <td>${player.balls}</td>
             <td>${player.fours}</td>
             <td>${player.sixes}</td>
             <td>${player.strike_rate ? player.strike_rate + '%' : ''}</td>
-            <td>${player.bowler_out || ''}</td>
-            <td>${player.fielder_out || ''}</td>
             `;
             });
 
@@ -868,22 +884,84 @@
                 .catch(err => commentaryLog.innerHTML += `<p style="color:red;">Match error: ${err}</p>`);
         }
 
-        // snapshot & download the #scorecard-overlay as a PNG
+        // Production fix for saveScorecardImage() function
         function saveScorecardImage() {
             const overlay = document.getElementById('scorecard-overlay');
-            html2canvas(overlay).then(canvas => {
-                canvas.toBlob(blob => {
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = 'scorecard.png';
-                    link.style.display = 'none';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
+            const titleElement = document.getElementById('scorecard-title');
+
+            // Store original styles to restore later
+            const originalStyles = {
+                background: titleElement.style.background,
+                color: titleElement.style.color,
+                webkitBackgroundClip: titleElement.style.webkitBackgroundClip,
+                backgroundClip: titleElement.style.backgroundClip
+            };
+
+            try {
+                // Temporarily apply solid styling for better canvas capture
+                titleElement.style.background = 'none';
+                titleElement.style.color = '#4a90e2'; // Use your accent color directly
+                titleElement.style.webkitBackgroundClip = 'initial';
+                titleElement.style.backgroundClip = 'initial';
+
+                // Capture with enhanced settings for better quality
+                html2canvas(overlay, {
+                    backgroundColor: null,
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    allowTaint: true
+                }).then(canvas => {
+                    // Restore original styles immediately after capture
+                    restoreOriginalStyles();
+
+                    // Generate and download the image
+                    canvas.toBlob(blob => {
+                        if (blob) {
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = getFilename();
+                            link.style.display = 'none';
+
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                        } else {
+                            console.error('Failed to create blob from canvas');
+                        }
+                    }, 'image/png', 0.95);
+
+                }).catch(error => {
+                    // Ensure styles are restored even on error
+                    restoreOriginalStyles();
+                    console.error('Error capturing scorecard:', error);
+                    alert('Failed to save scorecard image. Please try again.');
                 });
-            });
+
+            } catch (error) {
+                // Fallback error handling
+                restoreOriginalStyles();
+                console.error('Error in saveScorecardImage:', error);
+                alert('Failed to save scorecard image. Please try again.');
+            }
+
+            // Helper function to restore original styles
+            function restoreOriginalStyles() {
+                titleElement.style.background = originalStyles.background;
+                titleElement.style.color = originalStyles.color;
+                titleElement.style.webkitBackgroundClip = originalStyles.webkitBackgroundClip;
+                titleElement.style.backgroundClip = originalStyles.backgroundClip;
+            }
+
+            // Helper function to generate meaningful filename
+            function getFilename() {
+                const titleText = titleElement.textContent || 'scorecard';
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+                const cleanTitle = titleText.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                return `${cleanTitle}_${timestamp}.png`;
+            }
         }
 
         function startSuperOver(firstBattingTeam) {
