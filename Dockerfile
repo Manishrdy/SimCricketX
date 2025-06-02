@@ -9,7 +9,7 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 3. Copy requirements first (caching benefit)
+# 3. Copy requirements first (for caching)
 # ──────────────────────────────────────────────────────────────────────────────
 COPY requirements.txt .
 
@@ -19,24 +19,22 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 5. Copy the rest of your project files
-#     (this brings in app.py, all folders, templates, static files, utils, etc.)
+# 5. Copy rest of the project files (including logs/ directory)
 # ──────────────────────────────────────────────────────────────────────────────
 COPY . .
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 6. Expose port 7860
-#     Hugging Face Spaces expects the web service to listen on 0.0.0.0:7860
+# 6. Ensure the logs directory exists and is writable
+# ──────────────────────────────────────────────────────────────────────────────
+RUN mkdir -p /app/logs
+RUN chmod -R 0777 /app/logs
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 7. Expose the port that Flask will listen on
 # ──────────────────────────────────────────────────────────────────────────────
 EXPOSE 7860
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 7. Entrypoint: run your Flask app
-#
-#    - Assumes that app.py calls
-#        app.run(host="0.0.0.0", port=7860)
-#      at the bottom, or otherwise binds to 0.0.0.0:7860.
-#    - If you prefer Gunicorn, replace this CMD with something like:
-#        ["gunicorn", "-w", "4", "-b", "0.0.0.0:7860", "app:app"]
+# 8. Start the Flask app
 # ──────────────────────────────────────────────────────────────────────────────
 CMD ["python", "app.py"]

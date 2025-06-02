@@ -138,7 +138,32 @@ def create_app():
     # --- Flask setup ---
     app = Flask(__name__)
     config = load_config()
-    app.config["SECRET_KEY"] = config.get("app", {}).get("secret_key", "default-dev-key")
+    
+
+    # 1a) Try to read from config file
+    secret = None
+    try:
+        secret = config.get("app", {}).get("secret_key", None)
+        if not secret or not isinstance(secret, str):
+            raise ValueError("Invalid secret_key in config")
+    except Exception as e:
+        # Log if config file is missing or malformed
+        print(f"[WARN] Could not read secret_key from config.yaml: {e}")
+
+    # 1b) Fallback to an environment variable (HF Secrets) or hardcoded fallback
+    if not secret:
+        secret = os.getenv("FLASK_SECRET_KEY", None)
+        if not secret:
+            # Last fallback (non-secure): random bytes on each start
+            # WARNING: this means users must re-login after each rebuild!
+            secret = os.urandom(24).hex()
+            print("[WARN] Using random Flask SECRET_KEY—sessions won't persist across restarts")
+
+    app.config["SECRET_KEY"] = secret
+
+    # 1c) Force cookies to be secure (HF uses HTTPS)
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # --- Logging setup ---
     base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -179,6 +204,8 @@ def create_app():
     @app.route("/")
     @login_required
     def home():
+        print(f"[DEBUG] current_user.is_authenticated = {current_user.is_authenticated}")
+        print(f"[DEBUG] current_user.get_id() = {current_user.get_id()}")
         return render_template("home.html", user=current_user)
 
     @app.route("/register", methods=["GET", "POST"])
@@ -201,7 +228,9 @@ def create_app():
             email = request.form["email"].strip().lower()
             password = request.form["password"]
             app.logger.info(f"Login attempt for {email}")
+            
             if verify_user(email, password):
+                app.logger.info("Inside verify_user")
                 user = User(email)
                 login_user(user)
                 session.pop('_flashes', None)  # 🧼 clear any prior flashes
@@ -797,7 +826,10 @@ def create_app():
         if outcome.get("match_over"):
             result = outcome.get("result", "Match ended")
             # After
-            app.logger.info(f"Result in main.py {outcome.get("result",  "Match ended")}")
+            app.logger.info(
+    f"Result in main.py {outcome.get('result', 'Match ended')}"
+)
+
 
             return jsonify({
                 "innings_end":     True,                              # ← flag it as an innings end
