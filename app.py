@@ -1167,4 +1167,4 @@ if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     app.config['ARCHIVES_FOLDER'] = os.path.join(BASE_DIR, 'data')
     # debug=False for production
-    app.run(host="0.0.0.0", port=2624, debug=False)
+    app.run(host="0.0.0.0", port=7860, debug=False)
