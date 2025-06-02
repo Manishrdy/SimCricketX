@@ -20,9 +20,8 @@
     <!-- Modern CSS Reset -->
     <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
 
-    <!-- Font Awesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
-        integrity="sha512-Cw1PhL2WQ1U3xNlO7lY2kh8AJX9nhRg+aP5Ux8pFv0FukcSDvg5jyUL/MyQtkIpQGfrDp7ImeXj7tU6W2puqEA=="
+    <!-- Replace your current Font Awesome link with this: -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
         crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     <style>
@@ -332,7 +331,17 @@
     <button class="toggle" id="theme-toggle" aria-label="Toggle theme">🌙</button>
 
     <!-- Page title -->
-    <h1>📂 My Matches</h1>
+    <h1 style="display: flex; align-items: center;">
+        <a href="{{ url_for('home') }}" title="Home" style="color: var(--icon-color); /* e.g. #005fcc */
+            margin-right: 1.0rem;
+            font-size: 1.5rem;
+            display: inline-flex;
+            align-items: center;
+            text-decoration: none;">
+            <i class="fa-solid fa-house"></i>
+        </a>
+        📂 My Matches
+    </h1>
 
     <!-- Flash messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -348,7 +357,7 @@
             {% if files %}
             {% for file in files %}
             <div class="file-card" id="card-{{ loop.index }}" data-filename="{{ file.filename }}"
-                data-delete-url="{{ file.delete_url }}">
+                data-delete-url="{{ url_for('delete_archive', archive_name=file.filename) }}">
                 <!-- Improved Delete Button -->
                 <button class="delete-btn" aria-label="Delete {{ file.filename }}"
                     onclick="promptDelete('card-{{ loop.index }}')">

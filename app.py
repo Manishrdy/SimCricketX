@@ -1112,11 +1112,59 @@ def create_app():
             app.logger.error(f"Error sending archive {zip_path}: {e}", exc_info=True)
             return jsonify({"error": "Failed to send file"}), 500
 
-    
+
+    @app.route('/archives/<path:archive_name>', methods=['DELETE'])
+    def delete_archive(archive_name):
+        """
+        DELETE endpoint to remove an archive file.
+        Production considerations:
+        - Prevent path traversal by normalizing and checking for “..” segments.
+        - Use a configured ARCHIVES_FOLDER to locate files.
+        - Log each attempt and handle exceptions cleanly.
+        - Return appropriate status codes and JSON messages.
+        """
+
+        # 1. Normalize and validate the incoming path to prevent traversal
+        safe_name = os.path.normpath(archive_name)
+        if os.path.isabs(safe_name) or '..' in safe_name.split(os.path.sep):
+            app.logger.warning(f"Invalid delete path attempt: {archive_name}")
+            return jsonify({'error': 'Invalid file path'}), 400
+
+        # 2. Build the absolute path under ARCHIVES_FOLDER
+        archive_folder = app.config.get('ARCHIVES_FOLDER')
+        if not archive_folder:
+            app.logger.error("ARCHIVES_FOLDER is not configured")
+            return jsonify({'error': 'Server misconfiguration'}), 500
+
+        file_path = os.path.join(archive_folder, safe_name)
+
+        # 3. Check existence
+        if not os.path.isfile(file_path):
+            app.logger.info(f"Delete requested for non-existent file: {file_path}")
+            return jsonify({'error': 'File not found'}), 404
+
+        # 4. Attempt removal
+        try:
+            os.remove(file_path)
+            app.logger.info(f"Deleted archive: {file_path}")
+            return jsonify({'message': 'Archive deleted successfully'}), 200
+
+        except PermissionError:
+            app.logger.exception(f"Permission denied deleting {file_path}")
+            return jsonify({'error': 'Permission denied'}), 403
+
+        except Exception:
+            app.logger.exception(f"Unexpected error deleting {file_path}")
+            return jsonify({'error': 'Internal server error'}), 500
+
+
     return app
 
 # ────── Run Server ──────
 if __name__ == "__main__":
     app = create_app()
+    # Example: if your ZIPs live under a folder named “archives” next to app.py
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    app.config['ARCHIVES_FOLDER'] = os.path.join(BASE_DIR, 'data')
     # debug=False for production
     app.run(host="0.0.0.0", port=2624, debug=False)

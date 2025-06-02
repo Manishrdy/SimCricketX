@@ -1651,9 +1651,13 @@ class Match:
 
         if wicket:
             self.wickets += 1
-            self.bowler_stats[self.current_bowler["name"]]["wickets"] += 1
+            # self.bowler_stats[self.current_bowler["name"]]["wickets"] += 1
             
             wicket_type = outcome["wicket_type"]
+
+            if wicket_type != "Run Out":
+                self.bowler_stats[self.current_bowler["name"]]["wickets"] += 1
+            
             fielder_name = None
             
             self.batsman_stats[self.current_striker["name"]]["wicket_type"] = wicket_type
