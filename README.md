@@ -11,10 +11,10 @@ pinned: false
 
 # SimCricketX
 
-This Hugging Face Space hosts my Flask‐based IPL cricket simulator. It uses Docker under the hood:
+This Space hosts my Flask-based IPL cricket simulator in a Docker container.
 
-- **app.py**: Flask entrypoint (serves on 0.0.0.0:7860).  
-- **Dockerfile**: builds a Python 3.9‐slim container, installs requirements, and runs `python app.py`.  
-- **requirements.txt**: lists `Flask`, `PyYAML`, and any other dependencies.  
+- **app.py** → Flask entry point (listening on 0.0.0.0:7860)  
+- **Dockerfile** → Builds a Python 3.9-slim image, installs `requirements.txt`, and runs `python app.py`  
+- **requirements.txt** → Lists Flask, PyYAML, etc.
 
-To update the Space, commit/push changes (no `.pyc` or `__pycache__`), and HF will rebuild automatically.
+To update: commit changes (no `__pycache__` or `.pyc`), then `git push hf-space deploy:main --force`. HF will rebuild automatically.
