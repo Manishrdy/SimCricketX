@@ -1,0 +1,131 @@
+2025-06-02 14:22:57,418 - auth.user_auth - INFO - <module>:30 - Initializing user_auth module
+2025-06-02 14:22:57,418 - auth.user_auth - DEBUG - <module>:31 - Python version: 3.12.7 | packaged by Anaconda, Inc. | (main, Oct  4 2024, 08:22:19) [Clang 14.0.6 ]
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:32 - Platform: macOS-15.5-arm64-arm-64bit
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:33 - Current working directory: /Users/manish/Documents/GitHub/project_x
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:36 - Checking existence of /app/auth/credentials.json: False
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:38 - Checking existence of /app/auth/encryption.key: False
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:41 - PROJECT_ROOT determined as: /Users/manish/Documents/GitHub/project_x
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:43 - AUTH_DIR determined as: /Users/manish/Documents/GitHub/project_x/auth
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:46 - CREDENTIALS_FILE path: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:48 - KEY_FILE path: /Users/manish/Documents/GitHub/project_x/auth/encryption.key
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:60 - AUTH_DIR exists: /Users/manish/Documents/GitHub/project_x/auth
+2025-06-02 14:22:57,434 - auth.user_auth - INFO - <module>:968 - user_auth module initialization completed
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:969 - Module constants - PROJECT_ROOT: /Users/manish/Documents/GitHub/project_x
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:970 - Module constants - AUTH_DIR: /Users/manish/Documents/GitHub/project_x/auth
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:971 - Module constants - CREDENTIALS_FILE: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:22:57,434 - auth.user_auth - DEBUG - <module>:972 - Module constants - KEY_FILE: /Users/manish/Documents/GitHub/project_x/auth/encryption.key
+2025-06-02 14:22:57,458 - werkzeug - INFO - _log:97 - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.139:7860
+2025-06-02 14:22:57,458 - werkzeug - INFO - _log:97 - [33mPress CTRL+C to quit[0m
+2025-06-02 14:23:03,766 - app - INFO - log_request:200 - 192.168.254.139 GET /logout
+2025-06-02 14:23:03,767 - auth.user_auth - INFO - load_credentials:212 - Entering load_credentials function
+2025-06-02 14:23:03,767 - auth.user_auth - DEBUG - load_credentials:213 - Checking if credentials file exists: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:03,767 - auth.user_auth - DEBUG - load_credentials:226 - Credentials file exists: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:03,767 - auth.user_auth - DEBUG - load_credentials:228 - Credentials file size: 1164 bytes
+2025-06-02 14:23:03,767 - auth.user_auth - DEBUG - load_credentials:231 - Reading credentials from file: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:03,768 - auth.user_auth - DEBUG - load_credentials:235 - Successfully loaded credentials, user count: 2
+2025-06-02 14:23:03,768 - auth.user_auth - DEBUG - load_credentials:236 - Credential keys: ['admin@projectx.com', 'manish@projectx.com']
+2025-06-02 14:23:03,768 - auth.user_auth - DEBUG - load_credentials:240 - Validating user data for: admin@projectx.com
+2025-06-02 14:23:03,768 - auth.user_auth - DEBUG - load_credentials:248 - User data fields for admin@projectx.com: ['user_id', 'encrypted_password', 'decrypted_password', 'ip_address', 'mac_address', 'hostname', 'os', 'os_version', 'machine', 'processor', 'login_time']
+2025-06-02 14:23:03,768 - auth.user_auth - DEBUG - load_credentials:240 - Validating user data for: manish@projectx.com
+2025-06-02 14:23:03,769 - auth.user_auth - DEBUG - load_credentials:248 - User data fields for manish@projectx.com: ['user_id', 'encrypted_password', 'decrypted_password', 'ip_address', 'mac_address', 'hostname', 'os', 'os_version', 'machine', 'processor', 'login_time']
+2025-06-02 14:23:03,769 - auth.user_auth - INFO - load_credentials:250 - Credentials loaded and validated successfully
+2025-06-02 14:23:03,769 - app - INFO - logout:259 - Logout for admin@projectx.com
+2025-06-02 14:23:03,771 - werkzeug - INFO - _log:97 - 192.168.254.139 - - [02/Jun/2025 14:23:03] "[32mGET /logout HTTP/1.1[0m" 302 -
+2025-06-02 14:23:03,773 - app - INFO - log_request:200 - 192.168.254.139 GET /login
+2025-06-02 14:23:03,781 - auth.user_auth - INFO - load_credentials:212 - Entering load_credentials function
+2025-06-02 14:23:03,781 - auth.user_auth - DEBUG - load_credentials:213 - Checking if credentials file exists: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:03,781 - auth.user_auth - DEBUG - load_credentials:226 - Credentials file exists: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:03,781 - auth.user_auth - DEBUG - load_credentials:228 - Credentials file size: 1164 bytes
+2025-06-02 14:23:03,781 - auth.user_auth - DEBUG - load_credentials:231 - Reading credentials from file: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:03,781 - auth.user_auth - DEBUG - load_credentials:235 - Successfully loaded credentials, user count: 2
+2025-06-02 14:23:03,781 - auth.user_auth - DEBUG - load_credentials:236 - Credential keys: ['admin@projectx.com', 'manish@projectx.com']
+2025-06-02 14:23:03,781 - auth.user_auth - DEBUG - load_credentials:240 - Validating user data for: admin@projectx.com
+2025-06-02 14:23:03,781 - auth.user_auth - DEBUG - load_credentials:248 - User data fields for admin@projectx.com: ['user_id', 'encrypted_password', 'decrypted_password', 'ip_address', 'mac_address', 'hostname', 'os', 'os_version', 'machine', 'processor', 'login_time']
+2025-06-02 14:23:03,781 - auth.user_auth - DEBUG - load_credentials:240 - Validating user data for: manish@projectx.com
+2025-06-02 14:23:03,782 - auth.user_auth - DEBUG - load_credentials:248 - User data fields for manish@projectx.com: ['user_id', 'encrypted_password', 'decrypted_password', 'ip_address', 'mac_address', 'hostname', 'os', 'os_version', 'machine', 'processor', 'login_time']
+2025-06-02 14:23:03,782 - auth.user_auth - INFO - load_credentials:250 - Credentials loaded and validated successfully
+2025-06-02 14:23:03,782 - werkzeug - INFO - _log:97 - 192.168.254.139 - - [02/Jun/2025 14:23:03] "GET /login HTTP/1.1" 200 -
+2025-06-02 14:23:20,185 - auth.user_auth - INFO - <module>:30 - Initializing user_auth module
+2025-06-02 14:23:20,185 - auth.user_auth - DEBUG - <module>:31 - Python version: 3.12.7 | packaged by Anaconda, Inc. | (main, Oct  4 2024, 08:22:19) [Clang 14.0.6 ]
+2025-06-02 14:23:20,193 - auth.user_auth - DEBUG - <module>:32 - Platform: macOS-15.5-arm64-arm-64bit
+2025-06-02 14:23:20,193 - auth.user_auth - DEBUG - <module>:33 - Current working directory: /Users/manish/Documents/GitHub/project_x
+2025-06-02 14:23:20,193 - auth.user_auth - DEBUG - <module>:36 - Checking existence of /app/auth/credentials.json: False
+2025-06-02 14:23:20,193 - auth.user_auth - DEBUG - <module>:38 - Checking existence of /app/auth/encryption.key: False
+2025-06-02 14:23:20,193 - auth.user_auth - DEBUG - <module>:41 - PROJECT_ROOT determined as: /Users/manish/Documents/GitHub/project_x
+2025-06-02 14:23:20,193 - auth.user_auth - DEBUG - <module>:43 - AUTH_DIR determined as: /Users/manish/Documents/GitHub/project_x/auth
+2025-06-02 14:23:20,193 - auth.user_auth - DEBUG - <module>:46 - CREDENTIALS_FILE path: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:20,193 - auth.user_auth - DEBUG - <module>:48 - KEY_FILE path: /Users/manish/Documents/GitHub/project_x/auth/encryption.key
+2025-06-02 14:23:20,193 - auth.user_auth - DEBUG - <module>:60 - AUTH_DIR exists: /Users/manish/Documents/GitHub/project_x/auth
+2025-06-02 14:23:20,194 - auth.user_auth - INFO - <module>:968 - user_auth module initialization completed
+2025-06-02 14:23:20,194 - auth.user_auth - DEBUG - <module>:969 - Module constants - PROJECT_ROOT: /Users/manish/Documents/GitHub/project_x
+2025-06-02 14:23:20,194 - auth.user_auth - DEBUG - <module>:970 - Module constants - AUTH_DIR: /Users/manish/Documents/GitHub/project_x/auth
+2025-06-02 14:23:20,194 - auth.user_auth - DEBUG - <module>:971 - Module constants - CREDENTIALS_FILE: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:20,194 - auth.user_auth - DEBUG - <module>:972 - Module constants - KEY_FILE: /Users/manish/Documents/GitHub/project_x/auth/encryption.key
+2025-06-02 14:23:20,216 - werkzeug - INFO - _log:97 - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.139:7860
+2025-06-02 14:23:20,216 - werkzeug - INFO - _log:97 - [33mPress CTRL+C to quit[0m
+2025-06-02 14:23:26,511 - app - INFO - log_request:200 - 192.168.254.139 POST /login
+2025-06-02 14:23:26,512 - app - INFO - login:230 - Login attempt for admin@projectx.com
+2025-06-02 14:23:26,512 - auth.user_auth - INFO - verify_user:897 - Entering verify_user function
+2025-06-02 14:23:26,512 - auth.user_auth - DEBUG - verify_user:899 - Verifying user credentials: admin@projectx.com
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - verify_user:914 - Loading local credentials
+2025-06-02 14:23:26,513 - auth.user_auth - INFO - load_credentials:212 - Entering load_credentials function
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - load_credentials:213 - Checking if credentials file exists: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - load_credentials:226 - Credentials file exists: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - load_credentials:228 - Credentials file size: 1164 bytes
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - load_credentials:231 - Reading credentials from file: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - load_credentials:235 - Successfully loaded credentials, user count: 2
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - load_credentials:236 - Credential keys: ['admin@projectx.com', 'manish@projectx.com']
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - load_credentials:240 - Validating user data for: admin@projectx.com
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - load_credentials:248 - User data fields for admin@projectx.com: ['user_id', 'encrypted_password', 'decrypted_password', 'ip_address', 'mac_address', 'hostname', 'os', 'os_version', 'machine', 'processor', 'login_time']
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - load_credentials:240 - Validating user data for: manish@projectx.com
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - load_credentials:248 - User data fields for manish@projectx.com: ['user_id', 'encrypted_password', 'decrypted_password', 'ip_address', 'mac_address', 'hostname', 'os', 'os_version', 'machine', 'processor', 'login_time']
+2025-06-02 14:23:26,513 - auth.user_auth - INFO - load_credentials:250 - Credentials loaded and validated successfully
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - verify_user:916 - Loaded credentials for 2 users
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - verify_user:919 - User found in local credentials: admin@projectx.com
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - verify_user:923 - User data fields: ['user_id', 'encrypted_password', 'decrypted_password', 'ip_address', 'mac_address', 'hostname', 'os', 'os_version', 'machine', 'processor', 'login_time']
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - verify_user:931 - Attempting to decrypt password
+2025-06-02 14:23:26,513 - auth.user_auth - INFO - decrypt_password:173 - Entering decrypt_password function
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - decrypt_password:174 - Encrypted string length to decrypt: 100 characters
+2025-06-02 14:23:26,513 - auth.user_auth - DEBUG - decrypt_password:181 - Loading encryption key
+2025-06-02 14:23:26,514 - auth.user_auth - INFO - load_key:93 - Entering load_key function
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - load_key:94 - Checking if key file exists: /Users/manish/Documents/GitHub/project_x/auth/encryption.key
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - load_key:101 - Key file exists: /Users/manish/Documents/GitHub/project_x/auth/encryption.key
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - load_key:103 - Key file size: 44 bytes
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - load_key:106 - Reading key from file: /Users/manish/Documents/GitHub/project_x/auth/encryption.key
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - load_key:110 - Successfully read key, length: 44 bytes
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - load_key:115 - Key validation successful
+2025-06-02 14:23:26,514 - auth.user_auth - INFO - load_key:120 - Successfully loaded encryption key
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - decrypt_password:183 - Encryption key loaded successfully
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - decrypt_password:185 - Initializing Fernet cipher
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - decrypt_password:188 - Encoding encrypted string to bytes
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - decrypt_password:190 - Encrypted bytes length: 100
+2025-06-02 14:23:26,514 - auth.user_auth - DEBUG - decrypt_password:192 - Decrypting password
+2025-06-02 14:23:26,516 - auth.user_auth - DEBUG - decrypt_password:194 - Decrypted bytes length: 7
+2025-06-02 14:23:26,516 - auth.user_auth - DEBUG - decrypt_password:196 - Decoding decrypted bytes to string
+2025-06-02 14:23:26,516 - auth.user_auth - DEBUG - decrypt_password:198 - Decrypted password length: 7 characters
+2025-06-02 14:23:26,516 - auth.user_auth - INFO - decrypt_password:200 - Password decryption completed successfully
+2025-06-02 14:23:26,516 - auth.user_auth - DEBUG - verify_user:933 - Password decrypted successfully, length: 7
+2025-06-02 14:23:26,516 - auth.user_auth - DEBUG - verify_user:935 - Comparing decrypted password with provided password
+2025-06-02 14:23:26,516 - auth.user_auth - INFO - verify_user:937 - Local password verification successful: admin@projectx.com
+2025-06-02 14:23:26,517 - app - INFO - login:233 - Inside verify_user
+2025-06-02 14:23:26,518 - werkzeug - INFO - _log:97 - 192.168.254.139 - - [02/Jun/2025 14:23:26] "[32mPOST /login HTTP/1.1[0m" 302 -
+2025-06-02 14:23:26,521 - app - INFO - log_request:200 - 192.168.254.139 GET /
+2025-06-02 14:23:26,521 - auth.user_auth - INFO - load_credentials:212 - Entering load_credentials function
+2025-06-02 14:23:26,521 - auth.user_auth - DEBUG - load_credentials:213 - Checking if credentials file exists: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:26,521 - auth.user_auth - DEBUG - load_credentials:226 - Credentials file exists: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:26,521 - auth.user_auth - DEBUG - load_credentials:228 - Credentials file size: 1164 bytes
+2025-06-02 14:23:26,521 - auth.user_auth - DEBUG - load_credentials:231 - Reading credentials from file: /Users/manish/Documents/GitHub/project_x/auth/credentials.json
+2025-06-02 14:23:26,521 - auth.user_auth - DEBUG - load_credentials:235 - Successfully loaded credentials, user count: 2
+2025-06-02 14:23:26,521 - auth.user_auth - DEBUG - load_credentials:236 - Credential keys: ['admin@projectx.com', 'manish@projectx.com']
+2025-06-02 14:23:26,521 - auth.user_auth - DEBUG - load_credentials:240 - Validating user data for: admin@projectx.com
+2025-06-02 14:23:26,521 - auth.user_auth - DEBUG - load_credentials:248 - User data fields for admin@projectx.com: ['user_id', 'encrypted_password', 'decrypted_password', 'ip_address', 'mac_address', 'hostname', 'os', 'os_version', 'machine', 'processor', 'login_time']
+2025-06-02 14:23:26,521 - auth.user_auth - DEBUG - load_credentials:240 - Validating user data for: manish@projectx.com
+2025-06-02 14:23:26,521 - auth.user_auth - DEBUG - load_credentials:248 - User data fields for manish@projectx.com: ['user_id', 'encrypted_password', 'decrypted_password', 'ip_address', 'mac_address', 'hostname', 'os', 'os_version', 'machine', 'processor', 'login_time']
+2025-06-02 14:23:26,521 - auth.user_auth - INFO - load_credentials:250 - Credentials loaded and validated successfully
+2025-06-02 14:23:26,528 - werkzeug - INFO - _log:97 - 192.168.254.139 - - [02/Jun/2025 14:23:26] "GET / HTTP/1.1" 200 -
