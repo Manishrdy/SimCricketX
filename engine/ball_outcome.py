@@ -1,44 +1,273 @@
 import random
 
-# Outcome probabilities (editable scoring matrix)
-SCORING_MATRIX = {
-    "Dot": 0.35,      # 35 balls - Lower dot percentage due to aggressive batting
-    "Single": 0.30,   # 30 balls - Still most common but reduced
-    "Double": 0.14,   # 14 balls - More doubles due to aggressive running
-    "Three": 0.06,    # 6 balls - More adventurous running
-    "Four": 0.08,     # 8 balls - Higher boundary rate
-    "Six": 0.04,      # 4 balls - Much higher six rate in T20
-    "Wicket": 0.022,  # 2.2 balls - Slightly lower as batsmen take more risks
-    "Extras": 0.048   # 4.8 balls - More extras due to pressure bowling
+# -----------------------------------------------------------------------------
+# ball_outcome.py
+#
+# Implements ball-by-ball outcome logic with:
+#   • 60% pitch-influence + 40% player-skill blending
+#   • Detailed commentary templates
+#   • Enhanced boundary & wicket chances in the final 4 overs (17–20)
+#
+# Pitch average ranges (T20 context):
+#   - Green: 120–150 runs (favors pace bowlers)
+#   - Flat : 180–200 runs (batting paradise)
+#   - Dry  : 120–150 runs (favors spin bowlers)
+#   - Hard : 150–180 runs (balanced, slight batting edge)
+#   - Dead : 200–240 runs (batting festival; very few wickets)
+#
+# The logic below ensures:
+#   – Pitch contributes 60% to each outcome probability
+#   – Player ratings (batting, bowling, fielding) contribute 40%
+#   – In overs 17–20, boundary (4s/6s) chances and wicket chances are boosted
+#     based on pitch type:
+#       * Flat/Dead: highest boundary boost (aim ~3 boundaries/over)
+#       * Hard       : moderate boundary boost (aim ~2 boundaries/over)
+#       * Green/Dry  : minimal boundary boost (max ~1 boundary/over)
+#     Wicket chance also increases slightly in these death overs.
+#
+# Print-based logging is included to trace computations at each step.
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# 1) Commentary templates for each outcome category
+# -----------------------------------------------------------------------------
+commentary_templates = {
+    "Dot": [
+        "Good length, no run.",
+        "Well defended.",
+        "Beaten on the front foot."
+    ],
+    "Single": [
+        "Tapped away for a quick single.",
+        "Pushes gently for one.",
+        "Smart turn and a single taken."
+    ],
+    "Double": [
+        "Driven into the gap for two.",
+        "Quick running, two runs.",
+        "Nicely placed, they're off for a brace."
+    ],
+    "Three": [
+        "Excellently placed, three runs taken!",
+        "Triple taken with sharp running."
+    ],
+    "Four": [
+        "Beautifully struck boundary!",
+        "Cracking shot for four!",
+        "Racing to the fence for a four."
+    ],
+    "Six": [
+        "That's a huge six!",
+        "Launched into the stands!",
+        "Cleared the ropes with ease!"
+    ],
+    "Wicket": [
+        "He's out! Brilliant delivery!",
+        "Gone! A crucial wicket falls!",
+        "What a fantastic catch to dismiss him!"
+    ],
+    "Extras": [
+        "Wide delivery, extras added.",
+        "No-ball called by umpire.",
+        "Leg bye taken, extra run.",
+        "Byes conceded, run added."
+    ]
 }
 
-# Helper function: adjust probability based on ratings
-def adjust_for_rating(base_prob, batting, bowling, pitch_factor):
-    prob = base_prob * (batting / (batting + bowling))
-    prob *= pitch_factor
-    return prob
+# -----------------------------------------------------------------------------
+# 2) Pitch-influence definitions (60% weight)
+# -----------------------------------------------------------------------------
+PITCH_RUN_FACTOR = {
+    "Green": 0.80,  # run-suppressing: 120–150 average
+    "Flat":  1.20,  # batting paradise: 180–200 average
+    "Dry":   0.80,  # spin-friendly, low total: 120–150 average
+    "Hard":  1.00,  # balanced: 150–180 average
+    "Dead":  1.30   # batting festival: 200–240 average
+}
 
-# Pitch modifiers
-PITCH_FACTORS = {
+PITCH_WICKET_FACTOR = {
     "Green": {
-        "Fast": 1.2, "Fast-medium": 1.15, "Medium-fast": 1.1,
-        "default": 0.9
+        "Fast":         1.20,
+        "Fast-medium":  1.15,
+        "Medium-fast":  1.10,
+        "default":      0.80
     },
-    "Flat": {"default": 1.2},
+    "Flat": {
+        "default":      0.90
+    },
     "Dry": {
-        "Off spin": 1.2, "Leg spin": 1.2, "Finger spin": 1.15, "Wrist spin": 1.15,
-        "default": 0.95
+        "Off spin":     1.20,
+        "Leg spin":     1.20,
+        "Finger spin":  1.15,
+        "Wrist spin":   1.15,
+        "default":      0.80
     },
-    "Hard": {"default": 1.0},
-    "Dead": {"default": 1.25}
+    "Hard": {
+        "default":      1.00
+    },
+    "Dead": {
+        # Very difficult for bowlers on Dead track
+        "Fast":         0.70,
+        "Fast-medium":  0.70,
+        "Medium-fast":  0.70,
+        "Off spin":     0.70,
+        "Leg spin":     0.70,
+        "Finger spin":  0.70,
+        "Wrist spin":   0.70,
+        "default":      0.70
+    }
 }
 
-# Calculate pitch factor
-def pitch_factor(pitch, bowling_type):
-    return PITCH_FACTORS.get(pitch, {}).get(bowling_type, PITCH_FACTORS[pitch]["default"])
+def get_pitch_run_multiplier(pitch: str) -> float:
+    """
+    Returns the run-friendly multiplier for the given pitch.
+    """
+    factor = PITCH_RUN_FACTOR.get(pitch, 1.0)
+    print(f"[get_pitch_run_multiplier] Pitch: {pitch}, RunFactor: {factor}")
+    return factor
 
-# Main outcome function
-def calculate_outcome(batter, bowler, pitch, streak, over_number, batter_runs):
+def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
+    """
+    Returns the wicket-friendly multiplier for the given pitch and bowling type.
+    """
+    slot = PITCH_WICKET_FACTOR.get(pitch, {})
+    factor = slot.get(bowling_type, slot.get("default", 1.0))
+    print(f"[get_pitch_wicket_multiplier] Pitch: {pitch}, BowlingType: {bowling_type}, WicketFactor: {factor}")
+    return factor
+
+# -----------------------------------------------------------------------------
+# 3) Base outcome probabilities (raw frequencies)
+# -----------------------------------------------------------------------------
+SCORING_MATRIX = {
+    "Dot":     0.25,
+    "Single":  0.30,
+    "Double":  0.14,
+    "Three":   0.06,
+    "Four":    0.10,
+    "Six":     0.04,
+    "Wicket":  0.044,
+    "Extras":  0.048
+}
+
+# -----------------------------------------------------------------------------
+# 4) Compute blended probability weight for a single outcome
+# -----------------------------------------------------------------------------
+def compute_weighted_prob(
+    outcome_type: str,
+    base_prob: float,
+    batting: int,
+    bowling: int,
+    fielding: int,
+    pitch: str,
+    bowling_type: str,
+    streak: dict
+) -> float:
+    """
+    Returns a raw weight for one outcome (Dot/Single/Double/Three/Four/Six/Wicket/Extras),
+    combining 60% pitch-influence + 40% player-skill.
+    Includes print statements to trace the computation.
+    """
+    print(f"\n[compute_weighted_prob] Outcome: {outcome_type}")
+    print(f"  BaseProb: {base_prob}")
+    print(f"  PlayerStats -> Batting: {batting}, Bowling: {bowling}, Fielding: {fielding}")
+    print(f"  Pitch: {pitch}, BowlingType: {bowling_type}, Streak: {streak}")
+
+    # 1) Player-skill fraction
+    if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
+        if (batting + bowling) > 0:
+            skill_frac = batting / (batting + bowling)
+        else:
+            skill_frac = 0.5
+        print(f"  SkillFrac (run): {skill_frac:.4f}")
+    elif outcome_type == "Wicket":
+        if (batting + bowling) > 0:
+            skill_frac = (bowling / (batting + bowling)) * (fielding / 100.0)
+        else:
+            skill_frac = 0.5
+        print(f"  SkillFrac (wicket): {skill_frac:.4f}")
+    else:  # "Extras"
+        skill_frac = None
+        print(f"  SkillFrac (extra): N/A")
+
+    # 2) Pitch-influence fraction
+    if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
+        pitch_frac = get_pitch_run_multiplier(pitch)
+        print(f"  PitchFrac (run): {pitch_frac:.4f}")
+    elif outcome_type == "Wicket":
+        pitch_frac = get_pitch_wicket_multiplier(pitch, bowling_type)
+        print(f"  PitchFrac (wicket): {pitch_frac:.4f}")
+    else:  # "Extras"
+        pitch_frac = None
+        print(f"  PitchFrac (extra): N/A")
+
+    # 3) Compute raw weight
+    if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
+        # Boundary streak penalty for Four/Six
+        boundary_penalty = 1.0
+        if outcome_type in ("Four", "Six") and streak.get("boundaries", 0) >= 2:
+            boundary_penalty = 0.8
+            print(f"  BoundaryPenalty applied: {boundary_penalty}")
+
+        blended_frac = 0.4 * skill_frac + 0.6 * pitch_frac
+        raw_weight = base_prob * blended_frac * boundary_penalty
+        print(f"  BlendedFrac (run): {blended_frac:.4f}")
+        print(f"  RawWeight (run): {raw_weight:.6f}")
+        return raw_weight
+
+    elif outcome_type == "Wicket":
+        # Boundary streak boost for wicket
+        boundary_boost = 1.0
+        if streak.get("boundaries", 0) >= 2:
+            boundary_boost = 1.5
+            print(f"  BoundaryBoost applied: {boundary_boost}")
+
+        blended_frac = 0.4 * skill_frac + 0.6 * pitch_frac
+        raw_weight = base_prob * blended_frac * boundary_boost
+        print(f"  BlendedFrac (wicket): {blended_frac:.4f}")
+        print(f"  RawWeight (wicket): {raw_weight:.6f}")
+        return raw_weight
+
+    else:  # "Extras"
+        # Extras depend solely on bowler error (no pitch component)
+        raw_weight = base_prob * ((100 - bowling) / 100.0)
+        print(f"  RawWeight (extra): {raw_weight:.6f}")
+        return raw_weight
+
+# -----------------------------------------------------------------------------
+# 5) Main outcome selection function: calculate_outcome
+# -----------------------------------------------------------------------------
+def calculate_outcome(
+    batter: dict,
+    bowler: dict,
+    pitch: str,
+    streak: dict,
+    over_number: int,
+    batter_runs: int
+) -> dict:
+    """
+    Determines the outcome of a single delivery.
+    Returns a dict:
+      - "type"       ∈ {"run", "wicket", "extra"}
+      - "runs"       ∈ {0,1,2,3,4,6}
+      - "description": string commentary
+      - "wicket_type": if a wicket, one of ["Caught","Bowled","LBW","Run Out"], else None
+      - "is_extra"   ∈ {True, False}
+      - "batter_out" ∈ {True, False}
+
+    In the final 4 overs (over_number >= 16), boundary (4/6) and wicket probabilities
+    are boosted based on pitch type:
+      • Flat/Dead: largest boundary boost
+      • Hard     : moderate boundary boost
+      • Green/Dry: minimal boundary boost (max ~1 boundary/over)
+      • Wicket   : slight boost in all cases
+    """
+    print("\n==================== New Delivery ====================")
+    print(f"Ball context -> Over: {over_number + 1}, BatterRunsSoFar: {batter_runs}")
+    print(f"Batter: {batter['name']}, BattingRating: {batter['batting_rating']}, BattingHand: {batter['batting_hand']}")
+    print(f"Bowler: {bowler['name']}, BowlingRating: {bowler['bowling_rating']}, FieldingRating: {bowler['fielding_rating']}, BowlingHand: {bowler['bowling_hand']}, BowlingType: {bowler['bowling_type']}")
+    print(f"Pitch type: {pitch}, Current Streak: {streak}")
+
+    # 1) Unpack numeric ratings & attributes
     batting = batter["batting_rating"]
     bowling = bowler["bowling_rating"]
     fielding = bowler["fielding_rating"]
@@ -46,40 +275,86 @@ def calculate_outcome(batter, bowler, pitch, streak, over_number, batter_runs):
     bowling_hand = bowler["bowling_hand"]
     bowling_type = bowler["bowling_type"]
 
-    outcomes = list(SCORING_MATRIX.keys())
-    weights = []
-
-    # Adjust weights based on ratings, pitch, and hand matchups
-    for outcome in outcomes:
+    # 2) Compute raw weights for each outcome
+    raw_weights = {}
+    for outcome in SCORING_MATRIX:
         base = SCORING_MATRIX[outcome]
+        print(f"\n-- Computing weight for outcome: {outcome} (Base: {base}) --")
 
-        if outcome in ["Four", "Six"]:
-            prob = adjust_for_rating(base, batting, bowling, pitch_factor(pitch, bowling_type))
-            # Higher streak increases wicket chance slightly
-            if streak.get("boundaries", 0) >= 2:
-                prob *= 0.8
+        # Compute base weight via 60/40 blending
+        if outcome in ("Dot", "Single", "Double", "Three", "Four", "Six"):
+            weight = compute_weighted_prob(
+                outcome, base,
+                batting, bowling, fielding,
+                pitch, bowling_type, streak
+            )
         elif outcome == "Wicket":
-            prob = base * (bowling / (batting + bowling)) * (fielding / 100)
-            # Increase wicket chance on high streak
-            if streak.get("boundaries", 0) >= 2:
-                prob *= 1.5
-            if pitch == "Green" and bowling_hand == "Left" and batting_hand == "Right":
-                prob *= 1.2
-        elif outcome == "Extras":
-            prob = base * (100 - bowling) / 100
-        else:  # Dot, Single, Double, Three
-            prob = adjust_for_rating(base, batting, bowling, pitch_factor(pitch, bowling_type))
+            # Additional left-arm vs right-hand boost on Green
+            lr_boost = 1.0
+            if (
+                pitch == "Green"
+                and bowling_hand == "Left"
+                and batting_hand == "Right"
+            ):
+                lr_boost = 1.2
+                print(f"  LeftVsRightBoost applied: {lr_boost}")
 
-        weights.append(prob)
+            weight = compute_weighted_prob(
+                outcome, base,
+                batting, bowling, fielding,
+                pitch, bowling_type, streak
+            ) * lr_boost
+            print(f"  RawWeight after LeftVsRightBoost: {weight:.6f}")
+        else:  # "Extras"
+            weight = compute_weighted_prob(
+                outcome, base,
+                batting, bowling, fielding,
+                pitch, bowling_type, streak
+            )
 
-    total_weight = sum(weights)
-    normalized_weights = [w / total_weight for w in weights]
+        # 3) Death-over adjustments (overs 17–20 → over_number 16–19)
+        if over_number >= 16:
+            # Boundaries (4, 6) boost
+            if outcome in ("Four", "Six"):
+                if pitch in ("Flat", "Dead"):
+                    boundary_boost = 1.5
+                elif pitch == "Hard":
+                    boundary_boost = 1.3
+                else:  # Green or Dry
+                    boundary_boost = 1.1
+                print(f"  DeathOver: Boosting boundary ({outcome}) on {pitch} by factor {boundary_boost}")
+                weight *= boundary_boost
 
-    outcome_chosen = random.choices(outcomes, normalized_weights)[0]
+            # Wicket boost (slight increase)
+            if outcome == "Wicket":
+                wicket_boost = 1.2
+                print(f"  DeathOver: Boosting wicket on {pitch} by factor {wicket_boost}")
+                weight *= wicket_boost
 
-    # Build result
+        # Ensure no negative weights
+        weight = max(weight, 0.0)
+        raw_weights[outcome] = weight
+        print(f"  FinalRawWeight[{outcome}]: {weight:.6f}")
+
+    # 4) Normalize weights into probabilities
+    total_weight = sum(raw_weights.values())
+    print(f"\n[calculate_outcome] Total raw weight sum: {total_weight:.6f}")
+    if total_weight <= 0:
+        # Fallback in pathological case
+        chosen = "Dot"
+        print("[calculate_outcome] Warning: Total weight <= 0, defaulting to Dot ball")
+    else:
+        normalized_weights = [raw_weights[o] / total_weight for o in raw_weights]
+        print(f"[calculate_outcome] Normalized weights:")
+        for o, nw in zip(raw_weights.keys(), normalized_weights):
+            print(f"  {o}: {nw:.4f}")
+        chosen = random.choices(list(raw_weights.keys()), weights=normalized_weights)[0]
+
+    print(f"[calculate_outcome] Chosen outcome: {chosen}")
+
+    # 5) Build and return the result dictionary
     result = {
-        "type": "run",
+        "type": None,
         "runs": 0,
         "description": "",
         "wicket_type": None,
@@ -87,46 +362,54 @@ def calculate_outcome(batter, bowler, pitch, streak, over_number, batter_runs):
         "batter_out": False
     }
 
-    # Outcome details
-    commentary_templates = {
-        "Dot": ["Good length, no run.", "Well defended."],
-        "Single": ["Tapped away for a quick single.", "Pushes gently for one."],
-        "Double": ["Driven into the gap for two.", "Quick running, two runs."],
-        "Three": ["Excellently placed, three runs taken!"],
-        "Four": ["Beautifully struck boundary!", "Cracking shot for four!"],
-        "Six": ["That's a huge six!", "Launched into the stands!"],
-        "Wicket": ["He's out! Brilliant delivery!", "Gone! A crucial wicket falls!"],
-        "Extras": ["Wide delivery, extras added.", "No-ball called by umpire."]
-    }
+    if chosen == "Wicket":
+        result["type"] = "wicket"
+        result["runs"] = 0
+        result["batter_out"] = True
 
-    if outcome_chosen == "Wicket":
-        wicket_types = ["Caught", "Bowled", "LBW", "Run Out"]
-        wicket = random.choices(wicket_types, [0.4, 0.3, 0.2, 0.1])[0]
-        result.update({
-            "type": "wicket",
-            "runs": 0,
-            "wicket_type": wicket,
-            "batter_out": True,
-            "description": random.choice(commentary_templates["Wicket"])
-        })
-    elif outcome_chosen == "Extras":
+        # Decide wicket type with 40/30/20/10 weighting
+        types = ["Caught", "Bowled", "LBW", "Run Out"]
+        weights_pct = [0.4, 0.3, 0.2, 0.1]
+        wicket_choice = random.choices(types, weights=weights_pct)[0]
+        result["wicket_type"] = wicket_choice
+
+        # Use commentary template for Wicket
+        template = random.choice(commentary_templates["Wicket"])
+        result["description"] = template
+
+        print(f"[calculate_outcome] WICKET! Type: {wicket_choice}, Description: {template}")
+
+    elif chosen == "Extras":
+        result["type"] = "extra"
+        result["is_extra"] = True
+        result["runs"] = 1  # one run per extra
+
         extra_types = ["Wide", "No Ball", "Leg Bye", "Byes"]
-        extra = random.choice(extra_types)
-        result.update({
-            "type": "extra",
-            "runs": 1,
-            "is_extra": True,
-            "description": random.choice(commentary_templates["Extras"]) + f" ({extra})"
-        })
-    else:
-        runs_scored = {
-            "Dot": 0, "Single": 1, "Double": 2,
-            "Three": 3, "Four": 4, "Six": 6
-        }[outcome_chosen]
-        result.update({
-            "type": "run",
-            "runs": runs_scored,
-            "description": random.choice(commentary_templates[outcome_chosen])
-        })
+        extra_choice = random.choice(extra_types)
+        template = random.choice(commentary_templates["Extras"])
+        result["description"] = f"{template} ({extra_choice})"
 
+        print(f"[calculate_outcome] EXTRA! Type: {extra_choice}, Description: {result['description']}")
+
+    else:
+        # It must be one of Dot, Single, Double, Three, Four, Six
+        runs_map = {
+            "Dot":    0,
+            "Single": 1,
+            "Double": 2,
+            "Three":  3,
+            "Four":   4,
+            "Six":    6
+        }
+        result["type"] = "run"
+        result["runs"] = runs_map[chosen]
+        result["batter_out"] = False
+
+        # Use commentary template for run outcomes
+        template = random.choice(commentary_templates[chosen])
+        result["description"] = f"{template}"
+
+        print(f"[calculate_outcome] RUN! Outcome: {chosen}, Runs: {result['runs']}, Description: {template}")
+
+    print("=======================================================\n")
     return result

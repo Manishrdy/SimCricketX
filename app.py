@@ -36,6 +36,7 @@ import shutil
 from flask import send_file
 from flask import Flask, request, jsonify, send_file
 import time
+import threading
 
 
 MATCH_INSTANCES = {}
@@ -45,6 +46,35 @@ PROD_MAX_AGE = 7 * 24 * 3600
 
 # Make sure PROJECT_ROOT is defined near the top of app.py:
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
+
+def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
+    """
+    Walk through PROJECT_ROOT/data/, find any .zip files,
+    and delete those whose modification time is older than max_age_seconds.
+    """
+    data_dir = os.path.join(PROJECT_ROOT, "data")
+    now = time.time()
+
+    if not os.path.isdir(data_dir):
+        app.logger.warning(f"clean_old_archives: data directory does not exist: {data_dir}")
+        return
+
+    for filename in os.listdir(data_dir):
+        if not filename.lower().endswith(".zip"):
+            continue
+
+        full_path = os.path.join(data_dir, filename)
+        if not os.path.isfile(full_path):
+            continue
+
+        age = now - os.path.getmtime(full_path)
+        if age > max_age_seconds:
+            try:
+                os.remove(full_path)
+                app.logger.info(f"Deleted old archive: {filename} (age {age//3600}h)")
+            except Exception as e:
+                app.logger.error(f"Failed to delete {full_path}: {e}", exc_info=True)
+
 
 def load_match_metadata(match_id):
     """
@@ -70,6 +100,38 @@ def load_app_config():
     config_path = os.path.join(base_dir, "config", "config.yaml")
     with open(config_path, "r") as f:
         return yaml.safe_load(f)
+
+def cleanup_old_match_instances(app):
+    """Clean up old match instances from memory to prevent memory leaks"""
+    try:
+        current_time = time.time()
+        cutoff_time = current_time - (7 * 24 * 3600)  # 24 hours ago
+        
+        instances_to_remove = []
+        for match_id, instance in MATCH_INSTANCES.items():
+            # Check if instance has a timestamp or creation time
+            instance_time = getattr(instance, 'created_at', current_time)
+            if instance_time < cutoff_time:
+                instances_to_remove.append(match_id)
+        
+        for match_id in instances_to_remove:
+            del MATCH_INSTANCES[match_id]
+            app.logger.info(f"[Cleanup] Removed old match instance: {match_id}")
+        
+        if instances_to_remove:
+            app.logger.info(f"[Cleanup] Cleaned up {len(instances_to_remove)} old match instances")
+            
+    except Exception as e:
+        app.logger.error(f"[Cleanup] Error cleaning up match instances: {e}", exc_info=True)
+
+def periodic_cleanup(app):
+    """Run cleanup every 6 hours"""
+    while True:
+        try:
+            time.sleep(6 * 3600)  # 6 hours
+            cleanup_old_match_instances(app)
+        except Exception as e:
+            app.logger.error(f"[PeriodicCleanup] Error in cleanup thread: {e}")
 
 # ────── App Factory ──────
 def create_app():
@@ -849,62 +911,114 @@ def create_app():
     @login_required
     def download_archive(match_id):
         """
-        1) Expect JSON body: { "html_content": "<html>…</html>" }.
-        2) Recompute folder_name from match metadata (team_home, team_away, username, timestamp).
-        3) Write the HTML into data/<folder_name>/<folder_name>.html.
-        4) ZIP the entire data/<folder_name> directory.
-        5) send_file(...) the ZIP back to the client.
+        PRODUCTION VERSION with HTML Integration
+        1) Receive HTML content from frontend
+        2) Load match metadata and instance
+        3) Use MatchArchiver to create complete archive with CSV, JSON, TXT, AND HTML
+        4) Return ZIP file to user (also stored under <PROJECT_ROOT>/data/)
         """
         try:
-            payload = request.get_json() or {}
-            html_content = payload.get("html_content", "")
-            if not html_content:
-                return jsonify({"error": "No HTML provided"}), 400
+            app.logger.info(f"[DownloadArchive] Starting archive creation for match '{match_id}'")
 
-            # ── Step A: Load match metadata JSON ──────────────────────────
+            # ─── A) Extract HTML content from request ───────────────────────────
+            payload = request.get_json() or {}
+            html_content = payload.get("html_content")
+            if not html_content:
+                app.logger.error("[DownloadArchive] No HTML content provided in request payload")
+                return jsonify({"error": "HTML content is required"}), 400
+
+            app.logger.debug(f"[DownloadArchive] Received HTML content length: {len(html_content):,} characters")
+            if len(html_content) < 1000:
+                app.logger.warning("[DownloadArchive] HTML content seems unusually short (< 1,000 chars)")
+
+            # ─── B) Load match metadata ─────────────────────────────────────────
             match_meta = load_match_metadata(match_id)
             if not match_meta:
-                return jsonify({"error": "Match metadata not found"}), 404
+                app.logger.error(f"[DownloadArchive] Match metadata not found for match_id='{match_id}'")
+                return jsonify({"error": "Match not found"}), 404
 
-            # Extract the four fields that MatchArchiver used to build folder_name:
-            #   team_home, team_away come in the form "<TEAM>_…", so split on "_" first.
-            team_home = match_meta.get("team_home", "").split("_")[0]
-            team_away = match_meta.get("team_away", "").split("_")[0]
-            username  = match_meta.get("created_by", "")
-            timestamp = match_meta.get("timestamp", "")
+            # Verify ownership
+            created_by = match_meta.get("created_by")
+            if created_by != current_user.id:
+                app.logger.warning(f"[DownloadArchive] Unauthorized access: user='{current_user.id}' attempted to archive match='{match_id}'")
+                return jsonify({"error": "Unauthorized"}), 403
 
-            if not (team_home and team_away and username and timestamp):
-                return jsonify({"error": "Insufficient metadata to find archive folder"}), 400
+            # ─── C) Retrieve or rehydrate match instance ─────────────────────────
+            match_instance = MATCH_INSTANCES.get(match_id)
+            if not match_instance:
+                app.logger.info(f"[DownloadArchive] Match instance not in memory; recreating minimal Match for '{match_id}'")
+                from engine.match import Match
+                match_instance = Match(match_meta)
 
-            # Reconstruct the exact folder_name:
-            folder_name = f"playing_{team_home}_vs_{team_away}_{username}_{timestamp}"
-            archive_dir = os.path.join(PROJECT_ROOT, "data", folder_name)
+            # ─── D) Locate original JSON file on disk ───────────────────────────
+            from match_archiver import find_original_json_file
+            original_json_path = find_original_json_file(match_id)
+            if not original_json_path:
+                app.logger.error(f"[DownloadArchive] Original JSON file not found for match_id='{match_id}'")
+                return jsonify({"error": "Original match file not found"}), 404
 
-            if not os.path.isdir(archive_dir):
-                return jsonify({"error": f"Archive folder not found: {folder_name}"}), 404
+            app.logger.debug(f"[DownloadArchive] Found original JSON at '{original_json_path}'")
 
-            # ── Step B: Write the HTML file into that folder ──────────────
-            html_filename = f"{folder_name}.html"
-            html_path = os.path.join(archive_dir, html_filename)
-            with open(html_path, "w", encoding="utf-8") as f:
-                f.write(html_content)
+            # ─── E) Extract commentary log ───────────────────────────────────────
+            if getattr(match_instance, "frontend_commentary_captured", None):
+                commentary_log = match_instance.frontend_commentary_captured
+                app.logger.info(f"[DownloadArchive] Using frontend commentary (items={len(commentary_log)})")
+            elif getattr(match_instance, "commentary", None):
+                commentary_log = match_instance.commentary
+                app.logger.info(f"[DownloadArchive] Using backend commentary (items={len(commentary_log)})")
+            else:
+                commentary_log = ["Match completed - commentary preserved in HTML"]
+                app.logger.warning("[DownloadArchive] No commentary found; using fallback single-line log")
 
-            # ── Step C: ZIP the entire folder (data/<folder_name>) ────────
-            base_data = os.path.join(PROJECT_ROOT, "data")
-            zip_base  = os.path.join(base_data, folder_name)
-            zip_path  = shutil.make_archive(zip_base, 'zip', root_dir=archive_dir)
+            # ─── F) Instantiate MatchArchiver and create ZIP ────────────────────
+            from match_archiver import MatchArchiver
+            archiver = MatchArchiver(match_meta, match_instance)
+            zip_name = f"{archiver.folder_name}.zip"
+            app.logger.info(f"[DownloadArchive] Creating archive '{zip_name}' via MatchArchiver")
 
-            # ── Step D: send the ZIP back as an attachment ───────────────
-            return send_file(
-                zip_path,
-                mimetype="application/zip",
-                as_attachment=True,
-                download_name=f"{folder_name}.zip"
-            )
+            try:
+                # create_archive() will write ZIP to <PROJECT_ROOT>/data/<zip_name>
+                success = archiver.create_archive(
+                    original_json_path=original_json_path,
+                    commentary_log=commentary_log,
+                    html_content=html_content
+                )
+                if not success:
+                    app.logger.error(f"[DownloadArchive] MatchArchiver reported failure for '{match_id}'")
+                    return jsonify({"error": "Failed to create archive"}), 500
+            except ValueError as ve:
+                app.logger.error(f"[DownloadArchive] Validation error during archiving: {ve}", exc_info=True)
+                return jsonify({"error": f"Validation error: {ve}"}), 400
+            except Exception as arch_err:
+                app.logger.error(f"[DownloadArchive] Failed to create archive for match '{match_id}': {arch_err}", exc_info=True)
+                return jsonify({"error": "Failed to create archive"}), 500
+
+            # ─── G) Compute and confirm ZIP path on disk ─────────────────────────
+            zip_path = os.path.join(PROJECT_ROOT, "data", zip_name)
+            if not os.path.isfile(zip_path):
+                app.logger.error(f"[DownloadArchive] ZIP file missing after creation: '{zip_path}'")
+                return jsonify({"error": "Archive ZIP file not found"}), 500
+
+            zip_size = os.path.getsize(zip_path)
+            app.logger.info(f"[DownloadArchive] ZIP successfully created: '{zip_name}' ({zip_size:,} bytes)")
+
+            # ─── H) Stream the ZIP file back to the browser ─────────────────────
+            try:
+                app.logger.debug(f"[DownloadArchive] Sending ZIP to client: '{zip_path}'")
+                return send_file(
+                    zip_path,
+                    mimetype="application/zip",
+                    as_attachment=True,
+                    download_name=zip_name
+                )
+            except Exception as send_err:
+                app.logger.error(f"[DownloadArchive] Error sending ZIP file for match '{match_id}': {send_err}", exc_info=True)
+                return jsonify({"error": "Failed to send archive file"}), 500
 
         except Exception as e:
-            app.logger.error(f"Error in download_archive: {e}", exc_info=True)
-            return jsonify({"error": "Failed to create archive ZIP"}), 500
+            app.logger.error(f"[DownloadArchive] Unexpected error: {e}", exc_info=True)
+            return jsonify({"error": "An unexpected error occurred while creating the archive"}), 500
+
 
 
     @app.route("/my-matches")
@@ -997,37 +1111,6 @@ def create_app():
         except Exception as e:
             app.logger.error(f"Error sending archive {zip_path}: {e}", exc_info=True)
             return jsonify({"error": "Failed to send file"}), 500
-
-
-    def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
-        """
-        Walk through PROJECT_ROOT/data/, find any .zip files,
-        and delete those whose modification time is older than max_age_seconds.
-        """
-        data_dir = os.path.join(PROJECT_ROOT, "data")
-        now = time.time()
-
-        if not os.path.isdir(data_dir):
-            app.logger.warning(f"clean_old_archives: data directory does not exist: {data_dir}")
-            return
-
-        for filename in os.listdir(data_dir):
-            if not filename.lower().endswith(".zip"):
-                continue
-
-            full_path = os.path.join(data_dir, filename)
-            if not os.path.isfile(full_path):
-                continue
-
-            age = now - os.path.getmtime(full_path)
-            if age > max_age_seconds:
-                try:
-                    os.remove(full_path)
-                    app.logger.info(f"Deleted old archive: {filename} (age {age//3600}h)")
-                except Exception as e:
-                    app.logger.error(f"Failed to delete {full_path}: {e}", exc_info=True)
-
-
 
     
     return app

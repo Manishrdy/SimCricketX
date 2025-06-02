@@ -1,258 +1,448 @@
+"""
+Production-Level Match Archiver
+===============================
+
+Comprehensive cricket match archiving system that creates complete match records
+including JSON data, commentary text, CSV statistics, HTML webpage, and ZIP packaging.
+
+Features:
+- Complete match data preservation
+- Multiple output formats (JSON, TXT, CSV, HTML)
+- Automatic ZIP packaging
+- Robust error handling and validation
+- Production-level logging
+- Security and performance optimizations
+- Offline-compatible HTML generation
+
+Author: Cricket Simulation System
+Version: 1.0.0 (Production)
+"""
+
 import os
 import json
 import csv
 import shutil
+import re
+import tempfile
+import logging
 from datetime import datetime
+from pathlib import Path
 from tabulate import tabulate
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Union
+import zipfile
+
+# ─── Define PROJECT_ROOT so that we can write to /<project_root>/data/… ─────────────────────────────────────
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+class MatchArchiverError(Exception):
+    """Custom exception for MatchArchiver-specific errors"""
+    pass
+
 
 class MatchArchiver:
-    def __init__(self, match_data: Dict[str, Any], match_instance):
-        self.match_data = match_data
+    """
+    Production-level cricket match archiver with comprehensive error handling,
+    validation, and multi-format output generation.
+    """
+    
+    # Class constants
+    REQUIRED_MATCH_FIELDS = ['match_id', 'created_by', 'timestamp', 'team_home', 'team_away']
+    MIN_HTML_SIZE = 1000  # Minimum expected HTML size
+    MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB max file size
+    SUPPORTED_FORMATS = ['json', 'txt', 'csv', 'html', 'zip']
+    
+    def __init__(self, match_data: Dict[str, Any], match_instance: Any):
+        """
+        Initialize MatchArchiver with match data and instance.
+        
+        Args:
+            match_data: Dictionary containing match metadata
+            match_instance: Match object with game state and statistics
+            
+        Raises:
+            MatchArchiverError: If required data is missing or invalid
+        """
+        self.logger = logging.getLogger(__name__)
+        self.match_data = self._validate_match_data(match_data)
         self.match = match_instance
-        self.match_id = match_data.get('match_id')
-        self.username = match_data.get('created_by')
-        self.timestamp = match_data.get('timestamp')
         
-        # Extract team names
-        self.team_home = match_data.get('team_home', '').split('_')[0]
-        self.team_away = match_data.get('team_away', '').split('_')[0]
+        # Extract core identifiers
+        self.match_id = self.match_data.get('match_id')
+        self.username = self.match_data.get('created_by')
+        self.timestamp = self.match_data.get('timestamp')
         
-        # Generate folder and file names
-        self.folder_name = f"playing_{self.team_home}_vs_{self.team_away}_{self.username}_{self.timestamp}"
-        self.archive_path = os.path.join("data", self.folder_name)
+        # Extract and validate team names
+        self.team_home = self._extract_team_name(self.match_data.get('team_home', ''))
+        self.team_away = self._extract_team_name(self.match_data.get('team_away', ''))
         
-        # File paths
-        self.json_filename = f"playing_{self.team_home}_vs_{self.team_away}_{self.username}_{self.timestamp}.json"
-        self.txt_filename = f"playing_{self.team_home}_vs_{self.team_away}_{self.username}_{self.timestamp}.txt"
+        if not self.team_home or not self.team_away:
+            raise MatchArchiverError("Invalid team names in match data")
+        
+        # Generate standardized names
+        self.folder_name = self._generate_folder_name()
+        self.archive_path = Path("data") / self.folder_name
+        
+        # Generate all file names
+        self.filenames = self._generate_filenames()
+        
+        # Initialize tracking
+        self.created_files = []
+        self.temp_files = []
+        
+        self.logger.info(f"MatchArchiver initialized for {self.team_home} vs {self.team_away} (ID: {self.match_id})")
 
-    def create_archive(self, original_json_path: str, commentary_log: List[str]):
-        """Create complete match archive with all files"""
+    def _validate_match_data(self, match_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate match data contains required fields"""
+        if not isinstance(match_data, dict):
+            raise MatchArchiverError("Match data must be a dictionary")
+        
+        missing_fields = [field for field in self.REQUIRED_MATCH_FIELDS if not match_data.get(field)]
+        if missing_fields:
+            raise MatchArchiverError(f"Missing required match data fields: {missing_fields}")
+        
+        return match_data
+
+    def _extract_team_name(self, team_identifier: str) -> str:
+        """Extract clean team name from team identifier"""
+        if not team_identifier:
+            return ""
+        return team_identifier.split('_')[0]
+
+    def _generate_folder_name(self) -> str:
+        """Generate standardized folder name for the archive"""
+        # Sanitize components
+        safe_home = re.sub(r'[^\w]', '', self.team_home)
+        safe_away = re.sub(r'[^\w]', '', self.team_away)
+        safe_username = re.sub(r'[^\w@.]', '', self.username)
+        safe_timestamp = re.sub(r'[^\w]', '', self.timestamp)
+        
+        return f"playing_{safe_home}_vs_{safe_away}_{safe_username}_{safe_timestamp}"
+
+    def _generate_filenames(self) -> Dict[str, str]:
+        """Generate all required filenames with consistent naming"""
+        base_name = f"playing_{self.team_home}_vs_{self.team_away}_{self.username}_{self.timestamp}"
+        
+        return {
+            'json': f"{base_name}.json",
+            'txt': f"{base_name}.txt",
+            'html': f"{base_name}.html",
+            'zip': f"{self.folder_name}.zip"
+        }
+
+    def create_archive(self, 
+                      original_json_path: str, 
+                      commentary_log: List[str], 
+                      html_content: Optional[str] = None,
+                      cleanup_temp: bool = True) -> bool:
+        """
+        Create complete match archive with all formats and ZIP packaging.
+        
+        Args:
+            original_json_path: Path to original match JSON file
+            commentary_log: List of commentary entries
+            html_content: Complete HTML webpage content (optional)
+            cleanup_temp: Whether to clean up temporary files (default: True)
+            
+        Returns:
+            bool: True if archive creation successful, False otherwise
+        """
         try:
+            self.logger.info(f"Starting archive creation for match {self.match_id}")
+            
             # Create archive directory
-            os.makedirs(self.archive_path, exist_ok=True)
-            print(f"📁 Created archive directory: {self.archive_path}")
+            self._create_archive_directory()
             
-            # 1. Copy original JSON file (keep original intact)
+            # Create all individual files
             self._copy_json_file(original_json_path)
-            
-            # 2. Create comprehensive text file
             self._create_commentary_text_file(commentary_log)
-            
-            # 3. Create all CSV files
             self._create_all_csv_files()
             
-            # NOTE: HTML report is now handled by frontend "Save Report" button
+            if html_content:
+                self._create_html_file(html_content)
             
-            print(f"✅ Match archive created successfully: {self.folder_name}")
+            # Create ZIP archive
+            zip_path = self._create_zip_archive()
+            
+            # Validate final archive
+            if not self._validate_archive(zip_path):
+                raise MatchArchiverError("Archive validation failed")
+            
+            # Cleanup if requested
+            if cleanup_temp:
+                self._cleanup_temporary_files()
+            
+            archive_size = os.path.getsize(zip_path)
+            self.logger.info(f"Archive creation completed successfully: {zip_path} ({archive_size:,} bytes)")
+            
             return True
             
         except Exception as e:
-            print(f"❌ Error creating match archive: {e}")
+            self.logger.error(f"Archive creation failed: {e}", exc_info=True)
+            self._cleanup_on_error()
             return False
 
-    def _copy_json_file(self, original_path: str):
-        """Copy original JSON file to archive folder (preserving original)"""
-        if os.path.exists(original_path):
-            destination = os.path.join(self.archive_path, self.json_filename)
-            shutil.copy2(original_path, destination)  # copy2 preserves metadata
-            print(f"📄 Copied JSON file to archive: {self.json_filename}")
-        else:
-            print(f"⚠️ Original JSON file not found: {original_path}")
+    def _create_archive_directory(self) -> None:
+        """Create archive directory with proper permissions"""
+        try:
+            self.archive_path.mkdir(parents=True, exist_ok=True)
+            
+            # Verify directory is writable
+            test_file = self.archive_path / ".test_write"
+            test_file.touch()
+            test_file.unlink()
+            
+            self.logger.debug(f"Archive directory created: {self.archive_path}")
+            
+        except Exception as e:
+            raise MatchArchiverError(f"Failed to create archive directory: {e}")
 
-    def _create_commentary_text_file(self, commentary_log: List[str]):
-        """Create comprehensive text file with playing XI, commentary, and scorecards"""
-        txt_path = os.path.join(self.archive_path, self.txt_filename)
+    def _copy_json_file(self, original_path: str) -> None:
+        """Copy original JSON file to archive with validation"""
+        if not os.path.exists(original_path):
+            raise MatchArchiverError(f"Original JSON file not found: {original_path}")
         
-        with open(txt_path, 'w', encoding='utf-8') as f:
-            # Header
-            f.write("=" * 80 + "\n")
-            f.write(f"CRICKET MATCH RECORD\n")
-            f.write(f"{self.team_home} vs {self.team_away}\n")
-            f.write(f"Match ID: {self.match_id}\n")
-            f.write(f"Date: {self.timestamp}\n")
-            f.write(f"Stadium: {self.match_data.get('stadium', 'N/A')}\n")
-            f.write(f"Pitch: {self.match_data.get('pitch', 'N/A')}\n")
-            f.write("=" * 80 + "\n\n")
-            
-            # Playing XI
-            f.write(self._format_playing_xi())
-            
-            # Live Commentary
-            f.write("\nLIVE COMMENTARY\n")
-            f.write("=" * 50 + "\n")
-            for comment in commentary_log:
-                # Remove HTML tags for clean text
-                clean_comment = self._clean_html(comment)
-                f.write(f"{clean_comment}\n")
-            
-            # Scorecards
-            f.write(self._format_scorecards())
+        destination = self.archive_path / self.filenames['json']
         
-        print(f"📝 Created commentary text file: {self.txt_filename}")
+        try:
+            # Validate JSON before copying
+            with open(original_path, 'r', encoding='utf-8') as f:
+                json.load(f)  # Validate JSON format
+            
+            shutil.copy2(original_path, destination)
+            self.created_files.append(destination)
+            
+            self.logger.debug(f"JSON file copied: {self.filenames['json']}")
+            
+        except json.JSONDecodeError as e:
+            raise MatchArchiverError(f"Invalid JSON in original file: {e}")
+        except Exception as e:
+            raise MatchArchiverError(f"Failed to copy JSON file: {e}")
+
+    def _create_commentary_text_file(self, commentary_log: List[str]) -> None:
+        """Create comprehensive text file with commentary and statistics"""
+        txt_path = self.archive_path / self.filenames['txt']
+        
+        try:
+            with open(txt_path, 'w', encoding='utf-8') as f:
+                # Write header
+                f.write(self._generate_text_header())
+                
+                # Write playing XIs
+                f.write(self._format_playing_xi())
+                
+                # Write live commentary
+                f.write(self._format_commentary_section(commentary_log))
+                
+                # Write detailed scorecards
+                f.write(self._format_detailed_scorecards())
+                
+                # Write match summary
+                f.write(self._format_match_summary())
+            
+            self.created_files.append(txt_path)
+            self.logger.debug(f"Text file created: {self.filenames['txt']}")
+            
+        except Exception as e:
+            raise MatchArchiverError(f"Failed to create text file: {e}")
+
+    def _generate_text_header(self) -> str:
+        """Generate formatted header for text file"""
+        header_lines = [
+            "=" * 80,
+            "CRICKET MATCH ARCHIVE - OFFICIAL RECORD",
+            "=" * 80,
+            f"Match: {self.team_home} vs {self.team_away}",
+            f"Match ID: {self.match_id}",
+            f"Date: {self.timestamp}",
+            f"Created by: {self.username}",
+            f"Stadium: {self.match_data.get('stadium', 'N/A')}",
+            f"Pitch: {self.match_data.get('pitch', 'N/A')}",
+            f"Rain Probability: {(self.match_data.get('rain_probability', 0) * 100):.1f}%",
+            f"Archive Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "=" * 80,
+            ""
+        ]
+        return "\n".join(header_lines)
 
     def _format_playing_xi(self) -> str:
         """Format playing XI for both teams"""
-        output = []
+        lines = []
         
-        # Team 1 Playing XI
-        output.append(f"TEAM 1 - {self.team_home} PLAYING XI:")
-        output.append("-" * 30)
-        for i, player in enumerate(self.match_data['playing_xi']['home'], 1):
-            bowling_info = " (Bowling)" if player.get('will_bowl', False) else ""
-            output.append(f"{i:2}. {player['name']} ({player['role']}){bowling_info}")
+        try:
+            # Team 1 Playing XI
+            lines.extend([
+                f"TEAM 1 - {self.team_home} PLAYING XI:",
+                "-" * 40
+            ])
+            
+            home_xi = self.match_data.get('playing_xi', {}).get('home', [])
+            for i, player in enumerate(home_xi, 1):
+                bowling_info = " (Bowling)" if player.get('will_bowl', False) else ""
+                lines.append(f"{i:2}. {player.get('name', 'Unknown')} ({player.get('role', 'Unknown')}){bowling_info}")
+            
+            lines.extend(["", f"TEAM 2 - {self.team_away} PLAYING XI:", "-" * 40])
+            
+            away_xi = self.match_data.get('playing_xi', {}).get('away', [])
+            for i, player in enumerate(away_xi, 1):
+                bowling_info = " (Bowling)" if player.get('will_bowl', False) else ""
+                lines.append(f"{i:2}. {player.get('name', 'Unknown')} ({player.get('role', 'Unknown')}){bowling_info}")
+            
+            lines.extend(["", ""])
+            
+        except Exception as e:
+            self.logger.warning(f"Error formatting playing XI: {e}")
+            lines.extend(["Playing XI information unavailable", "", ""])
         
-        output.append("")
-        
-        # Team 2 Playing XI
-        output.append(f"TEAM 2 - {self.team_away} PLAYING XI:")
-        output.append("-" * 30)
-        for i, player in enumerate(self.match_data['playing_xi']['away'], 1):
-            bowling_info = " (Bowling)" if player.get('will_bowl', False) else ""
-            output.append(f"{i:2}. {player['name']} ({player['role']}){bowling_info}")
-        
-        output.append("\n")
-        return "\n".join(output)
+        return "\n".join(lines)
 
-    def _format_scorecards(self) -> str:
-        """Format scorecards in tabular format using tabulate"""
-        output = []
-        output.append("\n" + "=" * 80)
-        output.append("MATCH SCORECARDS")
-        output.append("=" * 80)
+    def _format_commentary_section(self, commentary_log: List[str]) -> str:
+        """Format commentary section with proper cleaning"""
+        lines = [
+            "LIVE COMMENTARY",
+            "=" * 50,
+            ""
+        ]
         
-        # Get team names
-        team_home = self.match_data["team_home"].split("_")[0]
-        team_away = self.match_data["team_away"].split("_")[0]
+        for comment in commentary_log:
+            cleaned_comment = self._clean_html_for_text(comment)
+            if cleaned_comment.strip():
+                lines.append(cleaned_comment)
+                lines.append("")  # Add spacing between comments
         
-        # Determine team order based on who batted first
+        lines.extend(["", ""])
+        return "\n".join(lines)
+
+    def _format_detailed_scorecards(self) -> str:
+        """Format comprehensive scorecards using tabulate"""
+        lines = [
+            "=" * 80,
+            "DETAILED MATCH SCORECARDS",
+            "=" * 80,
+            ""
+        ]
+        
+        try:
+            # Determine team batting order
+            team_order = self._determine_team_batting_order()
+            
+            # First innings scorecard
+            if hasattr(self.match, 'first_innings_batting_stats'):
+                lines.extend(self._format_innings_scorecard(
+                    innings_num=1,
+                    batting_team=team_order['first_batting'],
+                    bowling_team=team_order['first_bowling'],
+                    batting_stats=self.match.first_innings_batting_stats,
+                    bowling_stats=self.match.first_innings_bowling_stats
+                ))
+            
+            # Second innings scorecard
+            if hasattr(self.match, 'second_innings_batting_stats'):
+                lines.extend(self._format_innings_scorecard(
+                    innings_num=2,
+                    batting_team=team_order['second_batting'],
+                    bowling_team=team_order['second_bowling'],
+                    batting_stats=self.match.second_innings_batting_stats,
+                    bowling_stats=self.match.second_innings_bowling_stats
+                ))
+            
+            # Match result
+            if hasattr(self.match, 'result') and self.match.result:
+                lines.extend([
+                    "",
+                    "=" * 80,
+                    f"MATCH RESULT: {self.match.result}",
+                    "=" * 80
+                ])
+        
+        except Exception as e:
+            self.logger.warning(f"Error formatting scorecards: {e}")
+            lines.append("Scorecard information unavailable due to data formatting issues")
+        
+        return "\n".join(lines)
+
+    def _determine_team_batting_order(self) -> Dict[str, str]:
+        """Determine which team batted first"""
         if hasattr(self.match, 'first_batting_team_name') and self.match.first_batting_team_name:
-            first_batting_team = self.match.first_batting_team_name
-            first_bowling_team = self.match.first_bowling_team_name
-            second_batting_team = first_bowling_team
-            second_bowling_team = first_batting_team
+            first_batting = self.match.first_batting_team_name
+            first_bowling = self.match.first_bowling_team_name
         else:
-            # Fallback
-            first_batting_team = team_home
-            first_bowling_team = team_away
-            second_batting_team = team_away  
-            second_bowling_team = team_home
+            # Fallback logic
+            first_batting = self.team_home
+            first_bowling = self.team_away
         
-        # 1st Innings
-        if hasattr(self.match, 'first_innings_batting_stats') and self.match.first_innings_batting_stats:
-            output.append(f"\n1ST INNINGS - {first_batting_team} BATTING")
-            output.append("-" * 50)
-            output.append(self._create_batting_table(self.match.first_innings_batting_stats))
-            
-            output.append(f"\n1ST INNINGS - {first_bowling_team} BOWLING")
-            output.append("-" * 50)
-            output.append(self._create_bowling_table(self.match.first_innings_bowling_stats))
+        return {
+            'first_batting': first_batting,
+            'first_bowling': first_bowling,
+            'second_batting': first_bowling,
+            'second_bowling': first_batting
+        }
+
+    def _format_innings_scorecard(self, innings_num: int, batting_team: str, 
+                                bowling_team: str, batting_stats: Dict, 
+                                bowling_stats: Dict) -> List[str]:
+        """Format a single innings scorecard"""
+        lines = [
+            f"{innings_num}{'ST' if innings_num == 1 else 'ND'} INNINGS - {batting_team} BATTING",
+            "-" * 60
+        ]
         
-        # 2nd Innings
-        if hasattr(self.match, 'second_innings_batting_stats') and self.match.second_innings_batting_stats:
-            output.append(f"\n2ND INNINGS - {second_batting_team} BATTING")
-            output.append("-" * 50)
-            output.append(self._create_batting_table(self.match.second_innings_batting_stats))
-            
-            output.append(f"\n2ND INNINGS - {second_bowling_team} BOWLING")
-            output.append("-" * 50)
-            output.append(self._create_bowling_table(self.match.second_innings_bowling_stats))
-        elif hasattr(self.match, 'batsman_stats') and self.match.innings >= 2:
-            # Fallback: use current stats if second innings stats not saved
-            output.append(f"\n2ND INNINGS - {second_batting_team} BATTING")
-            output.append("-" * 50)
-            output.append(self._create_batting_table(self.match.batsman_stats))
-            
-            output.append(f"\n2ND INNINGS - {second_bowling_team} BOWLING")
-            output.append("-" * 50)
-            output.append(self._create_bowling_table(self.match.bowler_stats))
+        # Batting table
+        lines.append(self._create_batting_table(batting_stats))
+        lines.extend([
+            "",
+            f"{innings_num}{'ST' if innings_num == 1 else 'ND'} INNINGS - {bowling_team} BOWLING",
+            "-" * 60
+        ])
         
-        # Match Result
-        if hasattr(self.match, 'result') and self.match.result:
-            output.append(f"\nMATCH RESULT: {self.match.result}")
+        # Bowling table
+        lines.append(self._create_bowling_table(bowling_stats))
+        lines.extend(["", ""])
         
-        return "\n".join(output)
+        return lines
 
     def _create_batting_table(self, batting_stats: Dict) -> str:
-        """Create batting scorecard table"""
+        """Create formatted batting statistics table"""
+        if not batting_stats:
+            return "No batting statistics available"
+        
         headers = ['Player', 'Runs', 'Balls', '1s', '2s', '3s', '4s', '6s', 'Dots', 'S/R', 'Status']
         rows = []
         
-        # Determine batting order - try to get it from match instance
-        batting_order = []
-        if hasattr(self.match, 'home_xi') and hasattr(self.match, 'away_xi'):
-            # Try to determine which team this scorecard is for
-            # This is a bit complex since we need to figure out which team's stats these are
-            # For now, include all players from stats, then add missing ones
-            stats_players = list(batting_stats.keys())
-            
-            # Add players from both teams to be safe, we'll filter out the wrong team's players
-            all_possible_players = []
-            for player in self.match.home_xi + self.match.away_xi:
-                if player['name'] in batting_stats or len([p for p in stats_players if p == player['name']]) > 0:
-                    all_possible_players.append(player)
-            
-            # If we can't determine, just use the order from stats
-            if all_possible_players:
-                batting_order = all_possible_players
-            else:
-                batting_order = [{'name': name} for name in batting_stats.keys()]
-        else:
-            batting_order = [{'name': name} for name in batting_stats.keys()]
+        for player_name, stats in batting_stats.items():
+            if stats.get('balls', 0) > 0 or stats.get('wicket_type'):
+                strike_rate = f"{(stats['runs'] * 100 / stats['balls']):.1f}" if stats['balls'] > 0 else "0.0"
+                status = stats.get('wicket_type', '') or "not out"
+                
+                rows.append([
+                    player_name,
+                    stats.get('runs', 0),
+                    stats.get('balls', 0),
+                    stats.get('ones', 0),
+                    stats.get('twos', 0),
+                    stats.get('threes', 0),
+                    stats.get('fours', 0),
+                    stats.get('sixes', 0),
+                    stats.get('dots', 0),
+                    strike_rate,
+                    status
+                ])
         
-        # Add all players, including those who didn't bat
-        for player in batting_order:
-            player_name = player['name']
-            
-            if player_name in batting_stats:
-                stats = batting_stats[player_name]
-                # Only include players who actually have some activity (batted or got out)
-                if stats['balls'] > 0 or stats['wicket_type']:
-                    sr = f"{(stats['runs'] * 100 / stats['balls']):.1f}" if stats['balls'] > 0 else "0.0"
-                    status = stats['wicket_type'] if stats['wicket_type'] else "not out"
-                    
-                    rows.append([
-                        player_name,
-                        stats['runs'],
-                        stats['balls'],
-                        stats.get('ones', 0),      # ✅ Added 1s
-                        stats.get('twos', 0),      # ✅ Added 2s
-                        stats.get('threes', 0),    # ✅ Added 3s
-                        stats['fours'],
-                        stats['sixes'],
-                        stats.get('dots', 0),      # ✅ Added dots
-                        sr,
-                        status
-                    ])
-                else:
-                    # Player in stats but didn't bat
-                    rows.append([
-                        player_name,
-                        "-",
-                        "-", 
-                        "-",
-                        "-",
-                        "-",
-                        "-",
-                        "-",
-                        "-",
-                        "-",
-                        "did not bat"
-                    ])
-        
-        # If no rows (empty stats), add a placeholder
         if not rows:
-            rows.append(["No batting data available", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"])
+            return "No batting data available"
         
         return tabulate(rows, headers=headers, tablefmt="grid")
 
     def _create_bowling_table(self, bowling_stats: Dict) -> str:
-        """Create bowling scorecard table"""
+        """Create formatted bowling statistics table"""
+        if not bowling_stats:
+            return "No bowling statistics available"
+        
         headers = ['Bowler', 'Overs', 'Maidens', 'Runs', 'Wickets', 'Economy', 'Wides', 'No Balls']
         rows = []
         
         for bowler_name, stats in bowling_stats.items():
-            if stats['balls_bowled'] > 0:  # Only include bowlers who bowled
+            if stats.get('balls_bowled', 0) > 0:
                 total_balls = stats['overs'] * 6 + (stats['balls_bowled'] % 6)
                 overs_display = f"{stats['overs']}.{stats['balls_bowled'] % 6}" if stats['balls_bowled'] % 6 > 0 else str(stats['overs'])
                 economy = f"{(stats['runs'] * 6 / total_balls):.2f}" if total_balls > 0 else "0.00"
@@ -260,252 +450,630 @@ class MatchArchiver:
                 rows.append([
                     bowler_name,
                     overs_display,
-                    stats['maidens'],
-                    stats['runs'],
-                    stats['wickets'],
+                    stats.get('maidens', 0),
+                    stats.get('runs', 0),
+                    stats.get('wickets', 0),
                     economy,
-                    stats['wides'],
-                    stats['noballs']
+                    stats.get('wides', 0),
+                    stats.get('noballs', 0)
                 ])
+        
+        if not rows:
+            return "No bowling data available"
         
         return tabulate(rows, headers=headers, tablefmt="grid")
 
-    def _create_all_csv_files(self):
-        """Create all 4 CSV files for batting and bowling stats"""
-        # Get team names for proper CSV naming
-        team_home = self.match_data["team_home"].split("_")[0] 
-        team_away = self.match_data["team_away"].split("_")[0]
-        
-        # Determine which team batted first
-        if hasattr(self.match, 'first_batting_team_name') and self.match.first_batting_team_name:
-            first_batting_team = self.match.first_batting_team_name
-            first_bowling_team = self.match.first_bowling_team_name
-            second_batting_team = first_bowling_team  # Second batting team is opposite of first
-            second_bowling_team = first_batting_team  # Second bowling team is opposite of first
-        else:
-            # Fallback: assume home team batted first
-            first_batting_team = team_home
-            first_bowling_team = team_away  
-            second_batting_team = team_away
-            second_bowling_team = team_home
-        
-        print(f"📊 Creating CSV files:")
-        print(f"   1st Innings: {first_batting_team} batting, {first_bowling_team} bowling")
-        print(f"   2nd Innings: {second_batting_team} batting, {second_bowling_team} bowling")
-        
-        # Create all 4 CSV files with correct team names
-        # First innings
-        self._create_batting_csv(
-            f"{self.match_id}_{self.username}_{first_batting_team}_batting.csv",
-            getattr(self.match, 'first_innings_batting_stats', {})
-        )
-        self._create_bowling_csv(
-            f"{self.match_id}_{self.username}_{first_bowling_team}_bowling.csv", 
-            getattr(self.match, 'first_innings_bowling_stats', {})
-        )
-        
-        # Second innings  
-        self._create_batting_csv(
-            f"{self.match_id}_{self.username}_{second_batting_team}_batting.csv",
-            getattr(self.match, 'second_innings_batting_stats', {})
-        )
-        self._create_bowling_csv(
-            f"{self.match_id}_{self.username}_{second_bowling_team}_bowling.csv",
-            getattr(self.match, 'second_innings_bowling_stats', {})
-        )
-
-    def _create_batting_csv(self, filename: str, stats: Dict):
-        """Create batting statistics CSV file"""
-        csv_path = os.path.join(self.archive_path, filename)
-        
-        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            
-            # Headers - Include 1s, 2s, 3s columns
-            headers = ['Player Name', 'Runs', 'Balls', '1s', '2s', '3s', 'Fours', 'Sixes', 'Dots', 'Strike Rate', 'Status', 'Bowler Out', 'Fielder Out']
-            writer.writerow(headers)
-            
-            # Determine which team's batting order to use
-            if hasattr(self.match, 'home_xi') and hasattr(self.match, 'away_xi'):
-                # Get the correct batting team for this innings
-                if filename.endswith(f"{self.team_home}_batting.csv"):
-                    batting_order = self.match.home_xi
-                else:
-                    batting_order = self.match.away_xi
-            else:
-                # Fallback: use stats keys
-                batting_order = [{'name': name} for name in stats.keys()]
-            
-            # Include ALL players from batting team, not just those who batted
-            for player in batting_order:
-                player_name = player['name']
-                
-                if player_name in stats:
-                    player_stats = stats[player_name]
-                    # Player has stats (batted or got out)
-                    strike_rate = f"{(player_stats['runs'] * 100 / player_stats['balls']):.1f}" if player_stats['balls'] > 0 else "0.0"
-                    status = player_stats.get('wicket_type', '') if player_stats.get('wicket_type') else "not out"
-                    
-                    writer.writerow([
-                        player_name,
-                        player_stats.get('runs', 0),
-                        player_stats.get('balls', 0),
-                        player_stats.get('ones', 0),      # ✅ Added 1s
-                        player_stats.get('twos', 0),      # ✅ Added 2s  
-                        player_stats.get('threes', 0),    # ✅ Added 3s
-                        player_stats.get('fours', 0),
-                        player_stats.get('sixes', 0),
-                        player_stats.get('dots', 0),      # ✅ Added dots
-                        strike_rate,
-                        status,
-                        player_stats.get('bowler_out', ''),
-                        player_stats.get('fielder_out', '')
-                    ])
-                else:
-                    # Player didn't bat - add with empty values
-                    writer.writerow([
-                        player_name,
-                        "",  # Runs
-                        "",  # Balls
-                        "",  # 1s
-                        "",  # 2s
-                        "",  # 3s
-                        "",  # Fours
-                        "",  # Sixes
-                        "",  # Dots
-                        "",  # Strike Rate
-                        "did not bat",  # Status
-                        "",  # Bowler Out
-                        ""   # Fielder Out
-                    ])
-        
-        print(f"📊 Created batting CSV: {filename}")
-
-    def _create_bowling_csv(self, filename: str, stats: Dict):
-        """Create bowling statistics CSV file"""
-        csv_path = os.path.join(self.archive_path, filename)
-        
-        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            
-            # Headers
-            headers = ['Bowler Name', 'Overs', 'Maidens', 'Runs', 'Wickets', 'Economy', 'Wides', 'No Balls']
-            writer.writerow(headers)
-            
-            # Data rows
-            for bowler_name, bowler_stats in stats.items():
-                if bowler_stats.get('balls_bowled', 0) > 0:
-                    total_balls = bowler_stats['overs'] * 6 + (bowler_stats['balls_bowled'] % 6)
-                    overs_display = f"{bowler_stats['overs']}.{bowler_stats['balls_bowled'] % 6}" if bowler_stats['balls_bowled'] % 6 > 0 else str(bowler_stats['overs'])
-                    economy = f"{(bowler_stats['runs'] * 6 / total_balls):.2f}" if total_balls > 0 else "0.00"
-                    
-                    writer.writerow([
-                        bowler_name,
-                        overs_display,
-                        bowler_stats.get('maidens', 0),
-                        bowler_stats.get('runs', 0),
-                        bowler_stats.get('wickets', 0),
-                        economy,
-                        bowler_stats.get('wides', 0),
-                        bowler_stats.get('noballs', 0)
-                    ])
-        
-        print(f"📊 Created bowling CSV: {filename}")
-
-    def _clean_html(self, text: str) -> str:
-        """Remove HTML tags and clean text for file output"""
-        import re
-        
-        # STEP 1: Fix end-of-over formatting BEFORE general HTML cleaning
-        text = self._fix_end_of_over_formatting(text)
-        
-        # STEP 2: Convert <br> tags to double line breaks for better spacing
-        clean = re.sub(r'<br\s*/?>', '\n\n', text, flags=re.IGNORECASE)
-        
-        # STEP 3: Remove other HTML tags
-        clean = re.sub('<[^<]+?>', '', clean)
-        
-        # STEP 4: Replace HTML entities
-        clean = clean.replace('&nbsp;', ' ')
-        clean = clean.replace('&amp;', '&')
-        clean = clean.replace('&lt;', '<')
-        clean = clean.replace('&gt;', '>')
-        
-        return clean.strip()
-
-    def _create_html_report(self, commentary_log: List[str]):
-        """This will be called by frontend to save complete webpage"""
-        # This method will be called when frontend sends the complete HTML
-        print(f"🌐 HTML report will be created by frontend capture")
-
-    def save_complete_webpage(self, html_content: str):
-        """Save the complete webpage HTML as sent from frontend"""
-        html_path = os.path.join(self.archive_path, self.html_filename)
+    def _format_match_summary(self) -> str:
+        """Generate match summary statistics"""
+        lines = [
+            "=" * 80,
+            "MATCH SUMMARY & STATISTICS",
+            "=" * 80,
+            ""
+        ]
         
         try:
-            with open(html_path, 'w', encoding='utf-8') as f:
-                f.write(html_content)
+            # Add toss information
+            toss_winner = self.match_data.get('toss_winner', 'Unknown')
+            toss_decision = self.match_data.get('toss_decision', 'Unknown')
+            lines.extend([
+                f"Toss: {toss_winner} won and chose to {toss_decision}",
+                ""
+            ])
             
-            print(f"🌐 Saved complete webpage: {self.html_filename}")
-            return True
+            # Add match conditions
+            if self.match_data.get('rain_probability', 0) > 0:
+                lines.append(f"Rain Probability: {(self.match_data['rain_probability'] * 100):.1f}%")
+            
+            # Add any rain delays if occurred
+            if hasattr(self.match, 'rain_affected') and self.match.rain_affected:
+                lines.extend([
+                    "Match affected by rain - DLS method applied",
+                    ""
+                ])
+            
+            lines.extend([
+                f"Archive created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Total files in archive: {len(self.created_files) + 1}",  # +1 for upcoming ZIP
+                ""
+            ])
+        
+        except Exception as e:
+            self.logger.warning(f"Error generating match summary: {e}")
+            lines.append("Match summary unavailable")
+        
+        return "\n".join(lines)
+
+    def _create_all_csv_files(self) -> None:
+        """Create all CSV files for batting and bowling statistics"""
+        try:
+            team_order = self._determine_team_batting_order()
+            
+            # Create CSV files for both innings
+            csv_files = [
+                (f"{self.match_id}_{self.username}_{team_order['first_batting']}_batting.csv", 
+                 getattr(self.match, 'first_innings_batting_stats', {})),
+                (f"{self.match_id}_{self.username}_{team_order['first_bowling']}_bowling.csv", 
+                 getattr(self.match, 'first_innings_bowling_stats', {})),
+                (f"{self.match_id}_{self.username}_{team_order['second_batting']}_batting.csv", 
+                 getattr(self.match, 'second_innings_batting_stats', {})),
+                (f"{self.match_id}_{self.username}_{team_order['second_bowling']}_bowling.csv", 
+                 getattr(self.match, 'second_innings_bowling_stats', {}))
+            ]
+            
+            for filename, stats in csv_files:
+                if 'batting' in filename:
+                    self._create_batting_csv(filename, stats)
+                else:
+                    self._create_bowling_csv(filename, stats)
+            
+            self.logger.debug("All CSV files created successfully")
             
         except Exception as e:
-            print(f"❌ Error saving webpage: {e}")
+            raise MatchArchiverError(f"Failed to create CSV files: {e}")
+
+    def _create_batting_csv(self, filename: str, stats: Dict) -> None:
+        """Create batting statistics CSV file with comprehensive data"""
+        csv_path = self.archive_path / filename
+        
+        try:
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                
+                # Enhanced headers
+                headers = [
+                    'Player Name', 'Runs', 'Balls', '1s', '2s', '3s', 'Fours', 'Sixes', 
+                    'Dots', 'Strike Rate', 'Status', 'Bowler Out', 'Fielder Out'
+                ]
+                writer.writerow(headers)
+                
+                # Write player data
+                for player_name, player_stats in stats.items():
+                    if player_stats.get('balls', 0) > 0 or player_stats.get('wicket_type'):
+                        strike_rate = f"{(player_stats['runs'] * 100 / player_stats['balls']):.2f}" if player_stats['balls'] > 0 else "0.00"
+                        status = player_stats.get('wicket_type', '') or "not out"
+                        
+                        writer.writerow([
+                            player_name,
+                            player_stats.get('runs', 0),
+                            player_stats.get('balls', 0),
+                            player_stats.get('ones', 0),
+                            player_stats.get('twos', 0),
+                            player_stats.get('threes', 0),
+                            player_stats.get('fours', 0),
+                            player_stats.get('sixes', 0),
+                            player_stats.get('dots', 0),
+                            strike_rate,
+                            status,
+                            player_stats.get('bowler_out', ''),
+                            player_stats.get('fielder_out', '')
+                        ])
+            
+            self.created_files.append(csv_path)
+            self.logger.debug(f"Batting CSV created: {filename}")
+            
+        except Exception as e:
+            raise MatchArchiverError(f"Failed to create batting CSV {filename}: {e}")
+
+    def _create_bowling_csv(self, filename: str, stats: Dict) -> None:
+        """Create bowling statistics CSV file with comprehensive data"""
+        csv_path = self.archive_path / filename
+        
+        try:
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                
+                # Enhanced headers
+                headers = [
+                    'Bowler Name', 'Overs', 'Maidens', 'Runs', 'Wickets', 
+                    'Economy', 'Wides', 'No Balls', 'Byes', 'Leg Byes'
+                ]
+                writer.writerow(headers)
+                
+                # Write bowler data
+                for bowler_name, bowler_stats in stats.items():
+                    if bowler_stats.get('balls_bowled', 0) > 0:
+                        total_balls = bowler_stats['overs'] * 6 + (bowler_stats['balls_bowled'] % 6)
+                        overs_display = f"{bowler_stats['overs']}.{bowler_stats['balls_bowled'] % 6}" if bowler_stats['balls_bowled'] % 6 > 0 else str(bowler_stats['overs'])
+                        economy = f"{(bowler_stats['runs'] * 6 / total_balls):.2f}" if total_balls > 0 else "0.00"
+                        
+                        writer.writerow([
+                            bowler_name,
+                            overs_display,
+                            bowler_stats.get('maidens', 0),
+                            bowler_stats.get('runs', 0),
+                            bowler_stats.get('wickets', 0),
+                            economy,
+                            bowler_stats.get('wides', 0),
+                            bowler_stats.get('noballs', 0),
+                            bowler_stats.get('byes', 0),
+                            bowler_stats.get('legbyes', 0)
+                        ])
+            
+            self.created_files.append(csv_path)
+            self.logger.debug(f"Bowling CSV created: {filename}")
+            
+        except Exception as e:
+            raise MatchArchiverError(f"Failed to create bowling CSV {filename}: {e}")
+
+    def _create_html_file(self, html_content: str) -> None:
+        """Create HTML file with enhanced archival features"""
+        if not self._validate_html_content(html_content):
+            raise MatchArchiverError("Invalid HTML content provided")
+        
+        html_path = self.archive_path / self.filenames['html']
+        
+        try:
+            cleaned_html = self._clean_html_for_archive(html_content)
+            
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(cleaned_html)
+            
+            self.created_files.append(html_path)
+            self.logger.debug(f"HTML file created: {self.filenames['html']}")
+            
+        except Exception as e:
+            raise MatchArchiverError(f"Failed to create HTML file: {e}")
+
+    def _validate_html_content(self, html_content: str) -> bool:
+        """Comprehensive HTML content validation"""
+        if not html_content or not isinstance(html_content, str):
+            self.logger.warning("HTML content is empty or not a string")
             return False
+        
+        if len(html_content) < self.MIN_HTML_SIZE:
+            self.logger.warning(f"HTML content too small: {len(html_content)} < {self.MIN_HTML_SIZE}")
+            return False
+        
+        if len(html_content) > self.MAX_FILE_SIZE:
+            self.logger.warning(f"HTML content too large: {len(html_content)} > {self.MAX_FILE_SIZE}")
+            return False
+        
+        # Check for essential HTML elements
+        required_patterns = [
+            r'<html[^>]*>',
+            r'<head[^>]*>',
+            r'<body[^>]*>',
+            self.team_home.lower(),
+            self.team_away.lower()
+        ]
+        
+        missing_patterns = []
+        for pattern in required_patterns:
+            if not re.search(pattern, html_content, re.IGNORECASE):
+                missing_patterns.append(pattern)
+        
+        if missing_patterns:
+            self.logger.warning(f"HTML missing expected patterns: {missing_patterns}")
+        
+        return True
+
+    def _clean_html_for_archive(self, html_content: str) -> str:
+        """Clean and enhance HTML for archival storage"""
+        
+        # Add archive metadata header
+        archive_metadata = f"""
+<!--
+═══════════════════════════════════════════════════════════════════════════════
+CRICKET MATCH ARCHIVE - OFFICIAL HTML RECORD
+═══════════════════════════════════════════════════════════════════════════════
+Match: {self.team_home} vs {self.team_away}
+Match ID: {self.match_id}
+Date: {self.timestamp}
+Created by: {self.username}
+Stadium: {self.match_data.get('stadium', 'N/A')}
+Pitch: {self.match_data.get('pitch', 'N/A')}
+Rain Probability: {(self.match_data.get('rain_probability', 0) * 100):.1f}%
+
+Archive Details:
+- Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+- Archive Version: 1.0.0
+- File Type: Complete Interactive Match Report
+- Offline Compatible: Yes
+
+Note: This is an archived version of the live match simulation.
+All functionality preserved for offline viewing.
+═══════════════════════════════════════════════════════════════════════════════
+-->
+
+"""
+        
+        # Insert metadata after DOCTYPE
+        if html_content.startswith('<!DOCTYPE html>'):
+            html_content = html_content.replace('<!DOCTYPE html>', f'<!DOCTYPE html>{archive_metadata}')
+        else:
+            html_content = archive_metadata + html_content
+        
+        # Add archive banner
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        archive_banner = f'''
+<div id="archive-banner" style="
+    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+    color: white;
+    padding: 0.8rem;
+    text-align: center;
+    font-weight: bold;
+    font-family: 'Segoe UI', sans-serif;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    border-bottom: 3px solid #c23616;
+">
+    📁 ARCHIVED MATCH REPORT
+    <span style="margin: 0 1rem; opacity: 0.8;">•</span>
+    {self.team_home} vs {self.team_away}
+    <span style="margin: 0 1rem; opacity: 0.8;">•</span>
+    Saved: {current_time}
+    <span style="margin-left: 1rem; font-size: 0.9em; opacity: 0.9;">
+        (Match ID: {self.match_id})
+    </span>
+</div>
+<div style="height: 60px; margin-bottom: 1rem;"></div>
+'''
+        
+        # Insert banner after body tag
+        body_pattern = r'(<body[^>]*>)'
+        if re.search(body_pattern, html_content, re.IGNORECASE):
+            html_content = re.sub(body_pattern, r'\1' + archive_banner, html_content, flags=re.IGNORECASE)
+        
+        # Add archive-specific CSS for better offline experience
+        archive_css = '''
+<style id="archive-enhancements">
+/* Archive-specific enhancements */
+@media print {
+    #archive-banner { display: none !important; }
+    .toggle-theme { display: none !important; }
+}
+
+/* Ensure good contrast for archived version */
+:root {
+    --archive-text: #2c3e50;
+    --archive-bg: #ecf0f1;
+}
+
+/* Add timestamp to printed versions */
+@page {
+    @bottom-right {
+        content: "Archived: ''' + current_time + '''";
+        font-size: 10px;
+        color: #7f8c8d;
+    }
+}
+</style>
+'''
+        
+        # Insert CSS before closing head tag
+        if '</head>' in html_content:
+            html_content = html_content.replace('</head>', archive_css + '</head>')
+        
+        return html_content
+
+    def _clean_html_for_text(self, html_string: str) -> str:
+        """Clean HTML for text output with improved formatting"""
+        if not html_string:
+            return ""
+        
+        # First fix end-of-over formatting issues
+        cleaned = self._fix_end_of_over_formatting(html_string)
+        
+        # Convert common HTML elements to text equivalents
+        replacements = {
+            '<br>': '\n',
+            '<br/>': '\n',
+            '<br />': '\n',
+            '<strong>': '',
+            '</strong>': '',
+            '<b>': '',
+            '</b>': '',
+            '<em>': '',
+            '</em>': '',
+            '<i>': '',
+            '</i>': '',
+            '&nbsp;': ' ',
+            '&amp;': '&',
+            '&lt;': '<',
+            '&gt;': '>',
+            '&quot;': '"',
+            '&#39;': "'"
+        }
+        
+        for html_entity, replacement in replacements.items():
+            cleaned = cleaned.replace(html_entity, replacement)
+        
+        # Remove remaining HTML tags
+        cleaned = re.sub(r'<[^>]+>', '', cleaned)
+        
+        # Clean up excessive whitespace
+        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)  # Max 2 consecutive newlines
+        cleaned = re.sub(r' {2,}', ' ', cleaned)      # Max 1 space between words
+        
+        return cleaned.strip()
 
     def _fix_end_of_over_formatting(self, text: str) -> str:
-        """Fix end-of-over statistics formatting"""
-        import re
+        """Fix end-of-over statistics formatting issues"""
+        if "End of over" not in text:
+            return text
         
-        # DEBUG: Print original text to see what we're working with
-        if "End of over" in text:
-            print(f"🐛 BEFORE formatting: {text[:200]}...")
+        # Pattern fixes for end-of-over formatting
+        patterns = [
+            (r'(\*\*End of over \d+\*\* \([^)]+\))([A-Z][a-z])', r'\1\n\2'),
+            (r'(\]\s*)([A-Z][a-z]+\s+[A-Z])', r'\1\n\2'),
+            (r'(\])([A-Z][a-z]+)', r'\1\n\2'),
+            (r'(\]\s*)([A-Z][a-z]+[^0-9]*\d+\.\d+-\d+-\d+-\d+)', r'\1\n\2'),
+            (r'(\d\])([A-Z][a-z]+)', r'\1\n\2'),
+            (r'(\)\s*\[[^\]]+\])([A-Z][a-z]+)', r'\1\n\2')
+        ]
         
-        original_text = text
-        
-        # Pattern 1: After "End of over X** (Score: ...)" add line break before player name
-        # Matches: ")PlayerName" where PlayerName starts with capital letter
-        text = re.sub(r'(\*\*End of over \d+\*\* \([^)]+\))([A-Z][a-z])', r'\1<br>\2', text)
-        
-        # Pattern 2: After player stats "]PlayerName" add line break
-        # Matches: "] PlayerName" or "]PlayerName"
-        text = re.sub(r'(\]\s*)([A-Z][a-z]+\s+[A-Z])', r'\1<br>\2', text)
-        
-        # Pattern 3: After player stats with no space "]PlayerName"
-        text = re.sub(r'(\])([A-Z][a-z]+)', r'\1<br>\2', text)
-        
-        # Pattern 4: Before bowler stats (has pattern like "X.X-X-X-X")
-        # Matches: "PlayerName 2.0-0-17-0"
-        text = re.sub(r'(\]\s*)([A-Z][a-z]+[^0-9]*\d+\.\d+-\d+-\d+-\d+)', r'\1<br>\2', text)
-        
-        # Pattern 5: Specific fix for your exact format - between stats and player names
-        # Matches things like "6]Manish" or "0]Bumrah"
-        text = re.sub(r'(\d\])([A-Z][a-z]+)', r'\1<br>\2', text)
-        
-        # Pattern 6: Between player stats ending with ") [" and next player
-        text = re.sub(r'(\)\s*\[[^\]]+\])([A-Z][a-z]+)', r'\1<br>\2', text)
-        
-        # DEBUG: Show if any changes were made
-        if text != original_text and "End of over" in text:
-            print(f"🐛 AFTER formatting: {text[:300]}...")
-            print(f"🐛 Changes made: {text != original_text}")
+        for pattern, replacement in patterns:
+            text = re.sub(pattern, replacement, text)
         
         return text
 
-def find_original_json_file(match_id: str, base_path: str = "data/matches") -> str:
-    """Find the original JSON file for a given match_id"""
-    if not os.path.exists(base_path):
-        return None
+    def _create_zip_archive(self) -> str:
+        """
+        Create a ZIP archive containing all files in self.created_files.
+        The resulting ZIP is written to <PROJECT_ROOT>/data/<zip_name>.
+        Returns the absolute path to the ZIP file as a string.
+        Raises MatchArchiverError on any failure.
+        """
+        # Determine destination folder and filename
+        zip_name = self.filenames['zip']  # e.g. "playing_TeamA_vs_TeamB_user_20250531215311.zip"
+        zip_dir = Path(PROJECT_ROOT) / "data"
+        zip_dir.mkdir(parents=True, exist_ok=True)
+
+        zip_path = zip_dir / zip_name
+        try:
+            self.logger.debug(f"🐛 DEBUG: Starting ZIP creation at {zip_path}")
+
+            # Create the ZIP with moderate compression
+            with zipfile.ZipFile(zip_path, mode='w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zipf:
+                for file_path in self.created_files:
+                    if file_path.exists() and file_path.is_file():
+                        arcname = file_path.name
+                        zipf.write(file_path, arcname)
+                        self.logger.debug(f"🐛 DEBUG: Added to ZIP: {arcname}")
+                    else:
+                        self.logger.warning(f"⚠️ WARNING: Skipping missing or invalid file: {file_path}")
+
+                # After writing, check that at least one file of each expected type is present
+                namelist = set(zipf.namelist())
+                expected_exts = {'.json', '.txt', '.csv'}
+                for ext in expected_exts:
+                    if not any(name.endswith(ext) for name in namelist):
+                        self.logger.warning(f"⚠️ WARNING: ZIP archive missing files with extension: {ext}")
+
+            # Integrity check: test for any corrupted entries
+            self.logger.debug("🐛 DEBUG: Verifying ZIP integrity via testzip()")
+            with zipfile.ZipFile(zip_path, mode='r') as zipf:
+                bad_file = zipf.testzip()
+                if bad_file:
+                    raise MatchArchiverError(f"Corrupted member in ZIP: {bad_file!r}")
+
+            # Final validation: ensure it's recognized as a zipfile
+            if not zipfile.is_zipfile(zip_path):
+                raise MatchArchiverError("Resulting file is not a valid ZIP archive")
+
+            size_bytes = zip_path.stat().st_size
+            self.logger.info(f"✅ INFO: ZIP archive created successfully at {zip_path} ({size_bytes} bytes)")
+            return str(zip_path)
+
+        except Exception as e:
+            msg = f"❌ ERROR: Failed to create ZIP archive at {zip_path}: {e}"
+            self.logger.error(msg)
+            raise MatchArchiverError(msg)
+
+    def _validate_archive(self, zip_path: str) -> bool:
+        """Comprehensive archive validation"""
+        try:
+            # Check ZIP file exists and is valid
+            if not os.path.exists(zip_path):
+                self.logger.error("ZIP file does not exist")
+                return False
+            
+            if not zipfile.is_zipfile(zip_path):
+                self.logger.error("File is not a valid ZIP archive")
+                return False
+            
+            # Check ZIP contents
+            with zipfile.ZipFile(zip_path, 'r') as zipf:
+                files_in_zip = zipf.namelist()
+                
+                # Verify minimum required files
+                required_patterns = [r'\.json$', r'\.txt$', r'\.csv$']
+                for pattern in required_patterns:
+                    if not any(re.search(pattern, f) for f in files_in_zip):
+                        self.logger.error(f"ZIP missing files matching pattern: {pattern}")
+                        return False
+                
+                # Test ZIP integrity
+                zipf.testzip()
+            
+            # Check file size is reasonable
+            zip_size = os.path.getsize(zip_path)
+            if zip_size < 1024:  # Less than 1KB is suspicious
+                self.logger.warning(f"ZIP file unusually small: {zip_size} bytes")
+            elif zip_size > self.MAX_FILE_SIZE:
+                self.logger.warning(f"ZIP file very large: {zip_size} bytes")
+            
+            self.logger.info(f"Archive validation passed: {zip_size:,} bytes")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Archive validation failed: {e}")
+            return False
+
+    def _cleanup_temporary_files(self) -> None:
+        """Clean up temporary files and directories"""
+        try:
+            # Remove the temporary archive directory (but keep the ZIP)
+            if self.archive_path.exists():
+                shutil.rmtree(self.archive_path)
+                self.logger.debug(f"Cleaned up temporary directory: {self.archive_path}")
+            
+            # Clean up any explicitly tracked temp files
+            for temp_file in self.temp_files:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                    self.logger.debug(f"Cleaned up temporary file: {temp_file}")
+            
+        except Exception as e:
+            self.logger.warning(f"Cleanup error (non-critical): {e}")
+
+    def _cleanup_on_error(self) -> None:
+        """Clean up files created before error occurred"""
+        try:
+            self._cleanup_temporary_files()
+            
+            # Also remove any partial ZIP file
+            zip_path = Path("data") / self.filenames['zip']
+            if zip_path.exists():
+                zip_path.unlink()
+                self.logger.debug("Removed partial ZIP file after error")
+                
+        except Exception as e:
+            self.logger.warning(f"Error cleanup failed (non-critical): {e}")
+
+    def get_archive_info(self) -> Dict[str, Any]:
+        """Get information about the created archive"""
+        zip_path = Path("data") / self.filenames['zip']
+        
+        if not zip_path.exists():
+            return {"error": "Archive not found"}
+        
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zipf:
+                files_info = []
+                total_size = 0
+                
+                for file_info in zipf.filelist:
+                    files_info.append({
+                        "filename": file_info.filename,
+                        "size": file_info.file_size,
+                        "compressed_size": file_info.compress_size,
+                        "compression_ratio": f"{(1 - file_info.compress_size / file_info.file_size) * 100:.1f}%" if file_info.file_size > 0 else "0%"
+                    })
+                    total_size += file_info.file_size
+                
+                return {
+                    "zip_path": str(zip_path),
+                    "zip_size": os.path.getsize(zip_path),
+                    "total_uncompressed_size": total_size,
+                    "file_count": len(files_info),
+                    "files": files_info,
+                    "created": datetime.fromtimestamp(os.path.getctime(zip_path)).isoformat(),
+                    "match_id": self.match_id,
+                    "teams": f"{self.team_home} vs {self.team_away}"
+                }
+                
+        except Exception as e:
+            return {"error": f"Failed to read archive info: {e}"}
+
+
+def find_original_json_file(match_id: str, base_path: str = "data/matches") -> Optional[str]:
+    """
+    Find the original JSON file for a given match_id with enhanced error handling
     
-    for filename in os.listdir(base_path):
-        if filename.endswith('.json'):
-            filepath = os.path.join(base_path, filename)
+    Args:
+        match_id: The match identifier to search for
+        base_path: Directory to search in (default: "data/matches")
+        
+    Returns:
+        str: Path to the JSON file if found, None otherwise
+    """
+    logger = logging.getLogger(__name__)
+    
+    try:
+        base_path = Path(base_path)
+        
+        if not base_path.exists():
+            logger.warning(f"Base path does not exist: {base_path}")
+            return None
+        
+        if not base_path.is_dir():
+            logger.warning(f"Base path is not a directory: {base_path}")
+            return None
+        
+        # Search for JSON files
+        json_files = list(base_path.glob("*.json"))
+        
+        for json_file in json_files:
             try:
-                with open(filepath, 'r') as f:
+                with open(json_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    if data.get('match_id') == match_id:
-                        return filepath
-            except Exception:
+                    
+                if data.get('match_id') == match_id:
+                    logger.debug(f"Found match file: {json_file}")
+                    return str(json_file)
+                    
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Error reading {json_file}: {e}")
                 continue
+        
+        logger.warning(f"No JSON file found for match_id: {match_id}")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error searching for match file: {e}")
+        return None
+
+
+# Production-level utility functions
+def validate_archive_environment() -> Dict[str, Any]:
+    """Validate the environment is ready for archiving"""
+    logger = logging.getLogger(__name__)
+    issues = []
     
-    return None
+    # Check data directory
+    data_dir = Path("data")
+    if not data_dir.exists():
+        issues.append("Data directory does not exist")
+    elif not os.access(data_dir, os.W_OK):
+        issues.append("Data directory is not writable")
+    
+    # Check required modules
+    required_modules = ['json', 'csv', 'zipfile', 'tabulate']
+    for module in required_modules:
+        try:
+            __import__(module)
+        except ImportError:
+            issues.append(f"Required module missing: {module}")
+    
+    # Check disk space (if more than 100MB available)
+    try:
+        statvfs = os.statvfs(data_dir)
+        free_space = statvfs.f_frsize * statvfs.f_bavail
+        if free_space < 100 * 1024 * 1024:  # Less than 100MB
+            issues.append(f"Low disk space: {free_space / 1024 / 1024:.1f}MB available")
+    except (AttributeError, OSError):
+        # os.statvfs not available on Windows
+        pass
+    
+    return {
+        "ready": len(issues) == 0,
+        "issues": issues,
+        "data_directory": str(data_dir.absolute()),
+        "timestamp": datetime.now().isoformat()
+    }

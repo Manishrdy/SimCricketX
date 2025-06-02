@@ -8,118 +8,116 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
-    <!-- <script>
-        /**
-         * ① Capture the entire page HTML, POST it to the new Flask endpoint,
-         * and then download the ZIP returned by Flask.
-         */
+    <script>
+        // Capture entire HTML → POST to /download-archive → receive ZIP blob → force-download
+        // DEBUG ENHANCED VERSION - Replace in match_detail.html
+        // ✅ CORRECT STRUCTURE - Two separate parts:
+
+        // 1️⃣ FUNCTION DEFINITION (does the actual work)
         async function saveMatchArchive() {
             try {
-                // Capture the full DOM HTML
-                const html_content = document.documentElement.outerHTML;
+                console.log("🐛 DEBUG: saveMatchArchive() called");
 
-                // POST to our new /download-archive route
-                const response = await fetch(`${window.location.pathname}/download-archive`, {
+                // Capture entire HTML
+                const html_content = document.documentElement.outerHTML;
+                console.log("🐛 DEBUG: HTML content length:", html_content.length);
+                console.log("🐛 DEBUG: HTML preview:", html_content.substring(0, 200));
+
+                // Verify we have content
+                if (!html_content || html_content.length < 1000) {
+                    console.error("🐛 DEBUG: ❌ HTML content too short or empty!");
+                    alert("❌ Error: No HTML content to save");
+                    return;
+                }
+
+                const url = `${window.location.pathname}/download-archive`;
+                console.log("🐛 DEBUG: POST URL:", url);
+
+                const payload = { html_content };
+                console.log("🐛 DEBUG: Payload size:", JSON.stringify(payload).length);
+
+                console.log("🐛 DEBUG: Sending POST request...");
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ html_content })
+                    body: JSON.stringify(payload)
                 });
 
+                console.log("🐛 DEBUG: Response status:", response.status);
+                console.log("🐛 DEBUG: Response ok:", response.ok);
+
                 if (!response.ok) {
-                    // If Flask responded with an error JSON, show it
+                    console.error("🐛 DEBUG: ❌ Response not ok");
                     let errMsg = "Unknown error";
                     try {
                         const errJson = await response.json();
                         errMsg = errJson.error || response.statusText;
-                    } catch { }
+                        console.error("🐛 DEBUG: Error JSON:", errJson);
+                    } catch (parseError) {
+                        console.error("🐛 DEBUG: Could not parse error JSON:", parseError);
+                        errMsg = response.statusText;
+                    }
                     alert("❌ Failed to create/download archive:\n" + errMsg);
                     return;
                 }
 
-                // Read the ZIP file as a Blob
+                console.log("🐛 DEBUG: Reading response blob...");
                 const blob = await response.blob();
-                // Extract filename from Content-Disposition header
-                const contentDisp = response.headers.get('Content-Disposition') || '';
-                let filename = "match_archive.zip";
-                const match = /filename="?([^"]+)"?/.exec(contentDisp);
-                if (match && match[1]) {
-                    filename = match[1];
-                }
+                console.log("🐛 DEBUG: Blob size:", blob.size);
 
-                // Trigger browser download of the ZIP
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(link.href);
-
-                console.log("✅ Archive ZIP downloaded:", filename);
-            } catch (e) {
-                console.error("Exception in saveMatchArchive:", e);
-                alert("❌ Unexpected error while downloading archive");
-            }
-        }
-
-        // ② Change the Save Report button to call saveMatchArchive() instead of saveMatchReport()
-        document.addEventListener("DOMContentLoaded", () => {
-            const saveBtn = document.getElementById("save-report");
-            if (saveBtn) {
-                saveBtn.onclick = saveMatchArchive;
-            }
-        });
-    </script> -->
-
-    <script>
-        // Capture entire HTML → POST to /download-archive → receive ZIP blob → force-download
-        async function saveMatchArchive() {
-            try {
-                const html_content = document.documentElement.outerHTML;
-                const response = await fetch(`${window.location.pathname}/download-archive`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ html_content })
-                });
-
-                if (!response.ok) {
-                    const errJson = await response.json().catch(() => ({}));
-                    alert("❌ Failed to create/download archive:\n" + (errJson.error || response.statusText));
+                if (blob.size === 0) {
+                    console.error("🐛 DEBUG: ❌ Empty blob received!");
+                    alert("❌ Error: Received empty file");
                     return;
                 }
 
-                const blob = await response.blob();
+                // Extract filename from Content-Disposition header
                 const cd = response.headers.get('Content-Disposition') || "";
+                console.log("🐛 DEBUG: Content-Disposition:", cd);
+
                 let filename = "match_archive.zip";
                 const m = /filename="?([^"]+)"?/.exec(cd);
-                if (m && m[1]) filename = m[1];
+                if (m && m[1]) {
+                    filename = m[1];
+                }
+                console.log("🐛 DEBUG: Download filename:", filename);
 
+                // Trigger browser download
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
                 link.download = filename.replace(/\"/g, '');
                 document.body.appendChild(link);
+
+                console.log("🐛 DEBUG: Triggering download...");
                 link.click();
+
                 document.body.removeChild(link);
                 URL.revokeObjectURL(link.href);
 
+                console.log("🐛 DEBUG: ✅ Download completed successfully!");
+
             } catch (e) {
-                console.error("Error in saveMatchArchive:", e);
-                alert("❌ Unexpected error while downloading archive");
+                console.error("🐛 DEBUG: ❌ Exception in saveMatchArchive:", e);
+                console.error("🐛 DEBUG: Stack trace:", e.stack);
+                alert("❌ Unexpected error while downloading archive: " + e.message);
             }
         }
 
-        // Bind the button (remove any existing onclick="saveMatchReport()")
+        // 2️⃣ EVENT BINDING (separate - runs when page loads)
         document.addEventListener("DOMContentLoaded", () => {
+            console.log("🐛 DEBUG: DOM loaded, binding Save Report button...");
+
             const saveBtn = document.getElementById("save-report");
-            if (saveBtn) saveBtn.onclick = saveMatchArchive;
+            if (saveBtn) {
+                console.log("🐛 DEBUG: ✅ Save Report button found, binding click event");
+                saveBtn.onclick = saveMatchArchive;
+            } else {
+                console.error("🐛 DEBUG: ❌ Save Report button NOT found!");
+            }
         });
     </script>
-
-
 
     <script>
         const savedTheme = localStorage.getItem('theme') || 'light';
@@ -598,6 +596,7 @@
     <script>
         let matchOver = false;
         let delay = 300;  // default 1x pace
+        let isFinalScoreboard = false;
 
         document.querySelectorAll('.pace-btn').forEach(btn => {
             btn.onclick = () => delay = parseInt(btn.dataset.pace);
@@ -735,9 +734,24 @@
 
                             // Don’t auto-close—wait for the user to click “Close”
                             const closeBtn = document.querySelector('.close-scorecard');
-                            closeBtn.onclick = () => {
+                            closeBtn.onclick = async () => {
+
+                                console.log("🐛 DEBUG: closeScorecard() clicked; isFinalScoreboard =", isFinalScoreboard);
+                                if (isFinalScoreboard) {
+                                    console.log("🐛 DEBUG: Final scoreboard ⇒ invoking saveMatchArchive() before close");
+                                    try {
+                                        await saveMatchArchive();
+                                        console.log("🐛 DEBUG: saveMatchArchive() completed successfully");
+                                    } catch (err) {
+                                        console.error("🐛 DEBUG: Error in saveMatchArchive():", err);
+                                    }
+                                }
+                                else {
+                                    console.log("🐛 DEBUG: Not final scoreboard ⇒ skipping archive");
+                                }
                                 // 1) Hide the overlay
                                 closeScorecard();
+                                console.log("🐛 DEBUG: closeScorecard() executed");
 
                                 // 2) Append any final commentary
                                 // commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
@@ -767,6 +781,8 @@
                     if (data.innings_end && data.innings_number === 2) {
                         console.log("Inside 2nd innings scoreboard")
                         if (data.scorecard_data) {
+                            console.log("🐛 DEBUG: Final scorecard now displayed; setting isFinalScoreboard = true");
+                            isFinalScoreboard = true;
                             showScorecard(data.scorecard_data);
                         }
 
@@ -795,30 +811,6 @@
 
                         matchOver = true; // ✅ STOP the loop
                         return;
-                    }
-
-
-                    // Add this TEMPORARY debug function
-                    function debugCommentaryCapture() {
-                        const commentaryElement = document.getElementById('commentary-log');
-                        const fullCommentary = commentaryElement.innerHTML;
-
-                        console.log("🐛 DEBUG: Commentary HTML length:", fullCommentary.length);
-                        console.log("🐛 DEBUG: First 500 chars:", fullCommentary.substring(0, 500));
-                        console.log("🐛 DEBUG: Contains 'End of over':", fullCommentary.includes('End of over'));
-                        console.log("🐛 DEBUG: Contains 'end of over':", fullCommentary.includes('end of over'));
-
-                        // Check what's actually in the commentary
-                        const paragraphs = commentaryElement.querySelectorAll('p');
-                        console.log("🐛 DEBUG: Number of paragraphs:", paragraphs.length);
-
-                        // Look for end-of-over patterns
-                        paragraphs.forEach((p, index) => {
-                            const text = p.innerHTML;
-                            if (text.includes('End of over') || text.includes('end of over') || text.includes('**End')) {
-                                console.log(`🐛 DEBUG: Found end-of-over in paragraph ${index}:`, text);
-                            }
-                        });
                     }
 
 
