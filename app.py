@@ -46,7 +46,7 @@ PROD_MAX_AGE = 7 * 24 * 3600
 
 # Make sure PROJECT_ROOT is defined near the top of app.py:
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
-CREDENTIALS_FILE = 'root/auth/credentials.json'
+CREDENTIALS_FILE = 'auth/credentials.json'
 
 def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
     """
