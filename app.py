@@ -1188,6 +1188,15 @@ def create_app():
         except Exception:
             app.logger.exception(f"Unexpected error deleting {file_path}")
             return jsonify({'error': 'Internal server error'}), 500
+        
+
+    @app.route('/download-credentials')
+    def download_credentials():
+        try:
+            return send_file('auth/credentials.json', as_attachment=True)
+        except Exception as e:
+            return str(e), 500
+
 
 
     return app
@@ -1195,8 +1204,23 @@ def create_app():
 # ────── Run Server ──────
 if __name__ == "__main__":
     app = create_app()
-    # Example: if your ZIPs live under a folder named “archives” next to app.py
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    app.config['ARCHIVES_FOLDER'] = os.path.join(BASE_DIR, 'data')
-    # debug=False for production
+    
+    # Set ARCHIVES_FOLDER for use in routes, e.g., for sending ZIPs
+    import os
+    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    app.config["ARCHIVES_FOLDER"] = os.path.join(BASE_DIR, "data")
+
+    # Ensure critical config is present
+    if not app.config.get("SECRET_KEY"):
+        import secrets
+        generated_key = secrets.token_hex(32)
+        print("[WARNING] No SECRET_KEY set — generating random one (not persistent)")
+        app.config["SECRET_KEY"] = generated_key
+
+    # Enforce secure session cookie (important for HTTPS)
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+
+    # Start Flask app
     app.run(host="0.0.0.0", port=7860, debug=False)
