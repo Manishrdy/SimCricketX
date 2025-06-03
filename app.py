@@ -46,6 +46,7 @@ PROD_MAX_AGE = 7 * 24 * 3600
 
 # Make sure PROJECT_ROOT is defined near the top of app.py:
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
+CREDENTIALS_FILE = 'root/auth/credentials.json'
 
 def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
     """
@@ -1197,7 +1198,42 @@ def create_app():
         except Exception as e:
             return str(e), 500
 
+    @app.route('/credentials', methods=['GET', 'DELETE'])
+    def handle_credentials():
+        if not os.path.exists(CREDENTIALS_FILE):
+            return jsonify({"error": "Credentials file not found"}), 404
 
+        # Load the credentials
+        try:
+            with open(CREDENTIALS_FILE, 'r') as f:
+                credentials = json.load(f)
+        except Exception as e:
+            return jsonify({"error": f"Failed to load file: {str(e)}"}), 500
+
+        if request.method == 'GET':
+            # Return entire credentials file
+            return jsonify(credentials), 200
+
+        elif request.method == 'DELETE':
+            email = request.args.get('email') or request.json.get('email')
+            if not email:
+                return jsonify({"error": "Email is required for deletion"}), 400
+
+            if email not in credentials:
+                return jsonify({"message": f"No user found with email {email}"}), 404
+
+            deleted = credentials.pop(email)
+
+            try:
+                with open(CREDENTIALS_FILE, 'w') as f:
+                    json.dump(credentials, f, indent=2)
+            except Exception as e:
+                return jsonify({"error": f"Failed to write file: {str(e)}"}), 500
+
+            return jsonify({
+                "message": f"User {email} deleted successfully",
+                "deleted_record": deleted
+            }), 200
 
     return app
 
