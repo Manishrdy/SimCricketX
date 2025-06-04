@@ -1300,23 +1300,35 @@ def create_app():
 # ────── Run Server ──────
 if __name__ == "__main__":
     app = create_app()
-    
-    # Set ARCHIVES_FOLDER for use in routes, e.g., for sending ZIPs
+
     import os
+    import secrets
+
+    # Set archive folder path
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     app.config["ARCHIVES_FOLDER"] = os.path.join(BASE_DIR, "data")
 
-    # Ensure critical config is present
+    # Ensure SECRET_KEY is present
     if not app.config.get("SECRET_KEY"):
-        import secrets
         generated_key = secrets.token_hex(32)
         print("[WARNING] No SECRET_KEY set — generating random one (not persistent)")
         app.config["SECRET_KEY"] = generated_key
 
-    # Enforce secure session cookie (important for HTTPS)
-    app.config["SESSION_COOKIE_SECURE"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    # Set secure cookie defaults
     app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-    # Start Flask app
+    # Dynamically toggle secure cookie for localhost
+    @app.before_request
+    def configure_session_cookie():
+        host = request.host
+        app.logger.info("Hostname: {}".format(host))
+        if "localhost" in host or "127.0.0.1" in host or "192.168.254.131" in host:
+            app.config["SESSION_COOKIE_SECURE"] = False
+            app.logger.info("[Session] Localhost detected — SESSION_COOKIE_SECURE = False")
+        else:
+            app.config["SESSION_COOKIE_SECURE"] = True
+            app.logger.info("[Session] Production mode — SESSION_COOKIE_SECURE = True")
+
+    # Run the app
     app.run(host="0.0.0.0", port=7860, debug=False)

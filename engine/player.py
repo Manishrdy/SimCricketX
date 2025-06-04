@@ -22,7 +22,7 @@ from typing import Dict, Any, ClassVar, List
 PLAYER_ROLES: ClassVar[List[str]] = [
     "Batsman",
     "Bowler",
-    "Allrounder",
+    "All-rounder",
     "Wicketkeeper"
 ]
 

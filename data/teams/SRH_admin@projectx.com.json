@@ -1,163 +1,203 @@
 {
-  "team_name": "Sunrisers Hyderabad",
-  "short_code": "SRH",
-  "home_ground": "Rajiv Gandhi Stadium, Hyderabad",
-  "pitch_preference": "Flat",
-  "team_color": "#ff4500",
-  "players": [
-    {
-      "name": "Abhishek Sharma",
-      "role": "Batsman",
-      "batting_rating": 90,
-      "bowling_rating": 0,
-      "fielding_rating": 75,
-      "batting_hand": "Left",
-      "bowling_type": "",
-      "bowling_hand": ""
-    },
-    {
-      "name": "Travis Head",
-      "role": "Batsman",
-      "batting_rating": 95,
-      "bowling_rating": 0,
-      "fielding_rating": 90,
-      "batting_hand": "Left",
-      "bowling_type": "",
-      "bowling_hand": ""
-    },
-    {
-      "name": "Heinrich Klaasen",
-      "role": "Wicketkeeper",
-      "batting_rating": 95,
-      "bowling_rating": 0,
-      "fielding_rating": 95,
-      "batting_hand": "Right",
-      "bowling_type": "",
-      "bowling_hand": ""
-    },
-    {
-      "name": "Ishan Kishan",
-      "role": "Batsman",
-      "batting_rating": 80,
-      "bowling_rating": 0,
-      "fielding_rating": 90,
-      "batting_hand": "Left",
-      "bowling_type": "",
-      "bowling_hand": ""
-    },
-    {
-      "name": "Aniketh Verma",
-      "role": "Batsman",
-      "batting_rating": 75,
-      "bowling_rating": 0,
-      "fielding_rating": 80,
-      "batting_hand": "Right",
-      "bowling_type": "",
-      "bowling_hand": ""
-    },
-    {
-      "name": "Nitish Reddy",
-      "role": "All-rounder",
-      "batting_rating": 70,
-      "bowling_rating": 60,
-      "fielding_rating": 60,
-      "batting_hand": "Right",
-      "bowling_type": "Fast-medium",
-      "bowling_hand": "Right"
-    },
-    {
-      "name": "Abhinav Manohar",
-      "role": "Batsman",
-      "batting_rating": 70,
-      "bowling_rating": 0,
-      "fielding_rating": 50,
-      "batting_hand": "Right",
-      "bowling_type": "",
-      "bowling_hand": ""
-    },
-    {
-      "name": "Pat Cummins",
-      "role": "All-rounder",
-      "batting_rating": 70,
-      "bowling_rating": 90,
-      "fielding_rating": 90,
-      "batting_hand": "Right",
-      "bowling_type": "Fast",
-      "bowling_hand": "Right"
-    },
-    {
-      "name": "Eshan Malinga",
-      "role": "Bowler",
-      "batting_rating": 30,
-      "bowling_rating": 80,
-      "fielding_rating": 90,
-      "batting_hand": "Right",
-      "bowling_type": "Off spin",
-      "bowling_hand": "Right"
-    },
-    {
-      "name": "B Kumar",
-      "role": "Bowler",
-      "batting_rating": 30,
-      "bowling_rating": 85,
-      "fielding_rating": 85,
-      "batting_hand": "Right",
-      "bowling_type": "Medium-fast",
-      "bowling_hand": "Right"
-    },
-    {
-      "name": "T Natarajan",
-      "role": "Bowler",
-      "batting_rating": 10,
-      "bowling_rating": 85,
-      "fielding_rating": 50,
-      "batting_hand": "Left",
-      "bowling_type": "Fast-medium",
-      "bowling_hand": "Left"
-    },
-    {
-      "name": "Dale Steyn",
-      "role": "Bowler",
-      "batting_rating": 20,
-      "bowling_rating": 95,
-      "fielding_rating": 90,
-      "batting_hand": "Right",
-      "bowling_type": "Fast",
-      "bowling_hand": "Right"
-    },
-    {
-      "name": "Manish Reddy",
-      "role": "Bowler",
-      "batting_rating": 65,
-      "bowling_rating": 95,
-      "fielding_rating": 90,
-      "batting_hand": "Right",
-      "bowling_type": "Fast",
-      "bowling_hand": "Right"
-    },
-    {
-      "name": "David Warner",
-      "role": "Batsman",
-      "batting_rating": 95,
-      "bowling_rating": 30,
-      "fielding_rating": 99,
-      "batting_hand": "Left",
-      "bowling_type": "Off spin",
-      "bowling_hand": "Left"
-    },
-    {
-      "name": "Ben Cutting",
-      "role": "All-rounder",
-      "batting_rating": 65,
-      "bowling_rating": 65,
-      "fielding_rating": 65,
-      "batting_hand": "Right",
-      "bowling_type": "Fast",
-      "bowling_hand": "Right"
-    }
-  ],
-  "captain": "Abhishek Sharma",
-  "wicketkeeper": "Heinrich Klaasen",
-  "created_by_user_id": "40fbc280-ddd4-4104-9975-d158ba2f96b3",
-  "created_by_email": "admin@projectx.com"
+    "team_name": "Sunrisers Hyderabad",
+    "short_code": "SRH",
+    "home_ground": "Rajiv Gandhi Stadium, Hyderabad",
+    "pitch_preference": "Flat",
+    "team_color": "#ff4500",
+    "players": [
+        {
+            "name": "Abhishek Sharma",
+            "role": "Batsman",
+            "batting_rating": 90,
+            "bowling_rating": 0,
+            "fielding_rating": 75,
+            "batting_hand": "Left",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Travis Head",
+            "role": "Batsman",
+            "batting_rating": 95,
+            "bowling_rating": 0,
+            "fielding_rating": 90,
+            "batting_hand": "Left",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Heinrich Klaasen",
+            "role": "Wicketkeeper",
+            "batting_rating": 95,
+            "bowling_rating": 0,
+            "fielding_rating": 95,
+            "batting_hand": "Right",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Ishan Kishan",
+            "role": "Batsman",
+            "batting_rating": 80,
+            "bowling_rating": 0,
+            "fielding_rating": 90,
+            "batting_hand": "Left",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Aniketh Verma",
+            "role": "Batsman",
+            "batting_rating": 75,
+            "bowling_rating": 0,
+            "fielding_rating": 80,
+            "batting_hand": "Right",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Nitish Reddy",
+            "role": "All-rounder",
+            "batting_rating": 70,
+            "bowling_rating": 60,
+            "fielding_rating": 60,
+            "batting_hand": "Right",
+            "bowling_type": "Fast-medium",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Abhinav Manohar",
+            "role": "Batsman",
+            "batting_rating": 70,
+            "bowling_rating": 0,
+            "fielding_rating": 50,
+            "batting_hand": "Right",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Pat Cummins",
+            "role": "All-rounder",
+            "batting_rating": 70,
+            "bowling_rating": 90,
+            "fielding_rating": 90,
+            "batting_hand": "Right",
+            "bowling_type": "Fast",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Eshan Malinga",
+            "role": "Bowler",
+            "batting_rating": 30,
+            "bowling_rating": 80,
+            "fielding_rating": 90,
+            "batting_hand": "Right",
+            "bowling_type": "Off spin",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "B Kumar",
+            "role": "Bowler",
+            "batting_rating": 30,
+            "bowling_rating": 85,
+            "fielding_rating": 85,
+            "batting_hand": "Right",
+            "bowling_type": "Medium-fast",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "T Natarajan",
+            "role": "Bowler",
+            "batting_rating": 10,
+            "bowling_rating": 85,
+            "fielding_rating": 50,
+            "batting_hand": "Left",
+            "bowling_type": "Fast-medium",
+            "bowling_hand": "Left"
+        },
+        {
+            "name": "Dale Steyn",
+            "role": "Bowler",
+            "batting_rating": 20,
+            "bowling_rating": 95,
+            "fielding_rating": 90,
+            "batting_hand": "Right",
+            "bowling_type": "Fast",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Manish Reddy",
+            "role": "Bowler",
+            "batting_rating": 65,
+            "bowling_rating": 95,
+            "fielding_rating": 90,
+            "batting_hand": "Right",
+            "bowling_type": "Fast",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "David Warner",
+            "role": "Batsman",
+            "batting_rating": 95,
+            "bowling_rating": 30,
+            "fielding_rating": 99,
+            "batting_hand": "Left",
+            "bowling_type": "Off spin",
+            "bowling_hand": "Left"
+        },
+        {
+            "name": "Ben Cutting",
+            "role": "All-rounder",
+            "batting_rating": 65,
+            "bowling_rating": 65,
+            "fielding_rating": 65,
+            "batting_hand": "Right",
+            "bowling_type": "Fast",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Rashid Khan",
+            "role": "All-rounder",
+            "batting_rating": 60,
+            "bowling_rating": 95,
+            "fielding_rating": 95,
+            "batting_hand": "Right",
+            "bowling_type": "Wrist spin",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Kane Williamson",
+            "role": "Batsman",
+            "batting_rating": 88,
+            "bowling_rating": 25,
+            "fielding_rating": 85,
+            "batting_hand": "Right",
+            "bowling_type": "Off spin",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Rahul Tripathi",
+            "role": "Batsman",
+            "batting_rating": 80,
+            "bowling_rating": 0,
+            "fielding_rating": 80,
+            "batting_hand": "Right",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Marco Jansen",
+            "role": "All-rounder",
+            "batting_rating": 65,
+            "bowling_rating": 80,
+            "fielding_rating": 78,
+            "batting_hand": "Left",
+            "bowling_type": "Fast",
+            "bowling_hand": "Left"
+        }
+    ],
+    "captain": "Abhishek Sharma",
+    "wicketkeeper": "Heinrich Klaasen",
+    "created_by_user_id": "40fbc280-ddd4-4104-9975-d158ba2f96b3",
+    "created_by_email": "admin@projectx.com"
 }
