@@ -1234,6 +1234,66 @@ def create_app():
                 "message": f"User {email} deleted successfully",
                 "deleted_record": deleted
             }), 200
+        
+    @app.route("/api/teams/list", methods=["GET"])
+    def list_all_teams():
+        try:
+            teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
+            if not os.path.isdir(teams_dir):
+                return jsonify({"teams": []}), 200
+
+            files = [f for f in os.listdir(teams_dir) if f.endswith(".json")]
+            app.logger.info(f"[TeamsList] {len(files)} team files found")
+            return jsonify({"teams": files}), 200
+
+        except Exception as e:
+            app.logger.error(f"[TeamsList] Error: {e}", exc_info=True)
+            return jsonify({"error": "Internal server error"}), 500
+        
+    @app.route("/api/teams/by-user", methods=["GET"])
+    def list_teams_by_user():
+        try:
+            teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
+            if not os.path.isdir(teams_dir):
+                return jsonify({"users": {}}), 200
+
+            user_files = {}
+            for f in os.listdir(teams_dir):
+                if f.endswith(".json") and "_" in f:
+                    parts = f.rsplit("_", 1)
+                    if len(parts) == 2:
+                        user_email = parts[1].replace(".json", "")
+                        user_files.setdefault(user_email, []).append(f)
+
+            app.logger.info(f"[TeamsByUser] Grouped files by {len(user_files)} users")
+            return jsonify({"users": user_files}), 200
+
+        except Exception as e:
+            app.logger.error(f"[TeamsByUser] Error: {e}", exc_info=True)
+            return jsonify({"error": "Internal server error"}), 500
+
+    @app.route("/api/teams/download/<filename>", methods=["GET"])
+    def download_team_file(filename):
+        try:
+            # Basic security validation
+            if not filename.endswith(".json") or "/" in filename or "\\" in filename:
+                app.logger.warning(f"[DownloadTeam] Invalid filename requested: {filename}")
+                return jsonify({"error": "Invalid filename"}), 400
+
+            teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
+            full_path = os.path.join(teams_dir, filename)
+
+            if not os.path.isfile(full_path):
+                app.logger.warning(f"[DownloadTeam] File not found: {filename}")
+                return jsonify({"error": "File not found"}), 404
+
+            app.logger.info(f"[DownloadTeam] Sending file: {filename}")
+            return send_file(full_path, mimetype="application/json", as_attachment=True)
+
+        except Exception as e:
+            app.logger.error(f"[DownloadTeam] Error downloading {filename}: {e}", exc_info=True)
+            return jsonify({"error": "Internal server error"}), 500
+
 
     return app
 
