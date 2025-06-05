@@ -1398,16 +1398,56 @@ class Match:
         print(f"  Risk Factors: {risk_assessment['risk_factors']}")
         print(f"  Emergency Mode: {risk_assessment['emergency_mode']}")
         
-        # ================ PHASE 1: DUAL CONSTRAINT ENFORCEMENT ================
+                # ================ PHASE 1: DUAL CONSTRAINT ENFORCEMENT ================
+                # ================ PHASE 1: DUAL CONSTRAINT ENFORCEMENT ================
         print(f"\n--- PHASE 1: DUAL CONSTRAINT ENFORCEMENT ---")
-        
+
         # Sub-phase 1A: 4-Overs Policy Enforcement
         quota_eligible = self._apply_strict_quota_policy(all_bowlers, quota_analysis)
         print(f"After 4-overs filter: {[b['name'] for b in quota_eligible]}")
-        
+
         # Sub-phase 1B: No Consecutive Policy Enforcement
         constraint_eligible = self._apply_strict_consecutive_policy(quota_eligible, risk_assessment)
         print(f"After no-consecutive filter: {[b['name'] for b in constraint_eligible]}")
+
+        # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+        # SPECIAL HANDLING: DEAD or FLAT PITCH → force Spinner/Medium-fast/Medium,
+        # then boost their bowling_rating by 10%.
+        if self.pitch in ("Dead", "Flat"):
+            # 1. Keep only Spinner / Medium-fast / Medium among constraint_eligible
+            filtered = [
+                b for b in constraint_eligible
+                if b["type"] in ("Spinner", "Medium-fast", "Medium")
+            ]
+            if filtered:
+                # 2. Replace constraint_eligible with that filtered list
+                constraint_eligible = filtered
+
+                # 3. Temporarily boost each bowler’s bowling_rating by 10% (capped at 100)
+                for bowler in constraint_eligible:
+                    if bowler.get("_orig_boiling_rating") is None:
+                        bowler["_orig_boiling_rating"] = bowler["bowling_rating"]
+                    bowler["bowling_rating"] = int(
+                        min(bowler["_orig_boiling_rating"] * 1.1, 100)
+                    )
+        # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+
+        # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+        # NEW: Ensure every ‘will_bowl=True’ bowler bowls at least 1 over.
+        # If the number of remaining overs equals the count of fresh bowlers,
+        # force selection from those who haven’t yet bowled.
+        remaining_overs = 20 - (self.current_over + 1)
+        # “Fresh” means: marked will_bowl AND overs_bowled == 0
+        fresh_bowlers = [
+            b for b in constraint_eligible
+            if b.get("will_bowl", False)
+               and self.bowler_history.get(b["name"], 0) == 0
+        ]
+        # If exactly as many fresh bowlers as there are overs left, they all must bowl once.
+        if fresh_bowlers and len(fresh_bowlers) == remaining_overs:
+            constraint_eligible = fresh_bowlers
+        # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+
         
         # ================ EMERGENCY CONSTRAINT HANDLING ================
         if not constraint_eligible:
@@ -1449,20 +1489,29 @@ class Match:
         else:
             print(f"✅ VALIDATION PASSED: All constraints satisfied")
         
-        # ================ TRACKING & PROJECTION ================
+                # ================ TRACKING & PROJECTION ================
         print(f"\n--- TRACKING & PROJECTION ---")
-        
+
         # Update tracking
         self._update_bowler_tracking(selected_bowler)
-        
+
         # Project future implications
         future_projection = self._project_future_constraints(selected_bowler, all_bowlers)
         print(f"📈 FUTURE PROJECTION:")
         print(f"  Remaining overs: {20 - (self.current_over + 1)}")
         print(f"  Available bowlers after this over: {future_projection['available_count']}")
         print(f"  Potential risk next over: {future_projection['next_over_risk']}")
-        
+
         print(f"\n🏁 === BOWLER SELECTION COMPLETE ===\n")
+
+        # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+        # If we had boosted any Spinner/Medium-fast/Medium earlier, revert their rating now
+        for bowler in self.bowling_team:
+            if bowler.get("_orig_boiling_rating") is not None:
+                bowler["bowling_rating"] = bowler["_orig_boiling_rating"]
+                del bowler["_orig_boiling_rating"]
+        # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+
         return selected_bowler
 
 

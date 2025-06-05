@@ -276,7 +276,7 @@ commentary_templates = {
 PITCH_RUN_FACTOR = {
     "Green": 0.80,  # run-suppressing: 120–150 average
     "Flat":  1.20,  # batting paradise: 180–200 average
-    "Dry":   0.80,  # spin-friendly, low total: 120–150 average
+    "Dry":   0.60,  # spin-friendly, low total: 120–150 average
     "Hard":  1.00,  # balanced: 150–180 average
     "Dead":  1.50   # batting festival: 200–240 average
 }
@@ -292,11 +292,11 @@ PITCH_WICKET_FACTOR = {
         "default":      0.90
     },
     "Dry": {
-        "Off spin":     1.20,
-        "Leg spin":     1.20,
-        "Finger spin":  1.15,
-        "Wrist spin":   1.15,
-        "default":      0.80
+        "Off spin":     0.80,
+        "Leg spin":     0.75,
+        "Finger spin":  0.85,
+        "Wrist spin":   0.80,
+        "default":      1.10
     },
     "Hard": {
         "default":      1.00
@@ -337,10 +337,10 @@ def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
 SCORING_MATRIX = {
     "Dot":     0.25,
     "Single":  0.30,
-    "Double":  0.14,
+    "Double":  0.10,
     "Three":   0.06,
-    "Four":    0.10,
-    "Six":     0.04,
+    "Four":    0.08,
+    "Six":     0.03,
     "Wicket":  0.044,
     "Extras":  0.048
 }
