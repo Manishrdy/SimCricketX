@@ -274,43 +274,51 @@ commentary_templates = {
 # 2) Pitch-influence definitions (60% weight)
 # -----------------------------------------------------------------------------
 PITCH_RUN_FACTOR = {
-    "Green": 0.80,  # run-suppressing: 120–150 average
-    "Flat":  1.20,  # batting paradise: 180–200 average
-    "Dry":   0.60,  # spin-friendly, low total: 120–150 average
-    "Hard":  1.00,  # balanced: 150–180 average
-    "Dead":  1.50   # batting festival: 200–240 average
+    "Green": 0.80,   # run-suppressing → 150–170 average
+    "Dry":   0.80,   # spin-friendly → 150–170 average
+    "Hard":  1.10,   # balanced (batting edge) → 160–180
+    "Flat":  1.20,   # batting paradise → 180–200
+    "Dead":  1.30    # batting festival → 200–230
 }
+
+# ---------------------------------------------------------------------
+# 2) Pitch-influence definitions (60% weight)
+# ---------------------------------------------------------------------
 
 PITCH_WICKET_FACTOR = {
     "Green": {
-        "Fast":         1.20,
-        "Fast-medium":  1.15,
-        "Medium-fast":  1.10,
-        "default":      0.80
-    },
-    "Flat": {
-        "default":      0.90
+        "Fast":         1.30,   # fastest bowlers excel on Green
+        "Fast-medium":  1.20,
+        "Medium-fast":  1.15,
+        "default":      0.75    # spinners/pacers that don’t fit above
     },
     "Dry": {
-        "Off spin":     0.80,
-        "Leg spin":     0.75,
-        "Finger spin":  0.85,
-        "Wrist spin":   0.80,
-        "default":      1.10
+        "Leg spin":     1.35,   # leggies turn square, highest threat
+        "Wrist spin":   1.30,   # similar to leggies on a turning track
+        "Off spin":     1.25,   # very effective but slightly easier than a leggie
+        "Finger spin":  1.20,   # orthodox left-arm; still strong, but a bit less than right-arm
+        "default":      0.80    # pace bowlers on a dry turner
     },
     "Hard": {
-        "default":      1.00
+        "Fast":         1.10,   # pace gets decent bounce & seam, but still batsmen can score
+        "Fast-medium":  1.05,
+        "Medium-fast":  1.00,
+        "default":      0.90    # spin/other styles on a true track
+    },
+    "Flat": {
+        # Almost no one “takes” wickets easily on Flat—batsmen dominate.
+        "default":      0.85
     },
     "Dead": {
-        # Very difficult for bowlers on Dead track
-        "Fast":         0.50,
-        "Fast-medium":  0.50,
-        "Medium-fast":  0.50,
-        "Off spin":     0.50,
-        "Leg spin":     0.50,
-        "Finger spin":  0.50,
-        "Wrist spin":   0.50,
-        "default":      0.50
+        # Very tough for bowlers on Dead track—wickets are rare
+        "Fast":         0.60,
+        "Fast-medium":  0.60,
+        "Medium-fast":  0.60,
+        "Off spin":     0.60,
+        "Leg spin":     0.60,
+        "Finger spin":  0.60,
+        "Wrist spin":   0.60,
+        "default":      0.60
     }
 }
 
