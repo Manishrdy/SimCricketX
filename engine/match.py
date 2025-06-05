@@ -1556,7 +1556,7 @@ class Match:
                 else:
                     # Check for tie
                     # if self.score == self.target - 1:
-                    if self.score >= self.target - 1:
+                    if self.score == self.target - 1:
                         self.result = "Match Tied"
                         # Set up super over
                         self.innings = 4  # Super over mode
@@ -1658,6 +1658,10 @@ class Match:
             if wicket_type != "Run Out":
                 self.bowler_stats[self.current_bowler["name"]]["wickets"] += 1
             
+            # ─── NEW: credit this ball to the striker’s 'balls faced' counter ───
+            if not extra:
+                self.batsman_stats[self.current_striker["name"]]["balls"] += 1
+            
             fielder_name = None
             
             self.batsman_stats[self.current_striker["name"]]["wicket_type"] = wicket_type
@@ -1689,13 +1693,64 @@ class Match:
                     "commentary": "<br>".join(self.commentary[-2:])  # Include last ball and all-out message
                 }
 
+            
+            # 1) Gather the dismissed batsman’s stats:
+            out_name      = self.current_striker["name"]
+            stats         = self.batsman_stats[out_name]
+            runs_scored   = stats["runs"]
+            balls_faced   = stats["balls"]
+            fours_scored  = stats["fours"]
+            sixes_scored  = stats["sixes"]
+
+            # 2) Choose fielder/bowler strings based on wicket type:
+            wkt = outcome["wicket_type"]
+            bowler_name = self.current_bowler["name"]
+            fielder_part = ""
+            bowler_part  = ""
+
+            if wkt == "Caught":
+                # caught: “c Fielder b Bowler”
+                # fielder_name was already computed above as fielder_name
+                fielder_part = f"c {fielder_name}"
+                bowler_part  = f"b {bowler_name}"
+            elif wkt == "Bowled":
+                # bowled: “b Bowler”
+                bowler_part = f"b {bowler_name}"
+            elif wkt == "LBW":
+                # lbw: “lbw b Bowler”
+                bowler_part = f"lbw b {bowler_name}"
+            elif wkt == "Run Out":
+                # run out: “f Fielder” (no bowler)
+                fielder_part = f"f {fielder_name}"
+
+            # 3) Build the “[0x4, 1x6]” part:
+            extras = []
+            if fours_scored > 0:
+                extras.append(f"{fours_scored}x4")
+            if sixes_scored > 0:
+                extras.append(f"{sixes_scored}x6")
+            extra_str = f"[{', '.join(extras)}]" if extras else ""
+
+            # 4) Combine into one dismissal‐line:
+            dismissal_line = f"{out_name} "
+            if fielder_part:
+                dismissal_line += f"{fielder_part} "
+            if bowler_part:
+                dismissal_line += f"{bowler_part} "
+            dismissal_line += f"{runs_scored}({balls_faced}b) {extra_str}"
+
+            # 5) Append it before “New batsman…”
+            print("dismissal_line", dismissal_line)
+            commentary_line += "<br><br>" + dismissal_line + "<br>"
+
+            
             self.current_striker = self.batting_team[self.batter_idx[0]]
             if self.current_striker["name"] not in self.batsman_stats:
                 self.batsman_stats[self.current_striker["name"]] = {
                     "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0,
                     "wicket_type": "", "bowler_out": "", "fielder_out": ""
                 }
-            commentary_line += f"<br><strong>New batsman:</strong> {self.current_striker['name']}<br>"
+            commentary_line += f"<br><strong>New batsman:</strong> {self.current_striker['name']}<br><br>"
             self.commentary.append(commentary_line)
 
         else:
