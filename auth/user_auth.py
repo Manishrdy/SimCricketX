@@ -13,9 +13,641 @@ from utils.helpers import load_config
 import gspread
 from google.oauth2.service_account import Credentials
 import yaml
+import shutil
+import stat
+import tempfile
+import time
+import random
+import threading
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+AUTH_DIR = os.path.join(PROJECT_ROOT, "auth")
+
+# Add these imports at the top of user_auth.py
+try:
+    import fcntl
+    FCNTL_AVAILABLE = True
+except ImportError:
+    FCNTL_AVAILABLE = False
+
+def detect_platform_environment():
+    """
+    Detect the platform and environment to determine locking strategy.
+    Returns: (platform_type, use_fcntl_locking)
+    """
+    try:
+        hostname = socket.gethostname()
+        ip_address = socket.gethostbyname(hostname)
+        
+        # Check if we're in a local development environment
+        is_local_dev = ('localhost' in hostname.lower() or 
+                       ip_address in ['127.0.0.1', '192.168.254.131'] or
+                       hostname.lower() in ['localhost', 'local'])
+        
+        system = platform.system().lower()
+        is_windows = system == 'windows'
+        is_macos = system == 'darwin'
+        is_unix = system in ['linux', 'unix', 'freebsd', 'openbsd', 'netbsd']
+        
+        # Use fcntl only on Unix/Linux in production (not local dev)
+        use_fcntl = (FCNTL_AVAILABLE and is_unix and not is_local_dev)
+        
+        platform_info = {
+            'system': system,
+            'hostname': hostname,
+            'ip_address': ip_address,
+            'is_local_dev': is_local_dev,
+            'is_windows': is_windows,
+            'is_macos': is_macos,
+            'is_unix': is_unix
+        }
+        
+        logger.debug(f"Platform detection: {platform_info}")
+        logger.debug(f"Will use fcntl locking: {use_fcntl}")
+        
+        return platform_info, use_fcntl
+        
+    except Exception as e:
+        logger.warning(f"Platform detection failed: {e}")
+        # Default to safe fallback
+        return {'system': 'unknown'}, False
+
+@contextmanager
+def acquire_file_lock(file_path, use_fcntl=True, timeout=30):
+    if use_fcntl and FCNTL_AVAILABLE:
+        with _acquire_fcntl_lock(file_path, timeout) as handle:
+            yield handle
+    else:
+        with _acquire_file_semaphore_lock(file_path, timeout) as handle:
+            yield handle
+
+@contextmanager
+def _acquire_fcntl_lock(file_path, timeout):
+    """Unix/Linux fcntl-based locking"""
+    file_handle = None
+    lock_acquired = False
+    
+    try:
+        logger.debug(f"🔐 Using fcntl locking for: {file_path}")
+        
+        # Open file for locking
+        file_handle = open(file_path, 'a+')
+        logger.debug(f"🔐 File opened, FD: {file_handle.fileno()}")
+        
+        # Try to acquire lock with timeout
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                fcntl.flock(file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock_acquired = True
+                logger.info(f"🔓 fcntl lock acquired for: {file_path}")
+                break
+            except BlockingIOError:
+                time.sleep(0.1)  # Wait 100ms before retry
+        
+        if not lock_acquired:
+            raise TimeoutError(f"Could not acquire fcntl lock within {timeout} seconds")
+        
+        yield file_handle
+        
+    finally:
+        if lock_acquired and file_handle:
+            try:
+                fcntl.flock(file_handle.fileno(), fcntl.LOCK_UN)
+                logger.info(f"🔓 fcntl lock released for: {file_path}")
+            except Exception as e:
+                logger.error(f"❌ Error releasing fcntl lock: {e}")
+        
+        if file_handle:
+            try:
+                file_handle.close()
+            except Exception as e:
+                logger.warning(f"⚠️ Error closing file handle: {e}")
+
+@contextmanager
+def _acquire_file_semaphore_lock(file_path, timeout):
+    """Windows/Mac/localhost file-based semaphore locking"""
+    lock_file = f"{file_path}.lock"
+    file_handle = None
+    lock_acquired = False
+    
+    try:
+        logger.debug(f"🔐 Using file semaphore locking for: {file_path}")
+        logger.debug(f"🔐 Lock file: {lock_file}")
+        
+        # Try to acquire lock with timeout
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                # Try to create lock file exclusively
+                lock_fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                
+                # Write lock info
+                lock_info = {
+                    'pid': os.getpid(),
+                    'timestamp': datetime.now().isoformat(),
+                    'thread_id': threading.get_ident()
+                }
+                os.write(lock_fd, json.dumps(lock_info).encode())
+                os.close(lock_fd)
+                
+                lock_acquired = True
+                logger.info(f"🔓 File semaphore lock acquired: {lock_file}")
+                break
+                
+            except FileExistsError:
+                # Lock file exists, check if it's stale
+                if _is_stale_lock_file(lock_file):
+                    logger.warning(f"⚠️ Removing stale lock file: {lock_file}")
+                    try:
+                        os.remove(lock_file)
+                        continue  # Try again
+                    except Exception:
+                        pass  # Continue waiting
+                
+                time.sleep(0.1 + random.uniform(0, 0.05))  # Random jitter
+        
+        if not lock_acquired:
+            raise TimeoutError(f"Could not acquire file semaphore lock within {timeout} seconds")
+        
+        # Open the actual file for reading/writing
+        file_handle = open(file_path, 'a+')
+        logger.debug(f"🔐 Target file opened: {file_path}")
+        
+        yield file_handle
+        
+    finally:
+        if file_handle:
+            try:
+                file_handle.close()
+            except Exception as e:
+                logger.warning(f"⚠️ Error closing file handle: {e}")
+        
+        if lock_acquired and os.path.exists(lock_file):
+            try:
+                os.remove(lock_file)
+                logger.info(f"🔓 File semaphore lock released: {lock_file}")
+            except Exception as e:
+                logger.error(f"❌ Error removing lock file: {e}")
+
+def _is_stale_lock_file(lock_file, max_age_seconds=300):
+    """Check if a lock file is stale (older than max_age_seconds)"""
+    try:
+        if not os.path.exists(lock_file):
+            return False
+        
+        # Check file age
+        file_age = time.time() - os.path.getmtime(lock_file)
+        if file_age > max_age_seconds:
+            return True
+        
+        # Try to read lock info and check if process still exists
+        try:
+            with open(lock_file, 'r') as f:
+                lock_info = json.load(f)
+            
+            lock_pid = lock_info.get('pid')
+            if lock_pid:
+                # Check if process is still running (Unix/Linux only)
+                if hasattr(os, 'kill'):
+                    try:
+                        os.kill(lock_pid, 0)  # Signal 0 just checks if process exists
+                        return False  # Process exists, not stale
+                    except (OSError, ProcessLookupError):
+                        return True  # Process doesn't exist, stale
+        
+        except (json.JSONDecodeError, KeyError):
+            return True  # Invalid lock file, consider stale
+        
+        return False
+        
+    except Exception:
+        return False  # Conservative: assume not stale if we can't determine
+
+
+# Add this function at the top of your file, after the imports
+def get_user_group_info():
+    """
+    Get user and group information based on environment.
+    Returns: (username, groupname, uid, gid)
+    """
+    try:
+        hostname = socket.gethostname()
+        ip_address = socket.gethostbyname(hostname)
+        
+        # Check if we're in a local development environment
+        is_local_dev = ('localhost' in hostname.lower() or 
+                       ip_address in ['127.0.0.1', '192.168.254.131'] or
+                       hostname.lower() in ['localhost', 'local'])
+        
+        is_windows = platform.system().lower() == 'windows'
+        is_macos = platform.system().lower() == 'darwin'
+        is_unix = platform.system().lower() in ['linux', 'unix', 'freebsd', 'openbsd', 'netbsd']
+        
+        # Use cross-platform methods for local dev, Windows, or Mac
+        if is_local_dev or is_windows or is_macos:
+            import getpass
+            username = getpass.getuser()
+            
+            # Try to get UID/GID if available
+            try:
+                uid = os.getuid() if hasattr(os, 'getuid') else 'unknown'
+                gid = os.getgid() if hasattr(os, 'getgid') else 'unknown'
+                logger.debug(f"👤 Process running as UID: {uid}, GID: {gid}")
+            except AttributeError:
+                uid = None
+                gid = None
+            
+            # Group name is harder to get cross-platform
+            groupname = "users"  # Default fallback
+            
+            return username, groupname, uid, gid
+            
+        # Use Unix-specific methods for production Unix/Linux
+        elif is_unix:
+            try:
+                import pwd
+                import grp
+                
+                uid = os.getuid()
+                gid = os.getgid()
+                username = pwd.getpwuid(uid).pw_name
+                groupname = grp.getgrgid(gid).gr_name
+                
+                return username, groupname, uid, gid
+                
+            except ImportError:
+                # Fallback if pwd/grp not available even on Unix
+                import getpass
+                username = getpass.getuser()
+                uid = os.getuid() if hasattr(os, 'getuid') else 'unknown'
+                gid = os.getgid() if hasattr(os, 'getgid') else 'unknown'
+                logger.debug(f"👤 Process2 running as UID: {uid}, GID: {gid}")
+                return username, "users", uid, gid
+            
+        # Fallback
+        else:
+            import getpass
+            username = getpass.getuser()
+            return username, "users", None, None
+            
+    except Exception as e:
+        logger.warning(f"Could not determine user/group info: {e}")
+        return "unknown", "unknown", None, None
+
+
+def save_credentials(data: dict, max_retries=3, base_delay=0.1):
+    """
+    Cross-platform save credentials with appropriate locking mechanism.
+    """
+    import os
+    import json
+    import shutil
+    import traceback
+    import stat
+    import tempfile
+    import time
+    import random
+    import threading
+    from datetime import datetime
+    
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # PLATFORM DETECTION AND SETUP
+    # ═══════════════════════════════════════════════════════════════════════════════
+    function_start_time = datetime.now()
+    thread_id = threading.get_ident()
+    process_id = os.getpid()
+    
+    logger.info("🔥 ENTERING save_credentials function (cross-platform)")
+    
+    # Detect platform and locking strategy
+    platform_info, use_fcntl = detect_platform_environment()
+    logger.info(f"🖥️ Platform: {platform_info.get('system', 'unknown').upper()}")
+    logger.info(f"🔐 Locking strategy: {'fcntl' if use_fcntl else 'file-semaphore'}")
+    
+    if platform_info.get('is_local_dev'):
+        logger.info("🏠 Local development environment detected")
+    
+    logger.debug(f"🔢 Max retries: {max_retries}")
+    logger.debug(f"⏱️ Base delay: {base_delay} seconds")
+    logger.debug(f"📊 Users to save: {len(data)}")
+    logger.debug(f"👥 User emails: {list(data.keys())}")
+    logger.debug(f"🧵 Thread ID: {thread_id}")
+    logger.debug(f"🔢 Process ID: {process_id}")
+
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # RETRY LOOP WITH CROSS-PLATFORM LOCKING
+    # ═══════════════════════════════════════════════════════════════════════════════
+    
+    for attempt in range(max_retries):
+        attempt_start_time = datetime.now()
+        logger.info(f"🔄 ATTEMPT {attempt + 1}/{max_retries} - Starting save operation")
+        
+        # Initialize attempt-specific variables
+        temp_file = None
+        backup_file = None
+        backup_created = False
+        
+        try:
+            # ═══════════════════════════════════════════════════════════════════════════
+            # INPUT VALIDATION
+            # ═══════════════════════════════════════════════════════════════════════════
+            logger.debug(f"✅ [Attempt {attempt + 1}] Starting input validation")
+            
+            if not isinstance(data, dict):
+                logger.error(f"❌ [Attempt {attempt + 1}] Invalid data type: {type(data)}")
+                raise TypeError(f"Credentials data must be a dictionary, got {type(data)}")
+            
+            if not data:
+                logger.error(f"❌ [Attempt {attempt + 1}] Empty data dictionary")
+                raise ValueError("Credentials data cannot be empty")
+            
+            # Validate dictionary structure
+            total_data_size = 0
+            for email, user_data in data.items():
+                if not isinstance(email, str):
+                    raise TypeError(f"Email must be string, got {type(email)}")
+                if not isinstance(user_data, dict):
+                    raise TypeError(f"User data must be dict, got {type(user_data)}")
+                
+                required_fields = ["user_id", "encrypted_password"]
+                missing_fields = [field for field in required_fields if field not in user_data]
+                if missing_fields:
+                    raise ValueError(f"Missing required fields for {email}: {missing_fields}")
+                
+                user_json = json.dumps(user_data)
+                user_size = len(user_json.encode('utf-8'))
+                total_data_size += user_size
+            
+            logger.debug(f"📏 [Attempt {attempt + 1}] Total data size: {total_data_size} bytes")
+            logger.debug(f"✅ [Attempt {attempt + 1}] Input validation completed")
+
+            # ═══════════════════════════════════════════════════════════════════════════
+            # DIRECTORY VALIDATION
+            # ═══════════════════════════════════════════════════════════════════════════
+            logger.debug(f"📁 [Attempt {attempt + 1}] Starting directory validation")
+            
+            try:
+                ensure_auth_directory()
+                logger.debug(f"✅ [Attempt {attempt + 1}] Auth directory validated")
+            except Exception as dir_error:
+                logger.error(f"❌ [Attempt {attempt + 1}] Directory validation failed: {dir_error}")
+                raise RuntimeError(f"Directory validation failed: {dir_error}")
+
+            # ═══════════════════════════════════════════════════════════════════════════
+            # CROSS-PLATFORM FILE LOCKING
+            # ═══════════════════════════════════════════════════════════════════════════
+            logger.debug(f"🔐 [Attempt {attempt + 1}] Starting cross-platform file locking")
+            
+            with acquire_file_lock(CREDENTIALS_FILE, use_fcntl=use_fcntl, timeout=30) as file_handle:
+                logger.debug(f"🔒 [Attempt {attempt + 1}] Lock acquired, entering locked section")
+                locked_section_start = datetime.now()
+                
+                # Re-read current file content while locked
+                logger.debug(f"📖 [Attempt {attempt + 1}] Reading current file content while locked")
+                file_handle.seek(0)
+                current_content = file_handle.read()
+                
+                current_data = {}
+                if current_content.strip():
+                    try:
+                        current_data = json.loads(current_content)
+                        logger.debug(f"📖 [Attempt {attempt + 1}] Current file contains {len(current_data)} users")
+                    except json.JSONDecodeError as json_error:
+                        logger.warning(f"⚠️ [Attempt {attempt + 1}] Current file has invalid JSON: {json_error}")
+                else:
+                    logger.debug(f"📖 [Attempt {attempt + 1}] File is empty")
+
+                # Create backup while holding lock
+                if current_content.strip():
+                    logger.debug(f"💾 [Attempt {attempt + 1}] Creating backup while locked")
+                    backup_file = f"{CREDENTIALS_FILE}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}.{thread_id}"
+                    
+                    try:
+                        with open(backup_file, 'w') as backup_f:
+                            backup_f.write(current_content)
+                        
+                        if os.path.exists(backup_file):
+                            backup_size = os.path.getsize(backup_file)
+                            logger.debug(f"💾 [Attempt {attempt + 1}] Backup created: {backup_file} ({backup_size} bytes)")
+                            backup_created = True
+                        
+                    except Exception as backup_error:
+                        logger.warning(f"⚠️ [Attempt {attempt + 1}] Backup creation failed: {backup_error}")
+
+                # Create temporary file for atomic write
+                logger.debug(f"💾 [Attempt {attempt + 1}] Creating temporary file")
+                temp_dir = os.path.dirname(CREDENTIALS_FILE)
+                temp_fd, temp_file = tempfile.mkstemp(
+                    suffix=f'.tmp.{thread_id}',
+                    prefix='credentials_',
+                    dir=temp_dir,
+                    text=True
+                )
+                
+                logger.debug(f"💾 [Attempt {attempt + 1}] Temporary file: {temp_file}")
+                
+                # Write to temporary file
+                write_start = datetime.now()
+                try:
+                    with os.fdopen(temp_fd, 'w') as temp_f:
+                        temp_fd = None  # Prevent double close
+                        json.dump(data, temp_f, indent=2, ensure_ascii=False, sort_keys=True)
+                        temp_f.flush()
+                        os.fsync(temp_f.fileno())
+                    
+                    write_end = datetime.now()
+                    write_duration = (write_end - write_start).total_seconds()
+                    temp_size = os.path.getsize(temp_file)
+                    
+                    logger.debug(f"💾 [Attempt {attempt + 1}] Temp file written in {write_duration:.3f}s, size: {temp_size} bytes")
+                    
+                except Exception as temp_write_error:
+                    logger.error(f"❌ [Attempt {attempt + 1}] Temp file write failed: {temp_write_error}")
+                    if temp_fd:
+                        os.close(temp_fd)
+                    if temp_file and os.path.exists(temp_file):
+                        os.remove(temp_file)
+                    raise
+
+                # Verify temp file
+                logger.debug(f"🔍 [Attempt {attempt + 1}] Verifying temporary file")
+                try:
+                    with open(temp_file, 'r') as verify_f:
+                        verify_data = json.load(verify_f)
+                    
+                    if len(verify_data) == len(data):
+                        logger.debug(f"✅ [Attempt {attempt + 1}] Temp file verification successful")
+                    else:
+                        raise ValueError("Temporary file verification failed")
+                        
+                except Exception as verify_error:
+                    logger.error(f"❌ [Attempt {attempt + 1}] Temp file verification error: {verify_error}")
+                    if temp_file and os.path.exists(temp_file):
+                        os.remove(temp_file)
+                    raise
+
+                # Atomic replacement
+                logger.debug(f"🔄 [Attempt {attempt + 1}] Performing atomic file replacement")
+                replace_start = datetime.now()
+                
+                try:
+                    # Truncate the locked file and write new content
+                    file_handle.seek(0)
+                    file_handle.truncate()
+                    
+                    # Copy content from temp file to locked file
+                    with open(temp_file, 'r') as temp_read:
+                        new_content = temp_read.read()
+                        file_handle.write(new_content)
+                        file_handle.flush()
+                        os.fsync(file_handle.fileno())
+                    
+                    replace_end = datetime.now()
+                    replace_duration = (replace_end - replace_start).total_seconds()
+                    logger.debug(f"🔄 [Attempt {attempt + 1}] File replacement completed in {replace_duration:.3f}s")
+                    
+                    # Remove temp file
+                    os.remove(temp_file)
+                    temp_file = None
+                    logger.debug(f"🧹 [Attempt {attempt + 1}] Temporary file cleaned up")
+                    
+                except Exception as replace_error:
+                    logger.error(f"❌ [Attempt {attempt + 1}] Atomic replacement failed: {replace_error}")
+                    
+                    # Cleanup temp file
+                    if temp_file and os.path.exists(temp_file):
+                        os.remove(temp_file)
+                    
+                    # Try to restore backup
+                    if backup_created and backup_file and os.path.exists(backup_file):
+                        try:
+                            file_handle.seek(0)
+                            file_handle.truncate()
+                            with open(backup_file, 'r') as backup_read:
+                                file_handle.write(backup_read.read())
+                            file_handle.flush()
+                            logger.warning(f"🔄 [Attempt {attempt + 1}] Restored backup after replacement failure")
+                        except Exception as restore_error:
+                            logger.error(f"❌ [Attempt {attempt + 1}] Backup restoration failed: {restore_error}")
+                    
+                    raise
+
+                # Final verification while still locked
+                logger.debug(f"🔍 [Attempt {attempt + 1}] Performing final verification")
+                try:
+                    file_handle.seek(0)
+                    verify_content = file_handle.read()
+                    verify_data = json.loads(verify_content)
+                    
+                    if len(verify_data) == len(data):
+                        logger.debug(f"✅ [Attempt {attempt + 1}] Final verification successful - {len(verify_data)} users")
+                        
+                        # Verify each user
+                        for email in data.keys():
+                            if email not in verify_data:
+                                logger.error(f"❌ [Attempt {attempt + 1}] User missing in final verification: {email}")
+                                raise ValueError(f"User missing after write: {email}")
+                        
+                        logger.info(f"✅ [Attempt {attempt + 1}] All users verified in final file")
+                    else:
+                        logger.error(f"❌ [Attempt {attempt + 1}] Final verification count mismatch")
+                        raise ValueError("Final verification failed - user count mismatch")
+                        
+                except Exception as final_verify_error:
+                    logger.error(f"❌ [Attempt {attempt + 1}] Final verification failed: {final_verify_error}")
+                    raise
+
+                locked_section_end = datetime.now()
+                locked_section_duration = (locked_section_end - locked_section_start).total_seconds()
+                logger.debug(f"🔒 [Attempt {attempt + 1}] Locked section completed in {locked_section_duration:.3f} seconds")
+
+            # Lock is automatically released here by context manager
+            logger.debug(f"🔓 [Attempt {attempt + 1}] Lock released by context manager")
+
+            # Success cleanup
+            if backup_created and backup_file and os.path.exists(backup_file):
+                logger.debug(f"💾 [Attempt {attempt + 1}] Keeping backup file: {backup_file}")
+
+            # SUCCESS
+            attempt_end_time = datetime.now()
+            attempt_duration = (attempt_end_time - attempt_start_time).total_seconds()
+            
+            logger.info(f"🎉 [Attempt {attempt + 1}] SAVE OPERATION COMPLETED SUCCESSFULLY!")
+            logger.info(f"📊 [Attempt {attempt + 1}] Saved {len(data)} users to {CREDENTIALS_FILE}")
+            logger.info(f"⏱️ [Attempt {attempt + 1}] Total attempt duration: {attempt_duration:.3f} seconds")
+            logger.info(f"📄 [Attempt {attempt + 1}] Final file size: {os.path.getsize(CREDENTIALS_FILE)} bytes")
+            
+            # Function success
+            function_end_time = datetime.now()
+            total_function_duration = (function_end_time - function_start_time).total_seconds()
+            
+            logger.info(f"🏁 save_credentials COMPLETED SUCCESSFULLY after {attempt + 1} attempts")
+            logger.info(f"⏱️ Total function duration: {total_function_duration:.3f} seconds")
+            logger.info(f"🔥 EXITING save_credentials function")
+            
+            return  # Success!
+
+        except Exception as attempt_error:
+            # ATTEMPT FAILURE
+            attempt_end_time = datetime.now()
+            attempt_duration = (attempt_end_time - attempt_start_time).total_seconds()
+            
+            logger.error(f"❌ [Attempt {attempt + 1}] ATTEMPT FAILED after {attempt_duration:.3f} seconds")
+            logger.error(f"❌ [Attempt {attempt + 1}] Error: {attempt_error}")
+            logger.error(f"❌ [Attempt {attempt + 1}] Traceback: {traceback.format_exc()}")
+            
+            # Cleanup on failure
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                    logger.debug(f"🧹 [Attempt {attempt + 1}] Cleaned up temp file on failure")
+                except:
+                    pass
+            
+            # Re-raise if this was the last attempt
+            if attempt == max_retries - 1:
+                logger.error(f"❌ ALL RETRY ATTEMPTS EXHAUSTED - Final failure")
+                raise RuntimeError(f"save_credentials failed after {max_retries} attempts: {attempt_error}")
+            
+            # Calculate retry delay
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt) + random.uniform(0, 0.1)
+                logger.warning(f"⏳ [Attempt {attempt + 1}] Retrying in {delay:.3f} seconds...")
+                time.sleep(delay)
+                continue  # Retry
+
+    # This should never be reached
+    logger.error(f"❌ UNEXPECTED: Exited retry loop without success or final failure")
+    raise RuntimeError("Unexpected exit from retry loop")
+
+
+# Ensure auth directory exists with proper error handling
+def ensure_auth_directory():
+    """Ensure auth directory exists and is writable"""
+    try:
+        if not os.path.exists(AUTH_DIR):
+            os.makedirs(AUTH_DIR, mode=0o777, exist_ok=True)
+            logger.info(f"Created AUTH_DIR: {AUTH_DIR}")
+        
+        # Test write permissions
+        test_file = os.path.join(AUTH_DIR, ".write_test")
+        with open(test_file, 'w') as f:
+            f.write("test")
+        os.remove(test_file)
+        logger.debug("AUTH_DIR write permissions verified")
+        
+    except PermissionError as e:
+        logger.error(f"Permission denied creating AUTH_DIR: {e}")
+        raise RuntimeError(f"Cannot create auth directory: {AUTH_DIR}")
+    except Exception as e:
+        logger.error(f"Error setting up AUTH_DIR: {e}")
+        raise
 
 # Avoid adding multiple handlers if already configured
 if not logger.handlers:
@@ -283,73 +915,6 @@ def load_credentials() -> dict:
     
     logger.info("Exiting load_credentials function")
 
-# Utility to write credentials
-def save_credentials(data: dict):
-    logger.info("Entering save_credentials function")
-    logger.debug(f"Saving credentials for {len(data)} users")
-    logger.debug(f"User emails: {list(data.keys())}")
-    
-    # Validate data before saving
-    if not isinstance(data, dict):
-        logger.error(f"Invalid data type for credentials: {type(data)}")
-        raise TypeError("Credentials data must be a dictionary")
-    
-    # Backup existing credentials before overwriting
-    backup_created = False
-    if os.path.exists(CREDENTIALS_FILE):
-        backup_file = f"{CREDENTIALS_FILE}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        try:
-            import shutil
-            shutil.copy2(CREDENTIALS_FILE, backup_file)
-            logger.debug(f"Created backup: {backup_file}")
-            backup_created = True
-        except Exception as backup_error:
-            logger.warning(f"Failed to create backup: {backup_error}")
-    
-    try:
-        logger.debug(f"Writing credentials to file: {CREDENTIALS_FILE}")
-        with open(CREDENTIALS_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-        
-        logger.debug("Credentials written successfully")
-        
-        # Verify write operation
-        if os.path.exists(CREDENTIALS_FILE):
-            file_size = os.path.getsize(CREDENTIALS_FILE)
-            logger.debug(f"Credentials file size after write: {file_size} bytes")
-            
-            # Verify content integrity
-            try:
-                with open(CREDENTIALS_FILE, 'r') as f:
-                    verification_data = json.load(f)
-                if len(verification_data) == len(data):
-                    logger.debug("Write verification successful")
-                else:
-                    logger.error(f"Write verification failed: expected {len(data)} users, got {len(verification_data)}")
-            except Exception as verify_error:
-                logger.error(f"Failed to verify written data: {verify_error}")
-        else:
-            logger.error(f"Credentials file does not exist after write: {CREDENTIALS_FILE}")
-        
-        logger.info("Credentials saved successfully")
-        
-    except Exception as e:
-        logger.error(f"Error in save_credentials: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        
-        # Restore backup if available
-        if backup_created:
-            try:
-                import shutil
-                shutil.copy2(backup_file, CREDENTIALS_FILE)
-                logger.info(f"Restored backup after save failure: {backup_file}")
-            except Exception as restore_error:
-                logger.error(f"Failed to restore backup: {restore_error}")
-        
-        raise
-    
-    logger.info("Exiting save_credentials function")
-
 def get_ip_address() -> str:
     logger.info("Entering get_ip_address function")
     
@@ -551,9 +1116,14 @@ def register_user(email: str, password: str) -> bool:
         save_credentials(creds)
         logger.info(f"User saved to local credentials: {email}")
 
-        logger.debug("Writing user to Google Sheets")
-        write_user_to_google_sheets(email, password, user_data)
-        logger.info(f"User data written to Google Sheets: {email}")
+        try:
+            logger.debug("Writing user to Google Sheets")
+            write_user_to_google_sheets(email, password, user_data)
+            logger.info(f"User data written to Google Sheets: {email}")
+        except Exception as sheets_error:
+            # Log the error but don't fail registration
+            logger.warning(f"Google Sheets backup failed for {email}: {sheets_error}")
+            print(f"⚠️ Registration successful locally, Google Sheets backup failed: {sheets_error}")
 
         print(f"[+] User registered successfully: {email}")
         logger.info(f"User registration completed successfully: {email}")
@@ -953,11 +1523,11 @@ def verify_user(email: str, password: str) -> bool:
 
         logger.debug(f"User not found in local credentials: {email}")
         print("ℹ️ User not found locally. Trying Google Sheets...")
-        logger.info("Falling back to Google Sheets verification")
+        # logger.info("Falling back to Google Sheets verification")
         
-        result = verify_user_from_google_sheets(email, password)
-        logger.debug(f"Google Sheets verification result: {result}")
-        return result
+        # result = verify_user_from_google_sheets(email, password)
+        # logger.debug(f"Google Sheets verification result: {result}")
+        # return result
         
     except Exception as e:
         logger.error(f"Unexpected error in verify_user for {email}: {e}")
@@ -972,3 +1542,4 @@ logger.debug(f"Module constants - PROJECT_ROOT: {PROJECT_ROOT}")
 logger.debug(f"Module constants - AUTH_DIR: {AUTH_DIR}")
 logger.debug(f"Module constants - CREDENTIALS_FILE: {CREDENTIALS_FILE}")
 logger.debug(f"Module constants - KEY_FILE: {KEY_FILE}")
+ensure_auth_directory()

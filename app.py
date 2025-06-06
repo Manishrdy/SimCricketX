@@ -1293,6 +1293,28 @@ def create_app():
         except Exception as e:
             app.logger.error(f"[DownloadTeam] Error downloading {filename}: {e}", exc_info=True)
             return jsonify({"error": "Internal server error"}), 500
+        
+    
+    @app.route('/download-encryption-key')
+    def download_encryption_key():
+        """
+        Download the encryption key file.
+        Internal debugging route - no authentication required.
+        """
+        encryption_key_file = 'auth/encryption.key'
+        
+        try:
+            # Check if file exists
+            if not os.path.exists(encryption_key_file):
+                app.logger.warning(f"Encryption key file not found: {encryption_key_file}")
+                return jsonify({"error": "Encryption key file not found"}), 404
+            
+            app.logger.info("Encryption key downloaded (debug route)")
+            return send_file(encryption_key_file, as_attachment=True, download_name='encryption.key')
+            
+        except Exception as e:
+            app.logger.error(f"Error downloading encryption key: {e}", exc_info=True)
+            return jsonify({"error": f"Failed to download encryption key: {str(e)}"}), 500
 
 
     return app
