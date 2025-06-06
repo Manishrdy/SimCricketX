@@ -1417,7 +1417,7 @@ class Match:
             # 1. Keep only Spinner / Medium-fast / Medium among constraint_eligible
             filtered = [
                 b for b in constraint_eligible
-                if b["type"] in ("Spinner", "Medium-fast", "Medium")
+                if b["bowling_type"] in ("Spinner", "Medium-fast", "Medium")
             ]
             if filtered:
                 # 2. Replace constraint_eligible with that filtered list
