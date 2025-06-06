@@ -349,10 +349,10 @@ PITCH_SCORING_MATRIX = {
     "Green": {
         # Pace-friendly, lower scoring (6-7 runs/over average)
         # More dots, fewer boundaries, moderate wickets for pace bowlers
-        "Dot":     0.35,
+        "Dot":     0.40,
         "Single":  0.34,  # Changed from 0.32 to 0.34 (+0.02)
-        "Double":  0.08,
-        "Three":   0.04,
+        "Double":  0.06,
+        "Three":   0.01,
         "Four":    0.06,
         "Six":     0.02,
         "Wicket":  0.06,

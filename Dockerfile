@@ -19,15 +19,23 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 5. Copy rest of the project files (including logs/ directory)
+# 5. Copy rest of the project files
 # ──────────────────────────────────────────────────────────────────────────────
 COPY . .
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 6. Ensure the logs directory exists and is writable
+# 6. Create and set permissions for critical directories
 # ──────────────────────────────────────────────────────────────────────────────
 RUN mkdir -p /app/logs
+RUN mkdir -p /app/auth        # ← ADD THIS
+RUN mkdir -p /app/data        # ← ADD THIS for match files
+RUN mkdir -p /app/data/teams  # ← ADD THIS for team files
+RUN mkdir -p /app/data/matches # ← ADD THIS for match files
+
+# Set proper permissions
 RUN chmod -R 0777 /app/logs
+RUN chmod -R 0777 /app/auth   # ← ADD THIS  
+RUN chmod -R 0777 /app/data   # ← ADD THIS
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 7. Expose the port that Flask will listen on
