@@ -274,8 +274,8 @@ commentary_templates = {
 # 2) Pitch-influence definitions (60% weight)
 # -----------------------------------------------------------------------------
 PITCH_RUN_FACTOR = {
-    "Green": 0.80,   # run-suppressing → 150–170 average
-    "Dry":   0.80,   # spin-friendly → 150–170 average
+    "Green": 0.70,   # run-suppressing → 150–170 average
+    "Dry":   0.70,   # spin-friendly → 150–170 average
     "Hard":  1.10,   # balanced (batting edge) → 160–180
     "Flat":  1.20,   # batting paradise → 180–200
     "Dead":  1.30    # batting festival → 200–230
@@ -287,17 +287,17 @@ PITCH_RUN_FACTOR = {
 
 PITCH_WICKET_FACTOR = {
     "Green": {
-        "Fast":         1.30,   # fastest bowlers excel on Green
+        "Fast":         1.40,   # fastest bowlers excel on Green
         "Fast-medium":  1.20,
         "Medium-fast":  1.15,
-        "default":      0.75    # spinners/pacers that don’t fit above
+        "default":      0.55    # spinners/pacers that don’t fit above
     },
     "Dry": {
-        "Leg spin":     1.35,   # leggies turn square, highest threat
-        "Wrist spin":   1.30,   # similar to leggies on a turning track
-        "Off spin":     1.25,   # very effective but slightly easier than a leggie
+        "Leg spin":     1.40,   # leggies turn square, highest threat
+        "Wrist spin":   1.35,   # similar to leggies on a turning track
+        "Off spin":     1.30,   # very effective but slightly easier than a leggie
         "Finger spin":  1.20,   # orthodox left-arm; still strong, but a bit less than right-arm
-        "default":      0.80    # pace bowlers on a dry turner
+        "default":      0.60    # pace bowlers on a dry turner
     },
     "Hard": {
         "Fast":         1.10,   # pace gets decent bounce & seam, but still batsmen can score
@@ -342,16 +342,107 @@ def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
 # -----------------------------------------------------------------------------
 # 3) Base outcome probabilities (raw frequencies)
 # -----------------------------------------------------------------------------
-SCORING_MATRIX = {
-    "Dot":     0.25,
-    "Single":  0.30,
-    "Double":  0.10,
-    "Three":   0.06,
-    "Four":    0.08,
-    "Six":     0.03,
-    "Wicket":  0.044,
-    "Extras":  0.048
+# -----------------------------------------------------------------------------
+# 3) Pitch-specific outcome probabilities (realistic scoring patterns)
+# -----------------------------------------------------------------------------
+PITCH_SCORING_MATRIX = {
+    "Green": {
+        # Pace-friendly, lower scoring (6-7 runs/over average)
+        # More dots, fewer boundaries, moderate wickets for pace bowlers
+        "Dot":     0.35,
+        "Single":  0.34,  # Changed from 0.32 to 0.34 (+0.02)
+        "Double":  0.08,
+        "Three":   0.04,
+        "Four":    0.06,
+        "Six":     0.02,
+        "Wicket":  0.06,
+        "Extras":  0.05
+        # Sum: 1.00 ✅
+    },
+    "Dry": {
+        # Spin-friendly, lower scoring (6-7 runs/over average)  
+        # More dots, controlled scoring, moderate wickets for spin bowlers
+        "Dot":     0.34,
+        "Single":  0.33,
+        "Double":  0.09,
+        "Three":   0.04,
+        "Four":    0.06,
+        "Six":     0.02,
+        "Wicket":  0.06,  # Reduced from 0.07 to prevent too many wickets
+        "Extras":  0.06   # Increased to balance the total
+        # Sum: 1.00 ✅
+    },
+    "Hard": {
+        # Balanced pitch, moderate scoring (7-8 runs/over average)
+        # Even distribution, slight batting advantage
+        "Dot":     0.28,
+        "Single":  0.31,
+        "Double":  0.11,
+        "Three":   0.06,
+        "Four":    0.09,
+        "Six":     0.04,
+        "Wicket":  0.055,
+        "Extras":  0.055  # Adjusted to make total = 1.0
+        # Sum: 1.00 ✅
+    },
+    "Flat": {
+        # Batting paradise, higher scoring (9-10 runs/over average)
+        # Fewer dots, more boundaries, fewer wickets
+        "Dot":     0.20,
+        "Single":  0.28,
+        "Double":  0.14,
+        "Three":   0.08,
+        "Four":    0.14,
+        "Six":     0.08,
+        "Wicket":  0.04,  # Good - not too high for batting pitch
+        "Extras":  0.04
+        # Sum: 1.00 ✅
+    },
+    "Dead": {
+        # Batting festival, highest scoring (10-12 runs/over average)
+        # Very few dots, lots of boundaries, very few wickets
+        "Dot":     0.15,
+        "Single":  0.25,
+        "Double":  0.16,
+        "Three":   0.10,
+        "Four":    0.18,
+        "Six":     0.12,
+        "Wicket":  0.02,  # Perfect - very low for batting paradise
+        "Extras":  0.02
+        # Sum: 1.00 ✅
+    }
 }
+
+# Fallback matrix for unknown pitch types (CORRECTED)
+DEFAULT_SCORING_MATRIX = {
+    "Dot":     0.27,   # Increased from 0.25
+    "Single":  0.32,   # Increased from 0.30
+    "Double":  0.11,   # Increased from 0.10
+    "Three":   0.06,   # Kept same
+    "Four":    0.09,   # Increased from 0.08
+    "Six":     0.05,   # Increased from 0.04
+    "Wicket":  0.05,   # Rounded from 0.044
+    "Extras":  0.05    # Rounded from 0.048
+    # Sum: 1.00 ✅
+}
+
+def _validate_scoring_matrices():
+    """Validate that all pitch scoring matrices sum to 1.0"""
+    print("🔍 Validating pitch scoring matrices:")
+    
+    for pitch_type, matrix in PITCH_SCORING_MATRIX.items():
+        total = sum(matrix.values())
+        print(f"  {pitch_type}: {total:.3f} {'✅' if abs(total - 1.0) < 0.001 else '❌'}")
+        
+        if abs(total - 1.0) >= 0.001:
+            print(f"    Warning: {pitch_type} matrix doesn't sum to 1.0!")
+    
+    # Validate default matrix too
+    default_total = sum(DEFAULT_SCORING_MATRIX.values())
+    print(f"  DEFAULT: {default_total:.3f} {'✅' if abs(default_total - 1.0) < 0.1 else '❌'}")
+
+# Validate matrices on module import (runs once when ball_outcome.py is imported)
+_validate_scoring_matrices()
 
 # -----------------------------------------------------------------------------
 # 4) Compute blended probability weight for a single outcome
@@ -479,10 +570,13 @@ def calculate_outcome(
     bowling_hand = bowler["bowling_hand"]
     bowling_type = bowler["bowling_type"]
 
-    # 2) Compute raw weights for each outcome
+    # 2) Get pitch-specific scoring matrix
+    pitch_matrix = PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX)
+    print(f"[calculate_outcome] Using scoring matrix for pitch: {pitch}")
+
     raw_weights = {}
-    for outcome in SCORING_MATRIX:
-        base = SCORING_MATRIX[outcome]
+    for outcome in pitch_matrix:
+        base = pitch_matrix[outcome]
         print(f"\n-- Computing weight for outcome: {outcome} (Base: {base}) --")
 
         # Compute base weight via 60/40 blending
@@ -575,10 +669,35 @@ def calculate_outcome(
         types = ["Caught", "Bowled", "LBW", "Run Out"]
         weights_pct = [0.4, 0.3, 0.2, 0.1]
         wicket_choice = random.choices(types, weights=weights_pct)[0]
+
         result["wicket_type"] = wicket_choice
 
+        # Use guaranteed wicket commentary templates
+        wicket_descriptions = [
+        "He's out! Brilliant delivery!",
+        "Gone! A crucial wicket falls!",
+        "What a fantastic catch to dismiss him!",
+        "Wicket! Excellent bowling!",
+        "Out! Clean bowled!",
+        "Caught! Brilliant fielding!",
+        "LBW! Plumb in front!",
+        "Stumped! Lightning quick!",
+        "Run out! Direct hit!",
+        "Caught behind! Great catch!",
+        "Bowled! Perfect delivery!",
+        "Out! Magnificent catch!",
+        "Wicket falls! Great bowling!",
+        "Dismissed! Excellent work!",
+        "Gone! Spectacular catch!",
+        "Wicket! Superb delivery!",
+        "Caught! Brilliant take!",
+        "Bowled middle stump!",
+        "Out! Perfect line and length!",
+        "Gone! Perfect execution!"
+    ]
+
         # Use commentary template for Wicket
-        template = random.choice(commentary_templates["Wicket"])
+        template = random.choice(wicket_descriptions)
         result["description"] = template
 
         print(f"[calculate_outcome] WICKET! Type: {wicket_choice}, Description: {template}")
@@ -617,3 +736,5 @@ def calculate_outcome(
 
     print("=======================================================\n")
     return result
+
+

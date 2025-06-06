@@ -1687,8 +1687,22 @@ class Match:
             batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"]
         )
 
+        # 🐛 ENHANCED DEBUG - Show ALL outcome details
+        print(f"🐛 Ball {self.current_over}.{self.current_ball + 1} FULL OUTCOME:")
+        print(f"   type: {outcome.get('type')}")
+        print(f"   runs: {outcome.get('runs')}")
+        print(f"   batter_out: {outcome.get('batter_out')}")
+        print(f"   wicket_type: {outcome.get('wicket_type')}")
+        print(f"   description: '{outcome.get('description')}'")
+        print(f"   is_extra: {outcome.get('is_extra')}")
+
+        # Debug wicket outcomes to catch future issues
+        if outcome.get("batter_out", False):
+            print(f"🐛 Ball {self.current_over}.{self.current_ball + 1} WICKET: type={outcome.get('wicket_type')}, desc='{outcome.get('description')}'")
+
         ball_number = f"{self.current_over}.{self.current_ball + 1}"
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
+
         self.prev_delivery_was_extra = extra
 
         if not hasattr(self, 'current_over_runs'):
@@ -1709,6 +1723,8 @@ class Match:
             
             # ─── NEW: credit this ball to the striker’s 'balls faced' counter ───
             if not extra:
+                self.current_ball += 1
+                self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
                 self.batsman_stats[self.current_striker["name"]]["balls"] += 1
             
             fielder_name = None
@@ -1725,22 +1741,96 @@ class Match:
 
             self.batter_idx[0] = max(self.batter_idx) + 1
 
+            # In match.py, replace the existing "all out" logic in next_ball() method:
             if self.batter_idx[0] >= len(self.batting_team):
                 scorecard_data = self._generate_detailed_scorecard()
-                self.commentary.append("<br><strong>All Out!</strong>")
 
-                self._save_second_innings_stats()
-                self._create_match_archive()
+                # ✅ BUILD ENHANCED ALL-OUT COMMENTARY
+                enhanced_commentary_parts = []
 
-                return {
-                    "Test": "Manish5",
-                    "match_over": True,
-                    "scorecard_data": scorecard_data,
-                    "final_score": self.score,
-                    "wickets": self.wickets,
-                    "result": f"All out for {self.score}",
-                    "commentary": "<br>".join(self.commentary[-2:])  # Include last ball and all-out message
-                }
+                # 1. Add the wicket ball commentary (already built)
+                enhanced_commentary_parts.append(commentary_line)
+
+                 # 2. Add current bowler's final stats (like end of over)
+                bowler_stats = self.bowler_stats[self.current_bowler["name"]]
+                balls_bowled_this_over = bowler_stats["balls_bowled"] % 6
+                overs_bowled = bowler_stats["overs"] + (balls_bowled_this_over / 10) if balls_bowled_this_over > 0 else bowler_stats["overs"]
+                
+                # Build extras string
+                extras_str = ""
+                if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
+                    extras_parts = []
+                    if bowler_stats["wides"] > 0:
+                        extras_parts.append(f"{bowler_stats['wides']}w")
+                    if bowler_stats["noballs"] > 0:
+                        extras_parts.append(f"{bowler_stats['noballs']}nb")
+                    if extras_parts:
+                        extras_str = f" ({', '.join(extras_parts)})"
+
+
+                enhanced_commentary_parts.append(f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}")
+    
+                # 3. Add "All Out!" message
+                enhanced_commentary_parts.append("<br><strong>All Out!</strong>")
+
+                # 4. Combine all parts
+                all_out_commentary = "<br>".join(enhanced_commentary_parts)
+                
+                if self.innings == 1:
+                    # ✅ FIRST INNINGS ALL OUT - Transition to second innings
+                    self.first_innings_score = self.score
+                    self.target = self.score + 1
+                    required_rr = self.target / self.overs
+                    chasing_team = self.data["team_away"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_home"].split("_")[0]
+                    scorecard_data["target_info"] = f"{chasing_team} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
+                    
+                    # Save first innings stats
+                    self._save_first_innings_stats()
+
+                    # Reset for 2nd innings (same as time-based transition)
+                    self.innings = 2
+                    self.batting_team, self.bowling_team = self.bowling_team, self.batting_team
+                    self.score = 0
+                    self.wickets = 0
+                    self.current_over = 0
+                    self.current_ball = 0
+                    self.batter_idx = [0, 1]
+                    self.current_striker = self.batting_team[0]
+                    self.current_non_striker = self.batting_team[1]
+                    self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": ""} for p in self.batting_team}
+                    self.bowler_history = {}
+                    self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p["will_bowl"]}
+                    self._reset_innings_state()
+
+                    return {
+                        "Test": "AllOut_FirstInnings",
+                        "innings_end": True,
+                        "innings_number": 1,
+                        "match_over": False,  # ✅ Keep match going
+                        "scorecard_data": scorecard_data,
+                        "score": 0,
+                        "wickets": 0,
+                        "over": 0,
+                        "ball": 0,
+                        "commentary": f"{all_out_commentary}!<br>End of 1st Innings: {self.first_innings_score}/10. Target: {self.target}",
+                        "striker": self.current_striker["name"],
+                        "non_striker": self.current_non_striker["name"],
+                        "bowler": ""
+                    }
+                else:
+                    # ✅ SECOND INNINGS ALL OUT - Match over
+                    self._save_second_innings_stats()
+                    self._create_match_archive()
+
+                    return {
+                        "Test": "AllOut_SecondInnings", 
+                        "match_over": True,
+                        "scorecard_data": scorecard_data,
+                        "final_score": self.score,
+                        "wickets": self.wickets,
+                        "result": f"All out for {self.score}",
+                        "commentary": f"{all_out_commentary}<br>Match Over! All out for {self.score}"
+                    }
 
             
             # 1) Gather the dismissed batsman’s stats:
@@ -1915,7 +2005,7 @@ class Match:
                     "commentary": final_commentary
                 }
 
-        if not extra:
+        if not extra and not wicket:
             self.current_ball += 1
             self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
 
