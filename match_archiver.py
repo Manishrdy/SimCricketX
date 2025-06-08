@@ -92,6 +92,32 @@ class MatchArchiver:
         
         self.logger.info(f"MatchArchiver initialized for {self.team_home} vs {self.team_away} (ID: {self.match_id})")
 
+
+
+    def _include_scorecard_images(self):
+        """Include scorecard images in the archive if they exist"""
+        temp_dir = Path("data") / "temp_scorecard_images"
+        
+        if not temp_dir.exists():
+            return
+        
+        # Look for scorecard images for this match
+        first_innings_img = temp_dir / f"{self.match_id}_first_innings_scorecard.png"
+        second_innings_img = temp_dir / f"{self.match_id}_second_innings_scorecard.png"
+        
+        if first_innings_img.exists():
+            dest_path = self.archive_path / f"{self.team_home}_vs_{self.team_away}_first_innings_scorecard.png"
+            shutil.copy2(first_innings_img, dest_path)
+            self.created_files.append(dest_path)
+            self.logger.debug(f"Added first innings scorecard image: {dest_path.name}")
+        
+        if second_innings_img.exists():
+            dest_path = self.archive_path / f"{self.team_home}_vs_{self.team_away}_second_innings_scorecard.png"
+            shutil.copy2(second_innings_img, dest_path)
+            self.created_files.append(dest_path)
+            self.logger.debug(f"Added second innings scorecard image: {dest_path.name}")
+
+
     def _validate_match_data(self, match_data: Dict[str, Any]) -> Dict[str, Any]:
         """Validate match data contains required fields"""
         if not isinstance(match_data, dict):
@@ -157,6 +183,7 @@ class MatchArchiver:
             self._copy_json_file(original_json_path)
             self._create_commentary_text_file(commentary_log)
             self._create_all_csv_files()
+            self._include_scorecard_images()
             
             if html_content:
                 self._create_html_file(html_content)
@@ -924,23 +951,253 @@ All functionality preserved for offline viewing.
         except Exception as e:
             self.logger.error(f"Archive validation failed: {e}")
             return False
-
+        
+    
     def _cleanup_temporary_files(self) -> None:
-        """Clean up temporary files and directories"""
+        """
+        Comprehensive cleanup of all temporary files and directories.
+        Uses multiple strategies to ensure complete cleanup even in edge cases.
+        """
+        cleanup_success = True
+        
+        # ========== PHASE 1: MAIN ARCHIVE DIRECTORY CLEANUP ==========
         try:
-            # Remove the temporary archive directory (but keep the ZIP)
-            if self.archive_path.exists():
-                shutil.rmtree(self.archive_path)
-                self.logger.debug(f"Cleaned up temporary directory: {self.archive_path}")
+            self.logger.debug(f"🧹 Phase 1: Starting cleanup of main archive directory")
+            self.logger.debug(f"Target directory: {self.archive_path}")
             
-            # Clean up any explicitly tracked temp files
+            if self.archive_path.exists():
+                self.logger.debug(f"Directory exists with {len(list(self.archive_path.iterdir()))} items")
+                
+                # Strategy 1: Standard removal
+                try:
+                    shutil.rmtree(self.archive_path)
+                    self.logger.info(f"✅ Successfully removed archive directory: {self.archive_path}")
+                    
+                except PermissionError as pe:
+                    self.logger.warning(f"⚠️ Permission error during standard cleanup: {pe}")
+                    cleanup_success = False
+                    
+                    # Strategy 2: Force permission change and retry
+                    try:
+                        self.logger.debug("🔧 Attempting permission fix and retry...")
+                        self._force_remove_directory(self.archive_path)
+                        self.logger.info(f"✅ Force removal successful: {self.archive_path}")
+                        cleanup_success = True
+                        
+                    except Exception as force_error:
+                        self.logger.error(f"❌ Force removal failed: {force_error}")
+                        
+                except Exception as std_error:
+                    self.logger.warning(f"⚠️ Standard removal failed: {std_error}")
+                    cleanup_success = False
+                    
+                    # Strategy 3: Individual file removal
+                    try:
+                        self.logger.debug("🔧 Attempting individual file removal...")
+                        self._remove_directory_contents_individually(self.archive_path)
+                        self.logger.info(f"✅ Individual removal successful: {self.archive_path}")
+                        cleanup_success = True
+                        
+                    except Exception as individual_error:
+                        self.logger.error(f"❌ Individual removal failed: {individual_error}")
+            else:
+                self.logger.debug("Directory does not exist, skipping archive cleanup")
+                
+        except Exception as phase1_error:
+            self.logger.error(f"❌ Phase 1 cleanup failed completely: {phase1_error}")
+            cleanup_success = False
+
+        # ========== PHASE 2: TRACKED TEMP FILES CLEANUP ==========
+        try:
+            self.logger.debug(f"🧹 Phase 2: Cleaning tracked temp files ({len(self.temp_files)} files)")
+            
             for temp_file in self.temp_files:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                    self.logger.debug(f"Cleaned up temporary file: {temp_file}")
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                        self.logger.debug(f"✅ Removed tracked file: {temp_file}")
+                    else:
+                        self.logger.debug(f"Tracked file already gone: {temp_file}")
+                        
+                except Exception as file_error:
+                    self.logger.warning(f"⚠️ Failed to remove tracked file {temp_file}: {file_error}")
+                    cleanup_success = False
+                    
+        except Exception as phase2_error:
+            self.logger.error(f"❌ Phase 2 cleanup failed: {phase2_error}")
+            cleanup_success = False
+
+        # ========== PHASE 3: SCORECARD IMAGES CLEANUP ==========
+        try:
+            self.logger.debug(f"🧹 Phase 3: Cleaning scorecard images for match {self.match_id}")
+            temp_dir = Path("data") / "temp_scorecard_images"
+            
+            if temp_dir.exists():
+                # Clean this match's specific images
+                match_images = [
+                    temp_dir / f"{self.match_id}_first_innings_scorecard.png",
+                    temp_dir / f"{self.match_id}_second_innings_scorecard.png"
+                ]
+                
+                images_removed = 0
+                for img_path in match_images:
+                    try:
+                        if img_path.exists():
+                            img_path.unlink()
+                            images_removed += 1
+                            self.logger.debug(f"✅ Removed scorecard image: {img_path.name}")
+                        else:
+                            self.logger.debug(f"Scorecard image not found: {img_path.name}")
+                            
+                    except Exception as img_error:
+                        self.logger.warning(f"⚠️ Failed to remove image {img_path.name}: {img_error}")
+                        cleanup_success = False
+                
+                self.logger.debug(f"Removed {images_removed} scorecard images for this match")
+                
+                # Clean up old images (older than 2 hours) to prevent accumulation
+                self._cleanup_old_scorecard_images(temp_dir)
+                
+                # Try to remove temp directory if empty
+                self._cleanup_empty_temp_directory(temp_dir)
+                
+            else:
+                self.logger.debug("Scorecard temp directory does not exist")
+                
+        except Exception as phase3_error:
+            self.logger.error(f"❌ Phase 3 cleanup failed: {phase3_error}")
+            cleanup_success = False
+
+        # ========== PHASE 4: FINAL VALIDATION & REPORTING ==========
+        try:
+            self.logger.debug("🧹 Phase 4: Final validation and reporting")
+            
+            # Check if main directory still exists
+            if self.archive_path.exists():
+                remaining_items = list(self.archive_path.iterdir())
+                self.logger.warning(f"⚠️ Archive directory still exists with {len(remaining_items)} items: {[item.name for item in remaining_items]}")
+                cleanup_success = False
+            
+            # Report overall status
+            if cleanup_success:
+                self.logger.info(f"🎉 Complete cleanup successful for match {self.match_id}")
+            else:
+                self.logger.warning(f"⚠️ Partial cleanup completed with some issues for match {self.match_id}")
+                
+        except Exception as phase4_error:
+            self.logger.error(f"❌ Phase 4 validation failed: {phase4_error}")
+
+    def _force_remove_directory(self, directory_path: Path) -> None:
+        """
+        Force remove directory by changing permissions and retrying.
+        Handles Windows and Unix permission issues.
+        """
+        import stat
+        
+        def handle_remove_readonly(func, path, exc):
+            """Error handler for permission issues"""
+            if os.path.exists(path):
+                # Change permissions and retry
+                os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+                func(path)
+        
+        try:
+            # Try with error handler for read-only files
+            shutil.rmtree(directory_path, onerror=handle_remove_readonly)
             
         except Exception as e:
-            self.logger.warning(f"Cleanup error (non-critical): {e}")
+            self.logger.debug(f"Force removal attempt failed: {e}")
+            raise
+
+    def _remove_directory_contents_individually(self, directory_path: Path) -> None:
+        """
+        Remove directory contents file by file, then remove empty directories.
+        Last resort cleanup method.
+        """
+        if not directory_path.exists():
+            return
+        
+        files_removed = 0
+        dirs_removed = 0
+        
+        # First pass: Remove all files
+        for item in directory_path.rglob('*'):
+            if item.is_file():
+                try:
+                    item.unlink()
+                    files_removed += 1
+                    self.logger.debug(f"Individually removed file: {item.name}")
+                except Exception as e:
+                    self.logger.debug(f"Failed to remove file {item.name}: {e}")
+                    # Try force removal for this file
+                    try:
+                        import stat
+                        item.chmod(stat.S_IWRITE)
+                        item.unlink()
+                        files_removed += 1
+                        self.logger.debug(f"Force removed file: {item.name}")
+                    except Exception as force_e:
+                        self.logger.warning(f"Could not force remove file {item.name}: {force_e}")
+        
+        # Second pass: Remove empty directories (bottom-up)
+        for item in sorted(directory_path.rglob('*'), key=lambda p: len(str(p)), reverse=True):
+            if item.is_dir() and item != directory_path:
+                try:
+                    item.rmdir()  # Only works if empty
+                    dirs_removed += 1
+                    self.logger.debug(f"Removed empty directory: {item.name}")
+                except OSError:
+                    pass  # Directory not empty, skip
+        
+        # Finally remove the main directory
+        try:
+            directory_path.rmdir()
+            dirs_removed += 1
+            self.logger.debug(f"Removed main directory: {directory_path.name}")
+        except OSError as e:
+            remaining = list(directory_path.iterdir()) if directory_path.exists() else []
+            self.logger.warning(f"Could not remove main directory: {e}. Remaining items: {[item.name for item in remaining]}")
+        
+        self.logger.debug(f"Individual cleanup: {files_removed} files, {dirs_removed} directories removed")
+
+    def _cleanup_old_scorecard_images(self, temp_dir: Path) -> None:
+        """Clean up scorecard images older than 2 hours to prevent accumulation"""
+        try:
+            import time
+            current_time = time.time()
+            two_hours_ago = current_time - 7200  # 2 hours in seconds
+            
+            old_files_removed = 0
+            for file_path in temp_dir.glob("*.png"):
+                try:
+                    if file_path.is_file():
+                        file_age = file_path.stat().st_mtime
+                        if file_age < two_hours_ago:
+                            file_path.unlink()
+                            old_files_removed += 1
+                            self.logger.debug(f"Removed old scorecard image: {file_path.name}")
+                except Exception as old_cleanup_error:
+                    self.logger.debug(f"Error removing old file {file_path.name}: {old_cleanup_error}")
+            
+            if old_files_removed > 0:
+                self.logger.debug(f"Cleaned up {old_files_removed} old scorecard images")
+                
+        except Exception as e:
+            self.logger.debug(f"Error during old image cleanup: {e}")
+
+    def _cleanup_empty_temp_directory(self, temp_dir: Path) -> None:
+        """Remove temp directory if it's empty"""
+        try:
+            if temp_dir.exists():
+                contents = list(temp_dir.iterdir())
+                if not contents:
+                    temp_dir.rmdir()
+                    self.logger.debug(f"✅ Removed empty temp directory: {temp_dir}")
+                else:
+                    self.logger.debug(f"Temp directory not empty, contains: {[item.name for item in contents]}")
+        except Exception as e:
+            self.logger.debug(f"Could not remove temp directory: {e}")
+
 
     def _cleanup_on_error(self) -> None:
         """Clean up files created before error occurred"""
