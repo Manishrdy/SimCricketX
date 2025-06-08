@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ match.team_home.split('_')[0] }} vs {{ match.team_away.split('_')[0] }} – Project X</title>
+    <title>{{ match.team_home.split('_')[0] }} vs {{ match.team_away.split('_')[0] }} – SimCricketX</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
@@ -1097,7 +1097,10 @@
             }
         }
 
+        // ✅ UPDATED: startSuperOver function with better styling and error handling
         function startSuperOver(firstBattingTeam) {
+            console.log(`🏏 Starting super over with ${firstBattingTeam} batting first`);
+
             fetch(`${window.location.pathname}/start-super-over`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1105,15 +1108,26 @@
             })
                 .then(res => res.json())
                 .then(data => {
+                    if (data.error) {
+                        commentaryLog.innerHTML += `<p style="color:red;">Error starting super over: ${data.error}</p>`;
+                        return;
+                    }
+
                     commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
                     commentaryLog.innerHTML += `
-            <div style="margin: 1rem 0; text-align: center;">
-                <button onclick="startSuperOverSimulation()" style="padding: 0.5rem 1rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem;">
-                    Start Super Over Simulation
-                </button>
-            </div>
-        `;
+                <div style="background: var(--input-bg); padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; text-align: center;">
+                    <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Ready for Super Over!</h4>
+                    <button onclick="startSuperOverSimulation()" 
+                            style="padding: 0.75rem 1.5rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem; font-weight: bold; font-size: 1rem;">
+                        🏏 Start Super Over Simulation
+                    </button>
+                </div>
+            `;
                     commentaryLog.scrollTop = commentaryLog.scrollHeight;
+                })
+                .catch(error => {
+                    console.error("Error starting super over:", error);
+                    commentaryLog.innerHTML += `<p style="color:red;">Network error starting super over: ${error}</p>`;
                 });
         }
 
