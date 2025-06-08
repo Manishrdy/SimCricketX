@@ -703,11 +703,11 @@
 
             console.log("data.target_info: ", data.target_info)
             console.log("DEBUG INFO:", {
-                        "data": data,
-                        scorecard: data.scorecard_data,
-                        inningsEnd: data.innings_end,
-                        inningsNumber: data.innings_number
-                    });
+                "data": data,
+                scorecard: data.scorecard_data,
+                inningsEnd: data.innings_end,
+                inningsNumber: data.innings_number
+            });
 
             // Show target info if 2nd innings
             if (data.target_info) {
@@ -736,7 +736,7 @@
                     "completeData": completeData
                 })
 
-                if(data.wickets === 10) {
+                if (data.wickets === 10) {
                     console.log("I think you found it!!!")
                     document.getElementById('target-info').style.display = 'block';
                     document.getElementById('target-info').textContent = completeData.result;
@@ -1118,11 +1118,21 @@
         }
 
         function startSuperOverSimulation() {
-            if (matchOver) return;
+            // ✅ RESET matchOver for super over simulation
+            matchOver = false;
+
+            console.log("🏏 Starting super over simulation...");
 
             fetch(`${window.location.pathname}/next-super-over-ball`)
                 .then(res => res.json())
                 .then(data => {
+                    console.log("🏏 Super over response:", data);
+
+                    if (data.error) {
+                        commentaryLog.innerHTML += `<p style="color:red;">Super Over Error: ${data.error}</p>`;
+                        return;
+                    }
+
                     commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
                     commentaryLog.scrollTop = commentaryLog.scrollHeight;
 
@@ -1144,6 +1154,10 @@
                     } else {
                         setTimeout(() => startSuperOverSimulation(), delay); // Next ball
                     }
+                })
+                .catch(error => {
+                    console.error("Super over fetch error:", error);
+                    commentaryLog.innerHTML += `<p style="color:red;">Super Over Network Error: ${error}</p>`;
                 });
         }
 
