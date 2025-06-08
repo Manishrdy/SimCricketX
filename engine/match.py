@@ -1822,14 +1822,17 @@ class Match:
                     self._save_second_innings_stats()
                     self._create_match_archive()
 
+                    #Include logic for all out result
+
                     return {
                         "Test": "AllOut_SecondInnings", 
                         "match_over": True,
                         "scorecard_data": scorecard_data,
                         "final_score": self.score,
                         "wickets": self.wickets,
-                        "result": f"All out for {self.score}",
-                        "commentary": f"{all_out_commentary}<br>Match Over! All out for {self.score}"
+                        # "result": f"All out for {self.score}",
+                        "commentary": f"{all_out_commentary}<br>Match Over! All out for {self.score}",
+                        "result": f"{self.first_batting_team_name} won by {(self.target - 1) - self.score} runs!!"
                     }
 
             

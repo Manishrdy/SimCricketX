@@ -605,6 +605,7 @@
     </div>
 
     <script>
+
         let matchOver = false;
         let delay = 300;  // default 1x pace
         let isFinalScoreboard = false;
@@ -652,7 +653,8 @@
 
         // Add these functions to your script section
 
-        function showScorecard(data) {
+        function showScorecard(data, completeData) {
+            console.log("Inside showScorecard")
             document.getElementById('scorecard-overlay').style.display = 'flex';
 
             // Update title
@@ -698,9 +700,25 @@
             document.getElementById('scorecard-summary').textContent =
                 `Total: ${data.total_score}/${data.wickets} | Overs: ${data.overs} | Run Rate: ${data.run_rate} | Extras: ${data.extras}`;
 
+
+            console.log("data.target_info: ", data.target_info)
+            console.log("DEBUG INFO:", {
+                        "data": data,
+                        scorecard: data.scorecard_data,
+                        inningsEnd: data.innings_end,
+                        inningsNumber: data.innings_number
+                    });
+
             // Show target info if 2nd innings
             if (data.target_info) {
                 document.getElementById('target-info').style.display = 'block';
+
+                console.log("Checking for target-info: ", {
+                    "data": data,
+                    "data.inningsNumber": data.inningsNumber,
+                    "data.innings_end": data.innings_end,
+                    "data.innings_number": data.innings_number
+                })
 
                 if (data.inningsNumber != 2) {
                     console.log('Innnings 1 identified')
@@ -712,9 +730,133 @@
                 }
 
             }
+            else {
+                console.log("Checking for target-info in else: ", {
+                    "data": data,
+                    "completeData": completeData
+                })
+
+                if(data.wickets === 10) {
+                    console.log("I think you found it!!!")
+                    document.getElementById('target-info').style.display = 'block';
+                    document.getElementById('target-info').textContent = completeData.result;
+                }
+            }
         }
 
-        function closeScorecard() {
+
+        // Global variable to store first innings scorecard image
+        let firstInningsImageBlob = null;
+
+        async function captureCurrentScorecardImage() {
+            try {
+                const panel = document.querySelector('.scorecard-panel');
+                const titleElement = document.getElementById('scorecard-title');
+
+                if (!panel || !titleElement) {
+                    console.error("❌ Missing scorecard panel or title");
+                    return false;
+                }
+
+                // Backup styles
+                const originalPanelStyle = panel.style.cssText;
+                const originalTitleStyles = {
+                    background: titleElement.style.background,
+                    color: titleElement.style.color,
+                    webkitBackgroundClip: titleElement.style.webkitBackgroundClip,
+                    backgroundClip: titleElement.style.backgroundClip
+                };
+
+                // Prepare for capture
+                titleElement.style.background = 'none';
+                titleElement.style.color = '#4a90e2';
+                titleElement.style.webkitBackgroundClip = 'initial';
+                titleElement.style.backgroundClip = 'initial';
+
+                panel.style.maxHeight = 'none';
+                panel.style.overflow = 'visible';
+                panel.scrollTop = 0;
+
+                await new Promise(res => setTimeout(res, 150));
+
+                const canvas = await html2canvas(panel, {
+                    backgroundColor: null,
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    allowTaint: true
+                });
+
+                // Restore styles
+                Object.assign(titleElement.style, originalTitleStyles);
+                panel.style.cssText = originalPanelStyle;
+
+                // Convert to blob
+                return new Promise((resolve) => {
+                    canvas.toBlob(async (blob) => {
+                        if (!blob) {
+                            console.error('❌ Failed to create image blob');
+                            return resolve(false);
+                        }
+
+                        const title = titleElement.textContent || '';
+                        if (title.includes('1st INNINGS')) {
+                            firstInningsImageBlob = blob;
+                            console.log('✅ First innings image saved');
+                        } else if (title.includes('2nd INNINGS')) {
+                            await sendScorecardImagesToBackend(firstInningsImageBlob, blob);
+                            console.log('✅ Second innings image sent');
+                        }
+
+                        resolve(true);
+                    }, 'image/png', 0.95);
+                });
+
+            } catch (err) {
+                console.error("❌ Exception in captureCurrentScorecardImage:", err);
+                return false;
+            }
+        }
+
+        async function sendScorecardImagesToBackend(firstInningsBlob, secondInningsBlob) {
+            try {
+                console.log("📤 DEBUG: Sending scorecard images to backend...");
+
+                const formData = new FormData();
+
+                if (firstInningsBlob) {
+                    const teams = document.querySelector('h1').textContent.replace(' – Project X', '');
+                    const firstInningsFilename = `${teams.replace(' vs ', '_vs_')}_first_innings_scorecard.png`;
+                    formData.append('first_innings_image', firstInningsBlob, firstInningsFilename);
+                    console.log("📤 DEBUG: Added first innings image:", firstInningsFilename);
+                }
+
+                if (secondInningsBlob) {
+                    const teams = document.querySelector('h1').textContent.replace(' – Project X', '');
+                    const secondInningsFilename = `${teams.replace(' vs ', '_vs_')}_second_innings_scorecard.png`;
+                    formData.append('second_innings_image', secondInningsBlob, secondInningsFilename);
+                    console.log("📤 DEBUG: Added second innings image:", secondInningsFilename);
+                }
+
+                // Send images to backend
+                const response = await fetch(`${window.location.pathname}/save-scorecard-images`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    console.log('✅ Scorecard images sent to backend successfully');
+                } else {
+                    console.error('❌ Failed to send images:', response.status);
+                }
+
+            } catch (error) {
+                console.error('❌ Error sending scorecard images to backend:', error);
+            }
+        }
+
+        async function closeScorecard() {
+            await captureCurrentScorecardImage();
             document.getElementById('scorecard-overlay').style.display = 'none';
         }
 
@@ -741,13 +883,16 @@
 
                         if (data.scorecard_data) {
                             // Show the 1st-innings scorecard
-                            showScorecard(data.scorecard_data);
+                            showScorecard(data.scorecard_data, data);
 
-                            // Don’t auto-close—wait for the user to click “Close”
+                            // Don't auto-close—wait for the user to click "Close"
                             const closeBtn = document.querySelector('.close-scorecard');
                             closeBtn.onclick = async () => {
-
                                 console.log("🐛 DEBUG: closeScorecard() clicked; isFinalScoreboard =", isFinalScoreboard);
+
+                                // ✅ ADD: Capture scorecard image before any other logic
+                                await captureCurrentScorecardImage();
+
                                 if (isFinalScoreboard) {
                                     console.log("🐛 DEBUG: Final scoreboard ⇒ invoking saveMatchArchive() before close");
                                     try {
@@ -781,20 +926,13 @@
                         }
                     }
 
-                    console.log("DEBUG INFO:", {
-                        "data": data,
-                        scorecard: data.scorecard_data,
-                        inningsEnd: data.innings_end,
-                        inningsNumber: data.innings_number
-                    });
-
 
                     if (data.innings_end && data.innings_number === 2) {
                         console.log("Inside 2nd innings scoreboard")
                         if (data.scorecard_data) {
                             console.log("🐛 DEBUG: Final scorecard now displayed; setting isFinalScoreboard = true");
                             isFinalScoreboard = true;
-                            showScorecard(data.scorecard_data);
+                            showScorecard(data.scorecard_data, data);
                         }
 
                         commentaryLog.innerHTML += `<p>${data.commentary || "<b>Match Over!</b>"}</p>`;
@@ -859,7 +997,7 @@
                         // Show scorecard after a short delay
                         if (data.scorecard_data) {
                             setTimeout(() => {
-                                showScorecard(data.scorecard_data);
+                                showScorecard(data.scorecard_data, data);
                             }, 1500);
                         }
 
@@ -881,7 +1019,7 @@
 
         // Production fix for saveScorecardImage() function
         function saveScorecardImage() {
-            const overlay = document.getElementById('scorecard-overlay');
+            const overlay = document.getElementById('scorecard-panel');
             const titleElement = document.getElementById('scorecard-title');
 
             // Store original styles to restore later

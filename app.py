@@ -831,7 +831,6 @@ def create_app():
     f"Result in main.py {outcome.get('result', 'Match ended')}"
 )
 
-
             return jsonify({
                 "innings_end":     True,                              # ← flag it as an innings end
                 "innings_number":  2,                                 # ← second innings
@@ -1316,6 +1315,42 @@ def create_app():
             app.logger.error(f"Error downloading encryption key: {e}", exc_info=True)
             return jsonify({"error": f"Failed to download encryption key: {str(e)}"}), 500
 
+    @app.route('/match/<match_id>/save-scorecard-images', methods=['POST'])
+    def save_scorecard_images(match_id):
+        try:
+            import os
+            from pathlib import Path
+            
+            # Create temp directory for images
+            temp_dir = Path("data") / "temp_scorecard_images"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            
+            saved_files = []
+            
+            # Save first innings image if provided
+            if 'first_innings_image' in request.files:
+                first_img = request.files['first_innings_image']
+                if first_img.filename:
+                    first_path = temp_dir / f"{match_id}_first_innings_scorecard.png"
+                    first_img.save(first_path)
+                    saved_files.append(str(first_path))
+            
+            # Save second innings image if provided  
+            if 'second_innings_image' in request.files:
+                second_img = request.files['second_innings_image']
+                if second_img.filename:
+                    second_path = temp_dir / f"{match_id}_second_innings_scorecard.png"
+                    second_img.save(second_path)
+                    saved_files.append(str(second_path))
+            
+            return jsonify({
+                "success": True,
+                "saved_files": saved_files
+            })
+            
+        except Exception as e:
+            print(f"Error saving scorecard images: {e}")
+            return jsonify({"error": str(e)}), 500
 
     return app
 
