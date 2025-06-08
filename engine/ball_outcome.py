@@ -388,12 +388,12 @@ PITCH_SCORING_MATRIX = {
     "Flat": {
         # Batting paradise, higher scoring (9-10 runs/over average)
         # Fewer dots, more boundaries, fewer wickets
-        "Dot":     0.20,
+        "Dot":     0.24,
         "Single":  0.28,
         "Double":  0.14,
         "Three":   0.08,
-        "Four":    0.14,
-        "Six":     0.08,
+        "Four":    0.12,
+        "Six":     0.06,
         "Wicket":  0.04,  # Good - not too high for batting pitch
         "Extras":  0.04
         # Sum: 1.00 ✅
@@ -403,10 +403,10 @@ PITCH_SCORING_MATRIX = {
         # Very few dots, lots of boundaries, very few wickets
         "Dot":     0.15,
         "Single":  0.25,
-        "Double":  0.16,
+        "Double":  0.18,
         "Three":   0.10,
         "Four":    0.18,
-        "Six":     0.12,
+        "Six":     0.10,
         "Wicket":  0.02,  # Perfect - very low for batting paradise
         "Extras":  0.02
         # Sum: 1.00 ✅

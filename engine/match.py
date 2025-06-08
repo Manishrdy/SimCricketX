@@ -1824,6 +1824,49 @@ class Match:
 
                     #Include logic for all out result
 
+                    # 3. Add striker dismissal line
+                    out_name      = self.current_striker["name"]
+                    stats         = self.batsman_stats[out_name]
+                    runs_scored   = stats["runs"]
+                    balls_faced   = stats["balls"]
+                    fours_scored  = stats["fours"]
+                    sixes_scored  = stats["sixes"]
+                    extras = []
+
+                    if fours_scored > 0:
+                        extras.append(f"{fours_scored}x4")
+                    if sixes_scored > 0:
+                        extras.append(f"{sixes_scored}x6")
+                    extra_str = f"[{', '.join(extras)}]" if extras else ""
+                    dismissal_line = f"{out_name} {runs_scored}({balls_faced}b) {extra_str}"
+                    enhanced_commentary_parts.append(dismissal_line)
+
+                    # 4. Add non-striker stats
+                    non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
+                    enhanced_commentary_parts.append(
+                        f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) "
+                        f"[{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]"
+                    )
+
+                    # 5. Add bowler stats line
+                    bowler_stats = self.bowler_stats[self.current_bowler["name"]]
+                    extras_str = ""
+                    if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
+                        extras_parts = []
+                        if bowler_stats["wides"] > 0:
+                            extras_parts.append(f"{bowler_stats['wides']}w")
+                        if bowler_stats["noballs"] > 0:
+                            extras_parts.append(f"{bowler_stats['noballs']}nb")
+                        extras_str = f" ({', '.join(extras_parts)})"
+
+                    balls_bowled_this_over = bowler_stats["balls_bowled"] % 6
+                    overs_bowled = bowler_stats["overs"] + (balls_bowled_this_over / 10) if balls_bowled_this_over > 0 else bowler_stats["overs"]
+                    enhanced_commentary_parts.append(
+                        f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-"
+                        f"{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
+                    )
+
+                    all_out_commentary = "<br>".join(enhanced_commentary_parts)
                     return {
                         "Test": "AllOut_SecondInnings", 
                         "match_over": True,
@@ -1835,7 +1878,6 @@ class Match:
                         "result": f"{self.first_batting_team_name} won by {(self.target - 1) - self.score} runs!!"
                     }
 
-            
             # 1) Gather the dismissed batsman’s stats:
             out_name      = self.current_striker["name"]
             stats         = self.batsman_stats[out_name]

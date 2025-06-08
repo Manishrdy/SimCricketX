@@ -134,6 +134,24 @@ def periodic_cleanup(app):
         except Exception as e:
             app.logger.error(f"[PeriodicCleanup] Error in cleanup thread: {e}")
 
+
+def cleanup_temp_scorecard_images():
+    """
+    Clean up temporary scorecard images folder before starting a new match.
+    Removes the entire temp_scorecard_images folder if it exists.
+    """
+    temp_images_dir = os.path.join(PROJECT_ROOT, "data", "temp_scorecard_images")
+    
+    try:
+        if os.path.exists(temp_images_dir) and os.path.isdir(temp_images_dir):
+            shutil.rmtree(temp_images_dir)
+            app.logger.info(f"[Cleanup] Removed temp scorecard images directory: {temp_images_dir}")
+        else:
+            app.logger.debug(f"[Cleanup] Temp scorecard images directory does not exist: {temp_images_dir}")
+    except Exception as e:
+        app.logger.error(f"[Cleanup] Error removing temp scorecard images directory: {e}", exc_info=True)
+
+
 # ────── App Factory ──────
 def create_app():
     # --- Flask setup ---
@@ -610,13 +628,12 @@ def create_app():
     @app.route("/match/setup", methods=["GET", "POST"])
     @login_required
     def match_setup():
-
-        # ① Clean up old ZIPs before doing anything else
-        clean_old_archives(PROD_MAX_AGE)
-
         teams = load_user_teams(current_user.id)
 
         if request.method == "POST":
+            clean_old_archives(PROD_MAX_AGE)
+            cleanup_temp_scorecard_images()
+
             data = request.get_json()
 
             # Step 1: Extract base team short codes
