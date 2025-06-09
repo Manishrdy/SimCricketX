@@ -1,0 +1,163 @@
+{
+    "team_name": "Team India",
+    "short_code": "IND",
+    "home_ground": "Narendra Modi Stadium, Ahmedabad",
+    "pitch_preference": "Flat",
+    "team_color": "#ff6600",
+    "players": [
+        {
+            "name": "Rohit Sharma",
+            "role": "Batsman",
+            "batting_rating": 92,
+            "bowling_rating": 0,
+            "fielding_rating": 85,
+            "batting_hand": "Right",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Virat Kohli",
+            "role": "Batsman",
+            "batting_rating": 90,
+            "bowling_rating": 0,
+            "fielding_rating": 88,
+            "batting_hand": "Right",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Suryakumar Yadav",
+            "role": "Batsman",
+            "batting_rating": 98,
+            "bowling_rating": 0,
+            "fielding_rating": 90,
+            "batting_hand": "Right",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "KL Rahul",
+            "role": "Wicketkeeper",
+            "batting_rating": 85,
+            "bowling_rating": 0,
+            "fielding_rating": 92,
+            "batting_hand": "Right",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Rishabh Pant",
+            "role": "Wicketkeeper",
+            "batting_rating": 82,
+            "bowling_rating": 0,
+            "fielding_rating": 88,
+            "batting_hand": "Left",
+            "bowling_type": "",
+            "bowling_hand": ""
+        },
+        {
+            "name": "Hardik Pandya",
+            "role": "All-rounder",
+            "batting_rating": 80,
+            "bowling_rating": 78,
+            "fielding_rating": 88,
+            "batting_hand": "Right",
+            "bowling_type": "Fast-medium",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Ravindra Jadeja",
+            "role": "All-rounder",
+            "batting_rating": 75,
+            "bowling_rating": 85,
+            "fielding_rating": 95,
+            "batting_hand": "Left",
+            "bowling_type": "Finger spin",
+            "bowling_hand": "Left"
+        },
+        {
+            "name": "Axar Patel",
+            "role": "All-rounder",
+            "batting_rating": 65,
+            "bowling_rating": 80,
+            "fielding_rating": 85,
+            "batting_hand": "Left",
+            "bowling_type": "Finger spin",
+            "bowling_hand": "Left"
+        },
+        {
+            "name": "Jasprit Bumrah",
+            "role": "Bowler",
+            "batting_rating": 20,
+            "bowling_rating": 98,
+            "fielding_rating": 80,
+            "batting_hand": "Right",
+            "bowling_type": "Fast",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Mohammed Siraj",
+            "role": "Bowler",
+            "batting_rating": 25,
+            "bowling_rating": 82,
+            "fielding_rating": 78,
+            "batting_hand": "Right",
+            "bowling_type": "Fast",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Arshdeep Singh",
+            "role": "Bowler",
+            "batting_rating": 15,
+            "bowling_rating": 78,
+            "fielding_rating": 75,
+            "batting_hand": "Left",
+            "bowling_type": "Fast-medium",
+            "bowling_hand": "Left"
+        },
+        {
+            "name": "Yuzvendra Chahal",
+            "role": "Bowler",
+            "batting_rating": 25,
+            "bowling_rating": 85,
+            "fielding_rating": 70,
+            "batting_hand": "Right",
+            "bowling_type": "Leg spin",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Kuldeep Yadav",
+            "role": "Bowler",
+            "batting_rating": 20,
+            "bowling_rating": 82,
+            "fielding_rating": 72,
+            "batting_hand": "Left",
+            "bowling_type": "Wrist spin",
+            "bowling_hand": "Left"
+        },
+        {
+            "name": "Shivam Dube",
+            "role": "All-rounder",
+            "batting_rating": 72,
+            "bowling_rating": 60,
+            "fielding_rating": 75,
+            "batting_hand": "Left",
+            "bowling_type": "Medium",
+            "bowling_hand": "Right"
+        },
+        {
+            "name": "Yashasvi Jaiswal",
+            "role": "Batsman",
+            "batting_rating": 85,
+            "bowling_rating": 0,
+            "fielding_rating": 80,
+            "batting_hand": "Left",
+            "bowling_type": "",
+            "bowling_hand": ""
+        }
+    ],
+    "captain": "Rohit Sharma",
+    "wicketkeeper": "KL Rahul",
+    "created_by_email": "taraksaiprathik@gmail.com",
+    "created_by_user_id": "6396f544-90b4-4ff3-b308-b470bf4edd62"
+}

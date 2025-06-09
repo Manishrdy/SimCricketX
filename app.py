@@ -66,39 +66,46 @@ def setup_auth_debug_logger():
     """
     auth_logger = logging.getLogger('auth_debug')
     auth_logger.setLevel(logging.DEBUG)
-    
+
     # Prevent duplicate handlers
     if auth_logger.handlers:
         return auth_logger
-    
-    # Create file handler for auth debug logs
+
+    # Create file handler for auth debug logs with UTF-8 encoding
     log_path = os.path.join(PROJECT_ROOT, "auth_debug.log")
     handler = RotatingFileHandler(
-        log_path, 
+        log_path,
         maxBytes=50*1024*1024,  # 50MB
-        backupCount=10
+        backupCount=10,
+        encoding='utf-8'  # <-- ADD THIS LINE
     )
     handler.setLevel(logging.DEBUG)
-    
+
     # Create detailed formatter
     formatter = logging.Formatter(
         '%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(funcName)s() - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     handler.setFormatter(formatter)
-    
+
     # Add handler to logger
     auth_logger.addHandler(handler)
-    
-    # Also log to console for immediate feedback
+
+    # Also log to console for immediate feedback, with UTF-8 encoding
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
+    # Set encoding for the console handler
     console_handler.setFormatter(logging.Formatter(
         '[AUTH-DEBUG] %(asctime)s - %(message)s',
         datefmt='%H:%M:%S'
     ))
+    # Python 3.9+ allows setting encoding directly. For broader compatibility,
+    # we rely on the handler using the system's encoding but this is where
+    # the error originates. A better fix is to handle it globally.
+    # The file handler fix is most important for logs you want to keep.
+
     auth_logger.addHandler(console_handler)
-    
+
     return auth_logger
 
 # Initialize the auth debug logger
@@ -307,7 +314,13 @@ def create_app():
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(log_dir, "execution.log")
 
-    handler = RotatingFileHandler(log_path, maxBytes=10*1024*1024, backupCount=5)
+    # Add encoding='utf-8' to the handler
+    handler = RotatingFileHandler(
+        log_path,
+        maxBytes=10*1024*1024,
+        backupCount=5,
+        encoding='utf-8'  # <-- ADD THIS LINE
+    )
     handler.setLevel(logging.INFO)
     handler.setFormatter(logging.Formatter(
         "%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]"

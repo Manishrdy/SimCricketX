@@ -1,0 +1,163 @@
+{
+  "team_name": "Deccan Chargers",
+  "short_code": "DCC",
+  "home_ground": "Rajiv Gandhi Stadium, Hyderabad",
+  "pitch_preference": "Flat",
+  "team_color": "#1f75fe",
+  "players": [
+    {
+      "name": "Adam Gilchrist",
+      "role": "Wicketkeeper",
+      "batting_rating": 92,
+      "bowling_rating": 0,
+      "fielding_rating": 90,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Herschelle Gibbs",
+      "role": "Batsman",
+      "batting_rating": 88,
+      "bowling_rating": 0,
+      "fielding_rating": 85,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Andrew Symonds",
+      "role": "All-rounder",
+      "batting_rating": 85,
+      "bowling_rating": 75,
+      "fielding_rating": 90,
+      "batting_hand": "Right",
+      "bowling_type": "Medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Rohit Sharma",
+      "role": "Batsman",
+      "batting_rating": 90,
+      "bowling_rating": 40,
+      "fielding_rating": 85,
+      "batting_hand": "Right",
+      "bowling_type": "Off spin",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "VVS Laxman",
+      "role": "Batsman",
+      "batting_rating": 86,
+      "bowling_rating": 0,
+      "fielding_rating": 75,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Tirumalasetti Suman",
+      "role": "Batsman",
+      "batting_rating": 75,
+      "bowling_rating": 0,
+      "fielding_rating": 70,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Chaminda Vaas",
+      "role": "All-rounder",
+      "batting_rating": 55,
+      "bowling_rating": 78,
+      "fielding_rating": 75,
+      "batting_hand": "Left",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Pragyan Ojha",
+      "role": "Bowler",
+      "batting_rating": 20,
+      "bowling_rating": 80,
+      "fielding_rating": 70,
+      "batting_hand": "Left",
+      "bowling_type": "Finger spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "RP Singh",
+      "role": "Bowler",
+      "batting_rating": 15,
+      "bowling_rating": 82,
+      "fielding_rating": 72,
+      "batting_hand": "Right",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Fidel Edwards",
+      "role": "Bowler",
+      "batting_rating": 10,
+      "bowling_rating": 85,
+      "fielding_rating": 75,
+      "batting_hand": "Right",
+      "bowling_type": "Fast",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Harmeet Singh",
+      "role": "Bowler",
+      "batting_rating": 25,
+      "bowling_rating": 70,
+      "fielding_rating": 68,
+      "batting_hand": "Right",
+      "bowling_type": "Medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Azhar Bilakhia",
+      "role": "Batsman",
+      "batting_rating": 72,
+      "bowling_rating": 0,
+      "fielding_rating": 60,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Venugopal Rao",
+      "role": "Batsman",
+      "batting_rating": 74,
+      "bowling_rating": 0,
+      "fielding_rating": 70,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Scott Styris",
+      "role": "All-rounder",
+      "batting_rating": 78,
+      "bowling_rating": 65,
+      "fielding_rating": 78,
+      "batting_hand": "Right",
+      "bowling_type": "Medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Manpreet Gony",
+      "role": "Bowler",
+      "batting_rating": 30,
+      "bowling_rating": 76,
+      "fielding_rating": 70,
+      "batting_hand": "Right",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Right"
+    }
+  ],
+  "captain": "Adam Gilchrist",
+  "wicketkeeper": "Adam Gilchrist",
+  "created_by_email": "taraksaiprathik@gmail.com",
+  "created_by_user_id": "6396f544-90b4-4ff3-b308-b470bf4edd62"
+}

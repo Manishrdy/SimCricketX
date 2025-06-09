@@ -1,0 +1,163 @@
+{
+  "team_name": "Royal Challengers Bangalore",
+  "short_code": "RCB",
+  "home_ground": "M. Chinnaswamy Stadium, Bengaluru",
+  "pitch_preference": "Flat",
+  "team_color": "#da1818",
+  "players": [
+    {
+      "name": "Faf du Plessis",
+      "role": "Batsman",
+      "batting_rating": 88,
+      "bowling_rating": 0,
+      "fielding_rating": 90,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Virat Kohli",
+      "role": "Batsman",
+      "batting_rating": 95,
+      "bowling_rating": 20,
+      "fielding_rating": 90,
+      "batting_hand": "Right",
+      "bowling_type": "Medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Rajat Patidar",
+      "role": "Batsman",
+      "batting_rating": 78,
+      "bowling_rating": 0,
+      "fielding_rating": 75,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Glenn Maxwell",
+      "role": "All-rounder",
+      "batting_rating": 85,
+      "bowling_rating": 65,
+      "fielding_rating": 90,
+      "batting_hand": "Right",
+      "bowling_type": "Off spin",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Dinesh Karthik",
+      "role": "Wicketkeeper",
+      "batting_rating": 80,
+      "bowling_rating": 0,
+      "fielding_rating": 85,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Cameron Green",
+      "role": "All-rounder",
+      "batting_rating": 78,
+      "bowling_rating": 75,
+      "fielding_rating": 80,
+      "batting_hand": "Right",
+      "bowling_type": "Fast-medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Mahipal Lomror",
+      "role": "All-rounder",
+      "batting_rating": 70,
+      "bowling_rating": 50,
+      "fielding_rating": 72,
+      "batting_hand": "Left",
+      "bowling_type": "Finger spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Karn Sharma",
+      "role": "Bowler",
+      "batting_rating": 20,
+      "bowling_rating": 75,
+      "fielding_rating": 70,
+      "batting_hand": "Left",
+      "bowling_type": "Leg spin",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Mohammed Siraj",
+      "role": "Bowler",
+      "batting_rating": 15,
+      "bowling_rating": 85,
+      "fielding_rating": 80,
+      "batting_hand": "Right",
+      "bowling_type": "Fast",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Yash Dayal",
+      "role": "Bowler",
+      "batting_rating": 12,
+      "bowling_rating": 78,
+      "fielding_rating": 72,
+      "batting_hand": "Right",
+      "bowling_type": "Fast-medium",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Lockie Ferguson",
+      "role": "Bowler",
+      "batting_rating": 18,
+      "bowling_rating": 84,
+      "fielding_rating": 75,
+      "batting_hand": "Right",
+      "bowling_type": "Fast",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Suyash Prabhudessai",
+      "role": "Batsman",
+      "batting_rating": 72,
+      "bowling_rating": 0,
+      "fielding_rating": 70,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Anuj Rawat",
+      "role": "Wicketkeeper",
+      "batting_rating": 74,
+      "bowling_rating": 0,
+      "fielding_rating": 78,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Mayank Dagar",
+      "role": "Bowler",
+      "batting_rating": 25,
+      "bowling_rating": 70,
+      "fielding_rating": 72,
+      "batting_hand": "Left",
+      "bowling_type": "Finger spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Vyshak Vijaykumar",
+      "role": "Bowler",
+      "batting_rating": 10,
+      "bowling_rating": 75,
+      "fielding_rating": 70,
+      "batting_hand": "Right",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Right"
+    }
+  ],
+  "captain": "Faf du Plessis",
+  "wicketkeeper": "Dinesh Karthik",
+  "created_by_email": "taraksaiprathik@gmail.com",
+  "created_by_user_id": "6396f544-90b4-4ff3-b308-b470bf4edd62"
+}

@@ -1,0 +1,163 @@
+{
+  "team_name": "Lucknow Super Giants",
+  "short_code": "LSG",
+  "home_ground": "Bharat Ratna Shri Atal Bihari Vajpayee Ekana Cricket Stadium, Lucknow",
+  "pitch_preference": "Dry",
+  "team_color": "#005faf",
+  "players": [
+    {
+      "name": "KL Rahul",
+      "role": "Wicketkeeper",
+      "batting_rating": 88,
+      "bowling_rating": 0,
+      "fielding_rating": 90,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Quinton de Kock",
+      "role": "Wicketkeeper",
+      "batting_rating": 86,
+      "bowling_rating": 0,
+      "fielding_rating": 85,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Marcus Stoinis",
+      "role": "All-rounder",
+      "batting_rating": 82,
+      "bowling_rating": 70,
+      "fielding_rating": 80,
+      "batting_hand": "Right",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Nicholas Pooran",
+      "role": "Wicketkeeper",
+      "batting_rating": 84,
+      "bowling_rating": 0,
+      "fielding_rating": 85,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Deepak Hooda",
+      "role": "All-rounder",
+      "batting_rating": 75,
+      "bowling_rating": 55,
+      "fielding_rating": 78,
+      "batting_hand": "Right",
+      "bowling_type": "Off spin",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Ayush Badoni",
+      "role": "Batsman",
+      "batting_rating": 74,
+      "bowling_rating": 0,
+      "fielding_rating": 75,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Krunal Pandya",
+      "role": "All-rounder",
+      "batting_rating": 72,
+      "bowling_rating": 70,
+      "fielding_rating": 80,
+      "batting_hand": "Left",
+      "bowling_type": "Finger spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Naveen-ul-Haq",
+      "role": "Bowler",
+      "batting_rating": 20,
+      "bowling_rating": 82,
+      "fielding_rating": 75,
+      "batting_hand": "Right",
+      "bowling_type": "Fast-medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Ravi Bishnoi",
+      "role": "Bowler",
+      "batting_rating": 10,
+      "bowling_rating": 85,
+      "fielding_rating": 80,
+      "batting_hand": "Right",
+      "bowling_type": "Wrist spin",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Yash Thakur",
+      "role": "Bowler",
+      "batting_rating": 15,
+      "bowling_rating": 75,
+      "fielding_rating": 70,
+      "batting_hand": "Right",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Mohsin Khan",
+      "role": "Bowler",
+      "batting_rating": 12,
+      "bowling_rating": 78,
+      "fielding_rating": 72,
+      "batting_hand": "Left",
+      "bowling_type": "Fast",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Devdutt Padikkal",
+      "role": "Batsman",
+      "batting_rating": 76,
+      "bowling_rating": 0,
+      "fielding_rating": 75,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Arshin Kulkarni",
+      "role": "All-rounder",
+      "batting_rating": 70,
+      "bowling_rating": 65,
+      "fielding_rating": 70,
+      "batting_hand": "Right",
+      "bowling_type": "Medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Mayank Yadav",
+      "role": "Bowler",
+      "batting_rating": 10,
+      "bowling_rating": 90,
+      "fielding_rating": 70,
+      "batting_hand": "Right",
+      "bowling_type": "Fast",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Manimaran Siddharth",
+      "role": "Bowler",
+      "batting_rating": 8,
+      "bowling_rating": 72,
+      "fielding_rating": 68,
+      "batting_hand": "Left",
+      "bowling_type": "Finger spin",
+      "bowling_hand": "Left"
+    }
+  ],
+  "captain": "KL Rahul",
+  "wicketkeeper": "KL Rahul",
+  "created_by_email": "taraksaiprathik@gmail.com",
+  "created_by_user_id": "6396f544-90b4-4ff3-b308-b470bf4edd62"
+}
