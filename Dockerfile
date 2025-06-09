@@ -1,48 +1,20 @@
-# ──────────────────────────────────────────────────────────────────────────────
 # 1. Base image
-# ──────────────────────────────────────────────────────────────────────────────
 FROM python:3.9-slim
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 2. Set working directory
-# ──────────────────────────────────────────────────────────────────────────────
 WORKDIR /app
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 3. Copy requirements first (for caching)
-# ──────────────────────────────────────────────────────────────────────────────
 COPY requirements.txt .
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 4. Install Python dependencies
-# ──────────────────────────────────────────────────────────────────────────────
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 5. Copy rest of the project files
-# ──────────────────────────────────────────────────────────────────────────────
 COPY . .
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 6. Create and set permissions for critical directories
-# ──────────────────────────────────────────────────────────────────────────────
-RUN mkdir -p /app/logs
-RUN mkdir -p /app/auth        # ← ADD THIS
-RUN mkdir -p /app/data        # ← ADD THIS for match files
-RUN mkdir -p /app/data/teams  # ← ADD THIS for team files
-RUN mkdir -p /app/data/matches # ← ADD THIS for match files
-
-# Set proper permissions
-RUN chmod -R 0777 /app/logs
-RUN chmod -R 0777 /app/auth   # ← ADD THIS  
-RUN chmod -R 0777 /app/data   # ← ADD THIS
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 7. Expose the port that Flask will listen on
-# ──────────────────────────────────────────────────────────────────────────────
+# 6. Expose the port that the app will listen on
 EXPOSE 7860
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 8. Start the Flask app
-# ──────────────────────────────────────────────────────────────────────────────
-CMD ["python", "app.py"]
+# 7. Start the app using a production-grade WSGI server (Gunicorn)
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "app:app"]

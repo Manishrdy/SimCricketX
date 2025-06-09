@@ -1,12 +1,12 @@
 ---
 title: SimCricketX
-emoji: "🏏"
+emoji: 🏏
 colorFrom: blue
 colorTo: green
 sdk: docker
-sdk_version: "latest"
-app_file: app.py
-pinned: false
+persistent_storage:
+  - ./data
+  - ./auth
 ---
 
 # SimCricketX

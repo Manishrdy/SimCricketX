@@ -1,193 +1,193 @@
 {
-    "team_name": "Sunrisers Hyderabad",
-    "short_code": "SRH",
-    "home_ground": "Rajiv Gandhi International Cricket Stadium, Hyderabad",
-    "pitch_preference": "Flat",
-    "team_color": "#f36f21",
-    "players": [
-        {
-            "name": "Pat Cummins",
-            "role": "Bowler",
-            "batting_rating": 70,
-            "bowling_rating": 92,
-            "fielding_rating": 90,
-            "batting_hand": "Right",
-            "bowling_type": "Fast",
-            "bowling_hand": "Right"
-        },
-        {
-            "name": "Heinrich Klaasen",
-            "role": "Wicketkeeper",
-            "batting_rating": 88,
-            "bowling_rating": 0,
-            "fielding_rating": 85,
-            "batting_hand": "Right",
-            "bowling_type": "",
-            "bowling_hand": ""
-        },
-        {
-            "name": "Abhishek Sharma",
-            "role": "All-rounder",
-            "batting_rating": 85,
-            "bowling_rating": 65,
-            "fielding_rating": 80,
-            "batting_hand": "Left",
-            "bowling_type": "Left-arm orthodox",
-            "bowling_hand": "Left"
-        },
-        {
-            "name": "Travis Head",
-            "role": "Batsman",
-            "batting_rating": 86,
-            "bowling_rating": 40,
-            "fielding_rating": 80,
-            "batting_hand": "Left",
-            "bowling_type": "Off spin",
-            "bowling_hand": "Right"
-        },
-        {
-            "name": "Nitish Kumar Reddy",
-            "role": "All-rounder",
-            "batting_rating": 78,
-            "bowling_rating": 70,
-            "fielding_rating": 75,
-            "batting_hand": "Right",
-            "bowling_type": "Medium-fast",
-            "bowling_hand": "Right"
-        },
-        {
-            "name": "Marco Jansen",
-            "role": "All-rounder",
-            "batting_rating": 72,
-            "bowling_rating": 82,
-            "fielding_rating": 78,
-            "batting_hand": "Left",
-            "bowling_type": "Fast",
-            "bowling_hand": "Left"
-        },
-        {
-            "name": "Rahul Tripathi",
-            "role": "Batsman",
-            "batting_rating": 80,
-            "bowling_rating": 0,
-            "fielding_rating": 80,
-            "batting_hand": "Right",
-            "bowling_type": "",
-            "bowling_hand": ""
-        },
-        {
-            "name": "Aiden Markram",
-            "role": "Batsman",
-            "batting_rating": 82,
-            "bowling_rating": 40,
-            "fielding_rating": 85,
-            "batting_hand": "Right",
-            "bowling_type": "Off spin",
-            "bowling_hand": "Right"
-        },
-        {
-            "name": "T Natarajan",
-            "role": "Bowler",
-            "batting_rating": 15,
-            "bowling_rating": 80,
-            "fielding_rating": 72,
-            "batting_hand": "Left",
-            "bowling_type": "Fast-medium",
-            "bowling_hand": "Left"
-        },
-        {
-            "name": "Bhuvneshwar Kumar",
-            "role": "Bowler",
-            "batting_rating": 25,
-            "bowling_rating": 82,
-            "fielding_rating": 75,
-            "batting_hand": "Right",
-            "bowling_type": "Medium-fast",
-            "bowling_hand": "Right"
-        },
-        {
-            "name": "Jaydev Unadkat",
-            "role": "Bowler",
-            "batting_rating": 20,
-            "bowling_rating": 75,
-            "fielding_rating": 70,
-            "batting_hand": "Right",
-            "bowling_type": "Left-arm medium-fast",
-            "bowling_hand": "Left"
-        },
-        {
-            "name": "Rashid Khan",
-            "role": "All-rounder",
-            "batting_rating": 60,
-            "bowling_rating": 95,
-            "fielding_rating": 95,
-            "batting_hand": "Right",
-            "bowling_type": "Wrist spin",
-            "bowling_hand": "Right"
-        },
-        {
-            "name": "Dale Steyn",
-            "role": "Bowler",
-            "batting_rating": 20,
-            "bowling_rating": 95,
-            "fielding_rating": 90,
-            "batting_hand": "Right",
-            "bowling_type": "Fast",
-            "bowling_hand": "Right"
-        },
-        {
-            "name": "Kane Williamson",
-            "role": "Batsman",
-            "batting_rating": 88,
-            "bowling_rating": 25,
-            "fielding_rating": 85,
-            "batting_hand": "Right",
-            "bowling_type": "Off spin",
-            "bowling_hand": "Right"
-        },
-        {
-            "name": "David Warner",
-            "role": "Batsman",
-            "batting_rating": 95,
-            "bowling_rating": 30,
-            "fielding_rating": 99,
-            "batting_hand": "Left",
-            "bowling_type": "Off spin",
-            "bowling_hand": "Left"
-        },
-        {
-            "name": "Mayank Markande",
-            "role": "Bowler",
-            "batting_rating": 15,
-            "bowling_rating": 78,
-            "fielding_rating": 70,
-            "batting_hand": "Right",
-            "bowling_type": "Leg spin",
-            "bowling_hand": "Right"
-        },
-        {
-            "name": "Washington Sundar",
-            "role": "All-rounder",
-            "batting_rating": 70,
-            "bowling_rating": 75,
-            "fielding_rating": 80,
-            "batting_hand": "Left",
-            "bowling_type": "Off spin",
-            "bowling_hand": "Right"
-        },
-        {
-            "name": "Anmolpreet Singh",
-            "role": "Batsman",
-            "batting_rating": 68,
-            "bowling_rating": 0,
-            "fielding_rating": 70,
-            "batting_hand": "Right",
-            "bowling_type": "",
-            "bowling_hand": ""
-        }
-    ],
-    "captain": "Pat Cummins",
-    "wicketkeeper": "Heinrich Klaasen",
-    "created_by_user_id": "40fbc280-ddd4-4104-9975-d158ba2f96b3",
-    "created_by_email": "admin@projectx.com"
+  "team_name": "Sunrisers Eastern Cape",
+  "short_code": "SRH",
+  "home_ground": "South Africa",
+  "pitch_preference": "Flat",
+  "team_color": "#ff4500",
+  "players": [
+    {
+      "name": "Jadeja 94",
+      "role": "Bowler",
+      "batting_rating": 50,
+      "bowling_rating": 45,
+      "fielding_rating": 66,
+      "batting_hand": "Right",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "S Iyer 15",
+      "role": "Batsman",
+      "batting_rating": 92,
+      "bowling_rating": 81,
+      "fielding_rating": 94,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Virat 74",
+      "role": "Bowler",
+      "batting_rating": 46,
+      "bowling_rating": 63,
+      "fielding_rating": 92,
+      "batting_hand": "Right",
+      "bowling_type": "Wrist spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Rohit 47",
+      "role": "All-rounder",
+      "batting_rating": 91,
+      "bowling_rating": 81,
+      "fielding_rating": 77,
+      "batting_hand": "Left",
+      "bowling_type": "Leg spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Jadeja 9",
+      "role": "All-rounder",
+      "batting_rating": 72,
+      "bowling_rating": 43,
+      "fielding_rating": 52,
+      "batting_hand": "Right",
+      "bowling_type": "Leg spin",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Root 88",
+      "role": "All-rounder",
+      "batting_rating": 70,
+      "bowling_rating": 43,
+      "fielding_rating": 88,
+      "batting_hand": "Right",
+      "bowling_type": "Fast-medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Anderson 25",
+      "role": "All-rounder",
+      "batting_rating": 63,
+      "bowling_rating": 58,
+      "fielding_rating": 44,
+      "batting_hand": "Right",
+      "bowling_type": "Fast",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Virat 39",
+      "role": "Bowler",
+      "batting_rating": 74,
+      "bowling_rating": 66,
+      "fielding_rating": 92,
+      "batting_hand": "Right",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Smith 3",
+      "role": "All-rounder",
+      "batting_rating": 95,
+      "bowling_rating": 76,
+      "fielding_rating": 94,
+      "batting_hand": "Left",
+      "bowling_type": "Fast-medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Warner 66",
+      "role": "Bowler",
+      "batting_rating": 43,
+      "bowling_rating": 88,
+      "fielding_rating": 95,
+      "batting_hand": "Left",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Root 67",
+      "role": "Batsman",
+      "batting_rating": 55,
+      "bowling_rating": 47,
+      "fielding_rating": 64,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Stokes 29",
+      "role": "All-rounder",
+      "batting_rating": 92,
+      "bowling_rating": 77,
+      "fielding_rating": 49,
+      "batting_hand": "Left",
+      "bowling_type": "Wrist spin",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "S Iyer 9",
+      "role": "Bowler",
+      "batting_rating": 78,
+      "bowling_rating": 89,
+      "fielding_rating": 75,
+      "batting_hand": "Right",
+      "bowling_type": "Fast",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Anderson 57",
+      "role": "Bowler",
+      "batting_rating": 68,
+      "bowling_rating": 81,
+      "fielding_rating": 83,
+      "batting_hand": "Right",
+      "bowling_type": "Finger spin",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Warner 78",
+      "role": "Bowler",
+      "batting_rating": 66,
+      "bowling_rating": 71,
+      "fielding_rating": 62,
+      "batting_hand": "Left",
+      "bowling_type": "Finger spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Warner 15",
+      "role": "Bowler",
+      "batting_rating": 67,
+      "bowling_rating": 75,
+      "fielding_rating": 76,
+      "batting_hand": "Right",
+      "bowling_type": "Off spin",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Dhoni 71",
+      "role": "All-rounder",
+      "batting_rating": 67,
+      "bowling_rating": 89,
+      "fielding_rating": 71,
+      "batting_hand": "Left",
+      "bowling_type": "Medium",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Root 27",
+      "role": "Wicketkeeper",
+      "batting_rating": 59,
+      "bowling_rating": 55,
+      "fielding_rating": 60,
+      "batting_hand": "Right",
+      "bowling_type": "Finger spin",
+      "bowling_hand": "Left"
+    }
+  ],
+  "captain": "S Iyer 15",
+  "wicketkeeper": "Root 27",
+  "created_by_user_id": "40fbc280-ddd4-4104-9975-d158ba2f96b3",
+  "created_by_email": "admin@projectx.com"
 }
