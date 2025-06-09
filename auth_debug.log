@@ -1,0 +1,265 @@
+2025-06-09 02:00:39 [INFO] auth_debug:488 - login() - 🔥🔥🔥 LOGIN SESSION 20250609_020039_629304 STARTED 🔥🔥🔥
+2025-06-09 02:00:39 [INFO] auth_debug:112 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-09 02:00:39 [DEBUG] auth_debug:113 - log_request_details() - Request method: HEAD
+2025-06-09 02:00:39 [DEBUG] auth_debug:114 - log_request_details() - Request URL: http://simcricketx.onrender.com/login?next=/
+2025-06-09 02:00:39 [DEBUG] auth_debug:115 - log_request_details() - Request endpoint: login
+2025-06-09 02:00:39 [DEBUG] auth_debug:116 - log_request_details() - Request remote_addr: 127.0.0.1
+2025-06-09 02:00:39 [DEBUG] auth_debug:117 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-09 02:00:39 [DEBUG] auth_debug:118 - log_request_details() - Request referrer: https://simcricketx.onrender.com/
+2025-06-09 02:00:39 [DEBUG] auth_debug:126 - log_request_details() - Session keys: ['_flashes']
+2025-06-09 02:00:39 [DEBUG] auth_debug:127 - log_request_details() - Current user authenticated: False
+2025-06-09 02:00:39 [INFO] auth_debug:137 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-09 02:00:39 [DEBUG] auth_debug:140 - log_system_state() - PROJECT_ROOT: /app
+2025-06-09 02:00:39 [DEBUG] auth_debug:141 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-09 02:00:39 [DEBUG] auth_debug:142 - log_system_state() - Credentials file exists: True
+2025-06-09 02:00:39 [DEBUG] auth_debug:146 - log_system_state() - Credentials file size: 1732 bytes
+2025-06-09 02:00:39 [DEBUG] auth_debug:149 - log_system_state() - Credentials file readable: True
+2025-06-09 02:00:39 [DEBUG] auth_debug:150 - log_system_state() - Credentials file writable: True
+2025-06-09 02:00:39 [DEBUG] auth_debug:154 - log_system_state() - Auth directory exists: True
+2025-06-09 02:00:39 [DEBUG] auth_debug:155 - log_system_state() - Auth directory writable: True
+2025-06-09 02:00:39 [ERROR] auth_debug:165 - log_system_state() - Error logging system state: No module named 'psutil'
+2025-06-09 02:00:39 [INFO] auth_debug:508 - login() - [20250609_020039_629304] POST request - processing login
+2025-06-09 02:00:39 [DEBUG] auth_debug:511 - login() - [20250609_020039_629304] Extracting form data...
+2025-06-09 02:00:39 [DEBUG] auth_debug:517 - login() - [20250609_020039_629304] Raw email extracted: '' (type: <class 'str'>, length: 0)
+2025-06-09 02:00:39 [DEBUG] auth_debug:518 - login() - [20250609_020039_629304] Raw password extracted: [REDACTED] (type: <class 'str'>, length: 0)
+2025-06-09 02:00:39 [ERROR] auth_debug:522 - login() - [20250609_020039_629304] ❌ Email field is empty or missing
+2025-06-09 02:00:39 [INFO] auth_debug:659 - login() - 🏁🏁🏁 LOGIN SESSION 20250609_020039_629304 COMPLETED 🏁🏁🏁
+2025-06-09 02:00:39 [INFO] auth_debug:488 - login() - 🔥🔥🔥 LOGIN SESSION 20250609_020039_808024 STARTED 🔥🔥🔥
+2025-06-09 02:00:39 [INFO] auth_debug:112 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-09 02:00:39 [DEBUG] auth_debug:113 - log_request_details() - Request method: GET
+2025-06-09 02:00:39 [DEBUG] auth_debug:114 - log_request_details() - Request URL: http://simcricketx.onrender.com/login?next=/
+2025-06-09 02:00:39 [DEBUG] auth_debug:115 - log_request_details() - Request endpoint: login
+2025-06-09 02:00:39 [DEBUG] auth_debug:116 - log_request_details() - Request remote_addr: 127.0.0.1
+2025-06-09 02:00:39 [DEBUG] auth_debug:117 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-09 02:00:39 [DEBUG] auth_debug:118 - log_request_details() - Request referrer: https://simcricketx.onrender.com/
+2025-06-09 02:00:39 [DEBUG] auth_debug:126 - log_request_details() - Session keys: ['_flashes', '_fresh']
+2025-06-09 02:00:39 [DEBUG] auth_debug:127 - log_request_details() - Current user authenticated: False
+2025-06-09 02:00:39 [INFO] auth_debug:137 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-09 02:00:39 [DEBUG] auth_debug:140 - log_system_state() - PROJECT_ROOT: /app
+2025-06-09 02:00:39 [DEBUG] auth_debug:141 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-09 02:00:39 [DEBUG] auth_debug:142 - log_system_state() - Credentials file exists: True
+2025-06-09 02:00:39 [DEBUG] auth_debug:146 - log_system_state() - Credentials file size: 1732 bytes
+2025-06-09 02:00:39 [DEBUG] auth_debug:149 - log_system_state() - Credentials file readable: True
+2025-06-09 02:00:39 [DEBUG] auth_debug:150 - log_system_state() - Credentials file writable: True
+2025-06-09 02:00:39 [DEBUG] auth_debug:154 - log_system_state() - Auth directory exists: True
+2025-06-09 02:00:39 [DEBUG] auth_debug:155 - log_system_state() - Auth directory writable: True
+2025-06-09 02:00:39 [ERROR] auth_debug:165 - log_system_state() - Error logging system state: No module named 'psutil'
+2025-06-09 02:00:39 [INFO] auth_debug:496 - login() - [20250609_020039_808024] GET request - serving login form
+2025-06-09 02:00:39 [DEBUG] auth_debug:497 - login() - [20250609_020039_808024] Checking current user state...
+2025-06-09 02:00:39 [DEBUG] auth_debug:504 - login() - [20250609_020039_808024] Rendering login template
+2025-06-09 02:00:39 [INFO] auth_debug:659 - login() - 🏁🏁🏁 LOGIN SESSION 20250609_020039_808024 COMPLETED 🏁🏁🏁
+2025-06-09 02:00:43 [INFO] auth_debug:356 - register() - 🔥🔥🔥 REGISTRATION SESSION 20250609_020043_345428 STARTED 🔥🔥🔥
+2025-06-09 02:00:43 [INFO] auth_debug:112 - log_request_details() - === REGISTRATION REQUEST STARTED ===
+2025-06-09 02:00:43 [DEBUG] auth_debug:113 - log_request_details() - Request method: GET
+2025-06-09 02:00:43 [DEBUG] auth_debug:114 - log_request_details() - Request URL: http://simcricketx.onrender.com/register
+2025-06-09 02:00:43 [DEBUG] auth_debug:115 - log_request_details() - Request endpoint: register
+2025-06-09 02:00:43 [DEBUG] auth_debug:116 - log_request_details() - Request remote_addr: 127.0.0.1
+2025-06-09 02:00:43 [DEBUG] auth_debug:117 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-09 02:00:43 [DEBUG] auth_debug:118 - log_request_details() - Request referrer: https://simcricketx.onrender.com/login?next=%2F
+2025-06-09 02:00:43 [DEBUG] auth_debug:126 - log_request_details() - Session keys: ['_fresh']
+2025-06-09 02:00:43 [DEBUG] auth_debug:127 - log_request_details() - Current user authenticated: False
+2025-06-09 02:00:43 [INFO] auth_debug:137 - log_system_state() - === REGISTRATION SYSTEM STATE ===
+2025-06-09 02:00:43 [DEBUG] auth_debug:140 - log_system_state() - PROJECT_ROOT: /app
+2025-06-09 02:00:43 [DEBUG] auth_debug:141 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-09 02:00:43 [DEBUG] auth_debug:142 - log_system_state() - Credentials file exists: True
+2025-06-09 02:00:43 [DEBUG] auth_debug:146 - log_system_state() - Credentials file size: 1732 bytes
+2025-06-09 02:00:43 [DEBUG] auth_debug:149 - log_system_state() - Credentials file readable: True
+2025-06-09 02:00:43 [DEBUG] auth_debug:150 - log_system_state() - Credentials file writable: True
+2025-06-09 02:00:43 [DEBUG] auth_debug:154 - log_system_state() - Auth directory exists: True
+2025-06-09 02:00:43 [DEBUG] auth_debug:155 - log_system_state() - Auth directory writable: True
+2025-06-09 02:00:43 [ERROR] auth_debug:165 - log_system_state() - Error logging system state: No module named 'psutil'
+2025-06-09 02:00:43 [INFO] auth_debug:364 - register() - [20250609_020043_345428] GET request - serving registration form
+2025-06-09 02:00:43 [DEBUG] auth_debug:365 - register() - [20250609_020043_345428] Rendering registration template
+2025-06-09 02:00:43 [INFO] auth_debug:476 - register() - 🏁🏁🏁 REGISTRATION SESSION 20250609_020043_345428 COMPLETED 🏁🏁🏁
+2025-06-09 02:01:22 [INFO] auth_debug:356 - register() - 🔥🔥🔥 REGISTRATION SESSION 20250609_020122_970075 STARTED 🔥🔥🔥
+2025-06-09 02:01:22 [INFO] auth_debug:112 - log_request_details() - === REGISTRATION REQUEST STARTED ===
+2025-06-09 02:01:22 [DEBUG] auth_debug:113 - log_request_details() - Request method: POST
+2025-06-09 02:01:22 [DEBUG] auth_debug:114 - log_request_details() - Request URL: http://simcricketx.onrender.com/register
+2025-06-09 02:01:22 [DEBUG] auth_debug:115 - log_request_details() - Request endpoint: register
+2025-06-09 02:01:22 [DEBUG] auth_debug:116 - log_request_details() - Request remote_addr: 127.0.0.1
+2025-06-09 02:01:22 [DEBUG] auth_debug:117 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-09 02:01:22 [DEBUG] auth_debug:118 - log_request_details() - Request referrer: https://simcricketx.onrender.com/register
+2025-06-09 02:01:22 [DEBUG] auth_debug:123 - log_request_details() - Form fields present: ['email', 'password']
+2025-06-09 02:01:22 [DEBUG] auth_debug:126 - log_request_details() - Session keys: ['_fresh']
+2025-06-09 02:01:22 [DEBUG] auth_debug:127 - log_request_details() - Current user authenticated: False
+2025-06-09 02:01:22 [INFO] auth_debug:137 - log_system_state() - === REGISTRATION SYSTEM STATE ===
+2025-06-09 02:01:22 [DEBUG] auth_debug:140 - log_system_state() - PROJECT_ROOT: /app
+2025-06-09 02:01:22 [DEBUG] auth_debug:141 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-09 02:01:22 [DEBUG] auth_debug:142 - log_system_state() - Credentials file exists: True
+2025-06-09 02:01:22 [DEBUG] auth_debug:146 - log_system_state() - Credentials file size: 1732 bytes
+2025-06-09 02:01:22 [DEBUG] auth_debug:149 - log_system_state() - Credentials file readable: True
+2025-06-09 02:01:22 [DEBUG] auth_debug:150 - log_system_state() - Credentials file writable: True
+2025-06-09 02:01:22 [DEBUG] auth_debug:154 - log_system_state() - Auth directory exists: True
+2025-06-09 02:01:22 [DEBUG] auth_debug:155 - log_system_state() - Auth directory writable: True
+2025-06-09 02:01:22 [ERROR] auth_debug:165 - log_system_state() - Error logging system state: No module named 'psutil'
+2025-06-09 02:01:22 [INFO] auth_debug:369 - register() - [20250609_020122_970075] POST request - processing registration
+2025-06-09 02:01:22 [DEBUG] auth_debug:372 - register() - [20250609_020122_970075] Extracting form data...
+2025-06-09 02:01:22 [DEBUG] auth_debug:378 - register() - [20250609_020122_970075] Raw email extracted: 'harshavardhanarra@gmail.com' (type: <class 'str'>, length: 27)
+2025-06-09 02:01:22 [DEBUG] auth_debug:379 - register() - [20250609_020122_970075] Raw password extracted: [REDACTED] (type: <class 'str'>, length: 9)
+2025-06-09 02:01:22 [DEBUG] auth_debug:388 - register() - [20250609_020122_970075] Processed email: 'harshavardhanarra@gmail.com' (length: 27)
+2025-06-09 02:01:22 [DEBUG] auth_debug:403 - register() - [20250609_020122_970075] Password validation passed (length: 9)
+2025-06-09 02:01:22 [INFO] auth_debug:406 - register() - [20250609_020122_970075] 🚀 Attempting user registration for: 'harshavardhanarra@gmail.com'
+2025-06-09 02:01:22 [DEBUG] auth_debug:407 - register() - [20250609_020122_970075] Calling register_user function...
+2025-06-09 02:01:22 [DEBUG] auth_debug:411 - register() - [20250609_020122_970075] Registration start time: 2025-06-09 02:01:22.972483
+2025-06-09 02:01:24 [DEBUG] auth_debug:418 - register() - [20250609_020122_970075] Registration end time: 2025-06-09 02:01:24.602584
+2025-06-09 02:01:24 [DEBUG] auth_debug:419 - register() - [20250609_020122_970075] Registration duration: 1.630 seconds
+2025-06-09 02:01:24 [INFO] auth_debug:420 - register() - [20250609_020122_970075] register_user returned: True
+2025-06-09 02:01:24 [INFO] auth_debug:423 - register() - [20250609_020122_970075] ✅ Registration successful for: 'harshavardhanarra@gmail.com'
+2025-06-09 02:01:24 [DEBUG] auth_debug:426 - register() - [20250609_020122_970075] Checking post-registration state...
+2025-06-09 02:01:24 [INFO] auth_debug:433 - register() - [20250609_020122_970075] ✅ User found in local credentials after registration
+2025-06-09 02:01:24 [DEBUG] auth_debug:435 - register() - [20250609_020122_970075] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-09 02:01:24 [DEBUG] auth_debug:444 - register() - [20250609_020122_970075] Setting success flash message
+2025-06-09 02:01:24 [DEBUG] auth_debug:447 - register() - [20250609_020122_970075] Redirecting to login page
+2025-06-09 02:01:24 [INFO] auth_debug:476 - register() - 🏁🏁🏁 REGISTRATION SESSION 20250609_020122_970075 COMPLETED 🏁🏁🏁
+2025-06-09 02:01:24 [INFO] auth_debug:488 - login() - 🔥🔥🔥 LOGIN SESSION 20250609_020124_784985 STARTED 🔥🔥🔥
+2025-06-09 02:01:24 [INFO] auth_debug:112 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-09 02:01:24 [DEBUG] auth_debug:113 - log_request_details() - Request method: GET
+2025-06-09 02:01:24 [DEBUG] auth_debug:114 - log_request_details() - Request URL: http://simcricketx.onrender.com/login
+2025-06-09 02:01:24 [DEBUG] auth_debug:115 - log_request_details() - Request endpoint: login
+2025-06-09 02:01:24 [DEBUG] auth_debug:116 - log_request_details() - Request remote_addr: 127.0.0.1
+2025-06-09 02:01:24 [DEBUG] auth_debug:117 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-09 02:01:24 [DEBUG] auth_debug:118 - log_request_details() - Request referrer: https://simcricketx.onrender.com/register
+2025-06-09 02:01:24 [DEBUG] auth_debug:126 - log_request_details() - Session keys: ['_flashes', '_fresh']
+2025-06-09 02:01:24 [DEBUG] auth_debug:127 - log_request_details() - Current user authenticated: False
+2025-06-09 02:01:24 [INFO] auth_debug:137 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-09 02:01:24 [DEBUG] auth_debug:140 - log_system_state() - PROJECT_ROOT: /app
+2025-06-09 02:01:24 [DEBUG] auth_debug:141 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-09 02:01:24 [DEBUG] auth_debug:142 - log_system_state() - Credentials file exists: True
+2025-06-09 02:01:24 [DEBUG] auth_debug:146 - log_system_state() - Credentials file size: 2326 bytes
+2025-06-09 02:01:24 [DEBUG] auth_debug:149 - log_system_state() - Credentials file readable: True
+2025-06-09 02:01:24 [DEBUG] auth_debug:150 - log_system_state() - Credentials file writable: True
+2025-06-09 02:01:24 [DEBUG] auth_debug:154 - log_system_state() - Auth directory exists: True
+2025-06-09 02:01:24 [DEBUG] auth_debug:155 - log_system_state() - Auth directory writable: True
+2025-06-09 02:01:24 [ERROR] auth_debug:165 - log_system_state() - Error logging system state: No module named 'psutil'
+2025-06-09 02:01:24 [INFO] auth_debug:496 - login() - [20250609_020124_784985] GET request - serving login form
+2025-06-09 02:01:24 [DEBUG] auth_debug:497 - login() - [20250609_020124_784985] Checking current user state...
+2025-06-09 02:01:24 [DEBUG] auth_debug:504 - login() - [20250609_020124_784985] Rendering login template
+2025-06-09 02:01:24 [INFO] auth_debug:659 - login() - 🏁🏁🏁 LOGIN SESSION 20250609_020124_784985 COMPLETED 🏁🏁🏁
+2025-06-09 02:01:33 [INFO] auth_debug:488 - login() - 🔥🔥🔥 LOGIN SESSION 20250609_020133_894416 STARTED 🔥🔥🔥
+2025-06-09 02:01:33 [INFO] auth_debug:112 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-09 02:01:33 [DEBUG] auth_debug:113 - log_request_details() - Request method: POST
+2025-06-09 02:01:33 [DEBUG] auth_debug:114 - log_request_details() - Request URL: http://simcricketx.onrender.com/login
+2025-06-09 02:01:33 [DEBUG] auth_debug:115 - log_request_details() - Request endpoint: login
+2025-06-09 02:01:33 [DEBUG] auth_debug:116 - log_request_details() - Request remote_addr: 127.0.0.1
+2025-06-09 02:01:33 [DEBUG] auth_debug:117 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-09 02:01:33 [DEBUG] auth_debug:118 - log_request_details() - Request referrer: https://simcricketx.onrender.com/login
+2025-06-09 02:01:33 [DEBUG] auth_debug:123 - log_request_details() - Form fields present: ['email', 'password']
+2025-06-09 02:01:33 [DEBUG] auth_debug:126 - log_request_details() - Session keys: ['_fresh']
+2025-06-09 02:01:33 [DEBUG] auth_debug:127 - log_request_details() - Current user authenticated: False
+2025-06-09 02:01:33 [INFO] auth_debug:137 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-09 02:01:33 [DEBUG] auth_debug:140 - log_system_state() - PROJECT_ROOT: /app
+2025-06-09 02:01:33 [DEBUG] auth_debug:141 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-09 02:01:33 [DEBUG] auth_debug:142 - log_system_state() - Credentials file exists: True
+2025-06-09 02:01:33 [DEBUG] auth_debug:146 - log_system_state() - Credentials file size: 2326 bytes
+2025-06-09 02:01:33 [DEBUG] auth_debug:149 - log_system_state() - Credentials file readable: True
+2025-06-09 02:01:33 [DEBUG] auth_debug:150 - log_system_state() - Credentials file writable: True
+2025-06-09 02:01:33 [DEBUG] auth_debug:154 - log_system_state() - Auth directory exists: True
+2025-06-09 02:01:33 [DEBUG] auth_debug:155 - log_system_state() - Auth directory writable: True
+2025-06-09 02:01:33 [ERROR] auth_debug:165 - log_system_state() - Error logging system state: No module named 'psutil'
+2025-06-09 02:01:33 [INFO] auth_debug:508 - login() - [20250609_020133_894416] POST request - processing login
+2025-06-09 02:01:33 [DEBUG] auth_debug:511 - login() - [20250609_020133_894416] Extracting form data...
+2025-06-09 02:01:33 [DEBUG] auth_debug:517 - login() - [20250609_020133_894416] Raw email extracted: 'harshavardhanarra@gmail.com' (type: <class 'str'>, length: 27)
+2025-06-09 02:01:33 [DEBUG] auth_debug:518 - login() - [20250609_020133_894416] Raw password extracted: [REDACTED] (type: <class 'str'>, length: 9)
+2025-06-09 02:01:33 [DEBUG] auth_debug:527 - login() - [20250609_020133_894416] Processed email: 'harshavardhanarra@gmail.com' (length: 27)
+2025-06-09 02:01:33 [DEBUG] auth_debug:542 - login() - [20250609_020133_894416] Password validation passed (length: 9)
+2025-06-09 02:01:33 [DEBUG] auth_debug:545 - login() - [20250609_020133_894416] Pre-verification credentials check...
+2025-06-09 02:01:33 [DEBUG] auth_debug:549 - login() - [20250609_020133_894416] Total users in local credentials: 4
+2025-06-09 02:01:33 [DEBUG] auth_debug:550 - login() - [20250609_020133_894416] Users in credentials: ['admin@projectx.com', 'harshavardhanarra@gmail.com', 'manish@pc.in', 'pinch-hitter@planetcricket.com']
+2025-06-09 02:01:33 [INFO] auth_debug:553 - login() - [20250609_020133_894416] ✅ User found in local credentials before verification
+2025-06-09 02:01:33 [DEBUG] auth_debug:555 - login() - [20250609_020133_894416] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-09 02:01:33 [INFO] auth_debug:565 - login() - [20250609_020133_894416] 🚀 Attempting user verification for: 'harshavardhanarra@gmail.com'
+2025-06-09 02:01:33 [DEBUG] auth_debug:566 - login() - [20250609_020133_894416] Calling verify_user function...
+2025-06-09 02:01:33 [DEBUG] auth_debug:570 - login() - [20250609_020133_894416] Verification start time: 2025-06-09 02:01:33.898086
+2025-06-09 02:01:33 [DEBUG] auth_debug:577 - login() - [20250609_020133_894416] Verification end time: 2025-06-09 02:01:33.900175
+2025-06-09 02:01:33 [DEBUG] auth_debug:578 - login() - [20250609_020133_894416] Verification duration: 0.002 seconds
+2025-06-09 02:01:33 [INFO] auth_debug:579 - login() - [20250609_020133_894416] verify_user returned: True
+2025-06-09 02:01:33 [INFO] auth_debug:582 - login() - [20250609_020133_894416] ✅ Verification successful for: 'harshavardhanarra@gmail.com'
+2025-06-09 02:01:33 [DEBUG] auth_debug:585 - login() - [20250609_020133_894416] Checking post-verification state...
+2025-06-09 02:01:33 [INFO] auth_debug:591 - login() - [20250609_020133_894416] ✅ User found in local credentials after verification
+2025-06-09 02:01:33 [DEBUG] auth_debug:593 - login() - [20250609_020133_894416] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-09 02:01:33 [DEBUG] auth_debug:602 - login() - [20250609_020133_894416] Creating User object for: 'harshavardhanarra@gmail.com'
+2025-06-09 02:01:33 [DEBUG] auth_debug:606 - login() - [20250609_020133_894416] User object created: <__main__.create_app.<locals>.User object at 0x7f90a5ce78e0>
+2025-06-09 02:01:33 [DEBUG] auth_debug:607 - login() - [20250609_020133_894416] User ID: harshavardhanarra@gmail.com
+2025-06-09 02:01:33 [DEBUG] auth_debug:609 - login() - [20250609_020133_894416] Calling login_user...
+2025-06-09 02:01:33 [INFO] auth_debug:611 - login() - [20250609_020133_894416] ✅ login_user completed successfully
+2025-06-09 02:01:33 [DEBUG] auth_debug:614 - login() - [20250609_020133_894416] Clearing existing flash messages
+2025-06-09 02:01:33 [DEBUG] auth_debug:618 - login() - [20250609_020133_894416] Setting success flash message
+2025-06-09 02:01:33 [INFO] auth_debug:622 - login() - [20250609_020133_894416] ✅ LOGIN SUCCESSFUL for: 'harshavardhanarra@gmail.com'
+2025-06-09 02:01:33 [DEBUG] auth_debug:625 - login() - [20250609_020133_894416] Redirecting to home page
+2025-06-09 02:01:33 [INFO] auth_debug:659 - login() - 🏁🏁🏁 LOGIN SESSION 20250609_020133_894416 COMPLETED 🏁🏁🏁
+2025-06-09 02:01:45 [INFO] auth_debug:488 - login() - 🔥🔥🔥 LOGIN SESSION 20250609_020145_888082 STARTED 🔥🔥🔥
+2025-06-09 02:01:45 [INFO] auth_debug:112 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-09 02:01:45 [DEBUG] auth_debug:113 - log_request_details() - Request method: GET
+2025-06-09 02:01:45 [DEBUG] auth_debug:114 - log_request_details() - Request URL: http://simcricketx.onrender.com/login
+2025-06-09 02:01:45 [DEBUG] auth_debug:115 - log_request_details() - Request endpoint: login
+2025-06-09 02:01:45 [DEBUG] auth_debug:116 - log_request_details() - Request remote_addr: 127.0.0.1
+2025-06-09 02:01:45 [DEBUG] auth_debug:117 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-09 02:01:45 [DEBUG] auth_debug:118 - log_request_details() - Request referrer: https://simcricketx.onrender.com/
+2025-06-09 02:01:45 [DEBUG] auth_debug:126 - log_request_details() - Session keys: ['_flashes']
+2025-06-09 02:01:45 [DEBUG] auth_debug:127 - log_request_details() - Current user authenticated: False
+2025-06-09 02:01:45 [INFO] auth_debug:137 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-09 02:01:45 [DEBUG] auth_debug:140 - log_system_state() - PROJECT_ROOT: /app
+2025-06-09 02:01:45 [DEBUG] auth_debug:141 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-09 02:01:45 [DEBUG] auth_debug:142 - log_system_state() - Credentials file exists: True
+2025-06-09 02:01:45 [DEBUG] auth_debug:146 - log_system_state() - Credentials file size: 2326 bytes
+2025-06-09 02:01:45 [DEBUG] auth_debug:149 - log_system_state() - Credentials file readable: True
+2025-06-09 02:01:45 [DEBUG] auth_debug:150 - log_system_state() - Credentials file writable: True
+2025-06-09 02:01:45 [DEBUG] auth_debug:154 - log_system_state() - Auth directory exists: True
+2025-06-09 02:01:45 [DEBUG] auth_debug:155 - log_system_state() - Auth directory writable: True
+2025-06-09 02:01:45 [ERROR] auth_debug:165 - log_system_state() - Error logging system state: No module named 'psutil'
+2025-06-09 02:01:45 [INFO] auth_debug:496 - login() - [20250609_020145_888082] GET request - serving login form
+2025-06-09 02:01:45 [DEBUG] auth_debug:497 - login() - [20250609_020145_888082] Checking current user state...
+2025-06-09 02:01:45 [DEBUG] auth_debug:504 - login() - [20250609_020145_888082] Rendering login template
+2025-06-09 02:01:45 [INFO] auth_debug:659 - login() - 🏁🏁🏁 LOGIN SESSION 20250609_020145_888082 COMPLETED 🏁🏁🏁
+2025-06-09 02:01:58 [INFO] auth_debug:488 - login() - 🔥🔥🔥 LOGIN SESSION 20250609_020158_424244 STARTED 🔥🔥🔥
+2025-06-09 02:01:58 [INFO] auth_debug:112 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-09 02:01:58 [DEBUG] auth_debug:113 - log_request_details() - Request method: POST
+2025-06-09 02:01:58 [DEBUG] auth_debug:114 - log_request_details() - Request URL: http://simcricketx.onrender.com/login
+2025-06-09 02:01:58 [DEBUG] auth_debug:115 - log_request_details() - Request endpoint: login
+2025-06-09 02:01:58 [DEBUG] auth_debug:116 - log_request_details() - Request remote_addr: 127.0.0.1
+2025-06-09 02:01:58 [DEBUG] auth_debug:117 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-09 02:01:58 [DEBUG] auth_debug:118 - log_request_details() - Request referrer: https://simcricketx.onrender.com/login
+2025-06-09 02:01:58 [DEBUG] auth_debug:123 - log_request_details() - Form fields present: ['email', 'password']
+2025-06-09 02:01:58 [DEBUG] auth_debug:126 - log_request_details() - Session keys: ['_fresh']
+2025-06-09 02:01:58 [DEBUG] auth_debug:127 - log_request_details() - Current user authenticated: False
+2025-06-09 02:01:58 [INFO] auth_debug:137 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-09 02:01:58 [DEBUG] auth_debug:140 - log_system_state() - PROJECT_ROOT: /app
+2025-06-09 02:01:58 [DEBUG] auth_debug:141 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-09 02:01:58 [DEBUG] auth_debug:142 - log_system_state() - Credentials file exists: True
+2025-06-09 02:01:58 [DEBUG] auth_debug:146 - log_system_state() - Credentials file size: 2326 bytes
+2025-06-09 02:01:58 [DEBUG] auth_debug:149 - log_system_state() - Credentials file readable: True
+2025-06-09 02:01:58 [DEBUG] auth_debug:150 - log_system_state() - Credentials file writable: True
+2025-06-09 02:01:58 [DEBUG] auth_debug:154 - log_system_state() - Auth directory exists: True
+2025-06-09 02:01:58 [DEBUG] auth_debug:155 - log_system_state() - Auth directory writable: True
+2025-06-09 02:01:58 [ERROR] auth_debug:165 - log_system_state() - Error logging system state: No module named 'psutil'
+2025-06-09 02:01:58 [INFO] auth_debug:508 - login() - [20250609_020158_424244] POST request - processing login
+2025-06-09 02:01:58 [DEBUG] auth_debug:511 - login() - [20250609_020158_424244] Extracting form data...
+2025-06-09 02:01:58 [DEBUG] auth_debug:517 - login() - [20250609_020158_424244] Raw email extracted: 'harshavardhanarra@gmail.com' (type: <class 'str'>, length: 27)
+2025-06-09 02:01:58 [DEBUG] auth_debug:518 - login() - [20250609_020158_424244] Raw password extracted: [REDACTED] (type: <class 'str'>, length: 9)
+2025-06-09 02:01:58 [DEBUG] auth_debug:527 - login() - [20250609_020158_424244] Processed email: 'harshavardhanarra@gmail.com' (length: 27)
+2025-06-09 02:01:58 [DEBUG] auth_debug:542 - login() - [20250609_020158_424244] Password validation passed (length: 9)
+2025-06-09 02:01:58 [DEBUG] auth_debug:545 - login() - [20250609_020158_424244] Pre-verification credentials check...
+2025-06-09 02:01:58 [DEBUG] auth_debug:549 - login() - [20250609_020158_424244] Total users in local credentials: 4
+2025-06-09 02:01:58 [DEBUG] auth_debug:550 - login() - [20250609_020158_424244] Users in credentials: ['admin@projectx.com', 'harshavardhanarra@gmail.com', 'manish@pc.in', 'pinch-hitter@planetcricket.com']
+2025-06-09 02:01:58 [INFO] auth_debug:553 - login() - [20250609_020158_424244] ✅ User found in local credentials before verification
+2025-06-09 02:01:58 [DEBUG] auth_debug:555 - login() - [20250609_020158_424244] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-09 02:01:58 [INFO] auth_debug:565 - login() - [20250609_020158_424244] 🚀 Attempting user verification for: 'harshavardhanarra@gmail.com'
+2025-06-09 02:01:58 [DEBUG] auth_debug:566 - login() - [20250609_020158_424244] Calling verify_user function...
+2025-06-09 02:01:58 [DEBUG] auth_debug:570 - login() - [20250609_020158_424244] Verification start time: 2025-06-09 02:01:58.428277
+2025-06-09 02:01:58 [DEBUG] auth_debug:577 - login() - [20250609_020158_424244] Verification end time: 2025-06-09 02:01:58.430576
+2025-06-09 02:01:58 [DEBUG] auth_debug:578 - login() - [20250609_020158_424244] Verification duration: 0.002 seconds
+2025-06-09 02:01:58 [INFO] auth_debug:579 - login() - [20250609_020158_424244] verify_user returned: True
+2025-06-09 02:01:58 [INFO] auth_debug:582 - login() - [20250609_020158_424244] ✅ Verification successful for: 'harshavardhanarra@gmail.com'
+2025-06-09 02:01:58 [DEBUG] auth_debug:585 - login() - [20250609_020158_424244] Checking post-verification state...
+2025-06-09 02:01:58 [INFO] auth_debug:591 - login() - [20250609_020158_424244] ✅ User found in local credentials after verification
+2025-06-09 02:01:58 [DEBUG] auth_debug:593 - login() - [20250609_020158_424244] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-09 02:01:58 [DEBUG] auth_debug:602 - login() - [20250609_020158_424244] Creating User object for: 'harshavardhanarra@gmail.com'
+2025-06-09 02:01:58 [DEBUG] auth_debug:606 - login() - [20250609_020158_424244] User object created: <__main__.create_app.<locals>.User object at 0x7f90a5cb1460>
+2025-06-09 02:01:58 [DEBUG] auth_debug:607 - login() - [20250609_020158_424244] User ID: harshavardhanarra@gmail.com
+2025-06-09 02:01:58 [DEBUG] auth_debug:609 - login() - [20250609_020158_424244] Calling login_user...
+2025-06-09 02:01:58 [INFO] auth_debug:611 - login() - [20250609_020158_424244] ✅ login_user completed successfully
+2025-06-09 02:01:58 [DEBUG] auth_debug:614 - login() - [20250609_020158_424244] Clearing existing flash messages
+2025-06-09 02:01:58 [DEBUG] auth_debug:618 - login() - [20250609_020158_424244] Setting success flash message
+2025-06-09 02:01:58 [INFO] auth_debug:622 - login() - [20250609_020158_424244] ✅ LOGIN SUCCESSFUL for: 'harshavardhanarra@gmail.com'
+2025-06-09 02:01:58 [DEBUG] auth_debug:625 - login() - [20250609_020158_424244] Redirecting to home page
+2025-06-09 02:01:58 [INFO] auth_debug:659 - login() - 🏁🏁🏁 LOGIN SESSION 20250609_020158_424244 COMPLETED 🏁🏁🏁
