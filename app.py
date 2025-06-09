@@ -672,6 +672,24 @@ def create_app():
         except Exception as e:
             return f"Error reading auth debug logs: {e}"
 
+
+    @app.route("/download-auth-logs")
+    def download_auth_logs():
+        """Download the auth debug log file"""
+        try:
+            log_path = os.path.join(PROJECT_ROOT, "auth_debug.log")
+            if os.path.exists(log_path):
+                return send_file(
+                    log_path, 
+                    mimetype="text/plain",
+                    as_attachment=True,
+                    download_name="auth_debug.log"
+                )
+            else:
+                return jsonify({"error": "Auth debug log file not found"}), 404
+        except Exception as e:
+            return jsonify({"error": f"Failed to download auth logs: {str(e)}"}), 500
+
     @app.route("/delete_account", methods=["POST"])
     @login_required
     def delete_account():
