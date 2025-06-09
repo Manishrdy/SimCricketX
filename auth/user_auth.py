@@ -1285,6 +1285,7 @@ def write_user_to_google_sheets(email: str, password: str, user_data: dict):
     
     logger.info("Exiting write_user_to_google_sheets function")
 
+
 def verify_user_from_google_sheets(email: str, password: str) -> bool:
     logger.info("Entering verify_user_from_google_sheets function")
     logger.debug(f"Verifying user from Google Sheets: {email}")
@@ -1341,41 +1342,96 @@ def verify_user_from_google_sheets(email: str, password: str) -> bool:
             headers = list(data[0].keys())
             logger.debug(f"Sheet headers: {headers}")
 
-        logger.debug(f"Searching for user: {email}")
+        # 🚨 NEW: Find ALL matching records and get the latest one
+        logger.debug(f"Searching for all records with email: {email}")
+        matching_records = []
+        
         for i, row in enumerate(data):
             logger.debug(f"Checking row {i+1}: {row.get('email', 'NO_EMAIL_FIELD')}")
             
             if row.get("email") == email:
-                logger.debug(f"User found in row {i+1}")
-                stored_password = row.get("password")
+                logger.debug(f"Found matching record in row {i+1}")
+                matching_records.append({
+                    'row_number': i+1,
+                    'data': row
+                })
+        
+        if not matching_records:
+            logger.warning(f"Email not found in Google Sheets: {email}")
+            print("❌ Email not found in Google Sheets.")
+            return False
+        
+        logger.info(f"Found {len(matching_records)} matching records for email: {email}")
+        
+        # If multiple records, get the latest one based on login_time
+        if len(matching_records) > 1:
+            logger.info(f"Multiple records found for {email}, selecting latest...")
+            
+            # Sort by login_time (latest first)
+            try:
+                # Try to parse login_time as datetime for proper sorting
+                from datetime import datetime
                 
-                if stored_password is None:
-                    logger.error(f"No password field found for user: {email}")
-                    print("❌ Password field not found in Google Sheets.")
-                    return False
+                def parse_login_time(record):
+                    try:
+                        login_time_str = record['data'].get('login_time', '')
+                        if login_time_str:
+                            # Try ISO format first
+                            return datetime.fromisoformat(login_time_str.replace('Z', '+00:00'))
+                        else:
+                            return datetime.min  # Default to earliest time if no login_time
+                    except:
+                        # If parsing fails, use row number as fallback (higher = later)
+                        return datetime.fromtimestamp(record['row_number'])
                 
-                logger.debug("Comparing passwords")
-                if stored_password == password:  # Plain match; hash if needed
-                    logger.info(f"Password match successful for user: {email}")
-                    print(f"✅ Google Sheets login successful for: {email}")
-                    return True
-                else:
-                    logger.warning(f"Password mismatch for user: {email}")
-                    logger.debug(f"Expected length: {len(password)}, Got length: {len(stored_password)}")
-                    print("❌ Password mismatch in Google Sheets.")
-                    return False
-
-        logger.warning(f"Email not found in Google Sheets: {email}")
-        print("❌ Email not found in Google Sheets.")
-        return False
+                matching_records.sort(key=parse_login_time, reverse=True)
+                logger.debug(f"Sorted {len(matching_records)} records by login_time")
+                
+            except Exception as sort_error:
+                logger.warning(f"Could not sort by login_time: {sort_error}")
+                # Fallback: use the last row (highest row number)
+                matching_records.sort(key=lambda x: x['row_number'], reverse=True)
+                logger.debug(f"Fallback: sorted by row number (latest = row {matching_records[0]['row_number']})")
+        
+        # Use the latest/first record
+        selected_record = matching_records[0]
+        row_data = selected_record['data']
+        row_number = selected_record['row_number']
+        
+        logger.info(f"Using record from row {row_number} for verification")
+        if len(matching_records) > 1:
+            logger.info(f"Selected latest record from {len(matching_records)} duplicates")
+        
+        # Verify password
+        stored_password = row_data.get("password")
+        
+        if stored_password is None:
+            logger.error(f"No password field found for user: {email}")
+            print("❌ Password field not found in Google Sheets.")
+            return False
+        
+        logger.debug("Comparing passwords")
+        if stored_password == password:  # Plain match; hash if needed
+            logger.info(f"Password match successful for user: {email} (row {row_number})")
+            print(f"✅ Google Sheets login successful for: {email}")
+            
+            # Log which record was used
+            login_time = row_data.get('login_time', 'Unknown')
+            logger.info(f"Used record with login_time: {login_time}")
+            
+            return True
+        else:
+            logger.warning(f"Password mismatch for user: {email}")
+            logger.debug(f"Expected length: {len(password)}, Got length: {len(stored_password)}")
+            print("❌ Password mismatch in Google Sheets.")
+            return False
 
     except Exception as e:
         logger.error(f"Google Sheets access error for {email}: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         print(f"[!] Google Sheets access error: {e}")
         return False
-    
-    logger.info("Exiting verify_user_from_google_sheets function")
+
 
 def delete_user_from_google_sheets(email: str) -> bool:
     """
@@ -1523,11 +1579,11 @@ def verify_user(email: str, password: str) -> bool:
 
         logger.debug(f"User not found in local credentials: {email}")
         print("ℹ️ User not found locally. Trying Google Sheets...")
-        # logger.info("Falling back to Google Sheets verification")
+        logger.info("Falling back to Google Sheets verification")
         
-        # result = verify_user_from_google_sheets(email, password)
-        # logger.debug(f"Google Sheets verification result: {result}")
-        # return result
+        result = verify_user_from_google_sheets(email, password)
+        logger.debug(f"Google Sheets verification result: {result}")
+        return result
         
     except Exception as e:
         logger.error(f"Unexpected error in verify_user for {email}: {e}")
