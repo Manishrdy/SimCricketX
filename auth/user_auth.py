@@ -27,6 +27,15 @@ logger.setLevel(logging.DEBUG)
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 AUTH_DIR = os.path.join(PROJECT_ROOT, "auth")
+CREDENTIALS_FILE = os.path.join(AUTH_DIR, "credentials.json")
+
+print(f"[DEBUG] __file__ = {__file__}")
+print(f"[DEBUG] os.path.dirname(__file__) = {os.path.dirname(__file__)}")
+print(f"[DEBUG] PROJECT_ROOT = {PROJECT_ROOT}")
+print(f"[DEBUG] AUTH_DIR = {AUTH_DIR}")
+print(f"[DEBUG] CREDENTIALS_FILE = {CREDENTIALS_FILE}")
+print(f"[DEBUG] File exists = {os.path.exists(CREDENTIALS_FILE)}")
+print(f"[DEBUG] Current working directory = {os.getcwd()}")
 
 # Add these imports at the top of user_auth.py
 try:
@@ -651,33 +660,27 @@ def ensure_auth_directory():
 
 # Avoid adding multiple handlers if already configured
 if not logger.handlers:
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
+    # Console handler with UTF-8 encoding
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    
+    # File handler with UTF-8 encoding
+    file_handler = logging.FileHandler('user_auth.log', encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+    
+    # Formatter
     formatter = logging.Formatter(
         '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+    
+    # Add both handlers
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)  # ← This creates the log file!
 
-# Log module initialization
-logger.info("Initializing user_auth module")
-logger.debug(f"Python version: {sys.version}")
-logger.debug(f"Platform: {platform.platform()}")
-logger.debug(f"Current working directory: {os.getcwd()}")
-
-print(f"[DEBUG] Checking existence of /app/auth/credentials.json: {os.path.exists('/app/auth/credentials.json')}")
-logger.debug(f"Checking existence of /app/auth/credentials.json: {os.path.exists('/app/auth/credentials.json')}")
-print(f"[DEBUG] Checking existence of /app/auth/encryption.key: {os.path.exists('/app/auth/encryption.key')}")
-logger.debug(f"Checking existence of /app/auth/encryption.key: {os.path.exists('/app/auth/encryption.key')}")
-
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-logger.debug(f"PROJECT_ROOT determined as: {PROJECT_ROOT}")
-AUTH_DIR = os.path.join(PROJECT_ROOT, "auth")
-logger.debug(f"AUTH_DIR determined as: {AUTH_DIR}")
-
-CREDENTIALS_FILE = os.path.join(AUTH_DIR, "credentials.json")
-logger.debug(f"CREDENTIALS_FILE path: {CREDENTIALS_FILE}")
 KEY_FILE = os.path.join(AUTH_DIR, "encryption.key")
 logger.debug(f"KEY_FILE path: {KEY_FILE}")
 
