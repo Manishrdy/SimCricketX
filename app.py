@@ -37,6 +37,16 @@ from flask import send_file
 from flask import Flask, request, jsonify, send_file
 import time
 import threading
+import logging
+import sys
+import traceback
+
+# Add this import for system monitoring
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 
 
 MATCH_INSTANCES = {}
@@ -47,6 +57,113 @@ PROD_MAX_AGE = 7 * 24 * 3600
 # Make sure PROJECT_ROOT is defined near the top of app.py:
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 CREDENTIALS_FILE = 'auth/credentials.json'
+
+# ===== AUTHENTICATION DEBUG LOGGER SETUP =====
+def setup_auth_debug_logger():
+    """
+    Create a dedicated logger for authentication debugging.
+    Logs to 'auth_debug.log' in the root folder with extensive detail.
+    """
+    auth_logger = logging.getLogger('auth_debug')
+    auth_logger.setLevel(logging.DEBUG)
+    
+    # Prevent duplicate handlers
+    if auth_logger.handlers:
+        return auth_logger
+    
+    # Create file handler for auth debug logs
+    log_path = os.path.join(PROJECT_ROOT, "auth_debug.log")
+    handler = RotatingFileHandler(
+        log_path, 
+        maxBytes=50*1024*1024,  # 50MB
+        backupCount=10
+    )
+    handler.setLevel(logging.DEBUG)
+    
+    # Create detailed formatter
+    formatter = logging.Formatter(
+        '%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(funcName)s() - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    handler.setFormatter(formatter)
+    
+    # Add handler to logger
+    auth_logger.addHandler(handler)
+    
+    # Also log to console for immediate feedback
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter(
+        '[AUTH-DEBUG] %(asctime)s - %(message)s',
+        datefmt='%H:%M:%S'
+    ))
+    auth_logger.addHandler(console_handler)
+    
+    return auth_logger
+
+# Initialize the auth debug logger
+auth_debug_logger = setup_auth_debug_logger()
+
+
+# Helper function to log request details
+def log_request_details(request, auth_debug_logger, operation):
+    """Log comprehensive request details for debugging"""
+    try:
+        auth_debug_logger.info(f"=== {operation.upper()} REQUEST STARTED ===")
+        auth_debug_logger.debug(f"Request method: {request.method}")
+        auth_debug_logger.debug(f"Request URL: {request.url}")
+        auth_debug_logger.debug(f"Request endpoint: {request.endpoint}")
+        auth_debug_logger.debug(f"Request remote_addr: {request.remote_addr}")
+        auth_debug_logger.debug(f"Request user_agent: {request.headers.get('User-Agent', 'Unknown')}")
+        auth_debug_logger.debug(f"Request referrer: {request.headers.get('Referer', 'None')}")
+        
+        # Log form data (excluding sensitive info)
+        if request.method == "POST":
+            form_keys = list(request.form.keys()) if request.form else []
+            auth_debug_logger.debug(f"Form fields present: {form_keys}")
+            
+        # Log session info
+        auth_debug_logger.debug(f"Session keys: {list(session.keys())}")
+        auth_debug_logger.debug(f"Current user authenticated: {current_user.is_authenticated if hasattr(current_user, 'is_authenticated') else 'Unknown'}")
+        
+    except Exception as e:
+        auth_debug_logger.error(f"Error logging request details: {e}")
+
+
+# Helper function to log system state
+def log_system_state(auth_debug_logger, operation):
+    """Log current system state for debugging"""
+    try:
+        auth_debug_logger.info(f"=== {operation.upper()} SYSTEM STATE ===")
+        
+        # Check file system
+        auth_debug_logger.debug(f"PROJECT_ROOT: {PROJECT_ROOT}")
+        auth_debug_logger.debug(f"CREDENTIALS_FILE path: {CREDENTIALS_FILE}")
+        auth_debug_logger.debug(f"Credentials file exists: {os.path.exists(CREDENTIALS_FILE)}")
+        
+        if os.path.exists(CREDENTIALS_FILE):
+            file_size = os.path.getsize(CREDENTIALS_FILE)
+            auth_debug_logger.debug(f"Credentials file size: {file_size} bytes")
+            
+            # Check file permissions
+            auth_debug_logger.debug(f"Credentials file readable: {os.access(CREDENTIALS_FILE, os.R_OK)}")
+            auth_debug_logger.debug(f"Credentials file writable: {os.access(CREDENTIALS_FILE, os.W_OK)}")
+        
+        # Check auth directory
+        auth_dir = os.path.join(PROJECT_ROOT, "auth")
+        auth_debug_logger.debug(f"Auth directory exists: {os.path.exists(auth_dir)}")
+        auth_debug_logger.debug(f"Auth directory writable: {os.access(auth_dir, os.W_OK) if os.path.exists(auth_dir) else 'N/A'}")
+        
+        # Memory info
+        import psutil
+        if psutil:
+            memory = psutil.virtual_memory()
+            auth_debug_logger.debug(f"System memory usage: {memory.percent}%")
+            auth_debug_logger.debug(f"Available memory: {memory.available / (1024*1024):.1f} MB")
+        
+    except Exception as e:
+        auth_debug_logger.error(f"Error logging system state: {e}")
+
 
 def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
     """
@@ -229,35 +346,331 @@ def create_app():
 
     @app.route("/register", methods=["GET", "POST"])
     def register():
-        if request.method == "POST":
-            email = request.form["email"].strip().lower()
-            password = request.form["password"]
-            app.logger.info(f"Registration attempt for {email}")
-            # Registration route
-            if register_user(email, password):
-                flash("✅ Registration successful! Please log in.", "success")
-                return redirect(url_for("login"))
-            else:
-                flash("❌ User already exists!", "danger")
-        return render_template("register.html")
+        """
+        Enhanced registration route with comprehensive debugging
+        """
+        global auth_debug_logger
+        
+        # Initialize debug session
+        debug_session_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        auth_debug_logger.info(f"🔥🔥🔥 REGISTRATION SESSION {debug_session_id} STARTED 🔥🔥🔥")
+        
+        try:
+            # Log request details
+            log_request_details(request, auth_debug_logger, "registration")
+            log_system_state(auth_debug_logger, "registration")
+            
+            if request.method == "GET":
+                auth_debug_logger.info(f"[{debug_session_id}] GET request - serving registration form")
+                auth_debug_logger.debug(f"[{debug_session_id}] Rendering registration template")
+                return render_template("register.html")
+            
+            # POST request processing
+            auth_debug_logger.info(f"[{debug_session_id}] POST request - processing registration")
+            
+            # Extract form data with extensive validation
+            auth_debug_logger.debug(f"[{debug_session_id}] Extracting form data...")
+            
+            try:
+                raw_email = request.form.get("email", "")
+                raw_password = request.form.get("password", "")
+                
+                auth_debug_logger.debug(f"[{debug_session_id}] Raw email extracted: '{raw_email}' (type: {type(raw_email)}, length: {len(raw_email) if raw_email else 0})")
+                auth_debug_logger.debug(f"[{debug_session_id}] Raw password extracted: [REDACTED] (type: {type(raw_password)}, length: {len(raw_password) if raw_password else 0})")
+                
+                # Process email
+                if not raw_email:
+                    auth_debug_logger.error(f"[{debug_session_id}] ❌ Email field is empty or missing")
+                    flash("❌ Email is required!", "danger")
+                    return render_template("register.html")
+                
+                email = raw_email.strip().lower()
+                auth_debug_logger.debug(f"[{debug_session_id}] Processed email: '{email}' (length: {len(email)})")
+                
+                # Validate email format
+                if "@" not in email or "." not in email:
+                    auth_debug_logger.error(f"[{debug_session_id}] ❌ Invalid email format: '{email}'")
+                    flash("❌ Invalid email format!", "danger")
+                    return render_template("register.html")
+                
+                # Process password
+                if not raw_password:
+                    auth_debug_logger.error(f"[{debug_session_id}] ❌ Password field is empty or missing")
+                    flash("❌ Password is required!", "danger")
+                    return render_template("register.html")
+                
+                password = raw_password
+                auth_debug_logger.debug(f"[{debug_session_id}] Password validation passed (length: {len(password)})")
+                
+                # Log before registration attempt
+                auth_debug_logger.info(f"[{debug_session_id}] 🚀 Attempting user registration for: '{email}'")
+                auth_debug_logger.debug(f"[{debug_session_id}] Calling register_user function...")
+                
+                # Call register_user with timing
+                registration_start = datetime.now()
+                auth_debug_logger.debug(f"[{debug_session_id}] Registration start time: {registration_start}")
+                
+                try:
+                    registration_result = register_user(email, password)
+                    registration_end = datetime.now()
+                    registration_duration = (registration_end - registration_start).total_seconds()
+                    
+                    auth_debug_logger.debug(f"[{debug_session_id}] Registration end time: {registration_end}")
+                    auth_debug_logger.debug(f"[{debug_session_id}] Registration duration: {registration_duration:.3f} seconds")
+                    auth_debug_logger.info(f"[{debug_session_id}] register_user returned: {registration_result}")
+                    
+                    if registration_result:
+                        auth_debug_logger.info(f"[{debug_session_id}] ✅ Registration successful for: '{email}'")
+                        
+                        # Log post-registration state
+                        auth_debug_logger.debug(f"[{debug_session_id}] Checking post-registration state...")
+                        
+                        # Check if user appears in credentials now
+                        try:
+                            from auth.user_auth import load_credentials
+                            post_reg_creds = load_credentials()
+                            if email in post_reg_creds:
+                                auth_debug_logger.info(f"[{debug_session_id}] ✅ User found in local credentials after registration")
+                                user_data_keys = list(post_reg_creds[email].keys())
+                                auth_debug_logger.debug(f"[{debug_session_id}] User data fields: {user_data_keys}")
+                            else:
+                                auth_debug_logger.warning(f"[{debug_session_id}] ⚠️ User NOT found in local credentials after registration")
+                                auth_debug_logger.debug(f"[{debug_session_id}] Available users in credentials: {list(post_reg_creds.keys())}")
+                        except Exception as cred_check_error:
+                            auth_debug_logger.error(f"[{debug_session_id}] ❌ Error checking post-registration credentials: {cred_check_error}")
+                            auth_debug_logger.debug(f"[{debug_session_id}] Credentials check traceback: {traceback.format_exc()}")
+                        
+                        # Flash success message and redirect
+                        auth_debug_logger.debug(f"[{debug_session_id}] Setting success flash message")
+                        flash("✅ Registration successful! Please log in.", "success")
+                        
+                        auth_debug_logger.debug(f"[{debug_session_id}] Redirecting to login page")
+                        return redirect(url_for("login"))
+                        
+                    else:
+                        auth_debug_logger.warning(f"[{debug_session_id}] ⚠️ Registration failed for: '{email}' - User already exists")
+                        auth_debug_logger.debug(f"[{debug_session_id}] Setting error flash message")
+                        flash("❌ User already exists!", "danger")
+                        
+                except Exception as reg_func_error:
+                    auth_debug_logger.error(f"[{debug_session_id}] ❌ Exception in register_user function: {reg_func_error}")
+                    auth_debug_logger.error(f"[{debug_session_id}] Registration function traceback: {traceback.format_exc()}")
+                    flash("❌ Registration failed due to system error!", "danger")
+                    
+            except Exception as form_error:
+                auth_debug_logger.error(f"[{debug_session_id}] ❌ Error processing form data: {form_error}")
+                auth_debug_logger.error(f"[{debug_session_id}] Form processing traceback: {traceback.format_exc()}")
+                flash("❌ Error processing registration form!", "danger")
+            
+            # Return to registration form
+            auth_debug_logger.debug(f"[{debug_session_id}] Returning to registration template")
+            return render_template("register.html")
+            
+        except Exception as route_error:
+            auth_debug_logger.critical(f"[{debug_session_id}] 💥 CRITICAL ERROR in registration route: {route_error}")
+            auth_debug_logger.critical(f"[{debug_session_id}] Route error traceback: {traceback.format_exc()}")
+            flash("❌ System error during registration!", "danger")
+            return render_template("register.html")
+            
+        finally:
+            auth_debug_logger.info(f"🏁🏁🏁 REGISTRATION SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
-        if request.method == "POST":
-            email = request.form["email"].strip().lower()
-            password = request.form["password"]
-            app.logger.info(f"Login attempt for {email}")
+        """
+        Enhanced login route with comprehensive debugging
+        """
+        global auth_debug_logger
+        
+        # Initialize debug session
+        debug_session_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        auth_debug_logger.info(f"🔥🔥🔥 LOGIN SESSION {debug_session_id} STARTED 🔥🔥🔥")
+        
+        try:
+            # Log request details
+            log_request_details(request, auth_debug_logger, "login")
+            log_system_state(auth_debug_logger, "login")
             
-            if verify_user(email, password):
-                app.logger.info("Inside verify_user")
-                user = User(email)
-                login_user(user)
-                session.pop('_flashes', None)  # 🧼 clear any prior flashes
-                flash("✅ Logged in successfully!", "success")
-                return redirect(url_for("home"))
+            if request.method == "GET":
+                auth_debug_logger.info(f"[{debug_session_id}] GET request - serving login form")
+                auth_debug_logger.debug(f"[{debug_session_id}] Checking current user state...")
+                
+                if current_user.is_authenticated:
+                    auth_debug_logger.info(f"[{debug_session_id}] User already authenticated: {current_user.id}")
+                    auth_debug_logger.debug(f"[{debug_session_id}] Redirecting authenticated user to home")
+                    return redirect(url_for("home"))
+                
+                auth_debug_logger.debug(f"[{debug_session_id}] Rendering login template")
+                return render_template("login.html")
+            
+            # POST request processing
+            auth_debug_logger.info(f"[{debug_session_id}] POST request - processing login")
+            
+            # Extract form data with extensive validation
+            auth_debug_logger.debug(f"[{debug_session_id}] Extracting form data...")
+            
+            try:
+                raw_email = request.form.get("email", "")
+                raw_password = request.form.get("password", "")
+                
+                auth_debug_logger.debug(f"[{debug_session_id}] Raw email extracted: '{raw_email}' (type: {type(raw_email)}, length: {len(raw_email) if raw_email else 0})")
+                auth_debug_logger.debug(f"[{debug_session_id}] Raw password extracted: [REDACTED] (type: {type(raw_password)}, length: {len(raw_password) if raw_password else 0})")
+                
+                # Process email
+                if not raw_email:
+                    auth_debug_logger.error(f"[{debug_session_id}] ❌ Email field is empty or missing")
+                    flash("❌ Email is required!", "danger")
+                    return render_template("login.html")
+                
+                email = raw_email.strip().lower()
+                auth_debug_logger.debug(f"[{debug_session_id}] Processed email: '{email}' (length: {len(email)})")
+                
+                # Validate email format
+                if "@" not in email or "." not in email:
+                    auth_debug_logger.error(f"[{debug_session_id}] ❌ Invalid email format: '{email}'")
+                    flash("❌ Invalid email format!", "danger")
+                    return render_template("login.html")
+                
+                # Process password
+                if not raw_password:
+                    auth_debug_logger.error(f"[{debug_session_id}] ❌ Password field is empty or missing")
+                    flash("❌ Password is required!", "danger")
+                    return render_template("login.html")
+                
+                password = raw_password
+                auth_debug_logger.debug(f"[{debug_session_id}] Password validation passed (length: {len(password)})")
+                
+                # Check local credentials before verification
+                auth_debug_logger.debug(f"[{debug_session_id}] Pre-verification credentials check...")
+                try:
+                    from auth.user_auth import load_credentials
+                    pre_verify_creds = load_credentials()
+                    auth_debug_logger.debug(f"[{debug_session_id}] Total users in local credentials: {len(pre_verify_creds)}")
+                    auth_debug_logger.debug(f"[{debug_session_id}] Users in credentials: {list(pre_verify_creds.keys())}")
+                    
+                    if email in pre_verify_creds:
+                        auth_debug_logger.info(f"[{debug_session_id}] ✅ User found in local credentials before verification")
+                        user_data_keys = list(pre_verify_creds[email].keys())
+                        auth_debug_logger.debug(f"[{debug_session_id}] User data fields: {user_data_keys}")
+                    else:
+                        auth_debug_logger.warning(f"[{debug_session_id}] ⚠️ User NOT found in local credentials before verification")
+                        auth_debug_logger.info(f"[{debug_session_id}] Will attempt Google Sheets fallback during verification")
+                        
+                except Exception as pre_cred_error:
+                    auth_debug_logger.error(f"[{debug_session_id}] ❌ Error loading pre-verification credentials: {pre_cred_error}")
+                    auth_debug_logger.debug(f"[{debug_session_id}] Pre-verification credentials error traceback: {traceback.format_exc()}")
+                
+                # Log before verification attempt
+                auth_debug_logger.info(f"[{debug_session_id}] 🚀 Attempting user verification for: '{email}'")
+                auth_debug_logger.debug(f"[{debug_session_id}] Calling verify_user function...")
+                
+                # Call verify_user with timing
+                verification_start = datetime.now()
+                auth_debug_logger.debug(f"[{debug_session_id}] Verification start time: {verification_start}")
+                
+                try:
+                    verification_result = verify_user(email, password)
+                    verification_end = datetime.now()
+                    verification_duration = (verification_end - verification_start).total_seconds()
+                    
+                    auth_debug_logger.debug(f"[{debug_session_id}] Verification end time: {verification_end}")
+                    auth_debug_logger.debug(f"[{debug_session_id}] Verification duration: {verification_duration:.3f} seconds")
+                    auth_debug_logger.info(f"[{debug_session_id}] verify_user returned: {verification_result}")
+                    
+                    if verification_result:
+                        auth_debug_logger.info(f"[{debug_session_id}] ✅ Verification successful for: '{email}'")
+                        
+                        # Log post-verification state
+                        auth_debug_logger.debug(f"[{debug_session_id}] Checking post-verification state...")
+                        
+                        # Check if user appears in credentials now (in case of Google Sheets sync)
+                        try:
+                            post_verify_creds = load_credentials()
+                            if email in post_verify_creds:
+                                auth_debug_logger.info(f"[{debug_session_id}] ✅ User found in local credentials after verification")
+                                user_data_keys = list(post_verify_creds[email].keys())
+                                auth_debug_logger.debug(f"[{debug_session_id}] User data fields: {user_data_keys}")
+                            else:
+                                auth_debug_logger.warning(f"[{debug_session_id}] ⚠️ User still NOT found in local credentials after verification")
+                                auth_debug_logger.debug(f"[{debug_session_id}] Available users in credentials: {list(post_verify_creds.keys())}")
+                        except Exception as post_cred_error:
+                            auth_debug_logger.error(f"[{debug_session_id}] ❌ Error checking post-verification credentials: {post_cred_error}")
+                            auth_debug_logger.debug(f"[{debug_session_id}] Post-verification credentials check traceback: {traceback.format_exc()}")
+                        
+                        # Create user object and login
+                        auth_debug_logger.debug(f"[{debug_session_id}] Creating User object for: '{email}'")
+                        try:
+                            # Use the User class that's defined in the create_app() scope
+                            user = User(email)
+                            auth_debug_logger.debug(f"[{debug_session_id}] User object created: {user}")
+                            auth_debug_logger.debug(f"[{debug_session_id}] User ID: {user.id}")
+                            
+                            auth_debug_logger.debug(f"[{debug_session_id}] Calling login_user...")
+                            login_user(user)
+                            auth_debug_logger.info(f"[{debug_session_id}] ✅ login_user completed successfully")
+                            
+                            # Clear any existing flash messages
+                            auth_debug_logger.debug(f"[{debug_session_id}] Clearing existing flash messages")
+                            session.pop('_flashes', None)
+                            
+                            # Set success flash message
+                            auth_debug_logger.debug(f"[{debug_session_id}] Setting success flash message")
+                            flash("✅ Logged in successfully!", "success")
+                            
+                            # Log successful login
+                            auth_debug_logger.info(f"[{debug_session_id}] ✅ LOGIN SUCCESSFUL for: '{email}'")
+                            app.logger.info(f"Successful login for {email}")
+                            
+                            auth_debug_logger.debug(f"[{debug_session_id}] Redirecting to home page")
+                            return redirect(url_for("home"))
+                            
+                        except Exception as login_obj_error:
+                            auth_debug_logger.error(f"[{debug_session_id}] ❌ Error creating user object or logging in: {login_obj_error}")
+                            auth_debug_logger.error(f"[{debug_session_id}] Login object error traceback: {traceback.format_exc()}")
+                            flash("❌ Login system error!", "danger")
+                        
+                    else:
+                        auth_debug_logger.warning(f"[{debug_session_id}] ⚠️ Verification failed for: '{email}'")
+                        auth_debug_logger.debug(f"[{debug_session_id}] Setting error flash message")
+                        flash("❌ Invalid email or password.", "danger")
+                        
+                except Exception as verify_func_error:
+                    auth_debug_logger.error(f"[{debug_session_id}] ❌ Exception in verify_user function: {verify_func_error}")
+                    auth_debug_logger.error(f"[{debug_session_id}] Verification function traceback: {traceback.format_exc()}")
+                    flash("❌ Login failed due to system error!", "danger")
+                    
+            except Exception as form_error:
+                auth_debug_logger.error(f"[{debug_session_id}] ❌ Error processing form data: {form_error}")
+                auth_debug_logger.error(f"[{debug_session_id}] Form processing traceback: {traceback.format_exc()}")
+                flash("❌ Error processing login form!", "danger")
+            
+            # Return to login form
+            auth_debug_logger.debug(f"[{debug_session_id}] Returning to login template")
+            return render_template("login.html")
+            
+        except Exception as route_error:
+            auth_debug_logger.critical(f"[{debug_session_id}] 💥 CRITICAL ERROR in login route: {route_error}")
+            auth_debug_logger.critical(f"[{debug_session_id}] Route error traceback: {traceback.format_exc()}")
+            flash("❌ System error during login!", "danger")
+            return render_template("login.html")
+            
+        finally:
+            auth_debug_logger.info(f"🏁🏁🏁 LOGIN SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+
+    @app.route("/debug-auth-logs")
+    def debug_auth_logs():
+        """Debug route to view recent auth logs"""
+        try:
+            log_path = os.path.join(PROJECT_ROOT, "auth_debug.log")
+            if os.path.exists(log_path):
+                with open(log_path, 'r') as f:
+                    logs = f.read()
+                return f"<pre>{logs}</pre>"
             else:
-                flash("❌ Invalid email or password.", "danger")
-        return render_template("login.html")
+                return "Auth debug log file not found"
+        except Exception as e:
+            return f"Error reading auth debug logs: {e}"
 
     @app.route("/delete_account", methods=["POST"])
     @login_required
