@@ -1684,7 +1684,8 @@ class Match:
             pitch=self.pitch,
             streak={},
             over_number=self.current_over,
-            batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"]
+            batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"],
+            innings=self.innings
         )
 
         # 🐛 ENHANCED DEBUG - Show ALL outcome details

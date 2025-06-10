@@ -7,3 +7,7 @@ google-auth>=2.0.0
 tabulate>=0.8.9
 psutil
 beautifulsoup4
+gunicorn
+pyinstaller  # Tool for bundling
+waitress     # Windows-compatible production server
+cffi

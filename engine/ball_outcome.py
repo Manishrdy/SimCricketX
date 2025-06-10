@@ -537,7 +537,8 @@ def calculate_outcome(
     pitch: str,
     streak: dict,
     over_number: int,
-    batter_runs: int
+    batter_runs: int,
+    innings: int = 1
 ) -> dict:
     """
     Determines the outcome of a single delivery.
@@ -615,9 +616,9 @@ def calculate_outcome(
             # Boundaries (4, 6) boost
             if outcome in ("Four", "Six"):
                 if pitch in ("Flat", "Dead"):
-                    boundary_boost = 1.5
-                elif pitch == "Hard":
                     boundary_boost = 1.3
+                elif pitch == "Hard":
+                    boundary_boost = 1.2
                 else:  # Green or Dry
                     boundary_boost = 1.1
                 print(f"  DeathOver: Boosting boundary ({outcome}) on {pitch} by factor {boundary_boost}")
@@ -628,6 +629,20 @@ def calculate_outcome(
                 wicket_boost = 1.2
                 print(f"  DeathOver: Boosting wicket on {pitch} by factor {wicket_boost}")
                 weight *= wicket_boost
+
+            # 4) Second innings special boosts (last 4 overs)
+            if innings == 2:
+                # Scoring boost by 15% for all run-scoring outcomes
+                if outcome in ("Single", "Double", "Three", "Four", "Six"):
+                    second_innings_scoring_boost = 1.15
+                    print(f"  SecondInnings: Boosting scoring ({outcome}) by factor {second_innings_scoring_boost}")
+                    weight *= second_innings_scoring_boost
+                
+                # Wicket boost by 3% additional
+                if outcome == "Wicket":
+                    second_innings_wicket_boost = 1.03
+                    print(f"  SecondInnings: Additional wicket boost by factor {second_innings_wicket_boost}")
+                    weight *= second_innings_wicket_boost
 
         # Ensure no negative weights
         weight = max(weight, 0.0)

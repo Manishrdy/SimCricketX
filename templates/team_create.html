@@ -562,6 +562,61 @@
     const rand = arr => arr[Math.floor(Math.random() * arr.length)];
     const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
+    // Validation function
+    function validateForm() {
+      const playerCount = container.children.length;
+      const cards = [...document.querySelectorAll('.player-card')];
+
+      // Check player count (15-18)
+      if (playerCount < 15 || playerCount > 18) return false;
+
+      // Check all players have required fields
+      for (let card of cards) {
+        const name = card.querySelector('[name=player_name]').value.trim();
+        const role = card.querySelector('[name=player_role]').value;
+        const bat = card.querySelector('[name=batting_rating]').value;
+        const bowl = card.querySelector('[name=bowling_rating]').value;
+        const field = card.querySelector('[name=fielding_rating]').value;
+        const bhand = card.querySelector('[name=batting_hand]').value;
+
+        if (!name || !role || !bat || !bowl || !field || !bhand) return false;
+      }
+
+      // Check role requirements
+      const wicketkeepers = cards.filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper');
+      const bowlers = cards.filter(c => ['Bowler', 'All-rounder'].includes(c.querySelector('[name=player_role]').value));
+
+      if (wicketkeepers.length < 1) return false;
+      if (bowlers.length < 6) return false;
+
+      // Check basic team info
+      const teamName = document.getElementById('team_name').value.trim();
+      const shortCode = document.querySelector('[name=short_code]').value.trim();
+      const homeGround = document.querySelector('[name=home_ground]').value.trim();
+      const pitchPref = document.querySelector('[name=pitch_preference]').value;
+
+      if (!teamName || !shortCode || !homeGround || !pitchPref) return false;
+
+      // Check captain and wicketkeeper selection
+      const captain = document.getElementById('select-captain').value;
+      const wk = document.getElementById('select-wk').value;
+
+      if (!captain || !wk) return false;
+
+      return true;
+    }
+
+    function updateSubmitButtons() {
+      const isValid = validateForm();
+      const submitButtons = document.querySelectorAll('button[type="submit"]');
+
+      submitButtons.forEach(btn => {
+        btn.disabled = !isValid;
+        btn.style.opacity = isValid ? '1' : '0.5';
+        btn.style.cursor = isValid ? 'pointer' : 'not-allowed';
+      });
+    }
+
     // Sample data
     const NAMES = ["Virat", "Rohit", "Dhoni", "Smith", "Warner", "Anderson", "Bumrah", "Jadeja", "Stokes", "Root", "Travis Head", "H Klaasen", "M Starc", "S Iyer", "Spidy Pant"];
     const ROLES = ["Batsman", "Bowler", "All-rounder", "Wicketkeeper"];
@@ -570,7 +625,20 @@
 
     // Update count
     function updateCount() {
-      countEl.textContent = `${container.children.length} / ${MAX}`;
+      const current = container.children.length;
+      countEl.textContent = `${current} / ${MAX}`;
+
+      // Add color coding
+      if (current < MIN) {
+        countEl.style.color = '#dc3545'; // red
+      } else if (current <= MAX) {
+        countEl.style.color = '#28a745'; // green
+      } else {
+        countEl.style.color = '#ffc107'; // yellow
+      }
+
+      refreshRoleSelectors();
+      updateSubmitButtons();
     }
 
     function refreshRoleSelectors() {
@@ -598,11 +666,6 @@
     const EDIT_MODE = {{ 'true' if edit else 'false' }};
     const TEAM_DATA = {{ team | tojson | safe if edit else 'null' }};
 
-    function updateCount() {
-      countEl.textContent = `${container.children.length} / ${MAX}`;
-      refreshRoleSelectors();
-    }
-
 
     // Add one player card
     function addPlayer(data) {
@@ -625,6 +688,15 @@
       // Hook into name or role changes → refresh captain/WK selectors
       ["player_name", "player_role"].forEach(field => {
         card.querySelector(`[name=${field}]`).addEventListener('input', refreshRoleSelectors);
+      });
+
+      // Add validation listeners to all player fields
+      ["player_name", "player_role", "batting_rating", "bowling_rating", "fielding_rating", "batting_hand"].forEach(field => {
+        const input = card.querySelector(`[name=${field}]`);
+        if (input) {
+          input.addEventListener('input', updateSubmitButtons);
+          input.addEventListener('change', updateSubmitButtons);
+        }
       });
 
       card.querySelector('.remove').onclick = () => {
@@ -719,6 +791,22 @@
     // update on both input and change events
     colorInput.addEventListener('input', e => swatch.style.background = e.target.value);
     colorInput.addEventListener('change', e => swatch.style.background = e.target.value);
+
+    // Add validation listeners to team info fields
+    ['team_name', 'short_code', 'home_ground', 'pitch_preference'].forEach(name => {
+      const field = document.querySelector(`[name="${name}"], #${name}`);
+      if (field) {
+        field.addEventListener('input', updateSubmitButtons);
+        field.addEventListener('change', updateSubmitButtons);
+      }
+    });
+
+    // Add listeners to captain/wicketkeeper selects
+    document.getElementById('select-captain').addEventListener('change', updateSubmitButtons);
+    document.getElementById('select-wk').addEventListener('change', updateSubmitButtons);
+
+    // Initial validation check
+    updateSubmitButtons();
 
   </script>
 </body>

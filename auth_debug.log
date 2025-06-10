@@ -504,3 +504,352 @@
 2025-06-09 10:20:44 [DEBUG] auth_debug:614 - login() - [20250609_102044_444244] Clearing existing flash messages
 2025-06-09 10:20:44 [DEBUG] auth_debug:618 - login() - [20250609_102044_444244] Setting success flash message
 2025-06-09 10:20:44 [DEBUG] auth_debug:625 - login() - [20250609_102044_444244] Redirecting to home page
+2025-06-09 11:03:08 [INFO] auth_debug:501 - login() - 🔥🔥🔥 LOGIN SESSION 20250609_110308_688870 STARTED 🔥🔥🔥
+2025-06-09 11:03:08 [INFO] auth_debug:119 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-09 11:03:08 [DEBUG] auth_debug:120 - log_request_details() - Request method: GET
+2025-06-09 11:03:08 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://127.0.0.1:7860/login
+2025-06-09 11:03:08 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: login
+2025-06-09 11:03:08 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 127.0.0.1
+2025-06-09 11:03:08 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-09 11:03:08 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: http://127.0.0.1:7860/
+2025-06-09 11:03:08 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_flashes']
+2025-06-09 11:03:08 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-09 11:03:08 [INFO] auth_debug:144 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-09 11:03:08 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\project_x
+2025-06-09 11:03:08 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-09 11:03:08 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-09 11:03:08 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 1162 bytes
+2025-06-09 11:03:08 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-09 11:03:08 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-09 11:03:08 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-09 11:03:08 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-09 11:03:08 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 79.7%
+2025-06-09 11:03:08 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 3221.7 MB
+2025-06-09 11:03:08 [INFO] auth_debug:509 - login() - [20250609_110308_688870] GET request - serving login form
+2025-06-09 11:03:08 [DEBUG] auth_debug:510 - login() - [20250609_110308_688870] Checking current user state...
+2025-06-09 11:03:08 [DEBUG] auth_debug:517 - login() - [20250609_110308_688870] Rendering login template
+2025-06-09 11:03:08 [INFO] auth_debug:672 - login() - 🏁🏁🏁 LOGIN SESSION 20250609_110308_688870 COMPLETED 🏁🏁🏁
+2025-06-09 11:03:18 [INFO] auth_debug:501 - login() - 🔥🔥🔥 LOGIN SESSION 20250609_110318_301220 STARTED 🔥🔥🔥
+2025-06-09 11:03:18 [INFO] auth_debug:119 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-09 11:03:18 [DEBUG] auth_debug:120 - log_request_details() - Request method: POST
+2025-06-09 11:03:18 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://127.0.0.1:7860/login
+2025-06-09 11:03:18 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: login
+2025-06-09 11:03:18 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 127.0.0.1
+2025-06-09 11:03:18 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-09 11:03:18 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: http://127.0.0.1:7860/login
+2025-06-09 11:03:18 [DEBUG] auth_debug:130 - log_request_details() - Form fields present: ['email', 'password']
+2025-06-09 11:03:18 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_fresh']
+2025-06-09 11:03:18 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-09 11:03:18 [INFO] auth_debug:144 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-09 11:03:18 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\project_x
+2025-06-09 11:03:18 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-09 11:03:18 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-09 11:03:18 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 1162 bytes
+2025-06-09 11:03:18 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-09 11:03:18 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-09 11:03:18 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-09 11:03:18 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-09 11:03:18 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 77.6%
+2025-06-09 11:03:18 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 3568.1 MB
+2025-06-09 11:03:18 [INFO] auth_debug:521 - login() - [20250609_110318_301220] POST request - processing login
+2025-06-09 11:03:18 [DEBUG] auth_debug:524 - login() - [20250609_110318_301220] Extracting form data...
+2025-06-09 11:03:18 [DEBUG] auth_debug:530 - login() - [20250609_110318_301220] Raw email extracted: 'admin@projectx.com' (type: <class 'str'>, length: 18)
+2025-06-09 11:03:18 [DEBUG] auth_debug:531 - login() - [20250609_110318_301220] Raw password extracted: [REDACTED] (type: <class 'str'>, length: 7)
+2025-06-09 11:03:18 [DEBUG] auth_debug:540 - login() - [20250609_110318_301220] Processed email: 'admin@projectx.com' (length: 18)
+2025-06-09 11:03:18 [DEBUG] auth_debug:555 - login() - [20250609_110318_301220] Password validation passed (length: 7)
+2025-06-09 11:03:18 [DEBUG] auth_debug:558 - login() - [20250609_110318_301220] Pre-verification credentials check...
+2025-06-09 11:03:18 [DEBUG] auth_debug:562 - login() - [20250609_110318_301220] Total users in local credentials: 2
+2025-06-09 11:03:18 [DEBUG] auth_debug:563 - login() - [20250609_110318_301220] Users in credentials: ['admin@projectx.com', 'taraksaiprathik@gmail.com']
+2025-06-09 11:03:18 [INFO] auth_debug:566 - login() - [20250609_110318_301220] ✅ User found in local credentials before verification
+2025-06-09 11:03:18 [DEBUG] auth_debug:568 - login() - [20250609_110318_301220] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-09 11:03:18 [INFO] auth_debug:578 - login() - [20250609_110318_301220] 🚀 Attempting user verification for: 'admin@projectx.com'
+2025-06-09 11:03:18 [DEBUG] auth_debug:579 - login() - [20250609_110318_301220] Calling verify_user function...
+2025-06-09 11:03:18 [DEBUG] auth_debug:583 - login() - [20250609_110318_301220] Verification start time: 2025-06-09 11:03:18.348318
+2025-06-09 11:03:18 [DEBUG] auth_debug:590 - login() - [20250609_110318_301220] Verification end time: 2025-06-09 11:03:18.380262
+2025-06-09 11:03:18 [DEBUG] auth_debug:591 - login() - [20250609_110318_301220] Verification duration: 0.032 seconds
+2025-06-09 11:03:18 [INFO] auth_debug:592 - login() - [20250609_110318_301220] verify_user returned: True
+2025-06-09 11:03:18 [INFO] auth_debug:595 - login() - [20250609_110318_301220] ✅ Verification successful for: 'admin@projectx.com'
+2025-06-09 11:03:18 [DEBUG] auth_debug:598 - login() - [20250609_110318_301220] Checking post-verification state...
+2025-06-09 11:03:18 [INFO] auth_debug:604 - login() - [20250609_110318_301220] ✅ User found in local credentials after verification
+2025-06-09 11:03:18 [DEBUG] auth_debug:606 - login() - [20250609_110318_301220] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-09 11:03:18 [DEBUG] auth_debug:615 - login() - [20250609_110318_301220] Creating User object for: 'admin@projectx.com'
+2025-06-09 11:03:18 [DEBUG] auth_debug:619 - login() - [20250609_110318_301220] User object created: <__main__.create_app.<locals>.User object at 0x00000211DCD2FDC0>
+2025-06-09 11:03:18 [DEBUG] auth_debug:620 - login() - [20250609_110318_301220] User ID: admin@projectx.com
+2025-06-09 11:03:18 [DEBUG] auth_debug:622 - login() - [20250609_110318_301220] Calling login_user...
+2025-06-09 11:03:18 [INFO] auth_debug:624 - login() - [20250609_110318_301220] ✅ login_user completed successfully
+2025-06-09 11:03:18 [DEBUG] auth_debug:627 - login() - [20250609_110318_301220] Clearing existing flash messages
+2025-06-09 11:03:18 [DEBUG] auth_debug:631 - login() - [20250609_110318_301220] Setting success flash message
+2025-06-09 11:03:18 [INFO] auth_debug:635 - login() - [20250609_110318_301220] ✅ LOGIN SUCCESSFUL for: 'admin@projectx.com'
+2025-06-09 11:03:18 [DEBUG] auth_debug:638 - login() - [20250609_110318_301220] Redirecting to home page
+2025-06-09 11:03:18 [INFO] auth_debug:672 - login() - 🏁🏁🏁 LOGIN SESSION 20250609_110318_301220 COMPLETED 🏁🏁🏁
+2025-06-10 02:49:33 [INFO] auth_debug:501 - login() - 🔥🔥🔥 LOGIN SESSION 20250610_024933_600860 STARTED 🔥🔥🔥
+2025-06-10 02:49:33 [INFO] auth_debug:119 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-10 02:49:33 [DEBUG] auth_debug:120 - log_request_details() - Request method: GET
+2025-06-10 02:49:33 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://192.168.254.131:7860/login?next=/
+2025-06-10 02:49:33 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: login
+2025-06-10 02:49:33 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 192.168.254.131
+2025-06-10 02:49:33 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-10 02:49:33 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: None
+2025-06-10 02:49:33 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_flashes']
+2025-06-10 02:49:33 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-10 02:49:33 [INFO] auth_debug:144 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-10 02:49:33 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\project_x
+2025-06-10 02:49:33 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-10 02:49:33 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-10 02:49:33 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 1162 bytes
+2025-06-10 02:49:33 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-10 02:49:33 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-10 02:49:33 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-10 02:49:33 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-10 02:49:33 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 87.4%
+2025-06-10 02:49:33 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 1998.0 MB
+2025-06-10 02:49:33 [INFO] auth_debug:509 - login() - [20250610_024933_600860] GET request - serving login form
+2025-06-10 02:49:33 [DEBUG] auth_debug:510 - login() - [20250610_024933_600860] Checking current user state...
+2025-06-10 02:49:33 [DEBUG] auth_debug:517 - login() - [20250610_024933_600860] Rendering login template
+2025-06-10 02:49:33 [INFO] auth_debug:672 - login() - 🏁🏁🏁 LOGIN SESSION 20250610_024933_600860 COMPLETED 🏁🏁🏁
+2025-06-10 02:49:38 [INFO] auth_debug:369 - register() - 🔥🔥🔥 REGISTRATION SESSION 20250610_024938_110113 STARTED 🔥🔥🔥
+2025-06-10 02:49:38 [INFO] auth_debug:119 - log_request_details() - === REGISTRATION REQUEST STARTED ===
+2025-06-10 02:49:38 [DEBUG] auth_debug:120 - log_request_details() - Request method: GET
+2025-06-10 02:49:38 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://192.168.254.131:7860/register
+2025-06-10 02:49:38 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: register
+2025-06-10 02:49:38 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 192.168.254.131
+2025-06-10 02:49:38 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-10 02:49:38 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: http://192.168.254.131:7860/login?next=%2F
+2025-06-10 02:49:38 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_fresh']
+2025-06-10 02:49:38 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-10 02:49:38 [INFO] auth_debug:144 - log_system_state() - === REGISTRATION SYSTEM STATE ===
+2025-06-10 02:49:38 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\project_x
+2025-06-10 02:49:38 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-10 02:49:38 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-10 02:49:38 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 1162 bytes
+2025-06-10 02:49:38 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-10 02:49:38 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-10 02:49:38 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-10 02:49:38 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-10 02:49:38 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 87.5%
+2025-06-10 02:49:38 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 1989.9 MB
+2025-06-10 02:49:38 [INFO] auth_debug:377 - register() - [20250610_024938_110113] GET request - serving registration form
+2025-06-10 02:49:38 [DEBUG] auth_debug:378 - register() - [20250610_024938_110113] Rendering registration template
+2025-06-10 02:49:38 [INFO] auth_debug:489 - register() - 🏁🏁🏁 REGISTRATION SESSION 20250610_024938_110113 COMPLETED 🏁🏁🏁
+2025-06-10 02:49:52 [INFO] auth_debug:369 - register() - 🔥🔥🔥 REGISTRATION SESSION 20250610_024952_570023 STARTED 🔥🔥🔥
+2025-06-10 02:49:52 [INFO] auth_debug:119 - log_request_details() - === REGISTRATION REQUEST STARTED ===
+2025-06-10 02:49:52 [DEBUG] auth_debug:120 - log_request_details() - Request method: POST
+2025-06-10 02:49:52 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://192.168.254.131:7860/register
+2025-06-10 02:49:52 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: register
+2025-06-10 02:49:52 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 192.168.254.131
+2025-06-10 02:49:52 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-10 02:49:52 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: http://192.168.254.131:7860/register
+2025-06-10 02:49:52 [DEBUG] auth_debug:130 - log_request_details() - Form fields present: ['email', 'password']
+2025-06-10 02:49:52 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_fresh']
+2025-06-10 02:49:52 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-10 02:49:52 [INFO] auth_debug:144 - log_system_state() - === REGISTRATION SYSTEM STATE ===
+2025-06-10 02:49:52 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\project_x
+2025-06-10 02:49:52 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-10 02:49:52 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-10 02:49:52 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 1162 bytes
+2025-06-10 02:49:52 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-10 02:49:52 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-10 02:49:52 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-10 02:49:52 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-10 02:49:52 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 86.7%
+2025-06-10 02:49:52 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 2112.3 MB
+2025-06-10 02:49:52 [INFO] auth_debug:382 - register() - [20250610_024952_570023] POST request - processing registration
+2025-06-10 02:49:52 [DEBUG] auth_debug:385 - register() - [20250610_024952_570023] Extracting form data...
+2025-06-10 02:49:52 [DEBUG] auth_debug:391 - register() - [20250610_024952_570023] Raw email extracted: 'new_account@pc.net' (type: <class 'str'>, length: 18)
+2025-06-10 02:49:52 [DEBUG] auth_debug:392 - register() - [20250610_024952_570023] Raw password extracted: [REDACTED] (type: <class 'str'>, length: 3)
+2025-06-10 02:49:52 [DEBUG] auth_debug:401 - register() - [20250610_024952_570023] Processed email: 'new_account@pc.net' (length: 18)
+2025-06-10 02:49:52 [DEBUG] auth_debug:416 - register() - [20250610_024952_570023] Password validation passed (length: 3)
+2025-06-10 02:49:52 [INFO] auth_debug:419 - register() - [20250610_024952_570023] 🚀 Attempting user registration for: 'new_account@pc.net'
+2025-06-10 02:49:52 [DEBUG] auth_debug:420 - register() - [20250610_024952_570023] Calling register_user function...
+2025-06-10 02:49:52 [DEBUG] auth_debug:424 - register() - [20250610_024952_570023] Registration start time: 2025-06-10 02:49:52.586727
+2025-06-10 02:49:52 [DEBUG] auth_debug:431 - register() - [20250610_024952_570023] Registration end time: 2025-06-10 02:49:52.914992
+2025-06-10 02:49:52 [DEBUG] auth_debug:432 - register() - [20250610_024952_570023] Registration duration: 0.328 seconds
+2025-06-10 02:49:52 [INFO] auth_debug:433 - register() - [20250610_024952_570023] register_user returned: True
+2025-06-10 02:49:52 [INFO] auth_debug:436 - register() - [20250610_024952_570023] ✅ Registration successful for: 'new_account@pc.net'
+2025-06-10 02:49:52 [DEBUG] auth_debug:439 - register() - [20250610_024952_570023] Checking post-registration state...
+2025-06-10 02:49:52 [INFO] auth_debug:446 - register() - [20250610_024952_570023] ✅ User found in local credentials after registration
+2025-06-10 02:49:52 [DEBUG] auth_debug:448 - register() - [20250610_024952_570023] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-10 02:49:52 [DEBUG] auth_debug:457 - register() - [20250610_024952_570023] Setting success flash message
+2025-06-10 02:49:52 [DEBUG] auth_debug:460 - register() - [20250610_024952_570023] Redirecting to login page
+2025-06-10 02:49:52 [INFO] auth_debug:489 - register() - 🏁🏁🏁 REGISTRATION SESSION 20250610_024952_570023 COMPLETED 🏁🏁🏁
+2025-06-10 02:49:52 [INFO] auth_debug:501 - login() - 🔥🔥🔥 LOGIN SESSION 20250610_024952_930030 STARTED 🔥🔥🔥
+2025-06-10 02:49:52 [INFO] auth_debug:119 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-10 02:49:52 [DEBUG] auth_debug:120 - log_request_details() - Request method: GET
+2025-06-10 02:49:52 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://192.168.254.131:7860/login
+2025-06-10 02:49:52 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: login
+2025-06-10 02:49:52 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 192.168.254.131
+2025-06-10 02:49:52 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-10 02:49:52 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: http://192.168.254.131:7860/register
+2025-06-10 02:49:52 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_flashes', '_fresh']
+2025-06-10 02:49:52 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-10 02:49:52 [INFO] auth_debug:144 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-10 02:49:52 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\project_x
+2025-06-10 02:49:52 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-10 02:49:52 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-10 02:49:52 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 1732 bytes
+2025-06-10 02:49:52 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-10 02:49:52 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-10 02:49:52 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-10 02:49:52 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-10 02:49:52 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 86.8%
+2025-06-10 02:49:52 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 2104.1 MB
+2025-06-10 02:49:52 [INFO] auth_debug:509 - login() - [20250610_024952_930030] GET request - serving login form
+2025-06-10 02:49:52 [DEBUG] auth_debug:510 - login() - [20250610_024952_930030] Checking current user state...
+2025-06-10 02:49:52 [DEBUG] auth_debug:517 - login() - [20250610_024952_930030] Rendering login template
+2025-06-10 02:49:52 [INFO] auth_debug:672 - login() - 🏁🏁🏁 LOGIN SESSION 20250610_024952_930030 COMPLETED 🏁🏁🏁
+2025-06-10 02:49:59 [INFO] auth_debug:501 - login() - 🔥🔥🔥 LOGIN SESSION 20250610_024959_657152 STARTED 🔥🔥🔥
+2025-06-10 02:49:59 [INFO] auth_debug:119 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-10 02:49:59 [DEBUG] auth_debug:120 - log_request_details() - Request method: POST
+2025-06-10 02:49:59 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://192.168.254.131:7860/login
+2025-06-10 02:49:59 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: login
+2025-06-10 02:49:59 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 192.168.254.131
+2025-06-10 02:49:59 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-10 02:49:59 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: http://192.168.254.131:7860/login
+2025-06-10 02:49:59 [DEBUG] auth_debug:130 - log_request_details() - Form fields present: ['email', 'password']
+2025-06-10 02:49:59 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_fresh']
+2025-06-10 02:49:59 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-10 02:49:59 [INFO] auth_debug:144 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-10 02:49:59 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\project_x
+2025-06-10 02:49:59 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-10 02:49:59 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-10 02:49:59 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 1732 bytes
+2025-06-10 02:49:59 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-10 02:49:59 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-10 02:49:59 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-10 02:49:59 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-10 02:49:59 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 86.5%
+2025-06-10 02:49:59 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 2145.4 MB
+2025-06-10 02:49:59 [INFO] auth_debug:521 - login() - [20250610_024959_657152] POST request - processing login
+2025-06-10 02:49:59 [DEBUG] auth_debug:524 - login() - [20250610_024959_657152] Extracting form data...
+2025-06-10 02:49:59 [DEBUG] auth_debug:530 - login() - [20250610_024959_657152] Raw email extracted: 'new_account@pc.net' (type: <class 'str'>, length: 18)
+2025-06-10 02:49:59 [DEBUG] auth_debug:531 - login() - [20250610_024959_657152] Raw password extracted: [REDACTED] (type: <class 'str'>, length: 3)
+2025-06-10 02:49:59 [DEBUG] auth_debug:540 - login() - [20250610_024959_657152] Processed email: 'new_account@pc.net' (length: 18)
+2025-06-10 02:49:59 [DEBUG] auth_debug:555 - login() - [20250610_024959_657152] Password validation passed (length: 3)
+2025-06-10 02:49:59 [DEBUG] auth_debug:558 - login() - [20250610_024959_657152] Pre-verification credentials check...
+2025-06-10 02:49:59 [DEBUG] auth_debug:562 - login() - [20250610_024959_657152] Total users in local credentials: 3
+2025-06-10 02:49:59 [DEBUG] auth_debug:563 - login() - [20250610_024959_657152] Users in credentials: ['admin@projectx.com', 'new_account@pc.net', 'taraksaiprathik@gmail.com']
+2025-06-10 02:49:59 [INFO] auth_debug:566 - login() - [20250610_024959_657152] ✅ User found in local credentials before verification
+2025-06-10 02:49:59 [DEBUG] auth_debug:568 - login() - [20250610_024959_657152] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-10 02:49:59 [INFO] auth_debug:578 - login() - [20250610_024959_657152] 🚀 Attempting user verification for: 'new_account@pc.net'
+2025-06-10 02:49:59 [DEBUG] auth_debug:579 - login() - [20250610_024959_657152] Calling verify_user function...
+2025-06-10 02:49:59 [DEBUG] auth_debug:583 - login() - [20250610_024959_657152] Verification start time: 2025-06-10 02:49:59.673270
+2025-06-10 02:49:59 [DEBUG] auth_debug:590 - login() - [20250610_024959_657152] Verification end time: 2025-06-10 02:49:59.676957
+2025-06-10 02:49:59 [DEBUG] auth_debug:591 - login() - [20250610_024959_657152] Verification duration: 0.004 seconds
+2025-06-10 02:49:59 [INFO] auth_debug:592 - login() - [20250610_024959_657152] verify_user returned: True
+2025-06-10 02:49:59 [INFO] auth_debug:595 - login() - [20250610_024959_657152] ✅ Verification successful for: 'new_account@pc.net'
+2025-06-10 02:49:59 [DEBUG] auth_debug:598 - login() - [20250610_024959_657152] Checking post-verification state...
+2025-06-10 02:49:59 [INFO] auth_debug:604 - login() - [20250610_024959_657152] ✅ User found in local credentials after verification
+2025-06-10 02:49:59 [DEBUG] auth_debug:606 - login() - [20250610_024959_657152] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-10 02:49:59 [DEBUG] auth_debug:615 - login() - [20250610_024959_657152] Creating User object for: 'new_account@pc.net'
+2025-06-10 02:49:59 [DEBUG] auth_debug:619 - login() - [20250610_024959_657152] User object created: <__main__.create_app.<locals>.User object at 0x0000014455F03A10>
+2025-06-10 02:49:59 [DEBUG] auth_debug:620 - login() - [20250610_024959_657152] User ID: new_account@pc.net
+2025-06-10 02:49:59 [DEBUG] auth_debug:622 - login() - [20250610_024959_657152] Calling login_user...
+2025-06-10 02:49:59 [INFO] auth_debug:624 - login() - [20250610_024959_657152] ✅ login_user completed successfully
+2025-06-10 02:49:59 [DEBUG] auth_debug:627 - login() - [20250610_024959_657152] Clearing existing flash messages
+2025-06-10 02:49:59 [DEBUG] auth_debug:631 - login() - [20250610_024959_657152] Setting success flash message
+2025-06-10 02:49:59 [INFO] auth_debug:635 - login() - [20250610_024959_657152] ✅ LOGIN SUCCESSFUL for: 'new_account@pc.net'
+2025-06-10 02:49:59 [DEBUG] auth_debug:638 - login() - [20250610_024959_657152] Redirecting to home page
+2025-06-10 02:49:59 [INFO] auth_debug:672 - login() - 🏁🏁🏁 LOGIN SESSION 20250610_024959_657152 COMPLETED 🏁🏁🏁
+2025-06-10 02:50:10 [INFO] auth_debug:501 - login() - 🔥🔥🔥 LOGIN SESSION 20250610_025010_784528 STARTED 🔥🔥🔥
+2025-06-10 02:50:10 [INFO] auth_debug:119 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-10 02:50:10 [DEBUG] auth_debug:120 - log_request_details() - Request method: GET
+2025-06-10 02:50:10 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://192.168.254.131:7860/login
+2025-06-10 02:50:10 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: login
+2025-06-10 02:50:10 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 192.168.254.131
+2025-06-10 02:50:10 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-10 02:50:10 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: http://192.168.254.131:7860/
+2025-06-10 02:50:10 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_flashes']
+2025-06-10 02:50:10 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-10 02:50:10 [INFO] auth_debug:144 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-10 02:50:10 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\project_x
+2025-06-10 02:50:10 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-10 02:50:10 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-10 02:50:10 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 1732 bytes
+2025-06-10 02:50:10 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-10 02:50:10 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-10 02:50:10 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-10 02:50:10 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-10 02:50:10 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 86.3%
+2025-06-10 02:50:10 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 2179.1 MB
+2025-06-10 02:50:10 [INFO] auth_debug:509 - login() - [20250610_025010_784528] GET request - serving login form
+2025-06-10 02:50:10 [DEBUG] auth_debug:510 - login() - [20250610_025010_784528] Checking current user state...
+2025-06-10 02:50:10 [DEBUG] auth_debug:517 - login() - [20250610_025010_784528] Rendering login template
+2025-06-10 02:50:10 [INFO] auth_debug:672 - login() - 🏁🏁🏁 LOGIN SESSION 20250610_025010_784528 COMPLETED 🏁🏁🏁
+2025-06-10 11:13:35 [INFO] auth_debug:501 - login() - 🔥🔥🔥 LOGIN SESSION 20250610_111335_468088 STARTED 🔥🔥🔥
+2025-06-10 11:13:35 [INFO] auth_debug:119 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-10 11:13:35 [DEBUG] auth_debug:120 - log_request_details() - Request method: GET
+2025-06-10 11:13:35 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://192.168.254.131:7860/login?next=/
+2025-06-10 11:13:35 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: login
+2025-06-10 11:13:35 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 192.168.254.131
+2025-06-10 11:13:35 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-10 11:13:35 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: None
+2025-06-10 11:13:35 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_flashes', '_fresh']
+2025-06-10 11:13:35 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-10 11:13:35 [INFO] auth_debug:144 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-10 11:13:35 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\project_x
+2025-06-10 11:13:35 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-10 11:13:35 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-10 11:13:35 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 1732 bytes
+2025-06-10 11:13:35 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-10 11:13:35 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-10 11:13:35 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-10 11:13:35 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-10 11:13:35 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 88.6%
+2025-06-10 11:13:35 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 1815.2 MB
+2025-06-10 11:13:35 [INFO] auth_debug:509 - login() - [20250610_111335_468088] GET request - serving login form
+2025-06-10 11:13:35 [DEBUG] auth_debug:510 - login() - [20250610_111335_468088] Checking current user state...
+2025-06-10 11:13:35 [DEBUG] auth_debug:517 - login() - [20250610_111335_468088] Rendering login template
+2025-06-10 11:13:35 [INFO] auth_debug:672 - login() - 🏁🏁🏁 LOGIN SESSION 20250610_111335_468088 COMPLETED 🏁🏁🏁
+2025-06-10 11:13:38 [INFO] auth_debug:501 - login() - 🔥🔥🔥 LOGIN SESSION 20250610_111338_886808 STARTED 🔥🔥🔥
+2025-06-10 11:13:38 [INFO] auth_debug:119 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-10 11:13:38 [DEBUG] auth_debug:120 - log_request_details() - Request method: POST
+2025-06-10 11:13:38 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://192.168.254.131:7860/login
+2025-06-10 11:13:38 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: login
+2025-06-10 11:13:38 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 192.168.254.131
+2025-06-10 11:13:38 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36
+2025-06-10 11:13:38 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: http://192.168.254.131:7860/login?next=%2F
+2025-06-10 11:13:38 [DEBUG] auth_debug:130 - log_request_details() - Form fields present: ['email', 'password']
+2025-06-10 11:13:38 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_fresh']
+2025-06-10 11:13:38 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-10 11:13:38 [INFO] auth_debug:144 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-10 11:13:38 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\project_x
+2025-06-10 11:13:38 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-10 11:13:38 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-10 11:13:38 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 1732 bytes
+2025-06-10 11:13:38 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-10 11:13:38 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-10 11:13:38 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-10 11:13:38 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-10 11:13:38 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 88.0%
+2025-06-10 11:13:38 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 1902.7 MB
+2025-06-10 11:13:38 [INFO] auth_debug:521 - login() - [20250610_111338_886808] POST request - processing login
+2025-06-10 11:13:38 [DEBUG] auth_debug:524 - login() - [20250610_111338_886808] Extracting form data...
+2025-06-10 11:13:38 [DEBUG] auth_debug:530 - login() - [20250610_111338_886808] Raw email extracted: 'admin@projectx.com' (type: <class 'str'>, length: 18)
+2025-06-10 11:13:38 [DEBUG] auth_debug:531 - login() - [20250610_111338_886808] Raw password extracted: [REDACTED] (type: <class 'str'>, length: 7)
+2025-06-10 11:13:38 [DEBUG] auth_debug:540 - login() - [20250610_111338_886808] Processed email: 'admin@projectx.com' (length: 18)
+2025-06-10 11:13:38 [DEBUG] auth_debug:555 - login() - [20250610_111338_886808] Password validation passed (length: 7)
+2025-06-10 11:13:38 [DEBUG] auth_debug:558 - login() - [20250610_111338_886808] Pre-verification credentials check...
+2025-06-10 11:13:38 [DEBUG] auth_debug:562 - login() - [20250610_111338_886808] Total users in local credentials: 3
+2025-06-10 11:13:38 [DEBUG] auth_debug:563 - login() - [20250610_111338_886808] Users in credentials: ['admin@projectx.com', 'new_account@pc.net', 'taraksaiprathik@gmail.com']
+2025-06-10 11:13:38 [INFO] auth_debug:566 - login() - [20250610_111338_886808] ✅ User found in local credentials before verification
+2025-06-10 11:13:38 [DEBUG] auth_debug:568 - login() - [20250610_111338_886808] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-10 11:13:38 [INFO] auth_debug:578 - login() - [20250610_111338_886808] 🚀 Attempting user verification for: 'admin@projectx.com'
+2025-06-10 11:13:38 [DEBUG] auth_debug:579 - login() - [20250610_111338_886808] Calling verify_user function...
+2025-06-10 11:13:38 [DEBUG] auth_debug:583 - login() - [20250610_111338_886808] Verification start time: 2025-06-10 11:13:38.904001
+2025-06-10 11:13:38 [DEBUG] auth_debug:590 - login() - [20250610_111338_886808] Verification end time: 2025-06-10 11:13:38.922394
+2025-06-10 11:13:38 [DEBUG] auth_debug:591 - login() - [20250610_111338_886808] Verification duration: 0.018 seconds
+2025-06-10 11:13:38 [INFO] auth_debug:592 - login() - [20250610_111338_886808] verify_user returned: True
+2025-06-10 11:13:38 [INFO] auth_debug:595 - login() - [20250610_111338_886808] ✅ Verification successful for: 'admin@projectx.com'
+2025-06-10 11:13:38 [DEBUG] auth_debug:598 - login() - [20250610_111338_886808] Checking post-verification state...
+2025-06-10 11:13:38 [INFO] auth_debug:604 - login() - [20250610_111338_886808] ✅ User found in local credentials after verification
+2025-06-10 11:13:38 [DEBUG] auth_debug:606 - login() - [20250610_111338_886808] User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-10 11:13:38 [DEBUG] auth_debug:615 - login() - [20250610_111338_886808] Creating User object for: 'admin@projectx.com'
+2025-06-10 11:13:38 [DEBUG] auth_debug:619 - login() - [20250610_111338_886808] User object created: <__main__.create_app.<locals>.User object at 0x0000025544ABF380>
+2025-06-10 11:13:38 [DEBUG] auth_debug:620 - login() - [20250610_111338_886808] User ID: admin@projectx.com
+2025-06-10 11:13:38 [DEBUG] auth_debug:622 - login() - [20250610_111338_886808] Calling login_user...
+2025-06-10 11:13:38 [INFO] auth_debug:624 - login() - [20250610_111338_886808] ✅ login_user completed successfully
+2025-06-10 11:13:38 [DEBUG] auth_debug:627 - login() - [20250610_111338_886808] Clearing existing flash messages
+2025-06-10 11:13:38 [DEBUG] auth_debug:631 - login() - [20250610_111338_886808] Setting success flash message
+2025-06-10 11:13:38 [INFO] auth_debug:635 - login() - [20250610_111338_886808] ✅ LOGIN SUCCESSFUL for: 'admin@projectx.com'
+2025-06-10 11:13:38 [DEBUG] auth_debug:638 - login() - [20250610_111338_886808] Redirecting to home page
+2025-06-10 11:13:38 [INFO] auth_debug:672 - login() - 🏁🏁🏁 LOGIN SESSION 20250610_111338_886808 COMPLETED 🏁🏁🏁
