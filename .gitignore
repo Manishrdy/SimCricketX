@@ -3,7 +3,9 @@
 # Never commit directories containing secrets or user-generated data.
 # These should be on a persistent disk in production.
 # =============================================================================
-
+/auth/
+/data/
+/logs/
 
 
 # =============================================================================
