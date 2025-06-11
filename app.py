@@ -1837,16 +1837,44 @@ if __name__ == "__main__":
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # Dynamically toggle secure cookie for localhost
+    # Replace the existing configure_session_cookie function in app.py with this:
+
     @app.before_request
     def configure_session_cookie():
         host = request.host
         app.logger.info("Hostname: {}".format(host))
-        if "localhost" in host or "127.0.0.1" in host or "192.168.254.131" in host:
+        
+        # Extract port number from host (format: "ip:port" or "hostname:port")
+        if ':' in host:
+            hostname_part, port_part = host.rsplit(':', 1)
+            try:
+                port = int(port_part)
+            except ValueError:
+                port = 80  # Default HTTP port if port parsing fails
+        else:
+            port = 80  # Default HTTP port if no port specified
+        
+        # Define development ports (commonly used for local development)
+        development_ports = [
+            3000,   # React dev server
+            4000,   # Common dev port
+            5000,   # Flask default
+            7860,   # Your current port
+            8000,   # Django/FastAPI dev
+            8080,   # Common dev port
+            8888,   # Jupyter
+            9000,   # Common dev port
+        ]
+        
+        # Also include non-standard ports as development (anything not 80/443)
+        is_development_port = port in development_ports or (port != 80 and port != 443)
+        
+        if is_development_port:
             app.config["SESSION_COOKIE_SECURE"] = False
-            app.logger.info("[Session] Localhost detected — SESSION_COOKIE_SECURE = False")
+            app.logger.info(f"[Session] Development port detected ({port}) — SESSION_COOKIE_SECURE = False")
         else:
             app.config["SESSION_COOKIE_SECURE"] = True
-            app.logger.info("[Session] Production mode — SESSION_COOKIE_SECURE = True")
+            app.logger.info(f"[Session] Production port detected ({port}) — SESSION_COOKIE_SECURE = True")
 
     # Run the app
     app.run(host="0.0.0.0", port=7860, debug=False)
