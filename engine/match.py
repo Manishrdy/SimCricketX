@@ -1610,11 +1610,19 @@ class Match:
                     self.result = f"{winner_code} won by {wkts_left} wicket(s) with {overs_left:.1f} overs remaining."
                 else:
                     # Check for tie
-                    # if self.score == self.target - 1:
                     if self.score == self.target - 1:
                         self.result = "Match Tied"
-                        # Set up super over
-                        self.innings = 4  # Super over mode
+                        
+                        # ✅ Save main match state
+                        self._save_second_innings_stats()
+                        self._create_match_archive()
+                        
+                        # ✅ Store original scorecard for later display
+                        self.original_scorecard = self._generate_detailed_scorecard()
+                        self.original_scorecard["target_info"] = "Match Tied"
+                        
+                        # ✅ Set up super over (this won't affect main match stats)
+                        self.innings = 4
                         return self._setup_super_over()
                     else:
                         winner_code = self.data["team_home"].split("_")[0] if self.bowling_team is self.home_xi else self.data["team_away"].split("_")[0]
@@ -2496,7 +2504,6 @@ class Match:
             "innings_complete": over_complete or self.super_over_wickets[team_key] >= 2
         }
 
-    # Completely replace the _end_super_over_innings method:
     def _end_super_over_innings(self):
         """Handle end of super over innings"""
         team_key = "home" if self.super_over_batting_team == self.home_xi else "away"
@@ -2554,14 +2561,15 @@ class Match:
                 
                 self.result = result
                 self.innings = 5  # Super over complete
-                
-                self._save_second_innings_stats()
-                self._create_match_archive()
+
+                # ✅ Update original scorecard with super over result
+                self.original_scorecard["target_info"] = result
                 
                 return {
                     "super_over_complete": True,
                     "match_over": True,
                     "result": result,
+                    "scorecard_data": self.original_scorecard,
                     "round": self.super_over_round,
                     "total_super_overs": self.super_over_round,
                     "home_score": home_score,

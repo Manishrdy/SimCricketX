@@ -945,20 +945,36 @@
                         commentaryLog.innerHTML += `<p style="color:green;"><b>MATCH TIED! Super Over Required!</b></p>`;
                         commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
 
-                        // Show super over options
-                        commentaryLog.innerHTML += `
-                <div style="margin: 1rem 0; text-align: center;">
-                    <h3>Choose which team bats first in Super Over:</h3>
-                    <button onclick="startSuperOver('home')" style="margin: 0.5rem; padding: 0.5rem 1rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem;">
-                        ${data.home_team} bats first
-                    </button>
-                    <button onclick="startSuperOver('away')" style="margin: 0.5rem; padding: 0.5rem 1rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem;">
-                        ${data.away_team} bats first
-                    </button>
-                </div>
-            `;
+                        // ✅ Show scorecard FIRST (like regular match)
+                        if (data.scorecard_data) {
+                            setTimeout(() => {
+                                showScorecard(data.scorecard_data, data);
 
-                        matchOver = true; // ✅ STOP the loop
+                                // ✅ Modify close button to show super over options AFTER closing
+                                const closeBtn = document.querySelector('.close-scorecard');
+                                const originalOnClick = closeBtn.onclick;
+                                closeBtn.onclick = async () => {
+                                    await originalOnClick(); // Close scorecard normally
+
+                                    // ✅ THEN show super over options
+                                    setTimeout(() => {
+                                        commentaryLog.innerHTML += `
+                        <div style="margin: 1rem 0; text-align: center;">
+                            <h3>Choose which team bats first in Super Over:</h3>
+                            <button onclick="startSuperOver('home')" style="margin: 0.5rem; padding: 0.5rem 1rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem;">
+                                ${data.home_team} bats first
+                            </button>
+                            <button onclick="startSuperOver('away')" style="margin: 0.5rem; padding: 0.5rem 1rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem;">
+                                ${data.away_team} bats first
+                            </button>
+                        </div>
+                    `;
+                                    }, 500);
+                                };
+                            }, 1500);
+                        }
+
+                        matchOver = true;
                         return;
                     }
 
@@ -985,16 +1001,8 @@
                         // Show match result commentary first
                         if (data.commentary) {
                             commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
-                        } else {
-                            commentaryLog.innerHTML += `<br><p style="color:green;"><b>Match Over! ${data.result}</b></p>`;
                         }
 
-                        document.getElementById('scoreboard').innerHTML = `
-<div class="match-result">
-    <span>${data.result}</span>
-</div>`;
-
-                        // Show scorecard after a short delay
                         if (data.scorecard_data) {
                             setTimeout(() => {
                                 showScorecard(data.scorecard_data, data);
