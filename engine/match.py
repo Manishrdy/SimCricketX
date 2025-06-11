@@ -76,6 +76,12 @@ class Match:
         
         self.result = ""  # Store final match result
 
+        # Add super over tracking variables
+        self.super_over_round = 0  # Track which super over we're on
+        self.super_over_history = []  # Track scores from each super over
+
+
+
     def _save_first_innings_stats(self):
         """Save first innings stats before resetting for second innings"""
         import copy
@@ -2343,9 +2349,13 @@ class Match:
             "away_team": self.data["team_away"].split("_")[0]
         }
 
+    # Modify the start_super_over method:
     def start_super_over(self, first_batting_team):
         """Start the super over with selected team batting first"""
+        self.super_over_round += 1
         self.super_over_innings = 1
+        
+        # Reset scores for this round (but keep history)
         self.super_over_scores = {"home": 0, "away": 0}
         self.super_over_wickets = {"home": 0, "away": 0}
         
@@ -2373,13 +2383,16 @@ class Match:
             for p in self.super_over_batsmen
         }
         
+        round_text = f"SUPER OVER {self.super_over_round}" if self.super_over_round == 1 else f"SUPER OVER {self.super_over_round} (Previous tied)"
+        
         return {
             "super_over_started": True,
             "innings": self.super_over_innings,
+            "round": self.super_over_round,
             "batting_team": first_batting_team,
             "batsmen": [p["name"] for p in self.super_over_batsmen],
             "bowler": self.super_over_bowler["name"],
-            "commentary": f"<br><strong>SUPER OVER {self.super_over_innings}</strong><br>" +
+            "commentary": f"<br><strong>{round_text}</strong><br>" +
                         f"Batsmen: {self.super_over_batsmen[0]['name']}, {self.super_over_batsmen[1]['name']}<br>" +
                         f"Bowler: {self.super_over_bowler['name']}<br>"
         }
@@ -2483,12 +2496,13 @@ class Match:
             "innings_complete": over_complete or self.super_over_wickets[team_key] >= 2
         }
 
+    # Completely replace the _end_super_over_innings method:
     def _end_super_over_innings(self):
         """Handle end of super over innings"""
         team_key = "home" if self.super_over_batting_team == self.home_xi else "away"
         
         if self.super_over_innings == 1:
-            # Start second innings
+            # Start second innings of this super over
             self.super_over_innings = 2
             self.super_over_batting_team, self.super_over_bowling_team = \
                 self.super_over_bowling_team, self.super_over_batting_team
@@ -2511,42 +2525,82 @@ class Match:
             return {
                 "super_over_innings_end": True,
                 "innings": 2,
+                "round": self.super_over_round,
                 "target": target,
                 "first_innings_score": self.super_over_scores[team_key],
                 "batting_team": "away" if team_key == "home" else "home",
-                "commentary": f"<br><strong>End of Super Over Innings 1</strong><br>" +
+                "commentary": f"<br><strong>End of Super Over {self.super_over_round} Innings 1</strong><br>" +
                             f"Target: {target} runs<br>" +
-                            f"<strong>SUPER OVER INNINGS 2</strong><br>" +
+                            f"<strong>SUPER OVER {self.super_over_round} INNINGS 2</strong><br>" +
                             f"Batsmen: {self.super_over_batsmen[0]['name']}, {self.super_over_batsmen[1]['name']}<br>" +
                             f"Bowler: {self.super_over_bowler['name']}<br>"
             }
         else:
-            # Determine super over winner
+            # End of second innings - determine winner or continue
             home_score = self.super_over_scores["home"]
             away_score = self.super_over_scores["away"]
+            
+            # Store this super over result in history
+            self.super_over_history.append({
+                "round": self.super_over_round,
+                "home_score": home_score,
+                "away_score": away_score
+            })
             
             if home_score > away_score:
                 winner = self.data["team_home"].split("_")[0]
                 margin = home_score - away_score
-                result = f"{winner} won the Super Over by {margin} run(s)"
+                result = f"{winner} won Super Over {self.super_over_round} by {margin} run(s)"
+                
+                self.result = result
+                self.innings = 5  # Super over complete
+                
+                self._save_second_innings_stats()
+                self._create_match_archive()
+                
+                return {
+                    "super_over_complete": True,
+                    "match_over": True,
+                    "result": result,
+                    "round": self.super_over_round,
+                    "total_super_overs": self.super_over_round,
+                    "home_score": home_score,
+                    "away_score": away_score,
+                    "commentary": f"<br><strong>SUPER OVER {self.super_over_round} COMPLETE!</strong><br>{result}"
+                }
+                
             elif away_score > home_score:
                 winner = self.data["team_away"].split("_")[0]
                 margin = away_score - home_score
-                result = f"{winner} won the Super Over by {margin} run(s)"
+                result = f"{winner} won Super Over {self.super_over_round} by {margin} run(s)"
+                
+                self.result = result
+                self.innings = 5  # Super over complete
+                
+                self._save_second_innings_stats()
+                self._create_match_archive()
+                
+                return {
+                    "super_over_complete": True,
+                    "match_over": True,
+                    "result": result,
+                    "round": self.super_over_round,
+                    "total_super_overs": self.super_over_round,
+                    "home_score": home_score,
+                    "away_score": away_score,
+                    "commentary": f"<br><strong>SUPER OVER {self.super_over_round} COMPLETE!</strong><br>{result}"
+                }
             else:
-                result = "Super Over also tied! (In real cricket, this would go to another Super Over)"
-            
-            self.result = result
-            self.innings = 5  # Super over complete
-            
-            self._save_second_innings_stats()
-            self._create_match_archive()
-             
-            return {
-                "super_over_complete": True,
-                "match_over": True,
-                "result": result,
-                "home_score": home_score,
-                "away_score": away_score,
-                "commentary": f"<br><strong>SUPER OVER COMPLETE!</strong><br>{result}"
-            }
+                # Another tie! Set up next super over
+                return {
+                    "super_over_tied_again": True,
+                    "match_over": False,
+                    "round": self.super_over_round,
+                    "home_score": home_score,
+                    "away_score": away_score,
+                    "home_team": self.data["team_home"].split("_")[0],
+                    "away_team": self.data["team_away"].split("_")[0],
+                    "commentary": f"<br><strong>SUPER OVER {self.super_over_round} TIED!</strong><br>" +
+                                f"Score: {home_score}-{away_score}<br>" +
+                                f"Another Super Over is required to decide the winner!<br>"
+                }

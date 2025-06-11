@@ -599,7 +599,7 @@
 
             <div class="scorecard-actions">
                 <button class="close-scorecard" onclick="closeScorecard()">Close</button>
-                <button class="save-scorecard" onclick="saveScorecardImage()">Save</button>
+                <!-- <button class="save-scorecard" onclick="saveScorecardImage()">Save</button> -->
             </div>
         </div>
     </div>
@@ -1097,7 +1097,47 @@
             }
         }
 
-        // ✅ UPDATED: startSuperOver function with better styling and error handling
+        // ✅ NEW: Function to start the next super over after a tie
+        function startNextSuperOver(firstBattingTeam, roundNumber) {
+            console.log(`🏏 Starting Super Over ${roundNumber} with ${firstBattingTeam} batting first`);
+
+            // Clear the choice buttons
+            const choiceDiv = document.querySelector('div:has(> button[onclick*="startNextSuperOver"])');
+            if (choiceDiv) {
+                choiceDiv.remove();
+            }
+
+            fetch(`${window.location.pathname}/start-super-over`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ first_batting_team: firstBattingTeam })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        commentaryLog.innerHTML += `<p style="color:red;">Error starting Super Over ${roundNumber}: ${data.error}</p>`;
+                        return;
+                    }
+
+                    commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+                    commentaryLog.innerHTML += `
+                <div style="background: var(--input-bg); padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; text-align: center;">
+                    <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Ready for Super Over ${roundNumber}!</h4>
+                    <button onclick="startSuperOverSimulation()" 
+                            style="padding: 0.75rem 1.5rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem; font-weight: bold; font-size: 1rem;">
+                        🏏 Start Super Over ${roundNumber} Simulation
+                    </button>
+                </div>
+            `;
+                    commentaryLog.scrollTop = commentaryLog.scrollHeight;
+                })
+                .catch(error => {
+                    console.error(`Error starting Super Over ${roundNumber}:`, error);
+                    commentaryLog.innerHTML += `<p style="color:red;">Network error starting Super Over ${roundNumber}: ${error}</p>`;
+                });
+        }
+
+        // ✅ UPDATE: Enhanced startSuperOver function with round tracking
         function startSuperOver(firstBattingTeam) {
             console.log(`🏏 Starting super over with ${firstBattingTeam} batting first`);
 
@@ -1114,12 +1154,14 @@
                     }
 
                     commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+
+                    const roundText = data.round ? ` ${data.round}` : '';
                     commentaryLog.innerHTML += `
                 <div style="background: var(--input-bg); padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; text-align: center;">
-                    <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Ready for Super Over!</h4>
+                    <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Ready for Super Over${roundText}!</h4>
                     <button onclick="startSuperOverSimulation()" 
                             style="padding: 0.75rem 1.5rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem; font-weight: bold; font-size: 1rem;">
-                        🏏 Start Super Over Simulation
+                        🏏 Start Super Over${roundText} Simulation
                     </button>
                 </div>
             `;
@@ -1150,21 +1192,65 @@
                     commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
                     commentaryLog.scrollTop = commentaryLog.scrollHeight;
 
-                    // Update score display
-                    scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
+                    // Update score display with round info
+                    const roundText = data.round ? ` (Round ${data.round})` : '';
+                    scoreElem.textContent = `Super Over${roundText}: ${data.score}/${data.wickets}`;
                     overInfoElem.textContent = `Ball: ${data.ball}/6`;
 
+                    // ✅ NEW: Handle another super over tie
+                    if (data.super_over_tied_again) {
+                        commentaryLog.innerHTML += `<p style="color:orange; font-weight:bold;">Super Over ${data.round} ended in a tie! Score: ${data.home_score}-${data.away_score}</p>`;
+
+                        // Show options for next super over
+                        commentaryLog.innerHTML += `
+                    <div style="background: var(--input-bg); padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; text-align: center;">
+                        <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Super Over ${data.round + 1} Required!</h4>
+                        <p style="margin-bottom: 1rem;">Choose which team bats first in the next Super Over:</p>
+                        <button onclick="startNextSuperOver('home', ${data.round + 1})" 
+                                style="margin: 0.5rem; padding: 0.5rem 1rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem;">
+                            ${data.home_team} bats first
+                        </button>
+                        <button onclick="startNextSuperOver('away', ${data.round + 1})" 
+                                style="margin: 0.5rem; padding: 0.5rem 1rem; background: var(--accent); color: white; border: none; border-radius: 0.5rem;">
+                            ${data.away_team} bats first
+                        </button>
+                    </div>
+                `;
+
+                        commentaryLog.scrollTop = commentaryLog.scrollHeight;
+                        matchOver = true; // Stop current loop, wait for user choice
+                        return;
+                    }
+
                     if (data.super_over_complete) {
-                        commentaryLog.innerHTML += `<p style="color:green;"><b>SUPER OVER COMPLETE!</b></p>`;
+                        const totalRounds = data.total_super_overs || data.round || 1;
+                        const roundText = totalRounds > 1 ? ` after ${totalRounds} Super Over(s)` : '';
+
+                        commentaryLog.innerHTML += `<p style="color:green; font-size: 1.2rem; font-weight: bold;">🏆 MATCH DECIDED${roundText}!</p>`;
+                        commentaryLog.innerHTML += `<p style="color:green; font-weight: bold;">${data.result}</p>`;
+
+                        // Update final score display
+                        document.getElementById('scoreboard').innerHTML = `
+                    <div class="match-result">
+                        <span>${data.result}</span>
+                        <small style="display: block; margin-top: 0.5rem; opacity: 0.8;">
+                            Decided in Super Over ${totalRounds}
+                        </small>
+                    </div>`;
+
                         matchOver = true;
                         return;
                     }
 
-                    if (data.innings_complete) {
+                    if (data.super_over_innings_end) {
                         if (data.target) {
-                            commentaryLog.innerHTML += `<p><b>Target: ${data.target} runs</b></p>`;
+                            commentaryLog.innerHTML += `<p style="background: var(--accent); color: white; padding: 0.5rem; border-radius: 0.3rem; text-align: center; font-weight: bold;">
+                        Target: ${data.target} runs in Super Over ${data.round}
+                    </p>`;
                         }
                         setTimeout(() => startSuperOverSimulation(), 1000); // Continue with next innings
+                    } else if (data.innings_complete) {
+                        setTimeout(() => startSuperOverSimulation(), 500); // Quick transition to result
                     } else {
                         setTimeout(() => startSuperOverSimulation(), delay); // Next ball
                     }
