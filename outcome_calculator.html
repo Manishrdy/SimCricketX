@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Cricket Outcome Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: A two-column dashboard layout. The left column contains all user inputs (sliders for player ratings, buttons for pitch conditions) to control the simulation. The right column displays the outputs dynamically: key calculated metrics (Skill Difference, Skill Factor), a step-by-step breakdown of how probabilities are adjusted, and a final, clear bar chart visualizing the outcome probabilities. This structure was chosen to create a direct, intuitive cause-and-effect relationship for the user, turning a static formula into an interactive learning tool where they can immediately see the impact of their changes. -->
+    <!-- Visualization & Content Choices: Report Info: Player ratings, pitch conditions. Goal: Allow interactive exploration. Viz/Method: Sliders for ratings, Buttons for pitch selection. Justification: Tactile and immediate input. Report Info: Formula steps. Goal: Explain the process. Viz/Method: Dynamic text and a table. Justification: Clearly shows intermediate calculations. Report Info: Final probabilities. Goal: Summarize the result. Viz/Method: Chart.js Bar Chart. Justification: Provides an immediate, powerful visual comparison of outcomes. Library/Method: Vanilla JS for logic, Chart.js for visualization. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fdfdfd;
+            color: #333;
+        }
+
+        .control-panel-bg {
+            background-color: #f4f2f0;
+        }
+
+        .output-panel-bg {
+            background-color: #ffffff;
+        }
+
+        .slider-track {
+            background-color: #dcd9d5;
+        }
+
+        .slider-thumb {
+            background-color: #c0392b;
+        }
+
+        .btn-pitch {
+            background-color: #e5e1dd;
+            color: #5a5a5a;
+        }
+
+        .btn-pitch.active {
+            background-color: #c0392b;
+            color: #ffffff;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+
+<body class="antialiased">
+
+    <div class="min-h-screen">
+        <header class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+                <h1 class="text-2xl font-bold text-gray-800">Interactive Ball Outcome Simulator</h1>
+                <p class="text-gray-600 mt-1">Explore how player skill and pitch conditions influence cricket match
+                    outcomes.</p>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <div class="flex flex-col lg:flex-row gap-6">
+
+                <!-- Left Panel: Controls -->
+                <div class="lg:w-1/3 w-full control-panel-bg p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-semibold mb-4 border-b pb-2">Simulation Controls</h2>
+                    <p class="text-sm text-gray-600 mb-6">Adjust the sliders and select a pitch type to see how the odds
+                        change in real-time. This section represents the inputs to the simulation formula.</p>
+
+                    <div class="space-y-6">
+                        <div>
+                            <label for="batsmanRating" class="flex justify-between font-medium text-gray-700">Batsman
+                                Rating <span id="batsmanRatingValue" class="font-bold">80</span></label>
+                            <input id="batsmanRating" type="range" min="1" max="100" value="80"
+                                class="w-full h-2 mt-2 rounded-lg appearance-none cursor-pointer slider-track">
+                        </div>
+                        <div>
+                            <label for="bowlerRating" class="flex justify-between font-medium text-gray-700">Bowler
+                                Rating <span id="bowlerRatingValue" class="font-bold">80</span></label>
+                            <input id="bowlerRating" type="range" min="1" max="100" value="80"
+                                class="w-full h-2 mt-2 rounded-lg appearance-none cursor-pointer slider-track">
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-700 mb-2">Pitch Condition</h3>
+                            <div id="pitchButtons" class="grid grid-cols-2 gap-2">
+                                <button data-pitch="Green"
+                                    class="btn-pitch py-2 px-4 rounded-md transition-all duration-200">Green</button>
+                                <button data-pitch="Normal"
+                                    class="btn-pitch py-2 px-4 rounded-md transition-all duration-200 active">Normal</button>
+                                <button data-pitch="Dusty"
+                                    class="btn-pitch py-2 px-4 rounded-md transition-all duration-200">Dusty</button>
+                                <button data-pitch="Dead"
+                                    class="btn-pitch py-2 px-4 rounded-md transition-all duration-200">Dead</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Outputs -->
+                <div class="lg:w-2/3 w-full output-panel-bg p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-semibold mb-4 border-b pb-2">Simulation Breakdown</h2>
+                    <p class="text-sm text-gray-600 mb-6">The outputs below show the step-by-step calculation, from the
+                        raw pitch probabilities to the final skill-adjusted outcomes. This demonstrates the core logic
+                        of the simulation engine.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-center">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-medium text-gray-500">Skill Difference</h4>
+                            <p id="skillDifference" class="text-2xl font-bold text-gray-800">0</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-medium text-gray-500">Skill Factor</h4>
+                            <p id="skillFactor" class="text-2xl font-bold text-gray-800">1.00</p>
+                        </div>
+                    </div>
+
+                    <!-- Probability Table -->
+                    <div class="mb-8">
+                        <h3 class="font-semibold text-lg mb-2">Probability Analysis</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="py-3 px-6">Outcome</th>
+                                        <th scope="col" class="py-3 px-6">Base (Pitch)</th>
+                                        <th scope="col" class="py-3 px-6">Adjusted (Skill)</th>
+                                        <th scope="col" class="py-3 px-6">Final</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="probabilityTable">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Chart -->
+                    <div>
+                        <h3 class="font-semibold text-lg mb-4 text-center">Final Outcome Probabilities</h3>
+                        <div class="chart-container">
+                            <canvas id="outcomeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const batsmanRatingSlider = document.getElementById('batsmanRating');
+            const bowlerRatingSlider = document.getElementById('bowlerRating');
+            const batsmanRatingValue = document.getElementById('batsmanRatingValue');
+            const bowlerRatingValue = document.getElementById('bowlerRatingValue');
+            const pitchButtonsContainer = document.getElementById('pitchButtons');
+
+            const skillDifferenceEl = document.getElementById('skillDifference');
+            const skillFactorEl = document.getElementById('skillFactor');
+            const probabilityTableEl = document.getElementById('probabilityTable');
+
+            let activePitch = 'Normal';
+            let outcomeChart;
+
+            const PITCH_PROBABILITIES = {
+                'Green': { '0': 10, '1': 30, '2': 5, '3': 0, '4': 5, '6': 2, 'W': 18, 'extras': 5 },
+                'Normal': { '0': 15, '1': 25, '2': 8, '3': 1, '4': 15, '6': 5, 'W': 10, 'extras': 3 },
+                'Dusty': { '0': 20, '1': 30, '2': 10, '3': 2, '4': 10, '6': 3, 'W': 12, 'extras': 4 },
+                'Dead': { '0': 10, '1': 20, '2': 5, '3': 1, '4': 25, '6': 10, 'W': 8, 'extras': 2 }
+            };
+            const OUTCOMES = ['0', '1', '2', '3', '4', '6', 'W'];
+
+            function initializeChart() {
+                const ctx = document.getElementById('outcomeChart').getContext('2d');
+                outcomeChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: OUTCOMES,
+                        datasets: [{
+                            label: 'Probability (%)',
+                            data: [],
+                            backgroundColor: [
+                                'rgba(110, 110, 110, 0.6)', // 0
+                                'rgba(54, 162, 235, 0.6)', // 1
+                                'rgba(54, 162, 235, 0.6)', // 2
+                                'rgba(54, 162, 235, 0.6)', // 3
+                                'rgba(75, 192, 192, 0.6)', // 4
+                                'rgba(153, 102, 255, 0.6)', // 6
+                                'rgba(255, 99, 132, 0.6)'  // W
+                            ],
+                            borderColor: [
+                                'rgba(110, 110, 110, 1)',
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(75, 192, 192, 1)',
+                                'rgba(153, 102, 255, 1)',
+                                'rgba(255, 99, 132, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Probability (%)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function (context) {
+                                        return `Probability: ${context.raw.toFixed(2)}%`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function updateSimulation() {
+                const batsmanRating = parseInt(batsmanRatingSlider.value);
+                const bowlerRating = parseInt(bowlerRatingSlider.value);
+
+                batsmanRatingValue.textContent = batsmanRating;
+                bowlerRatingValue.textContent = bowlerRating;
+
+                const skillDifference = batsmanRating - bowlerRating;
+                const skillFactor = 1 + (skillDifference / 100);
+
+                skillDifferenceEl.textContent = skillDifference;
+                skillFactorEl.textContent = skillFactor.toFixed(2);
+
+                const baseProbs = PITCH_PROBABILITIES[activePitch];
+                const adjustedProbs = {};
+                let totalAdjustedProb = 0;
+
+                OUTCOMES.forEach(outcome => {
+                    const baseProb = baseProbs[outcome] || 0;
+                    let adjustedProb;
+
+                    if (outcome === 'W') {
+                        adjustedProb = baseProb / skillFactor;
+                    } else {
+                        adjustedProb = baseProb * skillFactor;
+                    }
+
+                    if (adjustedProb < 0) adjustedProb = 0;
+                    adjustedProbs[outcome] = adjustedProb;
+                    totalAdjustedProb += adjustedProb;
+                });
+
+                const finalProbs = {};
+                OUTCOMES.forEach(outcome => {
+                    finalProbs[outcome] = (adjustedProbs[outcome] / totalAdjustedProb) * 100;
+                });
+
+                updateTable(baseProbs, adjustedProbs, finalProbs, totalAdjustedProb);
+                updateChart(finalProbs);
+            }
+
+            function updateTable(base, adjusted, final, totalAdjusted) {
+                probabilityTableEl.innerHTML = '';
+                OUTCOMES.forEach(outcome => {
+                    const row = `
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <th scope="row" class="py-4 px-6 font-medium text-gray-900 whitespace-nowrap">${outcome === 'W' ? 'Wicket' : `${outcome} Runs`}</th>
+                        <td class="py-4 px-6">${(base[outcome] || 0).toFixed(2)}%</td>
+                        <td class="py-4 px-6">${(adjusted[outcome] || 0).toFixed(2)}</td>
+                        <td class="py-4 px-6 font-bold text-blue-600">${(final[outcome] || 0).toFixed(2)}%</td>
+                    </tr>
+                `;
+                    probabilityTableEl.innerHTML += row;
+                });
+            }
+
+            function updateChart(finalProbs) {
+                outcomeChart.data.datasets[0].data = OUTCOMES.map(o => finalProbs[o]);
+                outcomeChart.update();
+            }
+
+
+            batsmanRatingSlider.addEventListener('input', updateSimulation);
+            bowlerRatingSlider.addEventListener('input', updateSimulation);
+
+            pitchButtonsContainer.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    const pitch = e.target.dataset.pitch;
+                    if (pitch) {
+                        activePitch = pitch;
+                        document.querySelectorAll('#pitchButtons button').forEach(btn => btn.classList.remove('active'));
+                        e.target.classList.add('active');
+                        updateSimulation();
+                    }
+                }
+            });
+
+            initializeChart();
+            updateSimulation();
+        });
+    </script>
+</body>
+
+</html>
