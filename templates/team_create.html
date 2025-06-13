@@ -444,7 +444,7 @@
       <div class="buttons">
         <button type="button" class="btn secondary" id="add-player">+ Add Player</button>
         <button type="button" class="btn secondary" id="generate-team">⚙️ Generate Team</button>
-        <span id="player-count">0 / 18</span>
+        <span id="player-count">0 / 25</span>
       </div>
 
       <!-- Players Grid -->
@@ -556,7 +556,7 @@
     // Player Logic
     const container = document.getElementById('players-container');
     const countEl = document.getElementById('player-count');
-    const MAX = 18, MIN = 15;
+    const MAX = 25, MIN = 15;
 
     // Helpers
     const rand = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -567,8 +567,8 @@
       const playerCount = container.children.length;
       const cards = [...document.querySelectorAll('.player-card')];
 
-      // Check player count (15-18)
-      if (playerCount < 15 || playerCount > 18) return false;
+      // Check player count (15-25)
+      if (playerCount < 15 || playerCount > 25) return false;
 
       // Check all players have required fields
       for (let card of cards) {
