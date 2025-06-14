@@ -273,7 +273,7 @@ if "%CURRENT_VERSION%"=="%LATEST_VERSION%" (
         echo Creating backup in: %BACKUP_DIR%
         mkdir "%BACKUP_DIR%" 2>nul
         
-        REM Backup important files
+        REM Backup important files (excluding user data)
         echo Backing up current files...
         for %%F in (*.py *.txt *.html) do (
             if exist "%%F" (
@@ -281,11 +281,52 @@ if "%CURRENT_VERSION%"=="%LATEST_VERSION%" (
                 echo   ✓ Backed up: %%F
             )
         )
-        for %%D in (templates static data config auth engine utils logs) do (
+        for %%D in (templates static config engine utils) do (
             if exist "%%D\" (
                 xcopy "%%D" "%BACKUP_DIR%\%%D\" /E /I /Q >nul 2>&1
                 echo   ✓ Backed up: %%D\
             )
+        )
+        
+        REM Special backup for user data that must be preserved
+        echo Preserving user data...
+        set "USER_DATA_BACKUP=%BACKUP_DIR%\user_data_preserve"
+        mkdir "%USER_DATA_BACKUP%" 2>nul
+        
+        REM Preserve auth credentials
+        if exist "auth\credentials.json" (
+            mkdir "%USER_DATA_BACKUP%\auth" 2>nul
+            copy "auth\credentials.json" "%USER_DATA_BACKUP%\auth\" >nul 2>&1
+            echo   🔒 Preserved: auth\credentials.json
+        )
+        
+        if exist "auth\encryption.key" (
+            mkdir "%USER_DATA_BACKUP%\auth" 2>nul
+            copy "auth\encryption.key" "%USER_DATA_BACKUP%\auth\" >nul 2>&1
+            echo   🔒 Preserved: auth\encryption.key
+        )
+        
+        REM Preserve entire data folder
+        if exist "data\" (
+            xcopy "data" "%USER_DATA_BACKUP%\data\" /E /I /Q >nul 2>&1
+            echo   🔒 Preserved: data\ (entire folder)
+        )
+        
+        REM Preserve entire logs folder
+        if exist "logs\" (
+            xcopy "logs" "%USER_DATA_BACKUP%\logs\" /E /I /Q >nul 2>&1
+            echo   🔒 Preserved: logs\ (entire folder)
+        )
+        
+        REM Preserve root log files
+        if exist "user_auth.log" (
+            copy "user_auth.log" "%USER_DATA_BACKUP%\" >nul 2>&1
+            echo   🔒 Preserved: user_auth.log
+        )
+        
+        if exist "auth_debug.log" (
+            copy "auth_debug.log" "%USER_DATA_BACKUP%\" >nul 2>&1
+            echo   🔒 Preserved: auth_debug.log
         )
         
         REM Download latest ZIP
@@ -349,6 +390,48 @@ if "%CURRENT_VERSION%"=="%LATEST_VERSION%" (
             )
         )
         popd
+        
+        REM Restore preserved user data (CRITICAL - overwrite any updated versions)
+        echo Restoring preserved user data...
+        if exist "%USER_DATA_BACKUP%" (
+            REM Restore auth files
+            if exist "%USER_DATA_BACKUP%\auth\credentials.json" (
+                mkdir "auth" 2>nul
+                copy "%USER_DATA_BACKUP%\auth\credentials.json" "auth\" >nul 2>&1
+                echo   🔒 Restored: auth\credentials.json
+            )
+            
+            if exist "%USER_DATA_BACKUP%\auth\encryption.key" (
+                mkdir "auth" 2>nul
+                copy "%USER_DATA_BACKUP%\auth\encryption.key" "auth\" >nul 2>&1
+                echo   🔒 Restored: auth\encryption.key
+            )
+            
+            REM Restore entire data folder
+            if exist "%USER_DATA_BACKUP%\data\" (
+                if exist "data\" rmdir /s /q "data" 2>nul
+                xcopy "%USER_DATA_BACKUP%\data" "data\" /E /I /Q >nul 2>&1
+                echo   🔒 Restored: data\ (entire folder)
+            )
+            
+            REM Restore entire logs folder
+            if exist "%USER_DATA_BACKUP%\logs\" (
+                if exist "logs\" rmdir /s /q "logs" 2>nul
+                xcopy "%USER_DATA_BACKUP%\logs" "logs\" /E /I /Q >nul 2>&1
+                echo   🔒 Restored: logs\ (entire folder)
+            )
+            
+            REM Restore root log files
+            if exist "%USER_DATA_BACKUP%\user_auth.log" (
+                copy "%USER_DATA_BACKUP%\user_auth.log" "." >nul 2>&1
+                echo   🔒 Restored: user_auth.log
+            )
+            
+            if exist "%USER_DATA_BACKUP%\auth_debug.log" (
+                copy "%USER_DATA_BACKUP%\auth_debug.log" "." >nul 2>&1
+                echo   🔒 Restored: auth_debug.log
+            )
+        )
         
         REM Cleanup
         del "%TEMP_ZIP%" 2>nul
@@ -430,9 +513,26 @@ mkdir "%BACKUP_DIR%" 2>nul
 for %%F in (*.py *.txt *.html) do (
     if exist "%%F" copy "%%F" "%BACKUP_DIR%\" >nul 2>&1
 )
-for %%D in (templates static data config auth engine utils logs) do (
+for %%D in (templates static config engine utils) do (
     if exist "%%D\" xcopy "%%D" "%BACKUP_DIR%\%%D\" /E /I /Q >nul 2>&1
 )
+
+REM Preserve user data
+set "USER_DATA_BACKUP=%BACKUP_DIR%\user_data_preserve"
+mkdir "%USER_DATA_BACKUP%" 2>nul
+
+if exist "auth\credentials.json" (
+    mkdir "%USER_DATA_BACKUP%\auth" 2>nul
+    copy "auth\credentials.json" "%USER_DATA_BACKUP%\auth\" >nul 2>&1
+)
+if exist "auth\encryption.key" (
+    mkdir "%USER_DATA_BACKUP%\auth" 2>nul
+    copy "auth\encryption.key" "%USER_DATA_BACKUP%\auth\" >nul 2>&1
+)
+if exist "data\" xcopy "data" "%USER_DATA_BACKUP%\data\" /E /I /Q >nul 2>&1
+if exist "logs\" xcopy "logs" "%USER_DATA_BACKUP%\logs\" /E /I /Q >nul 2>&1
+if exist "user_auth.log" copy "user_auth.log" "%USER_DATA_BACKUP%\" >nul 2>&1
+if exist "auth_debug.log" copy "auth_debug.log" "%USER_DATA_BACKUP%\" >nul 2>&1
 
 REM Download and install
 set "TEMP_ZIP=%TEMP%\simcricketx_latest.zip"
@@ -463,6 +563,27 @@ for /f "tokens=*" %%I in ('dir /b') do (
     )
 )
 popd
+
+REM Restore user data
+echo Restoring user data...
+if exist "%USER_DATA_BACKUP%\auth\credentials.json" (
+    mkdir "auth" 2>nul
+    copy "%USER_DATA_BACKUP%\auth\credentials.json" "auth\" >nul 2>&1
+)
+if exist "%USER_DATA_BACKUP%\auth\encryption.key" (
+    mkdir "auth" 2>nul
+    copy "%USER_DATA_BACKUP%\auth\encryption.key" "auth\" >nul 2>&1
+)
+if exist "%USER_DATA_BACKUP%\data\" (
+    if exist "data\" rmdir /s /q "data" 2>nul
+    xcopy "%USER_DATA_BACKUP%\data" "data\" /E /I /Q >nul 2>&1
+)
+if exist "%USER_DATA_BACKUP%\logs\" (
+    if exist "logs\" rmdir /s /q "logs" 2>nul
+    xcopy "%USER_DATA_BACKUP%\logs" "logs\" /E /I /Q >nul 2>&1
+)
+if exist "%USER_DATA_BACKUP%\user_auth.log" copy "%USER_DATA_BACKUP%\user_auth.log" "." >nul 2>&1
+if exist "%USER_DATA_BACKUP%\auth_debug.log" copy "%USER_DATA_BACKUP%\auth_debug.log" "." >nul 2>&1
 
 REM Cleanup
 del "%TEMP_ZIP%" 2>nul
