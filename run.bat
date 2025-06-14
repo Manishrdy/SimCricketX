@@ -1,14 +1,32 @@
 @echo off
-echo ============================================
-echo Starting SimCricketX Flask App...
-echo ============================================
-echo.
+setlocal enabledelayedexpansion
 
 REM ========== CONFIGURATION ==========
 REM UPDATE THESE VALUES FOR YOUR REPOSITORY
 set "GITHUB_USER=Manishrdy"
 set "GITHUB_REPO=SimCricketX"
+set "MAIN_BRANCH=main"
 REM ===================================
+
+REM Handle command line arguments
+if "%1"=="--update" (
+    call :force_update
+    exit /b 0
+)
+if "%1"=="--help" (
+    echo Usage: %0 [options]
+    echo Options:
+    echo   --update        Force update to latest version
+    echo   --skip-update   Skip update check
+    echo   --help          Show this help
+    pause
+    exit /b 0
+)
+
+echo ============================================
+echo Starting SimCricketX Flask App...
+echo ============================================
+echo.
 
 REM Force the window to stay open on any error
 set "PAUSE_ON_ERROR=1"
@@ -18,9 +36,9 @@ cd /d "%~dp0"
 echo Current directory: %CD%
 echo.
 
-REM Check for updates (can be skipped with --skip-update argument)
+REM Check for updates (unless skipped)
 if not "%1"=="--skip-update" (
-    call :check_for_updates
+    call :check_and_update
 )
 
 REM Show what files are present
@@ -31,7 +49,7 @@ if %errorlevel% neq 0 (
 )
 echo.
 
-title Run SimCricketX Flask App
+title SimCricketX Flask App
 
 REM Test Python with detailed output
 echo Checking for Python...
@@ -63,6 +81,7 @@ if not exist "requirements.txt" (
     dir /b
     echo.
     echo Make sure this batch file is in the same folder as requirements.txt
+    echo Or run with --update to download latest files
     echo.
     pause
     exit /b 1
@@ -74,6 +93,7 @@ if not exist "app.py" (
     echo.
     echo ERROR: app.py not found in: %CD%
     echo Make sure this batch file is in the same folder as app.py
+    echo Or run with --update to download latest files
     echo.
     pause
     exit /b 1
@@ -150,19 +170,28 @@ pause
 exit /b 0
 
 REM ============================================
-REM UPDATE CHECKER FUNCTION
+REM AUTO-UPDATE FUNCTION WITH DOWNLOAD
 REM ============================================
-:check_for_updates
+:check_and_update
 echo.
 echo ============================================
 echo Checking for updates...
 echo ============================================
 
-REM Check if we can access the internet and curl is available
+REM Check if curl is available (Windows 10+ has it built-in)
 curl --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo curl not available, skipping update check.
     echo (Update checking requires Windows 10 or newer)
+    echo.
+    timeout /t 2 >nul
+    goto :eof
+)
+
+REM Check if PowerShell is available for ZIP extraction
+powershell -Command "Write-Host 'PowerShell available'" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo PowerShell not available, cannot auto-update.
     echo.
     timeout /t 2 >nul
     goto :eof
@@ -180,7 +209,7 @@ set "TEMP_VERSION_FILE=%TEMP%\simcricketx_latest_version.txt"
 
 REM Download latest version from GitHub
 echo Checking latest version from GitHub...
-curl -s -f "https://raw.githubusercontent.com/%GITHUB_USER%/%GITHUB_REPO%/main/version.txt" -o "%TEMP_VERSION_FILE%" 2>nul
+curl -s -f "https://raw.githubusercontent.com/%GITHUB_USER%/%GITHUB_REPO%/%MAIN_BRANCH%/version.txt" -o "%TEMP_VERSION_FILE%" 2>nul
 
 if %errorlevel% neq 0 (
     echo Could not check for updates.
@@ -223,25 +252,131 @@ if "%CURRENT_VERSION%"=="%LATEST_VERSION%" (
     echo.
     echo What would you like to do?
     echo [1] Continue with current version
-    echo [2] Open GitHub page to download latest
-    echo [3] Exit to update manually
+    echo [2] AUTO-UPDATE: Download and install latest version
+    echo [3] Open GitHub page manually
+    echo [4] Exit to update manually
     echo.
     
-    set /p "choice=Enter your choice (1-3) [default: 1]: "
+    set /p "choice=Enter your choice (1-4) [default: 2]: "
     
-    if "%choice%"=="" set "choice=1"
+    if "%choice%"=="" set "choice=2"
     
     if "%choice%"=="2" (
+        echo.
+        echo ============================================
+        echo   🔄 AUTO-UPDATING...
+        echo ============================================
+        
+        REM Create backup directory with timestamp
+        for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set "dt=%%I"
+        set "BACKUP_DIR=backup_%dt:~0,8%_%dt:~8,6%"
+        echo Creating backup in: %BACKUP_DIR%
+        mkdir "%BACKUP_DIR%" 2>nul
+        
+        REM Backup important files
+        echo Backing up current files...
+        for %%F in (*.py *.txt *.html) do (
+            if exist "%%F" (
+                copy "%%F" "%BACKUP_DIR%\" >nul 2>&1
+                echo   ✓ Backed up: %%F
+            )
+        )
+        for %%D in (templates static data config auth engine utils logs) do (
+            if exist "%%D\" (
+                xcopy "%%D" "%BACKUP_DIR%\%%D\" /E /I /Q >nul 2>&1
+                echo   ✓ Backed up: %%D\
+            )
+        )
+        
+        REM Download latest ZIP
+        set "TEMP_ZIP=%TEMP%\simcricketx_latest.zip"
+        echo.
+        echo Downloading latest version...
+        curl -L -o "%TEMP_ZIP%" "https://github.com/%GITHUB_USER%/%GITHUB_REPO%/archive/refs/heads/%MAIN_BRANCH%.zip"
+        if %errorlevel% neq 0 (
+            echo ✗ Download failed!
+            echo Restore from backup if needed: xcopy "%BACKUP_DIR%\*" . /E /Y
+            echo.
+            pause
+            goto :eof
+        )
+        echo ✓ Download completed!
+        
+        REM Extract to temporary directory
+        set "TEMP_EXTRACT=%TEMP%\simcricketx_extract"
+        if exist "%TEMP_EXTRACT%" rmdir /s /q "%TEMP_EXTRACT%" 2>nul
+        mkdir "%TEMP_EXTRACT%" 2>nul
+        
+        echo Extracting files...
+        powershell -Command "Expand-Archive -Path '%TEMP_ZIP%' -DestinationPath '%TEMP_EXTRACT%' -Force" >nul 2>&1
+        if %errorlevel% neq 0 (
+            echo ✗ Extraction failed!
+            del "%TEMP_ZIP%" 2>nul
+            echo Restore from backup if needed: xcopy "%BACKUP_DIR%\*" . /E /Y
+            echo.
+            pause
+            goto :eof
+        )
+        echo ✓ Extraction completed!
+        
+        REM Find the extracted folder (GitHub creates [repo-name]-[branch]/)
+        set "EXTRACTED_FOLDER=%TEMP_EXTRACT%\%GITHUB_REPO%-%MAIN_BRANCH%"
+        if not exist "%EXTRACTED_FOLDER%" (
+            set "EXTRACTED_FOLDER=%TEMP_EXTRACT%\%GITHUB_REPO%-master"
+            if not exist "!EXTRACTED_FOLDER!" (
+                echo ✗ Could not find extracted folder!
+                echo Contents of extract directory:
+                dir "%TEMP_EXTRACT%"
+                del "%TEMP_ZIP%" 2>nul
+                rmdir /s /q "%TEMP_EXTRACT%" 2>nul
+                echo.
+                pause
+                goto :eof
+            )
+        )
+        
+        REM Copy new files to current directory
+        echo Installing new files...
+        pushd "%EXTRACTED_FOLDER%"
+        for /f "tokens=*" %%I in ('dir /b') do (
+            if exist "%%I" (
+                if exist "%%I\" (
+                    xcopy "%%I" "%~dp0%%I\" /E /I /Y /Q >nul 2>&1
+                ) else (
+                    copy "%%I" "%~dp0" >nul 2>&1
+                )
+                echo   ✓ Updated: %%I
+            )
+        )
+        popd
+        
+        REM Cleanup
+        del "%TEMP_ZIP%" 2>nul
+        rmdir /s /q "%TEMP_EXTRACT%" 2>nul
+        
+        echo.
+        echo ============================================
+        echo   ✅ UPDATE COMPLETED!
+        echo ============================================
+        echo Updated to version: %LATEST_VERSION%
+        echo Backup saved in: %BACKUP_DIR%
+        echo.
+        echo If anything goes wrong, restore with:
+        echo   xcopy "%BACKUP_DIR%\*" . /E /Y
+        echo.
+        timeout /t 3 >nul
+    )
+    
+    if "%choice%"=="3" (
         echo Opening GitHub repository...
         start https://github.com/%GITHUB_USER%/%GITHUB_REPO%
         echo.
         echo Please download the latest version from GitHub.
-        echo After downloading, extract and replace your current files.
         echo.
         pause
     )
     
-    if "%choice%"=="3" (
+    if "%choice%"=="4" (
         echo.
         echo Please download the latest version from:
         echo https://github.com/%GITHUB_USER%/%GITHUB_REPO%
@@ -258,4 +393,82 @@ if "%CURRENT_VERSION%"=="%LATEST_VERSION%" (
         timeout /t 2 >nul
     )
 )
+goto :eof
+
+REM ============================================
+REM FORCE UPDATE FUNCTION
+REM ============================================
+:force_update
+echo.
+echo ============================================
+echo   🔄 FORCE UPDATE MODE
+echo ============================================
+
+REM Check requirements
+curl --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ERROR: curl not available. Update checking requires Windows 10 or newer
+    pause
+    exit /b 1
+)
+
+powershell -Command "Write-Host 'PowerShell available'" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ERROR: PowerShell not available
+    pause
+    exit /b 1
+)
+
+echo Force updating to latest version...
+
+REM Create backup
+for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set "dt=%%I"
+set "BACKUP_DIR=backup_%dt:~0,8%_%dt:~8,6%"
+echo Creating backup in: %BACKUP_DIR%
+mkdir "%BACKUP_DIR%" 2>nul
+
+for %%F in (*.py *.txt *.html) do (
+    if exist "%%F" copy "%%F" "%BACKUP_DIR%\" >nul 2>&1
+)
+for %%D in (templates static data config auth engine utils logs) do (
+    if exist "%%D\" xcopy "%%D" "%BACKUP_DIR%\%%D\" /E /I /Q >nul 2>&1
+)
+
+REM Download and install
+set "TEMP_ZIP=%TEMP%\simcricketx_latest.zip"
+echo Downloading...
+curl -L -o "%TEMP_ZIP%" "https://github.com/%GITHUB_USER%/%GITHUB_REPO%/archive/refs/heads/%MAIN_BRANCH%.zip"
+
+set "TEMP_EXTRACT=%TEMP%\simcricketx_extract"
+if exist "%TEMP_EXTRACT%" rmdir /s /q "%TEMP_EXTRACT%" 2>nul
+mkdir "%TEMP_EXTRACT%" 2>nul
+
+echo Extracting...
+powershell -Command "Expand-Archive -Path '%TEMP_ZIP%' -DestinationPath '%TEMP_EXTRACT%' -Force" >nul 2>&1
+
+set "EXTRACTED_FOLDER=%TEMP_EXTRACT%\%GITHUB_REPO%-%MAIN_BRANCH%"
+if not exist "%EXTRACTED_FOLDER%" (
+    set "EXTRACTED_FOLDER=%TEMP_EXTRACT%\%GITHUB_REPO%-master"
+)
+
+echo Installing...
+pushd "%EXTRACTED_FOLDER%"
+for /f "tokens=*" %%I in ('dir /b') do (
+    if exist "%%I" (
+        if exist "%%I\" (
+            xcopy "%%I" "%~dp0%%I\" /E /I /Y /Q >nul 2>&1
+        ) else (
+            copy "%%I" "%~dp0" >nul 2>&1
+        )
+    )
+)
+popd
+
+REM Cleanup
+del "%TEMP_ZIP%" 2>nul
+rmdir /s /q "%TEMP_EXTRACT%" 2>nul
+
+echo ✅ Force update completed!
+echo Backup saved in: %BACKUP_DIR%
+echo.
 goto :eof
