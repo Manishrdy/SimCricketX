@@ -8,7 +8,7 @@ MAIN_BRANCH="main"  # Change to "master" if your default branch is master
 # ===================================
 
 # ============================================
-# AUTO-UPDATE FUNCTION WITH DOWNLOAD
+# AUTO-UPDATE FUNCTION WITH USER DATA PROTECTION
 # ============================================
 check_and_update() {
     echo
@@ -114,14 +114,55 @@ check_and_update() {
                 echo "Creating backup in: $BACKUP_DIR"
                 mkdir -p "$BACKUP_DIR"
                 
-                # Backup important files
+                # Backup important files (excluding user data)
                 echo "Backing up current files..."
-                for file in *.py *.txt *.html templates/ static/ data/ config/ auth/ engine/ utils/ logs/; do
+                for file in *.py *.txt *.html templates/ static/ config/ engine/ utils/; do
                     if [[ -e "$file" ]]; then
                         cp -r "$file" "$BACKUP_DIR/" 2>/dev/null
                         echo "  ✓ Backed up: $file"
                     fi
                 done
+                
+                # Special backup for user data that must be preserved
+                echo "Preserving user data..."
+                USER_DATA_BACKUP="$BACKUP_DIR/user_data_preserve"
+                mkdir -p "$USER_DATA_BACKUP"
+                
+                # Preserve auth credentials
+                if [[ -f "auth/credentials.json" ]]; then
+                    mkdir -p "$USER_DATA_BACKUP/auth"
+                    cp "auth/credentials.json" "$USER_DATA_BACKUP/auth/" 2>/dev/null
+                    echo "  🔒 Preserved: auth/credentials.json"
+                fi
+                
+                if [[ -f "auth/encryption.key" ]]; then
+                    mkdir -p "$USER_DATA_BACKUP/auth"
+                    cp "auth/encryption.key" "$USER_DATA_BACKUP/auth/" 2>/dev/null
+                    echo "  🔒 Preserved: auth/encryption.key"
+                fi
+                
+                # Preserve entire data folder
+                if [[ -d "data" ]]; then
+                    cp -r "data" "$USER_DATA_BACKUP/" 2>/dev/null
+                    echo "  🔒 Preserved: data/ (entire folder)"
+                fi
+                
+                # Preserve entire logs folder
+                if [[ -d "logs" ]]; then
+                    cp -r "logs" "$USER_DATA_BACKUP/" 2>/dev/null
+                    echo "  🔒 Preserved: logs/ (entire folder)"
+                fi
+                
+                # Preserve root log files
+                if [[ -f "user_auth.log" ]]; then
+                    cp "user_auth.log" "$USER_DATA_BACKUP/" 2>/dev/null
+                    echo "  🔒 Preserved: user_auth.log"
+                fi
+                
+                if [[ -f "auth_debug.log" ]]; then
+                    cp "auth_debug.log" "$USER_DATA_BACKUP/" 2>/dev/null
+                    echo "  🔒 Preserved: auth_debug.log"
+                fi
                 
                 # Download latest ZIP
                 TEMP_ZIP="/tmp/simcricketx_latest.zip"
@@ -182,6 +223,48 @@ check_and_update() {
                 done
                 cd "$OLDPWD"
                 
+                # Restore preserved user data (CRITICAL - overwrite any updated versions)
+                echo "Restoring preserved user data..."
+                if [[ -d "$USER_DATA_BACKUP" ]]; then
+                    # Restore auth files
+                    if [[ -f "$USER_DATA_BACKUP/auth/credentials.json" ]]; then
+                        mkdir -p "auth"
+                        cp "$USER_DATA_BACKUP/auth/credentials.json" "auth/" 2>/dev/null
+                        echo "  🔒 Restored: auth/credentials.json"
+                    fi
+                    
+                    if [[ -f "$USER_DATA_BACKUP/auth/encryption.key" ]]; then
+                        mkdir -p "auth"
+                        cp "$USER_DATA_BACKUP/auth/encryption.key" "auth/" 2>/dev/null
+                        echo "  🔒 Restored: auth/encryption.key"
+                    fi
+                    
+                    # Restore entire data folder
+                    if [[ -d "$USER_DATA_BACKUP/data" ]]; then
+                        rm -rf "data" 2>/dev/null
+                        cp -r "$USER_DATA_BACKUP/data" "." 2>/dev/null
+                        echo "  🔒 Restored: data/ (entire folder)"
+                    fi
+                    
+                    # Restore entire logs folder
+                    if [[ -d "$USER_DATA_BACKUP/logs" ]]; then
+                        rm -rf "logs" 2>/dev/null
+                        cp -r "$USER_DATA_BACKUP/logs" "." 2>/dev/null
+                        echo "  🔒 Restored: logs/ (entire folder)"
+                    fi
+                    
+                    # Restore root log files
+                    if [[ -f "$USER_DATA_BACKUP/user_auth.log" ]]; then
+                        cp "$USER_DATA_BACKUP/user_auth.log" "." 2>/dev/null
+                        echo "  🔒 Restored: user_auth.log"
+                    fi
+                    
+                    if [[ -f "$USER_DATA_BACKUP/auth_debug.log" ]]; then
+                        cp "$USER_DATA_BACKUP/auth_debug.log" "." 2>/dev/null
+                        echo "  🔒 Restored: auth_debug.log"
+                    fi
+                fi
+                
                 # Cleanup
                 rm -f "$TEMP_ZIP" 2>/dev/null
                 rm -rf "$TEMP_EXTRACT" 2>/dev/null
@@ -192,6 +275,14 @@ check_and_update() {
                 echo "============================================"
                 echo "Updated to version: $LATEST_VERSION"
                 echo "Backup saved in: $BACKUP_DIR"
+                echo
+                echo "🔒 USER DATA PROTECTION SUMMARY:"
+                echo "  ✅ auth/credentials.json - PRESERVED"
+                echo "  ✅ auth/encryption.key - PRESERVED"
+                echo "  ✅ data/ folder - PRESERVED"
+                echo "  ✅ logs/ folder - PRESERVED"
+                echo "  ✅ user_auth.log - PRESERVED"
+                echo "  ✅ auth_debug.log - PRESERVED"
                 echo
                 echo "If anything goes wrong, restore with:"
                 echo "  cp -r $BACKUP_DIR/* ."
@@ -258,11 +349,24 @@ force_update() {
     echo "Creating backup in: $BACKUP_DIR"
     mkdir -p "$BACKUP_DIR"
     
-    for file in *.py *.txt *.html templates/ static/ data/ config/ auth/ engine/ utils/ logs/; do
+    for file in *.py *.txt *.html templates/ static/ config/ engine/ utils/; do
         if [[ -e "$file" ]]; then
             cp -r "$file" "$BACKUP_DIR/" 2>/dev/null
         fi
     done
+    
+    # Special backup for user data that must be preserved
+    echo "Preserving user data..."
+    USER_DATA_BACKUP="$BACKUP_DIR/user_data_preserve"
+    mkdir -p "$USER_DATA_BACKUP"
+    
+    # Preserve all protected files/folders
+    [[ -f "auth/credentials.json" ]] && { mkdir -p "$USER_DATA_BACKUP/auth"; cp "auth/credentials.json" "$USER_DATA_BACKUP/auth/" 2>/dev/null; }
+    [[ -f "auth/encryption.key" ]] && { mkdir -p "$USER_DATA_BACKUP/auth"; cp "auth/encryption.key" "$USER_DATA_BACKUP/auth/" 2>/dev/null; }
+    [[ -d "data" ]] && cp -r "data" "$USER_DATA_BACKUP/" 2>/dev/null
+    [[ -d "logs" ]] && cp -r "logs" "$USER_DATA_BACKUP/" 2>/dev/null
+    [[ -f "user_auth.log" ]] && cp "user_auth.log" "$USER_DATA_BACKUP/" 2>/dev/null
+    [[ -f "auth_debug.log" ]] && cp "auth_debug.log" "$USER_DATA_BACKUP/" 2>/dev/null
     
     # Download and install
     TEMP_ZIP="/tmp/simcricketx_latest.zip"
@@ -286,12 +390,31 @@ force_update() {
     cp -rf * "$OLDPWD/"
     cd "$OLDPWD"
     
+    # Restore preserved user data
+    echo "Restoring user data..."
+    if [[ -d "$USER_DATA_BACKUP" ]]; then
+        [[ -f "$USER_DATA_BACKUP/auth/credentials.json" ]] && { mkdir -p "auth"; cp "$USER_DATA_BACKUP/auth/credentials.json" "auth/" 2>/dev/null; }
+        [[ -f "$USER_DATA_BACKUP/auth/encryption.key" ]] && { mkdir -p "auth"; cp "$USER_DATA_BACKUP/auth/encryption.key" "auth/" 2>/dev/null; }
+        [[ -d "$USER_DATA_BACKUP/data" ]] && { rm -rf "data" 2>/dev/null; cp -r "$USER_DATA_BACKUP/data" "." 2>/dev/null; }
+        [[ -d "$USER_DATA_BACKUP/logs" ]] && { rm -rf "logs" 2>/dev/null; cp -r "$USER_DATA_BACKUP/logs" "." 2>/dev/null; }
+        [[ -f "$USER_DATA_BACKUP/user_auth.log" ]] && cp "$USER_DATA_BACKUP/user_auth.log" "." 2>/dev/null
+        [[ -f "$USER_DATA_BACKUP/auth_debug.log" ]] && cp "$USER_DATA_BACKUP/auth_debug.log" "." 2>/dev/null
+    fi
+    
     # Cleanup
     rm -f "$TEMP_ZIP" 2>/dev/null
     rm -rf "$TEMP_EXTRACT" 2>/dev/null
     
     echo "✅ Force update completed!"
     echo "Backup saved in: $BACKUP_DIR"
+    echo
+    echo "🔒 USER DATA PROTECTED:"
+    echo "  ✅ auth/credentials.json"
+    echo "  ✅ auth/encryption.key"
+    echo "  ✅ data/ folder"
+    echo "  ✅ logs/ folder"
+    echo "  ✅ user_auth.log"
+    echo "  ✅ auth_debug.log"
     echo
 }
 
