@@ -387,12 +387,12 @@ PITCH_SCORING_MATRIX = {
     },
     "Flat": {
         "Dot":     0.24,   # slightly fewer dots
-        "Single":  0.30,   # ↑ more 1s
+        "Single":  0.29,   # ↑ more 1s
         "Double":  0.10,   # ↓ fewer 2s
         "Three":   0.04,   # ↓ much fewer 3s
         "Four":    0.18,   # ↑ more boundaries
         "Six":     0.06,   # same
-        "Wicket":  0.04,   # same or maybe slightly ↑ for realism
+        "Wicket":  0.05,   # same or maybe slightly ↑ for realism
         "Extras":  0.04
         # Sum: 1.00 ✅
     },
@@ -459,10 +459,10 @@ def compute_weighted_prob(
     combining 60% pitch-influence + 40% player-skill.
     Includes print statements to trace the computation.
     """
-    print(f"\n[compute_weighted_prob] Outcome: {outcome_type}")
-    print(f"  BaseProb: {base_prob}")
-    print(f"  PlayerStats -> Batting: {batting}, Bowling: {bowling}, Fielding: {fielding}")
-    print(f"  Pitch: {pitch}, BowlingType: {bowling_type}, Streak: {streak}")
+    # print(f"\n[compute_weighted_prob] Outcome: {outcome_type}")
+    # print(f"  BaseProb: {base_prob}")
+    # print(f"  PlayerStats -> Batting: {batting}, Bowling: {bowling}, Fielding: {fielding}")
+    # print(f"  Pitch: {pitch}, BowlingType: {bowling_type}, Streak: {streak}")
 
     # 1) Player-skill fraction
     if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
@@ -554,11 +554,11 @@ def calculate_outcome(
       • Green/Dry: minimal boundary boost (max ~1 boundary/over)
       • Wicket   : slight boost in all cases
     """
-    print("\n==================== New Delivery ====================")
-    print(f"Ball context -> Over: {over_number + 1}, BatterRunsSoFar: {batter_runs}")
-    print(f"Batter: {batter['name']}, BattingRating: {batter['batting_rating']}, BattingHand: {batter['batting_hand']}")
-    print(f"Bowler: {bowler['name']}, BowlingRating: {bowler['bowling_rating']}, FieldingRating: {bowler['fielding_rating']}, BowlingHand: {bowler['bowling_hand']}, BowlingType: {bowler['bowling_type']}")
-    print(f"Pitch type: {pitch}, Current Streak: {streak}")
+    # print("\n==================== New Delivery ====================")
+    # print(f"Ball context -> Over: {over_number + 1}, BatterRunsSoFar: {batter_runs}")
+    # print(f"Batter: {batter['name']}, BattingRating: {batter['batting_rating']}, BattingHand: {batter['batting_hand']}")
+    # print(f"Bowler: {bowler['name']}, BowlingRating: {bowler['bowling_rating']}, FieldingRating: {bowler['fielding_rating']}, BowlingHand: {bowler['bowling_hand']}, BowlingType: {bowler['bowling_type']}")
+    # print(f"Pitch type: {pitch}, Current Streak: {streak}")
 
     # 1) Unpack numeric ratings & attributes
     batting = batter["batting_rating"]
@@ -570,12 +570,12 @@ def calculate_outcome(
 
     # 2) Get pitch-specific scoring matrix
     pitch_matrix = PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX)
-    print(f"[calculate_outcome] Using scoring matrix for pitch: {pitch}")
+    # print(f"[calculate_outcome] Using scoring matrix for pitch: {pitch}")
 
     raw_weights = {}
     for outcome in pitch_matrix:
         base = pitch_matrix[outcome]
-        print(f"\n-- Computing weight for outcome: {outcome} (Base: {base}) --")
+        # print(f"\n-- Computing weight for outcome: {outcome} (Base: {base}) --")
 
         # Compute base weight via 60/40 blending
         if outcome in ("Dot", "Single", "Double", "Three", "Four", "Six"):
@@ -648,19 +648,19 @@ def calculate_outcome(
 
     # 4) Normalize weights into probabilities
     total_weight = sum(raw_weights.values())
-    print(f"\n[calculate_outcome] Total raw weight sum: {total_weight:.6f}")
+    # print(f"\n[calculate_outcome] Total raw weight sum: {total_weight:.6f}")
     if total_weight <= 0:
         # Fallback in pathological case
         chosen = "Dot"
-        print("[calculate_outcome] Warning: Total weight <= 0, defaulting to Dot ball")
+        # print("[calculate_outcome] Warning: Total weight <= 0, defaulting to Dot ball")
     else:
         normalized_weights = [raw_weights[o] / total_weight for o in raw_weights]
-        print(f"[calculate_outcome] Normalized weights:")
+        # print(f"[calculate_outcome] Normalized weights:")
         for o, nw in zip(raw_weights.keys(), normalized_weights):
             print(f"  {o}: {nw:.4f}")
         chosen = random.choices(list(raw_weights.keys()), weights=normalized_weights)[0]
 
-    print(f"[calculate_outcome] Chosen outcome: {chosen}")
+    # print(f"[calculate_outcome] Chosen outcome: {chosen}")
 
     # 5) Build and return the result dictionary
     result = {
@@ -712,7 +712,7 @@ def calculate_outcome(
         template = random.choice(wicket_descriptions)
         result["description"] = template
 
-        print(f"[calculate_outcome] WICKET! Type: {wicket_choice}, Description: {template}")
+        # print(f"[calculate_outcome] WICKET! Type: {wicket_choice}, Description: {template}")
 
     elif chosen == "Extras":
         result["type"] = "extra"
@@ -724,7 +724,7 @@ def calculate_outcome(
         template = random.choice(commentary_templates["Extras"])
         result["description"] = f"{template} ({extra_choice})"
 
-        print(f"[calculate_outcome] EXTRA! Type: {extra_choice}, Description: {result['description']}")
+        # print(f"[calculate_outcome] EXTRA! Type: {extra_choice}, Description: {result['description']}")
 
     else:
         # It must be one of Dot, Single, Double, Three, Four, Six
@@ -744,7 +744,7 @@ def calculate_outcome(
         template = random.choice(commentary_templates[chosen])
         result["description"] = f"{template}"
 
-        print(f"[calculate_outcome] RUN! Outcome: {chosen}, Runs: {result['runs']}, Description: {template}")
+        # print(f"[calculate_outcome] RUN! Outcome: {chosen}, Runs: {result['runs']}, Description: {template}")
 
     print("=======================================================\n")
     return result

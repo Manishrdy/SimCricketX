@@ -153,9 +153,9 @@ class Match:
             print(f"❌ Error creating match archive: {e}")
             return False
 
-    def _create_match_archive_with_frontend_commentary(self):
-        """Alternative method called when frontend commentary is captured"""
-        return self._create_match_archive()
+    # def _create_match_archive_with_frontend_commentary(self):
+    #     """Alternative method called when frontend commentary is captured"""
+    #     return self._create_match_archive()
             
 
     def _check_for_rain(self):
@@ -207,6 +207,7 @@ class Match:
         elif self.innings == 2:
             return self._handle_second_innings_rain()
         
+    # from the _handle_first_innings_rain function
     def _handle_first_innings_rain(self):
         """Scenario 1: Rain during 1st innings - stop innings and calculate DLS"""
         current_score = self.score
@@ -231,6 +232,9 @@ class Match:
         self.target = dls_target
         self.overs = reduced_overs  # This will limit 2nd innings automatically
         
+        # PRODUCTION FIX: Save the first innings stats before resetting for the second innings.
+        self._save_first_innings_stats()
+        
         # Generate scorecard for 1st innings
         scorecard_data = self._generate_detailed_scorecard()
         scorecard_data["target_info"] = f"DLS Target: {dls_target} runs from {reduced_overs} overs"
@@ -239,6 +243,7 @@ class Match:
         self.innings = 2
         self.batting_team, self.bowling_team = self.bowling_team, self.batting_team
         self.score = 0
+
         self.wickets = 0
         self.current_over = 0
         self.current_ball = 0
@@ -353,41 +358,478 @@ class Match:
             "original_target": original_target
         }
 
-    def _pick_death_overs_bowler(self):
-        """
-        PRE-CALCULATED death overs bowler selection (Overs 18-20)
-        Ignores all filters and uses pure mathematical distribution
-        """
-        print(f"\n🎯 === DEATH OVERS PRE-CALCULATION - Over {self.current_over + 1} ===")
+    def _validate_death_overs_plan(self, death_plan, remaining_bowlers):
+        """Validate death overs plan to ensure no violations"""
+        print(f" 🔍 DEATH OVERS PLAN VALIDATION:")
+        print(f" Plan: {death_plan}")
         
-        # Get all bowlers and their remaining overs
+        # Check 1: No consecutive bowling
+        for i in range(len(death_plan) - 1):
+            if death_plan[i] == death_plan[i + 1]:
+                print(f" ❌ CONSECUTIVE VIOLATION: {death_plan[i]} in positions {i+1} and {i+2}")
+                return False
+        
+        # Check 2: Quota compliance
+        usage_count = {}
+        for bowler_name in death_plan:
+            usage_count[bowler_name] = usage_count.get(bowler_name, 0) + 1
+        
+        for bowler_name, used_overs in usage_count.items():
+            available_overs = remaining_bowlers.get(bowler_name, 0)
+            if used_overs > available_overs:
+                print(f" ❌ QUOTA VIOLATION: {bowler_name} uses {used_overs} but has {available_overs}")
+                return False
+        
+        print(f" ✅ DEATH OVERS PLAN VALIDATED")
+        return True
+
+
+    def _handle_3_bowler_death_scenario_safe(self, remaining_bowlers, previous_bowler):
+        """
+        Handle: A(1 over), B(1 over), C(1 over)
+        ENFORCES NO CONSECUTIVE CONSTRAINT
+        """
+        print(f"  📋 3-Bowler Scenario (Consecutive-Safe):")
+        
+        bowler_names = list(remaining_bowlers.keys())
+        print(f"    Available: {bowler_names}")
+        print(f"    Previous bowler: {previous_bowler}")
+        
+        # Remove previous bowler from first position to avoid consecutive
+        if previous_bowler in bowler_names:
+            non_previous = [b for b in bowler_names if b != previous_bowler]
+            bowler_18 = non_previous[0]
+            remaining_after_18 = [b for b in bowler_names if b != bowler_18]
+            bowler_19 = remaining_after_18[0]
+            bowler_20 = remaining_after_18[1]
+        else:
+            # Previous bowler not in remaining (normal case)
+            bowler_18 = bowler_names[0]
+            bowler_19 = bowler_names[1] 
+            bowler_20 = bowler_names[2]
+        
+        death_plan = [bowler_18, bowler_19, bowler_20]
+        print(f"  ✅ Plan: 18→{death_plan[0]}, 19→{death_plan[1]}, 20→{death_plan[2]}")
+        
+        return death_plan
+
+    def _handle_complex_death_scenario_safe(self, remaining_bowlers, previous_bowler):
+        """
+        Handle complex scenarios (4+ bowlers or unusual distributions)
+        ENFORCES NO CONSECUTIVE CONSTRAINT
+        """
+        print(f"  📋 Complex Scenario ({len(remaining_bowlers)} bowlers, Consecutive-Safe):")
+        
+        available_bowlers = list(remaining_bowlers.keys())
+        death_plan = []
+        used_in_plan = {}
+        
+        # Initialize usage tracking
+        for name in available_bowlers:
+            used_in_plan[name] = 0
+        
+        # Plan each over ensuring no consecutive bowling
+        last_bowler = previous_bowler
+        
+        for over_idx in range(3):  # overs 18, 19, 20
+            print(f"    Planning over {18 + over_idx}, last bowler: {last_bowler}")
+            
+            # Find eligible bowlers for this over
+            eligible = []
+            for name in available_bowlers:
+                # Check if bowler has overs remaining
+                remaining_quota = remaining_bowlers[name] - used_in_plan[name]
+                # Check if not consecutive
+                is_consecutive = (name == last_bowler)
+                
+                if remaining_quota > 0 and not is_consecutive:
+                    eligible.append(name)
+            
+            if not eligible:
+                # Emergency: use any bowler with quota (allow consecutive if necessary)
+                print(f"    🚨 No non-consecutive bowlers available!")
+                for name in available_bowlers:
+                    remaining_quota = remaining_bowlers[name] - used_in_plan[name]
+                    if remaining_quota > 0:
+                        eligible.append(name)
+                        break
+            
+            if eligible:
+                # Select bowler (prefer those with more remaining overs)
+                selected = max(eligible, key=lambda x: remaining_bowlers[x] - used_in_plan[x])
+                death_plan.append(selected)
+                used_in_plan[selected] += 1
+                last_bowler = selected
+                print(f"    Selected: {selected}")
+            else:
+                print(f"    🚨 CRITICAL: No bowlers available!")
+                break
+        
+        # Ensure we have exactly 3 bowlers
+        while len(death_plan) < 3:
+            death_plan.append(available_bowlers[0])  # Emergency fallback
+        
+        print(f"  ✅ Complex Plan: 18→{death_plan[0]}, 19→{death_plan[1]}, 20→{death_plan[2]}")
+        return death_plan[:3]
+
+    def _emergency_death_plan_safe(self, remaining_bowlers, previous_bowler):
+        """
+        Emergency plan when mathematical constraints are violated
+        RESPECTS CONSECUTIVE CONSTRAINT EVEN IN EMERGENCIES
+        FIXED: Better handles impossible 2-bowler scenarios
+        """
+        print(f"  🚨 EMERGENCY DEATH PLAN (Consecutive-Safe - FIXED): {remaining_bowlers}")
+        
+        if not remaining_bowlers:
+            print(f"  💥 CRITICAL: No bowlers with remaining overs!")
+            # Use any bowler as absolute last resort
+            all_bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
+            if all_bowlers:
+                emergency_bowler = all_bowlers[0]["name"]
+                return [emergency_bowler, emergency_bowler, emergency_bowler]
+            return ["Emergency_Bowler", "Emergency_Bowler", "Emergency_Bowler"]
+        
+        available_bowlers = list(remaining_bowlers.keys())
+        death_plan = []
+        
+        # Create a working copy of remaining bowlers to modify
+        working_quota = remaining_bowlers.copy()
+        
+        # Build plan ensuring no consecutive overs
+        last_bowler = previous_bowler
+        
+        for over_num in range(3):  # overs 18, 19, 20
+            print(f"    Planning over {18 + over_num}, last bowler: {last_bowler}")
+            print(f"    Available quota: {working_quota}")
+            
+            # Find bowler who didn't bowl previous over and has quota
+            selected_bowler = None
+            
+            # Priority 1: Non-consecutive bowlers with quota
+            for bowler_name in available_bowlers:
+                if bowler_name != last_bowler and working_quota.get(bowler_name, 0) > 0:
+                    selected_bowler = bowler_name
+                    break
+            
+            # Priority 2: If no non-consecutive bowler available, ALLOW QUOTA VIOLATION
+            # but still prefer non-consecutive if possible
+            if not selected_bowler:
+                print(f"    🚨 No non-consecutive bowlers with quota!")
+                
+                # Try to find any non-consecutive bowler (even with 0 quota)
+                for bowler_name in available_bowlers:
+                    if bowler_name != last_bowler:
+                        selected_bowler = bowler_name
+                        print(f"    ⚠️ QUOTA VIOLATION: Using {bowler_name} with {working_quota.get(bowler_name, 0)} quota")
+                        break
+            
+            # Priority 3: Absolute emergency - allow consecutive if necessary
+            if not selected_bowler:
+                print(f"    💥 ABSOLUTE EMERGENCY: Allowing consecutive bowling")
+                for bowler_name in available_bowlers:
+                    if working_quota.get(bowler_name, 0) > 0:
+                        selected_bowler = bowler_name
+                        print(f"    💥 CONSECUTIVE VIOLATION: Using {bowler_name}")
+                        break
+                
+                # If still no bowler, use first available
+                if not selected_bowler:
+                    selected_bowler = available_bowlers[0]
+                    print(f"    💥 LAST RESORT: Using {selected_bowler}")
+            
+            # Add to plan and update tracking
+            death_plan.append(selected_bowler)
+            if working_quota.get(selected_bowler, 0) > 0:
+                working_quota[selected_bowler] -= 1
+            last_bowler = selected_bowler
+            
+            print(f"    Selected: {selected_bowler}")
+        
+        print(f"  ⚠️ Emergency Plan (Consecutive-Safe): 18→{death_plan[0]}, 19→{death_plan[1]}, 20→{death_plan[2]}")
+        
+        # Log any violations for monitoring
+        violation_count = 0
+        for i in range(len(death_plan) - 1):
+            if death_plan[i] == death_plan[i + 1]:
+                violation_count += 1
+                print(f"  🚨 EMERGENCY CONSECUTIVE VIOLATION: {death_plan[i]} in positions {i+1} and {i+2}")
+        
+        if violation_count > 0:
+            self._log_constraint_violation("EMERGENCY_CONSECUTIVE_VIOLATION", 
+                                        f"Emergency plan forced {violation_count} consecutive bowling instances")
+        
+        return death_plan
+
+    def _calculate_death_overs_plan_safe(self, bowler_quota):
+        """
+        DEBUG VERSION: Calculate optimal 3-over distribution for overs 18-20
+        """
+        print(f"  🐛 DEBUG _calculate_death_overs_plan_safe:")
+        print(f"     Input bowler_quota: {list(bowler_quota.keys())}")
+        
+        # Get bowlers with remaining overs
+        remaining_bowlers = {}
+        total_remaining = 0
+        
+        for name, data in bowler_quota.items():
+            if data['overs_remaining'] > 0:
+                remaining_bowlers[name] = data['overs_remaining']
+                total_remaining += data['overs_remaining']
+                print(f"    {name}: {data['overs_remaining']} overs remaining")
+        
+        print(f"  🐛 Remaining bowlers: {remaining_bowlers}")
+        print(f"  🐛 Total remaining: {total_remaining}")
+        
+        # Get previous bowler
+        previous_bowler = self.current_bowler["name"] if self.current_bowler else None
+        print(f"  🐛 Previous bowler: {previous_bowler}")
+        
+        # Check scenario
+        num_bowlers = len(remaining_bowlers)
+        print(f"  🐛 Number of bowlers with quota: {num_bowlers}")
+        
+        death_plan = None
+        
+        if num_bowlers == 2:
+            print(f"  🐛 CASE 1: 2-bowler scenario")
+            death_plan = self._handle_2_bowler_death_scenario_safe(remaining_bowlers, previous_bowler)
+            if death_plan is None:
+                print(f"  🐛 2-bowler scenario returned None - using emergency")
+                death_plan = self._emergency_death_plan_safe(remaining_bowlers, previous_bowler)
+        elif num_bowlers == 3:
+            print(f"  🐛 CASE 2: 3-bowler scenario")
+            death_plan = self._handle_3_bowler_death_scenario_safe(remaining_bowlers, previous_bowler)
+        else:
+            print(f"  🐛 CASE 3: Complex scenario ({num_bowlers} bowlers)")
+            death_plan = self._handle_complex_death_scenario_safe(remaining_bowlers, previous_bowler)
+        
+        print(f"  🐛 Final death plan: {death_plan}")
+        
+        # Validate plan
+        if death_plan:
+            validation_copy = remaining_bowlers.copy()
+            if self._validate_death_overs_plan(death_plan, validation_copy):
+                print(f"  🐛 Death plan PASSED validation")
+                return death_plan
+            else:
+                print(f"  🐛 Death plan FAILED validation - using emergency")
+                return self._emergency_death_plan_safe(remaining_bowlers, previous_bowler)
+        else:
+            print(f"  🐛 Death plan is None - using emergency")
+            return self._emergency_death_plan_safe(remaining_bowlers, previous_bowler)
+
+    def _handle_2_bowler_death_scenario_safe(self, remaining_bowlers, previous_bowler):
+        """
+        Handle: A(X overs left), B(Y overs left) where X+Y = 3
+        ENFORCES NO CONSECUTIVE CONSTRAINT + OPTIMAL DISTRIBUTION
+        FIXED: Prevents consecutive bowling in ALL scenarios
+        """
+        print(f" 📋 Enhanced 2-Bowler Death Scenario (Consecutive-Safe - FIXED):")
+        
+        bowler_names = list(remaining_bowlers.keys())
+        bowler_1_name = bowler_names[0]
+        bowler_2_name = bowler_names[1]
+        overs_1 = remaining_bowlers[bowler_1_name]
+        overs_2 = remaining_bowlers[bowler_2_name]
+        
+        print(f" {bowler_1_name}: {overs_1} overs, {bowler_2_name}: {overs_2} overs")
+        print(f" Previous bowler: {previous_bowler}")
+        
+        # Determine who has more overs
+        if overs_1 > overs_2:
+            bowler_more_overs = bowler_1_name
+            bowler_fewer_overs = bowler_2_name
+            overs_more = overs_1
+            overs_fewer = overs_2
+        elif overs_2 > overs_1:
+            bowler_more_overs = bowler_2_name
+            bowler_fewer_overs = bowler_1_name
+            overs_more = overs_2
+            overs_fewer = overs_1
+        else:
+            # Equal overs - choose arbitrarily but still apply consecutive logic
+            bowler_more_overs = bowler_1_name
+            bowler_fewer_overs = bowler_2_name
+            overs_more = overs_1
+            overs_fewer = overs_2
+        
+        print(f" More overs: {bowler_more_overs} ({overs_more})")
+        print(f" Fewer overs: {bowler_fewer_overs} ({overs_fewer})")
+        
+        # CRITICAL CHECK: Can we create a valid plan without consecutive violations?
+        
+        if previous_bowler == bowler_more_overs:
+            # Can't start with bowler who has more overs
+            print(f" 🚨 CONSECUTIVE CONSTRAINT: Can't start with {bowler_more_overs}")
+            
+            # Check if we can create a valid plan starting with fewer-overs bowler
+            if overs_more == 2 and overs_fewer == 1:
+                # Only possible plan: [fewer, more, ???]
+                # But "more" can't bowl again after position 2
+                # This creates an impossible scenario: we need "more" to bowl 2 overs
+                # but can't have consecutive, and "fewer" only has 1 over
+                print(f" 🚨 MATHEMATICAL IMPOSSIBILITY: Can't distribute 2-1 without consecutive")
+                print(f"    Required: {bowler_more_overs} needs 2 overs but can't be consecutive")
+                print(f"    Available: {bowler_fewer_overs} only has 1 over")
+                return None  # Signal that this scenario is impossible
+            else:
+                # For other distributions (like 1-2 which shouldn't happen, or edge cases)
+                # Try: [fewer, more, fewer] if fewer has enough overs
+                if overs_fewer >= 2:
+                    death_plan = [bowler_fewer_overs, bowler_more_overs, bowler_fewer_overs]
+                    print(f" ✅ Alternative Plan: 18→{death_plan[0]}, 19→{death_plan[1]}, 20→{death_plan[2]}")
+                else:
+                    print(f" 🚨 IMPOSSIBLE: {bowler_fewer_overs} doesn't have enough overs for alternative")
+                    return None
+        
+        elif previous_bowler == bowler_fewer_overs:
+            # Perfect - can start with bowler who has more overs
+            print(f" ✅ OPTIMAL: Starting with {bowler_more_overs} (more overs)")
+            
+            if overs_more == 2 and overs_fewer == 1:
+                # Standard case: [more, fewer, more]
+                death_plan = [bowler_more_overs, bowler_fewer_overs, bowler_more_overs]
+                print(f" ✅ Optimal Plan: 18→{death_plan[0]}, 19→{death_plan[1]}, 20→{death_plan[2]}")
+            else:
+                # Handle other distributions
+                death_plan = [bowler_more_overs, bowler_fewer_overs, bowler_more_overs]
+                print(f" ✅ Standard Plan: 18→{death_plan[0]}, 19→{death_plan[1]}, 20→{death_plan[2]}")
+        
+        else:
+            # Neither bowled previous over - use optimal distribution
+            print(f" ✅ NO CONSECUTIVE ISSUE: Using optimal distribution")
+            
+            if overs_more == 2 and overs_fewer == 1:
+                # Optimal: [more, fewer, more] - no consecutive issues
+                death_plan = [bowler_more_overs, bowler_fewer_overs, bowler_more_overs]
+                print(f" ✅ Optimal Plan: 18→{death_plan[0]}, 19→{death_plan[1]}, 20→{death_plan[2]}")
+            else:
+                # Handle equal or other distributions
+                death_plan = [bowler_more_overs, bowler_fewer_overs, bowler_more_overs]
+                print(f" ✅ Standard Plan: 18→{death_plan[0]}, 19→{death_plan[1]}, 20→{death_plan[2]}")
+        
+        # Validate the plan if we created one
+        if 'death_plan' not in locals():
+            print(f" 🚨 NO VALID PLAN CREATED - returning None")
+            return None
+        
+        # Final validation - ensure no consecutive bowling
+        for i in range(len(death_plan) - 1):
+            if death_plan[i] == death_plan[i + 1]:
+                print(f" 🚨 FINAL VALIDATION FAILED: {death_plan[i]} in consecutive positions {i+1} and {i+2}")
+                return None
+        
+        # Validate quota compliance
+        usage_count = {}
+        for bowler_name in death_plan:
+            usage_count[bowler_name] = usage_count.get(bowler_name, 0) + 1
+        
+        for bowler_name, used_overs in usage_count.items():
+            available_overs = remaining_bowlers.get(bowler_name, 0)
+            if used_overs > available_overs:
+                print(f" 🚨 QUOTA VALIDATION FAILED: {bowler_name} uses {used_overs} but has {available_overs}")
+                return None
+        
+        print(f" ✅ PLAN VALIDATED: No consecutive bowling, quota compliance verified")
+        return death_plan
+
+
+    def _emergency_single_bowler_selection(self):
+        """Emergency bowler selection for death overs"""
+        print(f"🚨 EMERGENCY SINGLE BOWLER SELECTION")
+        
         all_bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
-        bowler_quota = {}
         
+        # Find any bowler who didn't bowl previous over and has quota
         for bowler in all_bowlers:
             overs_bowled = self.bowler_history.get(bowler["name"], 0)
-            overs_remaining = max(0, 4 - overs_bowled)
-            bowler_quota[bowler["name"]] = {
-                'bowler': bowler,
-                'overs_remaining': overs_remaining,
-                'overs_bowled': overs_bowled
-            }
-            print(f"  {bowler['name']}: {overs_bowled}/4 bowled, {overs_remaining} remaining")
+            is_consecutive = self.current_bowler and bowler["name"] == self.current_bowler["name"]
+            
+            if overs_bowled < 4 and not is_consecutive:
+                print(f"🆘 Emergency selection: {bowler['name']}")
+                return bowler
         
-        # Calculate death overs plan
-        death_plan = self._calculate_death_overs_plan(bowler_quota)
+        # If no non-consecutive bowler with quota, allow quota violation but prevent consecutive
+        for bowler in all_bowlers:
+            is_consecutive = self.current_bowler and bowler["name"] == self.current_bowler["name"]
+            if not is_consecutive:
+                print(f"🆘 Emergency quota violation: {bowler['name']}")
+                return bowler
         
-        # Get current over position in death overs (18=0, 19=1, 20=2)
-        death_over_index = self.current_over - 17
+        # Absolute last resort
+        print(f"🆘 Absolute emergency: {all_bowlers[0]['name']}")
+        return all_bowlers[0]
+
+    def _pick_death_overs_bowler(self):
+        """
+        FIXED: PRE-CALCULATED death overs bowler selection (Overs 18-20)  
+        Calculates plan ONCE at over 18, then uses stored plan for 19 & 20
+        """
+        print(f"\n🎯 === DEATH OVERS SELECTION - Over {self.current_over + 1} ===")
+        
+        # ================ CHECK IF WE NEED TO CALCULATE NEW PLAN ================
+        # Only calculate plan at the START of death overs (over 18)
+        if self.current_over == 17:  # Over 18 (0-indexed)
+            print(f"🔥 CALCULATING NEW DEATH PLAN FOR OVERS 18-20")
+            
+            # Get all bowlers and their current quota
+            all_bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
+            
+            # Build quota dictionary with CURRENT state
+            bowler_quota = {}
+            for bowler in all_bowlers:
+                overs_bowled = self.bowler_history.get(bowler["name"], 0)
+                overs_remaining = max(0, 4 - overs_bowled)
+                if overs_remaining > 0:
+                    bowler_quota[bowler["name"]] = {
+                        'bowler': bowler,
+                        'overs_remaining': overs_remaining,
+                        'overs_bowled': overs_bowled
+                    }
+                    print(f"  {bowler['name']}: {overs_bowled}/4 bowled, {overs_remaining} remaining")
+            
+            # Calculate complete death plan for all 3 overs
+            self.death_overs_plan = self._calculate_death_overs_plan_safe(bowler_quota)
+            self.death_overs_bowler_objects = {}
+            
+            # Store bowler objects for quick lookup
+            for bowler_name in self.death_overs_plan:
+                self.death_overs_bowler_objects[bowler_name] = bowler_quota[bowler_name]['bowler']
+            
+            print(f"📋 STORED DEATH PLAN: 18→{self.death_overs_plan[0]}, 19→{self.death_overs_plan[1]}, 20→{self.death_overs_plan[2]}")
+        
+        # ================ USE STORED PLAN ================
+        elif hasattr(self, 'death_overs_plan') and self.death_overs_plan:
+            print(f"♻️  USING STORED DEATH PLAN: {self.death_overs_plan}")
+        
+        else:
+            print(f"🚨 ERROR: No death plan available for over {self.current_over + 1}")
+            # Emergency fallback - should not happen
+            return self._emergency_single_bowler_selection()
+        
+        # ================ GET BOWLER FOR CURRENT OVER ================
+        death_over_index = self.current_over - 17  # 17→0, 18→1, 19→2
         over_names = ["18th", "19th", "20th"]
         
-        selected_bowler_name = death_plan[death_over_index]
-        selected_bowler = bowler_quota[selected_bowler_name]['bowler']
+        if death_over_index >= len(self.death_overs_plan):
+            print(f"🚨 ERROR: Death over index {death_over_index} out of range")
+            return self._emergency_single_bowler_selection()
+        
+        selected_bowler_name = self.death_overs_plan[death_over_index]
+        selected_bowler = self.death_overs_bowler_objects[selected_bowler_name]
         
         print(f"🎯 DEATH PLAN SELECTION: {over_names[death_over_index]} over → {selected_bowler_name}")
-        print(f"📋 Complete Death Plan: 18th→{death_plan[0]}, 19th→{death_plan[1]}, 20th→{death_plan[2]}")
         
-        # Update tracking (since we bypass normal tracking)
+        # ================ SAFETY CHECK ================
+        if self.current_bowler and selected_bowler["name"] == self.current_bowler["name"]:
+            print(f"🚨 CONSECUTIVE VIOLATION IN STORED PLAN!")
+            print(f"   Previous: {self.current_bowler['name']}")
+            print(f"   Selected: {selected_bowler['name']}")
+            print(f"   This indicates a bug in the death plan calculation!")
+            # Use emergency fallback
+            return self._emergency_single_bowler_selection()
+        
+        # ================ UPDATE TRACKING ================
         old_count = self.bowler_history.get(selected_bowler["name"], 0)
         new_count = old_count + 1
         self.bowler_history[selected_bowler["name"]] = new_count
@@ -400,7 +842,6 @@ class Match:
                 "overs": 0, "maidens": 0, "balls_bowled": 0,
                 "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0
             }
-            print(f"📊 Initialized stats for {selected_bowler['name']}")
         
         print(f"🏁 === DEATH OVERS SELECTION COMPLETE ===\n")
         return selected_bowler
@@ -470,12 +911,12 @@ class Match:
         # This creates a mathematical impossibility that shouldn't occur with proper distribution.
         
         if previous_bowler == bowler_2_overs:
-            print(f"  🚨 MATHEMATICAL CONSTRAINT VIOLATION DETECTED!")
-            print(f"    {bowler_2_overs} has 2 overs left but bowled over 17 (consecutive issue)")
-            print(f"    This scenario should be prevented by better distribution in overs 1-17")
+            print(f"  🚨 CONSECUTIVE CONSTRAINT - FORCING ALTERNATIVE PLAN")
+            print(f"    {bowler_2_overs} has 2 overs left but bowled over 17")
+            print(f"    Using alternative: {bowler_1_over} bowls 2 overs instead")
             
-            # Emergency resolution: Allow consecutive for mathematical necessity
-            return [bowler_1_over, bowler_2_overs, bowler_2_overs]
+            # Force non-consecutive plan: bowler with 1 over gets extra over
+            return [bowler_1_over, bowler_2_overs, bowler_1_over]
         
         # Normal case: bowler with 2 overs didn't bowl over 17
         death_plan = [bowler_2_overs, bowler_1_over, bowler_2_overs]
@@ -513,94 +954,45 @@ class Match:
         return death_plan
 
     def _emergency_death_plan(self, remaining_bowlers):
-        """Emergency plan when mathematical constraints are violated"""
+        """Emergency plan when mathematical constraints are violated - RESPECTS CONSECUTIVE RULE"""
         print(f"  🚨 EMERGENCY DEATH PLAN: filtered remaining_bowlers={remaining_bowlers}")
-
-        # ——— OVERRIDE GUARD ———
-        if not remaining_bowlers:
-            print("  🔄 No bowlers passed filters; overriding selection protocols.")
-            remaining_bowlers = {
-                name: info.get("overs_remaining", 0)
-                for name, info in self.bowler_quota.items()
-                if info.get("overs_remaining", 0) > 0
-            }
-            print(f"  🔄 After first fallback, remaining_bowlers={remaining_bowlers}")
-            if not remaining_bowlers:
-                print("  ⚠️ Fallback still empty; using full quota map.")
-                remaining_bowlers = {
-                    name: info.get("overs_remaining", 0)
-                    for name, info in self.bowler_quota.items()
-                }
-                print(f"  🔄 After full fallback, remaining_bowlers={remaining_bowlers}")
-        # ————————————————
-
-        # Just distribute available overs as best as possible
-        available_overs = []
-        for name, overs in remaining_bowlers.items():
-            print(f"  ⚙️ Adding {overs} slots for bowler '{name}'")
-            available_overs.extend([name] * overs)
-        print(f"  ⚙️ Total available_overs slots={len(available_overs)}")
-
-        # Pad with last bowler if not enough overs (shouldn't happen)
-        while len(available_overs) < 3:
-            print(f"  🛠 Padding: current slots={len(available_overs)}")
-            if available_overs:
-                dup = available_overs[-1]
-                available_overs.append(dup)
-                print(f"  🛠 Appended duplicate of '{dup}'")
-            else:
-                print("  ❌ No available_overs; selecting first bowler from remaining_bowlers")
-                first_bowler = list(remaining_bowlers.keys())[0]
-                available_overs.append(first_bowler)
-                print(f"  🛠 Appended '{first_bowler}'")
-
-        death_plan = available_overs[:3]
-        print(f"  ⚠️ Emergency Plan: over18→{death_plan[0]}, over19→{death_plan[1]}, over20→{death_plan[2]}")
-        return death_plan
-
-
-    def _validate_death_plan(self, death_plan, bowler_quota):
-        """Enhanced validation with mathematical constraint checking"""
-        print(f"  ✅ Validating Death Plan:")
         
-        # Count assignments
-        death_assignments = {}
-        for bowler_name in death_plan:
-            death_assignments[bowler_name] = death_assignments.get(bowler_name, 0) + 1
-        
-        # Validate quota constraints
-        all_valid = True
-        for bowler_name, death_overs in death_assignments.items():
-            available = bowler_quota[bowler_name]['overs_remaining']
-            current_bowled = bowler_quota[bowler_name]['overs_bowled']
-            total_after = current_bowled + death_overs
-            
-            if death_overs > available:
-                print(f"  🚨 QUOTA VIOLATION: {bowler_name} assigned {death_overs}, has {available}")
-                all_valid = False
-            elif total_after > 4:
-                print(f"  🚨 TOTAL VIOLATION: {bowler_name} would bowl {total_after}/4 total")
-                all_valid = False
-            else:
-                print(f"  ✅ {bowler_name}: {current_bowled} + {death_overs} = {total_after}/4")
-        
-        # Check consecutive constraints
         previous_bowler = self.current_bowler["name"] if self.current_bowler else None
-        if previous_bowler == death_plan[0]:
-            print(f"  ⚠️  CONSECUTIVE: {previous_bowler} bowls over 17→18")
-            all_valid = False
+        available_bowlers = list(remaining_bowlers.keys())
         
-        for i in range(len(death_plan) - 1):
-            if death_plan[i] == death_plan[i + 1]:
-                print(f"  ⚠️  CONSECUTIVE: {death_plan[i]} bowls over {18+i}→{18+i+1}")
-                all_valid = False
+        # Remove previous bowler from first position to avoid consecutive
+        if previous_bowler in available_bowlers:
+            available_bowlers.remove(previous_bowler)
+            # Add back at end for later overs
+            available_bowlers.append(previous_bowler)
         
-        if all_valid:
-            print(f"  ✅ Death plan passes all constraints")
-        else:
-            print(f"  ⚠️  Death plan has constraint violations (may be mathematically necessary)")
+        # Build plan ensuring no consecutive overs
+        death_plan = []
+        used_bowlers = []
         
-        return all_valid
+        for over_num in range(3):  # overs 18, 19, 20
+            # Find bowler who didn't bowl previous over
+            last_bowler = death_plan[-1] if death_plan else previous_bowler
+            
+            for bowler_name in available_bowlers:
+                if bowler_name != last_bowler and remaining_bowlers[bowler_name] > 0:
+                    death_plan.append(bowler_name)
+                    remaining_bowlers[bowler_name] -= 1
+                    if remaining_bowlers[bowler_name] == 0:
+                        available_bowlers.remove(bowler_name)
+                    break
+        
+        # If we couldn't fill all 3 slots, use any available bowler
+        while len(death_plan) < 3:
+            for bowler_name in remaining_bowlers:
+                if remaining_bowlers[bowler_name] > 0:
+                    death_plan.append(bowler_name)
+                    remaining_bowlers[bowler_name] -= 1
+                    break
+        
+        print(f"  ⚠️ Emergency Plan (No Consecutive): over18→{death_plan[0]}, over19→{death_plan[1]}, over20→{death_plan[2]}")
+        return death_plan[:3]
+
 
     def _log_constraint_violation(self, violation_type, reason):
         """Log constraint violations for monitoring and analysis"""
@@ -621,18 +1013,6 @@ class Match:
             'timestamp': self.current_over
         })
 
-    def _find_least_overrun_bowlers(self, all_bowlers, quota_analysis):
-        """Find bowlers with minimum quota overrun for emergency selection"""
-        print(f"    🔍 Finding least overrun bowlers:")
-        
-        # Find bowlers with minimum overs bowled (even if 4+)
-        min_overs = min(quota_analysis[b["name"]]['overs_bowled'] for b in all_bowlers)
-        least_overrun = [b for b in all_bowlers if quota_analysis[b["name"]]['overs_bowled'] == min_overs]
-        
-        print(f"    Minimum overs bowled: {min_overs}")
-        print(f"    Bowlers at minimum: {[b['name'] for b in least_overrun]}")
-        
-        return least_overrun
 
     def _get_match_phase(self):
         """Determine current match phase for context"""
@@ -642,7 +1022,7 @@ class Match:
             return "MIDDLE_OVERS"
         else:
             return "DEATH_OVERS"
-        
+
     def _select_optimal_bowler(self, eligible_bowlers, risk_assessment):
         """Select optimal bowler from eligible pool with smart selection logic"""
         print(f"  🎯 Optimal Selection Logic:")
@@ -805,34 +1185,6 @@ class Match:
         print(f"  ✅ Emergency mode: Using all constraint-eligible bowlers")
         return constraint_eligible
 
-    def _apply_full_strategy_suite(self, constraint_eligible):
-        """Apply full strategy suite in normal mode"""
-        print(f"  ✅ FULL STRATEGY SUITE:")
-        current_eligible = constraint_eligible.copy()
-        
-        # Phase 2A: Approach 1 Strategy (Middle overs risk management)
-        if 6 <= self.current_over < 16:
-            print(f"  📊 Applying Approach 1 (Middle overs strategy):")
-            approach1_result = self._apply_approach_1_strategy(current_eligible)
-            if approach1_result != current_eligible:
-                current_eligible = approach1_result
-                print(f"    Modified by Approach 1: {[b['name'] for b in current_eligible]}")
-            else:
-                print(f"    No Approach 1 changes needed")
-        
-        # Phase 2B: Pattern Strategy
-        print(f"  🎯 Applying Pattern Strategy:")
-        pattern_result = self._apply_pattern_strategy(current_eligible, self._get_preferred_bowler_type(self.current_over))
-        print(f"    After pattern filter: {[b['name'] for b in pattern_result]}")
-        current_eligible = pattern_result
-        
-        # Phase 2C: Secondary Filters (Form, Matchup)
-        print(f"  🔧 Applying Secondary Filters:")
-        secondary_result = self._apply_secondary_filters(current_eligible)
-        print(f"    After secondary filters: {[b['name'] for b in secondary_result]}")
-        
-        return secondary_result
-
     
     def _reset_innings_state(self):
         """Reset all innings-specific state for clean 2nd innings"""
@@ -979,7 +1331,7 @@ class Match:
     
 
     def _apply_pattern_strategy(self, eligible_bowlers, preferred_type):
-        """Apply pattern strategy with comprehensive debugging"""
+        """Apply pattern strategy with RATING-WEIGHTED selection"""
         print(f"  🎯 Pattern Strategy Analysis:")
         print(f"  Input bowlers: {[b['name'] for b in eligible_bowlers]}")
         print(f"  Preferred type: {preferred_type}")
@@ -994,13 +1346,26 @@ class Match:
             pattern_bowlers = eligible_bowlers
             print(f"  Mixed/All types allowed")
         
-        # Safe fallback
+        # NEW: Rating-weighted selection within type
         if pattern_bowlers:
-            print(f"  ✅ Pattern filter successful")
+            pattern_bowlers = self._sort_by_rating_and_role(pattern_bowlers)
+            print(f"  ✅ Pattern filter successful with rating priority")
+            print(f"  Rating order: {[(b['name'], b['bowling_rating']) for b in pattern_bowlers]}")
             return pattern_bowlers
         else:
             print(f"  ⚠️  No bowlers match pattern - using all eligible")
             return eligible_bowlers
+
+    def _sort_by_rating_and_role(self, bowlers):
+        """
+        NEW: Sort bowlers by rating and role priority
+        Pure Bowler > All-rounder > Others for same rating range
+        """
+        return sorted(bowlers, key=lambda b: (
+            -b['bowling_rating'],                    # Higher rating first
+            0 if b['role'] == 'Bowler' else 1,      # Pure bowlers first
+            b['name']                                # Alphabetical for ties
+        ))
 
     def _apply_secondary_filters(self, eligible_bowlers):
         """Apply form, matchup, and other filters with debugging"""
@@ -1065,69 +1430,6 @@ class Match:
         
         print(f"    No favorable matchups - using all eligible")
         return eligible_bowlers
-
-    def _apply_approach_1_strategy(self, eligible_bowlers):
-        """
-        Approach 1: Risk-aware middle overs strategy with comprehensive debugging
-        """
-        print(f"  📊 Approach 1 Analysis:")
-        
-        # Identify death specialists
-        death_specialists = self._identify_death_specialists(eligible_bowlers)
-        print(f"  Death specialists available: {[b['name'] for b in death_specialists]}")
-        
-        # Calculate risk level
-        risk_level = self._calculate_death_overs_risk(death_specialists)
-        print(f"  Risk level: {risk_level}")
-        
-        if risk_level == "HIGH_RISK":
-            print(f"  🚨 HIGH RISK: Forcing non-death specialists")
-            non_specialists = [b for b in eligible_bowlers if not self._is_death_specialist(b)]
-            print(f"  Non-specialists: {[b['name'] for b in non_specialists]}")
-            
-            if non_specialists:
-                print(f"  ✅ Returning non-specialists only")
-                return non_specialists
-            else:
-                print(f"  ⚠️  No non-specialists available - using all eligible")
-                return eligible_bowlers
-        
-        elif risk_level == "MEDIUM_RISK":
-            print(f"  ⚖️  MEDIUM RISK: Limiting specialist usage")
-            specialists_used = self._count_specialists_used_in_middle()
-            max_usage = 1
-            print(f"  Specialists used in middle: {specialists_used}/{max_usage}")
-            
-            if specialists_used >= max_usage:
-                print(f"  🔒 Quota reached - forcing non-specialists")
-                non_specialists = [b for b in eligible_bowlers if not self._is_death_specialist(b)]
-                if non_specialists:
-                    return non_specialists
-            else:
-                print(f"  ✅ Can still use specialists")
-        
-        else:  # LOW_RISK
-            print(f"  ✅ LOW RISK: Normal selection allowed")
-        
-        return eligible_bowlers
-
-    def _identify_death_specialists(self, bowlers):
-        """Identify death overs specialists with debugging"""
-        specialists = []
-        
-        print(f"    🔍 Analyzing death specialist criteria:")
-        for bowler in bowlers:
-            is_fast = self._categorize_bowler(bowler) == "fast"
-            high_rating = bowler["bowling_rating"] >= 75
-            fast_type = bowler["bowling_type"] in ["Fast", "Fast-medium", "Medium-fast"]
-            
-            print(f"    {bowler['name']}: fast={is_fast}, rating≥75={high_rating}, fast_type={fast_type}")
-            
-            if is_fast and high_rating and fast_type:
-                specialists.append(bowler)
-                print(f"    ✅ {bowler['name']} qualified as death specialist")
-        
-        return specialists
 
     def _is_death_specialist(self, bowler):
         """Check if bowler is a death specialist (optimized version)"""
@@ -1276,6 +1578,83 @@ class Match:
             'total_overs_remaining': total_overs_remaining
         }
     
+    def _prevent_over_utilization(self, eligible_bowlers, quota_analysis):
+        """Prevent any bowler from bowling more than 2 overs in first 10 overs"""
+        print(f"  🎯 Over-Utilization Prevention (Over {self.current_over + 1}):")
+        
+        if self.current_over >= 10:
+            print(f"    After over 10 - no over-utilization limits")
+            return eligible_bowlers
+        
+        balanced_bowlers = []
+        for bowler in eligible_bowlers:
+            overs_bowled = quota_analysis[bowler['name']]['overs_bowled']
+            if overs_bowled < 2:
+                balanced_bowlers.append(bowler)
+                print(f"    ✅ {bowler['name']}: {overs_bowled}/2 overs - Available")
+            else:
+                print(f"    🚫 {bowler['name']}: {overs_bowled}/2 overs - Over-utilized")
+        
+        if not balanced_bowlers:
+            print(f"    ⚠️  No fresh bowlers - allowing 2-over bowlers")
+            balanced_bowlers = [b for b in eligible_bowlers if quota_analysis[b['name']]['overs_bowled'] <= 2]
+        
+        if not balanced_bowlers:
+            balanced_bowlers = eligible_bowlers
+        
+        return balanced_bowlers
+
+    def _apply_star_preservation_strategy(self, eligible_bowlers, bowler_tiers, quota_analysis):
+        """Save star bowlers for crucial phases"""
+        print(f"  ⭐ Star Preservation Strategy (Over {self.current_over + 1}):")
+        
+        if self.current_over < 6:  # Powerplay
+            return eligible_bowlers
+        elif self.current_over < 16:  # Middle overs - prefer regulars
+            regulars = [b for b in eligible_bowlers if b in bowler_tiers['regular']]
+            support = [b for b in eligible_bowlers if b in bowler_tiers['support']]
+            non_stars = regulars + support
+            
+            if non_stars:
+                print(f"    ✅ Middle overs: Using regular bowlers to save stars")
+                return non_stars
+            else:
+                print(f"    ⚠️  No regular bowlers - using stars")
+                return eligible_bowlers
+        else:  # Death overs
+            return eligible_bowlers
+
+    def _apply_variety_enforcement(self, eligible_bowlers, quota_analysis):
+        """Prevent same bowler from bowling too frequently"""
+        print(f"  🔄 Variety Enforcement:")
+        
+        if len(eligible_bowlers) <= 2:
+            return eligible_bowlers
+        
+        # Check last 3 overs
+        recent_overs = max(0, self.current_over - 2)
+        recent_bowlers = []
+        for over in range(recent_overs, self.current_over):
+            if over in self.over_bowler_log:
+                recent_bowlers.append(self.over_bowler_log[over])
+        
+        variety_preferred = []
+        for bowler in eligible_bowlers:
+            recent_count = recent_bowlers.count(bowler['name'])
+            if recent_count < 2:  # Hasn't bowled 2 of last 3 overs
+                variety_preferred.append(bowler)
+        
+        return variety_preferred if variety_preferred else eligible_bowlers
+
+    def _get_bowling_phase(self):
+        """Get current bowling phase"""
+        if self.current_over < 6:
+            return "POWERPLAY"
+        elif self.current_over < 16:
+            return "MIDDLE_OVERS"
+        else:
+            return "DEATH_OVERS"
+
     def _apply_strict_quota_policy(self, all_bowlers, quota_analysis):
         """Strictly enforce 4-overs-per-bowler policy"""
         print(f"  🔒 4-Overs Policy Enforcement:")
@@ -1294,93 +1673,431 @@ class Match:
         print(f"  Quota-eligible bowlers: {len(quota_eligible)}/{len(all_bowlers)}")
         return quota_eligible
 
+    def _absolute_consecutive_validation(self, selected_bowler):
+        """Final validation to ensure no consecutive bowling - PRODUCTION SAFETY NET"""
+        if not self.current_bowler:
+            return True  # No previous bowler, so no consecutive issue
+        
+        if selected_bowler["name"] == self.current_bowler["name"]:
+            print(f" 🚨 PRODUCTION SAFETY VIOLATION: {selected_bowler['name']} would bowl consecutive!")
+            print(f" 🚨 This should NEVER reach this point - constraint system failed!")
+            
+            # Log critical violation
+            self._log_constraint_violation("PRODUCTION_SAFETY_VIOLATION", 
+                                        f"Consecutive bowling detected at final validation: {selected_bowler['name']}")
+            
+            # ABSOLUTELY DO NOT ALLOW - Force system halt
+            raise Exception(f"PRODUCTION SAFETY: Consecutive bowling prevented for {selected_bowler['name']}")
+        
+        return True
+
+
     def _apply_strict_consecutive_policy(self, quota_eligible, risk_assessment):
-        """Strictly enforce no-consecutive-overs policy"""
-        print(f"  🔒 No-Consecutive Policy Enforcement:")
+        """Strictly enforce no-consecutive-overs policy - ABSOLUTE NO EXCEPTIONS"""
+        print(f" 🔒 ABSOLUTE No-Consecutive Policy Enforcement:")
         
         if not self.current_bowler:
-            print(f"    ✅ No previous bowler - all quota-eligible bowlers available")
+            print(f" ✅ No previous bowler - all quota-eligible bowlers available")
             return quota_eligible
         
         previous_name = self.current_bowler["name"]
-        print(f"    Previous bowler: {previous_name}")
+        print(f" Previous bowler (FORBIDDEN): {previous_name}")
         
         consecutive_eligible = []
         
         for bowler in quota_eligible:
             if bowler["name"] != previous_name:
                 consecutive_eligible.append(bowler)
-                print(f"    ✅ {bowler['name']}: Available (not consecutive)")
+                print(f" ✅ {bowler['name']}: Available (not consecutive)")
             else:
-                print(f"    ❌ {bowler['name']}: BLOCKED (would be consecutive)")
+                print(f" 🚫 {bowler['name']}: ABSOLUTELY BLOCKED (would be consecutive)")
         
-        print(f"  Non-consecutive eligible: {len(consecutive_eligible)}/{len(quota_eligible)}")
+        print(f" Non-consecutive eligible: {len(consecutive_eligible)}/{len(quota_eligible)}")
         
-        # Special handling for high-risk scenarios
-        if not consecutive_eligible and risk_assessment['emergency_mode']:
-            print(f"    🚨 EMERGENCY: No non-consecutive bowlers in high-risk scenario")
-            print(f"    📋 Will be handled in emergency constraint resolution")
+        # PRODUCTION FIX: Never return empty list if there are bowlers available
+        # If quota_eligible had bowlers but consecutive filtering removes all,
+        # this indicates a constraint management error that should be caught early
         
+        if not consecutive_eligible and quota_eligible:
+            print(f" 🚨 CRITICAL ERROR: All quota-eligible bowlers would be consecutive!")
+            print(f" 🚨 This indicates poor constraint planning - should never happen")
+            self._log_constraint_violation("CONSECUTIVE_CONSTRAINT_VIOLATION", 
+                                        f"All quota-eligible bowlers would bowl consecutive to {previous_name}")
+            
+            # Force emergency resolution through proper channels
+            # Don't return empty list - let emergency handler deal with it properly
+            
         return consecutive_eligible
 
+
     def _handle_constraint_emergency(self, all_bowlers, quota_analysis, risk_assessment):
-        """Handle emergency with ABSOLUTE constraint enforcement - NO EXCEPTIONS"""
-        print(f"  🚨 CONSTRAINT EMERGENCY HANDLING:")
-        print(f"  Risk Level: {risk_assessment['risk_level']}")
+        """Handle emergency with ABSOLUTE consecutive constraint enforcement - NO EXCEPTIONS EVER"""
+        print(f" 🚨 CONSTRAINT EMERGENCY HANDLING:")
+        print(f" Risk Level: {risk_assessment['risk_level']}")
         
-        # ABSOLUTE RULE: Never allow > 4 overs per bowler
-        # ABSOLUTE RULE: Never allow consecutive overs
+        # ABSOLUTE RULE 1: Never allow consecutive overs (HIGHEST PRIORITY)
+        # ABSOLUTE RULE 2: Prefer bowlers with < 4 overs, but allow 4+ overs if needed to prevent consecutive
         
-        # Step 1: Find bowlers with < 4 overs (STRICT)
-        quota_eligible = []
+        previous_bowler_name = self.current_bowler["name"] if self.current_bowler else None
+        print(f" Previous bowler (MUST BE AVOIDED): {previous_bowler_name}")
+        
+        # Step 1: Find ALL non-consecutive bowlers first (regardless of quota)
+        non_consecutive_bowlers = []
+        for bowler in all_bowlers:
+            if bowler["name"] != previous_bowler_name:
+                non_consecutive_bowlers.append(bowler)
+        
+        print(f" All non-consecutive bowlers: {[b['name'] for b in non_consecutive_bowlers]}")
+        
+        if not non_consecutive_bowlers:
+            # IMPOSSIBLE SCENARIO: Only one bowler in team (should never happen in T20)
+            print(f" 💥 CRITICAL SYSTEM ERROR: Only one bowler available - match cannot continue")
+            self._log_constraint_violation("IMPOSSIBLE_SCENARIO", "Only one bowler in team")
+            # Force match abandonment rather than allow consecutive
+            raise Exception("Match cannot continue: Insufficient bowlers to prevent consecutive overs")
+        
+        # Step 2: Among non-consecutive bowlers, prefer those with < 4 overs
+        preferred_bowlers = []
+        fallback_bowlers = []
+        
+        for bowler in non_consecutive_bowlers:
+            bowler_data = quota_analysis[bowler["name"]]
+            if bowler_data['overs_bowled'] < 4:
+                preferred_bowlers.append(bowler)
+            else:
+                fallback_bowlers.append(bowler)
+        
+        print(f" Preferred (< 4 overs): {[b['name'] for b in preferred_bowlers]}")
+        print(f" Fallback (4+ overs): {[b['name'] for b in fallback_bowlers]}")
+        
+        # Step 3: Return preferred bowlers if available, otherwise use fallback
+        if preferred_bowlers:
+            print(f" ✅ EMERGENCY RESOLVED: Using preferred non-consecutive bowlers")
+            return preferred_bowlers
+        else:
+            # Allow quota violation but NEVER consecutive bowling
+            print(f" ⚠️ QUOTA VIOLATION ALLOWED: Using 4+ over bowlers to prevent consecutive")
+            print(f" 🔒 CONSECUTIVE CONSTRAINT MAINTAINED: Never allowing consecutive overs")
+            self._log_constraint_violation("QUOTA_VIOLATION_FOR_CONSECUTIVE_PREVENTION", 
+                                        f"Using {fallback_bowlers[0]['name']} with 4+ overs to prevent consecutive")
+            return fallback_bowlers
+
+
+    def _classify_bowlers_by_tier(self, all_bowlers):
+        """
+        NEW: Classify bowlers into performance tiers for strategic selection
+        """
+        print(f"\n🏷️  === BOWLER CLASSIFICATION ===")
+        
+        tiers = {
+            'star': [],      # 85+ rating
+            'regular': [],   # 70-84 rating  
+            'support': [],   # 50-69 rating
+            'filler': []     # <50 rating
+        }
+        
+        for bowler in all_bowlers:
+            rating = bowler['bowling_rating']
+            role = bowler['role']
+            
+            if rating >= 85:
+                tiers['star'].append(bowler)
+                print(f"  ⭐ STAR: {bowler['name']} ({rating}, {role})")
+            elif rating >= 70:
+                tiers['regular'].append(bowler)
+                print(f"  🔷 REGULAR: {bowler['name']} ({rating}, {role})")
+            elif rating >= 50:
+                tiers['support'].append(bowler)
+                print(f"  🔹 SUPPORT: {bowler['name']} ({rating}, {role})")
+            else:
+                tiers['filler'].append(bowler)
+                print(f"  ⚪ FILLER: {bowler['name']} ({rating}, {role})")
+        
+        return tiers
+
+    def _try_early_overs_fast_selection(self, bowler_tiers, quota_analysis):
+        """
+        NEW: Force top-rated fast bowlers in early overs (1-4)
+        """
+        print(f"\n🚀 === EARLY OVERS FAST SELECTION ===")
+        
+        # Get ALL fast bowlers from all tiers, not just stars
+        all_bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
+        fast_bowlers = [
+            b for b in all_bowlers 
+            if self._is_fast_bowler(b) and self._is_powerplay_eligible(b, quota_analysis)
+        ]
+        
+        if not fast_bowlers:
+            print(f"  ❌ No fast bowlers available for early overs")
+            return None
+        
+        # Sort by rating first (highest to lowest), then by role (pure bowlers > all-rounders)
+        fast_bowlers.sort(key=lambda b: (
+            b['bowling_rating'], 
+            0 if b['role'] == 'Bowler' else 1
+        ), reverse=True)
+        
+        selected = fast_bowlers[0]
+        overs_bowled = quota_analysis[selected['name']]['overs_bowled']
+        
+        print(f"  ✅ EARLY OVERS FAST: {selected['name']} (Rating: {selected['bowling_rating']}, Overs: {overs_bowled}/4)")
+        return selected
+
+    def _prevent_star_neglect(self, bowler_tiers, quota_analysis):
+        """
+        NEW: Prevent star bowlers from sitting idle too long
+        """
+        print(f"\n⚡ === STAR NEGLECT PREVENTION ===")
+        
+        # Find star bowlers who haven't bowled enough
+        neglected_stars = []
+        for star in bowler_tiers['star']:
+            overs_bowled = quota_analysis[star['name']]['overs_bowled'] 
+            
+            # Star bowler neglect criteria
+            if self.current_over >= 10 and overs_bowled == 0:
+                neglected_stars.append((star, 'zero_overs'))
+                print(f"  🚨 CRITICAL NEGLECT: {star['name']} (0 overs by over {self.current_over + 1})")
+            elif self.current_over >= 14 and overs_bowled <= 1:
+                neglected_stars.append((star, 'under_bowled'))
+                print(f"  ⚠️  MODERATE NEGLECT: {star['name']} ({overs_bowled} overs by over {self.current_over + 1})")
+        
+        if not neglected_stars:
+            print(f"  ✅ No star bowler neglect detected")
+            return None
+        
+        # Prioritize critical neglect, then by rating
+        neglected_stars.sort(key=lambda x: (
+            0 if x[1] == 'zero_overs' else 1,  # Critical first
+            -x[0]['bowling_rating']             # Higher rating first
+        ))
+        
+        # Check if top neglected star is eligible
+        candidate = neglected_stars[0][0]
+        if self._is_constraint_eligible(candidate, quota_analysis):
+            print(f"  🎯 NEGLECT OVERRIDE: Selecting {candidate['name']}")
+            return candidate
+        
+        print(f"  ❌ Neglected star {candidate['name']} not constraint-eligible")
+        return None
+
+    def _is_fast_bowler(self, bowler):
+        """Check if bowler is fast/fast-medium type"""
+        return bowler['bowling_type'] in ['Fast', 'Fast-medium', 'Medium-fast']
+
+    def _is_powerplay_eligible(self, bowler, quota_analysis):
+        """Check if bowler is eligible for powerplay selection"""
+        bowler_data = quota_analysis[bowler['name']]
+        
+        # Must have overs remaining
+        if bowler_data['overs_bowled'] >= 4:
+            return False
+        
+        # Must not have bowled previous over (consecutive check)
+        if self.current_bowler and bowler['name'] == self.current_bowler['name']:
+            return False
+            
+        return True
+
+    def _is_constraint_eligible(self, bowler, quota_analysis):
+        """Check if bowler meets basic constraint requirements"""
+        return self._is_powerplay_eligible(bowler, quota_analysis)  # Same logic for now
+
+    def _try_low_rated_bowler_usage(self, bowler_tiers, quota_analysis):
+        """
+        NEW: Strategic usage of low-rated bowlers (support/filler) for 1-3 overs when beneficial
+        """
+        print(f"\n🎯 === LOW-RATED BOWLER STRATEGIC USAGE ===")
+        
+        # Combine support and filler bowlers
+        low_rated_bowlers = bowler_tiers['support'] + bowler_tiers['filler']
+        
+        if not low_rated_bowlers:
+            print(f"  ❌ No low-rated bowlers available")
+            return None
+        
+        # Filter for eligible bowlers (constraint-safe)
+        eligible_low_rated = []
+        for bowler in low_rated_bowlers:
+            if self._is_constraint_eligible(bowler, quota_analysis):
+                overs_bowled = quota_analysis[bowler['name']]['overs_bowled']
+                if overs_bowled <= 2:  # Max 3 overs for low-rated bowlers
+                    eligible_low_rated.append(bowler)
+        
+        if not eligible_low_rated:
+            print(f"  ❌ No eligible low-rated bowlers (constraint or over-limit)")
+            return None
+        
+        # Determine if we should use low-rated bowler based on strategy
+        should_use = False
+        reason = ""
+        
+        # Strategy 1: Save premium bowlers for death overs (overs 11-16)
+        if 11 <= self.current_over < 16:
+            star_remaining_overs = sum(
+                quota_analysis[star['name']]['overs_remaining'] 
+                for star in bowler_tiers['star']
+            )
+            death_overs_needed = 4  # overs 17-20
+            if star_remaining_overs >= death_overs_needed:
+                should_use = True
+                reason = "Saving stars for death overs"
+        
+        # Strategy 2: Balance workload in middle overs (overs 8-14)
+        elif 8 <= self.current_over < 15:
+            regular_bowlers_used = sum(
+                1 for regular in bowler_tiers['regular'] 
+                if quota_analysis[regular['name']]['overs_bowled'] >= 2
+            )
+            if regular_bowlers_used >= 2:  # If 2+ regulars have bowled 2+ overs
+                should_use = True
+                reason = "Balancing workload among regulars"
+        
+        # Strategy 3: Fresh bowler injection (any over after 7)
+        elif self.current_over >= 7:
+            unused_bowlers = sum(
+                1 for bowler in eligible_low_rated
+                if quota_analysis[bowler['name']]['overs_bowled'] == 0
+            )
+            if unused_bowlers > 0 and random.random() < 0.3:  # 30% chance
+                should_use = True
+                reason = "Fresh bowler injection for variation"
+        
+        if not should_use:
+            print(f"  ⏸️  Strategic conditions not met for low-rated usage")
+            return None
+        
+        # Select best available low-rated bowler
+        eligible_low_rated.sort(key=lambda b: (
+            quota_analysis[b['name']]['overs_bowled'],  # Prefer less used
+            -b['bowling_rating']  # Then by rating (descending)
+        ))
+        
+        selected = eligible_low_rated[0]
+        overs_bowled = quota_analysis[selected['name']]['overs_bowled']
+        
+        print(f"  ✅ LOW-RATED STRATEGIC: {selected['name']} (Rating: {selected['bowling_rating']}, Overs: {overs_bowled}/3)")
+        print(f"  📋 Reason: {reason}")
+        
+        return selected
+
+    def _check_critical_2_bowler_scenario(self):
+        """
+        CRITICAL: Check for 2-bowler scenario that could lead to consecutive bowling
+        Applies to overs 16+ to prevent impossible situations in death overs
+        """
+        print(f"\n🚨 === CRITICAL 2-BOWLER SCENARIO CHECK (Over {self.current_over + 1}) ===")
+        
+        # Get all available bowlers
+        all_bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
+        quota_analysis = self._analyze_quota_status(all_bowlers)
+        
+        # Count bowlers with overs remaining
+        available_bowlers = {}
         for bowler in all_bowlers:
             bowler_data = quota_analysis[bowler["name"]]
-            if bowler_data['overs_bowled'] < 4:  # STRICT: Must be < 4, not <= 4
-                quota_eligible.append(bowler)
+            if bowler_data['overs_remaining'] > 0:
+                available_bowlers[bowler["name"]] = bowler_data['overs_remaining']
         
-        print(f"  Bowlers with < 4 overs: {[b['name'] for b in quota_eligible]}")
+        print(f" Available bowlers: {available_bowlers}")
         
-        # Step 2: Remove previous bowler (STRICT)
-        if self.current_bowler:
-            previous_name = self.current_bowler["name"]
-            quota_eligible = [b for b in quota_eligible if b["name"] != previous_name]
-            print(f"  After removing consecutive ({previous_name}): {[b['name'] for b in quota_eligible]}")
+        # Check if exactly 2 bowlers remain with total overs = remaining match overs
+        remaining_match_overs = 20 - (self.current_over + 1)
+        total_available_overs = sum(available_bowlers.values())
         
-        # Step 3: If we have valid options, return them
-        if quota_eligible:
-            print(f"  ✅ EMERGENCY RESOLVED: Found valid bowlers")
-            return quota_eligible
+        print(f" Remaining match overs: {remaining_match_overs}")
+        print(f" Total available overs: {total_available_overs}")
         
-        # Step 4: CRITICAL EMERGENCY - Game cannot continue properly
-        print(f"  🚨 CRITICAL: NO VALID BOWLERS - MATCH CONSTRAINT VIOLATED")
-        print(f"  📋 This should NEVER happen with proper constraint management")
+        # CRITICAL SCENARIO: Exactly 2 bowlers AND tight quota situation
+        if (len(available_bowlers) == 2 and 
+            total_available_overs <= remaining_match_overs + 1):  # Allow 1 over buffer
+            
+            print(f" 🚨 CRITICAL 2-BOWLER SCENARIO DETECTED!")
+            
+            bowler_names = list(available_bowlers.keys())
+            bowler_1_name = bowler_names[0]
+            bowler_2_name = bowler_names[1]
+            overs_1 = available_bowlers[bowler_1_name]
+            overs_2 = available_bowlers[bowler_2_name]
+            
+            print(f" {bowler_1_name}: {overs_1} overs, {bowler_2_name}: {overs_2} overs")
+            
+            # Find bowler objects
+            bowler_1 = next(b for b in all_bowlers if b["name"] == bowler_1_name)
+            bowler_2 = next(b for b in all_bowlers if b["name"] == bowler_2_name)
+            
+            # Apply SMART SELECTION: Choose bowler with MORE overs to avoid future consecutive
+            # This prevents the scenario where we pick the wrong bowler now and create impossible situation later
+            
+            previous_bowler = self.current_bowler["name"] if self.current_bowler else None
+            
+            # Rule 1: Never allow consecutive
+            if previous_bowler == bowler_1_name:
+                if overs_2 > 0:  # bowler_2 is available and not consecutive
+                    selected_bowler = bowler_2
+                    print(f" ✅ CRITICAL: Selected {bowler_2_name} (not consecutive)")
+                else:
+                    print(f" ❌ IMPOSSIBLE: Both bowlers create consecutive or quota violations")
+                    return None
+            elif previous_bowler == bowler_2_name:
+                if overs_1 > 0:  # bowler_1 is available and not consecutive
+                    selected_bowler = bowler_1
+                    print(f" ✅ CRITICAL: Selected {bowler_1_name} (not consecutive)")
+                else:
+                    print(f" ❌ IMPOSSIBLE: Both bowlers create consecutive or quota violations")
+                    return None
+            else:
+                # Neither bowled previous over - apply SMART SELECTION
+                # Choose bowler with MORE remaining overs to better distribute workload
+                if overs_1 > overs_2:
+                    selected_bowler = bowler_1
+                    print(f" ✅ CRITICAL: Selected {bowler_1_name} (more overs: {overs_1} vs {overs_2})")
+                elif overs_2 > overs_1:
+                    selected_bowler = bowler_2
+                    print(f" ✅ CRITICAL: Selected {bowler_2_name} (more overs: {overs_2} vs {overs_1})")
+                else:
+                    # Equal overs - choose based on rating
+                    if bowler_1["bowling_rating"] >= bowler_2["bowling_rating"]:
+                        selected_bowler = bowler_1
+                        print(f" ✅ CRITICAL: Selected {bowler_1_name} (equal overs, higher rating)")
+                    else:
+                        selected_bowler = bowler_2
+                        print(f" ✅ CRITICAL: Selected {bowler_2_name} (equal overs, higher rating)")
+            
+            print(f"🎯 CRITICAL 2-BOWLER INTERVENTION: {selected_bowler['name']}")
+            return selected_bowler
         
-        # Log critical violation
-        self._log_constraint_violation("CRITICAL_SYSTEM_FAILURE", "No valid bowlers available")
-        
-        # EMERGENCY: Return any bowler with exactly 4 overs (least violation)
-        emergency_bowlers = [b for b in all_bowlers if quota_analysis[b["name"]]['overs_bowled'] == 4]
-        if emergency_bowlers:
-            print(f"  🔧 LAST RESORT: Using bowler with exactly 4 overs")
-            return emergency_bowlers[:1]  # Return only one option
-        
-        # ULTIMATE FALLBACK (should never reach here)
-        print(f"  💥 SYSTEM FAILURE: Returning first available bowler")
-        return all_bowlers[:1]
+        print(f" ✅ No critical 2-bowler scenario detected")
+        return None
 
 
     def pick_bowler(self):
         """
-        Production-level bowler selection with DUAL HIGH-PRIORITY constraints:
+        Production-level bowler selection with ENHANCED POWERPLAY + STAR PRIORITY:
         Priority 1A: Strict 4-overs policy (no bowler exceeds 4 overs)
-        Priority 1B: No consecutive overs (no bowler bowls back-to-back)
+        Priority 1B: No consecutive overs (no bowler bowls back-to-back)  
+        Priority 1C: Powerplay star selection (NEW)
+        Priority 1D: Star bowler utilization tracking (NEW)
         Priority 2: Strategy optimization (pattern, approach 1, etc.)
         """
+
+        print(f"\n🐛 PICK_BOWLER DEBUG: Over {self.current_over + 1}")
+        print(f"🐛 Current over >= 17? {self.current_over >= 17}")
+        print(f"🐛 Previous bowler: {self.current_bowler['name'] if self.current_bowler else 'None'}")
 
         # ================ DEATH OVERS SPECIAL HANDLING ================
         if self.current_over >= 17:  # Overs 18, 19, 20
             print(f"\n🎯 === SWITCHING TO DEATH OVERS MODE ===")
             return self._pick_death_overs_bowler()
+        
+        # ================ CRITICAL 2-BOWLER SCENARIO PRE-CHECK ================
+        # Check for 2-bowler scenario even before death overs (overs 16-17)
+        if self.current_over >= 15:  # Start checking from over 16
+            critical_2_bowler_result = self._check_critical_2_bowler_scenario()
+            if critical_2_bowler_result:
+                print(f"🚨 CRITICAL 2-BOWLER SCENARIO DETECTED - EARLY INTERVENTION")
+                return critical_2_bowler_result
         
         # ================ DEBUG: INITIALIZATION ================
         print(f"\n🎳 === BOWLER SELECTION DEBUG - Over {self.current_over + 1} ===")
@@ -1391,12 +2108,38 @@ class Match:
         all_bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
         print(f"All bowlers marked will_bowl: {[b['name'] for b in all_bowlers]}")
         
+        # ================ NEW: BOWLER CLASSIFICATION ================
+        bowler_tiers = self._classify_bowlers_by_tier(all_bowlers)
+        print(f"🌟 Star bowlers: {[b['name'] for b in bowler_tiers['star']]}")
+        print(f"⭐ Regular bowlers: {[b['name'] for b in bowler_tiers['regular']]}")
+        
         # ================ QUOTA TRACKING & ANALYSIS ================
         quota_analysis = self._analyze_quota_status(all_bowlers)
-        print(f"\n📊 QUOTA ANALYSIS:")
-        for bowler_name, data in quota_analysis.items():
-            print(f"  {bowler_name}: {data['overs_bowled']}/4 overs ({data['percentage']:.1f}%) - {data['status']}")
         
+        # ================ NEW: EARLY OVERS FAST BOWLER OVERRIDE ================
+        if self.current_over < 4:  # Early overs 1-4 only
+            early_overs_result = self._try_early_overs_fast_selection(bowler_tiers, quota_analysis)
+            if early_overs_result:
+                print(f"🚀 EARLY OVERS FAST OVERRIDE: Selected {early_overs_result['name']}")
+                self._update_bowler_tracking(early_overs_result)
+                return early_overs_result
+
+        # ================ NEW: STAR NEGLECT PREVENTION ================  
+        if self.current_over >= 10:  # After over 10
+            neglect_result = self._prevent_star_neglect(bowler_tiers, quota_analysis)
+            if neglect_result:
+                print(f"⚡ STAR NEGLECT PREVENTION: Selected {neglect_result['name']}")
+                self._update_bowler_tracking(neglect_result)
+                return neglect_result
+
+        # ================ NEW: LOW-RATED BOWLER STRATEGIC USAGE ================
+        if self.current_over >= 5:  # After early overs
+            low_rated_result = self._try_low_rated_bowler_usage(bowler_tiers, quota_analysis)
+            if low_rated_result:
+                print(f"🎯 LOW-RATED STRATEGIC: Selected {low_rated_result['name']}")
+                self._update_bowler_tracking(low_rated_result)
+                return low_rated_result
+
         # ================ RISK ASSESSMENT ================
         risk_assessment = self._assess_constraint_risk(all_bowlers, quota_analysis)
         print(f"\n⚠️  RISK ASSESSMENT:")
@@ -1461,18 +2204,27 @@ class Match:
             constraint_eligible = self._handle_constraint_emergency(all_bowlers, quota_analysis, risk_assessment)
             print(f"Emergency resolution: {[b['name'] for b in constraint_eligible]}")
         
-        # ================ PHASE 2: STRATEGIC OPTIMIZATION ================
-        print(f"\n--- PHASE 2: STRATEGIC OPTIMIZATION ---")
-        
-        # Check if we should override strategy due to high risk
-        if risk_assessment['emergency_mode']:
-            print(f"🚨 EMERGENCY MODE: Minimal strategy override only")
-            strategic_eligible = self._apply_minimal_strategy_override(constraint_eligible, risk_assessment)
-        else:
-            print(f"✅ NORMAL MODE: Full strategy application")
-            strategic_eligible = self._apply_full_strategy_suite(constraint_eligible)
-        
-        print(f"After strategic filters: {[b['name'] for b in strategic_eligible]}")
+        # ================ PHASE 2: BALANCED STRATEGIC DISTRIBUTION ================
+        print(f"\n--- PHASE 2: BALANCED STRATEGIC DISTRIBUTION ---")
+
+        # 2A: Prevent over-utilization (max 2 overs in first 10)
+        balanced_eligible = self._prevent_over_utilization(constraint_eligible, quota_analysis)
+
+        # 2B: Star preservation strategy  
+        preserved_eligible = self._apply_star_preservation_strategy(balanced_eligible, bowler_tiers, quota_analysis)
+
+        # 2C: Variety enforcement
+        variety_eligible = self._apply_variety_enforcement(preserved_eligible, quota_analysis)
+
+        print(f"After balanced strategy: {[b['name'] for b in variety_eligible]}")
+
+        # ================ PHASE 3: PATTERN OPTIMIZATION ================
+        print(f"\n--- PHASE 3: PATTERN OPTIMIZATION ---")
+
+        # Apply existing pattern strategy to final pool
+        strategic_eligible = self._apply_pattern_strategy(variety_eligible, self._get_preferred_bowler_type(self.current_over))
+
+        print(f"After pattern filters: {[b['name'] for b in strategic_eligible]}")
         
         # ================ FINAL SELECTION & VALIDATION ================
         print(f"\n--- FINAL SELECTION & VALIDATION ---")
@@ -1517,6 +2269,12 @@ class Match:
                 bowler["bowling_rating"] = bowler["_orig_boiling_rating"]
                 del bowler["_orig_boiling_rating"]
         # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+
+        # Add this right before "return selected_bowler" in pick_bowler()
+        # ================ PRODUCTION SAFETY NET ================
+        print(f"\n--- PRODUCTION CONSECUTIVE VALIDATION ---")
+        self._absolute_consecutive_validation(selected_bowler)
+        print(f"✅ CONSECUTIVE VALIDATION PASSED: {selected_bowler['name']} is safe to bowl")
 
         return selected_bowler
 
@@ -1598,14 +2356,6 @@ class Match:
                         "current_over": self.current_over,
                         "current_ball": self.current_ball
                     }))
-
-                    # balls_left = (self.overs - self.current_over) * 6 - self.current_ball
-                    # overs_left = balls_left / 6
-
-                    # total_balls_in_innings = self.overs * 6  # 120 balls for 20 overs
-                    # balls_played_including_this_ball = self.current_over * 6 + self.current_ball  # Now includes the match-winning ball
-                    # balls_left = total_balls_in_innings - balls_played_including_this_ball
-                    # overs_left = balls_left / 6
 
                     self.result = f"{winner_code} won by {wkts_left} wicket(s) with {overs_left:.1f} overs remaining."
                 else:
@@ -2136,75 +2886,6 @@ class Match:
             "bowler": self.current_bowler["name"] if self.current_bowler else ""
         }
 
-
-    def _generate_end_of_over_stats(self):
-        """Generate end of over statistics display"""
-        stats_lines = []
-        
-        # Team score with run rate
-        balls_played = self.current_over * 6 + self.current_ball
-        if balls_played > 0:
-            current_rr = (self.score * 6) / balls_played
-            stats_lines.append(f"<strong>End of over {self.current_over + 1}</strong> (Score: {self.score}/{self.wickets}, RR: {current_rr:.2f})")
-        else:
-            stats_lines.append(f"<strong>End of over {self.current_over + 1}</strong> (Score: {self.score}/{self.wickets})")
-        
-        # Required run rate for 2nd innings
-        if self.innings == 2:
-            balls_remaining = (self.overs - self.current_over - 1) * 6 + (6 - self.current_ball)
-            if balls_remaining > 0:
-                required_rr = ((self.target - self.score) * 6) / balls_remaining
-                stats_lines.append(f"Required: {self.target - self.score} runs from {balls_remaining} balls (RRR: {required_rr:.2f})")
-        
-        # Current batsmen stats
-        striker_stats = self.batsman_stats[self.current_striker["name"]]
-        non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
-        
-        stats_lines.append(f"{self.current_striker['name']}\t\t{striker_stats['runs']}({striker_stats['balls']}b) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]")
-        stats_lines.append(f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]")
-        
-        # Current bowler stats
-        bowler_stats = self.bowler_stats[self.current_bowler["name"]]
-        overs_bowled = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
-        stats_lines.append(f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}")
-        
-        return "<br>" + "<br>".join(stats_lines) + "<br>"
-
-
-    def _generate_end_of_innings_stats(self):
-        """Generate end of innings comprehensive statistics"""
-        stats_lines = []
-        stats_lines.append("<br><strong>=== INNINGS SUMMARY ===</strong>")
-        
-        # Current batsmen (last pair)
-        striker_stats = self.batsman_stats[self.current_striker["name"]]
-        non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
-        
-        stats_lines.append(f"{self.current_striker['name']}\t\t{striker_stats['runs']}({striker_stats['balls']}b) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]")
-        stats_lines.append(f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]")
-        
-        # Last bowler
-        if self.current_bowler:
-            bowler_stats = self.bowler_stats[self.current_bowler["name"]]
-            overs_bowled = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
-            
-
-            # Add extras display for innings end
-            extras_str = ""
-            if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
-                extras_parts = []
-                if bowler_stats["wides"] > 0:
-                    extras_parts.append(f"{bowler_stats['wides']}w")
-                if bowler_stats["noballs"] > 0:
-                    extras_parts.append(f"{bowler_stats['noballs']}nb")
-                if extras_parts:
-                    extras_str = f" ({', '.join(extras_parts)})"
-
-            stats_lines.append(f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}")
-
-        return "<br>" + "<br>".join(stats_lines) + "<br>"
-
-
     def _generate_detailed_scorecard(self):
         """Generate detailed cricbuzz-style scorecard"""
         
@@ -2216,16 +2897,18 @@ class Match:
         players = []
 
         # Loop through ALL players in batting order, not just those who batted
+        # from the _generate_detailed_scorecard function
         for player in self.batting_team:
             player_name = player["name"]
             
             if player_name in self.batsman_stats:
                 stats = self.batsman_stats[player_name]
                 
-                # Check if player actually batted (faced balls or got out)
-                if stats["balls"] > 0 or stats["wicket_type"]:
+                # PRODUCTION FIX: Display full stats if the player has a dismissal type OR has faced balls.
+                # This ensures 0-ball ducks are shown correctly.
+                if stats.get("wicket_type") or stats.get("balls", 0) > 0:
                     strike_rate = (stats["runs"] * 100) / stats["balls"] if stats["balls"] > 0 else 0
-                    status = stats["wicket_type"] if stats["wicket_type"] else "not out"
+                    status = stats.get("wicket_type") if stats.get("wicket_type") else "not out"
                     
                     players.append({
                         "name": player_name,
@@ -2251,19 +2934,6 @@ class Match:
                         "bowler_out": "",
                         "fielder_out": ""
                     })
-            else:
-                # Player not in stats at all - didn't bat
-                players.append({
-                    "name": player_name,
-                    "status": "-",
-                    "runs": "",
-                    "balls": "",
-                    "fours": "",
-                    "sixes": "",
-                    "strike_rate": "",
-                    "bowler_out": "",
-                    "fielder_out": ""
-                })
 
         # Generate bowler stats - all players marked will_bowl
         bowlers = []
