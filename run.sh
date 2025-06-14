@@ -4,12 +4,13 @@
 # UPDATE THESE VALUES FOR YOUR REPOSITORY
 GITHUB_USER="Manishrdy"
 GITHUB_REPO="SimCricketX"
+MAIN_BRANCH="main"  # Change to "master" if your default branch is master
 # ===================================
 
 # ============================================
-# UPDATE CHECKER FUNCTION (DEFINED FIRST)
+# AUTO-UPDATE FUNCTION WITH DOWNLOAD
 # ============================================
-check_for_updates() {
+check_and_update() {
     echo
     echo "============================================"
     echo "Checking for updates..."
@@ -19,6 +20,15 @@ check_for_updates() {
     if ! command -v curl &> /dev/null; then
         echo "curl not available, skipping update check."
         echo "(Install curl with: brew install curl)"
+        echo
+        sleep 2
+        return
+    fi
+
+    # Check if unzip is available
+    if ! command -v unzip &> /dev/null; then
+        echo "unzip not available, cannot auto-update."
+        echo "(Install unzip with: brew install unzip)"
         echo
         sleep 2
         return
@@ -36,7 +46,7 @@ check_for_updates() {
 
     # Download latest version from GitHub
     echo "Checking latest version from GitHub..."
-    if curl -s -f "https://raw.githubusercontent.com/$GITHUB_USER/$GITHUB_REPO/main/version.txt" -o "$TEMP_VERSION_FILE" 2>/dev/null; then
+    if curl -s -f "https://raw.githubusercontent.com/$GITHUB_USER/$GITHUB_REPO/$MAIN_BRANCH/version.txt" -o "$TEMP_VERSION_FILE" 2>/dev/null; then
         # Read latest version
         if [[ -f "$TEMP_VERSION_FILE" ]]; then
             LATEST_VERSION=$(cat "$TEMP_VERSION_FILE" | tr -d '\n\r')
@@ -81,18 +91,114 @@ check_for_updates() {
         echo
         echo "What would you like to do?"
         echo "[1] Continue with current version"
-        echo "[2] Open GitHub page to download latest"
-        echo "[3] Exit to update manually"
+        echo "[2] AUTO-UPDATE: Download and install latest version"
+        echo "[3] Open GitHub page manually"
+        echo "[4] Exit to update manually"
         echo
         
-        read -p "Enter your choice (1-3) [default: 1]: " choice
+        read -p "Enter your choice (1-4) [default: 2]: " choice
         
         if [[ -z "$choice" ]]; then
-            choice="1"
+            choice="2"
         fi
         
         case $choice in
             2)
+                echo
+                echo "============================================"
+                echo "   🔄 AUTO-UPDATING..."
+                echo "============================================"
+                
+                # Create backup directory with timestamp
+                BACKUP_DIR="backup_$(date +%Y%m%d_%H%M%S)"
+                echo "Creating backup in: $BACKUP_DIR"
+                mkdir -p "$BACKUP_DIR"
+                
+                # Backup important files
+                echo "Backing up current files..."
+                for file in *.py *.txt *.html templates/ static/ data/ config/ auth/ engine/ utils/ logs/; do
+                    if [[ -e "$file" ]]; then
+                        cp -r "$file" "$BACKUP_DIR/" 2>/dev/null
+                        echo "  ✓ Backed up: $file"
+                    fi
+                done
+                
+                # Download latest ZIP
+                TEMP_ZIP="/tmp/simcricketx_latest.zip"
+                echo
+                echo "Downloading latest version..."
+                if curl -L -o "$TEMP_ZIP" "https://github.com/$GITHUB_USER/$GITHUB_REPO/archive/refs/heads/$MAIN_BRANCH.zip"; then
+                    echo "✓ Download completed!"
+                else
+                    echo "✗ Download failed!"
+                    echo "Restore from backup if needed: cp -r $BACKUP_DIR/* ."
+                    echo
+                    read -p "Press Enter to continue..."
+                    return
+                fi
+                
+                # Extract to temporary directory
+                TEMP_EXTRACT="/tmp/simcricketx_extract"
+                rm -rf "$TEMP_EXTRACT" 2>/dev/null
+                mkdir -p "$TEMP_EXTRACT"
+                
+                echo "Extracting files..."
+                if unzip -q "$TEMP_ZIP" -d "$TEMP_EXTRACT"; then
+                    echo "✓ Extraction completed!"
+                else
+                    echo "✗ Extraction failed!"
+                    rm -f "$TEMP_ZIP" 2>/dev/null
+                    echo "Restore from backup if needed: cp -r $BACKUP_DIR/* ."
+                    echo
+                    read -p "Press Enter to continue..."
+                    return
+                fi
+                
+                # Find the extracted folder (GitHub creates [repo-name]-[branch]/)
+                EXTRACTED_FOLDER="$TEMP_EXTRACT/$GITHUB_REPO-$MAIN_BRANCH"
+                if [[ ! -d "$EXTRACTED_FOLDER" ]]; then
+                    # Try alternative naming
+                    EXTRACTED_FOLDER="$TEMP_EXTRACT/$GITHUB_REPO-master"
+                    if [[ ! -d "$EXTRACTED_FOLDER" ]]; then
+                        echo "✗ Could not find extracted folder!"
+                        echo "Contents of extract directory:"
+                        ls -la "$TEMP_EXTRACT"
+                        rm -f "$TEMP_ZIP" 2>/dev/null
+                        rm -rf "$TEMP_EXTRACT" 2>/dev/null
+                        echo
+                        read -p "Press Enter to continue..."
+                        return
+                    fi
+                fi
+                
+                # Copy new files to current directory
+                echo "Installing new files..."
+                cd "$EXTRACTED_FOLDER"
+                for item in *; do
+                    if [[ -e "$item" ]]; then
+                        cp -rf "$item" "$OLDPWD/"
+                        echo "  ✓ Updated: $item"
+                    fi
+                done
+                cd "$OLDPWD"
+                
+                # Cleanup
+                rm -f "$TEMP_ZIP" 2>/dev/null
+                rm -rf "$TEMP_EXTRACT" 2>/dev/null
+                
+                echo
+                echo "============================================"
+                echo "   ✅ UPDATE COMPLETED!"
+                echo "============================================"
+                echo "Updated to version: $LATEST_VERSION"
+                echo "Backup saved in: $BACKUP_DIR"
+                echo
+                echo "If anything goes wrong, restore with:"
+                echo "  cp -r $BACKUP_DIR/* ."
+                echo
+                sleep 3
+                ;;
+            3)
                 echo "Opening GitHub repository..."
                 if command -v open &> /dev/null; then
                     open "https://github.com/$GITHUB_USER/$GITHUB_REPO"
@@ -103,11 +209,10 @@ check_for_updates() {
                 fi
                 echo
                 echo "Please download the latest version from GitHub."
-                echo "After downloading, extract and replace your current files."
                 echo
                 read -p "Press Enter to continue..."
                 ;;
-            3)
+            4)
                 echo
                 echo "Please download the latest version from:"
                 echo "https://github.com/$GITHUB_USER/$GITHUB_REPO"
@@ -126,6 +231,87 @@ check_for_updates() {
     fi
 }
 
+# ============================================
+# FORCE UPDATE FUNCTION (if called with --update)
+# ============================================
+force_update() {
+    echo
+    echo "============================================"
+    echo "   🔄 FORCE UPDATE MODE"
+    echo "============================================"
+    
+    # Check requirements
+    if ! command -v curl &> /dev/null; then
+        echo "ERROR: curl not available. Install with: brew install curl"
+        exit 1
+    fi
+    
+    if ! command -v unzip &> /dev/null; then
+        echo "ERROR: unzip not available. Install with: brew install unzip"
+        exit 1
+    fi
+    
+    echo "Force updating to latest version..."
+    
+    # Create backup
+    BACKUP_DIR="backup_$(date +%Y%m%d_%H%M%S)"
+    echo "Creating backup in: $BACKUP_DIR"
+    mkdir -p "$BACKUP_DIR"
+    
+    for file in *.py *.txt *.html templates/ static/ data/ config/ auth/ engine/ utils/ logs/; do
+        if [[ -e "$file" ]]; then
+            cp -r "$file" "$BACKUP_DIR/" 2>/dev/null
+        fi
+    done
+    
+    # Download and install
+    TEMP_ZIP="/tmp/simcricketx_latest.zip"
+    echo "Downloading..."
+    curl -L -o "$TEMP_ZIP" "https://github.com/$GITHUB_USER/$GITHUB_REPO/archive/refs/heads/$MAIN_BRANCH.zip"
+    
+    TEMP_EXTRACT="/tmp/simcricketx_extract"
+    rm -rf "$TEMP_EXTRACT" 2>/dev/null
+    mkdir -p "$TEMP_EXTRACT"
+    
+    echo "Extracting..."
+    unzip -q "$TEMP_ZIP" -d "$TEMP_EXTRACT"
+    
+    EXTRACTED_FOLDER="$TEMP_EXTRACT/$GITHUB_REPO-$MAIN_BRANCH"
+    if [[ ! -d "$EXTRACTED_FOLDER" ]]; then
+        EXTRACTED_FOLDER="$TEMP_EXTRACT/$GITHUB_REPO-master"
+    fi
+    
+    echo "Installing..."
+    cd "$EXTRACTED_FOLDER"
+    cp -rf * "$OLDPWD/"
+    cd "$OLDPWD"
+    
+    # Cleanup
+    rm -f "$TEMP_ZIP" 2>/dev/null
+    rm -rf "$TEMP_EXTRACT" 2>/dev/null
+    
+    echo "✅ Force update completed!"
+    echo "Backup saved in: $BACKUP_DIR"
+    echo
+}
+
+# ============================================
+# MAIN SCRIPT LOGIC
+# ============================================
+
+# Handle command line arguments
+if [[ "$1" == "--update" ]]; then
+    force_update
+    exit 0
+elif [[ "$1" == "--help" ]]; then
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  --update        Force update to latest version"
+    echo "  --skip-update   Skip update check"
+    echo "  --help          Show this help"
+    exit 0
+fi
+
 echo "============================================"
 echo "Starting SimCricketX Flask App..."
 echo "============================================"
@@ -136,9 +322,9 @@ cd "$(dirname "$0")"
 echo "Current directory: $(pwd)"
 echo
 
-# Check for updates (can be skipped with --skip-update argument)
+# Check for updates (unless skipped)
 if [[ "$1" != "--skip-update" ]]; then
-    check_for_updates
+    check_and_update
 fi
 
 # Show what files are present
@@ -146,7 +332,7 @@ echo "Files in directory:"
 ls -la *.py *.txt 2>/dev/null || echo "No .py or .txt files found!"
 echo
 
-# Set terminal title (works in most terminals)
+# Set terminal title
 echo -ne "\033]0;SimCricketX Flask App\007"
 
 # Check for Python
@@ -185,6 +371,7 @@ if [[ ! -f "requirements.txt" ]]; then
     ls -la
     echo
     echo "Make sure this script is in the same folder as requirements.txt"
+    echo "Or run with --update to download latest files"
     echo
     read -p "Press Enter to exit..."
     exit 1
@@ -196,6 +383,7 @@ if [[ ! -f "app.py" ]]; then
     echo
     echo "ERROR: app.py not found in: $(pwd)"
     echo "Make sure this script is in the same folder as app.py"
+    echo "Or run with --update to download latest files"
     echo
     read -p "Press Enter to exit..."
     exit 1
