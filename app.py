@@ -1093,19 +1093,31 @@ def create_app():
             full_home = load_team(data["team_home"])
             full_away = load_team(data["team_away"])
 
-            # Step 3: Replace playing_xi with full player data + will_bowl flag
-            def enrich_xi(selected, full_team):
+            # Step 3: Generic function to enrich player lists (XI and substitutes)
+            def enrich_player_list(players_to_enrich, full_team_data):
                 enriched = []
-                for sel in selected:
-                    match = next((p for p in full_team["players"] if p["name"] == sel["name"]), None)
-                    if match:
-                        enriched_player = match.copy()
-                        enriched_player["will_bowl"] = sel.get("will_bowl", False)
+                for player_info in players_to_enrich:
+                    # Find the full player data from the team file
+                    full_player_data = next((p for p in full_team_data["players"] if p["name"] == player_info["name"]), None)
+                    if full_player_data:
+                        enriched_player = full_player_data.copy()
+                        # If 'will_bowl' was sent from frontend (for playing_xi), add it.
+                        print("Logger in app.py for player_info: {}".format(player_info))
+                        if 'will_bowl' in player_info:
+                            enriched_player["will_bowl"] = player_info.get("will_bowl", False)
                         enriched.append(enriched_player)
                 return enriched
 
-            data["playing_xi"]["home"] = enrich_xi(data["playing_xi"]["home"], full_home)
-            data["playing_xi"]["away"] = enrich_xi(data["playing_xi"]["away"], full_away)
+            # Enrich both playing XI and substitutes
+            data["playing_xi"]["home"] = enrich_player_list(data["playing_xi"]["home"], full_home)
+            data["playing_xi"]["away"] = enrich_player_list(data["playing_xi"]["away"], full_away)
+
+            if "substitutes" in data:
+                data["substitutes"]["home"] = enrich_player_list(data["substitutes"]["home"], full_home)
+                data["substitutes"]["away"] = enrich_player_list(data["substitutes"]["away"], full_away)
+            else:
+                data["substitutes"] = {"home": [], "away": []}
+
 
             # Step 4: Generate metadata and save file
             match_id = uuid.uuid4().hex[:8]
@@ -1121,7 +1133,7 @@ def create_app():
                 "match_id": match_id,
                 "created_by": user,
                 "timestamp": ts,
-                "rain_probability": data.get("rain_probability", 0.0)  # ADD THIS
+                "rain_probability": data.get("rain_probability", 0.0)
             })
 
             with open(path, "w") as f:
@@ -1264,6 +1276,111 @@ def create_app():
             "toss_decision":   toss_decision
         })
 
+    @app.route("/match/<match_id>/impact-player-swap", methods=["POST"])
+    @login_required
+    def impact_player_swap(match_id):
+        """Handle impact player substitution with optional swaps for each team"""
+        try:
+            # Load match data
+            match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+            match_path = None
+            match_data = None
+            
+            for fn in os.listdir(match_dir):
+                if not fn.endswith(".json"):
+                    continue
+                path = os.path.join(match_dir, fn)
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("match_id") == match_id:
+                    match_data = data
+                    match_path = path
+                    break
+            
+            if not match_data:
+                return jsonify({"error": "Match not found"}), 404
+            
+            # Get swap data
+            swap_data = request.get_json()
+            home_swap = swap_data.get("home_swap")
+            away_swap = swap_data.get("away_swap")
+            
+            impact_swaps = {}
+            
+            # Process home team swap if provided
+            if home_swap:
+                home_out_idx = home_swap["out_player_index"]
+                home_in_idx = home_swap["in_player_index"]
+                
+                # Swap players
+                home_out_player = match_data["playing_xi"]["home"][home_out_idx]
+                home_in_player = match_data["substitutes"]["home"][home_in_idx]
+                
+                match_data["playing_xi"]["home"][home_out_idx] = home_in_player
+                match_data["substitutes"]["home"][home_in_idx] = home_out_player
+                
+                impact_swaps["home"] = {
+                    "out": home_out_player["name"],
+                    "in": home_in_player["name"]
+                }
+            
+            # Process away team swap if provided
+            if away_swap:
+                away_out_idx = away_swap["out_player_index"]
+                away_in_idx = away_swap["in_player_index"]
+                
+                away_out_player = match_data["playing_xi"]["away"][away_out_idx]
+                away_in_player = match_data["substitutes"]["away"][away_in_idx]
+                
+                match_data["playing_xi"]["away"][away_out_idx] = away_in_player
+                match_data["substitutes"]["away"][away_in_idx] = away_out_player
+                
+                impact_swaps["away"] = {
+                    "out": away_out_player["name"],
+                    "in": away_in_player["name"]
+                }
+            
+            # Mark that impact players have been processed
+            match_data["impact_players_swapped"] = True
+            if impact_swaps:
+                match_data["impact_swaps"] = impact_swaps
+            
+            # Save updated match data
+            # with open(match_path, "w", encoding="utf-8") as f:
+            #     json.dump(match_data, f, indent=2)
+            
+            # Update match instance if it exists
+            if match_id in MATCH_INSTANCES:
+                match_instance = MATCH_INSTANCES[match_id]
+                # Update the teams based on the new lineups
+                if match_instance.innings == 2:
+                    # Update for second innings
+                    if match_instance.toss_winner == match_data["team_home"].split("_")[0]:
+                        if match_instance.toss_decision == "Bat":
+                            match_instance.batting_team = match_data["playing_xi"]["away"]
+                            match_instance.bowling_team = match_data["playing_xi"]["home"]
+                        else:
+                            match_instance.batting_team = match_data["playing_xi"]["home"]
+                            match_instance.bowling_team = match_data["playing_xi"]["away"]
+                    else:
+                        if match_instance.toss_decision == "Bat":
+                            match_instance.batting_team = match_data["playing_xi"]["home"]
+                            match_instance.bowling_team = match_data["playing_xi"]["away"]
+                        else:
+                            match_instance.batting_team = match_data["playing_xi"]["away"]
+                            match_instance.bowling_team = match_data["playing_xi"]["home"]
+            
+            app.logger.info(f"Impact player swaps completed for match {match_id}: {impact_swaps}")
+            
+            return jsonify({
+                "success": True,
+                "updated_match_data": match_data,
+                "swaps_made": impact_swaps
+            }), 200
+            
+        except Exception as e:
+            app.logger.error(f"Error in impact player swap: {e}", exc_info=True)
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/match/<match_id>/next-ball")
     @login_required
@@ -1272,13 +1389,26 @@ def create_app():
             match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
             match_data = None
             for fn in os.listdir(match_dir):
-                with open(os.path.join(match_dir, fn)) as f:
-                    data = json.load(f)
-                    if data["match_id"] == match_id:
+                path = os.path.join(match_dir, fn)
+                try:
+                    # Add encoding="utf-8" to correctly read files with special characters
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if data.get("match_id") == match_id:
                         match_data = data
                         break
+                except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                    app.logger.error(f"Error reading or decoding {fn}: {e}")
+                    continue # Skip corrupted or invalid files
             if not match_data:
                 return jsonify({"error": "Match not found"}), 404
+            
+            # Reset impact player flags for fresh simulation
+            if "impact_players_swapped" in match_data:
+                del match_data["impact_players_swapped"]
+            if "impact_swaps" in match_data:
+                del match_data["impact_swaps"]
+
             MATCH_INSTANCES[match_id] = Match(match_data)
 
         match = MATCH_INSTANCES[match_id]

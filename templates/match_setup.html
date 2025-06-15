@@ -374,6 +374,15 @@
             .pitch-section {
                 flex-direction: column;
             }
+
+            .sub-header {
+                text-align: center;
+                padding: 0.5rem;
+                color: var(--accent);
+                opacity: 0.9;
+                font-weight: 500;
+                margin-top: 1rem;
+            }
         }
     </style>
 </head>
@@ -411,15 +420,25 @@
         <div class="xi-grid">
             <div class="pane" id="home-pane">
                 <h3 id="home-name"></h3>
+                <h4 class="sub-header">Playing XI (<span id="home-selected-count">0</span>/11)</h4>
                 <div class="bars" id="home-selected" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
                     ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)"></div>
+                <h4 class="sub-header">Substitutes (<span id="home-substitutes-count">0</span>/5)</h4>
+                <div class="bars" id="home-substitutes" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
+                    ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)"></div>
+                <h4 class="sub-header">Available Players</h4>
                 <div class="bars" id="home-available" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
                     ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)"></div>
             </div>
             <div class="pane" id="away-pane">
                 <h3 id="away-name"></h3>
+                <h4 class="sub-header">Playing XI (<span id="away-selected-count">0</span>/11)</h4>
                 <div class="bars" id="away-selected" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
                     ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)"></div>
+                <h4 class="sub-header">Substitutes (<span id="away-substitutes-count">0</span>/5)</h4>
+                <div class="bars" id="away-substitutes" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
+                    ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)"></div>
+                <h4 class="sub-header">Available Players</h4>
                 <div class="bars" id="away-available" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
                     ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)"></div>
             </div>
@@ -580,15 +599,10 @@
         // Live selected count
         function updatePlayerCounts() {
             ['home', 'away'].forEach(side => {
-                const sel = document.getElementById(`${side}-selected`);
-                const old = sel.querySelector('.selected-count');
-                if (old) old.remove();
-                const count = sel.querySelectorAll('.player-bar').length;
-                const header = document.createElement('div');
-                header.className = 'selected-count';
-                header.style.cssText = "text-align:center;padding:1rem;color:var(--accent);opacity:0.7;";
-                header.textContent = `Selected Players (${count}/11)`;
-                sel.prepend(header);
+                const selectedCount = document.getElementById(`${side}-selected`).querySelectorAll('.player-bar').length;
+                const substitutesCount = document.getElementById(`${side}-substitutes`).querySelectorAll('.player-bar').length;
+                document.getElementById(`${side}-selected-count`).textContent = selectedCount;
+                document.getElementById(`${side}-substitutes-count`).textContent = substitutesCount;
             });
         }
 
@@ -599,21 +613,31 @@
             const errors = [];
 
             ['home', 'away'].forEach((side, i) => {
-                const name = side === 'home' ? 'Team 1' : 'Team 2';
-                const players = document.getElementById(`${side}-selected`)
-                    .querySelectorAll('.player-bar');
-                if (players.length !== 11)
-                    errors.push(`${name}: Need exactly 11 players (${players.length}/11)`);
-                if ([...players].filter(b => b.dataset.role === 'Wicketkeeper').length < 1)
-                    errors.push(`${name}: Need at least 1 Wicketkeeper`);
-                if ([...players].filter(b => {
-                    const cb = b.querySelector('.will-bowl');
-                    return cb && cb.checked;
-                }).length < 5)
-                    errors.push(`${name}: Need at least 5 bowlers`);
+                const teamData = TEAMS[selected[i]];
+                const teamName = teamData.team_name;
+
+                // Validate Playing XI
+                const playingXI = document.getElementById(`${side}-selected`).querySelectorAll('.player-bar');
+                if (playingXI.length !== 11) {
+                    errors.push(`${teamName}: Need exactly 11 players in Playing XI (${playingXI.length}/11).`);
+                }
+                if ([...playingXI].filter(b => b.dataset.role === 'Wicketkeeper').length < 1) {
+                    errors.push(`${teamName}: Need at least 1 Wicketkeeper in Playing XI.`);
+                }
+                if ([...playingXI].filter(b => b.querySelector('.will-bowl')?.checked).length < 5) {
+                    errors.push(`${teamName}: Need at least 5 bowlers in Playing XI.`);
+                }
+
+                // Validate Substitutes
+                const substitutes = document.getElementById(`${side}-substitutes`).querySelectorAll('.player-bar');
+                if (substitutes.length < 1 || substitutes.length > 5) {
+                    errors.push(`${teamName}: Need 1 to 5 substitute players (${substitutes.length} selected).`);
+                }
             });
-            if (![...tosses].some(r => r.checked))
-                errors.push('Select toss choice (Heads or Tails)');
+
+            if (![...tosses].some(r => r.checked)) {
+                errors.push('Select toss choice (Heads or Tails).');
+            }
 
             const old = document.querySelector('.flash');
             if (old) old.remove();
@@ -646,18 +670,29 @@
                 team_away: `${away.short_code}_${away.created_by_email}`,
                 stadium: home.home_ground,
                 pitch: document.getElementById('pitch-select').value,
-                rain_probability: parseFloat(document.getElementById('rain-probability').value), // ADD THIS
+                rain_probability: parseFloat(document.getElementById('rain-probability').value),
                 playing_xi: {
-                    home: [...document.getElementById('home-selected').children]
-                        // only bars that have a real playerName
-                        .filter(bar => bar.dataset.playerName)
+                    home: [...document.getElementById('home-selected').querySelectorAll('.player-bar')]
                         .map(bar => ({
                             name: bar.dataset.playerName,
                             role: bar.dataset.role,
                             will_bowl: Boolean(bar.querySelector('.will-bowl')?.checked)
                         })),
-                    away: [...document.getElementById('away-selected').children]
-                        .filter(bar => bar.dataset.playerName)
+                    away: [...document.getElementById('away-selected').querySelectorAll('.player-bar')]
+                        .map(bar => ({
+                            name: bar.dataset.playerName,
+                            role: bar.dataset.role,
+                            will_bowl: Boolean(bar.querySelector('.will-bowl')?.checked)
+                        }))
+                },
+                substitutes: {
+                    home: [...document.getElementById('home-substitutes').querySelectorAll('.player-bar')]
+                        .map(bar => ({
+                            name: bar.dataset.playerName,
+                            role: bar.dataset.role,
+                            will_bowl: Boolean(bar.querySelector('.will-bowl')?.checked)
+                        })),
+                    away: [...document.getElementById('away-substitutes').querySelectorAll('.player-bar')]
                         .map(bar => ({
                             name: bar.dataset.playerName,
                             role: bar.dataset.role,
