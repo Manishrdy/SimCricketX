@@ -13,6 +13,11 @@ class Match:
         self.stadium = match_data["stadium"]
         self.home_xi = match_data["playing_xi"]["home"]
         self.away_xi = match_data["playing_xi"]["away"]
+
+        # Load substitutes, defaulting to empty lists if not present
+        self.home_substitutes = match_data.get("substitutes", {}).get("home", [])
+        self.away_substitutes = match_data.get("substitutes", {}).get("away", [])
+        
         self.toss_winner = match_data.get("toss_winner")
         self.toss_decision = match_data.get("toss_decision")
 
@@ -2554,6 +2559,11 @@ class Match:
 
                     # Reset for 2nd innings (same as time-based transition)
                     self.innings = 2
+                    if hasattr(self, 'data') and self.data.get('impact_players_swapped'):
+                        # Use the updated playing XI from match data
+                        self.home_xi = self.data["playing_xi"]["home"]
+                        self.away_xi = self.data["playing_xi"]["away"]
+
                     self.batting_team, self.bowling_team = self.bowling_team, self.batting_team
                     self.score = 0
                     self.wickets = 0
