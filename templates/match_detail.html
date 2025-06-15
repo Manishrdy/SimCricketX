@@ -448,6 +448,245 @@
             display: block;
             line-height: 1.3;
         }
+
+        /* Impact Player Modal - Enhanced */
+        .impact-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .impact-content {
+            background: var(--card-bg);
+            margin: 2% auto;
+            padding: 2rem;
+            width: 95%;
+            max-width: 1400px;
+            border-radius: 1rem;
+            box-shadow: 0 8px 32px var(--shadow);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .impact-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .impact-header h2 {
+            font-size: 1.8rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .impact-teams-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .team-section {
+            background: var(--input-bg);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .team-section h3 {
+            text-align: center;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+            color: var(--accent);
+        }
+
+        .team-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .player-column {
+            background: var(--card-bg);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            min-height: 500px;
+        }
+
+        .column-header {
+            text-align: center;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--accent);
+            opacity: 0.9;
+        }
+
+        .player-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .player-card {
+            background: var(--card-bg);
+            border: 2px solid transparent;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            cursor: grab;
+            transition: all 0.2s ease;
+            position: relative;
+            user-select: none;
+        }
+
+        .player-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .player-card.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+
+        .player-card.swapped {
+            background: rgba(40, 167, 69, 0.1);
+            border-color: #28a745;
+        }
+
+        .player-card.original {
+            opacity: 0.6;
+            background: rgba(220, 53, 69, 0.05);
+        }
+
+        .player-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .player-name {
+            font-weight: 600;
+        }
+
+        .player-role {
+            font-size: 0.85rem;
+            color: var(--accent);
+            opacity: 0.8;
+        }
+
+        .swap-badge {
+            position: absolute;
+            top: 0.25rem;
+            right: 0.25rem;
+            background: #28a745;
+            color: white;
+            padding: 0.15rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .team-swap-status {
+            text-align: center;
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background: var(--card-bg);
+            border-radius: 0.5rem;
+            font-weight: 600;
+        }
+
+        .team-swap-status.active {
+            color: #28a745;
+        }
+
+        .team-swap-status.inactive {
+            color: #6c757d;
+        }
+
+        .swap-controls {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .swap-btn {
+            padding: 0.5rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .swap-btn.swap {
+            background: #28a745;
+            color: white;
+        }
+
+        .swap-btn.reset {
+            background: #dc3545;
+            color: white;
+        }
+
+        .swap-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .swap-btn:not(:disabled):hover {
+            transform: scale(1.05);
+        }
+
+        .impact-actions {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .impact-btn {
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .impact-btn.primary {
+            background: var(--gradient);
+            color: white;
+        }
+
+        .impact-btn.secondary {
+            background: var(--input-bg);
+            color: var(--fg);
+        }
+
+        .impact-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .impact-btn:not(:disabled):hover {
+            transform: scale(1.05);
+        }
+
+        .drag-placeholder {
+            border: 2px dashed var(--accent);
+            height: 60px;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+            opacity: 0.5;
+        }
     </style>
 </head>
 
@@ -604,9 +843,430 @@
         </div>
     </div>
 
+    <!-- Impact Player Modal -->
+    <div id="impact-modal" class="impact-modal">
+        <div class="impact-content">
+            <div class="impact-header">
+                <h2>Impact Player Substitution</h2>
+                <p>Each team can optionally swap one player from Playing XI with a substitute</p>
+            </div>
+
+            <div class="impact-teams-container">
+                <!-- Home Team Section -->
+                <div class="team-section" id="home-team-section">
+                    <h3 id="home-team-title">Home Team</h3>
+                    <div class="team-columns">
+                        <div class="player-column">
+                            <div class="column-header">Playing XI</div>
+                            <div class="player-list" id="home-playing-list"></div>
+                        </div>
+                        <div class="player-column">
+                            <div class="column-header">Substitutes</div>
+                            <div class="player-list" id="home-subs-list"></div>
+                        </div>
+                    </div>
+                    <div class="team-swap-status inactive" id="home-swap-status">No swap made</div>
+                    <div class="swap-controls">
+                        <button class="swap-btn reset" id="home-reset-btn" disabled>Reset Swap</button>
+                    </div>
+                </div>
+
+                <!-- Away Team Section -->
+                <div class="team-section" id="away-team-section">
+                    <h3 id="away-team-title">Away Team</h3>
+                    <div class="team-columns">
+                        <div class="player-column">
+                            <div class="column-header">Playing XI</div>
+                            <div class="player-list" id="away-playing-list"></div>
+                        </div>
+                        <div class="player-column">
+                            <div class="column-header">Substitutes</div>
+                            <div class="player-list" id="away-subs-list"></div>
+                        </div>
+                    </div>
+                    <div class="team-swap-status inactive" id="away-swap-status">No swap made</div>
+                    <div class="swap-controls">
+                        <button class="swap-btn reset" id="away-reset-btn" disabled>Reset Swap</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="impact-actions">
+                <button class="impact-btn primary" id="confirm-swaps">Confirm & Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Enhanced Impact Player System
+        let impactPlayerState = {
+            home: {
+                originalXI: [],
+                originalSubs: [],
+                currentXI: [],
+                currentSubs: [],
+                swapped: false,
+                swapInfo: null
+            },
+            away: {
+                originalXI: [],
+                originalSubs: [],
+                currentXI: [],
+                currentSubs: [],
+                swapped: false,
+                swapInfo: null
+            }
+        };
+
+        function showImpactPlayerModal() {
+            const modal = document.getElementById('impact-modal');
+            const homeTeamName = matchData.team_home.split('_')[0];
+            const awayTeamName = matchData.team_away.split('_')[0];
+
+            // Set team names
+            document.getElementById('home-team-title').textContent = homeTeamName;
+            document.getElementById('away-team-title').textContent = awayTeamName;
+
+            // Initialize state
+            initializeImpactPlayerState();
+
+            // Render both teams
+            renderTeam('home');
+            renderTeam('away');
+
+            modal.style.display = 'block';
+        }
+
+        function initializeImpactPlayerState() {
+            // Deep copy original lineups
+            impactPlayerState.home.originalXI = JSON.parse(JSON.stringify(matchData.playing_xi.home));
+            impactPlayerState.home.originalSubs = JSON.parse(JSON.stringify(matchData.substitutes.home));
+            impactPlayerState.home.currentXI = JSON.parse(JSON.stringify(matchData.playing_xi.home));
+            impactPlayerState.home.currentSubs = JSON.parse(JSON.stringify(matchData.substitutes.home));
+            impactPlayerState.home.swapped = false;
+            impactPlayerState.home.swapInfo = null;
+
+            impactPlayerState.away.originalXI = JSON.parse(JSON.stringify(matchData.playing_xi.away));
+            impactPlayerState.away.originalSubs = JSON.parse(JSON.stringify(matchData.substitutes.away));
+            impactPlayerState.away.currentXI = JSON.parse(JSON.stringify(matchData.playing_xi.away));
+            impactPlayerState.away.currentSubs = JSON.parse(JSON.stringify(matchData.substitutes.away));
+            impactPlayerState.away.swapped = false;
+            impactPlayerState.away.swapInfo = null;
+        }
+
+        function renderTeam(team) {
+            const playingList = document.getElementById(`${team}-playing-list`);
+            const subsList = document.getElementById(`${team}-subs-list`);
+
+            // Clear existing content
+            playingList.innerHTML = '';
+            subsList.innerHTML = '';
+
+            // Render Playing XI
+            impactPlayerState[team].currentXI.forEach((player, index) => {
+                const card = createPlayerCard(player, team, 'xi', index);
+                playingList.appendChild(card);
+            });
+
+            // Render Substitutes
+            impactPlayerState[team].currentSubs.forEach((player, index) => {
+                const card = createPlayerCard(player, team, 'sub', index);
+                subsList.appendChild(card);
+            });
+
+            // Update swap status
+            updateSwapStatus(team);
+        }
+
+        function createPlayerCard(player, team, type, index) {
+            const card = document.createElement('div');
+            card.className = 'player-card';
+            card.draggable = true;
+            card.dataset.team = team;
+            card.dataset.type = type;
+            card.dataset.index = index;
+
+            // Check if this player is swapped
+            const isSwapped = impactPlayerState[team].swapInfo &&
+                ((type === 'xi' && player.name === impactPlayerState[team].swapInfo.inPlayer) ||
+                    (type === 'sub' && player.name === impactPlayerState[team].swapInfo.outPlayer));
+
+            if (isSwapped) {
+                card.classList.add('swapped');
+            }
+
+            // Check if this is the original player who was swapped out
+            const isOriginalOut = type === 'sub' &&
+                impactPlayerState[team].swapInfo &&
+                player.name === impactPlayerState[team].swapInfo.outPlayer;
+
+            if (isOriginalOut) {
+                card.classList.add('original');
+            }
+
+            card.innerHTML = `
+        <div class="player-info">
+            <div>
+                <div class="player-name">${player.name}</div>
+                <div class="player-role">${player.role}</div>
+            </div>
+        </div>
+        ${isSwapped && type === 'xi' ? '<div class="swap-badge">IMPACT</div>' : ''}
+    `;
+
+            // Drag event handlers
+            card.addEventListener('dragstart', handleDragStart);
+            card.addEventListener('dragend', handleDragEnd);
+
+            return card;
+        }
+
+        function handleDragStart(e) {
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+                team: e.target.dataset.team,
+                type: e.target.dataset.type,
+                index: e.target.dataset.index
+            }));
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+        }
+
+        // Set up drop zones
+        document.addEventListener('DOMContentLoaded', () => {
+            const playerLists = document.querySelectorAll('.player-list');
+
+            playerLists.forEach(list => {
+                list.addEventListener('dragover', handleDragOver);
+                list.addEventListener('drop', handleDrop);
+                list.addEventListener('dragenter', handleDragEnter);
+                list.addEventListener('dragleave', handleDragLeave);
+            });
+        });
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleDragEnter(e) {
+            if (e.target.classList.contains('player-list')) {
+                e.target.style.background = 'rgba(74, 144, 226, 0.1)';
+            }
+        }
+
+        function handleDragLeave(e) {
+            if (e.target.classList.contains('player-list')) {
+                e.target.style.background = '';
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.target.style.background = '';
+
+            const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+            const dropZone = e.target.closest('.player-list');
+
+            if (!dropZone) return;
+
+            const dropZoneId = dropZone.id;
+            const dropTeam = dropZoneId.includes('home') ? 'home' : 'away';
+            const dropType = dropZoneId.includes('playing') ? 'xi' : 'sub';
+
+            // Can only swap within same team
+            if (data.team !== dropTeam) return;
+
+            // Can only swap between XI and subs, not within same list
+            if (data.type === dropType) return;
+
+            // Store the event globally so performSwap can access it
+            window.currentDropEvent = e;
+
+            // Perform the swap
+            performSwap(data.team, data.type, data.index, dropType);
+
+            // Clean up
+            window.currentDropEvent = null;
+        }
+
+        function performSwap(team, fromType, fromIndex, toType) {
+            const state = impactPlayerState[team];
+
+            // If already swapped, reset first
+            if (state.swapped) {
+                resetTeamSwap(team);
+            }
+
+            const fromList = fromType === 'xi' ? state.currentXI : state.currentSubs;
+            const toList = toType === 'xi' ? state.currentXI : state.currentSubs;
+
+            const draggedPlayer = fromList[fromIndex];
+
+            // Find the closest player in the drop zone to swap with
+            const dropZone = window.currentDropEvent.target.closest('.player-list');
+            const afterElement = getDragAfterElement(dropZone, window.currentDropEvent.clientY);
+            let swapWithIndex = 0;
+
+            // Determine which player to swap with based on drop position
+            if (afterElement) {
+                const cards = [...dropZone.querySelectorAll('.player-card')];
+                swapWithIndex = cards.indexOf(afterElement);
+                if (swapWithIndex > 0) swapWithIndex--; // Adjust for before position
+            } else {
+                // Dropped at the end
+                swapWithIndex = toList.length - 1;
+            }
+
+            // Ensure valid index
+            swapWithIndex = Math.max(0, Math.min(swapWithIndex, toList.length - 1));
+
+            if (toList.length > 0) {
+                const swapWithPlayer = toList[swapWithIndex];
+
+                // Perform the swap
+                fromList[fromIndex] = swapWithPlayer;
+                toList[swapWithIndex] = draggedPlayer;
+
+                // Record swap info
+                state.swapped = true;
+                state.swapInfo = {
+                    outPlayer: fromType === 'xi' ? draggedPlayer.name : swapWithPlayer.name,
+                    inPlayer: fromType === 'sub' ? draggedPlayer.name : swapWithPlayer.name,
+                    outIndex: fromType === 'xi' ? fromIndex : swapWithIndex,
+                    inIndex: fromType === 'sub' ? fromIndex : swapWithIndex
+                };
+
+                // Re-render team
+                renderTeam(team);
+
+                // Enable reset button
+                document.getElementById(`${team}-reset-btn`).disabled = false;
+            }
+        }
+
+        // Add this helper function after performSwap
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.player-card:not(.dragging)')];
+
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        function resetTeamSwap(team) {
+            const state = impactPlayerState[team];
+
+            // Restore original lineups
+            state.currentXI = JSON.parse(JSON.stringify(state.originalXI));
+            state.currentSubs = JSON.parse(JSON.stringify(state.originalSubs));
+            state.swapped = false;
+            state.swapInfo = null;
+
+            // Re-render team
+            renderTeam(team);
+
+            // Disable reset button
+            document.getElementById(`${team}-reset-btn`).disabled = true;
+        }
+
+        function updateSwapStatus(team) {
+            const statusEl = document.getElementById(`${team}-swap-status`);
+            const state = impactPlayerState[team];
+
+            if (state.swapped && state.swapInfo) {
+                statusEl.textContent = `Swapped: ${state.swapInfo.outPlayer} ↔ ${state.swapInfo.inPlayer}`;
+                statusEl.className = 'team-swap-status active';
+            } else {
+                statusEl.textContent = 'No swap made';
+                statusEl.className = 'team-swap-status inactive';
+            }
+        }
+
+        // Reset button handlers
+        document.getElementById('home-reset-btn').addEventListener('click', () => resetTeamSwap('home'));
+        document.getElementById('away-reset-btn').addEventListener('click', () => resetTeamSwap('away'));
+
+        // Confirm swaps handler
+        document.getElementById('confirm-swaps').addEventListener('click', async () => {
+            const swapData = {
+                home_swap: null,
+                away_swap: null
+            };
+
+            // Check home team swap
+            if (impactPlayerState.home.swapped && impactPlayerState.home.swapInfo) {
+                const homeOutIndex = impactPlayerState.home.originalXI.findIndex(
+                    p => p.name === impactPlayerState.home.swapInfo.outPlayer
+                );
+                const homeInIndex = impactPlayerState.home.originalSubs.findIndex(
+                    p => p.name === impactPlayerState.home.swapInfo.inPlayer
+                );
+
+                swapData.home_swap = {
+                    out_player_index: homeOutIndex,
+                    in_player_index: homeInIndex
+                };
+            }
+
+            // Check away team swap
+            if (impactPlayerState.away.swapped && impactPlayerState.away.swapInfo) {
+                const awayOutIndex = impactPlayerState.away.originalXI.findIndex(
+                    p => p.name === impactPlayerState.away.swapInfo.outPlayer
+                );
+                const awayInIndex = impactPlayerState.away.originalSubs.findIndex(
+                    p => p.name === impactPlayerState.away.swapInfo.inPlayer
+                );
+
+                swapData.away_swap = {
+                    out_player_index: awayOutIndex,
+                    in_player_index: awayInIndex
+                };
+            }
+
+            try {
+                // Only send request if at least one team made a swap
+                if (swapData.home_swap || swapData.away_swap) {
+                    const response = await fetch(`/match/${matchData.match_id}/impact-player-swap`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(swapData)
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        matchData = result.updated_match_data;
+                    } else {
+                        alert('Failed to save swaps. Please try again.');
+                        return;
+                    }
+                }
+
+                // Close modal and continue
+                document.getElementById('impact-modal').style.display = 'none';
+                setTimeout(startMatch, delay);
+
+            } catch (error) {
+                console.error('Error saving swaps:', error);
+                alert('An error occurred. Please try again.');
+            }
+        });
+    </script>
     <script>
 
         let matchOver = false;
+        let currentInningsNumber = null;
+        let matchData = {{ match| tojson }}; // Initialize matchData from the template
         let delay = 300;  // default 1x pace
         let isFinalScoreboard = false;
 
@@ -655,11 +1315,15 @@
 
         function showScorecard(data, completeData) {
             console.log("Inside showScorecard")
+
+            // Track current innings number
+            currentInningsNumber = completeData.innings_number;
+
             document.getElementById('scorecard-overlay').style.display = 'flex';
 
             // Update title
             document.getElementById('scorecard-title').textContent =
-                `${data.team_name} ${data.innings} INNINGS SCORECARD`;
+                `${data.innings} INNINGS SCORECARD`;
 
             // Populate batsmen table
             const tbody = document.getElementById('scorecard-tbody');
@@ -893,6 +1557,13 @@
                                 // ✅ ADD: Capture scorecard image before any other logic
                                 await captureCurrentScorecardImage();
 
+                                // Check for impact player swap opportunity
+                                if (data.innings_number === 1 && !matchData.impact_players_swapped) {
+                                    document.getElementById('scorecard-overlay').style.display = 'none';
+                                    showImpactPlayerModal();
+                                    return; // Don't continue with normal flow
+                                }
+
                                 if (isFinalScoreboard) {
                                     console.log("🐛 DEBUG: Final scoreboard ⇒ invoking saveMatchArchive() before close");
                                     try {
@@ -905,19 +1576,19 @@
                                 else {
                                     console.log("🐛 DEBUG: Not final scoreboard ⇒ skipping archive");
                                 }
-                                // 1) Hide the overlay
-                                closeScorecard();
+
+                                // Hide the overlay
+                                document.getElementById('scorecard-overlay').style.display = 'none';
                                 console.log("🐛 DEBUG: closeScorecard() executed");
 
-                                // 2) Append any final commentary
-                                // commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+                                // Append any final commentary
                                 commentaryLog.scrollTop = commentaryLog.scrollHeight;
 
-                                // 3) Update the live scoreboard for ball-by-ball view
+                                // Update the live scoreboard for ball-by-ball view
                                 scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
                                 overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
 
-                                // 4) Now kick off 2nd innings
+                                // Now kick off 2nd innings
                                 setTimeout(startMatch, delay);
                             };
 
