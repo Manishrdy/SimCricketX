@@ -327,7 +327,7 @@ def get_pitch_run_multiplier(pitch: str) -> float:
     Returns the run-friendly multiplier for the given pitch.
     """
     factor = PITCH_RUN_FACTOR.get(pitch, 1.0)
-    print(f"[get_pitch_run_multiplier] Pitch: {pitch}, RunFactor: {factor}")
+    # print(f"[get_pitch_run_multiplier] Pitch: {pitch}, RunFactor: {factor}")
     return factor
 
 def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
@@ -336,7 +336,7 @@ def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
     """
     slot = PITCH_WICKET_FACTOR.get(pitch, {})
     factor = slot.get(bowling_type, slot.get("default", 1.0))
-    print(f"[get_pitch_wicket_multiplier] Pitch: {pitch}, BowlingType: {bowling_type}, WicketFactor: {factor}")
+    # print(f"[get_pitch_wicket_multiplier] Pitch: {pitch}, BowlingType: {bowling_type}, WicketFactor: {factor}")
     return factor
 
 # -----------------------------------------------------------------------------
@@ -386,12 +386,12 @@ PITCH_SCORING_MATRIX = {
         # Sum: 1.00 ✅
     },
     "Flat": {
-        "Dot":     0.24,   # slightly fewer dots
-        "Single":  0.29,   # ↑ more 1s
-        "Double":  0.10,   # ↓ fewer 2s
+        "Dot":     0.26,   # slightly fewer dots
+        "Single":  0.30,   # ↑ more 1s
+        "Double":  0.11,   # ↓ fewer 2s
         "Three":   0.04,   # ↓ much fewer 3s
-        "Four":    0.18,   # ↑ more boundaries
-        "Six":     0.06,   # same
+        "Four":    0.15,   # ↑ more boundaries
+        "Six":     0.05,   # same
         "Wicket":  0.05,   # same or maybe slightly ↑ for realism
         "Extras":  0.04
         # Sum: 1.00 ✅
@@ -436,7 +436,7 @@ def _validate_scoring_matrices():
     
     # Validate default matrix too
     default_total = sum(DEFAULT_SCORING_MATRIX.values())
-    print(f"  DEFAULT: {default_total:.3f} {'✅' if abs(default_total - 1.0) < 0.1 else '❌'}")
+    # print(f"  DEFAULT: {default_total:.3f} {'✅' if abs(default_total - 1.0) < 0.1 else '❌'}")
 
 # Validate matrices on module import (runs once when ball_outcome.py is imported)
 _validate_scoring_matrices()
@@ -470,27 +470,27 @@ def compute_weighted_prob(
             skill_frac = batting / (batting + bowling)
         else:
             skill_frac = 0.5
-        print(f"  SkillFrac (run): {skill_frac:.4f}")
+        # print(f"  SkillFrac (run): {skill_frac:.4f}")
     elif outcome_type == "Wicket":
         if (batting + bowling) > 0:
             skill_frac = (bowling / (batting + bowling)) * (fielding / 100.0)
         else:
             skill_frac = 0.5
-        print(f"  SkillFrac (wicket): {skill_frac:.4f}")
+        # print(f"  SkillFrac (wicket): {skill_frac:.4f}")
     else:  # "Extras"
         skill_frac = None
-        print(f"  SkillFrac (extra): N/A")
+        # print(f"  SkillFrac (extra): N/A")
 
     # 2) Pitch-influence fraction
     if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
         pitch_frac = get_pitch_run_multiplier(pitch)
-        print(f"  PitchFrac (run): {pitch_frac:.4f}")
+        # print(f"  PitchFrac (run): {pitch_frac:.4f}")
     elif outcome_type == "Wicket":
         pitch_frac = get_pitch_wicket_multiplier(pitch, bowling_type)
-        print(f"  PitchFrac (wicket): {pitch_frac:.4f}")
+        # print(f"  PitchFrac (wicket): {pitch_frac:.4f}")
     else:  # "Extras"
         pitch_frac = None
-        print(f"  PitchFrac (extra): N/A")
+        # print(f"  PitchFrac (extra): N/A")
 
     # 3) Compute raw weight
     if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
@@ -498,12 +498,12 @@ def compute_weighted_prob(
         boundary_penalty = 1.0
         if outcome_type in ("Four", "Six") and streak.get("boundaries", 0) >= 2:
             boundary_penalty = 0.8
-            print(f"  BoundaryPenalty applied: {boundary_penalty}")
+            # print(f"  BoundaryPenalty applied: {boundary_penalty}")
 
         blended_frac = 0.4 * skill_frac + 0.6 * pitch_frac
         raw_weight = base_prob * blended_frac * boundary_penalty
-        print(f"  BlendedFrac (run): {blended_frac:.4f}")
-        print(f"  RawWeight (run): {raw_weight:.6f}")
+        # print(f"  BlendedFrac (run): {blended_frac:.4f}")
+        # print(f"  RawWeight (run): {raw_weight:.6f}")
         return raw_weight
 
     elif outcome_type == "Wicket":
@@ -511,18 +511,18 @@ def compute_weighted_prob(
         boundary_boost = 1.0
         if streak.get("boundaries", 0) >= 2:
             boundary_boost = 1.5
-            print(f"  BoundaryBoost applied: {boundary_boost}")
+            # print(f"  BoundaryBoost applied: {boundary_boost}")
 
         blended_frac = 0.4 * skill_frac + 0.6 * pitch_frac
         raw_weight = base_prob * blended_frac * boundary_boost
-        print(f"  BlendedFrac (wicket): {blended_frac:.4f}")
-        print(f"  RawWeight (wicket): {raw_weight:.6f}")
+        # print(f"  BlendedFrac (wicket): {blended_frac:.4f}")
+        # print(f"  RawWeight (wicket): {raw_weight:.6f}")
         return raw_weight
 
     else:  # "Extras"
         # Extras depend solely on bowler error (no pitch component)
         raw_weight = base_prob * ((100 - bowling) / 100.0)
-        print(f"  RawWeight (extra): {raw_weight:.6f}")
+        # print(f"  RawWeight (extra): {raw_weight:.6f}")
         return raw_weight
 
 # -----------------------------------------------------------------------------
@@ -593,14 +593,14 @@ def calculate_outcome(
                 and batting_hand == "Right"
             ):
                 lr_boost = 1.2
-                print(f"  LeftVsRightBoost applied: {lr_boost}")
+                # print(f"  LeftVsRightBoost applied: {lr_boost}")
 
             weight = compute_weighted_prob(
                 outcome, base,
                 batting, bowling, fielding,
                 pitch, bowling_type, streak
             ) * lr_boost
-            print(f"  RawWeight after LeftVsRightBoost: {weight:.6f}")
+            # print(f"  RawWeight after LeftVsRightBoost: {weight:.6f}")
         else:  # "Extras"
             weight = compute_weighted_prob(
                 outcome, base,
@@ -644,7 +644,7 @@ def calculate_outcome(
         # Ensure no negative weights
         weight = max(weight, 0.0)
         raw_weights[outcome] = weight
-        print(f"  FinalRawWeight[{outcome}]: {weight:.6f}")
+        # print(f"  FinalRawWeight[{outcome}]: {weight:.6f}")
 
     # 4) Normalize weights into probabilities
     total_weight = sum(raw_weights.values())

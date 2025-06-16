@@ -2310,14 +2310,37 @@ class Match:
                 self.first_innings_score = self.score
                 self.target = self.score + 1
                 required_rr = self.target / self.overs
-                chasing_team = self.data["team_away"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_home"].split("_")[0]
-                scorecard_data["target_info"] = f"{chasing_team} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
+                chasing_team_code = self.data["team_away"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_home"].split("_")[0]
+                scorecard_data["target_info"] = f"{chasing_team_code} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
                 
-                # ADD THIS LINE HERE (before resetting stats):
                 self._save_first_innings_stats()
 
                 self.innings = 2
-                self.batting_team, self.bowling_team = self.bowling_team, self.batting_team
+                
+                # Reload lineups from data to ensure impact player/reordering changes are applied
+                if hasattr(self, 'data') and self.data.get('impact_players_swapped'):
+                    print("🔄 [Innings Change] Applying impact player and reordering changes.")
+                    self.home_xi = self.data["playing_xi"]["home"]
+                    self.away_xi = self.data["playing_xi"]["away"]
+                    
+                # --- START FIX ---
+                # Re-determine batting and bowling teams based on original toss decision and the UPDATED XIs
+                team_home_code = self.match_data["team_home"].split("_")[0]
+                if self.toss_winner == team_home_code:
+                    if self.toss_decision == "Bat":
+                        # Home batted first, so Away bats second
+                        self.batting_team, self.bowling_team = self.away_xi, self.home_xi
+                    else:  # Home bowled first, so Home bats second
+                        self.batting_team, self.bowling_team = self.home_xi, self.away_xi
+                else:  # Away won toss
+                    if self.toss_decision == "Bat":
+                        # Away batted first, so Home bats second
+                        self.batting_team, self.bowling_team = self.home_xi, self.away_xi
+                    else:  # Away bowled first, so Away bats second
+                        self.batting_team, self.bowling_team = self.away_xi, self.home_xi
+                # --- END FIX ---
+
+                # Reset all innings-specific state
                 self.score = 0
                 self.wickets = 0
                 self.current_over = 0
@@ -2325,13 +2348,17 @@ class Match:
                 self.batter_idx = [0, 1]
                 self.current_striker = self.batting_team[0]
                 self.current_non_striker = self.batting_team[1]
+
+                print(f"🏏 Second innings batting order (Post-Fix):")
+                for i, player in enumerate(self.batting_team):
+                    print(f"   {i+1}. {player['name']}")
+
                 self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": ""} for p in self.batting_team}
                 self.bowler_history = {}
-                self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p["will_bowl"]}
+                self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p.get("will_bowl")}
                 self._reset_innings_state()
 
                 return {
-                    "Test": "Manish2",
                     "innings_end": True,
                     "innings_number": 1,
                     "match_over": False,
@@ -2559,10 +2586,14 @@ class Match:
 
                     # Reset for 2nd innings (same as time-based transition)
                     self.innings = 2
+                    # ✅ CRITICAL: Update lineups if impact player swaps occurred
                     if hasattr(self, 'data') and self.data.get('impact_players_swapped'):
+                        print(f"🔄 Applying impact player changes for second innings...")
                         # Use the updated playing XI from match data
                         self.home_xi = self.data["playing_xi"]["home"]
                         self.away_xi = self.data["playing_xi"]["away"]
+                        print(f"   Updated Home XI: {[p['name'] for p in self.home_xi]}")
+                        print(f"   Updated Away XI: {[p['name'] for p in self.away_xi]}")
 
                     self.batting_team, self.bowling_team = self.bowling_team, self.batting_team
                     self.score = 0
