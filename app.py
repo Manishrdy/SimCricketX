@@ -1279,109 +1279,199 @@ def create_app():
     @app.route("/match/<match_id>/impact-player-swap", methods=["POST"])
     @login_required
     def impact_player_swap(match_id):
-        """Handle impact player substitution with optional swaps for each team"""
+        """
+        Handle impact player substitution with optional swaps for each team.
+        
+        PRODUCTION-LEVEL ENDPOINT with comprehensive error handling, validation,
+        logging, and state management for mid-match player substitutions.
+        """
+        app.logger.info(f"[ImpactSwap] Starting impact player swap for match {match_id}")
+        
         try:
-            # Load match data
-            match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
-            match_path = None
-            match_data = None
-            
-            for fn in os.listdir(match_dir):
-                if not fn.endswith(".json"):
-                    continue
-                path = os.path.join(match_dir, fn)
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if data.get("match_id") == match_id:
-                    match_data = data
-                    match_path = path
-                    break
-            
-            if not match_data:
-                return jsonify({"error": "Match not found"}), 404
-            
-            # Get swap data
             swap_data = request.get_json()
+            if not swap_data:
+                return jsonify({"error": "Request body is required"}), 400
+                
             home_swap = swap_data.get("home_swap")
             away_swap = swap_data.get("away_swap")
             
+            # Load match data from filesystem
+            match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+            match_path, match_data = None, None
+            
+            for filename in os.listdir(match_dir):
+                if not filename.endswith(".json"): continue
+                file_path = os.path.join(match_dir, filename)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if data.get("match_id") == match_id:
+                        match_data, match_path = data, file_path
+                        break
+                except Exception as e:
+                    app.logger.warning(f"[ImpactSwap] Error reading {filename}: {e}")
+                    continue
+            
+            if not match_data:
+                return jsonify({"error": "Match not found"}), 404
+
+            if match_data.get("created_by") != current_user.id:
+                return jsonify({"error": "Unauthorized access"}), 403
+
             impact_swaps = {}
             
-            # Process home team swap if provided
+            # Perform home team swap
             if home_swap:
                 home_out_idx = home_swap["out_player_index"]
                 home_in_idx = home_swap["in_player_index"]
-                
-                # Swap players
                 home_out_player = match_data["playing_xi"]["home"][home_out_idx]
                 home_in_player = match_data["substitutes"]["home"][home_in_idx]
-                
                 match_data["playing_xi"]["home"][home_out_idx] = home_in_player
                 match_data["substitutes"]["home"][home_in_idx] = home_out_player
-                
-                impact_swaps["home"] = {
-                    "out": home_out_player["name"],
-                    "in": home_in_player["name"]
-                }
+                impact_swaps["home"] = {"out": home_out_player["name"], "in": home_in_player["name"]}
             
-            # Process away team swap if provided
+            # Perform away team swap
             if away_swap:
                 away_out_idx = away_swap["out_player_index"]
                 away_in_idx = away_swap["in_player_index"]
-                
                 away_out_player = match_data["playing_xi"]["away"][away_out_idx]
                 away_in_player = match_data["substitutes"]["away"][away_in_idx]
-                
                 match_data["playing_xi"]["away"][away_out_idx] = away_in_player
                 match_data["substitutes"]["away"][away_in_idx] = away_out_player
-                
-                impact_swaps["away"] = {
-                    "out": away_out_player["name"],
-                    "in": away_in_player["name"]
-                }
-            
-            # Mark that impact players have been processed
+                impact_swaps["away"] = {"out": away_out_player["name"], "in": away_in_player["name"]}
+
+            # Mark that swaps have occurred
             match_data["impact_players_swapped"] = True
-            if impact_swaps:
-                match_data["impact_swaps"] = impact_swaps
             
-            # Save updated match data
-            # with open(match_path, "w", encoding="utf-8") as f:
-            #     json.dump(match_data, f, indent=2)
-            
-            # Update match instance if it exists
+            # =================================================================
+            # 🟢 START: CRITICAL FIX - UPDATE IN-MEMORY INSTANCE
+            # =================================================================
             if match_id in MATCH_INSTANCES:
+                app.logger.info(f"[ImpactSwap] Found active match instance for {match_id}. Updating state.")
                 match_instance = MATCH_INSTANCES[match_id]
-                # Update the teams based on the new lineups
-                if match_instance.innings == 2:
-                    # Update for second innings
-                    if match_instance.toss_winner == match_data["team_home"].split("_")[0]:
-                        if match_instance.toss_decision == "Bat":
-                            match_instance.batting_team = match_data["playing_xi"]["away"]
-                            match_instance.bowling_team = match_data["playing_xi"]["home"]
-                        else:
-                            match_instance.batting_team = match_data["playing_xi"]["home"]
-                            match_instance.bowling_team = match_data["playing_xi"]["away"]
-                    else:
-                        if match_instance.toss_decision == "Bat":
-                            match_instance.batting_team = match_data["playing_xi"]["home"]
-                            match_instance.bowling_team = match_data["playing_xi"]["away"]
-                        else:
-                            match_instance.batting_team = match_data["playing_xi"]["away"]
-                            match_instance.bowling_team = match_data["playing_xi"]["home"]
+                
+                # Directly update the instance's player lists
+                match_instance.home_xi = match_data["playing_xi"]["home"]
+                match_instance.away_xi = match_data["playing_xi"]["away"]
+                
+                # Also update the raw data stored in the instance
+                match_instance.data = match_data
+                
+                app.logger.info(f"[ImpactSwap] Instance updated. Home XI now has {len(match_instance.home_xi)} players.")
+            else:
+                app.logger.warning(f"[ImpactSwap] No active match instance found for {match_id}. File will be updated, but live game may not reflect changes until reload.")
+            # =================================================================
+            # 🔴 END: CRITICAL FIX
+            # =================================================================
             
-            app.logger.info(f"Impact player swaps completed for match {match_id}: {impact_swaps}")
+            # Save the updated data back to the JSON file
+            with open(match_path, "w", encoding="utf-8") as f:
+                json.dump(match_data, f, indent=2)
+                
+            app.logger.info(f"[ImpactSwap] Successfully completed swaps for match {match_id}: {impact_swaps}")
             
             return jsonify({
                 "success": True,
+                "match_id": match_id,
                 "updated_match_data": match_data,
                 "swaps_made": impact_swaps
             }), 200
-            
-        except Exception as e:
-            app.logger.error(f"Error in impact player swap: {e}", exc_info=True)
-            return jsonify({"error": str(e)}), 500
 
+        except Exception as e:
+            app.logger.error(f"[ImpactSwap] Unexpected error for match {match_id}: {e}", exc_info=True)
+            return jsonify({"error": "Internal server error"}), 500
+
+
+    @app.route("/match/<match_id>/update-final-lineups", methods=["POST"])
+    @login_required
+    def update_final_lineups(match_id):
+        """
+        Update match instance with final reordered lineups and resync stats dictionaries.
+        """
+        try:
+            if match_id not in MATCH_INSTANCES:
+                app.logger.info(f"[FinalLineups] Match instance {match_id} not yet in memory. No action needed.")
+                return jsonify({"success": True, "message": "Lineups will be loaded from updated file."}), 200
+
+            match_instance = MATCH_INSTANCES[match_id]
+            lineup_data = request.get_json()
+            home_final_xi = lineup_data.get("home_final_xi")
+            away_final_xi = lineup_data.get("away_final_xi")
+
+            # Update the master XI lists in the instance
+            if home_final_xi:
+                match_instance.home_xi = home_final_xi
+                match_instance.data["playing_xi"]["home"] = home_final_xi
+                app.logger.info(f"[FinalLineups] Updated HOME XI for match {match_id}")
+
+            if away_final_xi:
+                match_instance.away_xi = away_final_xi
+                match_instance.data["playing_xi"]["away"] = away_final_xi
+                app.logger.info(f"[FinalLineups] Updated AWAY XI for match {match_id}")
+
+            # --- START FIX ---
+            # Determine the current batting and bowling teams based on the updated XIs
+            team_home_code = match_instance.match_data["team_home"].split("_")[0]
+            first_batting_team_was_home = (match_instance.toss_winner == team_home_code and match_instance.toss_decision == "Bat") or \
+                                        (match_instance.toss_winner != team_home_code and match_instance.toss_decision == "Bowl")
+
+            current_batting_team_list = None
+            if match_instance.innings == 1:
+                if first_batting_team_was_home:
+                    match_instance.batting_team = match_instance.home_xi
+                    match_instance.bowling_team = match_instance.away_xi
+                else:
+                    match_instance.batting_team = match_instance.away_xi
+                    match_instance.bowling_team = match_instance.home_xi
+            else:  # Innings 2
+                if first_batting_team_was_home:
+                    match_instance.batting_team = match_instance.away_xi
+                    match_instance.bowling_team = match_instance.home_xi
+                else:
+                    match_instance.batting_team = match_instance.home_xi
+                    match_instance.bowling_team = match_instance.away_xi
+            
+            # Preserve old stats before rebuilding the dictionary
+            old_batsman_stats = getattr(match_instance, 'batsman_stats', {}).copy()
+            new_batsman_stats = {}
+
+            # Rebuild the batsman_stats dictionary using the new batting_team
+            for player in match_instance.batting_team:
+                player_name = player["name"]
+                if player_name in old_batsman_stats:
+                    # If player already has stats, keep them
+                    new_batsman_stats[player_name] = old_batsman_stats[player_name]
+                else:
+                    # If it's a new player (e.g., impact sub), initialize their stats
+                    new_batsman_stats[player_name] = {
+                        "runs": 0, "balls": 0, "fours": 0, "sixes": 0,
+                        "ones": 0, "twos": 0, "threes": 0, "dots": 0,
+                        "wicket_type": "", "bowler_out": "", "fielder_out": ""
+                    }
+            
+            # Overwrite the instance's stats with the newly synced dictionary
+            match_instance.batsman_stats = new_batsman_stats
+            app.logger.info(f"[FinalLineups] Batsman stats dictionary resynced. Contains {len(new_batsman_stats)} players.")
+            
+            # Update the current striker and non-striker objects
+            if match_instance.wickets < 10 and len(match_instance.batting_team) > 1:
+                # Ensure batter_idx is valid for the current team size
+                if match_instance.batter_idx[0] < len(match_instance.batting_team) and \
+                match_instance.batter_idx[1] < len(match_instance.batting_team):
+                    match_instance.current_striker = match_instance.batting_team[match_instance.batter_idx[0]]
+                    match_instance.current_non_striker = match_instance.batting_team[match_instance.batter_idx[1]]
+            # --- END FIX ---
+
+            app.logger.info(f"[FinalLineups] Confirmed batting order for Innings {match_instance.innings}:")
+            for i, player in enumerate(match_instance.batting_team):
+                app.logger.info(f"   {i+1}. {player['name']}")
+
+            return jsonify({"success": True}), 200
+
+        except Exception as e:
+            app.logger.error(f"Error updating final lineups: {e}", exc_info=True)
+            return jsonify({"error": str(e)}), 500
+        
     @app.route("/match/<match_id>/next-ball")
     @login_required
     def next_ball(match_id):

@@ -687,6 +687,18 @@
             margin: 0.5rem 0;
             opacity: 0.5;
         }
+
+        .player-list.reorder-enabled {
+            border: 2px dashed #28a745 !important;
+            background: rgba(40, 167, 69, 0.05) !important;
+        }
+
+        .reorder-hint {
+            color: #28a745;
+            font-size: 0.8rem;
+            font-style: italic;
+            margin-top: 0.25rem;
+        }
     </style>
 </head>
 
@@ -898,7 +910,7 @@
     </div>
 
     <script>
-        // Enhanced Impact Player System
+        // Enhanced Impact Player System with Working Reordering
         let impactPlayerState = {
             home: {
                 originalXI: [],
@@ -915,7 +927,8 @@
                 currentSubs: [],
                 swapped: false,
                 swapInfo: null
-            }
+            },
+            reorderingEnabled: false
         };
 
         function showImpactPlayerModal() {
@@ -923,14 +936,10 @@
             const homeTeamName = matchData.team_home.split('_')[0];
             const awayTeamName = matchData.team_away.split('_')[0];
 
-            // Set team names
             document.getElementById('home-team-title').textContent = homeTeamName;
             document.getElementById('away-team-title').textContent = awayTeamName;
 
-            // Initialize state
             initializeImpactPlayerState();
-
-            // Render both teams
             renderTeam('home');
             renderTeam('away');
 
@@ -938,7 +947,6 @@
         }
 
         function initializeImpactPlayerState() {
-            // Deep copy original lineups
             impactPlayerState.home.originalXI = JSON.parse(JSON.stringify(matchData.playing_xi.home));
             impactPlayerState.home.originalSubs = JSON.parse(JSON.stringify(matchData.substitutes.home));
             impactPlayerState.home.currentXI = JSON.parse(JSON.stringify(matchData.playing_xi.home));
@@ -952,13 +960,14 @@
             impactPlayerState.away.currentSubs = JSON.parse(JSON.stringify(matchData.substitutes.away));
             impactPlayerState.away.swapped = false;
             impactPlayerState.away.swapInfo = null;
+
+            impactPlayerState.reorderingEnabled = false;
         }
 
         function renderTeam(team) {
             const playingList = document.getElementById(`${team}-playing-list`);
             const subsList = document.getElementById(`${team}-subs-list`);
 
-            // Clear existing content
             playingList.innerHTML = '';
             subsList.innerHTML = '';
 
@@ -974,8 +983,10 @@
                 subsList.appendChild(card);
             });
 
-            // Update swap status
             updateSwapStatus(team);
+
+            // Setup drag and drop for this team
+            setupDragAndDrop(team);
         }
 
         function createPlayerCard(player, team, type, index) {
@@ -985,8 +996,8 @@
             card.dataset.team = team;
             card.dataset.type = type;
             card.dataset.index = index;
+            card.dataset.playerName = player.name;
 
-            // Check if this player is swapped
             const isSwapped = impactPlayerState[team].swapInfo &&
                 ((type === 'xi' && player.name === impactPlayerState[team].swapInfo.inPlayer) ||
                     (type === 'sub' && player.name === impactPlayerState[team].swapInfo.outPlayer));
@@ -995,7 +1006,6 @@
                 card.classList.add('swapped');
             }
 
-            // Check if this is the original player who was swapped out
             const isOriginalOut = type === 'sub' &&
                 impactPlayerState[team].swapInfo &&
                 player.name === impactPlayerState[team].swapInfo.outPlayer;
@@ -1010,42 +1020,67 @@
                 <div class="player-name">${player.name}</div>
                 <div class="player-role">${player.role}</div>
             </div>
+            ${impactPlayerState.reorderingEnabled && type === 'xi' ?
+                    '<div style="font-size: 0.8rem; color: #666;">↕️ Drag to reorder</div>' : ''}
         </div>
         ${isSwapped && type === 'xi' ? '<div class="swap-badge">IMPACT</div>' : ''}
     `;
 
-            // Drag event handlers
-            card.addEventListener('dragstart', handleDragStart);
-            card.addEventListener('dragend', handleDragEnd);
-
             return card;
         }
 
-        function handleDragStart(e) {
-            e.target.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', JSON.stringify({
-                team: e.target.dataset.team,
-                type: e.target.dataset.type,
-                index: e.target.dataset.index
-            }));
-        }
+        function setupDragAndDrop(team) {
+            const playingList = document.getElementById(`${team}-playing-list`);
+            const subsList = document.getElementById(`${team}-subs-list`);
 
-        function handleDragEnd(e) {
-            e.target.classList.remove('dragging');
-        }
+            // Clear existing event listeners by cloning nodes
+            const newPlayingList = playingList.cloneNode(true);
+            const newSubsList = subsList.cloneNode(true);
+            playingList.parentNode.replaceChild(newPlayingList, playingList);
+            subsList.parentNode.replaceChild(newSubsList, subsList);
 
-        // Set up drop zones
-        document.addEventListener('DOMContentLoaded', () => {
-            const playerLists = document.querySelectorAll('.player-list');
+            // Re-get the new elements
+            const updatedPlayingList = document.getElementById(`${team}-playing-list`);
+            const updatedSubsList = document.getElementById(`${team}-subs-list`);
 
-            playerLists.forEach(list => {
+            // Add event listeners to player cards
+            updatedPlayingList.querySelectorAll('.player-card').forEach(card => {
+                card.addEventListener('dragstart', handleDragStart);
+                card.addEventListener('dragend', handleDragEnd);
+            });
+
+            updatedSubsList.querySelectorAll('.player-card').forEach(card => {
+                card.addEventListener('dragstart', handleDragStart);
+                card.addEventListener('dragend', handleDragEnd);
+            });
+
+            // Add event listeners to drop zones
+            [updatedPlayingList, updatedSubsList].forEach(list => {
                 list.addEventListener('dragover', handleDragOver);
                 list.addEventListener('drop', handleDrop);
                 list.addEventListener('dragenter', handleDragEnter);
                 list.addEventListener('dragleave', handleDragLeave);
             });
-        });
+        }
+
+        function handleDragStart(e) {
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+
+            const data = {
+                team: e.target.dataset.team,
+                type: e.target.dataset.type,
+                index: parseInt(e.target.dataset.index),
+                playerName: e.target.dataset.playerName
+            };
+
+            e.dataTransfer.setData('text/plain', JSON.stringify(data));
+            console.log('Drag started:', data);
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+        }
 
         function handleDragOver(e) {
             e.preventDefault();
@@ -1077,23 +1112,38 @@
             const dropTeam = dropZoneId.includes('home') ? 'home' : 'away';
             const dropType = dropZoneId.includes('playing') ? 'xi' : 'sub';
 
-            // Can only swap within same team
-            if (data.team !== dropTeam) return;
+            console.log('Drop event:', {
+                data,
+                dropTeam,
+                dropType,
+                reorderingEnabled: impactPlayerState.reorderingEnabled,
+                // ✅ ADD THIS DEBUG INFO
+                currentState: impactPlayerState
+            });
 
-            // Can only swap between XI and subs, not within same list
-            if (data.type === dropType) return;
+            // Can only operate within same team
+            if (data.team !== dropTeam) {
+                console.log('❌ Different teams - drop rejected');
+                return;
+            }
 
-            // Store the event globally so performSwap can access it
-            window.currentDropEvent = e;
+            // If reordering is enabled and both are Playing XI
+            if (impactPlayerState.reorderingEnabled && data.type === 'xi' && dropType === 'xi') {
+                console.log('✅ Performing reorder...');
+                performReorder(data.team, data.index, e, dropZone);
+                return;
+            }
 
-            // Perform the swap
-            performSwap(data.team, data.type, data.index, dropType);
-
-            // Clean up
-            window.currentDropEvent = null;
+            // Regular impact player swap (only if reordering not enabled)
+            if (!impactPlayerState.reorderingEnabled && data.type !== dropType) {
+                console.log('✅ Performing swap...');
+                performSwap(data.team, data.type, data.index, dropType, e, dropZone);
+            } else {
+                console.log('❌ Drop conditions not met for swap');
+            }
         }
 
-        function performSwap(team, fromType, fromIndex, toType) {
+        function performSwap(team, fromType, fromIndex, toType, dropEvent, dropZone) {
             const state = impactPlayerState[team];
 
             // If already swapped, reset first
@@ -1106,22 +1156,18 @@
 
             const draggedPlayer = fromList[fromIndex];
 
-            // Find the closest player in the drop zone to swap with
-            const dropZone = window.currentDropEvent.target.closest('.player-list');
-            const afterElement = getDragAfterElement(dropZone, window.currentDropEvent.clientY);
+            // Find insertion point
+            const afterElement = getDragAfterElement(dropZone, dropEvent.clientY);
             let swapWithIndex = 0;
 
-            // Determine which player to swap with based on drop position
             if (afterElement) {
                 const cards = [...dropZone.querySelectorAll('.player-card')];
                 swapWithIndex = cards.indexOf(afterElement);
-                if (swapWithIndex > 0) swapWithIndex--; // Adjust for before position
+                if (swapWithIndex > 0) swapWithIndex--;
             } else {
-                // Dropped at the end
                 swapWithIndex = toList.length - 1;
             }
 
-            // Ensure valid index
             swapWithIndex = Math.max(0, Math.min(swapWithIndex, toList.length - 1));
 
             if (toList.length > 0) {
@@ -1140,15 +1186,40 @@
                     inIndex: fromType === 'sub' ? fromIndex : swapWithIndex
                 };
 
-                // Re-render team
                 renderTeam(team);
-
-                // Enable reset button
                 document.getElementById(`${team}-reset-btn`).disabled = false;
             }
         }
 
-        // Add this helper function after performSwap
+        function performReorder(team, fromIndex, dropEvent, dropZone) {
+            const state = impactPlayerState[team];
+
+            // Find insertion point
+            const afterElement = getDragAfterElement(dropZone, dropEvent.clientY);
+            let toIndex = 0;
+
+            if (afterElement) {
+                const cards = [...dropZone.querySelectorAll('.player-card:not(.dragging)')];
+                toIndex = cards.indexOf(afterElement);
+            } else {
+                toIndex = state.currentXI.length;
+            }
+
+            // Adjust for the fact that we're removing an element
+            if (toIndex > fromIndex) {
+                toIndex--;
+            }
+
+            // Perform the reorder
+            const player = state.currentXI.splice(fromIndex, 1)[0];
+            state.currentXI.splice(toIndex, 0, player);
+
+            console.log(`Reordered ${player.name} from position ${fromIndex} to ${toIndex}`);
+
+            // Re-render the team
+            renderTeam(team);
+        }
+
         function getDragAfterElement(container, y) {
             const draggableElements = [...container.querySelectorAll('.player-card:not(.dragging)')];
 
@@ -1167,16 +1238,12 @@
         function resetTeamSwap(team) {
             const state = impactPlayerState[team];
 
-            // Restore original lineups
             state.currentXI = JSON.parse(JSON.stringify(state.originalXI));
             state.currentSubs = JSON.parse(JSON.stringify(state.originalSubs));
             state.swapped = false;
             state.swapInfo = null;
 
-            // Re-render team
             renderTeam(team);
-
-            // Disable reset button
             document.getElementById(`${team}-reset-btn`).disabled = true;
         }
 
@@ -1193,11 +1260,40 @@
             }
         }
 
+        function enableReordering() {
+            console.log('enableReordering() called');
+
+            // ✅ CRITICAL: Set the reordering flag
+            impactPlayerState.reorderingEnabled = true;
+
+            console.log('reorderingEnabled set to:', impactPlayerState.reorderingEnabled);
+
+            // Update visual indicators
+            ['home', 'away'].forEach(team => {
+                const playingList = document.getElementById(`${team}-playing-list`);
+                playingList.style.border = '2px dashed #28a745';
+                playingList.style.background = 'rgba(40, 167, 69, 0.05)';
+
+                // Add reorder hint to column header
+                const header = playingList.previousElementSibling;
+                if (header && !header.textContent.includes('Drag to reorder')) {
+                    header.innerHTML += '<br><small style="color: #28a745; font-weight: normal;">↕️ Drag to reorder batting sequence</small>';
+                }
+            });
+
+            // Re-render teams to show reorder hints and update event handlers
+            renderTeam('home');
+            renderTeam('away');
+
+            console.log('Reordering enabled and teams re-rendered');
+        }
+
         // Reset button handlers
         document.getElementById('home-reset-btn').addEventListener('click', () => resetTeamSwap('home'));
         document.getElementById('away-reset-btn').addEventListener('click', () => resetTeamSwap('away'));
 
-        // Confirm swaps handler
+        // Enhanced confirm swaps handler
+        // Enhanced confirm swaps handler - FIXED TIMING
         document.getElementById('confirm-swaps').addEventListener('click', async () => {
             const swapData = {
                 home_swap: null,
@@ -1235,7 +1331,7 @@
             }
 
             try {
-                // Only send request if at least one team made a swap
+                // Save swaps if any were made
                 if (swapData.home_swap || swapData.away_swap) {
                     const response = await fetch(`/match/${matchData.match_id}/impact-player-swap`, {
                         method: 'POST',
@@ -1246,15 +1342,88 @@
                     if (response.ok) {
                         const result = await response.json();
                         matchData = result.updated_match_data;
+
+                        // ✅ ENABLE REORDERING MODE HERE
+                        console.log('Enabling reordering mode after swaps...');
+                        enableReordering();
+
+                        // Update modal content for reordering phase
+                        document.querySelector('.impact-header h2').textContent = 'Adjust Batting Order';
+                        document.querySelector('.impact-header p').textContent = 'Drag players within Playing XI to set the batting order for this match.';
+
+                        // Change the confirm button
+                        const confirmBtn = document.getElementById('confirm-swaps');
+                        confirmBtn.textContent = 'Finalize Order & Start Match';
+
+                        // ✅ CRITICAL: Remove old event listener and add new one for reordering
+                        const newConfirmBtn = confirmBtn.cloneNode(true);
+                        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+                        // ✅ NEW EVENT LISTENER: Send reordered lineup
+                        newConfirmBtn.addEventListener('click', async () => {
+                            console.log('🔄 Sending FINAL reordered lineups...');
+
+                            // ✅ Capture CURRENT reordered state
+                            const finalLineups = {
+                                home_final_xi: impactPlayerState.home.currentXI.map(player => ({
+                                    name: player.name,
+                                    role: player.role,
+                                    batting_rating: player.batting_rating,
+                                    bowling_rating: player.bowling_rating,
+                                    fielding_rating: player.fielding_rating,
+                                    batting_hand: player.batting_hand,
+                                    bowling_type: player.bowling_type,
+                                    bowling_hand: player.bowling_hand,
+                                    will_bowl: player.will_bowl
+                                })),
+                                away_final_xi: impactPlayerState.away.currentXI.map(player => ({
+                                    name: player.name,
+                                    role: player.role,
+                                    batting_rating: player.batting_rating,
+                                    bowling_rating: player.bowling_rating,
+                                    fielding_rating: player.fielding_rating,
+                                    batting_hand: player.batting_hand,
+                                    bowling_type: player.bowling_type,
+                                    bowling_hand: player.bowling_hand,
+                                    will_bowl: player.will_bowl
+                                }))
+                            };
+
+                            console.log('🎯 FINAL Away XI order:', finalLineups.away_final_xi.map(p => p.name));
+                            console.log('🎯 FINAL Home XI order:', finalLineups.home_final_xi.map(p => p.name));
+
+                            // Send final lineups to backend
+                            try {
+                                const finalResponse = await fetch(`/match/${matchData.match_id}/update-final-lineups`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(finalLineups)
+                                });
+
+                                if (finalResponse.ok) {
+                                    console.log('✅ Final lineups sent successfully');
+                                    document.getElementById('impact-modal').style.display = 'none';
+                                    setTimeout(startMatch, delay);
+                                } else {
+                                    alert('Failed to save final lineups. Please try again.');
+                                }
+                            } catch (error) {
+                                console.error('Error sending final lineups:', error);
+                                alert('An error occurred. Please try again.');
+                            }
+                        });
+
+                        return; // Stay in modal for reordering
+
                     } else {
                         alert('Failed to save swaps. Please try again.');
                         return;
                     }
+                } else {
+                    // No swaps made, continue normally
+                    document.getElementById('impact-modal').style.display = 'none';
+                    setTimeout(startMatch, delay);
                 }
-
-                // Close modal and continue
-                document.getElementById('impact-modal').style.display = 'none';
-                setTimeout(startMatch, delay);
 
             } catch (error) {
                 console.error('Error saving swaps:', error);
@@ -1262,6 +1431,7 @@
             }
         });
     </script>
+
     <script>
 
         let matchOver = false;
