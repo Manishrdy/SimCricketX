@@ -3,322 +3,1068 @@
 
 <head>
   <script>
-    const saved = localStorage.getItem('theme');
-    if (saved) document.documentElement.setAttribute('data-theme', saved);
+    // Registration page has independent theme system - don't inherit from localStorage
   </script>
+
   <meta charset="UTF-8">
   <title>SimCricketX - Register</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Modern CSS Reset -->
   <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+
+  <!-- Font Awesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <!-- Google Fonts -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+
   <style>
     :root {
-      --bg: #f5f5f5;
-      --fg: #222;
-      --card-bg: #fff;
-      --input-bg: #eaeaea;
-      --accent: #005fcc;
-      --shadow: rgba(0, 0, 0, 0.1);
+      /* Light Theme */
+      --bg-primary: #f0f8ff;
+      --bg-secondary: #e6f3ff;
+      --fg-primary: #1a1d23;
+      --fg-secondary: #6b7280;
+      --card-bg: rgba(255, 255, 255, 0.95);
+      --card-border: rgba(59, 130, 246, 0.2);
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --accent-light: #dbeafe;
+      --shadow: rgba(59, 130, 246, 0.15);
+      --shadow-strong: rgba(59, 130, 246, 0.25);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --cricket-ball: #8b4513;
+      --cricket-stumps: #d2691e;
+      --cricket-field: #228b22;
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     [data-theme="dark"] {
-      --bg: #121212;
-      --fg: #e0e0e0;
-      --card-bg: #1e1e1e;
-      --input-bg: #2a2a2a;
-      --accent: #3399ff;
-      --shadow: rgba(0, 0, 0, 0.5);
+      /* Dark Theme */
+      --bg-primary: #0a0f1c;
+      --bg-secondary: #1a2332;
+      --fg-primary: #f9fafb;
+      --fg-secondary: #9ca3af;
+      --card-bg: rgba(30, 41, 59, 0.95);
+      --card-border: rgba(96, 165, 250, 0.3);
+      --accent: #60a5fa;
+      --accent-hover: #3b82f6;
+      --accent-light: #1e3a8a;
+      --shadow: rgba(0, 0, 0, 0.3);
+      --shadow-strong: rgba(0, 0, 0, 0.5);
+      --cricket-ball: #cd853f;
+      --cricket-stumps: #daa520;
+      --cricket-field: #2e8b57;
     }
 
-    /* ─── Light Themes ───────────────────────────────── */
-    :root[data-theme="nord"] {
-      --bg: #eceff4;
-      --fg: #2e3440;
-      --card-bg: #e5e9f0;
-      --input-bg: #dde1e8;
-      --accent: #88c0d0;
-      --shadow: rgba(0, 0, 0, 0.1);
+    * {
+      box-sizing: border-box;
     }
 
-    :root[data-theme="retro"] {
-      --bg: #fdf0d5;
-      --fg: #4b3621;
-      --card-bg: #fff7e6;
-      --input-bg: #f7e6c5;
-      --accent: #d97706;
-      --shadow: rgba(0, 0, 0, 0.1);
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
     }
-
-    :root[data-theme="cupcake"] {
-      --bg: #fffaf0;
-      --fg: #4b2995;
-      --card-bg: #faf5ff;
-      --input-bg: #f3e8ff;
-      --accent: #d946ef;
-      --shadow: rgba(0, 0, 0, 0.1);
-    }
-
-    /* ─── Dark Themes ────────────────────────────────── */
-    :root[data-theme="dim"] {
-      --bg: #1f1f1f;
-      --fg: #e0e0e0;
-      --card-bg: #2a2a2a;
-      --input-bg: #333;
-      --accent: #6366f1;
-      --shadow: rgba(0, 0, 0, 0.5);
-    }
-
-    :root[data-theme="dracula"] {
-      --bg: #282a36;
-      --fg: #f8f8f2;
-      --card-bg: #44475a;
-      --input-bg: #373844;
-      --accent: #6272a4;
-      --shadow: rgba(0, 0, 0, 0.6);
-    }
-
-    :root[data-theme="sunset"] {
-      --bg: #2d182d;
-      --fg: #f5e0dc;
-      --card-bg: #3c1f1f;
-      --input-bg: #5f3d3d;
-      --accent: #f28fb6;
-      --shadow: rgba(0, 0, 0, 0.6);
-    }
-
-    /* ─── Light Themes ─────────────── */
-    :root[data-theme="nord"] {
-      --bg: #eceff4;
-      --fg: #2e3440;
-      --card-bg: #e5e9f0;
-      --input-bg: #dde1e8;
-      --accent: #88c0d0;
-      --icon-color: #5e81ac;
-      --gradient: linear-gradient(135deg, #8fbcbb, #88c0d0);
-    }
-
-    :root[data-theme="retro"] {
-      --bg: #fdf0d5;
-      --fg: #4b3621;
-      --card-bg: #fff7e6;
-      --input-bg: #f7e6c5;
-      --accent: #d97706;
-      --icon-color: #b45309;
-      --gradient: linear-gradient(135deg, #d97706, #f59e0b);
-    }
-
-    :root[data-theme="cupcake"] {
-      --bg: #fffaf0;
-      --fg: #4b2995;
-      --card-bg: #faf5ff;
-      --input-bg: #f3e8ff;
-      --accent: #d946ef;
-      --icon-color: #a21caf;
-      --gradient: linear-gradient(135deg, #f472b6, #d946ef);
-    }
-
-    /* ─── Dark Themes ──────────────── */
-    :root[data-theme="dim"] {
-      --bg: #1f1f1f;
-      --fg: #e0e0e0;
-      --card-bg: #2a2a2a;
-      --input-bg: #333;
-      --accent: #6366f1;
-      --icon-color: #818cf8;
-      --gradient: linear-gradient(135deg, #4f46e5, #6366f1);
-    }
-
-    :root[data-theme="dracula"] {
-      --bg: #282a36;
-      --fg: #f8f8f2;
-      --card-bg: #44475a;
-      --input-bg: #373844;
-      --accent: #6272a4;
-      --icon-color: #8be9fd;
-      --gradient: linear-gradient(135deg, #6272a4, #8be9fd);
-    }
-
-    :root[data-theme="sunset"] {
-      --bg: #2d182d;
-      --fg: #f5e0dc;
-      --card-bg: #3c1f1f;
-      --input-bg: #5f3d3d;
-      --accent: #f28fb6;
-      --icon-color: #ff9ede;
-      --gradient: linear-gradient(135deg, #fb7185, #f28fb6);
-    }
-
 
     body {
-      background: var(--bg);
-      color: var(--fg);
-      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+      color: var(--fg-primary);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      position: relative;
+      margin: 0;
+      padding: 0;
     }
 
-    .toggle {
+    /* Cricket Animation Background */
+    .cricket-field {
       position: absolute;
-      top: 1rem;
-      right: 1rem;
-      background: none;
-      border: none;
-      font-size: 1.25rem;
-      cursor: pointer;
-      color: var(--fg);
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      z-index: 1;
     }
 
-    .card {
+    .cricket-animation {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Cricket Stumps */
+    .stumps {
+      position: absolute;
+      right: 15%;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      gap: 4px;
+      opacity: 0.6;
+    }
+
+    .stump {
+      width: 8px;
+      height: 60px;
+      background: var(--cricket-stumps);
+      border-radius: 4px 4px 0 0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .bail {
+      position: absolute;
+      top: -6px;
+      left: -2px;
+      width: 32px;
+      height: 4px;
+      background: var(--cricket-stumps);
+      border-radius: 2px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Cricket Ball */
+    .cricket-ball {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: var(--cricket-ball);
+      border-radius: 50%;
+      box-shadow:
+        inset -3px -3px 6px rgba(0, 0, 0, 0.3),
+        0 4px 12px rgba(0, 0, 0, 0.4);
+      opacity: 0;
+    }
+
+    .cricket-ball::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 2px;
+      right: 2px;
+      height: 1px;
+      background: #654321;
+      transform: translateY(-50%);
+    }
+
+    .cricket-ball::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      left: 50%;
+      width: 1px;
+      background: #654321;
+      transform: translateX(-50%);
+    }
+
+    /* Ball Animation */
+    @keyframes ballFlight {
+      0% {
+        left: -5%;
+        top: 60%;
+        opacity: 1;
+        transform: scale(0.8) rotate(0deg);
+      }
+
+      25% {
+        left: 30%;
+        top: 30%;
+        transform: scale(1) rotate(90deg);
+      }
+
+      50% {
+        left: 60%;
+        top: 45%;
+        transform: scale(1.1) rotate(180deg);
+      }
+
+      75% {
+        left: 85%;
+        top: 48%;
+        transform: scale(1) rotate(270deg);
+      }
+
+      85% {
+        left: 95%;
+        top: 50%;
+        transform: scale(0.9) rotate(315deg);
+      }
+
+      100% {
+        left: 110%;
+        top: 50%;
+        opacity: 0;
+        transform: scale(0.7) rotate(360deg);
+      }
+    }
+
+    @keyframes stumpShake {
+
+      0%,
+      85% {
+        transform: translateY(-50%) rotate(0deg);
+      }
+
+      86% {
+        transform: translateY(-50%) rotate(-2deg);
+      }
+
+      87% {
+        transform: translateY(-50%) rotate(2deg);
+      }
+
+      88% {
+        transform: translateY(-50%) rotate(-1deg);
+      }
+
+      89% {
+        transform: translateY(-50%) rotate(1deg);
+      }
+
+      90%,
+      100% {
+        transform: translateY(-50%) rotate(0deg);
+      }
+    }
+
+    @keyframes bailFall {
+
+      0%,
+      85% {
+        top: -6px;
+        opacity: 1;
+        transform: rotate(0deg);
+      }
+
+      86% {
+        top: -4px;
+        transform: rotate(5deg);
+      }
+
+      90% {
+        top: 10px;
+        transform: rotate(25deg);
+      }
+
+      95% {
+        top: 25px;
+        transform: rotate(45deg);
+      }
+
+      100% {
+        top: 40px;
+        opacity: 0;
+        transform: rotate(90deg);
+      }
+    }
+
+    /* Start animations */
+    .ball-animate {
+      animation: ballFlight 4s ease-in-out infinite;
+      animation-delay: 1s;
+    }
+
+    .stumps-animate {
+      animation: stumpShake 4s ease-in-out infinite;
+      animation-delay: 1s;
+    }
+
+    .bail-animate {
+      animation: bailFall 4s ease-in-out infinite;
+      animation-delay: 1s;
+    }
+
+    /* Floating Cricket Elements */
+    .floating-element {
+      position: absolute;
+      opacity: 0.1;
+      animation: float 8s ease-in-out infinite;
+    }
+
+    .floating-element:nth-child(1) {
+      top: 10%;
+      left: 10%;
+      animation-delay: 0s;
+    }
+
+    .floating-element:nth-child(2) {
+      top: 20%;
+      left: 80%;
+      animation-delay: 2s;
+    }
+
+    .floating-element:nth-child(3) {
+      top: 70%;
+      left: 15%;
+      animation-delay: 4s;
+    }
+
+    .floating-element:nth-child(4) {
+      top: 80%;
+      left: 75%;
+      animation-delay: 6s;
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translateY(0px) rotate(0deg);
+      }
+
+      33% {
+        transform: translateY(-15px) rotate(120deg);
+      }
+
+      66% {
+        transform: translateY(-10px) rotate(240deg);
+      }
+    }
+
+    /* Theme Toggle */
+    .theme-controls {
+      position: fixed;
+      top: 2rem;
+      right: 2rem;
+      display: flex;
+      gap: 1rem;
+      z-index: 1000;
+    }
+
+    .theme-toggle {
       background: var(--card-bg);
-      padding: 2rem;
-      border-radius: 0.5rem;
-      box-shadow: 0 4px 12px var(--shadow);
-      width: 100%;
-      max-width: 360px;
-    }
-
-    h2 {
-      margin-bottom: 1.5rem;
-      font-weight: 500;
-    }
-
-    .form-group {
-      margin-bottom: 1rem;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 0.25rem;
-      font-size: 0.9rem;
-    }
-
-    .form-group input {
-      width: 100%;
-      padding: 0.75rem;
-      border: none;
-      border-radius: 0.375rem;
-      background: var(--input-bg);
-      color: var(--fg);
-      font-size: 1rem;
-    }
-
-    .btn {
-      width: 100%;
-      padding: 0.75rem;
-      border: none;
-      border-radius: 0.375rem;
-      background: var(--accent);
-      color: #fff;
-      font-size: 1rem;
+      border: 1px solid var(--card-border);
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
       cursor: pointer;
-      margin-top: 1rem;
+      font-size: 1.25rem;
+      color: var(--fg-primary);
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px var(--shadow);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
 
-    .meta {
+    .theme-toggle:hover {
+      transform: scale(1.1);
+      box-shadow: 0 8px 25px var(--shadow-strong);
+    }
+
+    /* Main Container */
+    .auth-container {
+      width: 100%;
+      max-width: 450px;
+      z-index: 10;
+      position: relative;
+      padding: 0 1rem;
+    }
+
+    /* Logo Section */
+    .logo-section {
       text-align: center;
-      margin-top: 1rem;
-      font-size: 0.9rem;
+      margin-bottom: 2.5rem;
     }
 
-    .meta a {
-      color: var(--accent);
-      text-decoration: none;
+    .logo {
+      font-size: 2.8rem;
+      font-weight: 700;
+      color: var(--fg-primary);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      text-shadow: 0 2px 8px var(--shadow);
+    }
+
+    .logo-icon {
+      font-size: 3.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: bounce 2s ease-in-out infinite;
+    }
+
+    .logo-text {
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    @keyframes bounce {
+
+      0%,
+      20%,
+      50%,
+      80%,
+      100% {
+        transform: translateY(0);
+      }
+
+      40% {
+        transform: translateY(-10px);
+      }
+
+      60% {
+        transform: translateY(-5px);
+      }
+    }
+
+    /* Registration Card */
+    .register-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 2rem 2.5rem 2.5rem 2.5rem;
+      box-shadow: 0 20px 60px var(--shadow-strong);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      position: relative;
+      overflow: hidden;
+      min-height: auto;
+      width: 100%;
+    }
+
+    .register-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+      border-radius: 20px 20px 0 0;
+    }
+
+    .card-header {
+      text-align: center;
+      margin-bottom: 1.8rem;
+    }
+
+    .card-title {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: var(--fg-primary);
+      margin-bottom: 0.6rem;
+    }
+
+    .card-subtitle {
+      color: var(--fg-secondary);
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    /* Flash Messages */
+    .flash-messages {
+      margin-bottom: 1.5rem;
     }
 
     .alert {
-      padding: 0.75rem;
-      border-radius: 0.375rem;
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
       margin-bottom: 1rem;
-      font-size: 0.9rem;
-      text-align: center;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      animation: slideInDown 0.3s ease-out;
+      backdrop-filter: blur(10px);
+    }
+
+    @keyframes slideInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .alert-success {
-      background-color: #d1e7dd;
-      color: #0f5132;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
     }
 
     .alert-danger {
-      background-color: #f8d7da;
-      color: #842029;
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
     }
 
-    .theme-options {
-      position: fixed;
-      top: 3.5rem;
-      /* adjust if your toggle is taller */
-      right: 1rem;
+    .alert-info {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    /* Form Styles */
+    .register-form {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-      z-index: 100;
-      /* above other elements */
+      gap: 1.3rem;
     }
 
-    .theme-btn {
-      background: none;
+    .form-group {
+      position: relative;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--fg-primary);
+      margin-bottom: 0.6rem;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 1rem 1.2rem;
+      padding-left: 3.2rem;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      background: var(--bg-secondary);
+      color: var(--fg-primary);
+      font-size: 1rem;
+      transition: var(--transition);
+      font-family: inherit;
+      height: 52px;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      background: var(--card-bg);
+    }
+
+    .form-input::placeholder {
+      color: var(--fg-secondary);
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 1.2rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--fg-secondary);
+      font-size: 1.1rem;
+      pointer-events: none;
+      transition: var(--transition);
+    }
+
+    .form-group:focus-within .input-icon {
+      color: var(--accent);
+    }
+
+    /* Submit Button */
+    .submit-btn {
+      width: 100%;
+      padding: 1.1rem;
       border: none;
-      font-size: 1.25rem;
-      color: var(--icon-color);
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+      color: white;
+      font-size: 1.05rem;
+      font-weight: 600;
       cursor: pointer;
-      padding: 0.25rem;
-      border-radius: 0.3rem;
-      transition: background 0.2s, transform 0.2s;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+      margin-top: 0.7rem;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    .theme-btn:hover {
-      background: var(--input-bg);
-      transform: scale(1.1);
+    .submit-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s;
+    }
+
+    .submit-btn:hover::before {
+      left: 100%;
+    }
+
+    .submit-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+    }
+
+    .submit-btn:active {
+      transform: translateY(0);
+    }
+
+    /* Footer Links */
+    .auth-footer {
+      text-align: center;
+      margin-top: 1.8rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--card-border);
+    }
+
+    .auth-footer p {
+      font-size: 0.95rem;
+      color: var(--fg-secondary);
+    }
+
+    .auth-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+      transition: var(--transition);
+    }
+
+    .auth-link:hover {
+      text-decoration: underline;
+      color: var(--accent-hover);
+    }
+
+    /* Loading State */
+    .loading {
+      pointer-events: none;
+      opacity: 0.7;
+    }
+
+    .loading .submit-btn {
+      background: var(--fg-secondary);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 600px) {
+      .auth-container {
+        max-width: 380px;
+        padding: 0 1rem;
+      }
+
+      .logo {
+        font-size: 2.3rem;
+      }
+
+      .logo-icon {
+        font-size: 2.8rem;
+      }
+
+      .register-card {
+        padding: 1.8rem 2rem 2.2rem 2rem;
+      }
+
+      .card-title {
+        font-size: 1.6rem;
+      }
+
+      .form-input {
+        padding: 0.9rem 1rem;
+        padding-left: 3rem;
+        height: 48px;
+      }
+
+      .input-icon {
+        left: 1rem;
+        font-size: 1rem;
+      }
+
+      .submit-btn {
+        height: 50px;
+        font-size: 1rem;
+      }
+
+      .stumps {
+        right: 8%;
+        scale: 0.7;
+      }
+
+      .cricket-ball {
+        width: 16px;
+        height: 16px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .theme-controls {
+        top: 1rem;
+        right: 1rem;
+      }
+
+      .theme-toggle {
+        width: 45px;
+        height: 45px;
+      }
+
+      .auth-container {
+        max-width: 340px;
+        padding: 0 0.8rem;
+      }
+
+      .logo {
+        font-size: 2rem;
+      }
+
+      .logo-icon {
+        font-size: 2.4rem;
+      }
+
+      .register-card {
+        padding: 1.5rem 1.8rem 2rem 1.8rem;
+      }
+
+      .card-title {
+        font-size: 1.5rem;
+      }
+
+      .form-input {
+        padding: 0.8rem 0.9rem;
+        padding-left: 2.8rem;
+        height: 46px;
+      }
+
+      .input-icon {
+        left: 0.9rem;
+      }
+
+      .submit-btn {
+        height: 48px;
+      }
+
+      .stumps {
+        right: 5%;
+        scale: 0.6;
+      }
+
+      .cricket-ball {
+        width: 14px;
+        height: 14px;
+      }
+    }
+
+    @media (max-height: 700px) {
+      .logo-section {
+        margin-bottom: 2rem;
+      }
+
+      .logo {
+        font-size: 2.2rem;
+        margin-bottom: 0.8rem;
+      }
+
+      .logo-icon {
+        font-size: 2.6rem;
+      }
+
+      .register-card {
+        padding: 1.8rem 2.2rem 2.2rem 2.2rem;
+      }
+
+      .card-header {
+        margin-bottom: 1.5rem;
+      }
+
+      .register-form {
+        gap: 1.2rem;
+      }
+
+      .auth-footer {
+        margin-top: 1.5rem;
+      }
+    }
+
+    @media (max-height: 600px) {
+      .logo-section {
+        margin-bottom: 1.5rem;
+      }
+
+      .logo {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .logo-icon {
+        font-size: 2.4rem;
+      }
+
+      .register-card {
+        padding: 1.5rem 2rem 2rem 2rem;
+      }
+
+      .card-header {
+        margin-bottom: 1.3rem;
+      }
+
+      .card-title {
+        font-size: 1.6rem;
+      }
+
+      .register-form {
+        gap: 1.1rem;
+      }
+
+      .form-input {
+        height: 48px;
+      }
+
+      .submit-btn {
+        height: 50px;
+        margin-top: 0.5rem;
+      }
+
+      .auth-footer {
+        margin-top: 1.3rem;
+        padding-top: 1.2rem;
+      }
     }
   </style>
 </head>
 
 <body>
-  <button class="toggle" id="theme-toggle">🌙</button>
+  <!-- Theme Controls -->
+  <div class="theme-controls">
+    <button class="theme-toggle" id="theme-toggle" title="Toggle Theme">🌙</button>
+  </div>
 
+  <!-- Cricket Field Background -->
+  <div class="cricket-field">
+    <div class="cricket-animation">
+      <!-- Cricket Ball -->
+      <div class="cricket-ball ball-animate"></div>
 
-  <div class="card">
-    <h2>Create Account</h2>
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    {% for category, message in messages %}
-    <div class="alert alert-{{ category }}">{{ message }}</div>
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
-
-    <form method="POST" action="/register">
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" name="email" required autofocus>
+      <!-- Cricket Stumps -->
+      <div class="stumps stumps-animate">
+        <div class="stump"></div>
+        <div class="stump"></div>
+        <div class="stump"></div>
+        <div class="bail bail-animate"></div>
       </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" name="password" required>
+
+      <!-- Floating Cricket Elements -->
+      <div class="floating-element">🏏</div>
+      <div class="floating-element">⚾</div>
+      <div class="floating-element">🏆</div>
+      <div class="floating-element">🎯</div>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="auth-container">
+    <!-- Logo Section -->
+    <div class="logo-section">
+      <div class="logo">
+        <i class="fa-solid fa-cricket-bat-ball logo-icon"></i>
+        <span class="logo-text">SimCricketX</span>
       </div>
-      <button class="btn" type="submit">Sign Up</button>
-    </form>
-    <div class="meta">
-      Already have an account? <a href="/login">Login</a>
+    </div>
+
+    <!-- Registration Card -->
+    <div class="register-card">
+      <div class="card-header">
+        <h1 class="card-title">Create Account</h1>
+        <p class="card-subtitle">Join the premier cricket simulation platform</p>
+      </div>
+
+      <!-- Flash Messages -->
+      <div class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">
+          {% if category == 'success' %}
+          <i class="fa-solid fa-check-circle"></i>
+          {% elif category == 'danger' %}
+          <i class="fa-solid fa-exclamation-triangle"></i>
+          {% else %}
+          <i class="fa-solid fa-info-circle"></i>
+          {% endif %}
+          <span>{{ message }}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+      </div>
+
+      <!-- Registration Form -->
+      <form class="register-form" method="POST" action="/register" id="registerForm">
+        <div class="form-group">
+          <label for="email" class="form-label">Email Address</label>
+          <div style="position: relative;">
+            <i class="fa-solid fa-envelope input-icon"></i>
+            <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email" required
+              autofocus>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password" class="form-label">Password</label>
+          <div style="position: relative;">
+            <i class="fa-solid fa-lock input-icon"></i>
+            <input type="password" id="password" name="password" class="form-input"
+              placeholder="Create a strong password" required>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submitBtn">
+          <span class="btn-text">Create Account</span>
+        </button>
+      </form>
+
+      <!-- Footer -->
+      <div class="auth-footer">
+        <p>
+          Already have an account?
+          <a href="/login" class="auth-link">Sign in here</a>
+        </p>
+      </div>
     </div>
   </div>
 
   <script>
+    // Theme Toggle Functionality
     const toggle = document.getElementById('theme-toggle');
     const root = document.documentElement;
-    const saved = localStorage.getItem('theme');
-    if (saved) root.setAttribute('data-theme', saved);
-    toggle.onclick = () => {
-      const current = root.getAttribute('data-theme');
-      const next = current === 'dark' ? 'light' : 'dark';
-      root.setAttribute('data-theme', next);
-      localStorage.setItem('theme', next);
-      toggle.textContent = next === 'dark' ? '🌙' : '☀️';
-    };
-    toggle.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
 
+    // Update toggle icon based on theme
+    function updateToggleIcon(theme) {
+      toggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+
+    // Theme toggle click handler
+    toggle.onclick = () => {
+      const currentTheme = root.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', newTheme);
+      updateToggleIcon(newTheme);
+    };
+
+    // Initialize theme independently (don't use localStorage)
+    window.addEventListener('DOMContentLoaded', () => {
+      // Start with light theme by default
+      updateToggleIcon('light');
+    });
+
+    // Form Enhancement
+    const registerForm = document.getElementById('registerForm');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Add loading state on form submit
+    registerForm.addEventListener('submit', function (e) {
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating Account...';
+      submitBtn.disabled = true;
+      document.body.classList.add('loading');
+    });
+
+    // Input focus effects
+    document.querySelectorAll('.form-input').forEach(input => {
+      input.addEventListener('focus', function () {
+        this.parentElement.parentElement.classList.add('focused');
+      });
+
+      input.addEventListener('blur', function () {
+        this.parentElement.parentElement.classList.remove('focused');
+      });
+    });
+
+    // Add ripple effect to submit button
+    submitBtn.addEventListener('click', function (e) {
+      const rect = this.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const ripple = document.createElement('div');
+      ripple.style.cssText = `
+                position: absolute;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.3);
+                pointer-events: none;
+                transform: scale(0);
+                animation: ripple 0.6s ease-out;
+                left: ${x}px;
+                top: ${y}px;
+                width: 20px;
+                height: 20px;
+                margin-left: -10px;
+                margin-top: -10px;
+            `;
+
+      this.appendChild(ripple);
+
+      setTimeout(() => {
+        ripple.remove();
+      }, 600);
+    });
+
+    // Add CSS for ripple animation
+    const style = document.createElement('style');
+    style.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: scale(4);
+                    opacity: 0;
+                }
+            }
+        `;
+    document.head.appendChild(style);
+
+    // Auto-dismiss flash messages after 5 seconds
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        document.querySelectorAll('.alert').forEach(el => {
+          el.style.opacity = '0';
+          el.style.transform = 'translateY(-20px)';
+          setTimeout(() => el.remove(), 300);
+        });
+      }, 5000);
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Alt + T to toggle theme
+      if (e.altKey && e.key === 't') {
+        e.preventDefault();
+        toggle.click();
+      }
+    });
+
+    // Cricket animation restart on ball completion
+    setInterval(() => {
+      const ball = document.querySelector('.cricket-ball');
+      const stumps = document.querySelector('.stumps');
+      const bail = document.querySelector('.bail');
+
+      // Restart animations
+      ball.style.animation = 'none';
+      stumps.style.animation = 'none';
+      bail.style.animation = 'none';
+
+      setTimeout(() => {
+        ball.style.animation = 'ballFlight 4s ease-in-out';
+        stumps.style.animation = 'stumpShake 4s ease-in-out';
+        bail.style.animation = 'bailFall 4s ease-in-out';
+      }, 100);
+    }, 5000);
   </script>
 </body>
 
