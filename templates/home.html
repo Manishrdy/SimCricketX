@@ -16,234 +16,548 @@
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
+    <!-- Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
     <style>
         :root {
-            --bg: #f0f4f9;
-            --fg: #333;
-            --card-bg: #fff;
-            --accent: #005fcc;
-            --shadow: rgba(0, 0, 0, 0.1);
-            --gradient: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-            --icon-color: #005fcc;
+            --bg: #fafbfc;
+            --bg-secondary: #f5f6f8;
+            --fg: #1a1d23;
+            --fg-secondary: #6b7280;
+            --card-bg: #ffffff;
+            --card-border: #e5e7eb;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-light: #dbeafe;
+            --shadow: rgba(0, 0, 0, 0.04);
+            --shadow-hover: rgba(0, 0, 0, 0.08);
+            --shadow-strong: rgba(0, 0, 0, 0.12);
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-accent: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            --icon-color: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --border-radius: 16px;
+            --border-radius-sm: 8px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         [data-theme="dark"] {
-            --bg: #0d1117;
-            --fg: #eaeaea;
-            --card-bg: #161b22;
-            --accent: #00bcd4;
-            /* brighter cyan for accents in dark mode */
-            --shadow: rgba(0, 0, 0, 0.6);
-            --gradient: linear-gradient(135deg, #00bcd4 0%, #8bc34a 100%);
-            --icon-color: #00bcd4;
-            /* brighter cyan for better visibility */
+            --bg: #0f1419;
+            --bg-secondary: #1a1f2e;
+            --fg: #f9fafb;
+            --fg-secondary: #9ca3af;
+            --card-bg: #1e293b;
+            --card-border: #334155;
+            --accent: #60a5fa;
+            --accent-hover: #3b82f6;
+            --accent-light: #1e3a8a;
+            --shadow: rgba(0, 0, 0, 0.2);
+            --shadow-hover: rgba(0, 0, 0, 0.3);
+            --shadow-strong: rgba(0, 0, 0, 0.4);
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-accent: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+            --icon-color: #60a5fa;
         }
 
-        /* ─── Light Themes ───────────────────────────────── */
+        /* Light Themes */
         :root[data-theme="nord"] {
             --bg: #eceff4;
+            --bg-secondary: #e5e9f0;
             --fg: #2e3440;
-            --card-bg: #e5e9f0;
-            --input-bg: #dde1e8;
-            --accent: #88c0d0;
-            --shadow: rgba(0, 0, 0, 0.1);
-        }
-
-        :root[data-theme="retro"] {
-            --bg: #fdf0d5;
-            --fg: #4b3621;
-            --card-bg: #fff7e6;
-            --input-bg: #f7e6c5;
-            --accent: #d97706;
-            --shadow: rgba(0, 0, 0, 0.1);
-        }
-
-        :root[data-theme="cupcake"] {
-            --bg: #fffaf0;
-            --fg: #4b2995;
-            --card-bg: #faf5ff;
-            --input-bg: #f3e8ff;
-            --accent: #d946ef;
-            --shadow: rgba(0, 0, 0, 0.1);
-        }
-
-        /* ─── Dark Themes ────────────────────────────────── */
-        :root[data-theme="dim"] {
-            --bg: #1f1f1f;
-            --fg: #e0e0e0;
-            --card-bg: #2a2a2a;
-            --input-bg: #333;
-            --accent: #6366f1;
-            --shadow: rgba(0, 0, 0, 0.5);
-        }
-
-        :root[data-theme="dracula"] {
-            --bg: #282a36;
-            --fg: #f8f8f2;
-            --card-bg: #44475a;
-            --input-bg: #373844;
-            --accent: #6272a4;
-            --shadow: rgba(0, 0, 0, 0.6);
-        }
-
-        :root[data-theme="sunset"] {
-            --bg: #2d182d;
-            --fg: #f5e0dc;
-            --card-bg: #3c1f1f;
-            --input-bg: #5f3d3d;
-            --accent: #f28fb6;
-            --shadow: rgba(0, 0, 0, 0.6);
-        }
-
-        /* ─── Light Themes ─────────────── */
-        :root[data-theme="nord"] {
-            --bg: #eceff4;
-            --fg: #2e3440;
-            --card-bg: #e5e9f0;
-            --input-bg: #dde1e8;
-            --accent: #88c0d0;
+            --fg-secondary: #4c566a;
+            --card-bg: #ffffff;
+            --card-border: #d8dee9;
+            --accent: #5e81ac;
+            --accent-hover: #4c6994;
+            --accent-light: #e8f0ff;
             --icon-color: #5e81ac;
             --gradient: linear-gradient(135deg, #8fbcbb, #88c0d0);
+            --gradient-accent: linear-gradient(135deg, #5e81ac, #81a1c1);
         }
 
         :root[data-theme="retro"] {
-            --bg: #fdf0d5;
-            --fg: #4b3621;
-            --card-bg: #fff7e6;
-            --input-bg: #f7e6c5;
-            --accent: #d97706;
-            --icon-color: #b45309;
-            --gradient: linear-gradient(135deg, #d97706, #f59e0b);
+            --bg: #fef7ed;
+            --bg-secondary: #fed7aa;
+            --fg: #7c2d12;
+            --fg-secondary: #a16207;
+            --card-bg: #ffffff;
+            --card-border: #fed7aa;
+            --accent: #ea580c;
+            --accent-hover: #dc2626;
+            --accent-light: #fff7ed;
+            --icon-color: #ea580c;
+            --gradient: linear-gradient(135deg, #f97316, #eab308);
+            --gradient-accent: linear-gradient(135deg, #ea580c, #f59e0b);
         }
 
         :root[data-theme="cupcake"] {
-            --bg: #fffaf0;
-            --fg: #4b2995;
-            --card-bg: #faf5ff;
-            --input-bg: #f3e8ff;
-            --accent: #d946ef;
-            --icon-color: #a21caf;
+            --bg: #fdf2f8;
+            --bg-secondary: #fce7f3;
+            --fg: #831843;
+            --fg-secondary: #be185d;
+            --card-bg: #ffffff;
+            --card-border: #f9a8d4;
+            --accent: #ec4899;
+            --accent-hover: #db2777;
+            --accent-light: #fdf2f8;
+            --icon-color: #ec4899;
             --gradient: linear-gradient(135deg, #f472b6, #d946ef);
+            --gradient-accent: linear-gradient(135deg, #ec4899, #a855f7);
         }
 
-        /* ─── Dark Themes ──────────────── */
+        /* Dark Themes */
         :root[data-theme="dim"] {
-            --bg: #1f1f1f;
-            --fg: #e0e0e0;
-            --card-bg: #2a2a2a;
-            --input-bg: #333;
+            --bg: #1f2937;
+            --bg-secondary: #374151;
+            --fg: #f9fafb;
+            --fg-secondary: #d1d5db;
+            --card-bg: #374151;
+            --card-border: #4b5563;
             --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --accent-light: #312e81;
             --icon-color: #818cf8;
-            --gradient: linear-gradient(135deg, #4f46e5, #6366f1);
+            --gradient: linear-gradient(135deg, #4f46e5, #7c3aed);
+            --gradient-accent: linear-gradient(135deg, #6366f1, #8b5cf6);
         }
 
         :root[data-theme="dracula"] {
             --bg: #282a36;
+            --bg-secondary: #44475a;
             --fg: #f8f8f2;
+            --fg-secondary: #6272a4;
             --card-bg: #44475a;
-            --input-bg: #373844;
-            --accent: #6272a4;
+            --card-border: #6272a4;
+            --accent: #bd93f9;
+            --accent-hover: #8be9fd;
+            --accent-light: #44475a;
             --icon-color: #8be9fd;
-            --gradient: linear-gradient(135deg, #6272a4, #8be9fd);
+            --gradient: linear-gradient(135deg, #bd93f9, #ff79c6);
+            --gradient-accent: linear-gradient(135deg, #6272a4, #8be9fd);
         }
 
         :root[data-theme="sunset"] {
-            --bg: #2d182d;
+            --bg: #2d1b2e;
+            --bg-secondary: #3c1e3d;
             --fg: #f5e0dc;
-            --card-bg: #3c1f1f;
-            --input-bg: #5f3d3d;
-            --accent: #f28fb6;
+            --fg-secondary: #c9a96e;
+            --card-bg: #3c1e3d;
+            --card-border: #5d2e5f;
+            --accent: #ff6b9d;
+            --accent-hover: #f72585;
+            --accent-light: #5d2e5f;
             --icon-color: #ff9ede;
-            --gradient: linear-gradient(135deg, #fb7185, #f28fb6);
+            --gradient: linear-gradient(135deg, #fb7185, #f472b6);
+            --gradient-accent: linear-gradient(135deg, #ff6b9d, #c77dff);
         }
 
-
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             background: var(--bg);
             color: var(--fg);
-            font-family: 'Segoe UI', sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            font-size: 16px;
             min-height: 100vh;
-            padding: 2rem;
+            position: relative;
         }
 
-        .toggle {
+        /* Navigation Header */
+        .nav-header {
             position: fixed;
-            top: 1rem;
-            right: 1rem;
-            background: none;
-            border: none;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--card-border);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 1000;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
             font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--gradient-accent);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo-icon {
+            font-size: 2rem;
+            background: var(--gradient-accent);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .theme-toggle {
+            background: var(--bg-secondary);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius-sm);
+            padding: 0.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: var(--fg);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+        }
+
+        .theme-toggle:hover {
+            background: var(--accent-light);
+            border-color: var(--accent);
+            transform: scale(1.05);
+        }
+
+        .theme-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .theme-dropdown-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius-sm);
+            padding: 0.5rem 1rem;
             cursor: pointer;
             color: var(--fg);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        h1 {
-            font-size: 2rem;
-            margin-bottom: 2rem;
-            background: var(--gradient);
-            -webkit-background-clip: text;
-            color: transparent;
-            animation: fadeIn 1.5s ease;
+        .theme-dropdown-btn:hover {
+            background: var(--accent-light);
+            border-color: var(--accent);
         }
 
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1.5rem;
-            width: 100%;
-            max-width: 900px;
-        }
-
-        .card {
+        .theme-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
             background: var(--card-bg);
-            border-radius: 0.75rem;
-            box-shadow: 0 6px 20px var(--shadow);
-            padding: 2rem;
-            text-align: center;
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 25px var(--shadow-strong);
+            min-width: 200px;
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: var(--transition);
+            z-index: 1001;
+        }
+
+        .theme-dropdown.active .theme-dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .theme-option {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-radius: var(--border-radius-sm);
             cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            transition: var(--transition);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .theme-option:hover {
+            background: var(--bg-secondary);
+        }
+
+        .theme-icon {
+            font-size: 1.1rem;
+            color: var(--icon-color);
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding-top: 100px;
+            padding-bottom: 2rem;
+            padding-left: 2rem;
+            padding-right: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .hero-section {
+            text-align: center;
+            margin-bottom: 4rem;
+            padding: 2rem 0;
+        }
+
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: var(--gradient-accent);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            line-height: 1.2;
+        }
+
+        .hero-subtitle {
+            font-size: 1.125rem;
+            color: var(--fg-secondary);
+            font-weight: 400;
+            margin-bottom: 2rem;
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--fg-secondary);
+            font-weight: 500;
+        }
+
+        /* Flash Messages */
+        .flash-container {
+            margin-bottom: 2rem;
+        }
+
+        .flash {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-left: 4px solid var(--accent);
+            border-radius: var(--border-radius);
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .flash.fade-out {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        .flash i {
+            color: var(--accent);
+            font-size: 1.2rem;
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .dashboard-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            cursor: pointer;
+            transition: var(--transition);
             position: relative;
             overflow: hidden;
+            box-shadow: 0 2px 8px var(--shadow);
         }
 
-        .card:hover {
+        .dashboard-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient-accent);
+            transform: scaleX(0);
+            transition: var(--transition);
+        }
+
+        .dashboard-card:hover {
             transform: translateY(-8px);
-            box-shadow: 0 10px 25px var(--shadow);
+            box-shadow: 0 12px 32px var(--shadow-hover);
+            border-color: var(--accent);
         }
 
-        .card.disabled {
+        .dashboard-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .dashboard-card.disabled {
             cursor: not-allowed;
-            opacity: 0.5;
-            transform: none;
-            box-shadow: none;
+            opacity: 0.6;
+            transform: none !important;
+            box-shadow: 0 2px 8px var(--shadow) !important;
         }
 
-        .card i {
-            font-size: 2rem;
+        .dashboard-card.disabled::before {
+            transform: scaleX(0) !important;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
             margin-bottom: 1rem;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--accent-light);
             color: var(--icon-color);
-            /* updated icon color variable */
+            border-radius: var(--border-radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
         }
 
-        .card h2 {
+        .card-title {
             font-size: 1.25rem;
-            margin-bottom: 0.5rem;
             font-weight: 600;
+            color: var(--fg);
+            margin: 0;
         }
 
-        .card p {
-            font-size: 0.85rem;
-            opacity: 0.8;
+        .card-description {
+            color: var(--fg-secondary);
+            font-size: 0.9375rem;
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
         }
 
-        @keyframes fadeIn {
+        .card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            color: var(--fg-secondary);
+        }
+
+        .card-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+        }
+
+        .status-dot.coming-soon {
+            background: var(--warning);
+        }
+
+        .card-arrow {
+            color: var(--accent);
+            transition: var(--transition);
+        }
+
+        .dashboard-card:hover .card-arrow {
+            transform: translateX(4px);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .nav-header {
+                padding: 1rem;
+            }
+
+            .nav-controls {
+                gap: 0.5rem;
+            }
+
+            .theme-dropdown-btn {
+                padding: 0.5rem;
+                font-size: 0;
+            }
+
+            .main-content {
+                padding-left: 1rem;
+                padding-right: 1rem;
+                padding-top: 80px;
+            }
+
+            .hero-title {
+                font-size: 2.5rem;
+            }
+
+            .hero-stats {
+                gap: 1rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .dashboard-card {
+                padding: 1.5rem;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(-20px);
+                transform: translateY(30px);
             }
 
             to {
@@ -252,182 +566,386 @@
             }
         }
 
-        .flash {
-            padding: 0.75rem;
-            margin-bottom: 1rem;
-            border-radius: 0.5rem;
-            font-size: 0.9rem;
-            opacity: 1;
-            transition: opacity 0.3s ease;
+        .dashboard-card {
+            animation: fadeInUp 0.6s ease-out;
         }
 
-        .flash.fade-out {
-            opacity: 0;
+        .dashboard-card:nth-child(1) {
+            animation-delay: 0.1s;
         }
 
-        .theme-options {
-            position: fixed;
-            top: 3.5rem;
-            /* just under the toggle */
-            right: 1rem;
-            display: flex;
-            /* keep them stacked vertically */
-            flex-direction: column;
-            gap: 0.5rem;
-            z-index: 100;
-            /* above content */
-
-            /* ← NEW grouping styles: */
-            background: var(--card-bg);
-            padding: 0.5rem;
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 12px var(--shadow);
+        .dashboard-card:nth-child(2) {
+            animation-delay: 0.2s;
         }
 
-
-        .theme-btn {
-            background: none;
-            border: none;
-            font-size: 1.25rem;
-            color: var(--icon-color);
-            cursor: pointer;
-            padding: 0.25rem;
-            border-radius: 0.3rem;
-            transition: background 0.2s, transform 0.2s;
+        .dashboard-card:nth-child(3) {
+            animation-delay: 0.3s;
         }
 
-        .theme-btn:hover {
-            background: var(--input-bg);
-            transform: scale(1.1);
+        .dashboard-card:nth-child(4) {
+            animation-delay: 0.4s;
+        }
+
+        .dashboard-card:nth-child(5) {
+            animation-delay: 0.5s;
+        }
+
+        .dashboard-card:nth-child(6) {
+            animation-delay: 0.6s;
+        }
+
+        /* Theme-specific customizations */
+        [data-theme="retro"] .dashboard-card:hover {
+            box-shadow: 0 12px 32px rgba(234, 88, 12, 0.2);
+        }
+
+        [data-theme="cupcake"] .dashboard-card:hover {
+            box-shadow: 0 12px 32px rgba(236, 72, 153, 0.2);
+        }
+
+        [data-theme="dracula"] .dashboard-card:hover {
+            box-shadow: 0 12px 32px rgba(139, 233, 253, 0.2);
         }
     </style>
 </head>
 
 <body>
-    <button class="toggle" id="theme-toggle">🌙</button>
-
-    <!-- ─── Theme Picker Options ───────────────────── -->
-    <div class="theme-options" id="theme-options">
-        <button class="theme-btn" data-theme="nord" title="Nord"><i class="fa-solid fa-snowflake"></i></button>
-        <button class="theme-btn" data-theme="retro" title="Retro"><i class="fa-solid fa-compact-disc"></i></button>
-        <button class="theme-btn" data-theme="cupcake" title="Cupcake"><i
-                class="fa-solid fa-birthday-cake"></i></button>
-        <button class="theme-btn" data-theme="dim" title="Dim"><i class="fa-solid fa-adjust"></i></button>
-        <button class="theme-btn" data-theme="dracula" title="Dracula"><i class="fa-solid fa-ghost"></i></button>
-        <button class="theme-btn" data-theme="sunset" title="Sunset">
-            <i class="fa-solid fa-sun"></i>
-        </button>
-
-    </div>
-    <!-- ──────────────────────────────────────────────── -->
-
-
-    <h1>🚀 SimCricketX <em>by Manish</em>.</h1>
-
-    <!-- 🔥 Flash messages go here -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    {% for category, message in messages %}
-    <div class="flash alert-{{ category }}">{{ message }}</div>
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
-
-    <div class="grid">
-        <div class="card" onclick="location.href='/team/create'">
-            <i class="fa-solid fa-people-group"></i>
-            <h2>Create Team</h2>
-            <p>Build your dream squad</p>
+    <!-- Navigation Header -->
+    <header class="nav-header">
+        <div class="logo">
+            <i class="fa-solid fa-cricket-bat-ball logo-icon"></i>
+            <span>SimCricketX <em>by Manish</em></span>
         </div>
 
-        <div class="card" onclick="location.href='/teams/manage'"">
-            <i class=" fa-solid fa-pen-to-square"></i>
-            <h2>Manage Teams</h2>
-            <p>View, edit, or delete your teams</p>
+        <div class="nav-controls">
+            <button class="theme-toggle" id="theme-toggle">🌙</button>
+
+            <div class="theme-dropdown" id="theme-dropdown">
+                <button class="theme-dropdown-btn" id="theme-dropdown-btn">
+                    <i class="fa-solid fa-palette"></i>
+                    <span class="theme-dropdown-text">Themes</span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+
+                <div class="theme-dropdown-menu" id="theme-dropdown-menu">
+                    <div class="theme-option" data-theme="nord">
+                        <i class="fa-solid fa-snowflake theme-icon"></i>
+                        <span>Nord</span>
+                    </div>
+                    <div class="theme-option" data-theme="retro">
+                        <i class="fa-solid fa-compact-disc theme-icon"></i>
+                        <span>Retro</span>
+                    </div>
+                    <div class="theme-option" data-theme="cupcake">
+                        <i class="fa-solid fa-birthday-cake theme-icon"></i>
+                        <span>Cupcake</span>
+                    </div>
+                    <div class="theme-option" data-theme="dim">
+                        <i class="fa-solid fa-adjust theme-icon"></i>
+                        <span>Dim</span>
+                    </div>
+                    <div class="theme-option" data-theme="dracula">
+                        <i class="fa-solid fa-ghost theme-icon"></i>
+                        <span>Dracula</span>
+                    </div>
+                    <div class="theme-option" data-theme="sunset">
+                        <i class="fa-solid fa-sun theme-icon"></i>
+                        <span>Sunset</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Hero Section -->
+        <section class="hero-section">
+            <h1 class="hero-title">SimCricketX Dashboard</h1>
+            <p class="hero-subtitle">Your complete cricket simulation platform - create teams, simulate matches, and
+                track your cricket journey</p>
+
+            <div class="hero-stats">
+                <div class="stat-item">
+                    <span class="stat-number">∞</span>
+                    <span class="stat-label">Teams Created</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">∞</span>
+                    <span class="stat-label">Matches Simulated</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">6</span>
+                    <span class="stat-label">Features Available</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Flash Messages -->
+        <div class="flash-container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="flash alert-{{ category }}">
+                <i class="fa-solid fa-info-circle"></i>
+                <span>{{ message }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
         </div>
 
-        <div class="card" onclick="location.href='/match/setup'">
-            <i class="fa-solid fa-people-roof"></i>
-            <h2>Simulate Match</h2>
-            <p>Pick teams & set up XI</p>
-        </div>
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+            <div class="dashboard-card" onclick="location.href='/team/create'">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-people-group"></i>
+                    </div>
+                    <h2 class="card-title">Create Team</h2>
+                </div>
+                <p class="card-description">Build your dream cricket squad with custom players, assign roles, and create
+                    the perfect team composition for your matches.</p>
+                <div class="card-footer">
+                    <div class="card-status">
+                        <div class="status-dot"></div>
+                        <span>Ready to use</span>
+                    </div>
+                    <i class="fa-solid fa-arrow-right card-arrow"></i>
+                </div>
+            </div>
 
-        <div class="card disabled">
-            <i class="fa-solid fa-chart-simple"></i>
-            <h2>Stats</h2>
-            <p>(coming soon)</p>
-        </div>
+            <div class="dashboard-card" onclick="location.href='/teams/manage'">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </div>
+                    <h2 class="card-title">Manage Teams</h2>
+                </div>
+                <p class="card-description">View, edit, or delete your existing teams. Update player details, modify
+                    team strategies, and keep your squads up to date.</p>
+                <div class="card-footer">
+                    <div class="card-status">
+                        <div class="status-dot"></div>
+                        <span>Ready to use</span>
+                    </div>
+                    <i class="fa-solid fa-arrow-right card-arrow"></i>
+                </div>
+            </div>
 
-        <div class="card" onclick="location.href='/my-matches'">
-            <i class="fa-solid fa-folder-open"></i>
-            <h2>My Matches</h2>
-            <p>View your saved match archives</p>
-        </div>
+            <div class="dashboard-card" onclick="location.href='/match/setup'">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-people-roof"></i>
+                    </div>
+                    <h2 class="card-title">Simulate Match</h2>
+                </div>
+                <p class="card-description">Set up exciting cricket matches between your teams. Pick playing XI,
+                    configure match settings, and watch the simulation unfold.</p>
+                <div class="card-footer">
+                    <div class="card-status">
+                        <div class="status-dot"></div>
+                        <span>Ready to use</span>
+                    </div>
+                    <i class="fa-solid fa-arrow-right card-arrow"></i>
+                </div>
+            </div>
 
-        <div class="card" onclick="location.href='/logout'">
-            <i class="fa-solid fa-arrow-right-from-bracket"></i>
-            <h2>Logout</h2>
-            <p>Sign out securely</p>
+            <div class="dashboard-card disabled">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-chart-simple"></i>
+                    </div>
+                    <h2 class="card-title">Statistics</h2>
+                </div>
+                <p class="card-description">Comprehensive analytics and insights about your teams' performance, player
+                    statistics, and match history trends.</p>
+                <div class="card-footer">
+                    <div class="card-status">
+                        <div class="status-dot coming-soon"></div>
+                        <span>Coming soon</span>
+                    </div>
+                    <i class="fa-solid fa-clock card-arrow"></i>
+                </div>
+            </div>
+
+            <div class="dashboard-card" onclick="location.href='/my-matches'">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-folder-open"></i>
+                    </div>
+                    <h2 class="card-title">My Matches</h2>
+                </div>
+                <p class="card-description">Access your complete match archive. Review past simulations, analyze
+                    results, and relive your favorite cricket moments.</p>
+                <div class="card-footer">
+                    <div class="card-status">
+                        <div class="status-dot"></div>
+                        <span>Ready to use</span>
+                    </div>
+                    <i class="fa-solid fa-arrow-right card-arrow"></i>
+                </div>
+            </div>
+
+            <div class="dashboard-card" onclick="location.href='/logout'">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    </div>
+                    <h2 class="card-title">Logout</h2>
+                </div>
+                <p class="card-description">Securely sign out of your SimCricketX account. Your data will be safely
+                    stored for your next cricket session.</p>
+                <div class="card-footer">
+                    <div class="card-status">
+                        <div class="status-dot"></div>
+                        <span>Secure logout</span>
+                    </div>
+                    <i class="fa-solid fa-arrow-right card-arrow"></i>
+                </div>
+            </div>
         </div>
-    </div>
+    </main>
 
     <script>
+        // Theme Toggle Functionality
         const toggle = document.getElementById('theme-toggle');
         const root = document.documentElement;
-        if (localStorage.theme) root.setAttribute('data-theme', localStorage.theme);
-        toggle.onclick = () => {
-            const theme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-            root.setAttribute('data-theme', theme);
-            localStorage.theme = theme;
-            toggle.textContent = theme === 'dark' ? '☀️' : '🌙';
-        };
-        toggle.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
 
-        // Theme-picker buttons
-        document.querySelectorAll('.theme-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const theme = btn.getAttribute('data-theme');
+        // Initialize theme
+        if (localStorage.theme) {
+            root.setAttribute('data-theme', localStorage.theme);
+        }
+
+        toggle.onclick = () => {
+            const currentTheme = root.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateToggleIcon(newTheme);
+        };
+
+        function updateToggleIcon(theme) {
+            const isDark = theme === 'dark' || ['dim', 'dracula', 'sunset'].includes(theme);
+            toggle.textContent = isDark ? '☀️' : '🌙';
+        }
+
+        // Theme Dropdown Functionality
+        const dropdown = document.getElementById('theme-dropdown');
+        const dropdownBtn = document.getElementById('theme-dropdown-btn');
+        const dropdownMenu = document.getElementById('theme-dropdown-menu');
+
+        dropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('active');
+        });
+
+        document.addEventListener('click', () => {
+            dropdown.classList.remove('active');
+        });
+
+        dropdownMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        // Theme Selection
+        document.querySelectorAll('.theme-option').forEach(option => {
+            option.addEventListener('click', () => {
+                const theme = option.getAttribute('data-theme');
                 document.documentElement.setAttribute('data-theme', theme);
                 localStorage.setItem('theme', theme);
-                // update dark/light toggle icon if needed
-                document.getElementById('theme-toggle').textContent =
-                    theme.startsWith('dark') ? '☀️' : '🌙';
+                updateToggleIcon(theme);
+                dropdown.classList.remove('active');
             });
         });
 
-        // On load: apply saved theme or default
+        // Initialize on load
         window.addEventListener('DOMContentLoaded', () => {
             const saved = localStorage.getItem('theme');
             if (saved) {
                 document.documentElement.setAttribute('data-theme', saved);
-                document.getElementById('theme-toggle').textContent =
-                    saved.startsWith('dark') ? '☀️' : '🌙';
+                updateToggleIcon(saved);
+            } else {
+                updateToggleIcon('light');
             }
         });
 
-        window.addEventListener('DOMContentLoaded', () => {
-            const grid = document.querySelector('.grid');
-            const picker = document.querySelector('.theme-options');
-            if (grid && picker) {
-                const rect = grid.getBoundingClientRect();
-                // Position picker top to match grid’s top edge:
-                picker.style.top = `${rect.top}px`;
-                // Make picker height match grid’s height:
-                picker.style.height = `${rect.height}px`;
-            }
-        });
-
-
-
-        // Auto-dismiss flash messages after 3 seconds
+        // Auto-dismiss flash messages after 4 seconds
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 document.querySelectorAll('.flash').forEach(el => {
                     el.classList.add('fade-out');
                     setTimeout(() => el.remove(), 300);
                 });
-            }, 3000);
+            }, 4000);
         });
+
+        // Add smooth scroll behavior for better UX
+        document.querySelectorAll('.dashboard-card:not(.disabled)').forEach(card => {
+            card.addEventListener('click', function (e) {
+                // Add a subtle loading state
+                this.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 150);
+            });
+        });
+
+        // Keyboard navigation support
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                dropdown.classList.remove('active');
+            }
+        });
+
+        // Add ripple effect to cards on click
+        document.querySelectorAll('.dashboard-card:not(.disabled)').forEach(card => {
+            card.addEventListener('click', function (e) {
+                const rect = this.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                const ripple = document.createElement('div');
+                ripple.style.cssText = `
+                    position: absolute;
+                    border-radius: 50%;
+                    background: var(--accent);
+                    opacity: 0.3;
+                    pointer-events: none;
+                    transform: scale(0);
+                    animation: ripple 0.6s ease-out;
+                    left: ${x}px;
+                    top: ${y}px;
+                    width: 20px;
+                    height: 20px;
+                    margin-left: -10px;
+                    margin-top: -10px;
+                `;
+
+                this.appendChild(ripple);
+
+                setTimeout(() => {
+                    ripple.remove();
+                }, 600);
+            });
+        });
+
+        // Add CSS for ripple animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: scale(4);
+                    opacity: 0;
+                }
+            }
+            
+            .dashboard-card {
+                position: relative;
+                overflow: hidden;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 

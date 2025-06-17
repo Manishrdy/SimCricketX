@@ -10,329 +10,283 @@
   <title>{{ "Edit Team" if edit else "Create Team" }} – SimCricketX</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Reset + Icons -->
+  <!-- Modern CSS Reset -->
   <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+  <!-- Font Awesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <!-- Google Fonts -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
 
   <style>
     :root {
-      --bg: #f0f4f9;
-      --fg: #333;
-      --card-bg: #fff;
-      --accent: #005fcc;
-      --shadow: rgba(0, 0, 0, 0.1);
-      --gradient: linear-gradient(135deg, #6a11cb, #2575fc);
-      --border: 1px solid var(--accent);
-      --input-bg: #eaeaea;
+      --bg: #fafbfc;
+      --bg-secondary: #f5f6f8;
+      --fg: #1a1d23;
+      --fg-secondary: #6b7280;
+      --card-bg: #ffffff;
+      --card-border: #e5e7eb;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --accent-light: #dbeafe;
+      --shadow: rgba(0, 0, 0, 0.04);
+      --shadow-hover: rgba(0, 0, 0, 0.08);
+      --shadow-strong: rgba(0, 0, 0, 0.12);
+      --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --gradient-accent: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      --icon-color: #3b82f6;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --border-radius: 16px;
+      --border-radius-sm: 8px;
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     [data-theme="dark"] {
-      --bg: #0d1117;
-      --fg: #eaeaea;
-      --card-bg: #161b22;
-      --accent: #00bcd4;
-      --shadow: rgba(0, 0, 0, 0.6);
-      --gradient: linear-gradient(135deg, #00bcd4, #8bc34a);
-      --border: 1px solid var(--accent);
-      --input-bg: #2a2a2a;
+      --bg: #0f1419;
+      --bg-secondary: #1a1f2e;
+      --fg: #f9fafb;
+      --fg-secondary: #9ca3af;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --accent: #60a5fa;
+      --accent-hover: #3b82f6;
+      --accent-light: #1e3a8a;
+      --shadow: rgba(0, 0, 0, 0.2);
+      --shadow-hover: rgba(0, 0, 0, 0.3);
+      --shadow-strong: rgba(0, 0, 0, 0.4);
+      --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --gradient-accent: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+      --icon-color: #60a5fa;
     }
 
-    /* ─── Light Themes ───────────────────────────────── */
+    /* Light Themes */
     :root[data-theme="nord"] {
       --bg: #eceff4;
+      --bg-secondary: #e5e9f0;
       --fg: #2e3440;
-      --card-bg: #e5e9f0;
-      --input-bg: #dde1e8;
-      --accent: #88c0d0;
-      --shadow: rgba(0, 0, 0, 0.1);
-    }
-
-    :root[data-theme="retro"] {
-      --bg: #fdf0d5;
-      --fg: #4b3621;
-      --card-bg: #fff7e6;
-      --input-bg: #f7e6c5;
-      --accent: #d97706;
-      --shadow: rgba(0, 0, 0, 0.1);
-    }
-
-    :root[data-theme="cupcake"] {
-      --bg: #fffaf0;
-      --fg: #4b2995;
-      --card-bg: #faf5ff;
-      --input-bg: #f3e8ff;
-      --accent: #d946ef;
-      --shadow: rgba(0, 0, 0, 0.1);
-    }
-
-    /* ─── Dark Themes ────────────────────────────────── */
-    :root[data-theme="dim"] {
-      --bg: #1f1f1f;
-      --fg: #e0e0e0;
-      --card-bg: #2a2a2a;
-      --input-bg: #333;
-      --accent: #6366f1;
-      --shadow: rgba(0, 0, 0, 0.5);
-    }
-
-    :root[data-theme="dracula"] {
-      --bg: #282a36;
-      --fg: #f8f8f2;
-      --card-bg: #44475a;
-      --input-bg: #373844;
-      --accent: #6272a4;
-      --shadow: rgba(0, 0, 0, 0.6);
-    }
-
-    :root[data-theme="sunset"] {
-      --bg: #2d182d;
-      --fg: #f5e0dc;
-      --card-bg: #3c1f1f;
-      --input-bg: #5f3d3d;
-      --accent: #f28fb6;
-      --shadow: rgba(0, 0, 0, 0.6);
-    }
-
-    /* ─── Light Themes ─────────────── */
-    :root[data-theme="nord"] {
-      --bg: #eceff4;
-      --fg: #2e3440;
-      --card-bg: #e5e9f0;
-      --input-bg: #dde1e8;
-      --accent: #88c0d0;
+      --fg-secondary: #4c566a;
+      --card-bg: #ffffff;
+      --card-border: #d8dee9;
+      --accent: #5e81ac;
+      --accent-hover: #4c6994;
+      --accent-light: #e8f0ff;
       --icon-color: #5e81ac;
       --gradient: linear-gradient(135deg, #8fbcbb, #88c0d0);
+      --gradient-accent: linear-gradient(135deg, #5e81ac, #81a1c1);
     }
 
     :root[data-theme="retro"] {
-      --bg: #fdf0d5;
-      --fg: #4b3621;
-      --card-bg: #fff7e6;
-      --input-bg: #f7e6c5;
-      --accent: #d97706;
-      --icon-color: #b45309;
-      --gradient: linear-gradient(135deg, #d97706, #f59e0b);
+      --bg: #fef7ed;
+      --bg-secondary: #fed7aa;
+      --fg: #7c2d12;
+      --fg-secondary: #a16207;
+      --card-bg: #ffffff;
+      --card-border: #fed7aa;
+      --accent: #ea580c;
+      --accent-hover: #dc2626;
+      --accent-light: #fff7ed;
+      --icon-color: #ea580c;
+      --gradient: linear-gradient(135deg, #f97316, #eab308);
+      --gradient-accent: linear-gradient(135deg, #ea580c, #f59e0b);
     }
 
     :root[data-theme="cupcake"] {
-      --bg: #fffaf0;
-      --fg: #4b2995;
-      --card-bg: #faf5ff;
-      --input-bg: #f3e8ff;
-      --accent: #d946ef;
-      --icon-color: #a21caf;
+      --bg: #fdf2f8;
+      --bg-secondary: #fce7f3;
+      --fg: #831843;
+      --fg-secondary: #be185d;
+      --card-bg: #ffffff;
+      --card-border: #f9a8d4;
+      --accent: #ec4899;
+      --accent-hover: #db2777;
+      --accent-light: #fdf2f8;
+      --icon-color: #ec4899;
       --gradient: linear-gradient(135deg, #f472b6, #d946ef);
+      --gradient-accent: linear-gradient(135deg, #ec4899, #a855f7);
     }
 
-    /* ─── Dark Themes ──────────────── */
+    /* Dark Themes */
     :root[data-theme="dim"] {
-      --bg: #1f1f1f;
-      --fg: #e0e0e0;
-      --card-bg: #2a2a2a;
-      --input-bg: #333;
+      --bg: #1f2937;
+      --bg-secondary: #374151;
+      --fg: #f9fafb;
+      --fg-secondary: #d1d5db;
+      --card-bg: #374151;
+      --card-border: #4b5563;
       --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-light: #312e81;
       --icon-color: #818cf8;
-      --gradient: linear-gradient(135deg, #4f46e5, #6366f1);
+      --gradient: linear-gradient(135deg, #4f46e5, #7c3aed);
+      --gradient-accent: linear-gradient(135deg, #6366f1, #8b5cf6);
     }
 
     :root[data-theme="dracula"] {
       --bg: #282a36;
+      --bg-secondary: #44475a;
       --fg: #f8f8f2;
+      --fg-secondary: #6272a4;
       --card-bg: #44475a;
-      --input-bg: #373844;
-      --accent: #6272a4;
+      --card-border: #6272a4;
+      --accent: #bd93f9;
+      --accent-hover: #8be9fd;
+      --accent-light: #44475a;
       --icon-color: #8be9fd;
-      --gradient: linear-gradient(135deg, #6272a4, #8be9fd);
+      --gradient: linear-gradient(135deg, #bd93f9, #ff79c6);
+      --gradient-accent: linear-gradient(135deg, #6272a4, #8be9fd);
     }
 
     :root[data-theme="sunset"] {
-      --bg: #2d182d;
+      --bg: #2d1b2e;
+      --bg-secondary: #3c1e3d;
       --fg: #f5e0dc;
-      --card-bg: #3c1f1f;
-      --input-bg: #5f3d3d;
-      --accent: #f28fb6;
+      --fg-secondary: #c9a96e;
+      --card-bg: #3c1e3d;
+      --card-border: #5d2e5f;
+      --accent: #ff6b9d;
+      --accent-hover: #f72585;
+      --accent-light: #5d2e5f;
       --icon-color: #ff9ede;
-      --gradient: linear-gradient(135deg, #fb7185, #f28fb6);
+      --gradient: linear-gradient(135deg, #fb7185, #f472b6);
+      --gradient-accent: linear-gradient(135deg, #ff6b9d, #c77dff);
     }
 
-
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       background: var(--bg);
       color: var(--fg);
-      font-family: 'Segoe UI', sans-serif;
-      display: flex;
-      justify-content: center;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.6;
+      font-size: 16px;
+      min-height: 100vh;
       padding: 2rem;
     }
 
-    .toggle {
+    /* Navigation Header */
+    .nav-header {
       position: fixed;
-      top: 1rem;
-      right: 1rem;
-      background: none;
-      border: none;
-      font-size: 1.5rem;
-      cursor: pointer;
-      color: var(--fg);
-    }
-
-    .card {
+      top: 0;
+      left: 0;
+      right: 0;
       background: var(--card-bg);
-      border-radius: 1rem;
-      box-shadow: 0 10px 30px var(--shadow);
-      padding: 2rem;
-      width: 100%;
-      max-width: 900px;
-      animation: fadeIn 0.8s ease;
-    }
-
-    h1 {
-      font-size: 2rem;
-      text-align: center;
-      margin-bottom: 1.5rem;
-      background: var(--gradient);
-      -webkit-background-clip: text;
-      color: transparent;
-    }
-
-    form>.form-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1rem;
-    }
-
-    .form-grid input,
-    .form-grid select {
-      padding: 0.6rem;
-      border-radius: 0.5rem;
-      border: var(--border);
-      background: var(--input-bg);
-      color: var(--fg);
-      font-size: 1rem;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    .color-picker {
-      width: 2rem;
-      height: 2rem;
-      padding: 0;
-      border: none;
-      cursor: pointer;
-      border-radius: 0.25rem;
-    }
-
-    .buttons {
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      z-index: 1000;
+      padding: 1rem 2rem;
       display: flex;
-      justify-content: flex-end;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-left {
+      display: flex;
+      align-items: center;
       gap: 1rem;
-      flex-wrap: wrap;
-      margin-bottom: 1rem;
     }
 
-    .buttons .btn {
-      padding: 0.6rem 1.2rem;
-      border-radius: 0.5rem;
-      border: none;
-      background: var(--accent);
-      color: #fff;
-      cursor: pointer;
-      font-size: 0.95rem;
-    }
-
-    .buttons .btn.secondary {
-      background: transparent;
+    .home-link {
       color: var(--accent);
-      border: var(--border);
-    }
-
-    .btn {
-      border-radius: 0.5rem;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    .btn.secondary {
-      background: transparent;
-      border: 2px solid var(--accent);
-      color: var(--accent);
-    }
-
-
-    #player-count {
-      margin-left: auto;
-      align-self: center;
-      font-size: 0.9rem;
-    }
-
-    #players-container {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1rem;
-    }
-
-    .player-card {
-      background: var(--card-bg);
-      border: var(--border);
-      border-radius: 0.75rem;
-      padding: 1rem;
-      position: relative;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.5rem;
-    }
-
-    .player-card .remove {
-      position: absolute;
-      top: -8px;
-      /* pull it outside the card a bit */
-      right: -8px;
-      /* same on the right */
-      background: var(--accent);
-      color: #fff;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
+      font-size: 1.5rem;
+      text-decoration: none;
+      transition: var(--transition);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 2px 6px var(--shadow);
-      cursor: pointer;
-      z-index: 1;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--bg-secondary);
     }
 
-    .player-card input,
-    .player-card select {
-      width: 100%;
-      padding: 0.4rem;
-      border-radius: 0.4rem;
-      border: var(--border);
-      background: var(--input-bg);
+    .home-link:hover {
+      background: var(--accent-light);
+      transform: scale(1.1);
+    }
+
+    .page-title {
+      font-size: 1.25rem;
+      font-weight: 600;
       color: var(--fg);
-      font-size: 0.9rem;
+      margin: 0;
+    }
+
+    .theme-toggle {
+      background: var(--bg-secondary);
+      border: 1px solid var(--card-border);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+      font-size: 1.2rem;
+      color: var(--fg);
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .theme-toggle:hover {
+      background: var(--accent-light);
+      border-color: var(--accent);
+      transform: scale(1.05);
+    }
+
+    /* Main Content */
+    .main-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-top: 100px;
+    }
+
+    .page-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .dynamic-title {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: var(--gradient-accent);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 0.5rem;
+      line-height: 1.2;
+    }
+
+    .page-subtitle {
+      color: var(--fg-secondary);
+      font-size: 1.125rem;
+      font-weight: 400;
+    }
+
+    /* Flash Messages */
+    .flash-messages {
+      margin-bottom: 2rem;
     }
 
     .flash {
-      padding: 0.75rem;
-      border-radius: 0.5rem;
+      padding: 1rem 1.25rem;
+      border-radius: var(--border-radius-sm);
       margin-bottom: 1rem;
-      font-size: 0.9rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      animation: slideInDown 0.3s ease-out;
     }
 
-    .alert-success {
-      background: #d1e7dd;
-      color: #0f5132;
-    }
-
-    .alert-danger {
-      background: #f8d7da;
-      color: #842029;
-    }
-
-    @keyframes fadeIn {
+    @keyframes slideInDown {
       from {
         opacity: 0;
         transform: translateY(-20px);
@@ -343,196 +297,645 @@
         transform: translateY(0);
       }
     }
+
+    .alert-success {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .alert-danger {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    /* Main Card */
+    .team-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--border-radius);
+      padding: 2.5rem;
+      box-shadow: 0 8px 32px var(--shadow-strong);
+      position: relative;
+    }
+
+    .team-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--gradient-accent);
+      border-radius: var(--border-radius) var(--border-radius) 0 0;
+    }
+
+    /* Form Sections */
+    .form-section {
+      margin-bottom: 3rem;
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--fg);
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .section-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--accent-light);
+      color: var(--icon-color);
+      border-radius: var(--border-radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    /* Team Details Grid */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .form-group {
+      position: relative;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--fg);
+      margin-bottom: 0.5rem;
+    }
+
+    .form-input,
+    .form-select {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      border: 1px solid var(--card-border);
+      border-radius: var(--border-radius-sm);
+      background: var(--bg-secondary);
+      color: var(--fg);
+      font-size: 1rem;
+      transition: var(--transition);
+      font-family: inherit;
+    }
+
+    .form-input:focus,
+    .form-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      background: var(--card-bg);
+    }
+
+    .form-input::placeholder {
+      color: var(--fg-secondary);
+    }
+
+    /* Color Picker */
+    .color-picker-group {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .color-picker-wrapper {
+      position: relative;
+      width: 40px;
+      height: 40px;
+    }
+
+    .color-input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .color-swatch {
+      width: 100%;
+      height: 100%;
+      border: 2px solid var(--card-border);
+      border-radius: var(--border-radius-sm);
+      background: #ff4500;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .color-swatch:hover {
+      border-color: var(--accent);
+      transform: scale(1.1);
+    }
+
+    /* Action Buttons */
+    .action-section {
+      background: var(--bg-secondary);
+      border-radius: var(--border-radius-sm);
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      border: 1px solid var(--card-border);
+    }
+
+    .action-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .action-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    .player-count {
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 0.375rem 0.75rem;
+      border-radius: 20px;
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--border-radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+      text-decoration: none;
+      border: none;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: var(--gradient-accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+
+    .btn-secondary:hover {
+      background: var(--accent-light);
+      transform: translateY(-2px);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* Players Grid */
+    .players-section {
+      margin-bottom: 3rem;
+    }
+
+    .players-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .player-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--border-radius-sm);
+      padding: 1.5rem;
+      position: relative;
+      transition: var(--transition);
+    }
+
+    .player-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px var(--shadow-hover);
+      border-color: var(--accent);
+    }
+
+    .player-remove {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: var(--danger);
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: var(--transition);
+      font-size: 0.875rem;
+      z-index: 10;
+    }
+
+    .player-remove:hover {
+      background: #dc2626;
+      transform: scale(1.1);
+    }
+
+    .player-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .player-input,
+    .player-select {
+      width: 100%;
+      padding: 0.625rem 0.75rem;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      color: var(--fg);
+      font-size: 0.875rem;
+      transition: var(--transition);
+      font-family: inherit;
+    }
+
+    .player-input:focus,
+    .player-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    }
+
+    /* Team Leadership */
+    .leadership-section {
+      background: var(--bg-secondary);
+      border-radius: var(--border-radius-sm);
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      border: 1px solid var(--card-border);
+    }
+
+    .leadership-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+    }
+
+    /* Submit Section */
+    .submit-section {
+      display: flex;
+      justify-content: flex-end;
+      gap: 1rem;
+      flex-wrap: wrap;
+      padding-top: 2rem;
+      border-top: 1px solid var(--card-border);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .nav-header {
+        padding: 1rem;
+      }
+
+      .main-content {
+        padding-top: 80px;
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+
+      .team-card {
+        padding: 1.5rem;
+      }
+
+      .dynamic-title {
+        font-size: 2rem;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+
+      .players-container {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+
+      .action-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .action-buttons {
+        width: 100%;
+      }
+
+      .btn {
+        flex: 1;
+        justify-content: center;
+      }
+
+      .submit-section {
+        flex-direction: column;
+      }
+
+      .leadership-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 1rem;
+      }
+
+      .main-content {
+        padding-top: 70px;
+      }
+
+      .team-card {
+        padding: 1rem;
+      }
+
+      .dynamic-title {
+        font-size: 1.75rem;
+      }
+
+      .player-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Animation for new cards */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .player-card {
+      animation: fadeInUp 0.3s ease-out;
+    }
   </style>
 </head>
 
 <body>
-  <!-- Dark/Light Toggle -->
-  <button class="toggle" id="theme-toggle">🌙</button>
+  <!-- Navigation Header -->
+  <header class="nav-header">
+    <div class="nav-left">
+      <a href="{{ url_for('home') }}" class="home-link" title="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+      <h1 class="page-title">Team Builder</h1>
+    </div>
 
+    <button class="theme-toggle" id="theme-toggle">🌙</button>
+  </header>
 
-  <div class="card" style="position:relative;">
-    <!-- Home icon -->
-    <a href="{{ url_for('home') }}" style="
-        position:absolute; top:1rem; left:1rem;
-        color:var(--accent); font-size:1.3rem;
-      " title="Home">
-      <i class="fa-solid fa-house"></i>
-    </a>
-
-    <h1 id="dynamic-title">{{ team.team_name if edit else 'Team Creation' }}</h1>
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="dynamic-title" id="dynamic-title">{{ team.team_name if edit else 'Team Creation' }}</h1>
+      <p class="page-subtitle">Build your dream cricket squad with custom players and strategies</p>
+    </div>
 
     <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    {% for category, msg in messages %}
-    <div class="flash alert-{{category}}">{{msg}}</div>
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
-
-    <form id="team-form" method="POST"
-      action="{{ url_for('edit_team', short_code=team.short_code) if edit else url_for('create_team') }}">
-
-      <div class="submit-row"
-        style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap;">
-        {% if edit %}
-        <a href="{{ url_for('manage_teams') }}" class="btn secondary" style="
-      display: inline-flex;
-      align-items: center;
-      padding: 0.4rem 0.9rem;
-      font-size: 0.85rem;
-      gap: 0.4rem;
-    ">
-          <i class="fa-solid fa-xmark-circle"></i> Cancel
-        </a>
+    <div class="flash-messages">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      {% for category, msg in messages %}
+      <div class="flash alert-{{category}}">
+        {% if category == 'success' %}
+        <i class="fa-solid fa-check-circle"></i>
+        {% else %}
+        <i class="fa-solid fa-exclamation-triangle"></i>
         {% endif %}
-        <button type="submit" class="btn" style="
-    display: inline-flex;
-    align-items: center;
-    padding: 0.4rem 0.9rem;
-    font-size: 0.85rem;
-    gap: 0.4rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-  ">
-          <i class="fa-solid fa-cloud-upload-alt"></i>
-          {{ 'Update Team' if edit else 'Save Team' }}
-        </button>
+        {{msg}}
       </div>
+      {% endfor %}
+      {% endif %}
+      {% endwith %}
+    </div>
 
-      <!-- Team Details Grid -->
-      <div class="form-grid">
-        <input id="team_name" name="team_name" placeholder="Team Name" required>
-        <input name="short_code" placeholder="Short Code (2-3 chars)" minlength="2" maxlength="3" required>
-        <input name="home_ground" placeholder="Home Ground" required>
-        <select name="pitch_preference" required>
-          <option value="">Pitch Preference</option>
-          <option>Green</option>
-          <option>Flat</option>
-          <option>Dry</option>
-          <option>Hard</option>
-          <option>Dead</option>
-        </select>
+    <!-- Main Team Card -->
+    <div class="team-card">
+      <form id="team-form" method="POST"
+        action="{{ url_for('edit_team', short_code=team.short_code) if edit else url_for('create_team') }}">
 
-        <!-- Replace your current “Color Swatch” block with this -->
-        <div style="display:flex; align-items:center; gap:0.5rem;">
-          <label style="margin:0;" for="team_color">Team Color</label>
-          <div style="position:relative; width:24px; height:24px;">
-            <input type="color" id="team_color" name="team_color" value="#ff4500" required style="
-        position:absolute;
-        top:0; left:0;
-        width:100%; height:100%;
-        opacity:0;
-        cursor:pointer;
-      ">
-            <div id="color-swatch" style="
-        width:100%; height:100%;
-        border:2px solid var(--accent);
-        border-radius:4px;
-        background:#ff4500;
-        pointer-events:none;
-      "></div>
+        <!-- Team Details Section -->
+        <div class="form-section">
+          <div class="section-title">
+            <div class="section-icon">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            Team Information
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label" for="team_name">Team Name</label>
+              <input id="team_name" name="team_name" class="form-input" placeholder="Enter team name" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="short_code">Short Code</label>
+              <input name="short_code" class="form-input" placeholder="2-3 characters" minlength="2" maxlength="3"
+                required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="home_ground">Home Ground</label>
+              <input name="home_ground" class="form-input" placeholder="Stadium name" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="pitch_preference">Pitch Preference</label>
+              <select name="pitch_preference" class="form-select" required>
+                <option value="">Select pitch type</option>
+                <option>Green</option>
+                <option>Flat</option>
+                <option>Dry</option>
+                <option>Hard</option>
+                <option>Dead</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Team Color</label>
+              <div class="color-picker-group">
+                <div class="color-picker-wrapper">
+                  <input type="color" id="team_color" name="team_color" value="#ff4500" class="color-input" required>
+                  <div id="color-swatch" class="color-swatch"></div>
+                </div>
+                <span class="form-label" style="margin: 0;">Click to choose color</span>
+              </div>
+            </div>
           </div>
         </div>
 
+        <!-- Player Management Section -->
+        <div class="form-section">
+          <div class="section-title">
+            <div class="section-icon">
+              <i class="fa-solid fa-users"></i>
+            </div>
+            Squad Management
+          </div>
 
-      </div>
+          <div class="action-section">
+            <div class="action-header">
+              <div class="action-title">Build Your Squad</div>
+              <div class="player-count" id="player-count">0 / 25</div>
+            </div>
 
-      <!-- Action Buttons & Counter -->
-      <div class="buttons">
-        <button type="button" class="btn secondary" id="add-player">+ Add Player</button>
-        <button type="button" class="btn secondary" id="generate-team">⚙️ Generate Team</button>
-        <span id="player-count">0 / 25</span>
-      </div>
+            <div class="action-buttons">
+              <button type="button" class="btn btn-secondary" id="add-player">
+                <i class="fa-solid fa-user-plus"></i>
+                Add Player
+              </button>
+              <button type="button" class="btn btn-secondary" id="generate-team">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                Generate Team
+              </button>
+            </div>
+          </div>
+        </div>
 
-      <!-- Players Grid -->
-      <div id="players-container"></div>
+        <!-- Players Grid -->
+        <div class="players-section">
+          <div class="players-container" id="players-container"></div>
+        </div>
 
-      <!-- Select captain & wicket-keeperr -->
-      <div class="form-grid" style="margin-top:1rem;">
-        <select name="captain" id="select-captain" required>
-          <option value="">Select Captain</option>
-        </select>
-        <select name="wicketkeeper" id="select-wk" required>
-          <option value="">Select Wicketkeeper</option>
-        </select>
-      </div>
+        <!-- Team Leadership Section -->
+        <div class="form-section">
+          <div class="section-title">
+            <div class="section-icon">
+              <i class="fa-solid fa-crown"></i>
+            </div>
+            Team Leadership
+          </div>
 
-      <!-- Save / Cancel -->
-      <div class="submit-row"
-        style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap;">
-        {% if edit %}
-        <a href="{{ url_for('manage_teams') }}" class="btn secondary" style="
-      display: inline-flex;
-      align-items: center;
-      padding: 0.4rem 0.9rem;
-      font-size: 0.85rem;
-      gap: 0.4rem;
-    ">
-          <i class="fa-solid fa-xmark-circle"></i> Cancel
-        </a>
-        {% endif %}
-        <button type="submit" class="btn" style="
-    display: inline-flex;
-    align-items: center;
-    padding: 0.4rem 0.9rem;
-    font-size: 0.85rem;
-    gap: 0.4rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-  ">
-          <i class="fa-solid fa-cloud-upload-alt"></i>
-          {{ 'Update Team' if edit else 'Save Team' }}
-        </button>
-      </div>
+          <div class="leadership-section">
+            <div class="leadership-grid">
+              <div class="form-group">
+                <label class="form-label" for="select-captain">Team Captain</label>
+                <select name="captain" id="select-captain" class="form-select" required>
+                  <option value="">Select Captain</option>
+                </select>
+              </div>
 
-    </form>
-  </div>
+              <div class="form-group">
+                <label class="form-label" for="select-wk">Wicketkeeper</label>
+                <select name="wicketkeeper" id="select-wk" class="form-select" required>
+                  <option value="">Select Wicketkeeper</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Submit Section -->
+        <div class="submit-section">
+          {% if edit %}
+          <a href="{{ url_for('manage_teams') }}" class="btn btn-secondary">
+            <i class="fa-solid fa-xmark"></i>
+            Cancel
+          </a>
+          {% endif %}
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-save"></i>
+            {{ 'Update Team' if edit else 'Save Team' }}
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </main>
 
   <!-- Player Template -->
   <template id="player-template">
     <div class="player-card">
-      <span class="remove"><i class="fa-solid fa-xmark"></i></span>
-      <input name="player_name" placeholder="Player Name" required>
-      <select name="player_role" required>
-        <option value="">Role</option>
-        <option>Batsman</option>
-        <option>Bowler</option>
-        <option>All-rounder</option>
-        <option>Wicketkeeper</option>
-      </select>
-      <input type="number" name="batting_rating" placeholder="Batting (0-100)" min="0" max="100" required>
-      <input type="number" name="bowling_rating" placeholder="Bowling (0-100)" min="0" max="100" required>
-      <input type="number" name="fielding_rating" placeholder="Fielding (0-100)" min="0" max="100" required>
-      <select name="batting_hand" required>
-        <option value="">Batting Hand</option>
-        <option>Left</option>
-        <option>Right</option>
-      </select>
-      <select name="bowling_type">
-        <option value="">Bowling Type</option>
-        <option>Fast</option>
-        <option>Fast-medium</option>
-        <option>Medium-fast</option>
-        <option>Medium</option>
-        <option>Off spin</option>
-        <option>Leg spin</option>
-        <option>Finger spin</option>
-        <option>Wrist spin</option>
-      </select>
-      <select name="bowling_hand">
-        <option value="">Bowling Hand</option>
-        <option>Left</option>
-        <option>Right</option>
-      </select>
+      <div class="player-remove"><i class="fa-solid fa-xmark"></i></div>
+      <div class="player-grid">
+        <input name="player_name" class="player-input" placeholder="Player Name" required>
+        <select name="player_role" class="player-select" required>
+          <option value="">Role</option>
+          <option>Batsman</option>
+          <option>Bowler</option>
+          <option>All-rounder</option>
+          <option>Wicketkeeper</option>
+        </select>
+        <input type="number" name="batting_rating" class="player-input" placeholder="Batting (0-100)" min="0" max="100"
+          required>
+        <input type="number" name="bowling_rating" class="player-input" placeholder="Bowling (0-100)" min="0" max="100"
+          required>
+        <input type="number" name="fielding_rating" class="player-input" placeholder="Fielding (0-100)" min="0"
+          max="100" required>
+        <select name="batting_hand" class="player-select" required>
+          <option value="">Batting Hand</option>
+          <option>Left</option>
+          <option>Right</option>
+        </select>
+        <select name="bowling_type" class="player-select">
+          <option value="">Bowling Type</option>
+          <option>Fast</option>
+          <option>Fast-medium</option>
+          <option>Medium-fast</option>
+          <option>Medium</option>
+          <option>Off spin</option>
+          <option>Leg spin</option>
+          <option>Finger spin</option>
+          <option>Wrist spin</option>
+        </select>
+        <select name="bowling_hand" class="player-select">
+          <option value="">Bowling Hand</option>
+          <option>Left</option>
+          <option>Right</option>
+        </select>
+      </div>
     </div>
   </template>
 
   <script>
-
     // Dynamic Title
     const teamInput = document.getElementById('team_name');
     const titleEl = document.getElementById('dynamic-title');
@@ -540,7 +943,7 @@
       titleEl.textContent = teamInput.value || 'Team Creation';
     };
 
-    // Dark/Light Toggle
+    // Theme Toggle
     const toggle = document.getElementById('theme-toggle');
     const root = document.documentElement;
     if (localStorage.theme) root.setAttribute('data-theme', localStorage.theme);
@@ -551,7 +954,6 @@
       toggle.textContent = next === 'dark' ? '☀️' : '🌙';
     };
     toggle.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
-
 
     // Player Logic
     const container = document.getElementById('players-container');
@@ -631,10 +1033,13 @@
       // Add color coding
       if (current < MIN) {
         countEl.style.color = '#dc3545'; // red
+        countEl.style.background = 'rgba(239, 68, 68, 0.1)';
       } else if (current <= MAX) {
-        countEl.style.color = '#28a745'; // green
+        countEl.style.color = '#10b981'; // green
+        countEl.style.background = 'rgba(16, 185, 129, 0.1)';
       } else {
-        countEl.style.color = '#ffc107'; // yellow
+        countEl.style.color = '#f59e0b'; // yellow
+        countEl.style.background = 'rgba(245, 158, 11, 0.1)';
       }
 
       refreshRoleSelectors();
@@ -665,7 +1070,6 @@
 
     const EDIT_MODE = {{ 'true' if edit else 'false' }};
     const TEAM_DATA = {{ team | tojson | safe if edit else 'null' }};
-
 
     // Add one player card
     function addPlayer(data) {
@@ -699,7 +1103,7 @@
         }
       });
 
-      card.querySelector('.remove').onclick = () => {
+      card.querySelector('.player-remove').onclick = () => {
         card.remove();
         updateCount();
       };
@@ -707,7 +1111,6 @@
       container.appendChild(card);
       updateCount();
     }
-
 
     // Manual add
     document.getElementById('add-player').onclick = () => addPlayer();
@@ -741,8 +1144,6 @@
         addPlayer(data);
       });
     };
-
-
 
     // ─── Prefill on Edit Mode ───────────────────────────────────
     if (EDIT_MODE) {
@@ -778,7 +1179,7 @@
     }
     // ──────────────────────────────────────────────────────────
 
-    // Color swatch wiring (replace existing swatch.onclick / oninput)
+    // Color swatch wiring
     const swatch = document.getElementById('color-swatch');
     const colorInput = document.getElementById('team_color');
 
@@ -807,7 +1208,6 @@
 
     // Initial validation check
     updateSubmitButtons();
-
   </script>
 </body>
 
