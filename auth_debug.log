@@ -150,3 +150,28 @@
 2025-06-16 22:39:53 [INFO] auth_debug:635 - login() - [20250616_223953_230794] ✅ LOGIN SUCCESSFUL for: 'admin@projectx.com'
 2025-06-16 22:39:53 [DEBUG] auth_debug:638 - login() - [20250616_223953_230794] Redirecting to home page
 2025-06-16 22:39:53 [INFO] auth_debug:672 - login() - 🏁🏁🏁 LOGIN SESSION 20250616_223953_230794 COMPLETED 🏁🏁🏁
+2025-06-17 00:14:01 [INFO] auth_debug:501 - login() - 🔥🔥🔥 LOGIN SESSION 20250617_001401_624444 STARTED 🔥🔥🔥
+2025-06-17 00:14:01 [INFO] auth_debug:119 - log_request_details() - === LOGIN REQUEST STARTED ===
+2025-06-17 00:14:01 [DEBUG] auth_debug:120 - log_request_details() - Request method: GET
+2025-06-17 00:14:01 [DEBUG] auth_debug:121 - log_request_details() - Request URL: http://192.168.254.131:7860/login?next=/
+2025-06-17 00:14:01 [DEBUG] auth_debug:122 - log_request_details() - Request endpoint: login
+2025-06-17 00:14:01 [DEBUG] auth_debug:123 - log_request_details() - Request remote_addr: 192.168.254.126
+2025-06-17 00:14:01 [DEBUG] auth_debug:124 - log_request_details() - Request user_agent: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36
+2025-06-17 00:14:01 [DEBUG] auth_debug:125 - log_request_details() - Request referrer: None
+2025-06-17 00:14:01 [DEBUG] auth_debug:133 - log_request_details() - Session keys: ['_flashes']
+2025-06-17 00:14:01 [DEBUG] auth_debug:134 - log_request_details() - Current user authenticated: False
+2025-06-17 00:14:01 [INFO] auth_debug:144 - log_system_state() - === LOGIN SYSTEM STATE ===
+2025-06-17 00:14:01 [DEBUG] auth_debug:147 - log_system_state() - PROJECT_ROOT: D:\SimCricketX
+2025-06-17 00:14:01 [DEBUG] auth_debug:148 - log_system_state() - CREDENTIALS_FILE path: auth/credentials.json
+2025-06-17 00:14:01 [DEBUG] auth_debug:149 - log_system_state() - Credentials file exists: True
+2025-06-17 00:14:01 [DEBUG] auth_debug:153 - log_system_state() - Credentials file size: 579 bytes
+2025-06-17 00:14:01 [DEBUG] auth_debug:156 - log_system_state() - Credentials file readable: True
+2025-06-17 00:14:01 [DEBUG] auth_debug:157 - log_system_state() - Credentials file writable: True
+2025-06-17 00:14:01 [DEBUG] auth_debug:161 - log_system_state() - Auth directory exists: True
+2025-06-17 00:14:01 [DEBUG] auth_debug:162 - log_system_state() - Auth directory writable: True
+2025-06-17 00:14:01 [DEBUG] auth_debug:168 - log_system_state() - System memory usage: 80.4%
+2025-06-17 00:14:01 [DEBUG] auth_debug:169 - log_system_state() - Available memory: 3123.0 MB
+2025-06-17 00:14:01 [INFO] auth_debug:509 - login() - [20250617_001401_624444] GET request - serving login form
+2025-06-17 00:14:01 [DEBUG] auth_debug:510 - login() - [20250617_001401_624444] Checking current user state...
+2025-06-17 00:14:01 [DEBUG] auth_debug:517 - login() - [20250617_001401_624444] Rendering login template
+2025-06-17 00:14:01 [INFO] auth_debug:672 - login() - 🏁🏁🏁 LOGIN SESSION 20250617_001401_624444 COMPLETED 🏁🏁🏁
