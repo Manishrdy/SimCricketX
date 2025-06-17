@@ -1,0 +1,332 @@
+2025-06-16 22:39:28 [DEBUG] auth.user_auth: KEY_FILE path: D:\SimCricketX\auth\encryption.key
+2025-06-16 22:39:28 [DEBUG] auth.user_auth: AUTH_DIR exists: D:\SimCricketX\auth
+2025-06-16 22:39:28 [INFO] auth.user_auth: user_auth module initialization completed
+2025-06-16 22:39:28 [DEBUG] auth.user_auth: Module constants - PROJECT_ROOT: D:\SimCricketX
+2025-06-16 22:39:28 [DEBUG] auth.user_auth: Module constants - AUTH_DIR: D:\SimCricketX\auth
+2025-06-16 22:39:28 [DEBUG] auth.user_auth: Module constants - CREDENTIALS_FILE: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:28 [DEBUG] auth.user_auth: Module constants - KEY_FILE: D:\SimCricketX\auth\encryption.key
+2025-06-16 22:39:28 [DEBUG] auth.user_auth: AUTH_DIR write permissions verified
+2025-06-16 22:39:37 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:39:37 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:37 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:37 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:39:37 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:37 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:39:37 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:39:37 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:39:37 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:39:37 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:39:43 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:39:43 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:43 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:43 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:39:43 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:43 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:39:43 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:39:43 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:39:43 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:39:43 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:39:53 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:39:53 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:39:53 [INFO] auth.user_auth: Entering verify_user function
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Verifying user credentials: admin@projectx.com
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Loading local credentials
+2025-06-16 22:39:53 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:39:53 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Loaded credentials for 1 users
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: User found in local credentials: admin@projectx.com
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: User data fields: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Attempting to decrypt password
+2025-06-16 22:39:53 [INFO] auth.user_auth: Entering decrypt_password function
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Encrypted string length to decrypt: 100 characters
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Loading encryption key
+2025-06-16 22:39:53 [INFO] auth.user_auth: Entering load_key function
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Checking if key file exists: D:\SimCricketX\auth\encryption.key
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Key file exists: D:\SimCricketX\auth\encryption.key
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Key file size: 44 bytes
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Reading key from file: D:\SimCricketX\auth\encryption.key
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Successfully read key, length: 44 bytes
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Key validation successful
+2025-06-16 22:39:53 [INFO] auth.user_auth: Successfully loaded encryption key
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Encryption key loaded successfully
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Initializing Fernet cipher
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Encoding encrypted string to bytes
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Encrypted bytes length: 100
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Decrypting password
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Decrypted bytes length: 7
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Decoding decrypted bytes to string
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Decrypted password length: 7 characters
+2025-06-16 22:39:53 [INFO] auth.user_auth: Password decryption completed successfully
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Password decrypted successfully, length: 7
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Comparing decrypted password with provided password
+2025-06-16 22:39:53 [INFO] auth.user_auth: Local password verification successful: admin@projectx.com
+2025-06-16 22:39:53 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:39:53 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:39:53 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:39:53 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:39:53 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:39:58 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:39:58 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:58 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:58 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:39:58 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:39:58 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:39:58 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:39:58 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:39:58 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:39:58 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:40:05 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:40:05 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:05 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:05 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:40:05 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:05 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:40:05 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:40:05 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:40:05 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:40:05 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:40:07 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:40:07 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:07 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:07 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:40:07 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:07 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:40:07 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:40:07 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:40:07 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:40:07 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:40:15 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:40:15 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:15 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:15 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:40:15 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:15 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:40:15 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:40:15 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:40:15 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:40:15 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:40:28 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:40:28 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:28 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:28 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:40:28 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:28 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:40:28 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:40:28 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:40:28 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:40:28 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:40:30 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:40:30 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:30 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:30 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:40:30 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:30 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:40:30 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:40:30 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:40:30 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:40:30 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:40:49 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:40:49 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:49 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:49 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:40:49 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:49 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:40:49 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:40:49 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:40:49 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:40:49 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:40:53 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:40:53 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:53 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:53 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:40:53 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:53 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:40:53 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:40:53 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:40:53 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:40:53 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:40:58 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:40:58 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:58 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:58 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:40:58 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:40:58 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:40:58 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:40:58 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:40:58 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:40:58 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:41:00 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:41:00 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:41:00 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:41:00 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:41:00 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:41:00 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:41:00 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:41:00 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:41:00 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:41:00 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:41:03 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:41:03 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:41:03 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:41:03 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:41:03 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:41:03 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:41:03 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:41:03 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:41:03 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:41:03 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:49:50 [DEBUG] auth.user_auth: KEY_FILE path: D:\SimCricketX\auth\encryption.key
+2025-06-16 22:49:50 [DEBUG] auth.user_auth: AUTH_DIR exists: D:\SimCricketX\auth
+2025-06-16 22:49:50 [INFO] auth.user_auth: user_auth module initialization completed
+2025-06-16 22:49:50 [DEBUG] auth.user_auth: Module constants - PROJECT_ROOT: D:\SimCricketX
+2025-06-16 22:49:50 [DEBUG] auth.user_auth: Module constants - AUTH_DIR: D:\SimCricketX\auth
+2025-06-16 22:49:50 [DEBUG] auth.user_auth: Module constants - CREDENTIALS_FILE: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:49:50 [DEBUG] auth.user_auth: Module constants - KEY_FILE: D:\SimCricketX\auth\encryption.key
+2025-06-16 22:49:50 [DEBUG] auth.user_auth: AUTH_DIR write permissions verified
+2025-06-16 22:49:54 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:49:54 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:49:54 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:49:54 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:49:54 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:49:54 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:49:54 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:49:54 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:49:54 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:49:54 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:49:56 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:49:56 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:49:56 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:49:56 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:49:56 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:49:56 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:49:56 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:49:56 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:49:56 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:49:56 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:50:01 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:50:01 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:01 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:01 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:50:01 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:01 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:50:01 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:50:01 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:50:01 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:50:01 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:50:02 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:50:02 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:02 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:02 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:50:02 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:02 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:50:02 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:50:02 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:50:02 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:50:02 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:50:04 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:50:04 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:04 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:04 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:50:04 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:04 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:50:04 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:50:04 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:50:04 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:50:04 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:50:06 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:50:06 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:06 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:06 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:50:06 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:06 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:50:06 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:50:06 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:50:06 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:50:06 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:50:09 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:50:09 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:09 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:09 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:50:09 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:50:09 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:50:09 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:50:09 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:50:09 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:50:09 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:54:16 [DEBUG] auth.user_auth: KEY_FILE path: D:\SimCricketX\auth\encryption.key
+2025-06-16 22:54:16 [DEBUG] auth.user_auth: AUTH_DIR exists: D:\SimCricketX\auth
+2025-06-16 22:54:16 [INFO] auth.user_auth: user_auth module initialization completed
+2025-06-16 22:54:16 [DEBUG] auth.user_auth: Module constants - PROJECT_ROOT: D:\SimCricketX
+2025-06-16 22:54:16 [DEBUG] auth.user_auth: Module constants - AUTH_DIR: D:\SimCricketX\auth
+2025-06-16 22:54:16 [DEBUG] auth.user_auth: Module constants - CREDENTIALS_FILE: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:54:16 [DEBUG] auth.user_auth: Module constants - KEY_FILE: D:\SimCricketX\auth\encryption.key
+2025-06-16 22:54:16 [DEBUG] auth.user_auth: AUTH_DIR write permissions verified
+2025-06-16 22:54:20 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:54:20 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:54:20 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:54:20 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:54:20 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:54:20 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:54:20 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:54:20 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:54:20 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:54:20 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:54:23 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:54:23 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:54:23 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:54:23 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:54:23 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:54:23 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:54:23 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:54:23 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:54:23 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:54:23 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-16 22:54:36 [INFO] auth.user_auth: Entering load_credentials function
+2025-06-16 22:54:36 [DEBUG] auth.user_auth: Checking if credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:54:36 [DEBUG] auth.user_auth: Credentials file exists: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:54:36 [DEBUG] auth.user_auth: Credentials file size: 579 bytes
+2025-06-16 22:54:36 [DEBUG] auth.user_auth: Reading credentials from file: D:\SimCricketX\auth\credentials.json
+2025-06-16 22:54:36 [DEBUG] auth.user_auth: Successfully loaded credentials, user count: 1
+2025-06-16 22:54:36 [DEBUG] auth.user_auth: Credential keys: ['admin@projectx.com']
+2025-06-16 22:54:36 [DEBUG] auth.user_auth: Validating user data for: admin@projectx.com
+2025-06-16 22:54:36 [DEBUG] auth.user_auth: User data fields for admin@projectx.com: ['decrypted_password', 'encrypted_password', 'hostname', 'ip_address', 'login_time', 'mac_address', 'machine', 'os', 'os_version', 'processor', 'user_id']
+2025-06-16 22:54:36 [INFO] auth.user_auth: Credentials loaded and validated successfully
+2025-06-17 00:10:38 [DEBUG] auth.user_auth: KEY_FILE path: D:\SimCricketX\auth\encryption.key
+2025-06-17 00:10:38 [DEBUG] auth.user_auth: AUTH_DIR exists: D:\SimCricketX\auth
+2025-06-17 00:10:38 [INFO] auth.user_auth: user_auth module initialization completed
+2025-06-17 00:10:38 [DEBUG] auth.user_auth: Module constants - PROJECT_ROOT: D:\SimCricketX
+2025-06-17 00:10:38 [DEBUG] auth.user_auth: Module constants - AUTH_DIR: D:\SimCricketX\auth
+2025-06-17 00:10:38 [DEBUG] auth.user_auth: Module constants - CREDENTIALS_FILE: D:\SimCricketX\auth\credentials.json
+2025-06-17 00:10:38 [DEBUG] auth.user_auth: Module constants - KEY_FILE: D:\SimCricketX\auth\encryption.key
+2025-06-17 00:10:38 [DEBUG] auth.user_auth: AUTH_DIR write permissions verified
