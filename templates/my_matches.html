@@ -2,9 +2,6 @@
 <html lang="en">
 
 <head>
-    <!-- ──────────────────────────────────────────────────────────────────────────── -->
-    <!--                         my_matches.html (Production)                          -->
-    <!-- ──────────────────────────────────────────────────────────────────────────── -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Matches - SimCricketX</title>
@@ -19,74 +16,390 @@
 
     <!-- Modern CSS Reset -->
     <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
-
-    <!-- Replace your current Font Awesome link with this: -->
+    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
         crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
         /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                          CSS VARIABLES & THEMES                              */
+        /*                          CRICKET THEME VARIABLES                              */
         /* ──────────────────────────────────────────────────────────────────────────── */
         :root {
-            --bg: #f0f4f9;
-            --fg: #333;
-            --card-bg: #fff;
-            --accent: #005fcc;
-            --accent-hover: #0041a8;
+            --bg: #fafbfc;
+            --fg: #1a202c;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --glass-bg: rgba(255, 255, 255, 0.15);
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
             --shadow: rgba(0, 0, 0, 0.1);
-            --gradient: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-            --icon-color: #005fcc;
-            --danger: #e53e3e;
-            --danger-hover: #c53030;
+            --shadow-strong: rgba(0, 0, 0, 0.15);
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --cricket-primary: #2d5016;
+            --cricket-secondary: #8b4513;
+            --cricket-field: #228b22;
+            --cricket-ball: #cd853f;
+            --border: rgba(59, 130, 246, 0.2);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
             --modal-bg: rgba(0, 0, 0, 0.5);
-            --modal-content-bg: #fff;
         }
 
         [data-theme="dark"] {
-            --bg: #0d1117;
-            --fg: #eaeaea;
-            --card-bg: #161b22;
-            --accent: #00bcd4;
-            --accent-hover: #028f9c;
-            --shadow: rgba(0, 0, 0, 0.6);
-            --gradient: linear-gradient(135deg, #00bcd4 0%, #8bc34a 100%);
-            --icon-color: #00bcd4;
-            --danger: #e53e3e;
-            --danger-hover: #c53030;
-            --modal-content-bg: #222;
+            --bg: #0f1419;
+            --fg: #e2e8f0;
+            --card-bg: rgba(30, 41, 59, 0.85);
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --accent: #60a5fa;
+            --accent-hover: #3b82f6;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --shadow-strong: rgba(0, 0, 0, 0.5);
+            --gradient: linear-gradient(135deg, #4338ca 0%, #7c3aed 100%);
+            --cricket-primary: #4ade80;
+            --cricket-secondary: #fbbf24;
+            --border: rgba(96, 165, 250, 0.3);
         }
 
-        /* Additional themes omitted for brevity */
+        /* Additional theme variations */
+        :root[data-theme="nord"] {
+            --bg: #eceff4;
+            --fg: #2e3440;
+            --card-bg: rgba(229, 233, 240, 0.85);
+            --accent: #5e81ac;
+            --gradient: linear-gradient(135deg, #8fbcbb, #88c0d0);
+        }
+
+        :root[data-theme="retro"] {
+            --bg: #fef7ed;
+            --fg: #4b3621;
+            --card-bg: rgba(255, 247, 230, 0.85);
+            --accent: #ea580c;
+            --gradient: linear-gradient(135deg, #f97316, #ea580c);
+        }
+
+        :root[data-theme="cupcake"] {
+            --bg: #fdf2f8;
+            --fg: #4b2995;
+            --card-bg: rgba(253, 242, 248, 0.85);
+            --accent: #ec4899;
+            --gradient: linear-gradient(135deg, #f472b6, #ec4899);
+        }
 
         /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              GLOBAL STYLES                                    */
+        /*                              GLOBAL FOUNDATION                                */
         /* ──────────────────────────────────────────────────────────────────────────── */
+        * {
+            box-sizing: border-box;
+        }
+
         body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg);
             color: var(--fg);
-            font-family: 'Segoe UI', sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            padding: 2rem 1rem;
-            transition: background 0.3s ease, color 0.3s ease;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        h1 {
+        /* Animated Cricket Stadium Background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 30%, var(--cricket-field) 1px, transparent 1px),
+                radial-gradient(circle at 80% 70%, var(--cricket-ball) 1px, transparent 1px),
+                radial-gradient(circle at 50% 50%, rgba(34, 139, 34, 0.03) 2px, transparent 2px),
+                linear-gradient(135deg, transparent 40%, rgba(34, 139, 34, 0.02) 60%);
+            background-size: 600px 600px, 400px 400px, 800px 800px, 100% 100%;
+            animation: stadiumFloat 25s ease-in-out infinite;
+            pointer-events: none;
+            z-index: -1;
+            opacity: 0.7;
+        }
+
+        @keyframes stadiumFloat {
+
+            0%,
+            100% {
+                transform: translateY(0px) rotate(0deg);
+            }
+
+            25% {
+                transform: translateY(-15px) rotate(1deg);
+            }
+
+            50% {
+                transform: translateY(5px) rotate(-0.5deg);
+            }
+
+            75% {
+                transform: translateY(-10px) rotate(0.5deg);
+            }
+        }
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                              HEADER & NAVIGATION                              */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        .nav-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 1000;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .logo-icon {
             font-size: 2rem;
-            margin-bottom: 1rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .theme-toggle {
+            background: var(--glass-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: var(--fg);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent);
+            transform: scale(1.05);
+        }
+
+        .theme-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .theme-dropdown-btn {
+            background: var(--glass-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            color: var(--fg);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .theme-dropdown-btn:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent);
+        }
+
+        .theme-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 10px 25px var(--shadow-strong);
+            min-width: 200px;
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1001;
+        }
+
+        .theme-dropdown.active .theme-dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .theme-option {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .theme-option:hover {
+            background: var(--glass-bg);
+        }
+
+        .theme-icon {
+            font-size: 1.1rem;
+            color: var(--accent);
+            width: 20px;
+            text-align: center;
+        }
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                              PAGE HERO SECTION                               */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        .page-hero {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem 0;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 700;
             background: var(--gradient);
             -webkit-background-clip: text;
             color: transparent;
-            animation: fadeIn 1.5s ease;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            line-height: 1.2;
         }
 
-        @keyframes fadeIn {
+        .title-icon {
+            font-size: 2.2rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        .page-subtitle {
+            font-size: 1.1rem;
+            color: var(--fg);
+            opacity: 0.7;
+            font-weight: 400;
+        }
+
+        .main-container {
+            flex: 1;
+            padding: 100px 2rem 2rem 2rem;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                              FLASH MESSAGES                                   */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        .flash {
+            padding: 1rem 1.5rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            font-size: 1rem;
+            font-weight: 500;
+            backdrop-filter: blur(15px);
+            border: 1px solid;
+            animation: flashSlide 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: 0 8px 25px var(--shadow);
+        }
+
+        .flash-success {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .flash-error {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .flash-info {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        @keyframes flashSlide {
             from {
                 opacity: 0;
-                transform: translateY(-20px);
+                transform: translateY(-20px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .flash.fade-out {
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                              MATCH CARDS GRID                                 */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        .matches-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 2rem;
+            animation: gridAppear 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes gridAppear {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
             }
 
             to {
@@ -95,168 +408,229 @@
             }
         }
 
-        /* Theme toggle button */
-        .toggle {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--fg);
-            z-index: 100;
-        }
-
-        /* Flash messages */
-        .flash {
-            padding: 0.75rem 1rem;
-            margin-bottom: 1rem;
-            border-radius: 0.5rem;
-            font-size: 0.95rem;
-            opacity: 1;
-            transition: opacity 0.3s ease;
-        }
-
-        .flash-success {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .flash-error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .flash-info {
-            background: #cce5ff;
-            color: #004085;
-        }
-
-        .flash.fade-out {
-            opacity: 0;
-        }
-
-        /* Container for cards */
-        .container {
-            width: 100%;
-            max-width: 960px;
-            margin-top: 2rem;
-        }
-
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              FILE CARD GRID                                   */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        .grid-files {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .file-card {
+        .match-card {
             background: var(--card-bg);
-            border-radius: 0.75rem;
-            box-shadow: 0 6px 20px var(--shadow);
-            padding: 1.5rem 1.25rem;
+            backdrop-filter: blur(20px) saturate(180%);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            box-shadow: 0 8px 25px var(--shadow);
+            padding: 2rem;
             position: relative;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             overflow: hidden;
+            animation: cardSlideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .file-card:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 10px 25px var(--shadow);
+        .match-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient);
+            border-radius: 20px 20px 0 0;
         }
 
-        /* Improved Delete (X) Button */
+        .match-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px var(--shadow-strong);
+            border-color: var(--accent);
+        }
+
+        @keyframes cardSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                              CARD CONTENT                                     */
+        /* ──────────────────────────────────────────────────────────────────────────── */
         .delete-btn {
             position: absolute;
-            top: 0.5rem;
-            right: 0.5rem;
+            top: 1rem;
+            right: 1rem;
             background: var(--danger);
             border: none;
             color: #fff;
             font-size: 0.9rem;
-            width: 1.8rem;
-            height: 1.8rem;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            opacity: 0.85;
-            transition: background 0.2s ease, opacity 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+            z-index: 10;
         }
 
         .delete-btn:hover {
             background: var(--danger-hover);
-            opacity: 1;
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
         }
 
-        .file-icon {
-            font-size: 3.5rem;
-            color: var(--accent);
+        .match-icon {
             text-align: center;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
         }
 
-        .file-title {
-            font-size: 1.1rem;
-            font-weight: 600;
+        .match-icon i {
+            font-size: 4rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            color: transparent;
+            display: block;
+            animation: iconPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes iconPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        .match-title {
+            font-size: 1.4rem;
+            font-weight: 700;
             text-align: center;
-            margin-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
             color: var(--fg);
             word-break: break-word;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            color: transparent;
         }
 
-        .file-info {
-            font-size: 0.9rem;
-            line-height: 1.4;
-            color: var(--fg);
-            margin-bottom: 1rem;
+        .match-details {
+            margin-bottom: 2rem;
         }
 
-        .file-info p {
-            margin: 0.25rem 0;
+        .detail-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 0.5rem;
+            border-radius: 12px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
         }
 
-        .countdown {
-            font-size: 0.9rem;
+        .detail-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+            transform: translateX(4px);
+        }
+
+        .detail-icon {
+            color: var(--accent);
+            font-size: 1.1rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        .detail-text {
+            flex: 1;
+            font-size: 0.95rem;
             font-weight: 500;
+            color: var(--fg);
+        }
+
+        .countdown-item {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--danger);
+        }
+
+        .countdown-item .detail-text {
             color: var(--danger);
+            font-weight: 600;
         }
 
         .download-btn {
-            display: block;
-            background: var(--accent);
+            width: 100%;
+            background: var(--gradient);
             color: #fff;
             border: none;
-            padding: 0.65rem 1rem;
-            border-radius: 0.5rem;
+            padding: 1rem 1.5rem;
+            border-radius: 16px;
             cursor: pointer;
-            font-size: 0.95rem;
+            font-size: 1rem;
+            font-weight: 600;
             text-align: center;
-            transition: background 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
         }
 
         .download-btn:hover {
-            background: var(--accent-hover);
-        }
-
-        .no-files {
-            text-align: center;
-            color: var(--fg);
-            opacity: 0.7;
-            margin-top: 3rem;
-            font-size: 1.1rem;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.5);
         }
 
         /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                             CONFIRMATION MODAL                                 */
+        /*                              EMPTY STATE                                      */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        .no-matches {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--fg);
+            opacity: 0.7;
+            animation: fadeIn 1s ease;
+        }
+
+        .no-matches-icon {
+            font-size: 5rem;
+            margin-bottom: 1.5rem;
+            color: var(--accent);
+            opacity: 0.5;
+        }
+
+        .no-matches-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .no-matches-text {
+            font-size: 1.1rem;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                              CONFIRMATION MODAL                               */
         /* ──────────────────────────────────────────────────────────────────────────── */
         .modal {
             position: fixed;
@@ -265,30 +639,87 @@
             width: 100%;
             height: 100%;
             background: var(--modal-bg);
+            backdrop-filter: blur(10px);
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 200;
+            z-index: 1000;
+            animation: modalFadeIn 0.3s ease;
         }
 
         .modal.hidden {
             display: none;
         }
 
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                backdrop-filter: blur(0px);
+            }
+
+            to {
+                opacity: 1;
+                backdrop-filter: blur(10px);
+            }
+        }
+
         .modal-content {
-            background: var(--modal-content-bg);
-            padding: 2rem;
-            border-radius: 0.75rem;
-            box-shadow: 0 8px 30px var(--shadow);
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            padding: 2.5rem;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 50px var(--shadow-strong);
             width: 90%;
-            max-width: 400px;
+            max-width: 480px;
             text-align: center;
+            color: var(--fg);
+            animation: modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .modal-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient);
+            border-radius: 24px 24px 0 0;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .modal-icon {
+            font-size: 3rem;
+            color: var(--danger);
+            margin-bottom: 1rem;
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
             color: var(--fg);
         }
 
-        .modal-content p {
-            margin-bottom: 1.5rem;
+        .modal-text {
             font-size: 1rem;
+            margin-bottom: 2rem;
+            color: var(--fg);
+            opacity: 0.8;
         }
 
         .modal-btns {
@@ -298,125 +729,367 @@
         }
 
         .modal-btn {
-            padding: 0.6rem 1.2rem;
+            padding: 0.875rem 2rem;
             border: none;
-            border-radius: 0.5rem;
+            border-radius: 12px;
             cursor: pointer;
-            font-size: 0.95rem;
-            transition: background 0.2s ease;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
         .btn-cancel {
-            background: #ccc;
-            color: #333;
+            background: var(--glass-bg);
+            color: var(--fg);
+            border: 2px solid var(--border);
+            backdrop-filter: blur(10px);
         }
 
         .btn-cancel:hover {
-            background: #bbb;
+            background: rgba(107, 114, 128, 0.1);
+            transform: translateY(-1px);
         }
 
         .btn-delete {
             background: var(--danger);
             color: #fff;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
         }
 
         .btn-delete:hover {
             background: var(--danger-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
+        }
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                              CRICKET BALL ANIMATION                           */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        .cricket-ball {
+            position: fixed;
+            top: 20%;
+            width: 18px;
+            height: 18px;
+            background: var(--cricket-ball);
+            border-radius: 50%;
+            opacity: 0;
+            animation: ballArchive 10s ease-in-out infinite;
+            box-shadow:
+                inset -2px -2px 4px rgba(0, 0, 0, 0.3),
+                0 3px 10px rgba(0, 0, 0, 0.4);
+            z-index: 50;
+        }
+
+        .cricket-ball::before,
+        .cricket-ball::after {
+            content: '';
+            position: absolute;
+            width: 1px;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .cricket-ball::before {
+            transform: translateX(-50%) rotate(25deg);
+        }
+
+        .cricket-ball::after {
+            transform: translateX(-50%) rotate(-25deg);
+        }
+
+        @keyframes ballArchive {
+            0% {
+                opacity: 0;
+                transform: translateX(-100px) translateY(0px) rotate(0deg);
+            }
+
+            8% {
+                opacity: 1;
+            }
+
+            45% {
+                transform: translateX(50vw) translateY(-40px) rotate(900deg);
+            }
+
+            92% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+                transform: translateX(calc(100vw + 100px)) translateY(0px) rotate(1800deg);
+            }
+        }
+
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        /*                              RESPONSIVE DESIGN                                */
+        /* ──────────────────────────────────────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            .nav-header {
+                padding: 1rem;
+            }
+
+            .nav-controls {
+                gap: 0.5rem;
+            }
+
+            .theme-dropdown-btn {
+                padding: 0.5rem;
+                font-size: 0;
+            }
+
+            .theme-dropdown-text {
+                display: none;
+            }
+
+            .main-container {
+                padding: 80px 1rem 2rem 1rem;
+            }
+
+            .page-title {
+                font-size: 2rem;
+            }
+
+            .title-icon {
+                font-size: 1.8rem;
+            }
+
+            .matches-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .match-card {
+                padding: 1.5rem;
+            }
+
+            .modal-content {
+                padding: 2rem;
+                margin: 1rem;
+            }
+
+            .modal-btns {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .modal-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .page-title {
+                font-size: 1.5rem;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .title-icon {
+                font-size: 1.4rem;
+            }
+
+            .match-card {
+                padding: 1.25rem;
+            }
+
+            .match-title {
+                font-size: 1.2rem;
+            }
+
+            .detail-item {
+                padding: 0.4rem;
+                margin-bottom: 0.5rem;
+            }
         }
     </style>
 </head>
 
 <body>
-    <!-- Theme toggle -->
-    <button class="toggle" id="theme-toggle" aria-label="Toggle theme">🌙</button>
+    <!-- Cricket Ball Animation -->
+    <div class="cricket-ball"></div>
 
-    <!-- Page title -->
-    <h1 style="display: flex; align-items: center;">
-        <a href="{{ url_for('home') }}" title="Home" style="color: var(--icon-color); /* e.g. #005fcc */
-            margin-right: 1.0rem;
-            font-size: 1.5rem;
-            display: inline-flex;
-            align-items: center;
-            text-decoration: none;">
-            <i class="fa-solid fa-house"></i>
+    <!-- Header Navigation -->
+    <header class="nav-header">
+        <a href="{{ url_for('home') }}" class="logo">
+            <i class="fa-solid fa-cricket-bat-ball logo-icon"></i>
+            <span>SimCricketX <em>by Manish</em></span>
         </a>
-        📂 My Matches
-    </h1>
 
-    <!-- Flash messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    {% for category, message in messages %}
-    <div class="flash flash-{{ category }}">{{ message }}</div>
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
+        <div class="nav-controls">
+            <button class="theme-toggle" id="theme-toggle">🌙</button>
 
-    <div class="container">
-        <div id="files-grid" class="grid-files">
-            {% if files %}
-            {% for file in files %}
-            <div class="file-card" id="card-{{ loop.index }}" data-filename="{{ file.filename }}"
-                data-delete-url="{{ url_for('delete_archive', archive_name=file.filename) }}">
-                <!-- Improved Delete Button -->
-                <button class="delete-btn" aria-label="Delete {{ file.filename }}"
-                    onclick="promptDelete('card-{{ loop.index }}')">
-                    &times;
+            <div class="theme-dropdown" id="theme-dropdown">
+                <button class="theme-dropdown-btn" id="theme-dropdown-btn">
+                    <i class="fa-solid fa-palette"></i>
+                    <span class="theme-dropdown-text">Themes</span>
+                    <i class="fa-solid fa-chevron-down"></i>
                 </button>
 
-                <!-- File Icon -->
-                <div class="file-icon">
-                    <i class="fa-solid fa-file-zipper"></i>
+                <div class="theme-dropdown-menu" id="theme-dropdown-menu">
+                    <div class="theme-option" data-theme="nord">
+                        <i class="fa-solid fa-snowflake theme-icon"></i>
+                        <span>Nord</span>
+                    </div>
+                    <div class="theme-option" data-theme="retro">
+                        <i class="fa-solid fa-compact-disc theme-icon"></i>
+                        <span>Retro</span>
+                    </div>
+                    <div class="theme-option" data-theme="cupcake">
+                        <i class="fa-solid fa-birthday-cake theme-icon"></i>
+                        <span>Cupcake</span>
+                    </div>
+                    <div class="theme-option" data-theme="dim">
+                        <i class="fa-solid fa-adjust theme-icon"></i>
+                        <span>Dim</span>
+                    </div>
+                    <div class="theme-option" data-theme="dracula">
+                        <i class="fa-solid fa-ghost theme-icon"></i>
+                        <span>Dracula</span>
+                    </div>
+                    <div class="theme-option" data-theme="sunset">
+                        <i class="fa-solid fa-sun theme-icon"></i>
+                        <span>Sunset</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-container">
+        <!-- Page Title Section -->
+        <section class="page-hero">
+            <h1 class="page-title">
+                <i class="fa-solid fa-folder-open title-icon"></i>
+                My Match Archives
+            </h1>
+            <p class="page-subtitle">Access and manage all your cricket match simulations</p>
+        </section>
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">
+            <i
+                class="fa-solid {{ 'fa-check-circle' if category == 'success' else 'fa-exclamation-triangle' if category == 'error' else 'fa-info-circle' }}"></i>
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <!-- Matches Grid -->
+        <div class="matches-grid" id="files-grid">
+            {% if files %}
+            {% for file in files %}
+            <div class="match-card" id="card-{{ loop.index }}" data-filename="{{ file.filename }}"
+                data-delete-url="{{ url_for('delete_archive', archive_name=file.filename) }}">
+
+                <!-- Delete Button -->
+                <button class="delete-btn" aria-label="Delete {{ file.filename }}"
+                    onclick="promptDelete('card-{{ loop.index }}')">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+
+                <!-- Match Icon -->
+                <div class="match-icon">
+                    <i class="fa-solid fa-cricket-bat-ball"></i>
                 </div>
 
-                <!-- Title: Team1 vs Team2 -->
-                <div class="file-title" id="title-{{ loop.index }}">Loading...</div>
+                <!-- Match Title -->
+                <div class="match-title" id="title-{{ loop.index }}">Loading Match...</div>
 
-                <!-- File Info: Created Date, Creator, Expiry -->
-                <div class="file-info">
-                    <p class="created-info" id="created-{{ loop.index }}">Created Date: --</p>
-                    <p class="creator-info" id="creator-{{ loop.index }}">Creator: --</p>
-                    <p class="expiry-info" id="expiry-{{ loop.index }}">Expiry: --</p>
-                    <p class="countdown" id="countdown-{{ loop.index }}">Time Left: --</p>
+                <!-- Match Details -->
+                <div class="match-details">
+                    <div class="detail-item">
+                        <i class="fa-solid fa-calendar-days detail-icon"></i>
+                        <span class="detail-text" id="created-{{ loop.index }}">Created: --</span>
+                    </div>
+
+                    <div class="detail-item">
+                        <i class="fa-solid fa-user detail-icon"></i>
+                        <span class="detail-text" id="creator-{{ loop.index }}">Creator: --</span>
+                    </div>
+
+                    <div class="detail-item">
+                        <i class="fa-solid fa-hourglass-end detail-icon"></i>
+                        <span class="detail-text" id="expiry-{{ loop.index }}">Expires: --</span>
+                    </div>
+
+                    <div class="detail-item countdown-item">
+                        <i class="fa-solid fa-clock detail-icon"></i>
+                        <span class="detail-text" id="countdown-{{ loop.index }}">Time Left: --</span>
+                    </div>
                 </div>
 
                 <!-- Download Button -->
                 <a href="{{ file.download_url }}" class="download-btn" download>
-                    <i class="fa-solid fa-download" style="margin-right: 0.4rem;"></i>
-                    Download
+                    <i class="fa-solid fa-download"></i>
+                    Download Archive
                 </a>
             </div>
             {% endfor %}
             {% else %}
-            <div id="no-files" class="no-files">
-                No archives found in the last 7 days.
+            <div id="no-files" class="no-matches">
+                <div class="no-matches-icon">
+                    <i class="fa-solid fa-folder-open"></i>
+                </div>
+                <div class="no-matches-title">No Match Archives Found</div>
+                <div class="no-matches-text">
+                    You haven't created any match simulations in the last 7 days.
+                    Start by creating teams and simulating matches!
+                </div>
             </div>
             {% endif %}
         </div>
-    </div>
+    </main>
 
     <!-- Confirmation Modal -->
     <div id="confirm-modal" class="modal hidden">
         <div class="modal-content">
-            <p>Are you sure you want to delete this archive?</p>
+            <div class="modal-icon">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="modal-title">Delete Match Archive?</div>
+            <div class="modal-text">
+                This action cannot be undone. The match archive will be permanently deleted.
+            </div>
             <div class="modal-btns">
-                <button class="modal-btn btn-cancel" onclick="closeModal()">Cancel</button>
-                <button class="modal-btn btn-delete" id="confirm-delete-btn">Delete</button>
+                <button class="modal-btn btn-cancel" onclick="closeModal()">
+                    <i class="fa-solid fa-times"></i>
+                    Cancel
+                </button>
+                <button class="modal-btn btn-delete" id="confirm-delete-btn">
+                    <i class="fa-solid fa-trash"></i>
+                    Delete
+                </button>
             </div>
         </div>
     </div>
 
     <script>
         // ────────────────────────────────────────────────────────────────────────────
-        //                         THEME TOGGLE LOGIC (same as home.html)
+        //                           THEME MANAGEMENT
         // ────────────────────────────────────────────────────────────────────────────
         const themeToggleBtn = document.getElementById('theme-toggle');
         const root = document.documentElement;
 
+        function updateToggleIcon(theme) {
+            const isDark = theme === 'dark' || ['dim', 'dracula', 'sunset'].includes(theme);
+            themeToggleBtn.textContent = isDark ? '☀️' : '🌙';
+        }
+
         function applySavedTheme() {
             const theme = localStorage.getItem('theme') || 'light';
             root.setAttribute('data-theme', theme);
-            themeToggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
+            updateToggleIcon(theme);
         }
 
         themeToggleBtn.addEventListener('click', () => {
@@ -424,78 +1097,116 @@
             const nextTheme = current === 'dark' ? 'light' : 'dark';
             root.setAttribute('data-theme', nextTheme);
             localStorage.setItem('theme', nextTheme);
-            themeToggleBtn.textContent = nextTheme === 'dark' ? '☀️' : '🌙';
+            updateToggleIcon(nextTheme);
         });
 
+        // Theme Dropdown Functionality
+        const dropdown = document.getElementById('theme-dropdown');
+        const dropdownBtn = document.getElementById('theme-dropdown-btn');
+        const dropdownMenu = document.getElementById('theme-dropdown-menu');
+
+        dropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('active');
+        });
+
+        document.addEventListener('click', () => {
+            dropdown.classList.remove('active');
+        });
+
+        dropdownMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        // Theme Selection
+        document.querySelectorAll('.theme-option').forEach(option => {
+            option.addEventListener('click', () => {
+                const theme = option.getAttribute('data-theme');
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                updateToggleIcon(theme);
+                dropdown.classList.remove('active');
+            });
+        });
+
+        // ────────────────────────────────────────────────────────────────────────────
+        //                           FILE PROCESSING & COUNTDOWN
+        // ────────────────────────────────────────────────────────────────────────────
         window.addEventListener('DOMContentLoaded', () => {
             applySavedTheme();
 
-            // Auto-dismiss flash messages after 3 seconds
+            // Auto-dismiss flash messages after 4 seconds
             setTimeout(() => {
                 document.querySelectorAll('.flash').forEach(el => {
                     el.classList.add('fade-out');
-                    setTimeout(() => el.remove(), 300);
+                    setTimeout(() => el.remove(), 400);
                 });
-            }, 3000);
+            }, 4000);
 
-            // Populate file card details and start countdown timers
-            document.querySelectorAll('.file-card').forEach(card => {
-                const filename = card.dataset.filename; // e.g. "playing_SRH_vs_MI_admin@projectx.com_20250530154936.zip"
-                // Strip ".zip"
-                const base = filename.slice(0, -4);
+            // Process each match card
+            document.querySelectorAll('.match-card').forEach(card => {
+                const filename = card.dataset.filename;
+
+                // Parse filename: "playing_SRH_vs_MI_admin@projectx.com_20250530154936.zip"
+                const base = filename.slice(0, -4); // Remove .zip
                 const parts = base.split('_');
-                // parts = ["playing", "SRH", "vs", "MI", "admin@projectx.com", "20250530154936"]
                 const team1 = parts[1];
                 const team2 = parts[3];
                 const creator = parts[4];
-                const timestampStr = parts[5]; // "20250530154936"
+                const timestampStr = parts[5];
 
-                // Format Created Date (DD-MM-YYYY)
+                // Parse timestamp: "20250530154936"
                 const year = parseInt(timestampStr.slice(0, 4), 10);
                 const month = parseInt(timestampStr.slice(4, 6), 10) - 1; // zero-based
                 const day = parseInt(timestampStr.slice(6, 8), 10);
                 const hour = parseInt(timestampStr.slice(8, 10), 10);
                 const minute = parseInt(timestampStr.slice(10, 12), 10);
                 const second = parseInt(timestampStr.slice(12, 14), 10);
-                const createdDate = new Date(year, month, day, hour, minute, second);
 
-                // Expiry date: +7 days
+                const createdDate = new Date(year, month, day, hour, minute, second);
                 const expiryDate = new Date(createdDate);
                 expiryDate.setDate(expiryDate.getDate() + 7);
 
-                // Populate Title and Info Elements
+                // Format dates
+                const formatDate = (date) => {
+                    return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
+                };
+
+                // Update card content
                 const idx = card.id.split('-')[1];
                 document.getElementById(`title-${idx}`).textContent = `${team1} vs ${team2}`;
-                document.getElementById(`created-${idx}`).textContent =
-                    `Created Date: ${String(day).padStart(2, '0')}-${String(month + 1).padStart(2, '0')}-${year}`;
+                document.getElementById(`created-${idx}`).textContent = `Created: ${formatDate(createdDate)}`;
                 document.getElementById(`creator-${idx}`).textContent = `Creator: ${creator}`;
-                document.getElementById(`expiry-${idx}`).textContent =
-                    `Expiry: ${String(expiryDate.getDate()).padStart(2, '0')}-${String(expiryDate.getMonth() + 1).padStart(2, '0')}-${expiryDate.getFullYear()}`;
+                document.getElementById(`expiry-${idx}`).textContent = `Expires: ${formatDate(expiryDate)}`;
 
-                // Start countdown
+                // Start countdown timer
                 const countdownElem = document.getElementById(`countdown-${idx}`);
                 function updateCountdown() {
                     const now = new Date();
                     const diffMs = expiryDate - now;
+
                     if (diffMs <= 0) {
                         countdownElem.textContent = 'Expired';
                         countdownElem.style.color = 'var(--danger)';
                         clearInterval(intervalId);
                         return;
                     }
+
                     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
                     const diffHrs = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                     const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
                     const diffSecs = Math.floor((diffMs % (1000 * 60)) / 1000);
+
                     countdownElem.textContent = `Time Left: ${diffDays}d ${diffHrs}h ${diffMins}m ${diffSecs}s`;
                 }
+
                 updateCountdown();
                 const intervalId = setInterval(updateCountdown, 1000);
             });
         });
 
         // ────────────────────────────────────────────────────────────────────────────
-        //                  DELETE ARCHIVE WITH IN-PAGE CONFIRMATION
+        //                           DELETE CONFIRMATION
         // ────────────────────────────────────────────────────────────────────────────
         let pendingDeleteCardId = null;
 
@@ -509,8 +1220,10 @@
             document.getElementById('confirm-modal').classList.add('hidden');
         }
 
+        // Handle delete confirmation
         document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
             if (!pendingDeleteCardId) return;
+
             const card = document.getElementById(pendingDeleteCardId);
             const deleteUrl = card.dataset.deleteUrl;
 
@@ -521,25 +1234,63 @@
                         'Content-Type': 'application/json'
                     }
                 });
+
                 if (!response.ok) {
                     const err = await response.json().catch(() => ({}));
                     alert("Failed to delete: " + (err.error || response.statusText));
                     closeModal();
                     return;
                 }
-                card.remove();
+
+                // Remove card with animation
+                card.style.transform = 'translateY(-20px) scale(0.9)';
+                card.style.opacity = '0';
+
+                setTimeout(() => {
+                    card.remove();
+
+                    // Show empty state if no cards remaining
+                    if (document.querySelectorAll('.match-card').length === 0) {
+                        const noFiles = document.createElement('div');
+                        noFiles.id = 'no-files';
+                        noFiles.className = 'no-matches';
+                        noFiles.innerHTML = `
+                            <div class="no-matches-icon">
+                                <i class="fa-solid fa-folder-open"></i>
+                            </div>
+                            <div class="no-matches-title">No Match Archives Found</div>
+                            <div class="no-matches-text">
+                                You haven't created any match simulations in the last 7 days. 
+                                Start by creating teams and simulating matches!
+                            </div>
+                        `;
+                        document.getElementById('files-grid').appendChild(noFiles);
+                    }
+                }, 300);
+
                 closeModal();
-                if (document.querySelectorAll('.file-card').length === 0) {
-                    const noFiles = document.createElement('div');
-                    noFiles.id = 'no-files';
-                    noFiles.className = 'no-files';
-                    noFiles.textContent = 'No archives found in the last 7 days.';
-                    document.getElementById('files-grid').appendChild(noFiles);
-                }
+
             } catch (error) {
                 console.error("Error deleting archive:", error);
                 alert("Unexpected error occurred while deleting.");
                 closeModal();
+            }
+        });
+
+        // Close modal on background click
+        document.getElementById('confirm-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'confirm-modal') {
+                closeModal();
+            }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (!document.getElementById('confirm-modal').classList.contains('hidden')) {
+                    closeModal();
+                }
+                dropdown.classList.remove('active');
             }
         });
     </script>
