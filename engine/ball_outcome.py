@@ -347,67 +347,60 @@ def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
 # -----------------------------------------------------------------------------
 PITCH_SCORING_MATRIX = {
     "Green": {
-        # Pace-friendly, lower scoring (6-7 runs/over average)
-        # More dots, fewer boundaries, moderate wickets for pace bowlers
-        "Dot":     0.40,
-        "Single":  0.34,  # Changed from 0.32 to 0.34 (+0.02)
+        # Pace-friendly, lower scoring (120-140 average, ~6-7 wickets)
+        "Dot":     0.39,   
+        "Single":  0.34,   
         "Double":  0.06,
         "Three":   0.01,
-        "Four":    0.06,
-        "Six":     0.02,
-        "Wicket":  0.06,
-        "Extras":  0.05
-        # Sum: 1.00 ✅
+        "Four":    0.06,   
+        "Six":     0.02,   
+        "Wicket":  0.075,  # Moderate increase - not too high
+        "Extras":  0.045
     },
     "Dry": {
-        # Spin-friendly, lower scoring (6-7 runs/over average)  
-        # More dots, controlled scoring, moderate wickets for spin bowlers
-        "Dot":     0.34,
-        "Single":  0.33,
+        # Spin-friendly, lower scoring (120-140 average, ~6-7 wickets)
+        "Dot":     0.33,   
+        "Single":  0.33,   
         "Double":  0.09,
         "Three":   0.04,
-        "Four":    0.06,
-        "Six":     0.02,
-        "Wicket":  0.06,  # Reduced from 0.07 to prevent too many wickets
-        "Extras":  0.06   # Increased to balance the total
-        # Sum: 1.00 ✅
+        "Four":    0.06,   
+        "Six":     0.02,   
+        "Wicket":  0.075,  # Moderate increase
+        "Extras":  0.055   
     },
     "Hard": {
-        # Balanced pitch, moderate scoring (7-8 runs/over average)
-        # Even distribution, slight batting advantage
-        "Dot":     0.28,
-        "Single":  0.31,
+        # Balanced pitch (150-180 average, ~6-7 wickets)
+        "Dot":     0.27,   
+        "Single":  0.31,   
         "Double":  0.11,
         "Three":   0.06,
-        "Four":    0.09,
-        "Six":     0.04,
-        "Wicket":  0.055,
-        "Extras":  0.055  # Adjusted to make total = 1.0
-        # Sum: 1.00 ✅
+        "Four":    0.09,   
+        "Six":     0.05,   
+        "Wicket":  0.06,   # Moderate increase from 0.055
+        "Extras":  0.050
     },
     "Flat": {
-        "Dot":     0.26,   # slightly fewer dots
-        "Single":  0.30,   # ↑ more 1s
-        "Double":  0.11,   # ↓ fewer 2s
-        "Three":   0.04,   # ↓ much fewer 3s
-        "Four":    0.15,   # ↑ more boundaries
-        "Six":     0.05,   # same
-        "Wicket":  0.05,   # same or maybe slightly ↑ for realism
+        # Batting-friendly (170-210 average, ~5-6 wickets)
+        "Dot":     0.25,   
+        "Single":  0.30,   
+        "Double":  0.12,   
+        "Three":   0.04,   
+        "Four":    0.14,   # Good boundary rate
+        "Six":     0.06,   
+        "Wicket":  0.05,   # Slight increase from 0.05
         "Extras":  0.04
-        # Sum: 1.00 ✅
     },
     "Dead": {
-        "Dot":     0.15,
-        "Single":  0.29,   # ↑ more 1s
-        "Double":  0.12,   # ↓ fewer 2s
-        "Three":   0.02,   # ↓
-        "Four":    0.22,   # ↑ more 4s
-        "Six":     0.14,   # ↑ more 6s if you want fireworks
-        "Wicket":  0.02,   # slightly ↑ if required
-        "Extras":  0.04
-        # Sum: 1.00 ✅
+        # Batting paradise (210+ average, ~4-5 wickets)
+        "Dot":     0.15,   
+        "Single":  0.29,   
+        "Double":  0.12,   
+        "Three":   0.02,   
+        "Four":    0.21,   # High boundary rate
+        "Six":     0.13,   
+        "Wicket":  0.035,  # Low wicket rate
+        "Extras":  0.045
     }
-
 }
 
 # Fallback matrix for unknown pitch types (CORRECTED)
@@ -535,7 +528,8 @@ def calculate_outcome(
     streak: dict,
     over_number: int,
     batter_runs: int,
-    innings: int = 1
+    innings: int = 1,
+    pressure_effects: dict = None
 ) -> dict:
     """
     Determines the outcome of a single delivery.
@@ -613,17 +607,17 @@ def calculate_outcome(
             # Boundaries (4, 6) boost
             if outcome in ("Four", "Six"):
                 if pitch in ("Flat", "Dead"):
-                    boundary_boost = 1.3
+                    boundary_boost = 1.25  # Reduced from 1.3
                 elif pitch == "Hard":
-                    boundary_boost = 1.2
+                    boundary_boost = 1.15   # Reduced from 1.2
                 else:  # Green or Dry
-                    boundary_boost = 1.1
+                    boundary_boost = 1.08  # Reduced from 1.1
                 print(f"  DeathOver: Boosting boundary ({outcome}) on {pitch} by factor {boundary_boost}")
                 weight *= boundary_boost
 
             # Wicket boost (slight increase)
             if outcome == "Wicket":
-                wicket_boost = 1.2
+                wicket_boost = 1.1  # Reduced from 1.2
                 print(f"  DeathOver: Boosting wicket on {pitch} by factor {wicket_boost}")
                 weight *= wicket_boost
 
@@ -645,9 +639,47 @@ def calculate_outcome(
         weight = max(weight, 0.0)
         raw_weights[outcome] = weight
         # print(f"  FinalRawWeight[{outcome}]: {weight:.6f}")
-
-    # 4) Normalize weights into probabilities
+    
+    # 3.5) Calculate total weight first
     total_weight = sum(raw_weights.values())
+
+    # 3.6) Apply pressure effects if provided
+    if pressure_effects:
+        print(f"  [PRESSURE] Applying pressure effects: {pressure_effects}")
+        
+        # Increase dot ball probability by adding absolute weight
+        if "Dot" in raw_weights:
+            original_dot = raw_weights["Dot"]
+            dot_bonus = pressure_effects.get('dot_bonus', 0.0)
+            raw_weights["Dot"] += dot_bonus * total_weight
+            print(f"  [PRESSURE] Dot: {original_dot:.6f} → {raw_weights['Dot']:.6f}")
+        
+        # Modify boundary probabilities (reduce)
+        boundary_modifier = pressure_effects.get('boundary_modifier', 1.0)
+        for boundary_type in ["Four", "Six"]:
+            if boundary_type in raw_weights:
+                original_boundary = raw_weights[boundary_type]
+                raw_weights[boundary_type] *= boundary_modifier
+                print(f"  [PRESSURE] {boundary_type}: {original_boundary:.6f} → {raw_weights[boundary_type]:.6f}")
+        
+        # Modify wicket probability (increase)
+        if "Wicket" in raw_weights:
+            original_wicket = raw_weights["Wicket"]
+            raw_weights["Wicket"] *= pressure_effects.get('wicket_modifier', 1.0)
+            print(f"  [PRESSURE] Wicket: {original_wicket:.6f} → {raw_weights['Wicket']:.6f}")
+        
+        # Reduce strike rotation (singles and threes)
+        strike_rotation_penalty = pressure_effects.get('strike_rotation_penalty', 0.0)
+        for rotation_type in ["Single", "Three"]:
+            if rotation_type in raw_weights:
+                original_rotation = raw_weights[rotation_type]
+                raw_weights[rotation_type] *= (1 - strike_rotation_penalty)
+                print(f"  [PRESSURE] {rotation_type}: {original_rotation:.6f} → {raw_weights[rotation_type]:.6f}")
+        
+        # Recalculate total weight after pressure modifications
+        total_weight = sum(raw_weights.values())
+    
+    # 4) Normalize weights into probabilities
     # print(f"\n[calculate_outcome] Total raw weight sum: {total_weight:.6f}")
     if total_weight <= 0:
         # Fallback in pathological case

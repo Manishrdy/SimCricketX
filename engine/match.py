@@ -2,6 +2,7 @@ import random
 from engine.ball_outcome import calculate_outcome
 from engine.super_over_outcome import calculate_super_over_outcome
 from match_archiver import MatchArchiver, find_original_json_file
+from engine.pressure_engine import PressureEngine
 
 class Match:
     def __init__(self, match_data):
@@ -85,7 +86,54 @@ class Match:
         self.super_over_round = 0  # Track which super over we're on
         self.super_over_history = []  # Track scores from each super over
 
+        # Initialize pressure engine
+        self.pressure_engine = PressureEngine()
 
+        # Track partnership for pressure calculation
+        self.current_partnership_balls = 0
+        self.current_partnership_runs = 0
+
+
+    def _calculate_current_match_state(self):
+        """Calculate current match state for pressure calculation"""
+        total_balls = self.current_over * 6 + self.current_ball
+        current_rr = (self.score * 6) / total_balls if total_balls > 0 else 0
+        
+        state = {
+            'innings': self.innings,
+            'current_over': self.current_over,
+            'current_run_rate': current_rr,
+            'wickets': self.wickets,
+            'score': self.score,
+            'pitch': self.pitch,
+            'current_partnership_balls': self.current_partnership_balls
+        }
+        
+        if self.innings == 2:
+            overs_played = self.current_over + (self.current_ball / 6)
+            overs_remaining = self.overs - overs_played
+            runs_needed = self.target - self.score
+            required_rr = (runs_needed * 6) / (overs_remaining * 6) if overs_remaining > 0 else 0
+            
+            state.update({
+                'overs_remaining': overs_remaining,
+                'runs_needed': runs_needed,
+                'required_run_rate': required_rr
+            })
+        
+        return state
+
+    def _update_partnership_tracking(self, outcome):
+        """Update partnership tracking for pressure calculation"""
+        if outcome.get('batter_out'):
+            # Partnership broken
+            self.current_partnership_balls = 0
+            self.current_partnership_runs = 0
+        else:
+            # Continue partnership
+            if not outcome.get('is_extra'):
+                self.current_partnership_balls += 1
+            self.current_partnership_runs += outcome.get('runs', 0)
 
     def _save_first_innings_stats(self):
         """Save first innings stats before resetting for second innings"""
@@ -2288,6 +2336,191 @@ class Match:
         self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
         self.batter_idx.reverse()
 
+    def _generate_risk_commentary(self, risk_effects):
+        """Generate commentary for risk-based cricket"""
+        if not risk_effects or not risk_effects.get('risk_active'):
+            return None
+        
+        mode = risk_effects['mode']
+        risk_factor = risk_effects['risk_factor']
+        
+        if mode == 'DEATH_OR_GLORY':
+            return random.choice([
+                f"<strong>💀 DEATH OR GLORY!</strong> Risk factor {risk_factor:.1f}x - It's boundaries or bust!",
+                f"<strong>💀 FINAL ASSAULT!</strong> Throwing everything at it now!",
+                f"<strong>💀 LAST STAND!</strong> No tomorrow cricket!"
+            ])
+        elif mode == 'ALL_OUT_ATTACK':
+            return random.choice([
+                f"<strong>🔥 ALL-OUT ATTACK!</strong> High-risk cricket in full flow!",
+                f"<strong>🔥 AGGRESSIVE MODE!</strong> Calculated risks being taken!",
+                f"<strong>🔥 POWER SURGE!</strong> Going for broke!"
+            ])
+        elif mode == 'HIGH_RISK_CRICKET':
+            return random.choice([
+                f"<strong>⚡ HIGH-RISK CRICKET!</strong> Batsmen taking chances!",
+                f"<strong>⚡ PRESSURE COOKER!</strong> Big shots needed!",
+                f"<strong>⚡ AGGRESSIVE INTENT!</strong> No safe options left!"
+            ])
+        else:  # AGGRESSIVE_CRICKET
+            return random.choice([
+                f"<strong>🎯 AGGRESSIVE CRICKET!</strong> Taking calculated risks!",
+                f"<strong>🎯 STEPPING UP!</strong> Need boundaries to stay alive!"
+            ])
+
+    def _calculate_winning_probability(self):
+        """Calculate winning probability for chasing team based on match situation"""
+        if self.innings != 2:
+            return None
+        
+        runs_needed = self.target - self.score
+        balls_remaining = (self.overs - self.current_over) * 6 - self.current_ball
+        wickets_remaining = 10 - self.wickets
+        required_rr = (runs_needed * 6) / balls_remaining if balls_remaining > 0 else 0
+        
+        # Base probability factors
+        if runs_needed <= 0:
+            return 100.0  # Already won
+        
+        if balls_remaining <= 0 or wickets_remaining <= 0:
+            return 0.0   # Can't win
+        
+        # Winning probability based on required run rate and resources
+        if required_rr <= 6:
+            base_prob = 85
+        elif required_rr <= 8:
+            base_prob = 70
+        elif required_rr <= 10:
+            base_prob = 50
+        elif required_rr <= 12:
+            base_prob = 25
+        elif required_rr <= 15:
+            base_prob = 10
+        else:
+            base_prob = 3
+        
+        # Adjust for wickets remaining
+        wicket_factor = min(wickets_remaining / 7, 1.0)  # 7+ wickets = full factor
+        
+        # Adjust for balls remaining (less time = harder)
+        if balls_remaining < 12:  # Less than 2 overs
+            time_factor = 0.7
+        elif balls_remaining < 24:  # Less than 4 overs  
+            time_factor = 0.85
+        else:
+            time_factor = 1.0
+        
+        win_prob = base_prob * wicket_factor * time_factor
+        return max(0.0, min(100.0, win_prob))
+
+    def _generate_win_probability_commentary(self, win_prob):
+        """Generate commentary for winning probability"""
+        if win_prob >= 80:
+            return f"<strong>🟢 Win Probability: {win_prob:.1f}%</strong> - Chasing team in control!"
+        elif win_prob >= 60:
+            return f"<strong>🟡 Win Probability: {win_prob:.1f}%</strong> - Advantage to chasing team"
+        elif win_prob >= 40:
+            return f"<strong>🟠 Win Probability: {win_prob:.1f}%</strong> - Evenly poised!"
+        elif win_prob >= 20:
+            return f"<strong>🔴 Win Probability: {win_prob:.1f}%</strong> - Bowling team on top"
+        else:
+            return f"<strong>⚫ Win Probability: {win_prob:.1f}%</strong> - Mountain to climb!"
+
+
+    def _generate_pressure_commentary(self, pressure_score, match_state):
+        """Generate contextual pressure commentary based on match situation"""
+        
+        # Only show pressure commentary occasionally to avoid spam
+        if random.random() > 0.3:  # 30% chance to show
+            return None
+        
+        # Only show for medium-high pressure
+        if pressure_score < 40:
+            return None
+        
+        commentary = ""
+        
+        if self.innings == 1:
+            # First innings pressure commentary
+            if pressure_score >= 70:
+                if self.current_over < 6:
+                    commentary = random.choice([
+                        f"<strong>Pressure Building!</strong> {self.data['team_home'].split('_')[0] if self.batting_team == self.home_xi else self.data['team_away'].split('_')[0]} struggling to get going in the powerplay...",
+                        f"The run rate is concerning early on - need to accelerate soon!",
+                        f"Dot balls piling up - the asking rate keeps climbing!",
+                        f"Early wickets have put the brakes on - need a partnership here."
+                    ])
+                elif self.current_over >= 15:
+                    commentary = random.choice([
+                        f"<strong>Death Overs Pressure!</strong> Need to find the boundary - every ball is crucial now!",
+                        f"The total is looking under par - desperate need for some big hits!",
+                        f"Clock is ticking! Can they accelerate in these final overs?",
+                        f"Pressure of setting a competitive total weighing heavily..."
+                    ])
+            elif pressure_score >= 50:
+                commentary = random.choice([
+                    f"Building some pressure here - need to rotate the strike...",
+                    f"Bowlers have tightened the screws - batsmen feeling the heat!",
+                    f"Partnership under pressure - one big shot could release it..."
+                ])
+        
+        else:  # Second innings
+            runs_needed = match_state.get('runs_needed', 0)
+            overs_remaining = match_state.get('overs_remaining', 0)
+            required_rr = match_state.get('required_run_rate', 0)
+            
+            if pressure_score >= 70:
+                if overs_remaining <= 5:
+                    commentary = random.choice([
+                        f"<strong>Crunch Time!</strong> {runs_needed} needed from {overs_remaining:.1f} overs - RRR: {required_rr:.2f}",
+                        f"Nerves jangling in the dressing room! This is where champions are made!",
+                        f"The pressure is immense! Every run, every ball matters now!",
+                        f"Heart-stopping cricket! Can they hold their nerve?",
+                        f"The crowd is on its feet - this is nail-biting stuff!",
+                        f"Pressure cooker situation! One boundary could change everything!"
+                    ])
+                else:
+                    commentary = random.choice([
+                        f"Required rate climbing dangerously - {required_rr:.1f} runs per over needed!",
+                        f"The chase is getting away from them - need a big over soon!",
+                        f"Wickets falling at the wrong time - pressure mounting!",
+                        f"Running out of recognized batsmen - dangerous situation!"
+                    ])
+            elif pressure_score >= 50:
+                commentary = random.choice([
+                    f"Chase getting tighter - need to find gaps and rotate strike...",
+                    f"Bowlers applying the squeeze - batsmen need to be smart here!",
+                    f"Asking rate creeping up - time to take calculated risks!",
+                    f"Partnership needs to weather this storm..."
+                ])
+        
+        # Add pitch-specific pressure elements
+        if self.pitch in ['Green', 'Dusty'] and pressure_score >= 60:
+            pitch_commentary = random.choice([
+                f"This {self.pitch.lower()} pitch is making life difficult for the batsmen!",
+                f"Conditions favoring the bowlers - tough to score freely!"
+            ])
+            if commentary:
+                commentary += f"<br>{pitch_commentary}"
+            else:
+                commentary = pitch_commentary
+        
+        # Add momentum-specific commentary
+        recent_events = getattr(self.pressure_engine, 'recent_events', [])
+        if len(recent_events) >= 3:
+            recent_dots = sum(1 for event in recent_events[-3:] if event.get('runs') == 0 and not event.get('extra'))
+            if recent_dots >= 2 and pressure_score >= 55:
+                momentum_commentary = random.choice([
+                    "Three dot balls building pressure!",
+                    "Bowler right on top - batsmen struggling to get away!",
+                    "Maiden over building? Pressure mounting with every dot ball!"
+                ])
+                if commentary:
+                    commentary += f"<br>{momentum_commentary}"
+                else:
+                    commentary = momentum_commentary
+        
+        return f"<em>{commentary}</em>" if commentary else None
 
     def next_ball(self):
         if self.innings == 3:
@@ -2474,6 +2707,59 @@ class Match:
                     f"🎯 <strong>Non-striker:</strong> {self.current_non_striker['name']}<br>"
                 )
 
+        # Calculate pressure and effects
+        match_state = self._calculate_current_match_state()
+        pressure_score = self.pressure_engine.calculate_pressure(match_state)
+
+        # Calculate win probability for 2nd innings
+        win_probability = None
+        if self.innings == 2:
+            win_probability = self._calculate_winning_probability()
+
+        
+        # Get base pressure effects
+        pressure_effects = self.pressure_engine.get_pressure_effects(
+            pressure_score, 
+            self.current_striker['batting_rating'],
+            self.current_bowler['bowling_rating'],
+            self.pitch
+        )
+
+        # Apply risk-based effects on top of pressure effects
+        risk_effects = self.pressure_engine.get_risk_based_effects(match_state, win_probability)
+
+        if risk_effects and risk_effects['risk_active']:
+            # Compound risk effects with pressure effects
+            pressure_effects['boundary_modifier'] *= risk_effects['boundary_boost']
+            pressure_effects['dot_bonus'] += risk_effects['dot_increase']  
+            pressure_effects['wicket_modifier'] *= risk_effects['wicket_boost']
+            pressure_effects['strike_rotation_penalty'] = min(
+                pressure_effects['strike_rotation_penalty'] + risk_effects['strike_rotation_penalty'], 
+                0.85  # Cap at 85% penalty
+            )
+            
+            print(f"🎯 COMBINED EFFECTS: Boundaries={pressure_effects['boundary_modifier']:.1f}x, Wickets={pressure_effects['wicket_modifier']:.1f}x")
+
+
+        print(f"🎯 PRESSURE: Score={pressure_score:.1f}, Effects={pressure_effects}")
+
+        # ========= ADD PRESSURE COMMENTARY HERE =========
+        pressure_commentary = self._generate_pressure_commentary(pressure_score, match_state)
+        if pressure_commentary:
+            self.commentary.append("<br>")  # Empty line before
+            self.commentary.append(pressure_commentary)
+            self.commentary.append("<br>")  # Empty line after
+        # ================================================
+
+        # Add risk commentary occasionally
+        if risk_effects and risk_effects.get('risk_active') and random.random() < 0.25:  # 25% chance
+            risk_commentary = self._generate_risk_commentary(risk_effects)
+            if risk_commentary:
+                self.commentary.append("<br>")
+                self.commentary.append(risk_commentary)
+                self.commentary.append("<br>")
+
+
         outcome = calculate_outcome(
             batter=self.current_striker,
             bowler=self.current_bowler,
@@ -2481,8 +2767,13 @@ class Match:
             streak={},
             over_number=self.current_over,
             batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"],
-            innings=self.innings
+            innings=self.innings,
+            pressure_effects=pressure_effects
         )
+
+        # Update pressure engine with outcome
+        self.pressure_engine.update_recent_events(outcome)
+        self._update_partnership_tracking(outcome)
 
         # 🐛 ENHANCED DEBUG - Show ALL outcome details
         print(f"🐛 Ball {self.current_over}.{self.current_ball + 1} FULL OUTCOME:")
@@ -2887,6 +3178,14 @@ class Match:
             
             all_commentary.append(f"<br><strong>End of over {self.current_over + 1}</strong> (Score: {self.score}/{self.wickets}, RR: {current_rr:.2f})<br>")
             
+
+            # ADD WINNING PROBABILITY HERE
+            if self.innings == 2:
+                win_prob = self._calculate_winning_probability()
+                if win_prob is not None:
+                    win_prob_commentary = self._generate_win_probability_commentary(win_prob)
+                    all_commentary.append(win_prob_commentary)
+
             if self.innings == 2:
                 balls_remaining = (self.overs - self.current_over - 1) * 6
                 if balls_remaining > 0:
