@@ -157,10 +157,10 @@ class MatchArchiver:
         }
 
     def create_archive(self, 
-                      original_json_path: str, 
-                      commentary_log: List[str], 
-                      html_content: Optional[str] = None,
-                      cleanup_temp: bool = True) -> bool:
+                  original_json_path: str, 
+                  commentary_log: List[str], 
+                  html_content: Optional[str] = None,
+                  cleanup_temp: bool = True) -> bool:
         """
         Create complete match archive with all formats and ZIP packaging.
         
@@ -183,6 +183,10 @@ class MatchArchiver:
             self._copy_json_file(original_json_path)
             self._create_commentary_text_file(commentary_log)
             self._create_all_csv_files()
+            
+            # Copy CSV files to data folder before any cleanup
+            self._copy_csv_files_to_data_folder()
+            
             self._include_scorecard_images()
             
             if html_content:
@@ -208,6 +212,31 @@ class MatchArchiver:
             self.logger.error(f"Archive creation failed: {e}", exc_info=True)
             self._cleanup_on_error()
             return False
+
+    def get_csv_files_in_data_folder(self) -> List[str]:
+        """Get list of CSV file paths that were copied to the data folder"""
+        data_folder = Path("data")
+        csv_files = []
+        
+        try:
+            team_order = self._determine_team_batting_order()
+            
+            expected_csv_files = [
+                f"{self.match_id}_{self.username}_{team_order['first_batting']}_batting.csv",
+                f"{self.match_id}_{self.username}_{team_order['first_bowling']}_bowling.csv", 
+                f"{self.match_id}_{self.username}_{team_order['second_batting']}_batting.csv",
+                f"{self.match_id}_{self.username}_{team_order['second_bowling']}_bowling.csv"
+            ]
+            
+            for filename in expected_csv_files:
+                csv_path = data_folder / filename
+                if csv_path.exists():
+                    csv_files.append(str(csv_path))
+            
+        except Exception as e:
+            self.logger.warning(f"Error getting CSV file paths: {e}")
+        
+        return csv_files
 
     def _create_archive_directory(self) -> None:
         """Create archive directory with proper permissions"""
@@ -531,57 +560,111 @@ class MatchArchiver:
         
         return "\n".join(lines)
 
+    def _copy_csv_files_to_data_folder(self) -> None:
+        """Copy all CSV files to the main data folder for permanent storage"""
+        try:
+            data_folder = Path("data")
+            data_folder.mkdir(parents=True, exist_ok=True)
+            
+            csv_files_copied = 0
+            for file_path in self.created_files:
+                if file_path.suffix.lower() == '.csv':
+                    destination = data_folder / file_path.name
+                    try:
+                        shutil.copy2(file_path, destination)
+                        csv_files_copied += 1
+                        self.logger.debug(f"CSV copied to data folder: {file_path.name}")
+                    except Exception as copy_error:
+                        self.logger.warning(f"Failed to copy CSV {file_path.name} to data folder: {copy_error}")
+            
+            self.logger.info(f"Copied {csv_files_copied} CSV files to data folder")
+            
+        except Exception as e:
+            self.logger.warning(f"Error copying CSV files to data folder: {e}")
+            # Don't raise exception as this is not critical for archive creation
+
     def _create_all_csv_files(self) -> None:
         """Create all CSV files for batting and bowling statistics"""
         try:
             team_order = self._determine_team_batting_order()
             
-            # Create CSV files for both innings
+            # Get full team lineups
+            home_xi = self.match_data.get('playing_xi', {}).get('home', [])
+            away_xi = self.match_data.get('playing_xi', {}).get('away', [])
+            
+            # Determine which team's lineup to use for each innings
+            if team_order['first_batting'] == self.team_home:
+                first_batting_lineup = home_xi
+                second_batting_lineup = away_xi
+            else:
+                first_batting_lineup = away_xi
+                second_batting_lineup = home_xi
+            
+            if team_order['first_bowling'] == self.team_home:
+                first_bowling_lineup = home_xi
+                second_bowling_lineup = away_xi
+            else:
+                first_bowling_lineup = away_xi
+                second_bowling_lineup = home_xi
+            
+            # Create CSV files for both innings with team names and full lineups
             csv_files = [
                 (f"{self.match_id}_{self.username}_{team_order['first_batting']}_batting.csv", 
-                 getattr(self.match, 'first_innings_batting_stats', {})),
+                getattr(self.match, 'first_innings_batting_stats', {}),
+                team_order['first_batting'], 'batting', first_batting_lineup),
                 (f"{self.match_id}_{self.username}_{team_order['first_bowling']}_bowling.csv", 
-                 getattr(self.match, 'first_innings_bowling_stats', {})),
+                getattr(self.match, 'first_innings_bowling_stats', {}),
+                team_order['first_bowling'], 'bowling', first_bowling_lineup),
                 (f"{self.match_id}_{self.username}_{team_order['second_batting']}_batting.csv", 
-                 getattr(self.match, 'second_innings_batting_stats', {})),
+                getattr(self.match, 'second_innings_batting_stats', {}),
+                team_order['second_batting'], 'batting', second_batting_lineup),
                 (f"{self.match_id}_{self.username}_{team_order['second_bowling']}_bowling.csv", 
-                 getattr(self.match, 'second_innings_bowling_stats', {}))
+                getattr(self.match, 'second_innings_bowling_stats', {}),
+                team_order['second_bowling'], 'bowling', second_bowling_lineup)
             ]
             
-            for filename, stats in csv_files:
-                if 'batting' in filename:
-                    self._create_batting_csv(filename, stats)
+            for filename, stats, team_name, file_type, lineup in csv_files:
+                if file_type == 'batting':
+                    self._create_batting_csv(filename, stats, team_name, lineup)
                 else:
-                    self._create_bowling_csv(filename, stats)
+                    self._create_bowling_csv(filename, stats, team_name)
             
             self.logger.debug("All CSV files created successfully")
             
         except Exception as e:
             raise MatchArchiverError(f"Failed to create CSV files: {e}")
 
-    def _create_batting_csv(self, filename: str, stats: Dict) -> None:
-        """Create batting statistics CSV file with comprehensive data"""
+    def _create_batting_csv(self, filename: str, stats: Dict, team_name: str, full_lineup: List) -> None:
+        """Create batting statistics CSV file with comprehensive data including all players"""
         csv_path = self.archive_path / filename
         
         try:
             with open(csv_path, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 
-                # Enhanced headers
+                # Enhanced headers with team name
                 headers = [
-                    'Player Name', 'Runs', 'Balls', '1s', '2s', '3s', 'Fours', 'Sixes', 
+                    'Player Name', 'Team Name', 'Runs', 'Balls', '1s', '2s', '3s', 'Fours', 'Sixes', 
                     'Dots', 'Strike Rate', 'Status', 'Bowler Out', 'Fielder Out'
                 ]
                 writer.writerow(headers)
                 
-                # Write player data
-                for player_name, player_stats in stats.items():
-                    if player_stats.get('balls', 0) > 0 or player_stats.get('wicket_type'):
+                # Write data for ALL players in the lineup
+                for player in full_lineup:
+                    player_name = player.get('name', 'Unknown')
+                    
+                    # Check if player actually batted (has balls faced > 0 OR has a wicket type)
+                    if (player_name in stats and 
+                        (stats[player_name].get('balls', 0) > 0 or stats[player_name].get('wicket_type'))):
+                        
+                        # Player has stats (actually batted)
+                        player_stats = stats[player_name]
                         strike_rate = f"{(player_stats['runs'] * 100 / player_stats['balls']):.2f}" if player_stats['balls'] > 0 else "0.00"
                         status = player_stats.get('wicket_type', '') or "not out"
                         
                         writer.writerow([
                             player_name,
+                            team_name,
                             player_stats.get('runs', 0),
                             player_stats.get('balls', 0),
                             player_stats.get('ones', 0),
@@ -595,6 +678,24 @@ class MatchArchiver:
                             player_stats.get('bowler_out', ''),
                             player_stats.get('fielder_out', '')
                         ])
+                    else:
+                        # Player didn't bat - include only name and team, rest empty
+                        writer.writerow([
+                            player_name,
+                            team_name,
+                            '',  # Empty runs
+                            '',  # Empty balls
+                            '',  # Empty 1s
+                            '',  # Empty 2s
+                            '',  # Empty 3s
+                            '',  # Empty 4s
+                            '',  # Empty 6s
+                            '',  # Empty dots
+                            '',  # Empty strike rate
+                            '',  # Empty status
+                            '',  # Empty bowler out
+                            ''   # Empty fielder out
+                        ])
             
             self.created_files.append(csv_path)
             self.logger.debug(f"Batting CSV created: {filename}")
@@ -602,17 +703,17 @@ class MatchArchiver:
         except Exception as e:
             raise MatchArchiverError(f"Failed to create batting CSV {filename}: {e}")
 
-    def _create_bowling_csv(self, filename: str, stats: Dict) -> None:
-        """Create bowling statistics CSV file with comprehensive data"""
+    def _create_bowling_csv(self, filename: str, stats: Dict, team_name: str) -> None:
+        """Create bowling statistics CSV file with comprehensive data including team name"""
         csv_path = self.archive_path / filename
         
         try:
             with open(csv_path, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 
-                # Enhanced headers
+                # Enhanced headers with team name
                 headers = [
-                    'Bowler Name', 'Overs', 'Maidens', 'Runs', 'Wickets', 
+                    'Bowler Name', 'Team Name', 'Overs', 'Maidens', 'Runs', 'Wickets', 
                     'Economy', 'Wides', 'No Balls', 'Byes', 'Leg Byes'
                 ]
                 writer.writerow(headers)
@@ -626,6 +727,7 @@ class MatchArchiver:
                         
                         writer.writerow([
                             bowler_name,
+                            team_name,  # Added team name
                             overs_display,
                             bowler_stats.get('maidens', 0),
                             bowler_stats.get('runs', 0),
