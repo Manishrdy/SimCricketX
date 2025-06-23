@@ -92,6 +92,8 @@ class Match:
         # Track partnership for pressure calculation
         self.current_partnership_balls = 0
         self.current_partnership_runs = 0
+        self.recent_wickets_count = 0  # Track wickets in last few balls
+        self.recent_wickets_tracker = []  # Track when wickets fell
 
 
     def _calculate_current_match_state(self):
@@ -2717,7 +2719,7 @@ class Match:
             win_probability = self._calculate_winning_probability()
 
         
-        # Get base pressure effects
+        # Get base pressure effects (now fair)
         pressure_effects = self.pressure_engine.get_pressure_effects(
             pressure_score, 
             self.current_striker['batting_rating'],
@@ -2725,40 +2727,45 @@ class Match:
             self.pitch
         )
 
-        # Apply risk-based effects on top of pressure effects
-        risk_effects = self.pressure_engine.get_risk_based_effects(match_state, win_probability)
+        # 🔧 ADD CHASING ADVANTAGE
+        chasing_advantage = self.pressure_engine.get_chasing_advantage(match_state)
+        if chasing_advantage:
+            pressure_effects['boundary_modifier'] *= chasing_advantage['boundary_boost']
+            pressure_effects['wicket_modifier'] *= chasing_advantage['wicket_reduction']
+            print(f"🎯 CHASING ADVANTAGE: {chasing_advantage['boundary_boost']:.2f}x boundaries, {chasing_advantage['wicket_reduction']:.2f}x wickets")
 
-        if risk_effects and risk_effects['risk_active']:
-            # Compound risk effects with pressure effects
-            pressure_effects['boundary_modifier'] *= risk_effects['boundary_boost']
-            pressure_effects['dot_bonus'] += risk_effects['dot_increase']  
-            pressure_effects['wicket_modifier'] *= risk_effects['wicket_boost']
-            pressure_effects['strike_rotation_penalty'] = min(
-                pressure_effects['strike_rotation_penalty'] + risk_effects['strike_rotation_penalty'], 
-                0.85  # Cap at 85% penalty
-            )
+        # Check for defensive mode first
+        defensive_effects = self.pressure_engine.calculate_defensive_factor(match_state)
+
+        if defensive_effects and defensive_effects['defensive_active']:
+            # Defensive mode (many wickets down)
+            pressure_effects['boundary_modifier'] *= (1 - defensive_effects['boundary_reduction'])
+            pressure_effects['wicket_modifier'] *= (1 - defensive_effects['wicket_reduction'])
+            pressure_effects['dot_bonus'] += defensive_effects['dot_increase']
+            pressure_effects['single_boost'] = defensive_effects['single_boost']
+            print(f"🛡️ {defensive_effects['mode']}: Playing defensively!")
+
+        else:
+            # Apply fair risk-based effects
+            risk_effects = self.pressure_engine.get_risk_based_effects(match_state, win_probability)
             
-            print(f"🎯 COMBINED EFFECTS: Boundaries={pressure_effects['boundary_modifier']:.1f}x, Wickets={pressure_effects['wicket_modifier']:.1f}x")
-
-
-        print(f"🎯 PRESSURE: Score={pressure_score:.1f}, Effects={pressure_effects}")
-
-        # ========= ADD PRESSURE COMMENTARY HERE =========
-        pressure_commentary = self._generate_pressure_commentary(pressure_score, match_state)
-        if pressure_commentary:
-            self.commentary.append("<br>")  # Empty line before
-            self.commentary.append(pressure_commentary)
-            self.commentary.append("<br>")  # Empty line after
-        # ================================================
-
-        # Add risk commentary occasionally
-        if risk_effects and risk_effects.get('risk_active') and random.random() < 0.25:  # 25% chance
-            risk_commentary = self._generate_risk_commentary(risk_effects)
-            if risk_commentary:
-                self.commentary.append("<br>")
-                self.commentary.append(risk_commentary)
-                self.commentary.append("<br>")
-
+            if risk_effects and risk_effects['risk_active']:
+                # Check wicket cluster
+                recent_wickets = getattr(self, 'recent_wickets_count', 0)
+                cluster_trigger = self.pressure_engine.should_trigger_wicket_cluster(
+                    match_state, recent_wickets
+                )
+                
+                if cluster_trigger:
+                    pressure_effects['wicket_modifier'] *= 1.3  # Reduced from 1.5
+                    print(f"💀 WICKET CLUSTER: 1.3x additional wicket boost!")
+                
+                # Apply effects
+                pressure_effects['boundary_modifier'] *= risk_effects['boundary_boost']
+                pressure_effects['dot_bonus'] += risk_effects['dot_increase']
+                pressure_effects['wicket_modifier'] *= risk_effects['wicket_boost']
+                pressure_effects['strike_rotation_penalty'] = risk_effects['strike_rotation_penalty']
+                pressure_effects['single_floor'] = risk_effects['single_floor']
 
         outcome = calculate_outcome(
             batter=self.current_striker,
@@ -2791,6 +2798,21 @@ class Match:
         ball_number = f"{self.current_over}.{self.current_ball + 1}"
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
 
+        # 🔧 NOW ADD WICKET TRACKING HERE (after wicket is defined)
+        if wicket:
+            # Update recent wickets tracking
+            if not hasattr(self, 'recent_wickets_tracker'):
+                self.recent_wickets_tracker = []
+            
+            self.recent_wickets_tracker.append(self.current_over * 6 + self.current_ball)
+            # Keep only last 12 balls (2 overs)
+            current_ball_number = self.current_over * 6 + self.current_ball
+            self.recent_wickets_tracker = [w for w in self.recent_wickets_tracker 
+                                        if current_ball_number - w <= 12]
+            self.recent_wickets_count = len(self.recent_wickets_tracker)
+            print(f"💀 Wicket tracking: {self.recent_wickets_count} wickets in last 12 balls")
+
+        
         self.prev_delivery_was_extra = extra
 
         if not hasattr(self, 'current_over_runs'):

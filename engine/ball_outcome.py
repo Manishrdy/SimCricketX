@@ -347,59 +347,59 @@ def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
 # -----------------------------------------------------------------------------
 PITCH_SCORING_MATRIX = {
     "Green": {
-        # Pace-friendly, lower scoring (120-140 average, ~6-7 wickets)
-        "Dot":     0.39,   
-        "Single":  0.34,   
-        "Double":  0.06,
-        "Three":   0.01,
-        "Four":    0.06,   
-        "Six":     0.02,   
-        "Wicket":  0.075,  # Moderate increase - not too high
-        "Extras":  0.045
+        # Pace-friendly, lower scoring (≤140 average, ~6-7 wickets)
+        "Dot":     0.37,   # Reduced from 0.39 (slightly more scoring)
+        "Single":  0.35,   # Increased from 0.34 
+        "Double":  0.07,   # Increased from 0.06
+        "Three":   0.01,   
+        "Four":    0.07,   # Increased from 0.06
+        "Six":     0.025,  # Increased from 0.02
+        "Wicket":  0.075,  
+        "Extras":  0.05    # Increased from 0.045
     },
     "Dry": {
-        # Spin-friendly, lower scoring (120-140 average, ~6-7 wickets)
-        "Dot":     0.33,   
-        "Single":  0.33,   
-        "Double":  0.09,
-        "Three":   0.04,
-        "Four":    0.06,   
-        "Six":     0.02,   
-        "Wicket":  0.075,  # Moderate increase
+        # Spin-friendly, lower scoring (≤140 average, ~6-7 wickets)
+        "Dot":     0.31,   # Reduced from 0.33 (slightly more scoring)
+        "Single":  0.35,   # Increased from 0.33
+        "Double":  0.10,   # Increased from 0.09
+        "Three":   0.04,   
+        "Four":    0.07,   # Increased from 0.06
+        "Six":     0.025,  # Increased from 0.02
+        "Wicket":  0.075,  
         "Extras":  0.055   
     },
     "Hard": {
-        # Balanced pitch (150-180 average, ~6-7 wickets)
-        "Dot":     0.27,   
-        "Single":  0.31,   
-        "Double":  0.11,
+        # Balanced pitch (150-170 average, ~6-7 wickets)
+        "Dot":     0.28,   # Increased from 0.27 (slightly less scoring)
+        "Single":  0.32,   # Increased from 0.31
+        "Double":  0.11,   
         "Three":   0.06,
-        "Four":    0.09,   
-        "Six":     0.05,   
-        "Wicket":  0.06,   # Moderate increase from 0.055
-        "Extras":  0.050
+        "Four":    0.08,   # Reduced from 0.09
+        "Six":     0.04,   # Reduced from 0.05
+        "Wicket":  0.065,  # Increased from 0.06
+        "Extras":  0.045   # Reduced from 0.050
     },
     "Flat": {
-        # Batting-friendly (170-210 average, ~5-6 wickets)
-        "Dot":     0.25,   
-        "Single":  0.30,   
+        # Batting-friendly (170-200 average, ~5-6 wickets)
+        "Dot":     0.26,   # Increased from 0.25 (less scoring)
+        "Single":  0.31,   # Increased from 0.30
         "Double":  0.12,   
         "Three":   0.04,   
-        "Four":    0.14,   # Good boundary rate
-        "Six":     0.06,   
-        "Wicket":  0.05,   # Slight increase from 0.05
-        "Extras":  0.04
+        "Four":    0.12,   # Reduced from 0.14
+        "Six":     0.05,   # Reduced from 0.06
+        "Wicket":  0.055,  # Increased from 0.05
+        "Extras":  0.045   # Increased from 0.04
     },
     "Dead": {
-        # Batting paradise (210+ average, ~4-5 wickets)
-        "Dot":     0.15,   
-        "Single":  0.29,   
-        "Double":  0.12,   
-        "Three":   0.02,   
-        "Four":    0.21,   # High boundary rate
-        "Six":     0.13,   
-        "Wicket":  0.035,  # Low wicket rate
-        "Extras":  0.045
+        # Batting paradise (200+ average, ~4-5 wickets)
+        "Dot":     0.18,   # Increased from 0.15 (less scoring)
+        "Single":  0.31,   # Increased from 0.29
+        "Double":  0.13,   # Increased from 0.12
+        "Three":   0.03,   # Increased from 0.02
+        "Four":    0.18,   # Reduced from 0.21
+        "Six":     0.10,   # Reduced from 0.13
+        "Wicket":  0.045,  # Increased from 0.035
+        "Extras":  0.045   
     }
 }
 
@@ -647,14 +647,14 @@ def calculate_outcome(
     if pressure_effects:
         print(f"  [PRESSURE] Applying pressure effects: {pressure_effects}")
         
-        # Increase dot ball probability by adding absolute weight
+        # Increase dot ball probability
         if "Dot" in raw_weights:
             original_dot = raw_weights["Dot"]
             dot_bonus = pressure_effects.get('dot_bonus', 0.0)
             raw_weights["Dot"] += dot_bonus * total_weight
             print(f"  [PRESSURE] Dot: {original_dot:.6f} → {raw_weights['Dot']:.6f}")
         
-        # Modify boundary probabilities (reduce)
+        # Modify boundary probabilities
         boundary_modifier = pressure_effects.get('boundary_modifier', 1.0)
         for boundary_type in ["Four", "Six"]:
             if boundary_type in raw_weights:
@@ -662,19 +662,40 @@ def calculate_outcome(
                 raw_weights[boundary_type] *= boundary_modifier
                 print(f"  [PRESSURE] {boundary_type}: {original_boundary:.6f} → {raw_weights[boundary_type]:.6f}")
         
-        # Modify wicket probability (increase)
+        # Modify wicket probability
         if "Wicket" in raw_weights:
             original_wicket = raw_weights["Wicket"]
             raw_weights["Wicket"] *= pressure_effects.get('wicket_modifier', 1.0)
             print(f"  [PRESSURE] Wicket: {original_wicket:.6f} → {raw_weights['Wicket']:.6f}")
         
-        # Reduce strike rotation (singles and threes)
-        strike_rotation_penalty = pressure_effects.get('strike_rotation_penalty', 0.0)
-        for rotation_type in ["Single", "Three"]:
-            if rotation_type in raw_weights:
-                original_rotation = raw_weights[rotation_type]
-                raw_weights[rotation_type] *= (1 - strike_rotation_penalty)
-                print(f"  [PRESSURE] {rotation_type}: {original_rotation:.6f} → {raw_weights[rotation_type]:.6f}")
+        # 🔧 NEW: Handle singles (boost or penalty with floor)
+        if "Single" in raw_weights:
+            original_single = raw_weights["Single"]
+            
+            # Apply single boost (defensive mode)
+            if 'single_boost' in pressure_effects:
+                raw_weights["Single"] *= pressure_effects['single_boost']
+                print(f"  [PRESSURE] Single BOOST: {original_single:.6f} → {raw_weights['Single']:.6f}")
+            
+            # Apply single penalty with floor (aggressive mode)
+            elif 'strike_rotation_penalty' in pressure_effects:
+                penalty = pressure_effects['strike_rotation_penalty']
+                single_floor = pressure_effects.get('single_floor', 0.0)
+                
+                # Apply penalty but enforce minimum floor
+                new_single_weight = original_single * (1 - penalty)
+                floor_weight = single_floor * total_weight
+                raw_weights["Single"] = max(new_single_weight, floor_weight)
+                
+                print(f"  [PRESSURE] Single PENALTY: {original_single:.6f} → {raw_weights['Single']:.6f} (floor: {floor_weight:.6f})")
+        
+        # Reduce strike rotation for threes
+        if "Three" in raw_weights:
+            strike_rotation_penalty = pressure_effects.get('strike_rotation_penalty', 0.0)
+            if strike_rotation_penalty > 0:
+                original_three = raw_weights["Three"]
+                raw_weights["Three"] *= (1 - strike_rotation_penalty)
+                print(f"  [PRESSURE] Three: {original_three:.6f} → {raw_weights['Three']:.6f}")
         
         # Recalculate total weight after pressure modifications
         total_weight = sum(raw_weights.values())

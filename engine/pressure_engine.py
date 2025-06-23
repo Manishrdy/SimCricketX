@@ -56,32 +56,135 @@ class PressureEngine:
         
         return risk_factor
 
-    def get_risk_based_effects(self, match_state, win_probability=None):
-        """Get risk-based effects for boom-or-bust cricket"""
-        risk_factor = self.calculate_unified_risk_factor(match_state, win_probability)
-        
-        if risk_factor <= 1.1:  # Minimal risk
+
+    def calculate_defensive_factor(self, match_state):
+        """Calculate defensive factor when team is protecting wickets in death overs"""
+        if match_state['innings'] != 2:
             return None
         
-        # Convert risk factor to outcome modifiers
-        risk_multiplier = risk_factor - 1.0  # How much above baseline
+        current_over = match_state.get('current_over', 0)
+        wickets_fallen = match_state.get('wickets', 0)
+        overs_remaining = match_state.get('overs_remaining', 0)
+        
+        # Defensive mode only in death overs (17-20) with many wickets down
+        if current_over >= 16 and wickets_fallen >= 6:
+            
+            # More wickets fallen = more defensive
+            if wickets_fallen >= 8:
+                defensive_level = 1.0  # Maximum defense
+                mode = 'SURVIVAL_MODE'
+            elif wickets_fallen >= 7:
+                defensive_level = 0.8
+                mode = 'DAMAGE_CONTROL'
+            else:  # 6 wickets
+                defensive_level = 0.6
+                mode = 'CAUTIOUS_CRICKET'
+            
+            # Less time remaining = slightly more defensive
+            if overs_remaining <= 2:
+                defensive_level += 0.2
+            
+            defensive_level = min(defensive_level, 1.0)  # Cap at 1.0
+            
+            effects = {
+                'defensive_active': True,
+                'defensive_level': defensive_level,
+                'boundary_reduction': 0.4 + (defensive_level * 0.4),  # 40-80% fewer boundaries
+                'wicket_reduction': 0.3 + (defensive_level * 0.5),    # 30-80% fewer wickets
+                'dot_increase': defensive_level * 0.3,                 # More defensive dots
+                'single_boost': 1.0 + (defensive_level * 0.8),        # 80% more singles
+                'mode': mode
+            }
+            
+            print(f"🛡️ {mode}: Defensive level {defensive_level:.1f} - Protecting wickets!")
+            return effects
+        
+        return None
+    
+    def should_trigger_wicket_cluster(self, match_state, recent_wickets=0):
+        """Check if conditions are right for rapid wicket fall"""
+        if match_state['innings'] != 2:
+            return False
+        
+        current_over = match_state.get('current_over', 0)
+        required_rr = match_state.get('required_run_rate', 0)
+        wickets_fallen = match_state.get('wickets', 0)
+        
+        # Only in death overs with extreme required rate
+        if current_over >= 16 and required_rr >= 14:
+            
+            # Higher chance if already under pressure
+            if wickets_fallen >= 5:
+                cluster_chance = 0.15  # 15% chance per ball
+            elif wickets_fallen >= 3:
+                cluster_chance = 0.12  # 12% chance per ball
+            else:
+                cluster_chance = 0.08  # 8% chance per ball
+            
+            # Increase chance based on how impossible the chase is
+            impossibility_factor = min((required_rr - 14) / 6, 1.0)  # 0-1 scale
+            cluster_chance += impossibility_factor * 0.1
+            
+            # Reduce chance if wickets already fell recently (avoid unrealistic collapses)
+            if recent_wickets >= 2:
+                cluster_chance *= 0.3  # Much lower chance if 2+ wickets just fell
+            elif recent_wickets >= 1:
+                cluster_chance *= 0.6  # Lower chance if 1 wicket just fell
+            
+            return random.random() < cluster_chance
+        
+        return False
+
+    def get_risk_based_effects(self, match_state, win_probability=None):
+        """Get FAIR risk-based effects - boom-or-bust without unfair restrictions"""
+        risk_factor = self.calculate_unified_risk_factor(match_state, win_probability)
+        
+        if risk_factor <= 1.1:
+            return None
+        
+        required_rr = match_state.get('required_run_rate', 0)
+        current_over = match_state.get('current_over', 0)
+        
+        # Risk multiplier
+        risk_multiplier = risk_factor - 1.0
+        
+        # 🔧 FAIR BOOM-OR-BUST: Equal boundary opportunities, proportional wickets
+        wicket_multiplier = 1.0 + (risk_multiplier * 1.5)
+        
+        # Extreme scaling only for impossible chases (RRR 16+)
+        if current_over >= 16 and required_rr > 16:
+            if required_rr >= 20:
+                extreme_boost = 2.5  # Only for truly impossible
+                chaos_level = "ABSOLUTE_CHAOS"
+            elif required_rr >= 18:
+                extreme_boost = 2.0
+                chaos_level = "RECKLESS_HITTING"
+            else:  # 16-18 RRR
+                extreme_boost = 1.5
+                chaos_level = "DESPERATE_SWINGING"
+            
+            wicket_multiplier *= extreme_boost
+            print(f"💀 {chaos_level}: RRR {required_rr:.1f} = {extreme_boost:.1f}x wicket boost!")
         
         effects = {
             'risk_active': True,
             'risk_factor': risk_factor,
-            'boundary_boost': 1.0 + (risk_multiplier * 1.8),    # Boundaries increase most
-            'wicket_boost': 1.0 + (risk_multiplier * 1.5),      # Wickets increase significantly  
-            'dot_increase': risk_multiplier * 0.6,               # More mistimed shots
-            'strike_rotation_penalty': risk_multiplier * 0.8,    # Much less safe singles
+            'boundary_boost': 1.0 + (risk_multiplier * 2.0),  # 🔧 INCREASED from 1.8
+            'wicket_boost': wicket_multiplier,
+            'dot_increase': max(0, (risk_multiplier - 0.5) * 0.3),  # 🔧 ONLY for extreme risk
+            'strike_rotation_penalty': min(risk_multiplier * 0.4, 0.5),  # Capped at 50%
+            'single_floor': max(0.06, 0.12 - (required_rr - 12) * 0.01),
             'mode': 'AGGRESSIVE_CRICKET'
         }
         
-        # Special modes for extreme risk
-        if risk_factor >= 2.5:
-            effects['mode'] = 'DEATH_OR_GLORY'
-        elif risk_factor >= 2.0:
-            effects['mode'] = 'ALL_OUT_ATTACK'
-        elif risk_factor >= 1.8:
+        # Mode classification
+        if required_rr >= 20:
+            effects['mode'] = 'ABSOLUTE_CHAOS'
+        elif required_rr >= 18:
+            effects['mode'] = 'RECKLESS_HITTING'
+        elif required_rr >= 16:
+            effects['mode'] = 'DESPERATE_SWINGING'
+        elif wicket_multiplier >= 2.0:
             effects['mode'] = 'HIGH_RISK_CRICKET'
         
         print(f"🔥 {effects['mode']}: Boundaries={effects['boundary_boost']:.1f}x, Wickets={effects['wicket_boost']:.1f}x")
@@ -217,6 +320,32 @@ class PressureEngine:
         if len(self.recent_events) > 6:
             self.recent_events.pop(0)
     
+
+    def get_chasing_advantage(self, match_state):
+        """Apply realistic chasing advantage in T20 cricket"""
+        if match_state['innings'] != 2:
+            return None
+        
+        current_over = match_state.get('current_over', 0)
+        wickets_remaining = 10 - match_state.get('wickets', 0)
+        
+        # Chasing teams have advantage knowing the target
+        base_advantage = {
+            'boundary_boost': 1.08,  # 8% more boundaries (better shot selection)
+            'wicket_reduction': 0.95,  # 5% fewer wickets (better game awareness)
+            'strike_rotation_boost': 1.1  # 10% better strike rotation
+        }
+        
+        # Additional advantage in death overs with wickets in hand
+        if current_over >= 15 and wickets_remaining >= 6:
+            base_advantage.update({
+                'boundary_boost': 1.12,  # 12% more boundaries
+                'wicket_reduction': 0.92,  # 8% fewer wickets
+            })
+            print(f"🎯 CHASING ADVANTAGE: Death overs with {wickets_remaining} wickets - Enhanced scoring!")
+        
+        return base_advantage
+
     def get_pressure_effects(self, pressure_score, batter_rating, bowler_rating, pitch):
         """Get pressure effects on ball outcome probabilities"""
         # Player pressure handling ability
@@ -227,7 +356,7 @@ class PressureEngine:
         effective_pressure = pressure_score * (1 - batter_pressure_handling) * (1 + bowler_pressure_advantage)
         effective_pressure = min(100, max(0, effective_pressure))
         
-        # Convert to pressure effects
+        # 🔧 FAIR PRESSURE EFFECTS - No artificial dot increases in death overs
         if effective_pressure < 30:  # Low pressure
             return {
                 'dot_bonus': 0.0,
@@ -237,17 +366,17 @@ class PressureEngine:
             }
         elif effective_pressure < 70:  # Medium pressure
             return {
-                'dot_bonus': 0.05,
-                'boundary_modifier': 0.95,
-                'wicket_modifier': 1.1,
-                'strike_rotation_penalty': 0.1
+                'dot_bonus': 0.02,  # Reduced from 0.05
+                'boundary_modifier': 1.0,  # No penalty - keep equal to first innings
+                'wicket_modifier': 1.15,   # Slight increase
+                'strike_rotation_penalty': 0.05  # Minimal penalty
             }
-        else:  # High pressure
+        else:  # High pressure - Focus on boom-or-bust, not restriction
             return {
-                'dot_bonus': 0.12,
-                'boundary_modifier': 0.85,
-                'wicket_modifier': 1.25,
-                'strike_rotation_penalty': 0.2
+                'dot_bonus': 0.03,  # Minimal - reduced from 0.12
+                'boundary_modifier': 1.05,  # 🔧 SLIGHT BONUS for aggressive cricket
+                'wicket_modifier': 1.3,     # Higher wickets for boom-or-bust
+                'strike_rotation_penalty': 0.1  # Reduced from 0.2
             }
     
     def _get_pressure_handling(self, player_rating):
