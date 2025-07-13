@@ -40,6 +40,7 @@ import threading
 import logging
 import sys
 import traceback
+from flask_login import UserMixin
 
 # Add this import for system monitoring
 try:
@@ -275,6 +276,9 @@ def cleanup_temp_scorecard_images():
     except Exception as e:
         app.logger.error(f"[Cleanup] Error removing temp scorecard images directory: {e}", exc_info=True)
 
+class User(UserMixin):
+    def __init__(self, email):
+        self.id = email
 
 # ────── App Factory ──────
 def create_app():
@@ -331,10 +335,6 @@ def create_app():
     # --- Flask-Login setup ---
     login_manager = LoginManager(app)
     login_manager.login_view = "login"
-
-    class User(UserMixin):
-        def __init__(self, email):
-            self.id = email
 
     @login_manager.user_loader
     def load_user(email):
