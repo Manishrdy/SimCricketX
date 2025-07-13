@@ -285,6 +285,12 @@ def create_app():
     # --- Flask setup ---
     app = Flask(__name__)
     config = load_config()
+
+    @app.before_request
+    def configure_session_cookie():
+        is_secure = request.is_secure or (request.headers.get('X-Forwarded-Proto') == 'https')
+        app.config["SESSION_COOKIE_SECURE"] = is_secure
+        app.logger.info(f"[Session] Setting SESSION_COOKIE_SECURE to {is_secure} (HTTPS: {request.scheme}, X-Forwarded-Proto: {request.headers.get('X-Forwarded-Proto')})")
     
 
     # 1a) Try to read from config file
@@ -309,7 +315,7 @@ def create_app():
     app.config["SECRET_KEY"] = secret
 
     # 1c) Force cookies to be secure (HF uses HTTPS)
-    app.config["SESSION_COOKIE_SECURE"] = True
+    # app.config["SESSION_COOKIE_SECURE"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # --- Logging setup ---
@@ -2056,26 +2062,8 @@ if __name__ == "__main__":
     # Secure cookie config
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-
-    @app.before_request
-    def configure_session_cookie():
-        host = request.host
-        app.logger.info("Hostname: {}".format(host))
-
-        if ':' in host:
-            hostname_part, port_part = host.rsplit(':', 1)
-            try:
-                port = int(port_part)
-            except ValueError:
-                port = 80
-        else:
-            port = 80
-
-        development_ports = [3000, 4000, 5000, 7860, 8000, 8080, 8888, 9000]
-        is_dev = port in development_ports or (port != 80 and port != 443)
-
-        app.config["SESSION_COOKIE_SECURE"] = not is_dev
-        app.logger.info(f"[Session] {'Development' if is_dev else 'Production'} port ({port}) — SESSION_COOKIE_SECURE = {not is_dev}")
+    app.config["SESSION_COOKIE_SECURE"] = False  # Explicitly set to False for local dev
+    app.config["PERMANENT_SESSION_LIFETIME"] = 604800  # 7 days in seconds
 
     # 🔥 FINAL: Force Flask to bind on all interfaces
     print("🔁 Launching Flask server on 0.0.0.0:7860")
