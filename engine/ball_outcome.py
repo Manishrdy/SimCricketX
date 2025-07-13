@@ -349,7 +349,7 @@ PITCH_SCORING_MATRIX = {
     "Green": {
         # Pace-friendly, lower scoring (≤140 average, ~6-7 wickets)
         "Dot":     0.37,   # Reduced from 0.39 (slightly more scoring)
-        "Single":  0.35,   # Increased from 0.34 
+        "Single":  0.33,   # Increased from 0.34 
         "Double":  0.07,   # Increased from 0.06
         "Three":   0.01,   
         "Four":    0.07,   # Increased from 0.06
@@ -360,7 +360,7 @@ PITCH_SCORING_MATRIX = {
     "Dry": {
         # Spin-friendly, lower scoring (≤140 average, ~6-7 wickets)
         "Dot":     0.31,   # Reduced from 0.33 (slightly more scoring)
-        "Single":  0.35,   # Increased from 0.33
+        "Single":  0.325,   # Increased from 0.33
         "Double":  0.10,   # Increased from 0.09
         "Three":   0.04,   
         "Four":    0.07,   # Increased from 0.06
@@ -393,7 +393,7 @@ PITCH_SCORING_MATRIX = {
     "Dead": {
         # Batting paradise (200+ average, ~4-5 wickets)
         "Dot":     0.18,   # Increased from 0.15 (less scoring)
-        "Single":  0.31,   # Increased from 0.29
+        "Single":  0.29,   # Increased from 0.29
         "Double":  0.13,   # Increased from 0.12
         "Three":   0.03,   # Increased from 0.02
         "Four":    0.18,   # Reduced from 0.21

@@ -2037,10 +2037,11 @@ def create_app():
 
 # ────── Run Server ──────
 if __name__ == "__main__":
-    app = create_app()
-
     import os
     import secrets
+    from flask import request
+
+    app = create_app()
 
     # Set archive folder path
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -2052,49 +2053,30 @@ if __name__ == "__main__":
         print("[WARNING] No SECRET_KEY set — generating random one (not persistent)")
         app.config["SECRET_KEY"] = generated_key
 
-    # Set secure cookie defaults
+    # Secure cookie config
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-
-    # Dynamically toggle secure cookie for localhost
-    # Replace the existing configure_session_cookie function in app.py with this:
 
     @app.before_request
     def configure_session_cookie():
         host = request.host
         app.logger.info("Hostname: {}".format(host))
-        
-        # Extract port number from host (format: "ip:port" or "hostname:port")
+
         if ':' in host:
             hostname_part, port_part = host.rsplit(':', 1)
             try:
                 port = int(port_part)
             except ValueError:
-                port = 80  # Default HTTP port if port parsing fails
+                port = 80
         else:
-            port = 80  # Default HTTP port if no port specified
-        
-        # Define development ports (commonly used for local development)
-        development_ports = [
-            3000,   # React dev server
-            4000,   # Common dev port
-            5000,   # Flask default
-            7860,   # Your current port
-            8000,   # Django/FastAPI dev
-            8080,   # Common dev port
-            8888,   # Jupyter
-            9000,   # Common dev port
-        ]
-        
-        # Also include non-standard ports as development (anything not 80/443)
-        is_development_port = port in development_ports or (port != 80 and port != 443)
-        
-        if is_development_port:
-            app.config["SESSION_COOKIE_SECURE"] = False
-            app.logger.info(f"[Session] Development port detected ({port}) — SESSION_COOKIE_SECURE = False")
-        else:
-            app.config["SESSION_COOKIE_SECURE"] = True
-            app.logger.info(f"[Session] Production port detected ({port}) — SESSION_COOKIE_SECURE = True")
+            port = 80
 
-    # Run the app
+        development_ports = [3000, 4000, 5000, 7860, 8000, 8080, 8888, 9000]
+        is_dev = port in development_ports or (port != 80 and port != 443)
+
+        app.config["SESSION_COOKIE_SECURE"] = not is_dev
+        app.logger.info(f"[Session] {'Development' if is_dev else 'Production'} port ({port}) — SESSION_COOKIE_SECURE = {not is_dev}")
+
+    # 🔥 FINAL: Force Flask to bind on all interfaces
+    print("🔁 Launching Flask server on 0.0.0.0:7860")
     app.run(host="0.0.0.0", port=7860, debug=False)
