@@ -330,3 +330,19 @@
 2025-06-17 00:10:38 [DEBUG] auth.user_auth: Module constants - CREDENTIALS_FILE: D:\SimCricketX\auth\credentials.json
 2025-06-17 00:10:38 [DEBUG] auth.user_auth: Module constants - KEY_FILE: D:\SimCricketX\auth\encryption.key
 2025-06-17 00:10:38 [DEBUG] auth.user_auth: AUTH_DIR write permissions verified
+2025-07-13 11:57:12 [DEBUG] auth.user_auth: KEY_FILE path: D:\SimCricketX\auth\encryption.key
+2025-07-13 11:57:12 [DEBUG] auth.user_auth: AUTH_DIR exists: D:\SimCricketX\auth
+2025-07-13 11:57:12 [INFO] auth.user_auth: user_auth module initialization completed
+2025-07-13 11:57:12 [DEBUG] auth.user_auth: Module constants - PROJECT_ROOT: D:\SimCricketX
+2025-07-13 11:57:12 [DEBUG] auth.user_auth: Module constants - AUTH_DIR: D:\SimCricketX\auth
+2025-07-13 11:57:12 [DEBUG] auth.user_auth: Module constants - CREDENTIALS_FILE: D:\SimCricketX\auth\credentials.json
+2025-07-13 11:57:12 [DEBUG] auth.user_auth: Module constants - KEY_FILE: D:\SimCricketX\auth\encryption.key
+2025-07-13 11:57:12 [DEBUG] auth.user_auth: AUTH_DIR write permissions verified
+2025-07-13 11:58:20 [DEBUG] auth.user_auth: KEY_FILE path: D:\SimCricketX\auth\encryption.key
+2025-07-13 11:58:20 [DEBUG] auth.user_auth: AUTH_DIR exists: D:\SimCricketX\auth
+2025-07-13 11:58:20 [INFO] auth.user_auth: user_auth module initialization completed
+2025-07-13 11:58:20 [DEBUG] auth.user_auth: Module constants - PROJECT_ROOT: D:\SimCricketX
+2025-07-13 11:58:20 [DEBUG] auth.user_auth: Module constants - AUTH_DIR: D:\SimCricketX\auth
+2025-07-13 11:58:20 [DEBUG] auth.user_auth: Module constants - CREDENTIALS_FILE: D:\SimCricketX\auth\credentials.json
+2025-07-13 11:58:20 [DEBUG] auth.user_auth: Module constants - KEY_FILE: D:\SimCricketX\auth\encryption.key
+2025-07-13 11:58:20 [DEBUG] auth.user_auth: AUTH_DIR write permissions verified
