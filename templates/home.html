@@ -127,34 +127,59 @@
         }
 
         :root[data-theme="dracula"] {
+            /* Base colors */
             --bg: #282a36;
+            /* VS Code Dracula background :contentReference[oaicite:0]{index=0} */
             --bg-secondary: #44475a;
+            /* Current line / selection :contentReference[oaicite:1]{index=1} */
             --fg: #f8f8f2;
+            /* Foreground :contentReference[oaicite:2]{index=2} */
             --fg-secondary: #6272a4;
+            /* Comments :contentReference[oaicite:3]{index=3} */
+
+            /* Card styling */
             --card-bg: #44475a;
+            /* Matches selection color :contentReference[oaicite:4]{index=4} */
             --card-border: #6272a4;
-            --accent: #bd93f9;
-            --accent-hover: #8be9fd;
-            --accent-light: #44475a;
-            --icon-color: #8be9fd;
-            --gradient: linear-gradient(135deg, #bd93f9, #ff79c6);
-            --gradient-accent: linear-gradient(135deg, #6272a4, #8be9fd);
+            /* Comments color as subtle border :contentReference[oaicite:5]{index=5} */
+
+            /* Accent palette */
+            --accent: #ff79c6;
+            /* Pink (keywords) :contentReference[oaicite:6]{index=6} */
+            --accent-hover: #bd93f9;
+            /* Purple (functions) :contentReference[oaicite:7]{index=7} */
+            --accent-light: rgba(255, 121, 198, 0.1);
+            /* Pink glow */
+
+            /* Icons & highlights */
+            --icon-color: #ff79c6;
+            --gradient: linear-gradient(135deg, #ff79c6 0%, #bd93f9 100%);
+            /* Pink → Purple :contentReference[oaicite:8]{index=8} */
+            --gradient-accent: linear-gradient(135deg, #ff79c6 0%, #8be9fd 100%);
+            /* Pink → Cyan :contentReference[oaicite:9]{index=9} */
         }
 
+
         :root[data-theme="sunset"] {
-            --bg: #2d1b2e;
-            --bg-secondary: #3c1e3d;
-            --fg: #f5e0dc;
-            --fg-secondary: #c9a96e;
-            --card-bg: #3c1e3d;
-            --card-border: #5d2e5f;
-            --accent: #ff6b9d;
-            --accent-hover: #f72585;
-            --accent-light: #5d2e5f;
-            --icon-color: #ff9ede;
-            --gradient: linear-gradient(135deg, #fb7185, #f472b6);
-            --gradient-accent: linear-gradient(135deg, #ff6b9d, #c77dff);
+            /* Elegant cream and gold with deep navy accents */
+            --bg: #faf8f3;
+            --bg-secondary: #f5f2ea;
+            --fg: #2c3e50;
+            --fg-secondary: #7f8c8d;
+            --card-bg: #ffffff;
+            --card-border: #e8dcc0;
+            --accent: #d4af37;
+            /* Classic gold */
+            --accent-hover: #b8941f;
+            --accent-light: rgba(212, 175, 55, 0.1);
+            --icon-color: #d4af37;
+            --shadow: rgba(212, 175, 55, 0.08);
+            --shadow-hover: rgba(212, 175, 55, 0.15);
+            --shadow-strong: rgba(212, 175, 55, 0.2);
+            --gradient: linear-gradient(135deg, #d4af37 0%, #f4e6a1 100%);
+            --gradient-accent: linear-gradient(135deg, #d4af37 0%, #8b7355 100%);
         }
+
 
         * {
             box-sizing: border-box;
@@ -606,6 +631,71 @@
         [data-theme="dracula"] .dashboard-card:hover {
             box-shadow: 0 12px 32px rgba(139, 233, 253, 0.2);
         }
+
+        :root[data-theme="prototype"] {
+            --bg: linear-gradient(135deg, #0f0f0f, #1a1a1a);
+            --bg-secondary: rgba(255, 255, 255, 0.02);
+            --fg: #e0e0e0;
+            --fg-secondary: #a0a0a0;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --accent: #00d4aa;
+            /* default teal green */
+            --accent-hover: #00b894;
+            --accent-light: rgba(0, 212, 170, 0.1);
+            --icon-color: #00d4aa;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --shadow-hover: rgba(0, 0, 0, 0.4);
+            --shadow-strong: rgba(0, 0, 0, 0.5);
+            --gradient: linear-gradient(135deg, #00d4aa, #00b894);
+            --gradient-accent: linear-gradient(45deg, #00d4aa, #ffffff);
+        }
+
+        .theme-option.theme-has-submenu {
+            position: relative;
+            justify-content: space-between;
+        }
+
+        .submenu-arrow {
+            font-size: 0.8rem;
+            color: var(--fg-secondary);
+            margin-left: auto;
+        }
+
+        .submenu {
+            position: absolute;
+            top: 0;
+            right: 100%;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius-sm);
+            box-shadow: 0 8px 20px var(--shadow-strong);
+            padding: 0.75rem;
+            display: none;
+            flex-direction: column;
+            gap: 0.5rem;
+            z-index: 1002;
+            min-width: 70px;
+        }
+
+        .theme-option.theme-has-submenu:hover .submenu {
+            display: flex;
+        }
+
+        .variant-btn {
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            box-shadow: 0 2px 6px var(--shadow);
+            transition: var(--transition);
+        }
+
+        .variant-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px var(--shadow-hover);
+        }
     </style>
 </head>
 
@@ -652,6 +742,29 @@
                         <i class="fa-solid fa-sun theme-icon"></i>
                         <span>Sunset</span>
                     </div>
+                    <div class="theme-option theme-has-submenu" data-theme="prototype">
+                        <i class="fa-solid fa-palette theme-icon"></i>
+                        <span>Shadow</span>
+                        <i class="fa-solid fa-chevron-left submenu-arrow"></i>
+                        <div class="submenu">
+                            <button class="variant-btn" data-primary="#00d4aa" data-light="#00b894"
+                                style="background: #00d4aa;"></button>
+                            <button class="variant-btn" data-primary="#4facfe" data-light="#00f2fe"
+                                style="background: #4facfe;"></button>
+                            <button class="variant-btn" data-primary="#a855f7" data-light="#3b82f6"
+                                style="background: #a855f7;"></button>
+                            <button class="variant-btn" data-primary="#ff6b6b" data-light="#ffa500"
+                                style="background: #ff6b6b;"></button>
+                            <button class="variant-btn" data-primary="#ff758c" data-light="#ff7eb3"
+                                style="background: #ff758c;"></button>
+                            <button class="variant-btn" data-primary="#ffd700" data-light="#ffb347"
+                                style="background: #ffd700;"></button>
+                            <!-- New shiny silver variant -->
+                            <button class="variant-btn" data-primary="#ffffff" data-light="#c0c0c0"
+                                style="background: linear-gradient(135deg, #ffffff, #c0c0c0);"></button>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -659,6 +772,7 @@
 
     <!-- Main Content -->
     <main class="main-content">
+
         <!-- Hero Section -->
         <section class="hero-section">
             <h1 class="hero-title">SimCricketX Dashboard</h1>
@@ -671,13 +785,18 @@
                     <span class="stat-label">Teams Created</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">∞</span>
-                    <span class="stat-label">Matches Simulated</span>
-                </div>
-                <div class="stat-item">
                     <span class="stat-number">6</span>
                     <span class="stat-label">Features Available</span>
                 </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ matches_simulated }}</span>
+                    <span class="stat-label">Matches Simulated</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ total_visits }}</span>
+                    <span class="stat-label">Total Visitors</span>
+                </div>
+
             </div>
         </section>
 
@@ -848,13 +967,67 @@
             e.stopPropagation();
         });
 
-        // Theme Selection
-        document.querySelectorAll('.theme-option').forEach(option => {
+        // Theme Selection - Updated to handle Shadow theme variants properly
+        document.querySelectorAll('.theme-option:not(.theme-has-submenu)').forEach(option => {
             option.addEventListener('click', () => {
                 const theme = option.getAttribute('data-theme');
+
+                // Clear any custom properties set by Shadow theme variants
+                document.documentElement.style.removeProperty('--accent');
+                document.documentElement.style.removeProperty('--accent-hover');
+                document.documentElement.style.removeProperty('--accent-light');
+                document.documentElement.style.removeProperty('--icon-color');
+                document.documentElement.style.removeProperty('--gradient');
+                document.documentElement.style.removeProperty('--gradient-accent');
+
                 document.documentElement.setAttribute('data-theme', theme);
                 localStorage.setItem('theme', theme);
                 updateToggleIcon(theme);
+                dropdown.classList.remove('active');
+            });
+        });
+
+        // Handle Shadow theme selection (without variants)
+        const shadowOpt = document.querySelector('.theme-option.theme-has-submenu');
+        shadowOpt.addEventListener('click', e => {
+            // ignore clicks on the little submenu buttons themselves
+            if (e.target.closest('.variant-btn')) return;
+            document.documentElement.setAttribute('data-theme', 'prototype');
+            localStorage.setItem('theme', 'prototype');
+            updateToggleIcon('prototype');
+            dropdown.classList.remove('active');
+        });
+
+        // Handle Shadow theme variants
+        document.querySelectorAll('.variant-btn').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const primary = this.getAttribute('data-primary');
+                const light = this.getAttribute('data-light');
+
+                // ① Persist the chosen Shadow-variant
+                localStorage.setItem('prototypePrimary', primary);
+                localStorage.setItem('prototypeLight', light);
+
+                // ② Apply prototype theme + icon
+                document.documentElement.setAttribute('data-theme', 'prototype');
+                localStorage.setItem('theme', 'prototype');
+                updateToggleIcon('prototype');
+
+                // ③ Re-apply the CSS vars
+                document.documentElement.style.setProperty('--accent', primary);
+                document.documentElement.style.setProperty('--accent-hover', light);
+                document.documentElement.style.setProperty('--accent-light', `${primary}1a`);
+                document.documentElement.style.setProperty('--icon-color', primary);
+                document.documentElement.style.setProperty(
+                    '--gradient',
+                    `linear-gradient(135deg, ${primary}, ${light})`
+                );
+                document.documentElement.style.setProperty(
+                    '--gradient-accent',
+                    `linear-gradient(45deg, ${primary}, #ffffff)`
+                );
+
                 dropdown.classList.remove('active');
             });
         });
@@ -870,8 +1043,37 @@
             }
         });
 
-        // Auto-dismiss flash messages after 4 seconds
+        // On load: restore theme (and prototype variant), then auto-dismiss flashes
         window.addEventListener('DOMContentLoaded', () => {
+            const root = document.documentElement;
+            const saved = localStorage.getItem('theme');
+
+            // ① If a theme was saved, apply it & restore prototype colors
+            if (saved) {
+                root.setAttribute('data-theme', saved);
+                updateToggleIcon(saved);
+
+                if (saved === 'prototype') {
+                    const primary = localStorage.getItem('prototypePrimary');
+                    const light = localStorage.getItem('prototypeLight');
+                    if (primary && light) {
+                        root.style.setProperty('--accent', primary);
+                        root.style.setProperty('--accent-hover', light);
+                        root.style.setProperty('--accent-light', `${primary}1a`);
+                        root.style.setProperty('--icon-color', primary);
+                        root.style.setProperty(
+                            '--gradient',
+                            `linear-gradient(135deg, ${primary}, ${light})`
+                        );
+                        root.style.setProperty(
+                            '--gradient-accent',
+                            `linear-gradient(45deg, ${primary}, #ffffff)`
+                        );
+                    }
+                }
+            }
+
+            // ② Then auto-dismiss any flash messages after 4 s
             setTimeout(() => {
                 document.querySelectorAll('.flash').forEach(el => {
                     el.classList.add('fade-out');
@@ -879,6 +1081,7 @@
                 });
             }, 4000);
         });
+
 
         // Add smooth scroll behavior for better UX
         document.querySelectorAll('.dashboard-card:not(.disabled)').forEach(card => {
@@ -946,6 +1149,26 @@
             }
         `;
         document.head.appendChild(style);
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const variantContainer = document.querySelector('.prototype-theme-variants');
+            if (!variantContainer) return;   // <<< guard against missing element
+
+            function updateVariantVisibility() {
+                variantContainer.style.display =
+                    document.documentElement.getAttribute('data-theme') === 'prototype'
+                        ? 'block'
+                        : 'none';
+            }
+
+            document.querySelectorAll('.theme-option').forEach(option => {
+                option.addEventListener('click', updateVariantVisibility);
+            });
+
+            updateVariantVisibility();
+        });
+
+
     </script>
 </body>
 
