@@ -14,10 +14,75 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
 
-    <!-- Fetch saved theme or default to light -->
     <script>
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        window.appTheme = savedTheme;
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1️⃣ Grab root & restore saved theme (or default to light)
+            const root = document.documentElement;
+            const saved = localStorage.getItem('theme') || 'light';
+            window.appTheme = saved;
+            root.setAttribute('data-theme', saved);
+
+            // 2️⃣ If Prototype (Shadow), re-apply the last-picked variant colors
+            if (saved === 'prototype') {
+                const primary = localStorage.getItem('prototypePrimary');
+                const light = localStorage.getItem('prototypeLight');
+                if (primary && light) {
+                    root.style.setProperty('--accent', primary);
+                    root.style.setProperty('--accent-hover', light);
+                    root.style.setProperty('--accent-light', `${primary}1a`);
+                    root.style.setProperty('--icon-color', primary);
+                    root.style.setProperty(
+                        '--gradient',
+                        `linear-gradient(135deg, ${primary}, ${light})`
+                    );
+                    root.style.setProperty(
+                        '--gradient-accent',
+                        `linear-gradient(45deg, ${primary}, #ffffff)`
+                    );
+                }
+            }
+
+            // 3️⃣ Wire up the toggle button
+            const ttl = document.getElementById('theme-toggle');
+            // Set its initial icon
+            ttl.textContent = saved === 'dark' ? '☀️' : '🌙';
+
+            // Function to apply & persist a theme (and Prototype variant colors)
+            function applyTheme(t) {
+                root.setAttribute('data-theme', t);
+                ttl.textContent = t === 'dark' ? '☀️' : '🌙';
+                localStorage.setItem('theme', t);
+
+                if (t === 'prototype') {
+                    const primary = localStorage.getItem('prototypePrimary');
+                    const light = localStorage.getItem('prototypeLight');
+                    if (primary && light) {
+                        root.style.setProperty('--accent', primary);
+                        root.style.setProperty('--accent-hover', light);
+                        root.style.setProperty('--accent-light', `${primary}1a`);
+                        root.style.setProperty('--icon-color', primary);
+                        root.style.setProperty(
+                            '--gradient',
+                            `linear-gradient(135deg, ${primary}, ${light})`
+                        );
+                        root.style.setProperty(
+                            '--gradient-accent',
+                            `linear-gradient(45deg, ${primary}, #ffffff)`
+                        );
+                    }
+                }
+            }
+
+            // 4️⃣ Initialize on load
+            applyTheme(window.appTheme);
+
+            // 5️⃣ Toggle handler (dark ↔ light; leaves Prototype untouched)
+            ttl.addEventListener('click', () => {
+                const next = window.appTheme === 'dark' ? 'light' : window.appTheme;
+                window.appTheme = next;
+                applyTheme(next);
+            });
+        });
     </script>
 
     <style>
@@ -62,6 +127,26 @@
             --gradient-accent: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
             --icon-color: #60a5fa;
         }
+
+        /* Shadow / Prototype theme */
+        :root[data-theme="prototype"] {
+            --bg: linear-gradient(135deg, #0f0f0f, #1a1a1a);
+            --bg-secondary: rgba(255, 255, 255, 0.02);
+            --fg: #e0e0e0;
+            --fg-secondary: #a0a0a0;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --accent: #00d4aa;
+            --accent-hover: #00b894;
+            --accent-light: rgba(0, 212, 170, 0.1);
+            --icon-color: #00d4aa;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --shadow-hover: rgba(0, 0, 0, 0.4);
+            --shadow-strong: rgba(0, 0, 0, 0.5);
+            --gradient: linear-gradient(135deg, #00d4aa, #00b894);
+            --gradient-accent: linear-gradient(45deg, #00d4aa, #ffffff);
+        }
+
 
         * {
             box-sizing: border-box;
@@ -896,18 +981,6 @@
         // Teams JSON
         const TEAMS = {{ teams| tojson }};
 
-        // Theme toggle
-        const root = document.documentElement, ttl = document.getElementById('theme-toggle');
-
-        function applyTheme(t) {
-            root.setAttribute('data-theme', t);
-            ttl.textContent = t === 'dark' ? '☀️' : '🌙';
-            // Persist exactly the same key your homepage and other pages read:
-            localStorage.setItem('theme', t);
-        }
-        applyTheme(window.appTheme);
-        ttl.onclick = () => applyTheme(window.appTheme = window.appTheme === 'dark' ? 'light' : 'dark');
-
         // Team selection logic (locks after XI)
         const cards = document.querySelectorAll('.team-card'),
             nextBtn = document.getElementById('next-btn'),
@@ -1030,7 +1103,14 @@
         // Validation (show all rules)
         const tosses = document.getElementsByName('toss'),
             simBtn = document.getElementById('simulate-btn');
+
         function validateAll() {
+
+            if (!selected || selected.length !== 2) {
+                simulateBtn.disabled = true;
+                return;
+            }
+
             const errors = [];
 
             ['home', 'away'].forEach((side, i) => {
@@ -1077,7 +1157,6 @@
             }
         }
         tosses.forEach(r => r.addEventListener('change', validateAll));
-        document.addEventListener('DOMContentLoaded', validateAll);
 
         // FINAL: Handle "Simulate Match" click
         const simulateBtn = document.getElementById('simulate-btn');
