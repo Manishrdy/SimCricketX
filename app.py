@@ -59,6 +59,39 @@ PROD_MAX_AGE = 7 * 24 * 3600
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 CREDENTIALS_FILE = 'auth/credentials.json'
 
+VISIT_FILE = os.path.join(PROJECT_ROOT, "data", "visit_counter.txt")
+MATCHES_FILE = os.path.join(PROJECT_ROOT, "data", "matches_simulated.txt")
+
+def get_matches_simulated():
+    try:
+        with open(MATCHES_FILE, "r") as f:
+            return int(f.read().strip())
+    except Exception:
+        return 0
+
+def increment_matches_simulated():
+    current = get_matches_simulated()
+    try:
+        with open(MATCHES_FILE, "w") as f:
+            f.write(str(current + 1))
+    except Exception as e:
+        print(f"[ERROR] Failed to write matches_simulated: {e}")
+
+def get_visit_counter():
+    try:
+        with open(VISIT_FILE, "r") as f:
+            return int(f.read().strip())
+    except Exception:
+        return 0
+
+def increment_visit_counter():
+    count = get_visit_counter() + 1
+    try:
+        with open(VISIT_FILE, "w") as f:
+            f.write(str(count))
+    except Exception as e:
+        print(f"[ERROR] Could not write visit count: {e}")
+
 
 def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
     """
@@ -248,7 +281,12 @@ def create_app():
     def home():
         print(f"[DEBUG] current_user.is_authenticated = {current_user.is_authenticated}")
         print(f"[DEBUG] current_user.get_id() = {current_user.get_id()}")
-        return render_template("home.html", user=current_user)
+
+        if not session.get("visit_counted"):
+            increment_visit_counter()
+            session["visit_counted"] = True
+            
+        return render_template("home.html", user=current_user, total_visits=get_visit_counter(), matches_simulated=get_matches_simulated())
 
     @app.route("/register", methods=["GET", "POST"])
     def register():
@@ -451,6 +489,7 @@ def create_app():
     @app.route("/logout")
     @login_required
     def logout():
+        session.pop("visit_counted", None)
         app.logger.info(f"Logout for {current_user.id}")
         logout_user()
         session.pop('_flashes', None)  # ⬅️ Clear previous flash messages
@@ -900,6 +939,7 @@ def create_app():
             flash("❌ Match not found or access denied.", "danger")
             return redirect(url_for("home"))
 
+        increment_matches_simulated()
         # Render the detail page, passing the loaded JSON
         return render_template("match_detail.html", match=match_data)
     

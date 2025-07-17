@@ -119,11 +119,6 @@
         });
     </script>
 
-    <script>
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        window.appTheme = savedTheme;
-    </script>
-
     <style>
         /* Theme Variables (reuse from match_setup.html exactly) */
         :root {
@@ -145,6 +140,34 @@
             --shadow: rgba(0, 0, 0, 0.5);
             --gradient: linear-gradient(135deg, #4a90e2, #357ab7);
         }
+
+        /* Shadow / Prototype theme */
+        :root[data-theme="prototype"] {
+            --bg: linear-gradient(135deg, #0f0f0f, #1a1a1a);
+            --bg-secondary: rgba(255, 255, 255, 0.02);
+            --fg: #e0e0e0;
+            --fg-secondary: #a0a0a0;
+
+            /* Make cards & overlays opaque enough to read */
+            --card-bg: rgba(255, 255, 255, 0.20);
+            /* ↑ bump from 0.03 to 0.20 */
+            --card-border: rgba(255, 255, 255, 0.15);
+
+            /* Panels (Playing XI, Commentary, etc.) */
+            --input-bg: rgba(255, 255, 255, 0.10);
+            /* ↑ new */
+
+            --accent: #00d4aa;
+            --accent-hover: #00b894;
+            --accent-light: rgba(0, 212, 170, 0.1);
+            --icon-color: #00d4aa;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --shadow-hover: rgba(0, 0, 0, 0.4);
+            --shadow-strong: rgba(0, 0, 0, 0.5);
+            --gradient: linear-gradient(135deg, #00d4aa, #00b894);
+            --gradient-accent: linear-gradient(45deg, #00d4aa, #ffffff);
+        }
+
 
         * {
             box-sizing: border-box;
@@ -362,19 +385,17 @@
             font-weight: bold;
         } */
 
+        /* theme-aware scorecard header */
         .scorecard-header {
             text-align: center;
             margin-bottom: 1.5rem;
-            background: white;
-            /* Change this from: background: var(--gradient); */
-            color: var(--accent);
-            /* Change this from: color: transparent; */
-            /* Remove this line: -webkit-background-clip: text; */
+            background: var(--card-bg);
+            color: var(--fg);
             font-size: 1.5rem;
             font-weight: bold;
             padding: 1rem;
-            /* Add this for better spacing */
         }
+
 
         .scorecard-table {
             width: 100%;
@@ -2150,19 +2171,68 @@
 
             console.log(`✅ Match report saved as: ${filename}`);
         }
+    </script>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const root = document.documentElement;
+            const theme = localStorage.getItem('theme') || 'light';
+            const toggleBtn = document.getElementById('theme-toggle');
 
-        // Theme toggle (consistent with match_setup.html)
-        const root = document.documentElement, ttl = document.getElementById('theme-toggle');
+            // ① Apply base theme & restore Shadow-variant (if any)
+            root.setAttribute('data-theme', theme);
+            toggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
 
-        function applyTheme(t) {
-            root.setAttribute('data-theme', t);
-            ttl.textContent = t === 'dark' ? '☀️' : '🌙';
-            localStorage.setItem('theme', t);
-        }
+            if (theme === 'prototype') {
+                const p = localStorage.getItem('prototypePrimary');
+                const l = localStorage.getItem('prototypeLight');
+                if (p && l) {
+                    root.style.setProperty('--accent', p);
+                    root.style.setProperty('--accent-hover', l);
+                    root.style.setProperty('--accent-light', `${p}1a`);
+                    root.style.setProperty('--icon-color', p);
+                    root.style.setProperty(
+                        '--gradient',
+                        `linear-gradient(135deg, ${p}, ${l})`
+                    );
+                    root.style.setProperty(
+                        '--gradient-accent',
+                        `linear-gradient(45deg, ${p}, #ffffff)`
+                    );
+                }
+            }
 
-        applyTheme(window.appTheme);
-        ttl.onclick = () => applyTheme(window.appTheme = window.appTheme === 'dark' ? 'light' : 'dark');
+            // ② Toggle handler
+            function applyTheme(t) {
+                root.setAttribute('data-theme', t);
+                localStorage.setItem('theme', t);
+                toggleBtn.textContent = t === 'dark' ? '☀️' : '🌙';
+                if (t === 'prototype') {
+                    const p = localStorage.getItem('prototypePrimary');
+                    const l = localStorage.getItem('prototypeLight');
+                    if (p && l) {
+                        root.style.setProperty('--accent', p);
+                        root.style.setProperty('--accent-hover', l);
+                        root.style.setProperty('--accent-light', `${p}1a`);
+                        root.style.setProperty('--icon-color', p);
+                        root.style.setProperty(
+                            '--gradient',
+                            `linear-gradient(135deg, ${p}, ${l})`
+                        );
+                        root.style.setProperty(
+                            '--gradient-accent',
+                            `linear-gradient(45deg, ${p}, #ffffff)`
+                        );
+                    }
+                }
+            }
+
+            toggleBtn.addEventListener('click', () => {
+                // dark ↔ light; leave Prototype untouched
+                const next = theme === 'dark' ? 'light' : theme;
+                applyTheme(next);
+            });
+        });
     </script>
 
 

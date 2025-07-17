@@ -88,6 +88,24 @@
             --gradient: linear-gradient(135deg, #f472b6, #ec4899);
         }
 
+        /* Shadow / Prototype theme */
+        :root[data-theme="prototype"] {
+            --bg: linear-gradient(135deg, #0f0f0f, #1a1a1a);
+            --fg: #e0e0e0;
+            --card-bg: rgba(255, 255, 255, 0.20);
+            --glass-bg: rgba(255, 255, 255, 0.10);
+            --accent: #00d4aa;
+            --accent-hover: #00b894;
+            --accent-light: rgba(0, 212, 170, 0.1);
+            --shadow: rgba(0, 0, 0, 0.3);
+            --shadow-strong: rgba(0, 0, 0, 0.5);
+            --gradient: linear-gradient(135deg, #00d4aa, #00b894);
+            --border: rgba(255, 255, 255, 0.15);
+            --cricket-primary: #00d4aa;
+            --cricket-secondary: #00b894;
+        }
+
+
         /* ──────────────────────────────────────────────────────────────────────────── */
         /*                              GLOBAL FOUNDATION                                */
         /* ──────────────────────────────────────────────────────────────────────────── */
@@ -1090,7 +1108,21 @@
             const theme = localStorage.getItem('theme') || 'light';
             root.setAttribute('data-theme', theme);
             updateToggleIcon(theme);
+
+            // If Prototype, restore the last-picked Shadow variant colors
+            if (theme === 'prototype') {
+                const primary = localStorage.getItem('prototypePrimary');
+                const light = localStorage.getItem('prototypeLight');
+                if (primary && light) {
+                    root.style.setProperty('--accent', primary);
+                    root.style.setProperty('--accent-hover', light);
+                    root.style.setProperty('--accent-light', `${primary}1a`);
+                    root.style.setProperty('--gradient', `linear-gradient(135deg, ${primary}, ${light})`);
+                    root.style.setProperty('--gradient-accent', `linear-gradient(45deg, ${primary}, #ffffff)`);
+                }
+            }
         }
+
 
         themeToggleBtn.addEventListener('click', () => {
             const current = root.getAttribute('data-theme') || 'light';

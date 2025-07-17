@@ -2,10 +2,7 @@
 <html lang="en">
 
 <head>
-  <script>
-    const saved = localStorage.getItem('theme');
-    if (saved) document.documentElement.setAttribute('data-theme', saved);
-  </script>
+
   <meta charset="UTF-8">
   <title>{{ "Edit Team" if edit else "Create Team" }} – SimCricketX</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -155,6 +152,27 @@
       --gradient: linear-gradient(135deg, #fb7185, #f472b6);
       --gradient-accent: linear-gradient(135deg, #ff6b9d, #c77dff);
     }
+
+    /* Shadow / Prototype theme */
+    :root[data-theme="prototype"] {
+      --bg: linear-gradient(135deg, #0f0f0f, #1a1a1a);
+      --bg-secondary: rgba(255, 255, 255, 0.02);
+      --fg: #e0e0e0;
+      --fg-secondary: #a0a0a0;
+      --card-bg: rgba(255, 255, 255, 0.20);
+      --input-bg: rgba(255, 255, 255, 0.10);
+      --card-border: rgba(255, 255, 255, 0.15);
+      --accent: #00d4aa;
+      --accent-hover: #00b894;
+      --accent-light: rgba(0, 212, 170, 0.1);
+      --icon-color: #00d4aa;
+      --shadow: rgba(0, 0, 0, 0.3);
+      --shadow-hover: rgba(0, 0, 0, 0.4);
+      --shadow-strong: rgba(0, 0, 0, 0.5);
+      --gradient: linear-gradient(135deg, #00d4aa, #00b894);
+      --gradient-accent: linear-gradient(45deg, #00d4aa, #ffffff);
+    }
+
 
     * {
       box-sizing: border-box;
@@ -943,18 +961,6 @@
       titleEl.textContent = teamInput.value || 'Team Creation';
     };
 
-    // Theme Toggle
-    const toggle = document.getElementById('theme-toggle');
-    const root = document.documentElement;
-    if (localStorage.theme) root.setAttribute('data-theme', localStorage.theme);
-    toggle.onclick = () => {
-      const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      root.setAttribute('data-theme', next);
-      localStorage.theme = next;
-      toggle.textContent = next === 'dark' ? '☀️' : '🌙';
-    };
-    toggle.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
-
     // Player Logic
     const container = document.getElementById('players-container');
     const countEl = document.getElementById('player-count');
@@ -1209,6 +1215,67 @@
     // Initial validation check
     updateSubmitButtons();
   </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const root = document.documentElement;
+      const theme = localStorage.getItem('theme') || 'light';
+      const toggleBtn = document.getElementById('theme-toggle');
+
+      // Apply base theme & restore Prototype variant if set
+      root.setAttribute('data-theme', theme);
+      toggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
+
+      if (theme === 'prototype') {
+        const p = localStorage.getItem('prototypePrimary');
+        const l = localStorage.getItem('prototypeLight');
+        if (p && l) {
+          root.style.setProperty('--accent', p);
+          root.style.setProperty('--accent-hover', l);
+          root.style.setProperty('--accent-light', `${p}1a`);
+          root.style.setProperty('--icon-color', p);
+          root.style.setProperty(
+            '--gradient',
+            `linear-gradient(135deg, ${p}, ${l})`
+          );
+          root.style.setProperty(
+            '--gradient-accent',
+            `linear-gradient(45deg, ${p}, #ffffff)`
+          );
+        }
+      }
+
+      // Toggle handler (dark ↔ light; leaves Prototype intact)
+      function applyTheme(t) {
+        root.setAttribute('data-theme', t);
+        localStorage.setItem('theme', t);
+        toggleBtn.textContent = t === 'dark' ? '☀️' : '🌙';
+        if (t === 'prototype') {
+          const p = localStorage.getItem('prototypePrimary');
+          const l = localStorage.getItem('prototypeLight');
+          if (p && l) {
+            root.style.setProperty('--accent', p);
+            root.style.setProperty('--accent-hover', l);
+            root.style.setProperty('--accent-light', `${p}1a`);
+            root.style.setProperty('--icon-color', p);
+            root.style.setProperty(
+              '--gradient',
+              `linear-gradient(135deg, ${p}, ${l})`
+            );
+            root.style.setProperty(
+              '--gradient-accent',
+              `linear-gradient(45deg, ${p}, #ffffff)`
+            );
+          }
+        }
+      }
+
+      toggleBtn.addEventListener('click', () => {
+        const next = theme === 'dark' ? 'light' : theme;
+        applyTheme(next);
+      });
+    });
+  </script>
+
 </body>
 
 </html>

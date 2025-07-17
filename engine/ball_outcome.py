@@ -346,27 +346,25 @@ def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
 # 3) Pitch-specific outcome probabilities (realistic scoring patterns)
 # -----------------------------------------------------------------------------
 PITCH_SCORING_MATRIX = {
-    "Green": {
-        # Pace-friendly, lower scoring (≤140 average, ~6-7 wickets)
-        "Dot":     0.37,   # Reduced from 0.39 (slightly more scoring)
-        "Single":  0.33,   # Increased from 0.34 
-        "Double":  0.07,   # Increased from 0.06
-        "Three":   0.01,   
-        "Four":    0.07,   # Increased from 0.06
-        "Six":     0.025,  # Increased from 0.02
-        "Wicket":  0.075,  
-        "Extras":  0.05    # Increased from 0.045
+        "Green": {
+        "Dot":     0.4000,
+        "Single":  0.3619,
+        "Double":  0.0556,
+        "Three":   0.0079,
+        "Four":    0.0556,
+        "Six":     0.0198,
+        "Wicket":  0.0595,
+        "Extras":  0.0397
     },
     "Dry": {
-        # Spin-friendly, lower scoring (≤140 average, ~6-7 wickets)
-        "Dot":     0.31,   # Reduced from 0.33 (slightly more scoring)
-        "Single":  0.325,   # Increased from 0.33
-        "Double":  0.10,   # Increased from 0.09
-        "Three":   0.04,   
-        "Four":    0.07,   # Increased from 0.06
-        "Six":     0.025,  # Increased from 0.02
-        "Wicket":  0.075,  
-        "Extras":  0.055   
+        "Dot":     0.4000,
+        "Single":  0.3355,
+        "Double":  0.0725,
+        "Three":   0.0290,
+        "Four":    0.0507,
+        "Six":     0.0181,
+        "Wicket":  0.0543,
+        "Extras":  0.0399
     },
     "Hard": {
         # Balanced pitch (150-170 average, ~6-7 wickets)
