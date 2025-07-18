@@ -1268,6 +1268,29 @@
             });
         });
     </script>
+    <script>
+        function confirmDelete(shortCode) {
+            if (confirm(`Are you sure you want to delete team "${shortCode}"?`)) {
+                fetch("/team/delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: `short_code=${encodeURIComponent(shortCode)}`
+                }).then(res => {
+                    if (res.redirected) {
+                        window.location.href = res.url;
+                    } else {
+                        alert("❌ Failed to delete team.");
+                    }
+                });
+            }
+        }
+
+        function editTeam(shortCode) {
+            window.location.href = `/team/${shortCode}/edit`;
+        }
+    </script>
+
+
 </body>
 
 </html>
