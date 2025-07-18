@@ -943,6 +943,25 @@ def create_app():
         # Render the detail page, passing the loaded JSON
         return render_template("match_detail.html", match=match_data)
     
+    @app.route("/teams/<short_code>/delete", methods=["DELETE"])
+    @login_required
+    def delete_team_rest(short_code):
+        teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
+        filename = f"{short_code}_{current_user.id}.json"
+        team_path = os.path.join(teams_dir, filename)
+
+        if not os.path.exists(team_path):
+            return jsonify({"error": "Team not found"}), 404
+
+        try:
+            os.remove(team_path)
+            app.logger.info(f"Team '{short_code}' deleted by {current_user.id}")
+            return jsonify({"success": True})
+        except Exception as e:
+            app.logger.error(f"Error deleting team file: {e}", exc_info=True)
+            return jsonify({"error": "Internal server error"}), 500
+
+
     @app.route("/match/<match_id>/set-toss", methods=["POST"])
     @login_required
     def set_toss(match_id):
