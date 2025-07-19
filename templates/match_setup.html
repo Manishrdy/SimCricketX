@@ -519,6 +519,9 @@
             border-radius: var(--border-radius-sm);
             background: var(--bg-secondary);
             transition: var(--transition);
+            /* Fix mobile scrolling */
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
         }
 
         .bars.drag-over {
@@ -789,6 +792,19 @@
             .bars {
                 min-height: 150px;
                 max-height: 350px;
+                /* Enhanced mobile scrolling */
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+                scroll-behavior: smooth;
+            }
+
+            /* Add touch-friendly drag indicators */
+            .player-bar {
+                touch-action: pan-y;
+            }
+
+            .player-bar:active {
+                transform: scale(0.98);
             }
         }
 
@@ -823,6 +839,36 @@
 
         .loading #simulate-btn {
             background: var(--fg-secondary);
+        }
+
+        /* Visual feedback for click actions */
+        .player-bar {
+            position: relative;
+            user-select: none;
+        }
+
+        .player-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--accent);
+            opacity: 0;
+            border-radius: var(--border-radius-sm);
+            pointer-events: none;
+            transition: opacity 0.1s ease;
+        }
+
+        .player-bar:active::after {
+            opacity: 0.1;
+        }
+
+        /* Capacity limit visual feedback */
+        .bars.capacity-full {
+            border-color: var(--danger) !important;
+            background: rgba(239, 68, 68, 0.05);
         }
     </style>
 </head>
@@ -1048,14 +1094,43 @@
                     bar.innerHTML = `<span class="info">${roleIcons[p.role] || ''} ${p.name}</span>` +
                         ((['Bowler', 'All-rounder'].includes(p.role))
                             ? `<span class="controls">
-                                   <label>
-                                     <input type="checkbox" class="will-bowl">
-                                     <i class="fa fa-dot-circle"></i> Bowl
-                                   </label>
-                               </span>`
+                       <label>
+                         <input type="checkbox" class="will-bowl">
+                         <i class="fa fa-dot-circle"></i> Bowl
+                       </label>
+                   </span>`
                             : '');
                     bar.addEventListener('dragstart', () => bar.classList.add('dragging'));
                     bar.addEventListener('dragend', () => { bar.classList.remove('dragging'); validateAll(); });
+
+                    // Add double/triple click functionality
+                    let clickCount = 0;
+                    let clickTimer = null;
+
+                    bar.addEventListener('click', (e) => {
+                        // Prevent triggering on checkbox/label clicks
+                        if (e.target.type === 'checkbox' || e.target.tagName === 'LABEL' || e.target.closest('label')) {
+                            return;
+                        }
+
+                        clickCount++;
+
+                        if (clickTimer) {
+                            clearTimeout(clickTimer);
+                        }
+
+                        clickTimer = setTimeout(() => {
+                            if (clickCount === 2) {
+                                // Double click - move to Playing XI
+                                movePlayerToSection(bar, side, 'selected');
+                            } else if (clickCount === 3) {
+                                // Triple click - move to Substitutes
+                                movePlayerToSection(bar, side, 'substitutes');
+                            }
+                            clickCount = 0;
+                        }, 300); // 300ms timeout for detecting multiple clicks
+                    });
+
                     avail.appendChild(bar);
                 });
             });
@@ -1088,6 +1163,54 @@
                         ? { offset, element: child }
                         : closest;
                 }, { offset: -Infinity }).element;
+        }
+
+        // Helper function to move player between sections
+        function movePlayerToSection(playerBar, side, targetSection) {
+            const targetContainer = document.getElementById(`${side}-${targetSection}`);
+            const currentContainer = playerBar.parentElement;
+
+            // Check capacity limits
+            if (targetSection === 'selected') {
+                const currentCount = targetContainer.querySelectorAll('.player-bar').length;
+                if (currentCount >= 11) {
+                    // Show brief visual feedback
+                    targetContainer.style.borderColor = 'var(--danger)';
+                    setTimeout(() => {
+                        targetContainer.style.borderColor = '';
+                    }, 1000);
+                    return;
+                }
+            } else if (targetSection === 'substitutes') {
+                const currentCount = targetContainer.querySelectorAll('.player-bar').length;
+                if (currentCount >= 5) {
+                    // Show brief visual feedback
+                    targetContainer.style.borderColor = 'var(--danger)';
+                    setTimeout(() => {
+                        targetContainer.style.borderColor = '';
+                    }, 1000);
+                    return;
+                }
+            }
+
+            // Add smooth transition effect
+            playerBar.style.transform = 'scale(0.95)';
+            playerBar.style.opacity = '0.7';
+
+            setTimeout(() => {
+                targetContainer.appendChild(playerBar);
+                playerBar.style.transform = '';
+                playerBar.style.opacity = '';
+
+                // Show success feedback
+                targetContainer.style.borderColor = 'var(--success)';
+                setTimeout(() => {
+                    targetContainer.style.borderColor = '';
+                }, 500);
+
+                updatePlayerCounts();
+                validateAll();
+            }, 150);
         }
 
         // Live selected count
