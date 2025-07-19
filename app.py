@@ -1743,6 +1743,11 @@ def create_app():
             print(f"Error saving scorecard images: {e}")
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/statistics")
+    @login_required
+    def statistics():
+        return render_template("statistics.html", user=current_user)
+
     return app
 
 # ────── Run Server ──────

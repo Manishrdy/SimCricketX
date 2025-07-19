@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <script>
+        // Immediately apply the saved theme from localStorage to prevent flash of unstyled content.
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+        // Persist custom prototype colors if they exist.
+        const prototypePrimary = localStorage.getItem('prototypePrimary');
+        if (savedTheme === 'prototype' && prototypePrimary) {
+            const prototypeLight = localStorage.getItem('prototypeLight');
+            const rootStyle = document.documentElement.style;
+            rootStyle.setProperty('--accent', prototypePrimary);
+            rootStyle.setProperty('--accent-hover', prototypeLight);
+            rootStyle.setProperty('--gradient-accent', `linear-gradient(45deg, ${prototypePrimary}, #ffffff)`);
+        }
+    </script>
+    <meta charset="UTF-8">
+    <title>The Architect's Holo-Deck - SimCricketX</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Modern CSS Reset -->
+    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* Inheriting all theme variables for consistency */
+        :root {
+            --bg: #fafbfc;
+            --bg-secondary: #f5f6f8;
+            --fg: #1a1d23;
+            --fg-secondary: #6b7280;
+            --card-bg: #ffffff;
+            --card-border: #e5e7eb;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-light: #dbeafe;
+            --shadow: rgba(0, 0, 0, 0.04);
+            --shadow-hover: rgba(0, 0, 0, 0.08);
+            --shadow-strong: rgba(0, 0, 0, 0.12);
+            --gradient-accent: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            --icon-color: #3b82f6;
+            --success: #10b981;
+            --border-radius: 16px;
+            --border-radius-sm: 8px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-theme="dark"] {
+            --bg: #0f1419;
+            --bg-secondary: #1a1f2e;
+            --fg: #f9fafb;
+            --fg-secondary: #9ca3af;
+            --card-bg: #1e293b;
+            --card-border: #334155;
+            --accent: #60a5fa;
+            --accent-hover: #3b82f6;
+            --accent-light: #1e3a8a;
+            --shadow: rgba(0, 0, 0, 0.2);
+            --shadow-hover: rgba(0, 0, 0, 0.3);
+            --shadow-strong: rgba(0, 0, 0, 0.4);
+            --gradient-accent: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+            --icon-color: #60a5fa;
+        }
+
+        [data-theme="nord"] {
+            --bg: #eceff4;
+            --bg-secondary: #e5e9f0;
+            --fg: #2e3440;
+            --fg-secondary: #4c566a;
+            --card-bg: #ffffff;
+            --card-border: #d8dee9;
+            --accent: #5e81ac;
+            --accent-hover: #4c6994;
+            --accent-light: #e8f0ff;
+            --icon-color: #5e81ac;
+        }
+
+        [data-theme="retro"] {
+            --bg: #fef7ed;
+            --bg-secondary: #fed7aa;
+            --fg: #7c2d12;
+            --fg-secondary: #a16207;
+            --card-bg: #ffffff;
+            --card-border: #fed7aa;
+            --accent: #ea580c;
+            --accent-hover: #dc2626;
+            --accent-light: #fff7ed;
+            --icon-color: #ea580c;
+        }
+
+        [data-theme="cupcake"] {
+            --bg: #fdf2f8;
+            --bg-secondary: #fce7f3;
+            --fg: #831843;
+            --fg-secondary: #be185d;
+            --card-bg: #ffffff;
+            --card-border: #f9a8d4;
+            --accent: #ec4899;
+            --accent-hover: #db2777;
+            --accent-light: #fdf2f8;
+            --icon-color: #ec4899;
+        }
+
+        [data-theme="dim"] {
+            --bg: #1f2937;
+            --bg-secondary: #374151;
+            --fg: #f9fafb;
+            --fg-secondary: #d1d5db;
+            --card-bg: #374151;
+            --card-border: #4b5563;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --accent-light: #312e81;
+            --icon-color: #818cf8;
+        }
+
+        [data-theme="dracula"] {
+            --bg: #282a36;
+            --bg-secondary: #44475a;
+            --fg: #f8f8f2;
+            --fg-secondary: #6272a4;
+            --card-bg: #44475a;
+            --card-border: #6272a4;
+            --accent: #ff79c6;
+            --accent-hover: #bd93f9;
+            --accent-light: rgba(255, 121, 198, 0.1);
+            --icon-color: #ff79c6;
+        }
+
+        [data-theme="sunset"] {
+            --bg: #faf8f3;
+            --bg-secondary: #f5f2ea;
+            --fg: #2c3e50;
+            --fg-secondary: #7f8c8d;
+            --card-bg: #ffffff;
+            --card-border: #e8dcc0;
+            --accent: #d4af37;
+            --accent-hover: #b8941f;
+            --accent-light: rgba(212, 175, 55, 0.1);
+            --icon-color: #d4af37;
+        }
+
+        [data-theme="prototype"] {
+            --bg: #0f1419;
+            --bg-secondary: rgba(255, 255, 255, 0.02);
+            --fg: #e0e0e0;
+            --fg-secondary: #a0a0a0;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --accent: #00d4aa;
+            --accent-hover: #00b894;
+            --accent-light: rgba(0, 212, 170, 0.1);
+            --icon-color: #00d4aa;
+            --gradient-accent: linear-gradient(45deg, #00d4aa, #ffffff);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            height: 100%;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--fg);
+            font-family: 'Inter', sans-serif;
+            min-height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .nav-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: transparent;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--gradient-accent);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .main-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            gap: 2rem;
+        }
+
+        /* Holo-Deck Pitch Area */
+        .holo-deck {
+            flex-basis: 60%;
+            height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pitch-area {
+            width: 300px;
+            height: 600px;
+            border: 2px solid var(--accent);
+            border-radius: 150px / 30px;
+            position: relative;
+            background: radial-gradient(ellipse at center, var(--accent-light) 0%, transparent 70%);
+            box-shadow: 0 0 15px var(--accent), inset 0 0 15px var(--accent-light);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .pitch-area.dragover {
+            transform: scale(1.05);
+            box-shadow: 0 0 35px var(--accent), inset 0 0 25px var(--accent-light);
+        }
+
+        .crease {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 4px;
+            background: var(--accent);
+        }
+
+        .crease.top {
+            top: 50px;
+        }
+
+        .crease.bottom {
+            bottom: 50px;
+        }
+
+        .stumps {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+        }
+
+        .stump {
+            width: 8px;
+            height: 60px;
+            background: var(--accent);
+            border-radius: 4px;
+            box-shadow: 0 0 8px var(--accent);
+            transition: var(--transition);
+        }
+
+        .pitch-area.dragover .stump {
+            background: var(--success);
+            box-shadow: 0 0 15px var(--success);
+            transform: scale(1.1);
+        }
+
+        .upload-prompt {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--fg);
+            font-weight: 500;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .upload-prompt i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: block;
+            color: var(--accent);
+            text-shadow: 0 0 10px var(--accent);
+        }
+
+        /* Dossier (File List) Area */
+        .dossier-area {
+            flex-basis: 40%;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background: rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--card-border);
+            backdrop-filter: blur(10px);
+        }
+
+        #dossier-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding-right: 1rem;
+        }
+
+        .dossier-card {
+            background: var(--card-bg);
+            border-left: 4px solid var(--accent);
+            border-radius: var(--border-radius-sm);
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .dossier-icon {
+            font-size: 2rem;
+            color: var(--accent);
+        }
+
+        .dossier-details {
+            flex-grow: 1;
+        }
+
+        .dossier-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            word-break: break-all;
+        }
+
+        .dossier-status {
+            font-size: 0.8rem;
+            color: var(--fg-secondary);
+        }
+
+        .dossier-remove {
+            background: none;
+            border: none;
+            color: var(--fg-secondary);
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        .dossier-remove:hover {
+            color: var(--danger);
+        }
+
+        /* Submit Button */
+        .submit-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px var(--shadow-hover);
+        }
+
+        .submit-btn:disabled {
+            background-color: var(--fg-secondary);
+            cursor: not-allowed;
+        }
+
+        .home-link {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            color: var(--fg-secondary);
+            text-decoration: none;
+            z-index: 10;
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="particle-canvas"></canvas>
+
+    <header class="nav-header">
+        <a href="home.html" style="text-decoration: none;">
+            <div class="logo">
+                <i class="fa-solid fa-cricket-bat-ball logo-icon"></i>
+                <span>SimCricketX Architect</span>
+            </div>
+        </a>
+    </header>
+
+    <main class="main-content">
+        <div class="holo-deck">
+            <label for="file-input" class="pitch-area" id="pitch-area">
+                <div class="crease top"></div>
+                <div class="stumps">
+                    <div class="stump"></div>
+                    <div class="stump"></div>
+                    <div class="stump"></div>
+                </div>
+                <div class="upload-prompt" id="upload-prompt">
+                    <i class="fa-solid fa-file-csv"></i>
+                    Drop CSV Files on Pitch
+                </div>
+                <div class="crease bottom"></div>
+            </label>
+        </div>
+
+        <aside class="dossier-area">
+            <h2 style="text-align: center; font-family: 'JetBrains Mono', monospace;">PLAYER DATA DOSSIERS</h2>
+            <div id="dossier-container">
+                <!-- Dossier cards will be injected here -->
+            </div>
+            <input type="file" id="file-input" accept=".csv" multiple style="display: none;">
+            <button type="submit" class="submit-btn" id="submit-button" disabled>
+                <i class="fa-solid fa-paper-plane"></i>
+                Finalize Draft
+            </button>
+        </aside>
+
+        <a href="home.html" class="home-link"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
+    </main>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const pitchArea = document.getElementById('pitch-area');
+        const dossierContainer = document.getElementById('dossier-container');
+        const submitButton = document.getElementById('submit-button');
+
+        let stagedFiles = new Map();
+
+        function updateUI() {
+            dossierContainer.innerHTML = '';
+            if (stagedFiles.size === 0) {
+                dossierContainer.innerHTML = '<p style="text-align:center; color: var(--fg-secondary); font-family: \'JetBrains Mono\', monospace;">Awaiting player data...</p>';
+            } else {
+                stagedFiles.forEach((file, name) => {
+                    const dossierCard = document.createElement('div');
+                    dossierCard.className = 'dossier-card';
+                    dossierCard.innerHTML = `
+                        <div class="dossier-icon"><i class="fa-solid fa-file-csv"></i></div>
+                        <div class="dossier-details">
+                            <div class="dossier-name">${file.name}</div>
+                            <div class="dossier-status">Ready for drafting</div>
+                        </div>
+                        <button class="dossier-remove" data-filename="${file.name}" title="Remove file">&times;</button>
+                    `;
+                    dossierContainer.appendChild(dossierCard);
+                });
+            }
+            submitButton.disabled = stagedFiles.size === 0;
+        }
+
+        function handleFiles(files) {
+            for (const file of files) {
+                if (file.type === 'text/csv' && !stagedFiles.has(file.name)) {
+                    stagedFiles.set(file.name, file);
+                }
+            }
+            updateUI();
+        }
+
+        fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+        pitchArea.addEventListener('click', () => fileInput.click());
+
+        dossierContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('dossier-remove')) {
+                const filename = e.target.dataset.filename;
+                stagedFiles.delete(filename);
+                updateUI();
+            }
+        });
+
+        submitButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (stagedFiles.size === 0) return;
+
+            // In a real app, you would upload the files here.
+            // const formData = new FormData();
+            // stagedFiles.forEach(file => formData.append('files', file));
+            // fetch('/upload-endpoint', { method: 'POST', body: formData });
+
+            submitButton.innerHTML = `<i class="fa-solid fa-check"></i> Draft Finalized!`;
+            submitButton.style.backgroundColor = 'var(--success)';
+
+            setTimeout(() => {
+                stagedFiles.clear();
+                updateUI();
+                submitButton.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Finalize Draft`;
+                submitButton.style.backgroundColor = '';
+            }, 2000);
+        });
+
+        // --- Drag and Drop Logic ---
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); });
+        });
+        ['dragenter', 'dragover'].forEach(eventName => {
+            pitchArea.addEventListener(eventName, () => pitchArea.classList.add('dragover'));
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            pitchArea.addEventListener(eventName, () => pitchArea.classList.remove('dragover'));
+        });
+        pitchArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+
+        // --- Animated Particle Background (retained from previous version) ---
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        function getThemeColor() { return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(); }
+        class Particle {
+            constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height; this.size = Math.random() * 2 + 1; this.speedX = Math.random() * 0.5 - 0.25; this.speedY = Math.random() * 0.5 - 0.25; }
+            update() { this.x += this.speedX; this.y += this.speedY; if (this.x > canvas.width || this.x < 0) this.speedX *= -1; if (this.y > canvas.height || this.y < 0) this.speedY *= -1; }
+            draw() { ctx.fillStyle = getThemeColor(); ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); }
+        }
+        function initParticles() { particles = []; let num = (canvas.width * canvas.height) / 12000; for (let i = 0; i < num; i++) particles.push(new Particle()); }
+        function animate() { ctx.clearRect(0, 0, canvas.width, canvas.height); for (let p of particles) { p.update(); p.draw(); } requestAnimationFrame(animate); }
+        window.addEventListener('resize', () => { resizeCanvas(); initParticles(); });
+
+        // Initial setup
+        updateUI();
+        resizeCanvas();
+        initParticles();
+        animate();
+    </script>
+</body>
+
+</html>
