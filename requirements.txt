@@ -4,10 +4,12 @@ PyYAML>=5.4
 cryptography>=3.4
 gspread>=5.0.0
 google-auth>=2.0.0
-tabulate>=0.8.9
 psutil
 beautifulsoup4
 gunicorn
 pyinstaller  # Tool for bundling
 waitress     # Windows-compatible production server
 cffi
+werkzeug
+pandas
+tabulate

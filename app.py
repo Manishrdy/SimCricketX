@@ -41,6 +41,14 @@ import sys
 import traceback
 from flask_login import UserMixin
 from auth.user_auth import load_credentials, save_credentials
+from werkzeug.utils import secure_filename
+from engine.stats_aggregator import StatsAggregator 
+import glob
+import pandas as pd 
+from tabulate import tabulate
+from flask import Response
+import io
+
 
 # Add this import for system monitoring
 try:
@@ -211,56 +219,79 @@ def create_app():
         is_secure = request.is_secure or (request.headers.get('X-Forwarded-Proto') == 'https')
         app.config["SESSION_COOKIE_SECURE"] = is_secure
         app.logger.info(f"[Session] Setting SESSION_COOKIE_SECURE to {is_secure} (HTTPS: {request.scheme}, X-Forwarded-Proto: {request.headers.get('X-Forwarded-Proto')})")
-    
 
-    # 1a) Try to read from config file
+    # --- Secret key setup ---
     secret = None
     try:
         secret = config.get("app", {}).get("secret_key", None)
         if not secret or not isinstance(secret, str):
             raise ValueError("Invalid secret_key in config")
     except Exception as e:
-        # Log if config file is missing or malformed
         print(f"[WARN] Could not read secret_key from config.yaml: {e}")
 
-    # 1b) Fallback to an environment variable (HF Secrets) or hardcoded fallback
     if not secret:
         secret = os.getenv("FLASK_SECRET_KEY", None)
         if not secret:
-            # Last fallback (non-secure): random bytes on each start
-            # WARNING: this means users must re-login after each rebuild!
             secret = os.urandom(24).hex()
             print("[WARN] Using random Flask SECRET_KEY—sessions won't persist across restarts")
 
     app.config["SECRET_KEY"] = secret
-
-    # 1c) Force cookies to be secure (HF uses HTTPS)
-    # app.config["SESSION_COOKIE_SECURE"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-    # --- Logging setup ---
+    # --- Logging setup (logs to file + terminal) ---
     base_dir = os.path.abspath(os.path.dirname(__file__))
     log_dir = os.path.join(base_dir, "logs")
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(log_dir, "execution.log")
 
-    # Add encoding='utf-8' to the handler
-    handler = RotatingFileHandler(
+    # Clear existing handlers to avoid duplicates
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
+    # File handler for persistent logging
+    file_handler = RotatingFileHandler(
         log_path,
-        maxBytes=10*1024*1024,
+        maxBytes=10 * 1024 * 1024,
         backupCount=5,
-        encoding='utf-8'  # <-- ADD THIS LINE
+        encoding='utf-8'
     )
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter(
-        "%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]"
-    ))
-    app.logger.addHandler(handler)
-    app.logger.setLevel(logging.INFO)
+    file_handler.setLevel(logging.DEBUG)
+
+    # Console handler for terminal visibility
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+
+    # Formatter for both
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    # Setup logging globally
+    logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
+
+    # Attach logger to app
+    app.logger = logging.getLogger("SimCricketX")
+    app.logger.setLevel(logging.DEBUG)  # You can change to INFO for production
 
     # --- Flask-Login setup ---
     login_manager = LoginManager(app)
     login_manager.login_view = "login"
+
+    # --- NEW: Statistics Feature Setup ---
+    UPLOAD_FOLDER = 'uploads'
+    ALLOWED_EXTENSIONS = {'csv'}
+    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+    # Ensure upload and stats directories exist
+    if not os.path.exists(UPLOAD_FOLDER):
+        os.makedirs(UPLOAD_FOLDER)
+    if not os.path.exists('data/stats'):
+        os.makedirs('data/stats')
+
+    def allowed_file(filename):
+        return '.' in filename and \
+               filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    # --- END NEW ---
 
     @login_manager.user_loader
     def load_user(email):
@@ -273,6 +304,89 @@ def create_app():
     @app.before_request
     def log_request():
         app.logger.info(f"{request.remote_addr} {request.method} {request.path}")
+
+    def _render_statistics_page(user_id):
+        try:
+            stats_dir = 'data/stats'
+            batting_files = glob.glob(os.path.join(stats_dir, f"{user_id}_batting_*.csv"))
+            bowling_files = glob.glob(os.path.join(stats_dir, f"{user_id}_bowling_*.csv"))
+
+            latest_batting_file = max(batting_files, key=os.path.getctime, default=None)
+            latest_bowling_file = max(bowling_files, key=os.path.getctime, default=None)
+
+            force_upload = request.args.get('upload', 'false').lower() == 'true'
+
+            if force_upload or not latest_batting_file or not latest_bowling_file:
+                return render_template("statistics.html", has_stats=False, user=current_user)
+
+            bat_df = pd.read_csv(latest_batting_file)
+            bowl_df = pd.read_csv(latest_bowling_file)
+
+            # Column Mapping
+            bat_df = bat_df.rename(columns={
+            'Sixes': '6s',
+            'Catches Taken': 'Catches',
+            'Batting Strike Rate': 'Strike Rate',
+            'Batting Average': 'Average',
+            'Player Name': 'Player',
+            'Team Name': 'Team'
+        })
+            bowl_df = bowl_df.rename(columns={
+                'Player Name': 'Player',
+                'Team Name': 'Team',
+                'Best Bowling': 'Best'
+            })
+
+            batting_stats = bat_df.to_dict("records")
+            bowling_stats = bowl_df.to_dict("records")
+            batting_headers = list(bat_df.columns)
+            bowling_headers = list(bowl_df.columns)
+
+            leaderboards = {}
+            leaderboards['top_run_scorers'] = bat_df.nlargest(5, 'Runs')[['Player', 'Team', 'Runs']].to_dict('records')
+            leaderboards['top_wicket_takers'] = bowl_df.nlargest(5, 'Wickets')[['Player', 'Team', 'Wickets']].to_dict('records')
+            leaderboards['most_sixes'] = bat_df.nlargest(5, '6s')[['Player', 'Team', '6s']].to_dict('records')
+            leaderboards['most_catches'] = bat_df.nlargest(5, 'Catches')[['Player', 'Team', 'Catches']].to_dict('records')
+
+            strikers_df = bat_df[bat_df['Balls'] >= 50]
+            leaderboards['best_strikers'] = [] if strikers_df.empty else strikers_df.nlargest(5, 'Strike Rate')[['Player', 'Team', 'Strike Rate']].to_dict('records')
+
+            def convert_overs_to_balls(overs_val):
+                overs_str = str(overs_val)
+                parts = overs_str.split('.')
+                return (int(parts[0]) * 6) + int(parts[1]) if '.' in overs_str else int(overs_str) * 6
+
+            bowl_df['total_balls'] = bowl_df['Overs'].apply(convert_overs_to_balls)
+
+            if 'Economy' not in bowl_df.columns and {'Runs', 'Overs'}.issubset(bowl_df.columns):
+                bowl_df['Economy'] = bowl_df.apply(
+                    lambda row: round(row['Runs'] / (row['total_balls'] / 6), 2) if row['total_balls'] > 0 else 0.00,
+                    axis=1
+                )
+
+            economy_df = bowl_df[bowl_df['total_balls'] >= 60]
+            leaderboards['best_economy'] = [] if economy_df.empty else economy_df.nsmallest(5, 'Economy')[['Player', 'Team', 'Economy']].to_dict('records')
+
+            avg_df = bat_df[bat_df["Average"].notnull()]
+            leaderboards["best_average"] = [] if avg_df.empty else avg_df.sort_values(by="Average", ascending=False).head(5)[["Player", "Team", "Average"]].to_dict("records")
+
+            figures_df = bowl_df.copy()
+            figures_df["Best"] = figures_df["Best"].astype(str)
+            leaderboards["best_figures"] = [] if figures_df.empty else figures_df.sort_values(by="Wickets", ascending=False).head(5)[["Player", "Team", "Best"]].to_dict("records")
+
+            return render_template("statistics.html",
+                                has_stats=True, user=current_user,
+                                batting_stats=batting_stats,
+                                bowling_stats=bowling_stats,
+                                batting_headers=batting_headers,
+                                bowling_headers=bowling_headers,
+                                leaderboards=leaderboards,
+                                batting_filename=os.path.basename(latest_batting_file),
+                                bowling_filename=os.path.basename(latest_bowling_file))
+        except Exception as e:
+            app.logger.error(f"Error in _render_statistics_page for user {user_id}: {e}", exc_info=True)
+            flash("An error occurred while loading the statistics page.", "danger")
+            return render_template("statistics.html", has_stats=False, user=current_user)
 
     # ───── Routes ─────
 
@@ -438,7 +552,6 @@ def create_app():
                         except Exception as post_cred_error:
                             print("error")
                         try:
-                            # Use the User class that's defined in the create_app() scope
                             user = User(email)
                             login_user(user)
                             session.pop('_flashes', None)
@@ -1746,34 +1859,225 @@ def create_app():
     @app.route("/statistics")
     @login_required
     def statistics():
-        return render_template("statistics.html", user=current_user)
+        return _render_statistics_page(current_user.id)
+
+    @app.route('/upload_stats', methods=['POST'])
+    @login_required
+    def upload_stats():
+        if 'stats_files' not in request.files:
+            flash('No file part in the request.', 'danger')
+            return redirect(url_for('statistics'))
+
+        files = request.files.getlist('stats_files')
+        if not files or files[0].filename == '':
+            flash('No files selected for upload.', 'danger')
+            return redirect(url_for('statistics'))
+
+        uploaded_filepaths = []
+        seen_filenames = set()
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        prefix = current_user.id.replace("@", "_").replace(".", "_")
+
+        for file in files:
+            if file and allowed_file(file.filename):
+                original = secure_filename(file.filename)
+                if original in seen_filenames:
+                    app.logger.warning(f"[Upload] Duplicate skipped: {original}")
+                    continue
+                seen_filenames.add(original)
+
+                # Detect file tag
+                if 'bat' in original.lower():
+                    tag = "batting"
+                elif 'bowl' in original.lower():
+                    tag = "bowling"
+                else:
+                    tag = "misc"
+
+                basename = os.path.splitext(original)[0]  # e.g., MI_batting
+                filename = f"{prefix}_{basename}_{timestamp}.csv"
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                uploaded_filepaths.append(filepath)
+                app.logger.debug(f"[DEBUG] Saved file: {filepath}")
+            else:
+                flash(f"Invalid file type for {file.filename}. Only CSV files are allowed.", 'danger')
+                return redirect(url_for('statistics'))
+
+        try:
+            aggregator = StatsAggregator(uploaded_filepaths, current_user.id)
+            aggregator.process_and_save()
+            flash("Statistics processed successfully!", "success")
+        except Exception as e:
+            flash(f"An error occurred during statistics processing: {e}", "danger")
+            app.logger.error(f"Error processing stats for user {current_user.id}: {e}", exc_info=True)
+        finally:
+            for filepath in uploaded_filepaths:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+
+        return _render_statistics_page(current_user.id)
+
+    
+    @app.route("/download_stats_csv/<leaderboard>")
+    @login_required
+    def download_stats_csv(leaderboard):
+        try:
+            user_id = current_user.get_id()
+            stats_dir = "data/stats"
+            batting_file = max(glob.glob(os.path.join(stats_dir, f"{user_id}_batting_*.csv")), key=os.path.getctime)
+            bowling_file = max(glob.glob(os.path.join(stats_dir, f"{user_id}_bowling_*.csv")), key=os.path.getctime)
+
+            if leaderboard in ["top_run_scorers", "most_sixes", "best_strikers", "most_catches"]:
+                df = pd.read_csv(batting_file)
+            else:
+                df = pd.read_csv(bowling_file)
+
+            if leaderboard == "top_run_scorers":
+                data = df.sort_values(by="Runs", ascending=False)[["Player", "Team", "Runs"]]
+            elif leaderboard == "most_sixes":
+                data = df.sort_values(by="6s", ascending=False)[["Player", "Team", "6s"]]
+            elif leaderboard == "most_catches":
+                data = df.sort_values(by="Catches", ascending=False)[["Player", "Team", "Catches"]]
+            elif leaderboard == "best_strikers":
+                filtered = df[df["Balls"] >= 50]
+                data = filtered.sort_values(by="Strike Rate", ascending=False)[["Player", "Team", "Strike Rate"]]
+            elif leaderboard == "top_wicket_takers":
+                data = df.sort_values(by="Wickets", ascending=False)[["Player", "Team", "Wickets"]]
+            elif leaderboard == "best_economy":
+                df["total_balls"] = df["Overs"].apply(lambda x: int(str(x).split('.')[0]) * 6 + int(str(x).split('.')[1]) if '.' in str(x) else int(x) * 6)
+                df["Economy"] = df.apply(lambda row: round(row["Runs"] / (row["total_balls"] / 6), 2) if row["total_balls"] > 0 else 0.00, axis=1)
+                filtered = df[df["total_balls"] >= 60]
+                data = filtered.sort_values(by="Economy")[["Player", "Team", "Economy"]]
+            elif leaderboard == "batting_full":
+                df = pd.read_csv(batting_file)
+                data = df
+            elif leaderboard == "bowling_full":
+                df = pd.read_csv(bowling_file)
+                data = df
+            elif leaderboard == "best_average":
+                df = pd.read_csv(batting_file)
+                df["Average"] = pd.to_numeric(df["Average"], errors="coerce")
+                df = df[df["Average"].notnull()]
+                df = df.sort_values(by="Average", ascending=False)[["Player", "Team", "Average"]]
+                data = df
+            elif leaderboard == "best_figures":
+                df = pd.read_csv(bowling_file)
+                df["Best"] = df["Best"].astype(str)
+                df = df.sort_values(by="Wickets", ascending=False)[["Player", "Team", "Best"]]
+                data = df
+            else:
+                return "Invalid leaderboard", 400
+
+            output = io.StringIO()
+            data.to_csv(output, index=False)
+            output.seek(0)
+            filename = f"{user_id}_{leaderboard}.csv"
+            return Response(output, mimetype='text/csv',
+                headers={"Content-Disposition": f"attachment; filename={filename}"})
+        except Exception as e:
+            return f"Error generating CSV: {str(e)}", 500
+
+    
+    @app.route("/download_stats_tab/<leaderboard>")
+    @login_required
+    def download_stats_tab(leaderboard):
+        try:
+            stats_dir = "data/stats"
+            user_id = current_user.get_id()
+            batting_file = max(glob.glob(os.path.join(stats_dir, f"{user_id}_batting_*.csv")), key=os.path.getctime)
+            bowling_file = max(glob.glob(os.path.join(stats_dir, f"{user_id}_bowling_*.csv")), key=os.path.getctime)
+
+            # Determine source file
+            if leaderboard in ["top_run_scorers", "most_sixes", "best_strikers", "most_catches", "best_average", "batting_full"]:
+                df = pd.read_csv(batting_file)
+            else:
+                df = pd.read_csv(bowling_file)
+
+            # Handle leaderboard logic
+            if leaderboard == "top_run_scorers":
+                df = df.sort_values(by="Runs", ascending=False)[["Player", "Team", "Runs"]]
+
+            elif leaderboard == "most_sixes":
+                df = df.sort_values(by="6s", ascending=False)[["Player", "Team", "6s"]]
+
+            elif leaderboard == "best_strikers":
+                df = df[df["Balls"] >= 50].sort_values(by="Strike Rate", ascending=False)[["Player", "Team", "Strike Rate"]]
+
+            elif leaderboard == "most_catches":
+                if "Catches" in df.columns:
+                    df = df.sort_values(by="Catches", ascending=False)[["Player", "Team", "Catches"]]
+                else:
+                    df = pd.DataFrame(columns=["Player", "Team", "Catches"])
+
+            elif leaderboard == "best_average":
+                df["Average"] = pd.to_numeric(df["Average"], errors="coerce")
+                df = df.sort_values(by="Average", ascending=False)[["Player", "Team", "Average"]]
+
+
+            elif leaderboard == "top_wicket_takers":
+                df = df.sort_values(by="Wickets", ascending=False)[["Player", "Team", "Wickets"]]
+
+            elif leaderboard == "best_economy":
+                df["total_balls"] = df["Overs"].apply(lambda x: int(str(x).split('.')[0]) * 6 + int(str(x).split('.')[1]) if '.' in str(x) else int(x) * 6)
+                df["Economy"] = df.apply(lambda row: round(row["Runs"] / (row["total_balls"] / 6), 2) if row["total_balls"] > 0 else 0.00, axis=1)
+                df = df[df["total_balls"] >= 60].sort_values(by="Economy")[["Player", "Team", "Economy"]]
+
+            elif leaderboard == "best_figures":
+                df["Best"] = df["Best"].astype(str)
+                df = df.sort_values(by="Wickets", ascending=False)[["Player", "Team", "Best"]]
+
+            elif leaderboard in ["batting_full", "bowling_full"]:
+                pass
+
+            else:
+                return "Leaderboard not found", 404
+
+            text = tabulate(df, headers="keys", tablefmt="pretty")
+            return Response(text, mimetype='text/plain')
+
+        except Exception as e:
+            app.logger.error(f"Error generating tabular text: {e}", exc_info=True)
+            return f"Error generating tabular text: {str(e)}", 500
+
 
     return app
 
 # ────── Run Server ──────
 if __name__ == "__main__":
-    import os
-    import secrets
-    from flask import request
+    import socket
+    import webbrowser
 
-    app = create_app()
+    try:
+        app = create_app()
 
-    # Set archive folder path
-    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-    app.config["ARCHIVES_FOLDER"] = os.path.join(BASE_DIR, "data")
+        # Determine IP
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
 
-    # Ensure SECRET_KEY is present
-    if not app.config.get("SECRET_KEY"):
-        generated_key = secrets.token_hex(32)
-        print("[WARNING] No SECRET_KEY set — generating random one (not persistent)")
-        app.config["SECRET_KEY"] = generated_key
+        # Final host and port
+        HOST = "127.0.0.1"  # <-- Switch to 127.0.0.1 for local browser open
+        PORT = 7860
+        url = f"http://{HOST}:{PORT}"
 
-    # Secure cookie config
-    app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = False  # Explicitly set to False for local dev
-    app.config["PERMANENT_SESSION_LIFETIME"] = 604800  # 7 days in seconds
+        # Show console startup info
+        print("✅ SimCricketX is up and running!")
+        print(f"🌐 Access the app at: {url}")
+        print("🔐 Press Ctrl+C to stop the server.\n")
 
-    # 🔥 FINAL: Force Flask to bind on all interfaces
-    print("🔁 Launching Flask server on 0.0.0.0:7860")
-    app.run(host="0.0.0.0", port=7860, debug=False)
+        # Cleanup before starting
+        cleanup_temp_scorecard_images()
+        threading.Thread(target=periodic_cleanup, args=(app,), daemon=True).start()
+
+        # Open browser only for localhost dev
+        if HOST in ("127.0.0.1", "localhost"):
+            webbrowser.open_new_tab(url)
+
+        # Run Flask
+        app.run(host=HOST, port=PORT, debug=True, use_reloader=False)
+
+    except Exception as e:
+        print("❌ Failed to start SimCricketX:")
+        traceback.print_exc()
+
+
