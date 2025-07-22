@@ -2047,37 +2047,45 @@ def create_app():
 if __name__ == "__main__":
     import socket
     import webbrowser
+    import os
+    import traceback
+    import threading
 
     try:
         app = create_app()
 
-        # Determine IP
+        # Choose host based on environment
         hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
+        ip_address = socket.gethostbyname(hostname)
+        ENV = os.getenv("ENV", "dev").lower()
 
-        # Final host and port
-        HOST = "127.0.0.1"  # <-- Switch to 127.0.0.1 for local browser open
+        is_local = ip_address.startswith("127.") or ENV == "dev"
+
+        HOST = "127.0.0.1" if is_local else "0.0.0.0"
         PORT = 7860
         url = f"http://{HOST}:{PORT}"
 
-        # Show console startup info
+        # Console info
         print("✅ SimCricketX is up and running!")
         print(f"🌐 Access the app at: {url}")
         print("🔐 Press Ctrl+C to stop the server.\n")
 
-        # Cleanup before starting
+        # Cleanup tasks
         cleanup_temp_scorecard_images()
         threading.Thread(target=periodic_cleanup, args=(app,), daemon=True).start()
 
-        # Open browser only for localhost dev
-        if HOST in ("127.0.0.1", "localhost"):
+        # Open browser for local use only
+        if is_local:
             webbrowser.open_new_tab(url)
 
-        # Run Flask
-        app.run(host=HOST, port=PORT, debug=True, use_reloader=False)
+        # Run Flask app
+        app.run(
+            host=HOST,
+            port=PORT,
+            debug=is_local,
+            use_reloader=False  # Important: avoid reloader in prod threads
+        )
 
     except Exception as e:
         print("❌ Failed to start SimCricketX:")
         traceback.print_exc()
-
-
