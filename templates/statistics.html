@@ -3,23 +3,11 @@
 
 <head>
     <script>
-        // Immediately apply the saved theme from localStorage to prevent flash of unstyled content.
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme) {
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        }
-        // Persist custom prototype colors if they exist.
-        const prototypePrimary = localStorage.getItem('prototypePrimary');
-        if (savedTheme === 'prototype' && prototypePrimary) {
-            const prototypeLight = localStorage.getItem('prototypeLight');
-            const rootStyle = document.documentElement.style;
-            rootStyle.setProperty('--accent', prototypePrimary);
-            rootStyle.setProperty('--accent-hover', prototypeLight);
-            rootStyle.setProperty('--gradient-accent', `linear-gradient(45deg, ${prototypePrimary}, #ffffff)`);
-        }
+        const saved = localStorage.getItem('theme');
+        if (saved) document.documentElement.setAttribute('data-theme', saved);
     </script>
     <meta charset="UTF-8">
-    <title>The Architect's Holo-Deck - SimCricketX</title>
+    <title>Statistics Hub - SimCricketX</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <!-- Modern CSS Reset -->
@@ -34,7 +22,6 @@
         rel="stylesheet">
 
     <style>
-        /* Inheriting all theme variables for consistency */
         :root {
             --bg: #fafbfc;
             --bg-secondary: #f5f6f8;
@@ -48,9 +35,12 @@
             --shadow: rgba(0, 0, 0, 0.04);
             --shadow-hover: rgba(0, 0, 0, 0.08);
             --shadow-strong: rgba(0, 0, 0, 0.12);
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             --gradient-accent: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
             --icon-color: #3b82f6;
             --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
             --border-radius: 16px;
             --border-radius-sm: 8px;
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -69,11 +59,13 @@
             --shadow: rgba(0, 0, 0, 0.2);
             --shadow-hover: rgba(0, 0, 0, 0.3);
             --shadow-strong: rgba(0, 0, 0, 0.4);
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             --gradient-accent: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
             --icon-color: #60a5fa;
         }
 
-        [data-theme="nord"] {
+        /* Light Themes */
+        :root[data-theme="nord"] {
             --bg: #eceff4;
             --bg-secondary: #e5e9f0;
             --fg: #2e3440;
@@ -84,9 +76,11 @@
             --accent-hover: #4c6994;
             --accent-light: #e8f0ff;
             --icon-color: #5e81ac;
+            --gradient: linear-gradient(135deg, #8fbcbb, #88c0d0);
+            --gradient-accent: linear-gradient(135deg, #5e81ac, #81a1c1);
         }
 
-        [data-theme="retro"] {
+        :root[data-theme="retro"] {
             --bg: #fef7ed;
             --bg-secondary: #fed7aa;
             --fg: #7c2d12;
@@ -97,9 +91,11 @@
             --accent-hover: #dc2626;
             --accent-light: #fff7ed;
             --icon-color: #ea580c;
+            --gradient: linear-gradient(135deg, #f97316, #eab308);
+            --gradient-accent: linear-gradient(135deg, #ea580c, #f59e0b);
         }
 
-        [data-theme="cupcake"] {
+        :root[data-theme="cupcake"] {
             --bg: #fdf2f8;
             --bg-secondary: #fce7f3;
             --fg: #831843;
@@ -110,9 +106,12 @@
             --accent-hover: #db2777;
             --accent-light: #fdf2f8;
             --icon-color: #ec4899;
+            --gradient: linear-gradient(135deg, #f472b6, #d946ef);
+            --gradient-accent: linear-gradient(135deg, #ec4899, #a855f7);
         }
 
-        [data-theme="dim"] {
+        /* Dark Themes */
+        :root[data-theme="dim"] {
             --bg: #1f2937;
             --bg-secondary: #374151;
             --fg: #f9fafb;
@@ -123,9 +122,11 @@
             --accent-hover: #4f46e5;
             --accent-light: #312e81;
             --icon-color: #818cf8;
+            --gradient: linear-gradient(135deg, #4f46e5, #7c3aed);
+            --gradient-accent: linear-gradient(135deg, #6366f1, #8b5cf6);
         }
 
-        [data-theme="dracula"] {
+        :root[data-theme="dracula"] {
             --bg: #282a36;
             --bg-secondary: #44475a;
             --fg: #f8f8f2;
@@ -136,9 +137,11 @@
             --accent-hover: #bd93f9;
             --accent-light: rgba(255, 121, 198, 0.1);
             --icon-color: #ff79c6;
+            --gradient: linear-gradient(135deg, #ff79c6 0%, #bd93f9 100%);
+            --gradient-accent: linear-gradient(135deg, #ff79c6 0%, #8be9fd 100%);
         }
 
-        [data-theme="sunset"] {
+        :root[data-theme="sunset"] {
             --bg: #faf8f3;
             --bg-secondary: #f5f2ea;
             --fg: #2c3e50;
@@ -149,10 +152,15 @@
             --accent-hover: #b8941f;
             --accent-light: rgba(212, 175, 55, 0.1);
             --icon-color: #d4af37;
+            --shadow: rgba(212, 175, 55, 0.08);
+            --shadow-hover: rgba(212, 175, 55, 0.15);
+            --shadow-strong: rgba(212, 175, 55, 0.2);
+            --gradient: linear-gradient(135deg, #d4af37 0%, #f4e6a1 100%);
+            --gradient-accent: linear-gradient(135deg, #d4af37 0%, #8b7355 100%);
         }
 
-        [data-theme="prototype"] {
-            --bg: #0f1419;
+        :root[data-theme="prototype"] {
+            --bg: linear-gradient(135deg, #0f0f0f, #1a1a1a);
             --bg-secondary: rgba(255, 255, 255, 0.02);
             --fg: #e0e0e0;
             --fg-secondary: #a0a0a0;
@@ -162,6 +170,10 @@
             --accent-hover: #00b894;
             --accent-light: rgba(0, 212, 170, 0.1);
             --icon-color: #00d4aa;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --shadow-hover: rgba(0, 0, 0, 0.4);
+            --shadow-strong: rgba(0, 0, 0, 0.5);
+            --gradient: linear-gradient(135deg, #00d4aa, #00b894);
             --gradient-accent: linear-gradient(45deg, #00d4aa, #ffffff);
         }
 
@@ -169,40 +181,31 @@
             box-sizing: border-box;
         }
 
-        html {
-            height: 100%;
-        }
-
         body {
             background: var(--bg);
             color: var(--fg);
-            font-family: 'Inter', sans-serif;
-            min-height: 100%;
-            position: relative;
-            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            font-size: 16px;
+            min-height: 100vh;
         }
 
-        #particle-canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-        }
-
+        /* Navigation Header */
         .nav-header {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            background: transparent;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--card-border);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             z-index: 1000;
-            padding: 1rem 2rem;
+            padding: 0.75rem 1.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 1rem;
         }
 
         .logo {
@@ -215,369 +218,2258 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            flex-shrink: 0;
         }
 
-        .main-content {
-            position: relative;
-            z-index: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 2rem;
-            gap: 2rem;
-        }
-
-        /* Holo-Deck Pitch Area */
-        .holo-deck {
-            flex-basis: 60%;
-            height: 80vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .pitch-area {
-            width: 300px;
-            height: 600px;
-            border: 2px solid var(--accent);
-            border-radius: 150px / 30px;
-            position: relative;
-            background: radial-gradient(ellipse at center, var(--accent-light) 0%, transparent 70%);
-            box-shadow: 0 0 15px var(--accent), inset 0 0 15px var(--accent-light);
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .pitch-area.dragover {
-            transform: scale(1.05);
-            box-shadow: 0 0 35px var(--accent), inset 0 0 25px var(--accent-light);
-        }
-
-        .crease {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80%;
-            height: 4px;
-            background: var(--accent);
-        }
-
-        .crease.top {
-            top: 50px;
-        }
-
-        .crease.bottom {
-            bottom: 50px;
-        }
-
-        .stumps {
-            position: absolute;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 15px;
-        }
-
-        .stump {
-            width: 8px;
-            height: 60px;
-            background: var(--accent);
-            border-radius: 4px;
-            box-shadow: 0 0 8px var(--accent);
-            transition: var(--transition);
-        }
-
-        .pitch-area.dragover .stump {
-            background: var(--success);
-            box-shadow: 0 0 15px var(--success);
-            transform: scale(1.1);
-        }
-
-        .upload-prompt {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            color: var(--fg);
-            font-weight: 500;
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .upload-prompt i {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            display: block;
-            color: var(--accent);
-            text-shadow: 0 0 10px var(--accent);
-        }
-
-        /* Dossier (File List) Area */
-        .dossier-area {
-            flex-basis: 40%;
-            height: 80vh;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            background: rgba(0, 0, 0, 0.1);
-            padding: 1.5rem;
-            border-radius: var(--border-radius);
-            border: 1px solid var(--card-border);
-            backdrop-filter: blur(10px);
-        }
-
-        #dossier-container {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding-right: 1rem;
-        }
-
-        .dossier-card {
-            background: var(--card-bg);
-            border-left: 4px solid var(--accent);
-            border-radius: var(--border-radius-sm);
-            padding: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 1rem;
-            animation: slideIn 0.5s ease-out;
-        }
-
-        .dossier-icon {
+        .logo-icon {
             font-size: 2rem;
+            background: var(--gradient-accent);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        /* Global Search Bar */
+        .global-search {
+            flex: 1;
+            max-width: 250px;
+            position: relative;
+            margin: 0 0.75rem;
+        }
+
+        .search-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.6rem 0.75rem 0.6rem 2.5rem;
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius-sm);
+            background: var(--bg-secondary);
+            color: var(--fg);
+            font-size: 0.85rem;
+            transition: var(--transition);
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-light);
+            background: var(--card-bg);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--fg-secondary);
+            font-size: 0.9rem;
+            pointer-events: none;
+        }
+
+        .search-clear {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--fg-secondary);
+            font-size: 0.9rem;
+            cursor: pointer;
+            opacity: 0;
+            transition: var(--transition);
+            display: none;
+        }
+
+        .search-clear.visible {
+            opacity: 1;
+            display: block;
+        }
+
+        .search-clear:hover {
             color: var(--accent);
         }
 
-        .dossier-details {
-            flex-grow: 1;
+        .search-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-top: none;
+            border-radius: 0 0 var(--border-radius-sm) var(--border-radius-sm);
+            box-shadow: 0 4px 12px var(--shadow-strong);
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 1001;
+            display: none;
         }
 
-        .dossier-name {
-            font-weight: 600;
-            font-size: 0.9rem;
-            word-break: break-all;
+        .search-suggestions.visible {
+            display: block;
         }
 
-        .dossier-status {
-            font-size: 0.8rem;
-            color: var(--fg-secondary);
-        }
-
-        .dossier-remove {
-            background: none;
-            border: none;
-            color: var(--fg-secondary);
+        .search-suggestion {
+            padding: 0.6rem 0.75rem;
             cursor: pointer;
+            transition: var(--transition);
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .search-suggestion:last-child {
+            border-bottom: none;
+        }
+
+        .search-suggestion:hover {
+            background: var(--bg-secondary);
+        }
+
+        .search-suggestion.highlighted {
+            background: var(--accent-light);
+        }
+
+        .suggestion-name {
+            font-weight: 500;
+        }
+
+        .suggestion-info {
+            font-size: 0.75rem;
+            color: var(--fg-secondary);
+        }
+
+        .no-results {
+            padding: 0.75rem;
+            text-align: center;
+            color: var(--fg-secondary);
+            font-style: italic;
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-shrink: 0;
+        }
+
+        .nav-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius-sm);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--fg);
+            text-decoration: none;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-btn:hover {
+            background: var(--accent-light);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .nav-btn.home-btn {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .nav-btn.home-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .theme-toggle {
+            background: var(--bg-secondary);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius-sm);
+            padding: 0.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: var(--fg);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+        }
+
+        .theme-toggle:hover {
+            background: var(--accent-light);
+            border-color: var(--accent);
+            transform: scale(1.05);
+        }
+
+        .theme-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .theme-dropdown-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius-sm);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            color: var(--fg);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .theme-dropdown-btn:hover {
+            background: var(--accent-light);
+            border-color: var(--accent);
+        }
+
+        .theme-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 25px var(--shadow-strong);
+            min-width: 200px;
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: var(--transition);
+            z-index: 1001;
+        }
+
+        .theme-dropdown.active .theme-dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .theme-option {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .theme-option:hover {
+            background: var(--bg-secondary);
+        }
+
+        .theme-icon {
+            font-size: 1.1rem;
+            color: var(--icon-color);
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding-top: 100px;
+            padding-bottom: 2rem;
+            padding-left: 2rem;
+            padding-right: 2rem;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .hero-section {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .hero-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: var(--gradient-accent);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            line-height: 1.2;
+        }
+
+        .hero-subtitle {
+            font-size: 1rem;
+            color: var(--fg-secondary);
+            margin-bottom: 2rem;
+        }
+
+        /* Flash Messages */
+        .flash-container {
+            margin-bottom: 2rem;
+        }
+
+        .alert {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-left: 4px solid var(--accent);
+            border-radius: var(--border-radius);
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .alert-success {
+            border-left-color: var(--success);
+        }
+
+        .alert-danger {
+            border-left-color: var(--danger);
+        }
+
+        .alert i {
+            color: var(--accent);
             font-size: 1.2rem;
         }
 
-        .dossier-remove:hover {
-            color: var(--danger);
+        /* Upload Section */
+        .upload-section {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius);
+            padding: 3rem 2rem;
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: 0 2px 8px var(--shadow);
         }
 
-        /* Submit Button */
-        .submit-btn {
+        .upload-icon {
+            font-size: 4rem;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+        }
+
+        .upload-title {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .upload-subtitle {
+            color: var(--fg-secondary);
+            margin-bottom: 2rem;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 2rem;
+        }
+
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-display {
+            border: 2px dashed var(--card-border);
+            border-radius: var(--border-radius);
+            padding: 2rem 3rem;
+            background: var(--bg-secondary);
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .file-input-display:hover,
+        .file-input-display.drag-over {
+            border-color: var(--accent);
+            background: var(--accent-light);
+        }
+
+        .upload-btn {
             background: var(--accent);
             color: white;
             border: none;
             border-radius: var(--border-radius-sm);
-            padding: 0.75rem 1.5rem;
+            padding: 1rem 2rem;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
             transition: var(--transition);
-            width: 100%;
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
             gap: 0.5rem;
         }
 
-        .submit-btn:hover:not(:disabled) {
+        .upload-btn:hover {
             background: var(--accent-hover);
             transform: translateY(-2px);
-            box-shadow: 0 4px 15px var(--shadow-hover);
+            box-shadow: 0 4px 12px var(--shadow-hover);
         }
 
-        .submit-btn:disabled {
-            background-color: var(--fg-secondary);
-            cursor: not-allowed;
+        /* Dashboard Section */
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
         }
 
-        .home-link {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            color: var(--fg-secondary);
+        .dashboard-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .action-btn {
+            background: var(--accent);
+            color: white;
             text-decoration: none;
-            z-index: 10;
+            padding: 0.5rem 1rem;
+            border-radius: var(--border-radius-sm);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border: none;
+            cursor: pointer;
+        }
+
+        .action-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .action-btn.secondary {
+            background: var(--bg-secondary);
+            color: var(--fg);
+            border: 1px solid var(--card-border);
+        }
+
+        .action-btn.secondary:hover {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+
+        /* Leaderboard Grid */
+        .leaderboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .leaderboard-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .leaderboard-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-accent);
+            transform: scaleX(0);
+            transition: var(--transition);
+        }
+
+        .leaderboard-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px var(--shadow-hover);
+        }
+
+        .leaderboard-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .leaderboard-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .leaderboard-icon {
+            color: var(--icon-color);
+            font-size: 1.25rem;
+        }
+
+        .leaderboard-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .leaderboard-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 1rem 0;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            font-size: 0.875rem;
+            border-bottom: 1px solid transparent;
+            transition: var(--transition);
+        }
+
+        .leaderboard-item:hover {
+            border-bottom-color: var(--card-border);
+            background: var(--bg-secondary);
+            margin: 0 -1rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
+            border-radius: var(--border-radius-sm);
+        }
+
+        .player-name {
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent);
+            font-size: 0.9rem;
+        }
+
+        .leaderboard-actions {
+            display: flex;
+            gap: 0.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--card-border);
+        }
+
+        .mini-btn {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            text-decoration: none;
+            background: var(--bg-secondary);
+            color: var(--fg-secondary);
+            border-radius: var(--border-radius-sm);
+            transition: var(--transition);
+        }
+
+        .mini-btn:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        /* Statistics Tables */
+        .stats-section {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--card-border);
+            margin-bottom: 2rem;
+            overflow-x: auto;
+        }
+
+        .tab-button {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--fg-secondary);
+            border-bottom: 2px solid transparent;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+
+        .tab-button.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-button:hover {
+            color: var(--accent);
+            background: var(--accent-light);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Filter Controls */
+        .filter-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--card-border);
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-label {
+            font-weight: 500;
+            font-size: 0.875rem;
+            color: var(--fg-secondary);
+            white-space: nowrap;
+        }
+
+        .team-filter {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius-sm);
+            background: var(--card-bg);
+            color: var(--fg);
+            font-size: 0.875rem;
+            transition: var(--transition);
+        }
+
+        .team-filter:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-light);
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .clear-filter-btn {
+            background: var(--fg-secondary);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .clear-filter-btn:hover {
+            background: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .download-csv-btn {
+            background: var(--success);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .download-csv-btn:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .download-txt-btn {
+            background: var(--warning);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .download-txt-btn:hover {
+            background: #d97706;
+            transform: translateY(-1px);
+        }
+
+        .filter-info {
+            font-size: 0.75rem;
+            color: var(--fg-secondary);
+            font-style: italic;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--card-border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        th,
+        td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--card-border);
+            white-space: nowrap;
+        }
+
+        thead {
+            background: var(--bg-secondary);
+        }
+
+        th {
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            transition: var(--transition);
+        }
+
+        th:hover {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+
+        th .sort-icon {
+            margin-left: 8px;
+            color: var(--fg-secondary);
+            transition: var(--transition);
+            opacity: 0.5;
+        }
+
+        th.sorted-asc .sort-icon {
+            transform: rotate(0deg);
+            color: var(--accent);
+            opacity: 1;
+        }
+
+        th.sorted-desc .sort-icon {
+            transform: rotate(180deg);
+            color: var(--accent);
+            opacity: 1;
+        }
+
+        tbody tr {
+            transition: var(--transition);
+        }
+
+        tbody tr:hover {
+            background: var(--bg-secondary);
+        }
+
+        tbody tr:nth-child(even) {
+            background: rgba(0, 0, 0, 0.01);
+        }
+
+        [data-theme="dark"] tbody tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .table-row-hidden {
+            display: none !important;
+        }
+
+        .table-row-highlighted {
+            background: var(--accent-light) !important;
+            border-left: 3px solid var(--accent);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .nav-header {
+                padding: 1rem;
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+
+            .global-search {
+                order: 3;
+                flex-basis: 100%;
+                max-width: none;
+                margin: 0;
+            }
+
+            .nav-controls {
+                gap: 0.5rem;
+            }
+
+            .theme-dropdown-btn {
+                padding: 0.5rem;
+                font-size: 0;
+            }
+
+            .main-content {
+                padding-left: 1rem;
+                padding-right: 1rem;
+                padding-top: 100px;
+            }
+
+            .hero-title {
+                font-size: 2rem;
+            }
+
+            .dashboard-header {
+                flex-direction: column;
+                align-items: stretch;
+                text-align: center;
+            }
+
+            .action-buttons {
+                justify-content: center;
+            }
+
+            .leaderboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-section {
+                padding: 1rem;
+            }
+
+            .tabs {
+                margin-bottom: 1rem;
+            }
+
+            .filter-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-group {
+                min-width: auto;
+            }
+
+            .filter-actions {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            th,
+            td {
+                padding: 0.5rem;
+            }
         }
 
         /* Animations */
-        @keyframes slideIn {
+        @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateX(20px);
+                transform: translateY(20px);
             }
 
             to {
                 opacity: 1;
-                transform: translateX(0);
+                transform: translateY(0);
             }
+        }
+
+        .leaderboard-card {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .leaderboard-card:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .leaderboard-card:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .leaderboard-card:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+
+        .leaderboard-card:nth-child(4) {
+            animation-delay: 0.4s;
+        }
+
+        .leaderboard-card:nth-child(5) {
+            animation-delay: 0.5s;
+        }
+
+        .leaderboard-card:nth-child(6) {
+            animation-delay: 0.6s;
+        }
+
+        .leaderboard-card:nth-child(7) {
+            animation-delay: 0.7s;
+        }
+
+        .leaderboard-card:nth-child(8) {
+            animation-delay: 0.8s;
+        }
+
+        /* Theme-specific styles for Shadow theme variants */
+        .theme-option.theme-has-submenu {
+            position: relative;
+            justify-content: space-between;
+        }
+
+        .submenu-arrow {
+            font-size: 0.8rem;
+            color: var(--fg-secondary);
+            margin-left: auto;
+        }
+
+        .submenu {
+            position: absolute;
+            top: 0;
+            right: 100%;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius-sm);
+            box-shadow: 0 8px 20px var(--shadow-strong);
+            padding: 0.75rem;
+            display: none;
+            flex-direction: column;
+            gap: 0.5rem;
+            z-index: 1002;
+            min-width: 70px;
+        }
+
+        .theme-option.theme-has-submenu:hover .submenu {
+            display: flex;
+        }
+
+        .variant-btn {
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            box-shadow: 0 2px 6px var(--shadow);
+            transition: var(--transition);
+        }
+
+        .variant-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px var(--shadow-hover);
         }
     </style>
 </head>
 
 <body>
-    <canvas id="particle-canvas"></canvas>
-
+    <!-- Navigation Header -->
     <header class="nav-header">
-        <a href="home.html" style="text-decoration: none;">
-            <div class="logo">
-                <i class="fa-solid fa-cricket-bat-ball logo-icon"></i>
-                <span>SimCricketX Architect</span>
-            </div>
-        </a>
-    </header>
-
-    <main class="main-content">
-        <div class="holo-deck">
-            <label for="file-input" class="pitch-area" id="pitch-area">
-                <div class="crease top"></div>
-                <div class="stumps">
-                    <div class="stump"></div>
-                    <div class="stump"></div>
-                    <div class="stump"></div>
-                </div>
-                <div class="upload-prompt" id="upload-prompt">
-                    <i class="fa-solid fa-file-csv"></i>
-                    Drop CSV Files on Pitch
-                </div>
-                <div class="crease bottom"></div>
-            </label>
+        <div class="logo">
+            <i class="fa-solid fa-chart-simple logo-icon"></i>
+            <span>SimCricketX</span>
         </div>
 
-        <aside class="dossier-area">
-            <h2 style="text-align: center; font-family: 'JetBrains Mono', monospace;">PLAYER DATA DOSSIERS</h2>
-            <div id="dossier-container">
-                <!-- Dossier cards will be injected here -->
+        <!-- Global Search Bar -->
+        <div class="global-search">
+            <div class="search-container">
+                <i class="fa-solid fa-search search-icon"></i>
+                <input type="text" class="search-input" id="global-search-input" placeholder="Search for players...">
+                <i class="fa-solid fa-times search-clear" id="search-clear"></i>
+                <div class="search-suggestions" id="search-suggestions"></div>
             </div>
-            <input type="file" id="file-input" accept=".csv" multiple style="display: none;">
-            <button type="submit" class="submit-btn" id="submit-button" disabled>
-                <i class="fa-solid fa-paper-plane"></i>
-                Finalize Draft
-            </button>
-        </aside>
+        </div>
 
-        <a href="home.html" class="home-link"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
+        <div class="nav-controls">
+            <a href="/" class="nav-btn home-btn">
+                <i class="fa-solid fa-home"></i>
+                <span>Home</span>
+            </a>
+
+            <button class="theme-toggle" id="theme-toggle">🌙</button>
+
+            <div class="theme-dropdown" id="theme-dropdown">
+                <button class="theme-dropdown-btn" id="theme-dropdown-btn">
+                    <i class="fa-solid fa-palette"></i>
+                    <span class="theme-dropdown-text">Themes</span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+
+                <div class="theme-dropdown-menu" id="theme-dropdown-menu">
+                    <div class="theme-option" data-theme="nord">
+                        <i class="fa-solid fa-snowflake theme-icon"></i>
+                        <span>Nord</span>
+                    </div>
+                    <div class="theme-option" data-theme="retro">
+                        <i class="fa-solid fa-compact-disc theme-icon"></i>
+                        <span>Retro</span>
+                    </div>
+                    <div class="theme-option" data-theme="cupcake">
+                        <i class="fa-solid fa-birthday-cake theme-icon"></i>
+                        <span>Cupcake</span>
+                    </div>
+                    <div class="theme-option" data-theme="dim">
+                        <i class="fa-solid fa-adjust theme-icon"></i>
+                        <span>Dim</span>
+                    </div>
+                    <div class="theme-option" data-theme="dracula">
+                        <i class="fa-solid fa-ghost theme-icon"></i>
+                        <span>Dracula</span>
+                    </div>
+                    <div class="theme-option" data-theme="sunset">
+                        <i class="fa-solid fa-sun theme-icon"></i>
+                        <span>Sunset</span>
+                    </div>
+                    <div class="theme-option theme-has-submenu" data-theme="prototype">
+                        <i class="fa-solid fa-palette theme-icon"></i>
+                        <span>Shadow</span>
+                        <i class="fa-solid fa-chevron-left submenu-arrow"></i>
+                        <div class="submenu">
+                            <button class="variant-btn" data-primary="#00d4aa" data-light="#00b894"
+                                style="background: #00d4aa;"></button>
+                            <button class="variant-btn" data-primary="#4facfe" data-light="#00f2fe"
+                                style="background: #4facfe;"></button>
+                            <button class="variant-btn" data-primary="#a855f7" data-light="#3b82f6"
+                                style="background: #a855f7;"></button>
+                            <button class="variant-btn" data-primary="#ff6b6b" data-light="#ffa500"
+                                style="background: #ff6b6b;"></button>
+                            <button class="variant-btn" data-primary="#ff758c" data-light="#ff7eb3"
+                                style="background: #ff758c;"></button>
+                            <button class="variant-btn" data-primary="#ffd700" data-light="#ffb347"
+                                style="background: #ffd700;"></button>
+                            <button class="variant-btn" data-primary="#ffffff" data-light="#c0c0c0"
+                                style="background: linear-gradient(135deg, #ffffff, #c0c0c0);"></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Hero Section -->
+        <section class="hero-section">
+            <h1 class="hero-title">🏏 Statistics Hub</h1>
+            <p class="hero-subtitle">Comprehensive cricket analytics and player performance insights</p>
+        </section>
+
+        <!-- Flash Messages -->
+        <div class="flash-container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">
+                <i class="fa-solid fa-info-circle"></i>
+                <span>{{ message }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+        </div>
+
+        {% if not has_stats %}
+        <!-- Upload Section -->
+        <section class="upload-section">
+            <div class="upload-icon">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+            </div>
+            <h2 class="upload-title">Upload Your Cricket Statistics</h2>
+            <p class="upload-subtitle">Upload your batting and bowling CSV files to generate comprehensive player
+                statistics and insights</p>
+
+            <form action="{{ url_for('upload_stats') }}" method="post" enctype="multipart/form-data">
+                <div class="file-input-wrapper">
+                    <input type="file" name="stats_files" class="file-input" required multiple accept=".csv"
+                        id="stats-files">
+                    <div class="file-input-display" id="file-display">
+                        <i class="fa-solid fa-file-csv"
+                            style="font-size: 2rem; color: var(--accent); margin-bottom: 1rem;"></i>
+                        <div>Click to select CSV files or drag and drop</div>
+                        <div style="font-size: 0.875rem; color: var(--fg-secondary); margin-top: 0.5rem;">Supports
+                            multiple CSV files</div>
+                    </div>
+                </div>
+
+                <button type="submit" class="upload-btn">
+                    <i class="fa-solid fa-cogs"></i>
+                    Process Statistics
+                </button>
+            </form>
+        </section>
+        {% else %}
+
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+            <h2 class="dashboard-title">Player Statistics Dashboard</h2>
+            <div class="action-buttons">
+                <a href="{{ url_for('statistics', upload='true') }}" class="action-btn secondary">
+                    <i class="fa-solid fa-upload"></i> New Upload
+                </a>
+                <a href="{{ url_for('download_stats_csv', leaderboard='batting_full') }}" class="action-btn">
+                    <i class="fa-solid fa-download"></i> Batting CSV
+                </a>
+                <a href="{{ url_for('download_stats_csv', leaderboard='bowling_full') }}" class="action-btn">
+                    <i class="fa-solid fa-download"></i> Bowling CSV
+                </a>
+                <a href="{{ url_for('download_stats_tab', leaderboard='batting_full') }}" target="_blank"
+                    class="action-btn">
+                    <i class="fa-solid fa-file-alt"></i> Batting TXT
+                </a>
+                <a href="{{ url_for('download_stats_tab', leaderboard='bowling_full') }}" target="_blank"
+                    class="action-btn">
+                    <i class="fa-solid fa-file-alt"></i> Bowling TXT
+                </a>
+            </div>
+        </div>
+
+        <!-- Leaderboards Grid -->
+        <div class="leaderboard-grid">
+            <div class="leaderboard-card">
+                <div class="leaderboard-header">
+                    <i class="fa-solid fa-trophy leaderboard-icon"></i>
+                    <h3 class="leaderboard-title">Top Run Scorers</h3>
+                </div>
+                <ul class="leaderboard-list">
+                    {% for player in leaderboards.top_run_scorers %}
+                    <li class="leaderboard-item">
+                        <span class="player-name">{{ player.Player }}</span>
+                        <span class="stat-value">{{ player.Runs }}</span>
+                    </li>
+                    {% else %}
+                    <li class="leaderboard-item">
+                        <span style="color: var(--fg-secondary); font-style: italic;">No data available</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="leaderboard-actions">
+                    <a href="{{ url_for('download_stats_csv', leaderboard='top_run_scorers') }}" class="mini-btn">📥
+                        CSV</a>
+                    <a href="{{ url_for('download_stats_tab', leaderboard='top_run_scorers') }}" target="_blank"
+                        class="mini-btn">📋 Text</a>
+                </div>
+            </div>
+
+            <div class="leaderboard-card">
+                <div class="leaderboard-header">
+                    <i class="fa-solid fa-bowling-ball leaderboard-icon"></i>
+                    <h3 class="leaderboard-title">Top Wicket Takers</h3>
+                </div>
+                <ul class="leaderboard-list">
+                    {% for player in leaderboards.top_wicket_takers %}
+                    <li class="leaderboard-item">
+                        <span class="player-name">{{ player.Player }}</span>
+                        <span class="stat-value">{{ player.Wickets }}</span>
+                    </li>
+                    {% else %}
+                    <li class="leaderboard-item">
+                        <span style="color: var(--fg-secondary); font-style: italic;">No data available</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="leaderboard-actions">
+                    <a href="{{ url_for('download_stats_csv', leaderboard='top_wicket_takers') }}" class="mini-btn">📥
+                        CSV</a>
+                    <a href="{{ url_for('download_stats_tab', leaderboard='top_wicket_takers') }}" target="_blank"
+                        class="mini-btn">📋 Text</a>
+                </div>
+            </div>
+
+            <div class="leaderboard-card">
+                <div class="leaderboard-header">
+                    <i class="fa-solid fa-rocket leaderboard-icon"></i>
+                    <h3 class="leaderboard-title">Most Sixes</h3>
+                </div>
+                <ul class="leaderboard-list">
+                    {% for player in leaderboards.most_sixes %}
+                    <li class="leaderboard-item">
+                        <span class="player-name">{{ player.Player }}</span>
+                        <span class="stat-value">{{ player['6s'] }}</span>
+                    </li>
+                    {% else %}
+                    <li class="leaderboard-item">
+                        <span style="color: var(--fg-secondary); font-style: italic;">No data available</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="leaderboard-actions">
+                    <a href="{{ url_for('download_stats_csv', leaderboard='most_sixes') }}" class="mini-btn">📥 CSV</a>
+                    <a href="{{ url_for('download_stats_tab', leaderboard='most_sixes') }}" target="_blank"
+                        class="mini-btn">📋 Text</a>
+                </div>
+            </div>
+
+            <div class="leaderboard-card">
+                <div class="leaderboard-header">
+                    <i class="fa-solid fa-bolt leaderboard-icon"></i>
+                    <h3 class="leaderboard-title">Best Strike Rate <small>(min 50 balls)</small></h3>
+                </div>
+                <ul class="leaderboard-list">
+                    {% for player in leaderboards.best_strikers %}
+                    <li class="leaderboard-item">
+                        <span class="player-name">{{ player.Player }}</span>
+                        <span class="stat-value">{{ player['Strike Rate'] }}</span>
+                    </li>
+                    {% else %}
+                    <li class="leaderboard-item">
+                        <span style="color: var(--fg-secondary); font-style: italic;">No data available</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="leaderboard-actions">
+                    <a href="{{ url_for('download_stats_csv', leaderboard='best_strikers') }}" class="mini-btn">📥
+                        CSV</a>
+                    <a href="{{ url_for('download_stats_tab', leaderboard='best_strikers') }}" target="_blank"
+                        class="mini-btn">📋 Text</a>
+                </div>
+            </div>
+
+            <div class="leaderboard-card">
+                <div class="leaderboard-header">
+                    <i class="fa-solid fa-shield-alt leaderboard-icon"></i>
+                    <h3 class="leaderboard-title">Best Economy <small>(min 10 overs)</small></h3>
+                </div>
+                <ul class="leaderboard-list">
+                    {% for player in leaderboards.best_economy %}
+                    <li class="leaderboard-item">
+                        <span class="player-name">{{ player.Player }}</span>
+                        <span class="stat-value">{{ player.Economy }}</span>
+                    </li>
+                    {% else %}
+                    <li class="leaderboard-item">
+                        <span style="color: var(--fg-secondary); font-style: italic;">No data available</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="leaderboard-actions">
+                    <a href="{{ url_for('download_stats_csv', leaderboard='best_economy') }}" class="mini-btn">📥
+                        CSV</a>
+                    <a href="{{ url_for('download_stats_tab', leaderboard='best_economy') }}" target="_blank"
+                        class="mini-btn">📋 Text</a>
+                </div>
+            </div>
+
+            <div class="leaderboard-card">
+                <div class="leaderboard-header">
+                    <i class="fa-solid fa-hand-paper leaderboard-icon"></i>
+                    <h3 class="leaderboard-title">Most Catches</h3>
+                </div>
+                <ul class="leaderboard-list">
+                    {% for player in leaderboards.most_catches %}
+                    <li class="leaderboard-item">
+                        <span class="player-name">{{ player.Player }}</span>
+                        <span class="stat-value">{{ player.Catches }}</span>
+                    </li>
+                    {% else %}
+                    <li class="leaderboard-item">
+                        <span style="color: var(--fg-secondary); font-style: italic;">No data available</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="leaderboard-actions">
+                    <a href="{{ url_for('download_stats_csv', leaderboard='most_catches') }}" class="mini-btn">📥
+                        CSV</a>
+                    <a href="{{ url_for('download_stats_tab', leaderboard='most_catches') }}" target="_blank"
+                        class="mini-btn">📋 Text</a>
+                </div>
+            </div>
+
+            <div class="leaderboard-card">
+                <div class="leaderboard-header">
+                    <i class="fa-solid fa-chart-line leaderboard-icon"></i>
+                    <h3 class="leaderboard-title">Best Batting Average</h3>
+                </div>
+                <ul class="leaderboard-list">
+                    {% for player in leaderboards.best_average %}
+                    <li class="leaderboard-item">
+                        <span class="player-name">{{ player.Player }}</span>
+                        <span class="stat-value">{{ player.Average }}</span>
+                    </li>
+                    {% else %}
+                    <li class="leaderboard-item">
+                        <span style="color: var(--fg-secondary); font-style: italic;">No data available</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="leaderboard-actions">
+                    <a href="{{ url_for('download_stats_csv', leaderboard='best_average') }}" class="mini-btn">📥
+                        CSV</a>
+                    <a href="{{ url_for('download_stats_tab', leaderboard='best_average') }}" target="_blank"
+                        class="mini-btn">📋 Text</a>
+                </div>
+            </div>
+
+            <div class="leaderboard-card">
+                <div class="leaderboard-header">
+                    <i class="fa-solid fa-burst leaderboard-icon"></i>
+                    <h3 class="leaderboard-title">Best Bowling Figures</h3>
+                </div>
+                <ul class="leaderboard-list">
+                    {% for player in leaderboards.best_figures %}
+                    <li class="leaderboard-item">
+                        <span class="player-name">{{ player.Player }}</span>
+                        <span class="stat-value">{{ player.Best }}</span>
+                    </li>
+                    {% else %}
+                    <li class="leaderboard-item">
+                        <span style="color: var(--fg-secondary); font-style: italic;">No data available</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="leaderboard-actions">
+                    <a href="{{ url_for('download_stats_csv', leaderboard='best_figures') }}" class="mini-btn">📥
+                        CSV</a>
+                    <a href="{{ url_for('download_stats_tab', leaderboard='best_figures') }}" target="_blank"
+                        class="mini-btn">📋 Text</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Tables Section -->
+        <section class="stats-section">
+            <div class="tabs">
+                <button class="tab-button active" data-tab="batting">
+                    <i class="fa-solid fa-baseball-bat-ball"></i>
+                    Batting Statistics
+                </button>
+                <button class="tab-button" data-tab="bowling">
+                    <i class="fa-solid fa-bowling-ball"></i>
+                    Bowling Statistics
+                </button>
+            </div>
+
+            <div id="batting" class="tab-content active">
+                <!-- Filter Controls for Batting -->
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label class="filter-label" for="batting-team-filter">
+                            <i class="fa-solid fa-filter"></i> Filter by Team:
+                        </label>
+                        <select id="batting-team-filter" class="team-filter">
+                            <option value="">All Teams</option>
+                        </select>
+                        <span class="filter-info" id="batting-filter-info">Showing all players</span>
+                    </div>
+                    <div class="filter-actions">
+                        <button class="clear-filter-btn" id="batting-clear-filter">
+                            <i class="fa-solid fa-times"></i> Clear
+                        </button>
+                        <button class="download-csv-btn" id="batting-download-csv">
+                            <i class="fa-solid fa-download"></i> CSV
+                        </button>
+                        <button class="download-txt-btn" id="batting-download-txt">
+                            <i class="fa-solid fa-file-alt"></i> TXT
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table id="batting-table">
+                        <thead>
+                            <tr>
+                                {% for header in batting_headers %}
+                                <th data-column="{{ header }}">
+                                    {{ header }}
+                                    <i class="fa-solid fa-sort sort-icon"></i>
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in batting_stats %}
+                            <tr>
+                                {% for header in batting_headers %}
+                                <td>{{ row[header] }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="bowling" class="tab-content">
+                <!-- Filter Controls for Bowling -->
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label class="filter-label" for="bowling-team-filter">
+                            <i class="fa-solid fa-filter"></i> Filter by Team:
+                        </label>
+                        <select id="bowling-team-filter" class="team-filter">
+                            <option value="">All Teams</option>
+                        </select>
+                        <span class="filter-info" id="bowling-filter-info">Showing all players</span>
+                    </div>
+                    <div class="filter-actions">
+                        <button class="clear-filter-btn" id="bowling-clear-filter">
+                            <i class="fa-solid fa-times"></i> Clear
+                        </button>
+                        <button class="download-csv-btn" id="bowling-download-csv">
+                            <i class="fa-solid fa-download"></i> CSV
+                        </button>
+                        <button class="download-txt-btn" id="bowling-download-txt">
+                            <i class="fa-solid fa-file-alt"></i> TXT
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table id="bowling-table">
+                        <thead>
+                            <tr>
+                                {% for header in bowling_headers %}
+                                <th data-column="{{ header }}">
+                                    {{ header }}
+                                    <i class="fa-solid fa-sort sort-icon"></i>
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in bowling_stats %}
+                            <tr>
+                                {% for header in bowling_headers %}
+                                <td>{{ row[header] }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        {% endif %}
     </main>
 
     <script>
-        const fileInput = document.getElementById('file-input');
-        const pitchArea = document.getElementById('pitch-area');
-        const dossierContainer = document.getElementById('dossier-container');
-        const submitButton = document.getElementById('submit-button');
+        // Global variables for player search
+        let allPlayers = [];
+        let currentSearchTimeout = null;
 
-        let stagedFiles = new Map();
+        // Theme functionality (identical to home.html)
+        const toggle = document.getElementById('theme-toggle');
+        const root = document.documentElement;
 
-        function updateUI() {
-            dossierContainer.innerHTML = '';
-            if (stagedFiles.size === 0) {
-                dossierContainer.innerHTML = '<p style="text-align:center; color: var(--fg-secondary); font-family: \'JetBrains Mono\', monospace;">Awaiting player data...</p>';
-            } else {
-                stagedFiles.forEach((file, name) => {
-                    const dossierCard = document.createElement('div');
-                    dossierCard.className = 'dossier-card';
-                    dossierCard.innerHTML = `
-                        <div class="dossier-icon"><i class="fa-solid fa-file-csv"></i></div>
-                        <div class="dossier-details">
-                            <div class="dossier-name">${file.name}</div>
-                            <div class="dossier-status">Ready for drafting</div>
-                        </div>
-                        <button class="dossier-remove" data-filename="${file.name}" title="Remove file">&times;</button>
-                    `;
-                    dossierContainer.appendChild(dossierCard);
-                });
-            }
-            submitButton.disabled = stagedFiles.size === 0;
+        function updateToggleIcon(theme) {
+            const isDark = theme === 'dark' || ['dim', 'dracula', 'sunset'].includes(theme);
+            toggle.textContent = isDark ? '☀️' : '🌙';
         }
 
-        function handleFiles(files) {
-            for (const file of files) {
-                if (file.type === 'text/csv' && !stagedFiles.has(file.name)) {
-                    stagedFiles.set(file.name, file);
+        toggle.onclick = () => {
+            const currentTheme = root.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateToggleIcon(newTheme);
+        };
+
+        // Theme Dropdown
+        const dropdown = document.getElementById('theme-dropdown');
+        const dropdownBtn = document.getElementById('theme-dropdown-btn');
+        const dropdownMenu = document.getElementById('theme-dropdown-menu');
+
+        dropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('active');
+        });
+
+        document.addEventListener('click', () => {
+            dropdown.classList.remove('active');
+        });
+
+        dropdownMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        // Theme Selection
+        document.querySelectorAll('.theme-option:not(.theme-has-submenu)').forEach(option => {
+            option.addEventListener('click', () => {
+                const theme = option.getAttribute('data-theme');
+                document.documentElement.style.removeProperty('--accent');
+                document.documentElement.style.removeProperty('--accent-hover');
+                document.documentElement.style.removeProperty('--accent-light');
+                document.documentElement.style.removeProperty('--icon-color');
+                document.documentElement.style.removeProperty('--gradient');
+                document.documentElement.style.removeProperty('--gradient-accent');
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                updateToggleIcon(theme);
+                dropdown.classList.remove('active');
+            });
+        });
+
+        // Shadow theme selection
+        const shadowOpt = document.querySelector('.theme-option.theme-has-submenu');
+        shadowOpt.addEventListener('click', e => {
+            if (e.target.closest('.variant-btn')) return;
+            document.documentElement.setAttribute('data-theme', 'prototype');
+            localStorage.setItem('theme', 'prototype');
+            updateToggleIcon('prototype');
+            dropdown.classList.remove('active');
+        });
+
+        // Shadow theme variants
+        document.querySelectorAll('.variant-btn').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const primary = this.getAttribute('data-primary');
+                const light = this.getAttribute('data-light');
+
+                localStorage.setItem('prototypePrimary', primary);
+                localStorage.setItem('prototypeLight', light);
+
+                document.documentElement.setAttribute('data-theme', 'prototype');
+                localStorage.setItem('theme', 'prototype');
+                updateToggleIcon('prototype');
+
+                document.documentElement.style.setProperty('--accent', primary);
+                document.documentElement.style.setProperty('--accent-hover', light);
+                document.documentElement.style.setProperty('--accent-light', `${primary}1a`);
+                document.documentElement.style.setProperty('--icon-color', primary);
+                document.documentElement.style.setProperty('--gradient', `linear-gradient(135deg, ${primary}, ${light})`);
+                document.documentElement.style.setProperty('--gradient-accent', `linear-gradient(45deg, ${primary}, #ffffff)`);
+
+                dropdown.classList.remove('active');
+            });
+        });
+
+        // Global Player Search functionality
+        function initializePlayerSearch() {
+            const searchInput = document.getElementById('global-search-input');
+            const searchClear = document.getElementById('search-clear');
+            const searchSuggestions = document.getElementById('search-suggestions');
+
+            if (!searchInput) return;
+
+            // Extract all players from both tables
+            extractAllPlayers();
+
+            // Search input handler
+            searchInput.addEventListener('input', function (e) {
+                const query = e.target.value.trim();
+
+                if (query.length === 0) {
+                    hideSearchSuggestions();
+                    searchClear.classList.remove('visible');
+                    clearHighlights();
+                    return;
+                }
+
+                searchClear.classList.add('visible');
+
+                // Debounce search
+                if (currentSearchTimeout) {
+                    clearTimeout(currentSearchTimeout);
+                }
+
+                currentSearchTimeout = setTimeout(() => {
+                    performPlayerSearch(query);
+                }, 200);
+            });
+
+            // Clear button handler
+            searchClear.addEventListener('click', function () {
+                searchInput.value = '';
+                searchClear.classList.remove('visible');
+                hideSearchSuggestions();
+                clearHighlights();
+            });
+
+            // Close suggestions when clicking outside
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest('.search-container')) {
+                    hideSearchSuggestions();
+                }
+            });
+
+            // Keyboard navigation for suggestions
+            searchInput.addEventListener('keydown', function (e) {
+                const suggestions = document.querySelectorAll('.search-suggestion');
+                const highlighted = document.querySelector('.search-suggestion.highlighted');
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (!highlighted) {
+                        suggestions[0]?.classList.add('highlighted');
+                    } else {
+                        highlighted.classList.remove('highlighted');
+                        const next = highlighted.nextElementSibling;
+                        if (next) {
+                            next.classList.add('highlighted');
+                        } else {
+                            suggestions[0]?.classList.add('highlighted');
+                        }
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (!highlighted) {
+                        suggestions[suggestions.length - 1]?.classList.add('highlighted');
+                    } else {
+                        highlighted.classList.remove('highlighted');
+                        const prev = highlighted.previousElementSibling;
+                        if (prev) {
+                            prev.classList.add('highlighted');
+                        } else {
+                            suggestions[suggestions.length - 1]?.classList.add('highlighted');
+                        }
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (highlighted) {
+                        selectPlayer(highlighted.dataset.player);
+                    }
+                } else if (e.key === 'Escape') {
+                    hideSearchSuggestions();
+                }
+            });
+        }
+
+        // Helper function to get team column index
+        function getTeamColumnIndex(table) {
+            const headers = table.querySelectorAll('thead th');
+            for (let i = 0; i < headers.length; i++) {
+                const headerText = headers[i].textContent.toLowerCase().trim();
+                if (headerText.includes('team') || headerText.includes('club')) {
+                    return i;
                 }
             }
-            updateUI();
+            return -1; // No team column found
         }
 
-        fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+        // Helper function to get player column index
+        function getPlayerColumnIndex(table) {
+            const headers = table.querySelectorAll('thead th');
+            for (let i = 0; i < headers.length; i++) {
+                const headerText = headers[i].textContent.toLowerCase().trim();
+                if (headerText === 'player' || headerText === 'name') {
+                    return i;
+                }
+            }
+            return -1;
+        }
 
-        pitchArea.addEventListener('click', () => fileInput.click());
+        function extractAllPlayers() {
+            allPlayers = [];
+            const playerSet = new Set();
 
-        dossierContainer.addEventListener('click', (e) => {
-            if (e.target.classList.contains('dossier-remove')) {
-                const filename = e.target.dataset.filename;
-                stagedFiles.delete(filename);
-                updateUI();
+            // Extract from batting table
+            const battingTable = document.getElementById('batting-table');
+            if (battingTable) {
+                const rows = battingTable.querySelectorAll('tbody tr');
+                const playerColumnIndex = getPlayerColumnIndex(battingTable);
+                const teamColumnIndex = getTeamColumnIndex(battingTable);
+
+                if (playerColumnIndex !== -1) {
+                    rows.forEach(row => {
+                        const playerCell = row.cells[playerColumnIndex];
+                        const teamCell = teamColumnIndex !== -1 ? row.cells[teamColumnIndex] : null;
+
+                        if (playerCell && playerCell.textContent.trim()) {
+                            const playerName = playerCell.textContent.trim();
+                            const teamName = teamCell ? teamCell.textContent.trim() : '';
+                            const playerKey = `${playerName}|${teamName}`;
+
+                            if (!playerSet.has(playerKey)) {
+                                playerSet.add(playerKey);
+                                allPlayers.push({
+                                    name: playerName,
+                                    team: teamName,
+                                    type: 'batting'
+                                });
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Extract from bowling table
+            const bowlingTable = document.getElementById('bowling-table');
+            if (bowlingTable) {
+                const rows = bowlingTable.querySelectorAll('tbody tr');
+                const playerColumnIndex = getPlayerColumnIndex(bowlingTable);
+                const teamColumnIndex = getTeamColumnIndex(bowlingTable);
+
+                if (playerColumnIndex !== -1) {
+                    rows.forEach(row => {
+                        const playerCell = row.cells[playerColumnIndex];
+                        const teamCell = teamColumnIndex !== -1 ? row.cells[teamColumnIndex] : null;
+
+                        if (playerCell && playerCell.textContent.trim()) {
+                            const playerName = playerCell.textContent.trim();
+                            const teamName = teamCell ? teamCell.textContent.trim() : '';
+                            const playerKey = `${playerName}|${teamName}`;
+
+                            if (!playerSet.has(playerKey)) {
+                                playerSet.add(playerKey);
+                                allPlayers.push({
+                                    name: playerName,
+                                    team: teamName,
+                                    type: 'bowling'
+                                });
+                            } else {
+                                // Update existing player to show both types
+                                const existingPlayer = allPlayers.find(p => p.name === playerName && p.team === teamName);
+                                if (existingPlayer && existingPlayer.type === 'batting') {
+                                    existingPlayer.type = 'both';
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        function performPlayerSearch(query) {
+            const searchSuggestions = document.getElementById('search-suggestions');
+            const queryLower = query.toLowerCase();
+
+            // Filter players based on query
+            const matches = allPlayers.filter(player =>
+                player.name.toLowerCase().includes(queryLower) ||
+                player.team.toLowerCase().includes(queryLower)
+            );
+
+            // Sort matches by relevance
+            matches.sort((a, b) => {
+                const aNameMatch = a.name.toLowerCase().startsWith(queryLower);
+                const bNameMatch = b.name.toLowerCase().startsWith(queryLower);
+
+                if (aNameMatch && !bNameMatch) return -1;
+                if (!aNameMatch && bNameMatch) return 1;
+
+                return a.name.localeCompare(b.name);
+            });
+
+            // Display suggestions
+            displaySearchSuggestions(matches.slice(0, 10)); // Show top 10 matches
+        }
+
+        function displaySearchSuggestions(matches) {
+            const searchSuggestions = document.getElementById('search-suggestions');
+
+            if (matches.length === 0) {
+                searchSuggestions.innerHTML = '<div class="no-results">No players found</div>';
+            } else {
+                const suggestionsHTML = matches.map(player => {
+                    const typeIcon = player.type === 'batting' ? '🏏' :
+                        player.type === 'bowling' ? '⚾' : '🏏⚾';
+                    const typeText = player.type === 'batting' ? 'Batting' :
+                        player.type === 'bowling' ? 'Bowling' : 'Both';
+
+                    return `
+                        <div class="search-suggestion" data-player="${player.name}" data-team="${player.team}" data-type="${player.type}">
+                            <div>
+                                <div class="suggestion-name">${player.name}</div>
+                                <div class="suggestion-info">${player.team} • ${typeIcon} ${typeText}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                searchSuggestions.innerHTML = suggestionsHTML;
+
+                // Add click handlers to suggestions
+                searchSuggestions.querySelectorAll('.search-suggestion').forEach(suggestion => {
+                    suggestion.addEventListener('click', function () {
+                        selectPlayer(this.dataset.player, this.dataset.team, this.dataset.type);
+                    });
+
+                    suggestion.addEventListener('mouseenter', function () {
+                        document.querySelectorAll('.search-suggestion').forEach(s => s.classList.remove('highlighted'));
+                        this.classList.add('highlighted');
+                    });
+                });
+            }
+
+            showSearchSuggestions();
+        }
+
+        function selectPlayer(playerName, teamName = '', playerType = '') {
+            const searchInput = document.getElementById('global-search-input');
+            searchInput.value = playerName;
+            hideSearchSuggestions();
+
+            // Highlight player in tables
+            highlightPlayerInTables(playerName);
+
+            // Switch to appropriate tab if specified
+            if (playerType === 'batting') {
+                switchToTab('batting');
+            } else if (playerType === 'bowling') {
+                switchToTab('bowling');
+            }
+
+            // Scroll to first highlighted row
+            setTimeout(() => {
+                const highlightedRow = document.querySelector('.table-row-highlighted');
+                if (highlightedRow) {
+                    highlightedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+
+        function highlightPlayerInTables(playerName) {
+            clearHighlights();
+
+            // Highlight in batting table
+            const battingTable = document.getElementById('batting-table');
+            if (battingTable) {
+                highlightPlayerInTable(battingTable, playerName);
+            }
+
+            // Highlight in bowling table
+            const bowlingTable = document.getElementById('bowling-table');
+            if (bowlingTable) {
+                highlightPlayerInTable(bowlingTable, playerName);
+            }
+        }
+
+        function highlightPlayerInTable(table, playerName) {
+            const playerColumnIndex = getPlayerColumnIndex(table);
+            if (playerColumnIndex === -1) return;
+
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const playerCell = row.cells[playerColumnIndex];
+                if (playerCell && playerCell.textContent.trim().toLowerCase() === playerName.toLowerCase()) {
+                    row.classList.add('table-row-highlighted');
+                }
+            });
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.table-row-highlighted').forEach(row => {
+                row.classList.remove('table-row-highlighted');
+            });
+        }
+
+        function switchToTab(tabName) {
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
+
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName)?.classList.add('active');
+        }
+
+        function showSearchSuggestions() {
+            document.getElementById('search-suggestions').classList.add('visible');
+        }
+
+        function hideSearchSuggestions() {
+            document.getElementById('search-suggestions').classList.remove('visible');
+            document.querySelectorAll('.search-suggestion').forEach(s => s.classList.remove('highlighted'));
+        }
+
+        // Initialize theme on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('theme');
+            if (saved) {
+                document.documentElement.setAttribute('data-theme', saved);
+                updateToggleIcon(saved);
+
+                if (saved === 'prototype') {
+                    const primary = localStorage.getItem('prototypePrimary');
+                    const light = localStorage.getItem('prototypeLight');
+                    if (primary && light) {
+                        document.documentElement.style.setProperty('--accent', primary);
+                        document.documentElement.style.setProperty('--accent-hover', light);
+                        document.documentElement.style.setProperty('--accent-light', `${primary}1a`);
+                        document.documentElement.style.setProperty('--icon-color', primary);
+                        document.documentElement.style.setProperty('--gradient', `linear-gradient(135deg, ${primary}, ${light})`);
+                        document.documentElement.style.setProperty('--gradient-accent', `linear-gradient(45deg, ${primary}, #ffffff)`);
+                    }
+                }
+            } else {
+                updateToggleIcon('light');
+            }
+
+            // Auto-dismiss flash messages
+            setTimeout(() => {
+                document.querySelectorAll('.alert').forEach(el => {
+                    el.style.opacity = '0';
+                    el.style.transform = 'translateY(-10px)';
+                    setTimeout(() => el.remove(), 300);
+                });
+            }, 4000);
+
+            // Initialize player search
+            initializePlayerSearch();
+        });
+
+        // Statistics page specific functionality
+        document.addEventListener('DOMContentLoaded', function () {
+            // Tab switching
+            const tabs = document.querySelector('.tabs');
+            if (tabs) {
+                tabs.addEventListener('click', (e) => {
+                    const button = e.target.closest('.tab-button');
+                    if (!button) return;
+
+                    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+
+                    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                    document.getElementById(button.dataset.tab).classList.add('active');
+                });
+            }
+
+            // Team filtering functionality
+            function initializeTeamFilters() {
+                const battingTable = document.getElementById('batting-table');
+                const bowlingTable = document.getElementById('bowling-table');
+
+                if (battingTable) {
+                    setupTeamFilter('batting', battingTable);
+                }
+                if (bowlingTable) {
+                    setupTeamFilter('bowling', bowlingTable);
+                }
+            }
+
+            function setupTeamFilter(type, table) {
+                const teamFilter = document.getElementById(`${type}-team-filter`);
+                const clearFilter = document.getElementById(`${type}-clear-filter`);
+                const downloadCsv = document.getElementById(`${type}-download-csv`);
+                const downloadTxt = document.getElementById(`${type}-download-txt`);
+                const filterInfo = document.getElementById(`${type}-filter-info`);
+
+                // Extract unique teams from table data
+                const teams = new Set();
+                const rows = table.querySelectorAll('tbody tr');
+                const teamColumnIndex = getTeamColumnIndex(table);
+
+                if (teamColumnIndex === -1) return; // No team column found
+
+                rows.forEach(row => {
+                    const teamCell = row.cells[teamColumnIndex];
+                    if (teamCell && teamCell.textContent.trim()) {
+                        teams.add(teamCell.textContent.trim());
+                    }
+                });
+
+                // Populate team filter dropdown
+                const sortedTeams = Array.from(teams).sort();
+                sortedTeams.forEach(team => {
+                    const option = document.createElement('option');
+                    option.value = team;
+                    option.textContent = team;
+                    teamFilter.appendChild(option);
+                });
+
+                // Team filter change handler
+                teamFilter.addEventListener('change', function () {
+                    filterTableByTeam(type, this.value, table, teamColumnIndex);
+                    updateFilterInfo(type, this.value, rows.length);
+                });
+
+                // Clear filter handler
+                clearFilter.addEventListener('click', function () {
+                    teamFilter.value = '';
+                    filterTableByTeam(type, '', table, teamColumnIndex);
+                    updateFilterInfo(type, '', rows.length);
+                });
+
+                // CSV download handler
+                downloadCsv.addEventListener('click', function () {
+                    downloadFilteredData(type, table, teamFilter.value, 'csv');
+                });
+
+                // TXT download handler
+                downloadTxt.addEventListener('click', function () {
+                    downloadFilteredData(type, table, teamFilter.value, 'txt');
+                });
+            }
+
+            function getTeamColumnIndex(table) {
+                const headers = table.querySelectorAll('thead th');
+                for (let i = 0; i < headers.length; i++) {
+                    const headerText = headers[i].textContent.toLowerCase().trim();
+                    if (headerText.includes('team') || headerText.includes('club')) {
+                        return i;
+                    }
+                }
+                return -1; // No team column found
+            }
+
+            function filterTableByTeam(type, selectedTeam, table, teamColumnIndex) {
+                const rows = table.querySelectorAll('tbody tr');
+
+                rows.forEach(row => {
+                    const teamCell = row.cells[teamColumnIndex];
+                    const teamName = teamCell ? teamCell.textContent.trim() : '';
+
+                    if (!selectedTeam || teamName === selectedTeam) {
+                        row.classList.remove('table-row-hidden');
+                    } else {
+                        row.classList.add('table-row-hidden');
+                    }
+                });
+            }
+
+            function updateFilterInfo(type, selectedTeam, totalRows) {
+                const filterInfo = document.getElementById(`${type}-filter-info`);
+                const table = document.getElementById(`${type}-table`);
+                const visibleRows = table.querySelectorAll('tbody tr:not(.table-row-hidden)').length;
+
+                if (selectedTeam) {
+                    filterInfo.textContent = `Showing ${visibleRows} players from ${selectedTeam}`;
+                } else {
+                    filterInfo.textContent = `Showing all ${totalRows} players`;
+                }
+            }
+
+            function downloadFilteredData(type, table, selectedTeam, format) {
+                const headers = [];
+                const data = [];
+
+                // Get headers
+                const headerCells = table.querySelectorAll('thead th');
+                headerCells.forEach(th => {
+                    headers.push(th.textContent.trim().replace(/\s+/g, ' '));
+                });
+
+                // Get visible rows data
+                const visibleRows = table.querySelectorAll('tbody tr:not(.table-row-hidden)');
+                visibleRows.forEach(row => {
+                    const rowData = [];
+                    const cells = row.querySelectorAll('td');
+                    cells.forEach(cell => {
+                        let cellText = cell.textContent.trim().replace(/\s+/g, ' ');
+                        rowData.push(cellText);
+                    });
+                    data.push(rowData);
+                });
+
+                // Generate filename
+                const timestamp = new Date().toISOString().split('T')[0];
+                const teamSuffix = selectedTeam ? `_${selectedTeam.replace(/\s+/g, '_')}` : '';
+                const filename = `${type}_stats${teamSuffix}_${timestamp}.${format}`;
+
+                if (format === 'csv') {
+                    // Create CSV content
+                    let content = headers.join(',') + '\n';
+                    data.forEach(row => {
+                        const escapedRow = row.map(cell => {
+                            // Escape quotes and wrap in quotes if contains comma
+                            if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                                return '"' + cell.replace(/"/g, '""') + '"';
+                            }
+                            return cell;
+                        });
+                        content += escapedRow.join(',') + '\n';
+                    });
+
+                    downloadFile(content, filename, 'text/csv;charset=utf-8;');
+                } else if (format === 'txt') {
+                    // Create formatted text content
+                    let content = `${type.toUpperCase()} STATISTICS${selectedTeam ? ` - ${selectedTeam}` : ''}\n`;
+                    content += '='.repeat(80) + '\n\n';
+
+                    if (data.length === 0) {
+                        content += 'No data available.\n';
+                    } else {
+                        // Calculate column widths
+                        const colWidths = headers.map((header, i) => {
+                            const headerWidth = header.length;
+                            const dataWidth = Math.max(...data.map(row => (row[i] || '').toString().length));
+                            return Math.max(headerWidth, dataWidth, 8); // minimum width of 8
+                        });
+
+                        // Create header row
+                        const headerRow = headers.map((header, i) =>
+                            header.padEnd(colWidths[i])
+                        ).join(' | ');
+                        content += headerRow + '\n';
+
+                        // Create separator
+                        const separator = colWidths.map(width => '-'.repeat(width)).join('-+-');
+                        content += separator + '\n';
+
+                        // Create data rows
+                        data.forEach(row => {
+                            const dataRow = row.map((cell, i) =>
+                                (cell || '').toString().padEnd(colWidths[i])
+                            ).join(' | ');
+                            content += dataRow + '\n';
+                        });
+                    }
+
+                    content += '\n' + '='.repeat(80) + '\n';
+                    content += `Generated on: ${new Date().toLocaleString()}\n`;
+                    content += `Total records: ${data.length}\n`;
+
+                    downloadFile(content, filename, 'text/plain;charset=utf-8;');
+                }
+            }
+
+            function downloadFile(content, filename, mimeType) {
+                const blob = new Blob([content], { type: mimeType });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }
+
+            // Table sorting
+            const sortableHeaders = document.querySelectorAll('th[data-column]');
+            sortableHeaders.forEach(headerCell => {
+                headerCell.addEventListener('click', () => {
+                    const tableElement = headerCell.closest('table');
+                    const headerIndex = Array.from(headerCell.parentElement.children).indexOf(headerCell);
+                    const currentIsAsc = headerCell.classList.contains('sorted-asc');
+
+                    tableElement.querySelectorAll('th').forEach(th => th.classList.remove('sorted-asc', 'sorted-desc'));
+                    headerCell.classList.add(currentIsAsc ? 'sorted-desc' : 'sorted-asc');
+                    sortTableByColumn(tableElement, headerIndex, !currentIsAsc);
+                });
+            });
+
+            function sortTableByColumn(table, columnIndex, asc = true) {
+                const dirModifier = asc ? 1 : -1;
+                const tBody = table.tBodies[0];
+                const rows = Array.from(tBody.querySelectorAll('tr'));
+
+                const sortedRows = rows.sort((a, b) => {
+                    const aColText = a.querySelector(`td:nth-child(${columnIndex + 1})`).textContent.trim();
+                    const bColText = b.querySelector(`td:nth-child(${columnIndex + 1})`).textContent.trim();
+
+                    const aVal = isNaN(parseFloat(aColText)) ? aColText.toLowerCase() : parseFloat(aColText);
+                    const bVal = isNaN(parseFloat(bColText)) ? bColText.toLowerCase() : parseFloat(bColText);
+
+                    if (aVal < bVal) return -1 * dirModifier;
+                    if (aVal > bVal) return 1 * dirModifier;
+                    return 0;
+                });
+
+                tBody.innerHTML = '';
+                tBody.append(...sortedRows);
+            }
+
+            // File upload drag and drop functionality
+            const fileInput = document.getElementById('stats-files');
+            const fileDisplay = document.getElementById('file-display');
+
+            if (fileInput && fileDisplay) {
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                    fileDisplay.addEventListener(eventName, preventDefaults, false);
+                    document.body.addEventListener(eventName, preventDefaults, false);
+                });
+
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    fileDisplay.addEventListener(eventName, highlight, false);
+                });
+
+                ['dragleave', 'drop'].forEach(eventName => {
+                    fileDisplay.addEventListener(eventName, unhighlight, false);
+                });
+
+                fileDisplay.addEventListener('drop', handleDrop, false);
+
+                function preventDefaults(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+
+                function highlight(e) {
+                    fileDisplay.classList.add('drag-over');
+                }
+
+                function unhighlight(e) {
+                    fileDisplay.classList.remove('drag-over');
+                }
+
+                function handleDrop(e) {
+                    const dt = e.dataTransfer;
+                    const files = dt.files;
+                    fileInput.files = files;
+                    updateFileDisplay(files);
+                }
+
+                fileInput.addEventListener('change', function (e) {
+                    updateFileDisplay(e.target.files);
+                });
+
+                function updateFileDisplay(files) {
+                    if (files.length > 0) {
+                        const fileNames = Array.from(files).map(file => file.name).join(', ');
+                        fileDisplay.innerHTML = `
+                            <i class="fa-solid fa-file-csv" style="font-size: 2rem; color: var(--success); margin-bottom: 1rem;"></i>
+                            <div>Selected: ${fileNames}</div>
+                            <div style="font-size: 0.875rem; color: var(--fg-secondary); margin-top: 0.5rem;">${files.length} file(s) ready to upload</div>
+                        `;
+                    }
+                }
+            }
+
+            // Initialize team filters when page loads
+            initializeTeamFilters();
+        });
+
+        // Keyboard navigation support
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                dropdown.classList.remove('active');
+                hideSearchSuggestions();
             }
         });
-
-        submitButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (stagedFiles.size === 0) return;
-
-            // In a real app, you would upload the files here.
-            // const formData = new FormData();
-            // stagedFiles.forEach(file => formData.append('files', file));
-            // fetch('/upload-endpoint', { method: 'POST', body: formData });
-
-            submitButton.innerHTML = `<i class="fa-solid fa-check"></i> Draft Finalized!`;
-            submitButton.style.backgroundColor = 'var(--success)';
-
-            setTimeout(() => {
-                stagedFiles.clear();
-                updateUI();
-                submitButton.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Finalize Draft`;
-                submitButton.style.backgroundColor = '';
-            }, 2000);
-        });
-
-        // --- Drag and Drop Logic ---
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            document.body.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); });
-        });
-        ['dragenter', 'dragover'].forEach(eventName => {
-            pitchArea.addEventListener(eventName, () => pitchArea.classList.add('dragover'));
-        });
-        ['dragleave', 'drop'].forEach(eventName => {
-            pitchArea.addEventListener(eventName, () => pitchArea.classList.remove('dragover'));
-        });
-        pitchArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
-
-        // --- Animated Particle Background (retained from previous version) ---
-        const canvas = document.getElementById('particle-canvas');
-        const ctx = canvas.getContext('2d');
-        let particles = [];
-        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-        function getThemeColor() { return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(); }
-        class Particle {
-            constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height; this.size = Math.random() * 2 + 1; this.speedX = Math.random() * 0.5 - 0.25; this.speedY = Math.random() * 0.5 - 0.25; }
-            update() { this.x += this.speedX; this.y += this.speedY; if (this.x > canvas.width || this.x < 0) this.speedX *= -1; if (this.y > canvas.height || this.y < 0) this.speedY *= -1; }
-            draw() { ctx.fillStyle = getThemeColor(); ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); }
-        }
-        function initParticles() { particles = []; let num = (canvas.width * canvas.height) / 12000; for (let i = 0; i < num; i++) particles.push(new Particle()); }
-        function animate() { ctx.clearRect(0, 0, canvas.width, canvas.height); for (let p of particles) { p.update(); p.draw(); } requestAnimationFrame(animate); }
-        window.addEventListener('resize', () => { resizeCanvas(); initParticles(); });
-
-        // Initial setup
-        updateUI();
-        resizeCanvas();
-        initParticles();
-        animate();
     </script>
 </body>
 
