@@ -2079,12 +2079,13 @@ if __name__ == "__main__":
             webbrowser.open_new_tab(url)
 
         # Run Flask app
-        app.run(
-            host=HOST,
-            port=PORT,
-            debug=is_local,
-            use_reloader=False  # Important: avoid reloader in prod threads
-        )
+        # app.run(
+        #     host=HOST,
+        #     port=PORT,
+        #     debug=is_local,
+        #     use_reloader=False  # Important: avoid reloader in prod threads
+        # )
+        app.run(host="0.0.0.0", port=7860, debug=False, use_reloader=False)
 
     except Exception as e:
         print("❌ Failed to start SimCricketX:")
