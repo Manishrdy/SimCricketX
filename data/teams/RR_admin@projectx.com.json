@@ -3,14 +3,14 @@
   "short_code": "RR",
   "home_ground": "Sawai Mansingh Stadium, Jaipur",
   "pitch_preference": "Flat",
-  "team_color": "#e91e63",
+  "team_color": "#FF69B4",
   "players": [
     {
       "name": "Sanju Samson",
       "role": "Wicketkeeper",
       "batting_rating": 88,
       "bowling_rating": 0,
-      "fielding_rating": 92,
+      "fielding_rating": 87,
       "batting_hand": "Right",
       "bowling_type": "",
       "bowling_hand": ""
@@ -18,9 +18,9 @@
     {
       "name": "Jos Buttler",
       "role": "Wicketkeeper",
-      "batting_rating": 95,
+      "batting_rating": 91,
       "bowling_rating": 0,
-      "fielding_rating": 95,
+      "fielding_rating": 86,
       "batting_hand": "Right",
       "bowling_type": "",
       "bowling_hand": ""
@@ -28,39 +28,29 @@
     {
       "name": "Yashasvi Jaiswal",
       "role": "Batsman",
-      "batting_rating": 85,
-      "bowling_rating": 0,
+      "batting_rating": 87,
+      "bowling_rating": 15,
       "fielding_rating": 80,
       "batting_hand": "Left",
-      "bowling_type": "",
-      "bowling_hand": ""
-    },
-    {
-      "name": "Devdutt Padikkal",
-      "role": "Batsman",
-      "batting_rating": 78,
-      "bowling_rating": 0,
-      "fielding_rating": 75,
-      "batting_hand": "Left",
-      "bowling_type": "",
-      "bowling_hand": ""
+      "bowling_type": "Leg spin",
+      "bowling_hand": "Right"
     },
     {
       "name": "Riyan Parag",
       "role": "All-rounder",
-      "batting_rating": 75,
+      "batting_rating": 80,
       "bowling_rating": 65,
-      "fielding_rating": 85,
+      "fielding_rating": 82,
       "batting_hand": "Right",
-      "bowling_type": "Off spin",
+      "bowling_type": "Leg spin",
       "bowling_hand": "Right"
     },
     {
       "name": "Shimron Hetmyer",
       "role": "Batsman",
-      "batting_rating": 82,
-      "bowling_rating": 0,
-      "fielding_rating": 80,
+      "batting_rating": 81,
+      "bowling_rating": 5,
+      "fielding_rating": 78,
       "batting_hand": "Left",
       "bowling_type": "",
       "bowling_hand": ""
@@ -68,19 +58,29 @@
     {
       "name": "Dhruv Jurel",
       "role": "Wicketkeeper",
-      "batting_rating": 70,
+      "batting_rating": 78,
       "bowling_rating": 0,
-      "fielding_rating": 88,
+      "fielding_rating": 83,
       "batting_hand": "Right",
       "bowling_type": "",
       "bowling_hand": ""
     },
     {
+      "name": "Rovman Powell",
+      "role": "All-rounder",
+      "batting_rating": 79,
+      "bowling_rating": 60,
+      "fielding_rating": 79,
+      "batting_hand": "Right",
+      "bowling_type": "Medium-fast",
+      "bowling_hand": "Right"
+    },
+    {
       "name": "Ravichandran Ashwin",
       "role": "All-rounder",
       "batting_rating": 65,
-      "bowling_rating": 90,
-      "fielding_rating": 80,
+      "bowling_rating": 88,
+      "fielding_rating": 81,
       "batting_hand": "Right",
       "bowling_type": "Off spin",
       "bowling_hand": "Right"
@@ -88,10 +88,10 @@
     {
       "name": "Trent Boult",
       "role": "Bowler",
-      "batting_rating": 30,
-      "bowling_rating": 88,
+      "batting_rating": 40,
+      "bowling_rating": 90,
       "fielding_rating": 82,
-      "batting_hand": "Left",
+      "batting_hand": "Right",
       "bowling_type": "Fast-medium",
       "bowling_hand": "Left"
     },
@@ -99,59 +99,109 @@
       "name": "Yuzvendra Chahal",
       "role": "Bowler",
       "batting_rating": 25,
-      "bowling_rating": 85,
-      "fielding_rating": 70,
+      "bowling_rating": 89,
+      "fielding_rating": 78,
       "batting_hand": "Right",
       "bowling_type": "Leg spin",
       "bowling_hand": "Right"
     },
     {
-      "name": "Prasidh Krishna",
+      "name": "Avesh Khan",
       "role": "Bowler",
       "batting_rating": 20,
-      "bowling_rating": 80,
+      "bowling_rating": 83,
+      "fielding_rating": 75,
+      "batting_hand": "Right",
+      "bowling_type": "Fast-medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Sandeep Sharma",
+      "role": "Bowler",
+      "batting_rating": 20,
+      "bowling_rating": 81,
+      "fielding_rating": 74,
+      "batting_hand": "Right",
+      "bowling_type": "Medium",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Nandre Burger",
+      "role": "Bowler",
+      "batting_rating": 30,
+      "bowling_rating": 84,
+      "fielding_rating": 76,
+      "batting_hand": "Left",
+      "bowling_type": "Fast",
+      "bowling_hand": "Left"
+    },
+    {
+      "name": "Kuldeep Sen",
+      "role": "Bowler",
+      "batting_rating": 15,
+      "bowling_rating": 78,
+      "fielding_rating": 72,
+      "batting_hand": "Right",
+      "bowling_type": "Fast",
+      "bowling_hand": "Right"
+    },
+    {
+      "name": "Navdeep Saini",
+      "role": "Bowler",
+      "batting_rating": 25,
+      "bowling_rating": 79,
       "fielding_rating": 75,
       "batting_hand": "Right",
       "bowling_type": "Fast",
       "bowling_hand": "Right"
     },
     {
-      "name": "Sandeep Sharma",
-      "role": "Bowler",
-      "batting_rating": 25,
-      "bowling_rating": 78,
-      "fielding_rating": 70,
-      "batting_hand": "Right",
-      "bowling_type": "Medium-fast",
-      "bowling_hand": "Right"
-    },
-    {
-      "name": "Kuldeep Sen",
-      "role": "Bowler",
-      "batting_rating": 15,
-      "bowling_rating": 75,
-      "fielding_rating": 65,
-      "batting_hand": "Right",
-      "bowling_type": "Fast-medium",
-      "bowling_hand": "Right"
-    },
-    {
       "name": "Donovan Ferreira",
-      "role": "All-rounder",
-      "batting_rating": 70,
-      "bowling_rating": 55,
-      "fielding_rating": 75,
+      "role": "Wicketkeeper",
+      "batting_rating": 75,
+      "bowling_rating": 20,
+      "fielding_rating": 79,
       "batting_hand": "Right",
-      "bowling_type": "Medium",
+      "bowling_type": "Off spin",
       "bowling_hand": "Right"
+    },
+    {
+      "name": "Tom Kohler-Cadmore",
+      "role": "Batsman",
+      "batting_rating": 76,
+      "bowling_rating": 0,
+      "fielding_rating": 74,
+      "batting_hand": "Right",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Shubham Dubey",
+      "role": "Batsman",
+      "batting_rating": 72,
+      "bowling_rating": 0,
+      "fielding_rating": 70,
+      "batting_hand": "Left",
+      "bowling_type": "",
+      "bowling_hand": ""
+    },
+    {
+      "name": "Abid Mushtaq",
+      "role": "All-rounder",
+      "batting_rating": 40,
+      "bowling_rating": 70,
+      "fielding_rating": 68,
+      "batting_hand": "Left",
+      "bowling_type": "Finger spin",
+      "bowling_hand": "Left"
     },
     {
       "name": "Keshav Maharaj",
       "role": "Bowler",
-      "batting_rating": 35,
-      "bowling_rating": 82,
-      "fielding_rating": 78,
-      "batting_hand": "Left",
+      "batting_rating": 45,
+      "bowling_rating": 87,
+      "fielding_rating": 79,
+      "batting_hand": "Right",
       "bowling_type": "Finger spin",
       "bowling_hand": "Left"
     }

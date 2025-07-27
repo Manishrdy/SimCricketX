@@ -378,15 +378,14 @@ PITCH_SCORING_MATRIX = {
         "Extras":  0.045   # Reduced from 0.050
     },
     "Flat": {
-        # Batting-friendly (170-200 average, ~5-6 wickets)
-        "Dot":     0.26,   # Increased from 0.25 (less scoring)
-        "Single":  0.31,   # Increased from 0.30
-        "Double":  0.12,   
-        "Three":   0.04,   
-        "Four":    0.12,   # Reduced from 0.14
-        "Six":     0.05,   # Reduced from 0.06
-        "Wicket":  0.055,  # Increased from 0.05
-        "Extras":  0.045   # Increased from 0.04
+    "Dot":     0.23,   # ↓ Lowered from 0.26 (encourage more scoring)
+    "Single":  0.30,   # ~ kept same
+    "Double":  0.12,   # — same
+    "Three":   0.04,   # — same
+    "Four":    0.15,   # ↑ Increased from 0.12
+    "Six":     0.07,   # ↑ Increased from 0.05
+    "Wicket":  0.045,  # ↓ Slightly reduced from 0.055 to protect batsmen
+    "Extras":  0.045   # — same
     },
     "Dead": {
         # Batting paradise (200+ average, ~4-5 wickets)
