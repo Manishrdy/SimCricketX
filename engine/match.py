@@ -1401,26 +1401,80 @@ class Match:
             pattern_bowlers = eligible_bowlers
             print(f"  Mixed/All types allowed")
         
-        # NEW: Rating-weighted selection within type
+        # Enhanced: Role and rating-weighted selection within type
         if pattern_bowlers:
             pattern_bowlers = self._sort_by_rating_and_role(pattern_bowlers)
-            print(f"  ✅ Pattern filter successful with rating priority")
-            print(f"  Rating order: {[(b['name'], b['bowling_rating']) for b in pattern_bowlers]}")
+            print(f"  ✅ Pattern filter successful with role and rating priority")
+            print(f"  Role-Rating order: {[(b['name'], b['role'], b['bowling_rating']) for b in pattern_bowlers]}")
             return pattern_bowlers
         else:
-            print(f"  ⚠️  No bowlers match pattern - using all eligible")
-            return eligible_bowlers
+            print(f"  ⚠️  No bowlers match pattern - using all eligible with role priority")
+            # Apply role-based sorting even when no pattern match
+            sorted_eligible = self._sort_by_rating_and_role(eligible_bowlers)
+            return sorted_eligible
 
     def _sort_by_rating_and_role(self, bowlers):
         """
-        NEW: Sort bowlers by rating and role priority
-        Pure Bowler > All-rounder > Others for same rating range
+        Enhanced: Sort bowlers with strong role-based priority
+        1. Pure Bowlers (any rating) > All-rounders (any rating) > Others
+        2. Within each role group, sort by rating (highest first)
+        3. Alphabetical for ties
         """
         return sorted(bowlers, key=lambda b: (
-            -b['bowling_rating'],                    # Higher rating first
-            0 if b['role'] == 'Bowler' else 1,      # Pure bowlers first
-            b['name']                                # Alphabetical for ties
+            # Primary sort: Role priority (lower number = higher priority)
+            0 if b['role'] == 'Bowler' else (1 if b['role'] == 'All-rounder' else 2),
+            # Secondary sort: Higher rating first (negative for descending)
+            -b['bowling_rating'],
+            # Tertiary sort: Alphabetical for ties
+            b['name']
         ))
+    
+    def _apply_all_rounder_bowling_limits(self, eligible_bowlers, quota_analysis):
+        """
+        NEW: Limit All-rounder bowling to 1-2 overs when 5+ bowlers available
+        Only applies when there are sufficient pure bowlers available
+        """
+        print(f"  🎯 All-rounder Bowling Limits Check:")
+        
+        # Count total bowlers marked will_bowl
+        all_bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
+        total_bowlers = len(all_bowlers)
+        
+        print(f"    Total bowlers available: {total_bowlers}")
+        
+        # Only apply limits when we have 6+ bowlers (more than minimum 5)
+        if total_bowlers < 6:
+            print(f"    ✅ Only {total_bowlers} bowlers - no All-rounder limits applied")
+            return eligible_bowlers
+        
+        # Separate pure bowlers and all-rounders
+        pure_bowlers = [b for b in eligible_bowlers if b['role'] == 'Bowler']
+        all_rounders = [b for b in eligible_bowlers if b['role'] == 'All-rounder']
+        other_bowlers = [b for b in eligible_bowlers if b['role'] not in ['Bowler', 'All-rounder']]
+        
+        print(f"    Pure bowlers available: {[b['name'] for b in pure_bowlers]}")
+        print(f"    All-rounders available: {[b['name'] for b in all_rounders]}")
+        
+        # Apply 2-over limit to all-rounders
+        limited_all_rounders = []
+        for ar in all_rounders:
+            overs_bowled = quota_analysis[ar['name']]['overs_bowled']
+            if overs_bowled < 2:  # Allow up to 2 overs
+                limited_all_rounders.append(ar)
+                print(f"    ✅ {ar['name']}: {overs_bowled}/2 overs - Available")
+            else:
+                print(f"    🚫 {ar['name']}: {overs_bowled}/2 overs - Limit reached")
+        
+        # Combine filtered bowlers with pure bowlers prioritized
+        filtered_bowlers = pure_bowlers + limited_all_rounders + other_bowlers
+        
+        # If we have no eligible bowlers after filtering, allow all-rounders to exceed limit
+        if not filtered_bowlers:
+            print(f"    ⚠️  No eligible bowlers after limits - allowing All-rounder override")
+            return eligible_bowlers
+        
+        print(f"    Final filtered pool: {[b['name'] for b in filtered_bowlers]}")
+        return filtered_bowlers
 
     def _apply_secondary_filters(self, eligible_bowlers):
         """Apply form, matchup, and other filters with debugging"""
@@ -2265,10 +2319,13 @@ class Match:
         # 2A: Prevent over-utilization (max 2 overs in first 10)
         balanced_eligible = self._prevent_over_utilization(constraint_eligible, quota_analysis)
 
-        # 2B: Star preservation strategy  
-        preserved_eligible = self._apply_star_preservation_strategy(balanced_eligible, bowler_tiers, quota_analysis)
+        # 2B: NEW - Apply All-rounder bowling limits when 6+ bowlers available
+        role_limited_eligible = self._apply_all_rounder_bowling_limits(balanced_eligible, quota_analysis)
 
-        # 2C: Variety enforcement
+        # 2C: Star preservation strategy  
+        preserved_eligible = self._apply_star_preservation_strategy(role_limited_eligible, bowler_tiers, quota_analysis)
+
+        # 2D: Variety enforcement
         variety_eligible = self._apply_variety_enforcement(preserved_eligible, quota_analysis)
 
         print(f"After balanced strategy: {[b['name'] for b in variety_eligible]}")
