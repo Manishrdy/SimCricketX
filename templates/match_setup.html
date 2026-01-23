@@ -1,1378 +1,916 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <title>Simulate Match – SimCricketX</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-
-    <!-- Font Awesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-
-    <!-- Google Fonts -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-        rel="stylesheet">
-
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // 1️⃣ Grab root & restore saved theme (or default to light)
-            const root = document.documentElement;
-            const saved = localStorage.getItem('theme') || 'light';
-            window.appTheme = saved;
-            root.setAttribute('data-theme', saved);
-
-            // 2️⃣ If Prototype (Shadow), re-apply the last-picked variant colors
-            if (saved === 'prototype') {
-                const primary = localStorage.getItem('prototypePrimary');
-                const light = localStorage.getItem('prototypeLight');
-                if (primary && light) {
-                    root.style.setProperty('--accent', primary);
-                    root.style.setProperty('--accent-hover', light);
-                    root.style.setProperty('--accent-light', `${primary}1a`);
-                    root.style.setProperty('--icon-color', primary);
-                    root.style.setProperty(
-                        '--gradient',
-                        `linear-gradient(135deg, ${primary}, ${light})`
-                    );
-                    root.style.setProperty(
-                        '--gradient-accent',
-                        `linear-gradient(45deg, ${primary}, #ffffff)`
-                    );
-                }
-            }
-
-            // 3️⃣ Wire up the toggle button
-            const ttl = document.getElementById('theme-toggle');
-            // Set its initial icon
-            ttl.textContent = saved === 'dark' ? '☀️' : '🌙';
-
-            // Function to apply & persist a theme (and Prototype variant colors)
-            function applyTheme(t) {
-                root.setAttribute('data-theme', t);
-                ttl.textContent = t === 'dark' ? '☀️' : '🌙';
-                localStorage.setItem('theme', t);
-
-                if (t === 'prototype') {
-                    const primary = localStorage.getItem('prototypePrimary');
-                    const light = localStorage.getItem('prototypeLight');
-                    if (primary && light) {
-                        root.style.setProperty('--accent', primary);
-                        root.style.setProperty('--accent-hover', light);
-                        root.style.setProperty('--accent-light', `${primary}1a`);
-                        root.style.setProperty('--icon-color', primary);
-                        root.style.setProperty(
-                            '--gradient',
-                            `linear-gradient(135deg, ${primary}, ${light})`
-                        );
-                        root.style.setProperty(
-                            '--gradient-accent',
-                            `linear-gradient(45deg, ${primary}, #ffffff)`
-                        );
-                    }
-                }
-            }
-
-            // 4️⃣ Initialize on load
-            applyTheme(window.appTheme);
-
-            // 5️⃣ Toggle handler (dark ↔ light; leaves Prototype untouched)
-            ttl.addEventListener('click', () => {
-                const next = window.appTheme === 'dark' ? 'light' : window.appTheme;
-                window.appTheme = next;
-                applyTheme(next);
-            });
-        });
-    </script>
-
-    <style>
-        :root {
-            --bg: #fafbfc;
-            --bg-secondary: #f5f6f8;
-            --fg: #1a1d23;
-            --fg-secondary: #6b7280;
-            --card-bg: #ffffff;
-            --card-border: #e5e7eb;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --accent-light: #dbeafe;
-            --shadow: rgba(0, 0, 0, 0.04);
-            --shadow-hover: rgba(0, 0, 0, 0.08);
-            --shadow-strong: rgba(0, 0, 0, 0.12);
-            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --gradient-accent: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-            --icon-color: #3b82f6;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --border-radius: 16px;
-            --border-radius-sm: 8px;
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        [data-theme="dark"] {
-            --bg: #0f1419;
-            --bg-secondary: #1a1f2e;
-            --fg: #f9fafb;
-            --fg-secondary: #9ca3af;
-            --card-bg: #1e293b;
-            --card-border: #334155;
-            --accent: #60a5fa;
-            --accent-hover: #3b82f6;
-            --accent-light: #1e3a8a;
-            --shadow: rgba(0, 0, 0, 0.2);
-            --shadow-hover: rgba(0, 0, 0, 0.3);
-            --shadow-strong: rgba(0, 0, 0, 0.4);
-            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --gradient-accent: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-            --icon-color: #60a5fa;
-        }
-
-        /* Shadow / Prototype theme */
-        :root[data-theme="prototype"] {
-            --bg: linear-gradient(135deg, #0f0f0f, #1a1a1a);
-            --bg-secondary: rgba(255, 255, 255, 0.02);
-            --fg: #e0e0e0;
-            --fg-secondary: #a0a0a0;
-            --card-bg: rgba(255, 255, 255, 0.03);
-            --card-border: rgba(255, 255, 255, 0.1);
-            --accent: #00d4aa;
-            --accent-hover: #00b894;
-            --accent-light: rgba(0, 212, 170, 0.1);
-            --icon-color: #00d4aa;
-            --shadow: rgba(0, 0, 0, 0.3);
-            --shadow-hover: rgba(0, 0, 0, 0.4);
-            --shadow-strong: rgba(0, 0, 0, 0.5);
-            --gradient: linear-gradient(135deg, #00d4aa, #00b894);
-            --gradient-accent: linear-gradient(45deg, #00d4aa, #ffffff);
-        }
-
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg);
-            color: var(--fg);
-            line-height: 1.6;
-            transition: var(--transition);
-        }
-
-        a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        button {
-            font: inherit;
-        }
-
-        /* Navigation Header */
-        .page-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: var(--card-bg);
-            border-bottom: 1px solid var(--card-border);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            z-index: 1000;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-        }
-
-        .nav-center {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-        }
-
-        .home {
-            color: var(--accent);
-            font-size: 1.5rem;
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            background: var(--bg-secondary);
-        }
-
-        .home:hover {
-            background: var(--accent-light);
-            transform: scale(1.1);
-        }
-
-        #page-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            background: var(--gradient-accent);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            margin: 0;
-        }
-
-        .theme-toggle {
-            background: var(--bg-secondary);
-            border: 1px solid var(--card-border);
-            border-radius: 50%;
-            width: 44px;
-            height: 44px;
-            cursor: pointer;
-            font-size: 1.2rem;
-            color: var(--fg);
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: absolute;
-            right: 2rem;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
-        .theme-toggle:hover {
-            background: var(--accent-light);
-            border-color: var(--accent);
-            transform: scale(1.05);
-        }
-
-        /* Main Content */
-        .main-content {
-            padding-top: 100px;
-            padding-bottom: 2rem;
-        }
-
-        /* Flash Messages */
-        .flash {
-            margin: 2rem;
-            padding: 1rem 1.25rem;
-            border-radius: var(--border-radius-sm);
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-            font-size: 0.875rem;
-            font-weight: 500;
-            display: flex;
-            align-items: flex-start;
-            gap: 0.75rem;
-            animation: slideDown 0.3s ease;
-            line-height: 1.5;
-        }
-
-        @keyframes slideDown {
-            from {
-                transform: translateY(-20px);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        /* Team Selection Section */
-        .teams-section {
-            display: flex;
-            flex-direction: column;
-            gap: 2rem;
-            padding: 2rem;
-        }
-
-        .section-header {
-            text-align: center;
-            margin-bottom: 1rem;
-        }
-
-        .section-title {
-            font-size: 1.75rem;
-            font-weight: 600;
-            color: var(--fg);
-            margin-bottom: 0.5rem;
-        }
-
-        .section-subtitle {
-            color: var(--fg-secondary);
-            font-size: 1rem;
-        }
-
-        .teams-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 1.5rem;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .team-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius);
-            padding: 1.5rem;
-            cursor: pointer;
-            transition: var(--transition);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .team-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--gradient-accent);
-            transform: scaleX(0);
-            transition: var(--transition);
-        }
-
-        .team-card:hover::before {
-            transform: scaleX(1);
-        }
-
-        .team-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 32px var(--shadow-hover);
-            border-color: var(--accent);
-        }
-
-        .team-card.selected {
-            border-color: var(--accent);
-            background: var(--accent-light);
-            transform: translateY(-4px);
-            box-shadow: 0 12px 32px var(--shadow-hover);
-        }
-
-        .team-card.selected::before {
-            transform: scaleX(1);
-        }
-
-        .team-card h3 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--fg);
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .color-dot {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border: 2px solid var(--card-border);
-            transition: var(--transition);
-        }
-
-        .team-card:hover .color-dot {
-            border-color: var(--accent);
-            transform: scale(1.1);
-        }
-
-        .team-card label {
-            font-size: 0.95rem;
-            font-weight: 500;
-            color: var(--fg-secondary);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            cursor: pointer;
-        }
-
-        .team-select {
-            width: 18px;
-            height: 18px;
-            accent-color: var(--accent);
-        }
-
-        .next-btn-container {
-            display: flex;
-            justify-content: center;
-            margin-top: 1rem;
-        }
-
-        #next-btn {
-            padding: 1rem 2.5rem;
-            font-size: 1.1rem;
-            background: var(--gradient-accent);
-            color: white;
-            border: none;
-            border-radius: var(--border-radius-sm);
-            cursor: pointer;
-            font-weight: 600;
-            transition: var(--transition);
-            opacity: 0.5;
-            transform: scale(0.95);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        #next-btn.enabled {
-            opacity: 1;
-            transform: scale(1);
-        }
-
-        #next-btn.enabled:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
-        }
-
-        /* XI Section */
-        #xi-section {
-            display: none;
-            flex-direction: column;
-            gap: 2rem;
-            padding: 2rem;
-            animation: fadeIn 0.5s ease;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .xi-header {
-            text-align: center;
-            margin-bottom: 1rem;
-        }
-
-        .xi-header h2 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            color: var(--fg);
-            margin-bottom: 0.5rem;
-        }
-
-        .xi-header p {
-            color: var(--fg-secondary);
-            font-size: 1rem;
-        }
-
-        .xi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
-            gap: 2rem;
-            max-width: 1960px;
-            margin: 0 auto;
-        }
-
-        .pane {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius);
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .pane h3 {
-            text-align: center;
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--fg);
-            margin: 0;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--card-border);
-        }
-
-        .sub-header {
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--fg-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin: 0.5rem 0;
-        }
-
-        .bars {
-            min-height: 180px;
-            max-height: 450px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            padding: 1rem;
-            border: 2px dashed var(--card-border);
-            border-radius: var(--border-radius-sm);
-            background: var(--bg-secondary);
-            transition: var(--transition);
-            /* Fix mobile scrolling */
-            -webkit-overflow-scrolling: touch;
-            overscroll-behavior: contain;
-        }
-
-        .bars.drag-over {
-            border-color: var(--success);
-            background: rgba(16, 185, 129, 0.1);
-        }
-
-        .player-bar {
-            padding: 0.875rem 1rem;
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius-sm);
-            box-shadow: 0 2px 8px var(--shadow);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: grab;
-            transition: var(--transition);
-            font-size: 0.875rem;
-        }
-
-        .player-bar:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px var(--shadow-hover);
-            border-color: var(--accent);
-        }
-
-        .player-bar.dragging {
-            opacity: 0.5;
-            transform: rotate(5deg);
-        }
-
-        .player-bar .info {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-weight: 500;
-        }
-
-        .player-bar .controls {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .player-bar .controls label {
-            display: flex;
-            align-items: center;
-            gap: 0.375rem;
-            font-size: 0.8rem;
-            color: var(--fg-secondary);
-            cursor: pointer;
-        }
-
-        .will-bowl {
-            width: 14px;
-            height: 14px;
-            accent-color: var(--accent);
-        }
-
-        /* Bottom Controls */
-        .bottom-controls {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius);
-            padding: 2rem;
-            margin: 2rem auto;
-            max-width: 800px;
-            display: flex;
-            flex-direction: column;
-            gap: 2rem;
-            align-items: center;
-        }
-
-        .controls-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 2rem;
-            width: 100%;
-        }
-
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .control-label {
-            font-weight: 600;
-            font-size: 1rem;
-            color: var(--accent);
-            text-align: center;
-        }
-
-        .pitch-section select {
-            padding: 0.75rem 1rem;
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius-sm);
-            background: var(--bg-secondary);
-            color: var(--fg);
-            font-size: 0.95rem;
-            min-width: 150px;
-            transition: var(--transition);
-        }
-
-        .pitch-section select:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .toss-options {
-            display: flex;
-            gap: 1.5rem;
-        }
-
-        .toss-options label {
-            cursor: pointer;
-            font-size: 0.95rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.75rem 1rem;
-            border-radius: var(--border-radius-sm);
-            transition: var(--transition);
-            background: var(--bg-secondary);
-            border: 1px solid var(--card-border);
-        }
-
-        .toss-options label:hover {
-            background: var(--accent-light);
-            border-color: var(--accent);
-        }
-
-        .toss-options input[type="radio"] {
-            accent-color: var(--accent);
-            width: 16px;
-            height: 16px;
-        }
-
-        .rain-control {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .rain-slider {
-            width: 200px;
-            height: 6px;
-            border-radius: 3px;
-            background: var(--bg-secondary);
-            outline: none;
-            appearance: none;
-            -webkit-appearance: none;
-        }
-
-        .rain-slider::-webkit-slider-thumb {
-            appearance: none;
-            -webkit-appearance: none;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: var(--accent);
-            cursor: pointer;
-            box-shadow: 0 2px 6px var(--shadow);
-        }
-
-        .rain-slider::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: var(--accent);
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 2px 6px var(--shadow);
-        }
-
-        #rain-display {
-            font-weight: 600;
-            color: var(--accent);
-        }
-
-        #simulate-btn {
-            padding: 1.25rem 3rem;
-            font-size: 1.1rem;
-            background: var(--gradient-accent);
-            color: white;
-            border: none;
-            border-radius: var(--border-radius-sm);
-            cursor: pointer;
-            font-weight: 600;
-            transition: var(--transition);
-            opacity: 0.5;
-            transform: scale(0.95);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-top: 1rem;
-        }
-
-        #simulate-btn.enabled {
-            opacity: 1;
-            transform: scale(1);
-        }
-
-        #simulate-btn.enabled:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .page-header {
-                padding: 1rem;
-            }
-
-            .nav-center {
-                gap: 1rem;
-            }
-
-            .theme-toggle {
-                right: 1rem;
-            }
-
-            #page-title {
-                font-size: 1.25rem;
-            }
-
-            .teams-grid {
-                grid-template-columns: 1fr;
-                gap: 1rem;
-            }
-
-            .xi-grid {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-            }
-
-            .controls-grid {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-            }
-
-            .toss-options {
-                flex-direction: column;
-                gap: 1rem;
-            }
-
-            .toss-options label {
-                justify-content: center;
-            }
-
-            .bottom-controls {
-                margin: 1rem;
-                padding: 1.5rem;
-            }
-
-            .teams-section {
-                padding: 1rem;
-            }
-
-            #xi-section {
-                padding: 1rem;
-            }
-
-            .bars {
-                min-height: 150px;
-                max-height: 350px;
-                /* Enhanced mobile scrolling */
-                -webkit-overflow-scrolling: touch;
-                overscroll-behavior: contain;
-                scroll-behavior: smooth;
-            }
-
-            /* Add touch-friendly drag indicators */
-            .player-bar {
-                touch-action: pan-y;
-            }
-
-            .player-bar:active {
-                transform: scale(0.98);
-            }
-        }
-
-        @media (max-width: 480px) {
-            .main-content {
-                padding-top: 80px;
-            }
-
-            .team-card {
-                padding: 1.25rem;
-            }
-
-            .pane {
-                padding: 1.25rem;
-            }
-
-            .bars {
-                min-height: 120px;
-                max-height: 280px;
-            }
-
-            .rain-slider {
-                width: 150px;
-            }
-        }
-
-        /* Loading state */
-        .loading {
-            pointer-events: none;
-            opacity: 0.7;
-        }
-
-        .loading #simulate-btn {
-            background: var(--fg-secondary);
-        }
-
-        /* Visual feedback for click actions */
-        .player-bar {
-            position: relative;
-            user-select: none;
-        }
-
-        .player-bar::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: var(--accent);
+{% extends "layout.html" %}
+
+{% block title %}New Match - SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Wizard Progress Bar */
+    .wizard-progress {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+        position: relative;
+        max-width: 600px;
+        margin: 0 auto 2rem;
+        padding: 0 1rem;
+    }
+
+    .wizard-progress::before {
+        content: '';
+        position: absolute;
+        top: 14px;
+        left: 20px;
+        right: 20px;
+        height: 2px;
+        background: var(--card-border);
+        z-index: 0;
+    }
+
+    .step-item {
+        position: relative;
+        z-index: 1;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 80px;
+    }
+
+    .step-circle {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--card-border);
+        color: var(--fg-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        transition: var(--transition);
+        border: 2px solid var(--bg);
+    }
+
+    .step-item.active .step-circle {
+        background: var(--accent);
+        color: white;
+        box-shadow: 0 0 0 4px var(--accent-light);
+    }
+
+    .step-item.completed .step-circle {
+        background: var(--success, #10b981);
+        color: white;
+    }
+
+    .step-label {
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+        font-weight: 500;
+    }
+
+    .step-item.active .step-label {
+        color: var(--fg);
+        font-weight: 600;
+    }
+
+    /* Wizard Steps */
+    .wizard-step {
+        display: none;
+        animation: fadeIn 0.4s ease;
+    }
+
+    .wizard-step.active {
+        display: block;
+    }
+
+    @keyframes fadeIn {
+        from {
             opacity: 0;
-            border-radius: var(--border-radius-sm);
-            pointer-events: none;
-            transition: opacity 0.1s ease;
+            transform: translateY(10px);
         }
 
-        .player-bar:active::after {
-            opacity: 0.1;
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Teams Grid (Reused & Tweaked) */
+    /* Teams Grid - Modern Card Layout */
+    .teams-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 0.5rem;
+    }
+
+    .team-card {
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 16px;
+        padding: 1.25rem 1.5rem;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        overflow: hidden;
+    }
+
+    .team-card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 6px;
+        background: var(--team-color, var(--card-border));
+        transition: width 0.3s ease;
+    }
+
+    .team-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
+    }
+
+    .team-card:hover::before {
+        width: 8px;
+    }
+
+    .team-card.selected {
+        border-color: var(--accent);
+        background: linear-gradient(135deg, var(--accent-light) 0%, var(--card-bg) 100%);
+        box-shadow: 0 0 0 3px var(--accent-light), 0 8px 20px -4px rgba(59, 130, 246, 0.25);
+    }
+
+    .team-card.selected::before {
+        width: 8px;
+        background: var(--accent);
+    }
+
+    .team-card.selected::after {
+        content: '✓';
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        width: 24px;
+        height: 24px;
+        background: var(--accent);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: bold;
+        box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    }
+
+    .team-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        flex: 1;
+        padding-left: 0.5rem;
+    }
+
+    .team-info h3 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--fg);
+        margin: 0;
+    }
+
+    .team-meta {
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .team-meta i {
+        font-size: 0.75rem;
+        color: var(--accent);
+    }
+
+    .color-dot {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: white;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Conditions Form */
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .form-group {
+        background: var(--card-bg);
+        padding: 1.5rem;
+        border-radius: var(--border-radius);
+        border: 1px solid var(--card-border);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        height: 100%;
+    }
+
+    .form-label {
+        display: block;
+        margin-bottom: 0.75rem;
+        font-weight: 600;
+        color: var(--fg);
+    }
+
+    select,
+    input[type="range"] {
+        width: 100%;
+        padding: 0.5rem;
+        border-radius: 6px;
+        border: 1px solid var(--card-border);
+        background: var(--bg);
+        color: var(--fg);
+    }
+
+    /* Custom Radio Buttons for Toss */
+    .radio-group {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .radio-label {
+        flex: 1;
+        cursor: pointer;
+        padding: 0.75rem;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        text-align: center;
+        transition: var(--transition);
+        background: var(--bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .radio-label:hover {
+        background: var(--card-bg);
+        border-color: var(--accent);
+    }
+
+    input[type="radio"]:checked+.radio-label {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+    }
+
+    input[type="radio"] {
+        display: none;
+    }
+
+    /* Squad Section */
+    .squad-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        height: 600px;
+    }
+
+    .team-pane {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: var(--border-radius);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .team-pane-header {
+        padding: 1rem;
+        background: var(--bg);
+        border-bottom: 1px solid var(--card-border);
+        text-align: center;
+        font-weight: 700;
+        color: var(--accent);
+    }
+
+    .drop-zones {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .zone-header {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--fg-secondary);
+        margin-bottom: 0.5rem;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .drop-zone {
+        background: var(--bg);
+        border: 2px dashed var(--card-border);
+        border-radius: 8px;
+        padding: 0.5rem;
+        min-height: 100px;
+        transition: var(--transition);
+    }
+
+    .drop-zone.active {
+        border-color: var(--accent);
+        background: var(--accent-light);
+    }
+
+    .player-pill {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        padding: 0.5rem 0.75rem;
+        margin-bottom: 0.5rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        cursor: grab;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 1px 2px var(--shadow);
+    }
+
+    .player-pill:active {
+        cursor: grabbing;
+        box-shadow: none;
+    }
+
+    .player-pill.dragging {
+        opacity: 0.5;
+    }
+
+    .role-icon {
+        width: 20px;
+        text-align: center;
+        display: inline-block;
+        margin-right: 5px;
+        color: var(--fg-secondary);
+    }
+
+    /* Controls */
+    .wizard-controls {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 2rem;
+        border-top: 1px solid var(--card-border);
+        padding-top: 1.5rem;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-secondary {
+        background: var(--bg-secondary);
+        color: var(--fg);
+        border: 1px solid var(--card-border);
+    }
+
+    .btn-secondary:hover {
+        background: var(--card-border);
+    }
+
+    .btn-primary {
+        background: var(--accent);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: var(--accent-hover);
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    @media (max-width: 900px) {
+        .squad-layout {
+            grid-template-columns: 1fr;
+            height: auto;
         }
 
-        /* Capacity limit visual feedback */
-        .bars.capacity-full {
-            border-color: var(--danger) !important;
-            background: rgba(239, 68, 68, 0.05);
+        .drop-zones {
+            max-height: 400px;
         }
-    </style>
-</head>
+    }
+</style>
+{% endblock %}
 
-<body>
-    <!-- Navigation Header -->
-    <div class="page-header">
-        <div class="nav-center">
-            <a href="{{ url_for('home') }}" class="home"><i class="fa fa-home"></i></a>
-            <h1 id="page-title">Select Teams</h1>
+{% block content %}
+<div class="wizard-container">
+    <div class="wizard-progress">
+        <div class="step-item active" id="step-ind-1">
+            <div class="step-circle">1</div>
+            <div class="step-label">Teams</div>
         </div>
-        <div id="theme-toggle" class="theme-toggle">🌙</div>
+        <div class="step-item" id="step-ind-2">
+            <div class="step-circle">2</div>
+            <div class="step-label">Match</div>
+        </div>
+        <div class="step-item" id="step-ind-3">
+            <div class="step-circle">3</div>
+            <div class="step-label">Squads</div>
+        </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <!-- Team Selection Section -->
-        <div class="teams-section">
-            <div class="section-header">
-                <h2 class="section-title">Choose Your Teams</h2>
-                <p class="section-subtitle">Select exactly 2 teams to set up your cricket match</p>
-            </div>
-
-            <div class="teams-grid">
-                {% for team in teams %}
-                <div class="team-card" data-index="{{ loop.index0 }}">
-                    <h3>
-                        <span class="color-dot" style="background: {{ team.team_color }}"></span>
-                        {{ team.team_name }}
-                    </h3>
-                    <label>
-                        <input type="checkbox" class="team-select" />
-                        <span>Select Team</span>
-                    </label>
+    <!-- STEP 1: TEAMS -->
+    <div class="wizard-step active" id="step-1">
+        <h2 style="text-align:center; margin-bottom: 2rem;">Select Opponents</h2>
+        <div class="teams-grid">
+            {% for team in teams %}
+            <div class="team-card" style="--team-color: {{ team.team_color }}"
+                onclick="toggleTeam({{ loop.index0 }}, this)">
+                <span class="color-dot" style="background: {{ team.team_color }}">🏏</span>
+                <div class="team-info">
+                    <h3>{{ team.team_name }}</h3>
+                    <div class="team-meta">
+                        <i class="fas fa-map-marker-alt"></i>
+                        {{ team.home_ground }}
+                    </div>
                 </div>
-                {% endfor %}
             </div>
-
-            <div class="next-btn-container">
-                <button id="next-btn" disabled>
-                    <i class="fa fa-users"></i>
-                    Pick Playing XI
-                </button>
-            </div>
+            {% endfor %}
         </div>
+    </div>
 
-        <!-- Playing XI Section -->
-        <div id="xi-section">
-            <div class="xi-header">
-                <h2>Configure Playing XI</h2>
-                <p>Drag players between sections. Each team needs exactly 11 players in Playing XI and 1-5 substitutes.
+    <!-- STEP 2: CONDITIONS -->
+    <div class="wizard-step" id="step-2">
+        <h2 style="text-align:center; margin-bottom: 2rem;">Match Conditions</h2>
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Host Venue</label>
+                <input type="text" id="venue-display" readonly style="opacity: 0.7;">
+                <p style="font-size:0.8rem; color:var(--fg-secondary); margin-top:0.5rem;">Based on Home Team selection
                 </p>
             </div>
 
-            <div class="xi-grid">
-                <!-- Home Team Pane -->
-                <div class="pane" id="home-pane">
-                    <h3 id="home-name"></h3>
-
-                    <h4 class="sub-header">Playing XI (<span id="home-selected-count">0</span>/11)</h4>
-                    <div class="bars" id="home-selected" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
-                        ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)">
-                    </div>
-
-                    <h4 class="sub-header">Substitutes (<span id="home-substitutes-count">0</span>/5)</h4>
-                    <div class="bars" id="home-substitutes" ondrop="dropHandler(event)"
-                        ondragover="dragOverHandler(event)" ondragenter="dragEnterHandler(event)"
-                        ondragleave="dragLeaveHandler(event)">
-                    </div>
-
-                    <h4 class="sub-header">Available Players</h4>
-                    <div class="bars" id="home-available" ondrop="dropHandler(event)"
-                        ondragover="dragOverHandler(event)" ondragenter="dragEnterHandler(event)"
-                        ondragleave="dragLeaveHandler(event)">
-                    </div>
-                </div>
-
-                <!-- Away Team Pane -->
-                <div class="pane" id="away-pane">
-                    <h3 id="away-name"></h3>
-
-                    <h4 class="sub-header">Playing XI (<span id="away-selected-count">0</span>/11)</h4>
-                    <div class="bars" id="away-selected" ondrop="dropHandler(event)" ondragover="dragOverHandler(event)"
-                        ondragenter="dragEnterHandler(event)" ondragleave="dragLeaveHandler(event)">
-                    </div>
-
-                    <h4 class="sub-header">Substitutes (<span id="away-substitutes-count">0</span>/5)</h4>
-                    <div class="bars" id="away-substitutes" ondrop="dropHandler(event)"
-                        ondragover="dragOverHandler(event)" ondragenter="dragEnterHandler(event)"
-                        ondragleave="dragLeaveHandler(event)">
-                    </div>
-
-                    <h4 class="sub-header">Available Players</h4>
-                    <div class="bars" id="away-available" ondrop="dropHandler(event)"
-                        ondragover="dragOverHandler(event)" ondragenter="dragEnterHandler(event)"
-                        ondragleave="dragLeaveHandler(event)">
-                    </div>
-                </div>
+            <div class="form-group">
+                <label class="form-label">Pitch Condition</label>
+                <select id="pitch-select">
+                    <!-- Populated via JS -->
+                </select>
             </div>
 
-            <!-- Match Configuration -->
-            <div class="bottom-controls">
-                <div class="controls-grid">
-                    <!-- Pitch Selection -->
-                    <div class="control-group">
-                        <div class="control-label">Pitch Type</div>
-                        <div class="pitch-section">
-                            <select id="pitch-select"></select>
+            <div class="form-group">
+                <label class="form-label">Toss Winner Choice</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="toss" value="Heads" checked>
+                        <div class="radio-label">
+                            <i class="fas fa-coins"></i> Heads
                         </div>
-                    </div>
-
-                    <!-- Toss Choice -->
-                    <div class="control-group">
-                        <div class="control-label" id="toss-label">Toss Choice</div>
-                        <div class="toss-options">
-                            <label>
-                                <input type="radio" name="toss" value="Heads">
-                                <i class="fa fa-coins"></i>
-                                Heads
-                            </label>
-                            <label>
-                                <input type="radio" name="toss" value="Tails">
-                                <i class="fa fa-coins"></i>
-                                Tails
-                            </label>
+                    </label>
+                    <label>
+                        <input type="radio" name="toss" value="Tails">
+                        <div class="radio-label">
+                            <i class="fas fa-coins"></i> Tails
                         </div>
-                    </div>
-
-                    <!-- Rain Probability -->
-                    <div class="control-group">
-                        <div class="control-label">
-                            Rain Probability: <span id="rain-display">0%</span>
-                        </div>
-                        <div class="rain-control">
-                            <input type="range" id="rain-probability" class="rain-slider" min="0" max="0.1" step="0.001"
-                                value="0" oninput="updateRainDisplay(this.value)">
-                        </div>
-                    </div>
+                    </label>
                 </div>
+                <!-- We dynamically set the label via JS "Away Team calls..." -->
+                <p id="toss-context" style="text-align:center; font-size:0.8rem; margin-top:1rem; color:var(--accent);">
+                    Away Team calls the toss
+                </p>
+            </div>
 
-                <button id="simulate-btn" disabled>
-                    <i class="fa fa-rocket"></i>
-                    Simulate Match
-                </button>
+            <div class="form-group">
+                <label class="form-label">
+                    Rain Probability: <span id="rain-val">0%</span>
+                </label>
+                <input type="range" id="rain-slider" min="0" max="0.30" step="0.01" value="0"
+                    oninput="document.getElementById('rain-val').textContent = Math.round(this.value*100) + '%'">
             </div>
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script>
-        function updateRainDisplay(value) {
-            const percentage = Math.round(parseFloat(value) * 100);
-            document.getElementById('rain-display').textContent = `${percentage}%`;
-        }
+    <!-- STEP 3: SQUADS -->
+    <div class="wizard-step" id="step-3">
+        <h2 style="text-align:center; margin-bottom: 0.5rem;">Finalize Playing XIs</h2>
+        <p style="text-align:center; color:var(--fg-secondary); margin-bottom:1.5rem;">
+            Drag players to organize the lineup. Ensure 5 bowlers + 1 Keeper per side.
+        </p>
 
-        // Teams JSON
-        const TEAMS = {{ teams| tojson }};
+        <div class="squad-layout">
+            <!-- HOME TEAM -->
+            <div class="team-pane" id="home-pane">
+                <div class="team-pane-header" id="home-name">Home Team</div>
+                <div class="drop-zones">
+                    <div>
+                        <div class="zone-header">
+                            <span>Playing XI</span>
+                            <span id="home-xi-count">0/11</span>
+                        </div>
+                        <div class="drop-zone" id="home-selected"></div>
+                    </div>
+                    <div>
+                        <div class="zone-header">
+                            <span>Bench</span>
+                            <span id="home-sub-count">0/5</span>
+                        </div>
+                        <div class="drop-zone" id="home-substitutes"></div>
+                    </div>
+                    <div>
+                        <div class="zone-header">Reserve</div>
+                        <div class="drop-zone" id="home-available" style="opacity:0.6;"></div>
+                    </div>
+                </div>
+            </div>
 
-        // Team selection logic (locks after XI)
-        const cards = document.querySelectorAll('.team-card'),
-            nextBtn = document.getElementById('next-btn'),
-            pageTitle = document.getElementById('page-title');
-        let selected = [];
+            <!-- AWAY TEAM -->
+            <div class="team-pane" id="away-pane">
+                <div class="team-pane-header" id="away-name">Away Team</div>
+                <div class="drop-zones">
+                    <div>
+                        <div class="zone-header">
+                            <span>Playing XI</span>
+                            <span id="away-xi-count">0/11</span>
+                        </div>
+                        <div class="drop-zone" id="away-selected"></div>
+                    </div>
+                    <div>
+                        <div class="zone-header">
+                            <span>Bench</span>
+                            <span id="away-sub-count">0/5</span>
+                        </div>
+                        <div class="drop-zone" id="away-substitutes"></div>
+                    </div>
+                    <div>
+                        <div class="zone-header">Reserve</div>
+                        <div class="drop-zone" id="away-available" style="opacity:0.6;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        cards.forEach(card => {
-            const cb = card.querySelector('.team-select');
-            card.onclick = e => {
-                if (document.getElementById('xi-section').style.display === 'flex') return;
-                if (e.target !== cb) {
-                    if (!cb.checked && selected.length >= 2) return;
-                    cb.checked = !cb.checked;
-                }
-                const idx = +card.dataset.index;
-                cb.checked ? selected.push(idx) : selected.splice(selected.indexOf(idx), 1);
-                cards.forEach((c, i) => c.classList.toggle('selected', selected.includes(i)));
-                nextBtn.disabled = selected.length !== 2;
-                nextBtn.classList.toggle('enabled', selected.length === 2);
-                if (selected.length === 2) {
-                    const t1 = cards[selected[0]].querySelector('h3').textContent.trim();
-                    const t2 = cards[selected[1]].querySelector('h3').textContent.trim();
-                    pageTitle.textContent = `${t1} vs ${t2}`;
-                } else {
-                    pageTitle.textContent = 'Select Teams';
-                }
-            };
+    <!-- CONTROLS -->
+    <div class="wizard-controls">
+        <button class="btn btn-secondary" id="back-btn" onclick="prevStep()" disabled>
+            <i class="fas fa-arrow-left"></i> Back
+        </button>
+        <button class="btn btn-primary" id="next-btn" onclick="nextStep()" disabled>
+            Next <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const TEAMS = {{ teams| tojson }};
+    let currentStep = 1;
+    let selectedTeamIndices = [];
+
+    // --- NAVIGATION ---
+    function updateWizard() {
+        // Steps visibility
+        document.querySelectorAll('.wizard-step').forEach(el => el.classList.remove('active'));
+        document.getElementById(`step-${currentStep}`).classList.add('active');
+
+        // Indicators
+        document.querySelectorAll('.step-item').forEach((el, idx) => {
+            el.classList.toggle('active', idx + 1 === currentStep);
+            el.classList.toggle('completed', idx + 1 < currentStep);
         });
 
-        // Show XI & render players
-        nextBtn.onclick = () => {
-            if (selected.length !== 2) return;
-            cards.forEach(c => c.style.pointerEvents = 'none');
-            document.getElementById('xi-section').style.display = 'flex';
-            const [h, a] = selected.map(i => TEAMS[i]);
-            document.getElementById('home-name').textContent = h.team_name;
-            document.getElementById('away-name').textContent = a.team_name;
-            document.getElementById('toss-label').textContent = `${a.team_name} Toss Choice`;
+        // Buttons
+        const backBtn = document.getElementById('back-btn');
+        const nextBtn = document.getElementById('next-btn');
 
-            // Pitch options
-            const psel = document.getElementById('pitch-select');
-            psel.innerHTML = `<option>${h.pitch_preference}</option>` +
-                ['Green', 'Flat', 'Dry', 'Hard', 'Dead']
-                    .filter(x => x !== h.pitch_preference)
-                    .map(x => `<option>${x}</option>`).join('');
+        backBtn.disabled = currentStep === 1;
 
-            // Icons mapping
-            const roleIcons = {
-                'Batsman': '🏏',
-                'Bowler': '🎳',
-                'Wicketkeeper': '🧤',
-                'All-rounder': '🏏🎳'
-            };
-
-            ['home', 'away'].forEach(side => {
-                const team = side === 'home' ? h : a;
-                const avail = document.getElementById(`${side}-available`);
-                avail.innerHTML = '';
-                team.players.forEach(p => {
-                    const bar = document.createElement('div');
-                    bar.className = 'player-bar';
-                    bar.draggable = true;
-                    bar.dataset.playerName = p.name;
-                    bar.dataset.role = p.role;
-                    bar.innerHTML = `<span class="info">${roleIcons[p.role] || ''} ${p.name}</span>` +
-                        ((['Bowler', 'All-rounder'].includes(p.role))
-                            ? `<span class="controls">
-                       <label>
-                         <input type="checkbox" class="will-bowl">
-                         <i class="fa fa-dot-circle"></i> Bowl
-                       </label>
-                   </span>`
-                            : '');
-                    bar.addEventListener('dragstart', () => bar.classList.add('dragging'));
-                    bar.addEventListener('dragend', () => { bar.classList.remove('dragging'); validateAll(); });
-
-                    // Add double/triple click functionality
-                    let clickCount = 0;
-                    let clickTimer = null;
-
-                    bar.addEventListener('click', (e) => {
-                        // Prevent triggering on checkbox/label clicks
-                        if (e.target.type === 'checkbox' || e.target.tagName === 'LABEL' || e.target.closest('label')) {
-                            return;
-                        }
-
-                        clickCount++;
-
-                        if (clickTimer) {
-                            clearTimeout(clickTimer);
-                        }
-
-                        clickTimer = setTimeout(() => {
-                            if (clickCount === 2) {
-                                // Double click - move to Playing XI
-                                movePlayerToSection(bar, side, 'selected');
-                            } else if (clickCount === 3) {
-                                // Triple click - move to Substitutes
-                                movePlayerToSection(bar, side, 'substitutes');
-                            }
-                            clickCount = 0;
-                        }, 300); // 300ms timeout for detecting multiple clicks
-                    });
-
-                    avail.appendChild(bar);
-                });
-            });
-
-            updatePlayerCounts();
-            validateAll();
-        };
-
-        // Drag & drop handlers
-        function dragEnterHandler(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
-        function dragLeaveHandler(e) { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); }
-        function dragOverHandler(e) { e.preventDefault(); }
-        function dropHandler(e) {
-            e.preventDefault();
-            e.currentTarget.classList.remove('drag-over');
-            const bar = document.querySelector('.player-bar.dragging');
-            if (!bar) return;
-            const dst = e.currentTarget;
-            const after = getDragAfterElement(dst, e.clientY);
-            after ? dst.insertBefore(bar, after) : dst.appendChild(bar);
-            updatePlayerCounts();
-            validateAll();
+        if (currentStep === 3) {
+            nextBtn.innerHTML = '<i class="fas fa-rocket"></i> Simulate';
+            nextBtn.onclick = simulateMatch;
+        } else {
+            nextBtn.innerHTML = 'Next <i class="fas fa-arrow-right"></i>';
+            nextBtn.onclick = nextStep;
         }
-        function getDragAfterElement(container, y) {
-            return [...container.querySelectorAll('.player-bar:not(.dragging)')]
-                .reduce((closest, child) => {
-                    const box = child.getBoundingClientRect();
-                    const offset = y - box.top - box.height / 2;
-                    return (offset < 0 && offset > closest.offset)
-                        ? { offset, element: child }
-                        : closest;
-                }, { offset: -Infinity }).element;
+    }
+
+    function nextStep() {
+        if (currentStep === 1 && selectedTeamIndices.length !== 2) {
+            Toast.show("Please select exactly 2 teams.", "error");
+            return;
         }
 
-        // Helper function to move player between sections
-        function movePlayerToSection(playerBar, side, targetSection) {
-            const targetContainer = document.getElementById(`${side}-${targetSection}`);
-            const currentContainer = playerBar.parentElement;
+        if (currentStep === 1) initializeStep2();
+        if (currentStep === 2) initializeStep3();
 
-            // Check capacity limits
-            if (targetSection === 'selected') {
-                const currentCount = targetContainer.querySelectorAll('.player-bar').length;
-                if (currentCount >= 11) {
-                    // Show brief visual feedback
-                    targetContainer.style.borderColor = 'var(--danger)';
-                    setTimeout(() => {
-                        targetContainer.style.borderColor = '';
-                    }, 1000);
-                    return;
-                }
-            } else if (targetSection === 'substitutes') {
-                const currentCount = targetContainer.querySelectorAll('.player-bar').length;
-                if (currentCount >= 5) {
-                    // Show brief visual feedback
-                    targetContainer.style.borderColor = 'var(--danger)';
-                    setTimeout(() => {
-                        targetContainer.style.borderColor = '';
-                    }, 1000);
-                    return;
-                }
+        if (currentStep < 3) {
+            currentStep++;
+            updateWizard();
+        }
+    }
+
+    function prevStep() {
+        if (currentStep > 1) {
+            currentStep--;
+            updateWizard();
+        }
+    }
+
+    // --- STEP 1: SELECTION ---
+    function toggleTeam(index, cardEl) {
+        if (selectedTeamIndices.includes(index)) {
+            selectedTeamIndices = selectedTeamIndices.filter(i => i !== index);
+            cardEl.classList.remove('selected');
+        } else {
+            if (selectedTeamIndices.length >= 2) {
+                // Remove first selected to maintain max 2 (Queue behavior for smoother UX)
+                const first = selectedTeamIndices.shift();
+                document.querySelectorAll('.team-card')[first].classList.remove('selected');
             }
-
-            // Add smooth transition effect
-            playerBar.style.transform = 'scale(0.95)';
-            playerBar.style.opacity = '0.7';
-
-            setTimeout(() => {
-                targetContainer.appendChild(playerBar);
-                playerBar.style.transform = '';
-                playerBar.style.opacity = '';
-
-                // Show success feedback
-                targetContainer.style.borderColor = 'var(--success)';
-                setTimeout(() => {
-                    targetContainer.style.borderColor = '';
-                }, 500);
-
-                updatePlayerCounts();
-                validateAll();
-            }, 150);
+            selectedTeamIndices.push(index);
+            cardEl.classList.add('selected');
         }
 
-        // Live selected count
-        function updatePlayerCounts() {
-            ['home', 'away'].forEach(side => {
-                const selectedCount = document.getElementById(`${side}-selected`).querySelectorAll('.player-bar').length;
-                const substitutesCount = document.getElementById(`${side}-substitutes`).querySelectorAll('.player-bar').length;
-                document.getElementById(`${side}-selected-count`).textContent = selectedCount;
-                document.getElementById(`${side}-substitutes-count`).textContent = substitutesCount;
-            });
-        }
+        const nextBtn = document.getElementById('next-btn');
+        nextBtn.disabled = selectedTeamIndices.length !== 2;
+    }
 
-        // Validation (show all rules)
-        const tosses = document.getElementsByName('toss'),
-            simBtn = document.getElementById('simulate-btn');
+    // --- STEP 2: CONDITIONS ---
+    function initializeStep2() {
+        const home = TEAMS[selectedTeamIndices[0]];
+        const away = TEAMS[selectedTeamIndices[1]];
 
-        function validateAll() {
+        document.getElementById('venue-display').value = home.home_ground;
+        document.getElementById('toss-context').textContent = `${away.team_name} Calls the Toss`;
 
-            if (!selected || selected.length !== 2) {
-                simulateBtn.disabled = true;
-                return;
-            }
+        // Populate pitch
+        const pSel = document.getElementById('pitch-select');
+        pSel.innerHTML = "";
+        const opts = ['Green', 'Flat', 'Dry', 'Hard', 'Dead'];
+        // Put preference first
+        const pref = home.pitch_preference;
+        const sorted = [pref, ...opts.filter(p => p !== pref)];
+        sorted.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.textContent = `${p} Pitch (Home Preference)`;
+            if (p !== pref) opt.textContent = `${p} Pitch`;
+            pSel.appendChild(opt);
+        });
+    }
 
-            const errors = [];
+    // --- STEP 3: SQUADS ---
+    function initializeStep3() {
+        const home = TEAMS[selectedTeamIndices[0]];
+        const away = TEAMS[selectedTeamIndices[1]];
 
-            ['home', 'away'].forEach((side, i) => {
-                const teamData = TEAMS[selected[i]];
-                const teamName = teamData.team_name;
+        setupTeamPane(home, 'home');
+        setupTeamPane(away, 'away');
 
-                // Validate Playing XI
-                const playingXI = document.getElementById(`${side}-selected`).querySelectorAll('.player-bar');
-                if (playingXI.length !== 11) {
-                    errors.push(`${teamName}: Need exactly 11 players in Playing XI (${playingXI.length}/11).`);
-                }
-                if ([...playingXI].filter(b => b.dataset.role === 'Wicketkeeper').length < 1) {
-                    errors.push(`${teamName}: Need at least 1 Wicketkeeper in Playing XI.`);
-                }
-                if ([...playingXI].filter(b => b.querySelector('.will-bowl')?.checked).length < 5) {
-                    errors.push(`${teamName}: Need at least 5 bowlers in Playing XI.`);
-                }
+        validateSquads(); // Check initial state
+    }
 
-                // Validate Substitutes
-                const substitutes = document.getElementById(`${side}-substitutes`).querySelectorAll('.player-bar');
-                if (substitutes.length < 1 || substitutes.length > 5) {
-                    errors.push(`${teamName}: Need 1 to 5 substitute players (${substitutes.length} selected).`);
-                }
-            });
+    function setupTeamPane(team, side) {
+        document.getElementById(`${side}-name`).textContent = team.team_name;
 
-            if (![...tosses].some(r => r.checked)) {
-                errors.push('Select toss choice (Heads or Tails).');
-            }
+        const xiContainer = document.getElementById(`${side}-selected`);
+        const subContainer = document.getElementById(`${side}-substitutes`);
+        const resContainer = document.getElementById(`${side}-available`);
 
-            const old = document.querySelector('.flash');
-            if (old) old.remove();
+        xiContainer.innerHTML = '';
+        subContainer.innerHTML = '';
+        resContainer.innerHTML = '';
 
-            if (errors.length) {
-                const div = document.createElement('div');
-                div.className = 'flash';
-                div.innerHTML = `<i class="fa fa-exclamation-triangle"></i> `
-                    + errors.join('<br><i class="fa fa-exclamation-triangle"></i> ');
-                document.getElementById('xi-section').prepend(div);
-                simBtn.disabled = true;
-                simBtn.classList.remove('enabled');
-            } else {
-                simBtn.disabled = false;
-                simBtn.classList.add('enabled');
-            }
-        }
-        tosses.forEach(r => r.addEventListener('change', validateAll));
+        team.players.forEach((p, idx) => {
+            // Logic: First 11 to XI, next 5 to Bench, rest to Reserve
+            let parent = resContainer;
+            if (idx < 11) parent = xiContainer;
+            else if (idx < 16) parent = subContainer;
 
-        // FINAL: Handle "Simulate Match" click
-        const simulateBtn = document.getElementById('simulate-btn');
-        simulateBtn.addEventListener('click', async () => {
-            // Add loading state
-            document.body.classList.add('loading');
-            simulateBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Setting up match...';
-
-            try {
-                // 1️⃣ Gather data
-                const [hIdx, aIdx] = selected;
-                const home = TEAMS[hIdx], away = TEAMS[aIdx];
-                const payload = {
-                    team_home: `${home.short_code}_${home.created_by_email}`,
-                    team_away: `${away.short_code}_${away.created_by_email}`,
-                    stadium: home.home_ground,
-                    pitch: document.getElementById('pitch-select').value,
-                    rain_probability: parseFloat(document.getElementById('rain-probability').value),
-                    playing_xi: {
-                        home: [...document.getElementById('home-selected').querySelectorAll('.player-bar')]
-                            .map(bar => ({
-                                name: bar.dataset.playerName,
-                                role: bar.dataset.role,
-                                will_bowl: Boolean(bar.querySelector('.will-bowl')?.checked)
-                            })),
-                        away: [...document.getElementById('away-selected').querySelectorAll('.player-bar')]
-                            .map(bar => ({
-                                name: bar.dataset.playerName,
-                                role: bar.dataset.role,
-                                will_bowl: Boolean(bar.querySelector('.will-bowl')?.checked)
-                            }))
-                    },
-                    substitutes: {
-                        home: [...document.getElementById('home-substitutes').querySelectorAll('.player-bar')]
-                            .map(bar => ({
-                                name: bar.dataset.playerName,
-                                role: bar.dataset.role,
-                                will_bowl: Boolean(bar.querySelector('.will-bowl')?.checked)
-                            })),
-                        away: [...document.getElementById('away-substitutes').querySelectorAll('.player-bar')]
-                            .map(bar => ({
-                                name: bar.dataset.playerName,
-                                role: bar.dataset.role,
-                                will_bowl: Boolean(bar.querySelector('.will-bowl')?.checked)
-                            }))
-                    },
-                    toss: document.querySelector('input[name="toss"]:checked').value
-                };
-
-                // 2️⃣ POST
-                const res = await fetch("/match/setup", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
-
-                // 3️⃣ Redirect or alert
-                if (res.ok) {
-                    const { match_id } = await res.json();
-                    window.location.href = `/match/${match_id}`;
-                } else {
-                    const err = await res.json();
-                    alert("❌ " + (err.error || "Could not save match"));
-
-                    // Reset button state
-                    document.body.classList.remove('loading');
-                    simulateBtn.innerHTML = '<i class="fa fa-rocket"></i> Simulate Match';
-                }
-            } catch (error) {
-                console.error('Error setting up match:', error);
-                alert("❌ Network error. Please try again.");
-
-                // Reset button state
-                document.body.classList.remove('loading');
-                simulateBtn.innerHTML = '<i class="fa fa-rocket"></i> Simulate Match';
-            }
+            const el = createPlayerPill(p, side);
+            parent.appendChild(el);
         });
 
-        // Add smooth scroll to XI section when it becomes visible
-        const xiSection = document.getElementById('xi-section');
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-                    if (xiSection.style.display === 'flex') {
-                        setTimeout(() => {
-                            xiSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }, 100);
+        // Update counts
+        updateCounts(side);
+
+        // Add drag listeners to zones
+        [xiContainer, subContainer, resContainer].forEach(zone => {
+            zone.ondragover = e => {
+                e.preventDefault();
+                zone.classList.add('active');
+
+                // Allow reordering visual feedback (optional, but good for UX)
+                const afterElement = getDragAfterElement(zone, e.clientY);
+                const dragged = document.querySelector('.player-pill.dragging');
+                if (dragged) {
+                    if (afterElement == null) {
+                        zone.appendChild(dragged);
+                    } else {
+                        zone.insertBefore(dragged, afterElement);
                     }
                 }
-            });
+            };
+            zone.ondragleave = e => {
+                zone.classList.remove('active');
+            };
+            zone.ondrop = e => handleDrop(e, zone, side);
         });
-        observer.observe(xiSection, { attributes: true });
-    </script>
-</body>
+    }
 
-</html>
+    function createPlayerPill(player, side) {
+        const div = document.createElement('div');
+        div.className = 'player-pill';
+        div.draggable = true;
+        div.dataset.name = player.name;
+        div.dataset.role = player.role;
+
+        const iconMap = { 'Batsman': '🏏', 'Bowler': '🎳', 'Wicketkeeper': '🧤', 'All-rounder': '🏏' };
+
+        // Checkbox for bowlers
+        const isBowler = ['Bowler', 'All-rounder'].includes(player.role);
+        const bowlCheck = isBowler ?
+            `<label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-size:0.75rem;">
+                <input type="checkbox" class="bowl-check" checked> Bowl
+             </label>` : '';
+
+        div.innerHTML = `
+            <span><span class="role-icon">${iconMap[player.role]}</span>${player.name}</span>
+            ${bowlCheck}
+        `;
+
+        div.ondragstart = e => {
+            div.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', player.name); // Required for FF
+        };
+        div.ondragend = () => {
+            div.classList.remove('dragging');
+            const zones = document.querySelectorAll('.drop-zone');
+            zones.forEach(z => z.classList.remove('active'));
+            validateSquads();
+        };
+
+        return div;
+    }
+
+    function handleDrop(e, zone, side) {
+        e.preventDefault();
+        zone.classList.remove('active'); // Remove active state on drop
+        const dragged = document.querySelector('.player-pill.dragging');
+        if (!dragged) return;
+
+        // Prevent cross-team drops
+        if (!zone.closest(`#${side}-pane`).contains(dragged) && !dragged.parentElement.closest(`#${side}-pane`)) {
+            return; // Logic handled in dragover mostly, but safety check
+        }
+
+        // Element is already moved in dragover, just update counts
+        updateCounts(side);
+    }
+
+    // Helper for Drag and Drop Reordering
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.player-pill:not(.dragging)')];
+
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    function updateCounts(side) {
+        const xi = document.getElementById(`${side}-selected`).children.length;
+        const sub = document.getElementById(`${side}-substitutes`).children.length;
+
+        document.getElementById(`${side}-xi-count`).textContent = `${xi}/11`;
+        document.getElementById(`${side}-sub-count`).textContent = `${sub}/5`;
+
+        const xiHeader = document.getElementById(`${side}-xi-count`);
+        xiHeader.style.color = xi === 11 ? 'var(--success)' : 'var(--danger)';
+    }
+
+    function validateSquads() {
+        const sides = ['home', 'away'];
+        let valid = true;
+
+        sides.forEach(side => {
+            const xi = document.getElementById(`${side}-selected`);
+            const sub = document.getElementById(`${side}-substitutes`);
+
+            const xiCount = xi.children.length;
+            const subCount = sub.children.length;
+
+            // Logic rules
+            if (xiCount !== 11) valid = false;
+            // if (subCount < 1) valid = false; // Soft rule
+
+            // Check roles
+            const pills = Array.from(xi.querySelectorAll('.player-pill'));
+            const wk = pills.some(p => p.dataset.role === 'Wicketkeeper');
+            const bowlers = pills.filter(p => p.querySelector('.bowl-check')?.checked).length;
+
+            // We can show warnings via Toast if needed, but for now just lock button
+            if (!wk || bowlers < 5) valid = false;
+        });
+
+        document.getElementById('next-btn').disabled = !valid;
+    }
+
+    // --- SIMULATE ---
+    async function simulateMatch() {
+        const btn = document.getElementById('next-btn');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Simulating...';
+        btn.disabled = true;
+
+        try {
+            const h = TEAMS[selectedTeamIndices[0]];
+            const a = TEAMS[selectedTeamIndices[1]];
+
+            const getPlayers = (zoneId) => {
+                return Array.from(document.getElementById(zoneId).querySelectorAll('.player-pill')).map(el => ({
+                    name: el.dataset.name,
+                    role: el.dataset.role,
+                    will_bowl: el.querySelector('.bowl-check')?.checked || false
+                }));
+            };
+
+            const payload = {
+                team_home: `${h.short_code}_${h.created_by_email}`,
+                team_away: `${a.short_code}_${a.created_by_email}`,
+                stadium: h.home_ground,
+                pitch: document.getElementById('pitch-select').value,
+                rain_probability: parseFloat(document.getElementById('rain-slider').value),
+                toss: document.querySelector('input[name="toss"]:checked').value,
+                playing_xi: {
+                    home: getPlayers('home-selected'),
+                    away: getPlayers('away-selected')
+                },
+                substitutes: {
+                    home: getPlayers('home-substitutes'),
+                    away: getPlayers('away-substitutes')
+                }
+            };
+
+            const res = await fetch("/match/setup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                window.location.href = `/match/${data.match_id}`;
+            } else {
+                throw new Error("Simulation failed");
+            }
+        } catch (e) {
+            Toast.show("Error starting simulation. Check logic.", "error");
+            btn.innerHTML = '<i class="fas fa-rocket"></i> Simulate';
+            btn.disabled = false;
+        }
+    }
+</script>
+{% endblock %}

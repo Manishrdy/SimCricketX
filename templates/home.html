@@ -1,1175 +1,379 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "layout.html" %}
 
-<head>
-    <script>
-        const saved = localStorage.getItem('theme');
-        if (saved) document.documentElement.setAttribute('data-theme', saved);
-    </script>
-    <meta charset="UTF-8">
-    <title>SimCricketX Dashboard</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+{% block title %}SimCricketX Dashboard{% endblock %}
 
-    <!-- Modern CSS Reset -->
-    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+{% block extra_css %}
+<style>
+    /* Hero Section */
+    .hero-section {
+        text-align: center;
+        margin-bottom: 3rem;
+        padding: 2rem 0;
+    }
 
-    <!-- Font Awesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    .hero-title {
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        background: linear-gradient(135deg, var(--accent), #8b5cf6);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        line-height: 1.2;
+    }
 
-    <!-- Google Fonts -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-        rel="stylesheet">
+    .hero-subtitle {
+        font-size: 1.125rem;
+        color: var(--fg-secondary);
+        margin-bottom: 2rem;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
 
-    <style>
-        :root {
-            --bg: #fafbfc;
-            --bg-secondary: #f5f6f8;
-            --fg: #1a1d23;
-            --fg-secondary: #6b7280;
-            --card-bg: #ffffff;
-            --card-border: #e5e7eb;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --accent-light: #dbeafe;
-            --shadow: rgba(0, 0, 0, 0.04);
-            --shadow-hover: rgba(0, 0, 0, 0.08);
-            --shadow-strong: rgba(0, 0, 0, 0.12);
-            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --gradient-accent: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-            --icon-color: #3b82f6;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --border-radius: 16px;
-            --border-radius-sm: 8px;
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
+    .hero-stats {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        flex-wrap: wrap;
+    }
 
-        [data-theme="dark"] {
-            --bg: #0f1419;
-            --bg-secondary: #1a1f2e;
-            --fg: #f9fafb;
-            --fg-secondary: #9ca3af;
-            --card-bg: #1e293b;
-            --card-border: #334155;
-            --accent: #60a5fa;
-            --accent-hover: #3b82f6;
-            --accent-light: #1e3a8a;
-            --shadow: rgba(0, 0, 0, 0.2);
-            --shadow-hover: rgba(0, 0, 0, 0.3);
-            --shadow-strong: rgba(0, 0, 0, 0.4);
-            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --gradient-accent: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-            --icon-color: #60a5fa;
-        }
+    .stat-item {
+        text-align: center;
+    }
 
-        /* Light Themes */
-        :root[data-theme="nord"] {
-            --bg: #eceff4;
-            --bg-secondary: #e5e9f0;
-            --fg: #2e3440;
-            --fg-secondary: #4c566a;
-            --card-bg: #ffffff;
-            --card-border: #d8dee9;
-            --accent: #5e81ac;
-            --accent-hover: #4c6994;
-            --accent-light: #e8f0ff;
-            --icon-color: #5e81ac;
-            --gradient: linear-gradient(135deg, #8fbcbb, #88c0d0);
-            --gradient-accent: linear-gradient(135deg, #5e81ac, #81a1c1);
-        }
+    .stat-number {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--accent);
+        display: block;
+    }
 
-        :root[data-theme="retro"] {
-            --bg: #fef7ed;
-            --bg-secondary: #fed7aa;
-            --fg: #7c2d12;
-            --fg-secondary: #a16207;
-            --card-bg: #ffffff;
-            --card-border: #fed7aa;
-            --accent: #ea580c;
-            --accent-hover: #dc2626;
-            --accent-light: #fff7ed;
-            --icon-color: #ea580c;
-            --gradient: linear-gradient(135deg, #f97316, #eab308);
-            --gradient-accent: linear-gradient(135deg, #ea580c, #f59e0b);
-        }
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--fg-secondary);
+        font-weight: 500;
+    }
 
-        :root[data-theme="cupcake"] {
-            --bg: #fdf2f8;
-            --bg-secondary: #fce7f3;
-            --fg: #831843;
-            --fg-secondary: #be185d;
-            --card-bg: #ffffff;
-            --card-border: #f9a8d4;
-            --accent: #ec4899;
-            --accent-hover: #db2777;
-            --accent-light: #fdf2f8;
-            --icon-color: #ec4899;
-            --gradient: linear-gradient(135deg, #f472b6, #d946ef);
-            --gradient-accent: linear-gradient(135deg, #ec4899, #a855f7);
-        }
+    /* Dashboard Grid */
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
 
-        /* Dark Themes */
-        :root[data-theme="dim"] {
-            --bg: #1f2937;
-            --bg-secondary: #374151;
-            --fg: #f9fafb;
-            --fg-secondary: #d1d5db;
-            --card-bg: #374151;
-            --card-border: #4b5563;
-            --accent: #6366f1;
-            --accent-hover: #4f46e5;
-            --accent-light: #312e81;
-            --icon-color: #818cf8;
-            --gradient: linear-gradient(135deg, #4f46e5, #7c3aed);
-            --gradient-accent: linear-gradient(135deg, #6366f1, #8b5cf6);
-        }
+    .dashboard-card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        cursor: pointer;
+        transition: var(--transition);
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 2px 8px var(--shadow);
+    }
 
-        :root[data-theme="dracula"] {
-            /* Base colors */
-            --bg: #282a36;
-            /* VS Code Dracula background :contentReference[oaicite:0]{index=0} */
-            --bg-secondary: #44475a;
-            /* Current line / selection :contentReference[oaicite:1]{index=1} */
-            --fg: #f8f8f2;
-            /* Foreground :contentReference[oaicite:2]{index=2} */
-            --fg-secondary: #6272a4;
-            /* Comments :contentReference[oaicite:3]{index=3} */
+    .dashboard-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(135deg, var(--accent), #8b5cf6);
+        transform: scaleX(0);
+        transition: var(--transition);
+    }
 
-            /* Card styling */
-            --card-bg: #44475a;
-            /* Matches selection color :contentReference[oaicite:4]{index=4} */
-            --card-border: #6272a4;
-            /* Comments color as subtle border :contentReference[oaicite:5]{index=5} */
+    .dashboard-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 20px var(--shadow-lg);
+        border-color: var(--accent);
+    }
 
-            /* Accent palette */
-            --accent: #ff79c6;
-            /* Pink (keywords) :contentReference[oaicite:6]{index=6} */
-            --accent-hover: #bd93f9;
-            /* Purple (functions) :contentReference[oaicite:7]{index=7} */
-            --accent-light: rgba(255, 121, 198, 0.1);
-            /* Pink glow */
+    .dashboard-card:hover::before {
+        transform: scaleX(1);
+    }
 
-            /* Icons & highlights */
-            --icon-color: #ff79c6;
-            --gradient: linear-gradient(135deg, #ff79c6 0%, #bd93f9 100%);
-            /* Pink → Purple :contentReference[oaicite:8]{index=8} */
-            --gradient-accent: linear-gradient(135deg, #ff79c6 0%, #8be9fd 100%);
-            /* Pink → Cyan :contentReference[oaicite:9]{index=9} */
-        }
+    .card-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
 
+    .card-icon {
+        width: 48px;
+        height: 48px;
+        background: var(--accent-light);
+        color: var(--accent);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
 
-        :root[data-theme="sunset"] {
-            /* Elegant cream and gold with deep navy accents */
-            --bg: #faf8f3;
-            --bg-secondary: #f5f2ea;
-            --fg: #2c3e50;
-            --fg-secondary: #7f8c8d;
-            --card-bg: #ffffff;
-            --card-border: #e8dcc0;
-            --accent: #d4af37;
-            /* Classic gold */
-            --accent-hover: #b8941f;
-            --accent-light: rgba(212, 175, 55, 0.1);
-            --icon-color: #d4af37;
-            --shadow: rgba(212, 175, 55, 0.08);
-            --shadow-hover: rgba(212, 175, 55, 0.15);
-            --shadow-strong: rgba(212, 175, 55, 0.2);
-            --gradient: linear-gradient(135deg, #d4af37 0%, #f4e6a1 100%);
-            --gradient-accent: linear-gradient(135deg, #d4af37 0%, #8b7355 100%);
-        }
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--fg);
+        margin: 0;
+    }
 
+    .card-description {
+        color: var(--fg-secondary);
+        font-size: 0.9375rem;
+        line-height: 1.5;
+        margin-bottom: 1rem;
+    }
 
-        * {
-            box-sizing: border-box;
-        }
+    .card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.875rem;
+        color: var(--fg-secondary);
+    }
 
-        body {
-            background: var(--bg);
-            color: var(--fg);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            line-height: 1.6;
-            font-size: 16px;
-            min-height: 100vh;
-            position: relative;
-        }
+    .card-status {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
 
-        /* Navigation Header */
-        .nav-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: var(--card-bg);
-            border-bottom: 1px solid var(--card-border);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            z-index: 1000;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #10b981;
+    }
 
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 700;
-            background: var(--gradient-accent);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
+    .card-arrow {
+        color: var(--accent);
+        transition: var(--transition);
+    }
 
-        .logo-icon {
-            font-size: 2rem;
-            background: var(--gradient-accent);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
+    .dashboard-card:hover .card-arrow {
+        transform: translateX(4px);
+    }
 
-        .nav-controls {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
+    /* Logout Button */
+    .logout-btn {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        color: var(--fg);
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+    }
 
-        .theme-toggle {
-            background: var(--bg-secondary);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius-sm);
-            padding: 0.5rem;
-            cursor: pointer;
-            font-size: 1.2rem;
-            color: var(--fg);
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 40px;
-            height: 40px;
-        }
+    .logout-btn:hover {
+        background: var(--accent-light);
+        border-color: var(--accent);
+        color: var(--accent);
+    }
 
-        .theme-toggle:hover {
-            background: var(--accent-light);
-            border-color: var(--accent);
-            transform: scale(1.05);
-        }
-
-        .theme-dropdown {
-            position: relative;
-            display: inline-block;
-        }
-
-        .theme-dropdown-btn {
-            background: var(--bg-secondary);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius-sm);
-            padding: 0.5rem 1rem;
-            cursor: pointer;
-            color: var(--fg);
-            font-size: 0.875rem;
-            font-weight: 500;
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .theme-dropdown-btn:hover {
-            background: var(--accent-light);
-            border-color: var(--accent);
-        }
-
-        .theme-dropdown-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius);
-            box-shadow: 0 10px 25px var(--shadow-strong);
-            min-width: 200px;
-            margin-top: 0.5rem;
-            padding: 0.5rem;
+    /* Animations */
+    @keyframes fadeInUp {
+        from {
             opacity: 0;
-            visibility: hidden;
-            transform: translateY(-10px);
-            transition: var(--transition);
-            z-index: 1001;
+            transform: translateY(20px);
         }
 
-        .theme-dropdown.active .theme-dropdown-menu {
+        to {
             opacity: 1;
-            visibility: visible;
             transform: translateY(0);
         }
+    }
 
-        .theme-option {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem;
-            border-radius: var(--border-radius-sm);
-            cursor: pointer;
-            transition: var(--transition);
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
+    .dashboard-card {
+        animation: fadeInUp 0.5s ease-out;
+    }
 
-        .theme-option:hover {
-            background: var(--bg-secondary);
-        }
+    .dashboard-card:nth-child(1) {
+        animation-delay: 0.1s;
+    }
 
-        .theme-icon {
-            font-size: 1.1rem;
-            color: var(--icon-color);
-            width: 20px;
-            text-align: center;
-        }
+    .dashboard-card:nth-child(2) {
+        animation-delay: 0.2s;
+    }
 
-        /* Main Content */
-        .main-content {
-            padding-top: 100px;
-            padding-bottom: 2rem;
-            padding-left: 2rem;
-            padding-right: 2rem;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+    .dashboard-card:nth-child(3) {
+        animation-delay: 0.3s;
+    }
 
-        .hero-section {
-            text-align: center;
-            margin-bottom: 4rem;
-            padding: 2rem 0;
-        }
+    .dashboard-card:nth-child(4) {
+        animation-delay: 0.4s;
+    }
 
+    .dashboard-card:nth-child(5) {
+        animation-delay: 0.5s;
+    }
+
+    .dashboard-card:nth-child(6) {
+        animation-delay: 0.6s;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
         .hero-title {
-            font-size: 3.5rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            background: var(--gradient-accent);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            line-height: 1.2;
-        }
-
-        .hero-subtitle {
-            font-size: 1.125rem;
-            color: var(--fg-secondary);
-            font-weight: 400;
-            margin-bottom: 2rem;
+            font-size: 2rem;
         }
 
         .hero-stats {
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-        }
-
-        .stat-item {
-            text-align: center;
-        }
-
-        .stat-number {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--accent);
-            display: block;
-        }
-
-        .stat-label {
-            font-size: 0.875rem;
-            color: var(--fg-secondary);
-            font-weight: 500;
-        }
-
-        /* Flash Messages */
-        .flash-container {
-            margin-bottom: 2rem;
-        }
-
-        .flash {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-left: 4px solid var(--accent);
-            border-radius: var(--border-radius);
-            padding: 1rem 1.5rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 2px 8px var(--shadow);
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .flash.fade-out {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-
-        .flash i {
-            color: var(--accent);
-            font-size: 1.2rem;
-        }
-
-        /* Dashboard Grid */
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 2rem;
-            margin-bottom: 3rem;
-        }
-
-        .dashboard-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius);
-            padding: 2rem;
-            cursor: pointer;
-            transition: var(--transition);
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 2px 8px var(--shadow);
-        }
-
-        .dashboard-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--gradient-accent);
-            transform: scaleX(0);
-            transition: var(--transition);
-        }
-
-        .dashboard-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 12px 32px var(--shadow-hover);
-            border-color: var(--accent);
-        }
-
-        .dashboard-card:hover::before {
-            transform: scaleX(1);
-        }
-
-        .dashboard-card.disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
-            transform: none !important;
-            box-shadow: 0 2px 8px var(--shadow) !important;
-        }
-
-        .dashboard-card.disabled::before {
-            transform: scaleX(0) !important;
-        }
-
-        .card-header {
-            display: flex;
-            align-items: center;
             gap: 1rem;
-            margin-bottom: 1rem;
         }
 
-        .card-icon {
-            width: 48px;
-            height: 48px;
-            background: var(--accent-light);
-            color: var(--icon-color);
-            border-radius: var(--border-radius-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
+        .dashboard-grid {
+            grid-template-columns: 1fr;
         }
+    }
+</style>
+{% endblock %}
 
-        .card-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--fg);
-            margin: 0;
-        }
+{% block content %}
+<!-- Hero Section -->
+<section class="hero-section">
+    <h1 class="hero-title">SimCricketX Dashboard</h1>
+    <p class="hero-subtitle">Your complete cricket simulation platform - create teams, simulate matches, and track your
+        cricket journey</p>
 
-        .card-description {
-            color: var(--fg-secondary);
-            font-size: 0.9375rem;
-            line-height: 1.5;
-            margin-bottom: 1.5rem;
-        }
-
-        .card-footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 0.875rem;
-            color: var(--fg-secondary);
-        }
-
-        .card-status {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--success);
-        }
-
-        .status-dot.coming-soon {
-            background: var(--warning);
-        }
-
-        .card-arrow {
-            color: var(--accent);
-            transition: var(--transition);
-        }
-
-        .dashboard-card:hover .card-arrow {
-            transform: translateX(4px);
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .nav-header {
-                padding: 1rem;
-            }
-
-            .nav-controls {
-                gap: 0.5rem;
-            }
-
-            .theme-dropdown-btn {
-                padding: 0.5rem;
-                font-size: 0;
-            }
-
-            .main-content {
-                padding-left: 1rem;
-                padding-right: 1rem;
-                padding-top: 80px;
-            }
-
-            .hero-title {
-                font-size: 2.5rem;
-            }
-
-            .hero-stats {
-                gap: 1rem;
-            }
-
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-            }
-
-            .dashboard-card {
-                padding: 1.5rem;
-            }
-        }
-
-        /* Animations */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .dashboard-card {
-            animation: fadeInUp 0.6s ease-out;
-        }
-
-        .dashboard-card:nth-child(1) {
-            animation-delay: 0.1s;
-        }
-
-        .dashboard-card:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .dashboard-card:nth-child(3) {
-            animation-delay: 0.3s;
-        }
-
-        .dashboard-card:nth-child(4) {
-            animation-delay: 0.4s;
-        }
-
-        .dashboard-card:nth-child(5) {
-            animation-delay: 0.5s;
-        }
-
-        .dashboard-card:nth-child(6) {
-            animation-delay: 0.6s;
-        }
-
-        /* Theme-specific customizations */
-        [data-theme="retro"] .dashboard-card:hover {
-            box-shadow: 0 12px 32px rgba(234, 88, 12, 0.2);
-        }
-
-        [data-theme="cupcake"] .dashboard-card:hover {
-            box-shadow: 0 12px 32px rgba(236, 72, 153, 0.2);
-        }
-
-        [data-theme="dracula"] .dashboard-card:hover {
-            box-shadow: 0 12px 32px rgba(139, 233, 253, 0.2);
-        }
-
-        :root[data-theme="prototype"] {
-            --bg: linear-gradient(135deg, #0f0f0f, #1a1a1a);
-            --bg-secondary: rgba(255, 255, 255, 0.02);
-            --fg: #e0e0e0;
-            --fg-secondary: #a0a0a0;
-            --card-bg: rgba(255, 255, 255, 0.03);
-            --card-border: rgba(255, 255, 255, 0.1);
-            --accent: #00d4aa;
-            /* default teal green */
-            --accent-hover: #00b894;
-            --accent-light: rgba(0, 212, 170, 0.1);
-            --icon-color: #00d4aa;
-            --shadow: rgba(0, 0, 0, 0.3);
-            --shadow-hover: rgba(0, 0, 0, 0.4);
-            --shadow-strong: rgba(0, 0, 0, 0.5);
-            --gradient: linear-gradient(135deg, #00d4aa, #00b894);
-            --gradient-accent: linear-gradient(45deg, #00d4aa, #ffffff);
-        }
-
-        .theme-option.theme-has-submenu {
-            position: relative;
-            justify-content: space-between;
-        }
-
-        .submenu-arrow {
-            font-size: 0.8rem;
-            color: var(--fg-secondary);
-            margin-left: auto;
-        }
-
-        .submenu {
-            position: absolute;
-            top: 0;
-            right: 100%;
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius-sm);
-            box-shadow: 0 8px 20px var(--shadow-strong);
-            padding: 0.75rem;
-            display: none;
-            flex-direction: column;
-            gap: 0.5rem;
-            z-index: 1002;
-            min-width: 70px;
-        }
-
-        .theme-option.theme-has-submenu:hover .submenu {
-            display: flex;
-        }
-
-        .variant-btn {
-            border: none;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            cursor: pointer;
-            box-shadow: 0 2px 6px var(--shadow);
-            transition: var(--transition);
-        }
-
-        .variant-btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 4px 12px var(--shadow-hover);
-        }
-    </style>
-</head>
-
-<body>
-    <!-- Navigation Header -->
-    <header class="nav-header">
-        <div class="logo">
-            <i class="fa-solid fa-cricket-bat-ball logo-icon"></i>
-            <span>SimCricketX <em>by Manish</em></span>
+    <div class="hero-stats">
+        <div class="stat-item">
+            <span class="stat-number">∞</span>
+            <span class="stat-label">Teams Created</span>
         </div>
-
-        <div class="nav-controls">
-            <button class="theme-toggle" id="theme-toggle">🌙</button>
-
-            <div class="theme-dropdown" id="theme-dropdown">
-                <button class="theme-dropdown-btn" id="theme-dropdown-btn">
-                    <i class="fa-solid fa-palette"></i>
-                    <span class="theme-dropdown-text">Themes</span>
-                    <i class="fa-solid fa-chevron-down"></i>
-                </button>
-
-                <div class="theme-dropdown-menu" id="theme-dropdown-menu">
-                    <div class="theme-option" data-theme="nord">
-                        <i class="fa-solid fa-snowflake theme-icon"></i>
-                        <span>Nord</span>
-                    </div>
-                    <div class="theme-option" data-theme="retro">
-                        <i class="fa-solid fa-compact-disc theme-icon"></i>
-                        <span>Retro</span>
-                    </div>
-                    <div class="theme-option" data-theme="cupcake">
-                        <i class="fa-solid fa-birthday-cake theme-icon"></i>
-                        <span>Cupcake</span>
-                    </div>
-                    <div class="theme-option" data-theme="dim">
-                        <i class="fa-solid fa-adjust theme-icon"></i>
-                        <span>Dim</span>
-                    </div>
-                    <div class="theme-option" data-theme="dracula">
-                        <i class="fa-solid fa-ghost theme-icon"></i>
-                        <span>Dracula</span>
-                    </div>
-                    <div class="theme-option" data-theme="sunset">
-                        <i class="fa-solid fa-sun theme-icon"></i>
-                        <span>Sunset</span>
-                    </div>
-                    <div class="theme-option theme-has-submenu" data-theme="prototype">
-                        <i class="fa-solid fa-palette theme-icon"></i>
-                        <span>Shadow</span>
-                        <i class="fa-solid fa-chevron-left submenu-arrow"></i>
-                        <div class="submenu">
-                            <button class="variant-btn" data-primary="#00d4aa" data-light="#00b894"
-                                style="background: #00d4aa;"></button>
-                            <button class="variant-btn" data-primary="#4facfe" data-light="#00f2fe"
-                                style="background: #4facfe;"></button>
-                            <button class="variant-btn" data-primary="#a855f7" data-light="#3b82f6"
-                                style="background: #a855f7;"></button>
-                            <button class="variant-btn" data-primary="#ff6b6b" data-light="#ffa500"
-                                style="background: #ff6b6b;"></button>
-                            <button class="variant-btn" data-primary="#ff758c" data-light="#ff7eb3"
-                                style="background: #ff758c;"></button>
-                            <button class="variant-btn" data-primary="#ffd700" data-light="#ffb347"
-                                style="background: #ffd700;"></button>
-                            <!-- New shiny silver variant -->
-                            <button class="variant-btn" data-primary="#ffffff" data-light="#c0c0c0"
-                                style="background: linear-gradient(135deg, #ffffff, #c0c0c0);"></button>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
+        <div class="stat-item">
+            <span class="stat-number">6</span>
+            <span class="stat-label">Features Available</span>
         </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="main-content">
-
-        <!-- Hero Section -->
-        <section class="hero-section">
-            <h1 class="hero-title">SimCricketX Dashboard</h1>
-            <p class="hero-subtitle">Your complete cricket simulation platform - create teams, simulate matches, and
-                track your cricket journey</p>
-
-            <div class="hero-stats">
-                <div class="stat-item">
-                    <span class="stat-number">∞</span>
-                    <span class="stat-label">Teams Created</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number">6</span>
-                    <span class="stat-label">Features Available</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number">{{ matches_simulated }}</span>
-                    <span class="stat-label">Matches Simulated</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number">{{ total_visits }}</span>
-                    <span class="stat-label">Total Visitors</span>
-                </div>
-
-            </div>
-        </section>
-
-        <!-- Flash Messages -->
-        <div class="flash-container">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            {% for category, message in messages %}
-            <div class="flash alert-{{ category }}">
-                <i class="fa-solid fa-info-circle"></i>
-                <span>{{ message }}</span>
-            </div>
-            {% endfor %}
-            {% endif %}
-            {% endwith %}
+        <div class="stat-item">
+            <span class="stat-number">{{ matches_simulated }}</span>
+            <span class="stat-label">Matches Simulated</span>
         </div>
-
-        <!-- Dashboard Grid -->
-        <div class="dashboard-grid">
-            <div class="dashboard-card" onclick="location.href='/team/create'">
-                <div class="card-header">
-                    <div class="card-icon">
-                        <i class="fa-solid fa-people-group"></i>
-                    </div>
-                    <h2 class="card-title">Create Team</h2>
-                </div>
-                <p class="card-description">Build your dream cricket squad with custom players, assign roles, and create
-                    the perfect team composition for your matches.</p>
-                <div class="card-footer">
-                    <div class="card-status">
-                        <div class="status-dot"></div>
-                        <span>Ready to use</span>
-                    </div>
-                    <i class="fa-solid fa-arrow-right card-arrow"></i>
-                </div>
-            </div>
-
-            <div class="dashboard-card" onclick="location.href='/teams/manage'">
-                <div class="card-header">
-                    <div class="card-icon">
-                        <i class="fa-solid fa-pen-to-square"></i>
-                    </div>
-                    <h2 class="card-title">Manage Teams</h2>
-                </div>
-                <p class="card-description">View, edit, or delete your existing teams. Update player details, modify
-                    team strategies, and keep your squads up to date.</p>
-                <div class="card-footer">
-                    <div class="card-status">
-                        <div class="status-dot"></div>
-                        <span>Ready to use</span>
-                    </div>
-                    <i class="fa-solid fa-arrow-right card-arrow"></i>
-                </div>
-            </div>
-
-            <div class="dashboard-card" onclick="location.href='/match/setup'">
-                <div class="card-header">
-                    <div class="card-icon">
-                        <i class="fa-solid fa-people-roof"></i>
-                    </div>
-                    <h2 class="card-title">Simulate Match</h2>
-                </div>
-                <p class="card-description">Set up exciting cricket matches between your teams. Pick playing XI,
-                    configure match settings, and watch the simulation unfold.</p>
-                <div class="card-footer">
-                    <div class="card-status">
-                        <div class="status-dot"></div>
-                        <span>Ready to use</span>
-                    </div>
-                    <i class="fa-solid fa-arrow-right card-arrow"></i>
-                </div>
-            </div>
-
-            <div class="dashboard-card" onclick="location.href='/statistics'">
-                <div class="card-header">
-                    <div class="card-icon">
-                        <i class="fa-solid fa-chart-simple"></i>
-                    </div>
-                    <h2 class="card-title">Statistics</h2>
-                </div>
-                <p class="card-description">Comprehensive analytics and insights about your teams' performance, player
-                    statistics, and match history trends.</p>
-                <div class="card-footer">
-                    <div class="card-status">
-                        <div class="status-dot"></div>
-                        <span>Ready to use</span>
-                    </div>
-                    <i class="fa-solid fa-arrow-right card-arrow"></i>
-                </div>
-            </div>
-
-            <div class="dashboard-card" onclick="location.href='/my-matches'">
-                <div class="card-header">
-                    <div class="card-icon">
-                        <i class="fa-solid fa-folder-open"></i>
-                    </div>
-                    <h2 class="card-title">My Matches</h2>
-                </div>
-                <p class="card-description">Access your complete match archive. Review past simulations, analyze
-                    results, and relive your favorite cricket moments.</p>
-                <div class="card-footer">
-                    <div class="card-status">
-                        <div class="status-dot"></div>
-                        <span>Ready to use</span>
-                    </div>
-                    <i class="fa-solid fa-arrow-right card-arrow"></i>
-                </div>
-            </div>
-
-            <div class="dashboard-card" onclick="location.href='/logout'">
-                <div class="card-header">
-                    <div class="card-icon">
-                        <i class="fa-solid fa-arrow-right-from-bracket"></i>
-                    </div>
-                    <h2 class="card-title">Logout</h2>
-                </div>
-                <p class="card-description">Securely sign out of your SimCricketX account. Your data will be safely
-                    stored for your next cricket session.</p>
-                <div class="card-footer">
-                    <div class="card-status">
-                        <div class="status-dot"></div>
-                        <span>Secure logout</span>
-                    </div>
-                    <i class="fa-solid fa-arrow-right card-arrow"></i>
-                </div>
-            </div>
+        <div class="stat-item">
+            <span class="stat-number">{{ total_visits }}</span>
+            <span class="stat-label">Total Visitors</span>
         </div>
-    </main>
+    </div>
+</section>
 
-    <script>
-        // Theme Toggle Functionality
-        const toggle = document.getElementById('theme-toggle');
-        const root = document.documentElement;
+<!-- Dashboard Grid -->
+<div class="dashboard-grid">
+    <div class="dashboard-card" onclick="location.href='/team/create'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fa-solid fa-people-group"></i>
+            </div>
+            <h2 class="card-title">Create Team</h2>
+        </div>
+        <p class="card-description">Build your dream cricket squad with custom players, assign roles, and create the
+            perfect team composition for your matches.</p>
+        <div class="card-footer">
+            <div class="card-status">
+                <div class="status-dot"></div>
+                <span>Ready to use</span>
+            </div>
+            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        </div>
+    </div>
 
-        // Initialize theme
-        if (localStorage.theme) {
-            root.setAttribute('data-theme', localStorage.theme);
-        }
+    <div class="dashboard-card" onclick="location.href='/teams/manage'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fa-solid fa-pen-to-square"></i>
+            </div>
+            <h2 class="card-title">Manage Teams</h2>
+        </div>
+        <p class="card-description">View, edit, or delete your existing teams. Update player details, modify team
+            strategies, and keep your squads up to date.</p>
+        <div class="card-footer">
+            <div class="card-status">
+                <div class="status-dot"></div>
+                <span>Ready to use</span>
+            </div>
+            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        </div>
+    </div>
 
-        toggle.onclick = () => {
-            const currentTheme = root.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            root.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            updateToggleIcon(newTheme);
-        };
+    <div class="dashboard-card" onclick="location.href='/match/setup'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fa-solid fa-people-roof"></i>
+            </div>
+            <h2 class="card-title">Simulate Match</h2>
+        </div>
+        <p class="card-description">Set up exciting cricket matches between your teams. Pick playing XI, configure match
+            settings, and watch the simulation unfold.</p>
+        <div class="card-footer">
+            <div class="card-status">
+                <div class="status-dot"></div>
+                <span>Ready to use</span>
+            </div>
+            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        </div>
+    </div>
 
-        function updateToggleIcon(theme) {
-            const isDark = theme === 'dark' || ['dim', 'dracula', 'sunset'].includes(theme);
-            toggle.textContent = isDark ? '☀️' : '🌙';
-        }
+    <div class="dashboard-card" onclick="location.href='/statistics'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fa-solid fa-chart-simple"></i>
+            </div>
+            <h2 class="card-title">Statistics</h2>
+        </div>
+        <p class="card-description">Comprehensive analytics and insights about your teams' performance, player
+            statistics, and match history trends.</p>
+        <div class="card-footer">
+            <div class="card-status">
+                <div class="status-dot"></div>
+                <span>Ready to use</span>
+            </div>
+            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        </div>
+    </div>
 
-        // Theme Dropdown Functionality
-        const dropdown = document.getElementById('theme-dropdown');
-        const dropdownBtn = document.getElementById('theme-dropdown-btn');
-        const dropdownMenu = document.getElementById('theme-dropdown-menu');
+    <div class="dashboard-card" onclick="location.href='/my-matches'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fa-solid fa-folder-open"></i>
+            </div>
+            <h2 class="card-title">My Matches</h2>
+        </div>
+        <p class="card-description">Access your complete match archive. Review past simulations, analyze results, and
+            relive your favorite cricket moments.</p>
+        <div class="card-footer">
+            <div class="card-status">
+                <div class="status-dot"></div>
+                <span>Ready to use</span>
+            </div>
+            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        </div>
+    </div>
 
-        dropdownBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            dropdown.classList.toggle('active');
-        });
-
-        document.addEventListener('click', () => {
-            dropdown.classList.remove('active');
-        });
-
-        dropdownMenu.addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
-
-        // Theme Selection - Updated to handle Shadow theme variants properly
-        document.querySelectorAll('.theme-option:not(.theme-has-submenu)').forEach(option => {
-            option.addEventListener('click', () => {
-                const theme = option.getAttribute('data-theme');
-
-                // Clear any custom properties set by Shadow theme variants
-                document.documentElement.style.removeProperty('--accent');
-                document.documentElement.style.removeProperty('--accent-hover');
-                document.documentElement.style.removeProperty('--accent-light');
-                document.documentElement.style.removeProperty('--icon-color');
-                document.documentElement.style.removeProperty('--gradient');
-                document.documentElement.style.removeProperty('--gradient-accent');
-
-                document.documentElement.setAttribute('data-theme', theme);
-                localStorage.setItem('theme', theme);
-                updateToggleIcon(theme);
-                dropdown.classList.remove('active');
-            });
-        });
-
-        // Handle Shadow theme selection (without variants)
-        const shadowOpt = document.querySelector('.theme-option.theme-has-submenu');
-        shadowOpt.addEventListener('click', e => {
-            // ignore clicks on the little submenu buttons themselves
-            if (e.target.closest('.variant-btn')) return;
-            document.documentElement.setAttribute('data-theme', 'prototype');
-            localStorage.setItem('theme', 'prototype');
-            updateToggleIcon('prototype');
-            dropdown.classList.remove('active');
-        });
-
-        // Handle Shadow theme variants
-        document.querySelectorAll('.variant-btn').forEach(btn => {
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                const primary = this.getAttribute('data-primary');
-                const light = this.getAttribute('data-light');
-
-                // ① Persist the chosen Shadow-variant
-                localStorage.setItem('prototypePrimary', primary);
-                localStorage.setItem('prototypeLight', light);
-
-                // ② Apply prototype theme + icon
-                document.documentElement.setAttribute('data-theme', 'prototype');
-                localStorage.setItem('theme', 'prototype');
-                updateToggleIcon('prototype');
-
-                // ③ Re-apply the CSS vars
-                document.documentElement.style.setProperty('--accent', primary);
-                document.documentElement.style.setProperty('--accent-hover', light);
-                document.documentElement.style.setProperty('--accent-light', `${primary}1a`);
-                document.documentElement.style.setProperty('--icon-color', primary);
-                document.documentElement.style.setProperty(
-                    '--gradient',
-                    `linear-gradient(135deg, ${primary}, ${light})`
-                );
-                document.documentElement.style.setProperty(
-                    '--gradient-accent',
-                    `linear-gradient(45deg, ${primary}, #ffffff)`
-                );
-
-                dropdown.classList.remove('active');
-            });
-        });
-
-        // Initialize on load
-        window.addEventListener('DOMContentLoaded', () => {
-            const saved = localStorage.getItem('theme');
-            if (saved) {
-                document.documentElement.setAttribute('data-theme', saved);
-                updateToggleIcon(saved);
-            } else {
-                updateToggleIcon('light');
-            }
-        });
-
-        // On load: restore theme (and prototype variant), then auto-dismiss flashes
-        window.addEventListener('DOMContentLoaded', () => {
-            const root = document.documentElement;
-            const saved = localStorage.getItem('theme');
-
-            // ① If a theme was saved, apply it & restore prototype colors
-            if (saved) {
-                root.setAttribute('data-theme', saved);
-                updateToggleIcon(saved);
-
-                if (saved === 'prototype') {
-                    const primary = localStorage.getItem('prototypePrimary');
-                    const light = localStorage.getItem('prototypeLight');
-                    if (primary && light) {
-                        root.style.setProperty('--accent', primary);
-                        root.style.setProperty('--accent-hover', light);
-                        root.style.setProperty('--accent-light', `${primary}1a`);
-                        root.style.setProperty('--icon-color', primary);
-                        root.style.setProperty(
-                            '--gradient',
-                            `linear-gradient(135deg, ${primary}, ${light})`
-                        );
-                        root.style.setProperty(
-                            '--gradient-accent',
-                            `linear-gradient(45deg, ${primary}, #ffffff)`
-                        );
-                    }
-                }
-            }
-
-            // ② Then auto-dismiss any flash messages after 4 s
-            setTimeout(() => {
-                document.querySelectorAll('.flash').forEach(el => {
-                    el.classList.add('fade-out');
-                    setTimeout(() => el.remove(), 300);
-                });
-            }, 4000);
-        });
-
-
-        // Add smooth scroll behavior for better UX
-        document.querySelectorAll('.dashboard-card:not(.disabled)').forEach(card => {
-            card.addEventListener('click', function (e) {
-                // Add a subtle loading state
-                this.style.transform = 'scale(0.98)';
-                setTimeout(() => {
-                    this.style.transform = '';
-                }, 150);
-            });
-        });
-
-        // Keyboard navigation support
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                dropdown.classList.remove('active');
-            }
-        });
-
-        // Add ripple effect to cards on click
-        document.querySelectorAll('.dashboard-card:not(.disabled)').forEach(card => {
-            card.addEventListener('click', function (e) {
-                const rect = this.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-
-                const ripple = document.createElement('div');
-                ripple.style.cssText = `
-                    position: absolute;
-                    border-radius: 50%;
-                    background: var(--accent);
-                    opacity: 0.3;
-                    pointer-events: none;
-                    transform: scale(0);
-                    animation: ripple 0.6s ease-out;
-                    left: ${x}px;
-                    top: ${y}px;
-                    width: 20px;
-                    height: 20px;
-                    margin-left: -10px;
-                    margin-top: -10px;
-                `;
-
-                this.appendChild(ripple);
-
-                setTimeout(() => {
-                    ripple.remove();
-                }, 600);
-            });
-        });
-
-        // Add CSS for ripple animation
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes ripple {
-                to {
-                    transform: scale(4);
-                    opacity: 0;
-                }
-            }
-            
-            .dashboard-card {
-                position: relative;
-                overflow: hidden;
-            }
-        `;
-        document.head.appendChild(style);
-
-        document.addEventListener('DOMContentLoaded', function () {
-            const variantContainer = document.querySelector('.prototype-theme-variants');
-            if (!variantContainer) return;   // <<< guard against missing element
-
-            function updateVariantVisibility() {
-                variantContainer.style.display =
-                    document.documentElement.getAttribute('data-theme') === 'prototype'
-                        ? 'block'
-                        : 'none';
-            }
-
-            document.querySelectorAll('.theme-option').forEach(option => {
-                option.addEventListener('click', updateVariantVisibility);
-            });
-
-            updateVariantVisibility();
-        });
-
-
-    </script>
-</body>
-
-</html>
+    <div class="dashboard-card" onclick="location.href='/logout'">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </div>
+            <h2 class="card-title">Logout</h2>
+        </div>
+        <p class="card-description">Securely sign out of your SimCricketX account. Your data will be saved and ready
+            when you return.</p>
+        <div class="card-footer">
+            <div class="card-status">
+                <div class="status-dot"></div>
+                <span>Secure</span>
+            </div>
+            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        </div>
+    </div>
+</div>
+{% endblock %}
