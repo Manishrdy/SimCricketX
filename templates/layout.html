@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SimCricketX{% endblock %}</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Global CSS Variables -->
+    <style>
+        :root {
+            /* Light Theme (Default) */
+            --bg: #f3f4f6;
+            --bg-secondary: #ffffff;
+            --fg: #111827;
+            --fg-secondary: #6b7280;
+            --card-bg: #ffffff;
+            --card-border: #e5e7eb;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-light: #eff6ff;
+            --shadow: rgba(0, 0, 0, 0.05);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --nav-height: 64px;
+            --border-radius: 12px;
+            --transition: all 0.2s ease;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme */
+            --bg: #111827;
+            --bg-secondary: #1f2937;
+            --fg: #f9fafb;
+            --fg-secondary: #9ca3af;
+            --card-bg: #1f2937;
+            --card-border: #374151;
+            --accent: #60a5fa;
+            --accent-hover: #3b82f6;
+            --accent-light: rgba(59, 130, 246, 0.1);
+            --shadow: rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Reset & Base */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            line-height: 1.5;
+            transition: var(--transition);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        button {
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        /* Navigation */
+        .navbar {
+            height: var(--nav-height);
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            box-shadow: 0 1px 2px var(--shadow);
+            backdrop-filter: blur(8px);
+        }
+
+        .nav-brand {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--fg);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-brand i {
+            color: var(--accent);
+        }
+
+        .nav-logo-text {
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .nav-items {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .theme-toggle {
+            background: var(--bg);
+            border: 1px solid var(--card-border);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--fg-secondary);
+            transition: var(--transition);
+        }
+
+        .theme-toggle:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+            background: var(--accent-light);
+        }
+
+        /* Content Wrapper */
+        .main-container {
+            flex: 1;
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="{{ url_for('home') }}" class="nav-brand">
+            <i class="fas fa-baseball-ball"></i>
+            <span class="nav-logo-text">SimCricketX</span>
+        </a>
+
+        <div class="nav-items">
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('home') }}" class="theme-toggle" title="Home"><i class="fas fa-home"></i></a>
+            <a href="{{ url_for('logout') }}" class="theme-toggle" title="Logout"><i
+                    class="fas fa-sign-out-alt"></i></a>
+            {% endif %}
+            <button id="theme-btn" class="theme-toggle" title="Toggle Theme">
+                <i class="fas fa-moon"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+    <script>
+        // Theme Logic
+        (function () {
+            const themeBtn = document.getElementById('theme-btn');
+            const icon = themeBtn.querySelector('i');
+            const html = document.documentElement;
+
+            // Load saved theme
+            const savedTheme = localStorage.getItem('theme') || 'light';
+
+            function applyTheme(theme) {
+                html.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            }
+
+            applyTheme(savedTheme);
+
+            // Toggle handler
+            themeBtn.addEventListener('click', function () {
+                const current = html.getAttribute('data-theme');
+                const next = current === 'dark' ? 'light' : 'dark';
+                applyTheme(next);
+            });
+        })();
+
+        // Flask Flash Messages -> Toast Notifications
+        document.addEventListener('DOMContentLoaded', function () {
+
+            {% with messages = get_flashed_messages(with_categories = true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            var toastType = '{{ category }}';
+            if (toastType === 'danger') toastType = 'error';
+            Toast.show('{{ message|safe }}', toastType);
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+        });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>
