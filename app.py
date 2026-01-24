@@ -285,8 +285,10 @@ def create_app():
 
     # --- NEW: Statistics Feature Setup ---
     UPLOAD_FOLDER = 'uploads'
+    ARCHIVES_FOLDER = os.path.join(PROJECT_ROOT, "data")
     ALLOWED_EXTENSIONS = {'csv'}
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+    app.config['ARCHIVES_FOLDER'] = ARCHIVES_FOLDER
 
     # Ensure upload and stats directories exist
     if not os.path.exists(UPLOAD_FOLDER):
@@ -1579,39 +1581,51 @@ def create_app():
 
 
     @app.route('/archives/<path:archive_name>', methods=['DELETE'])
+    @login_required
     def delete_archive(archive_name):
         """
         DELETE endpoint to remove an archive file.
-        Production considerations:
-        - Prevent path traversal by normalizing and checking for ".." segments.
-        - Use a configured ARCHIVES_FOLDER to locate files.
-        - Log each attempt and handle exceptions cleanly.
-        - Return appropriate status codes and JSON messages.
+        Expects archive_name to be either 'filename' or 'username/filename'.
+        Verified against current_user.id for security.
         """
+        # 1. Extract filename and verify ownership
+        if '/' in archive_name:
+            username_part, filename = archive_name.split('/', 1)
+            # Ensure the user is deleting their own file
+            if username_part != current_user.id:
+                app.logger.warning(f"Unauthorized delete attempt by {current_user.id} for {archive_name}")
+                return jsonify({'error': 'Unauthorized'}), 403
+        else:
+            filename = archive_name
+            # If only filename is provided, we must verify it contains the username
+            if f"_{current_user.id}_" not in filename:
+                app.logger.warning(f"Unauthorized delete attempt by {current_user.id} for {filename}")
+                return jsonify({'error': 'Unauthorized'}), 403
 
-        # 1. Normalize and validate the incoming path to prevent traversal
-        safe_name = os.path.normpath(archive_name)
-        if os.path.isabs(safe_name) or '..' in safe_name.split(os.path.sep):
-            app.logger.warning(f"Invalid delete path attempt: {archive_name}")
-            return jsonify({'error': 'Invalid file path'}), 400
-
-        # 2. Build the absolute path under ARCHIVES_FOLDER
+        # 2. Normalize filename
+        filename = os.path.basename(filename)
+        
+        # 3. Build the absolute path under ARCHIVES_FOLDER
         archive_folder = app.config.get('ARCHIVES_FOLDER')
         if not archive_folder:
             app.logger.error("ARCHIVES_FOLDER is not configured")
             return jsonify({'error': 'Server misconfiguration'}), 500
 
-        file_path = os.path.join(archive_folder, safe_name)
+        file_path = os.path.join(archive_folder, filename)
 
-        # 3. Check existence
+        # 4. Check existence
         if not os.path.isfile(file_path):
             app.logger.info(f"Delete requested for non-existent file: {file_path}")
             return jsonify({'error': 'File not found'}), 404
 
-        # 4. Attempt removal
+        # 5. Attempt removal
         try:
             os.remove(file_path)
             app.logger.info(f"Deleted archive: {file_path}")
+            
+            # Also cleanup any related CSV files if they exist in statistics?
+            # (Optional, but good for storage)
+            
             return jsonify({'message': 'Archive deleted successfully'}), 200
 
         except PermissionError:

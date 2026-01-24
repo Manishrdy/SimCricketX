@@ -34,22 +34,22 @@
         }
 
         [data-theme="dark"] {
-            /* Dark Theme - VS Code One Dark Pro Inspired */
-            --bg: #282c34;
-            --bg-secondary: #21252b;
-            --fg: #abb2bf;
-            --fg-secondary: #5c6370;
-            --card-bg: #2c313a;
-            --card-border: #3e4451;
-            /* Lighter border for definition */
-            --accent: #61afef;
-            /* One Dark Pro Blue */
-            --accent-hover: #528bff;
-            --accent-light: rgba(97, 175, 239, 0.15);
-            --shadow: rgba(0, 0, 0, 0.3);
-            --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.4);
-            --gradient: linear-gradient(135deg, #61afef 0%, #c678dd 100%);
-            /* Blue to Purple */
+            /* Dark Theme - Vibrant Slate with Neon Accents */
+            --bg: #0f172a;
+            --bg-secondary: #1e293b;
+            --fg: #e2e8f0;
+            --fg-secondary: #94a3b8;
+            --card-bg: #1e293b;
+            --card-border: #0ea5e9;
+            /* Vibrant cyan borders */
+            --accent: #06b6d4;
+            /* Bright cyan */
+            --accent-hover: #22d3ee;
+            --accent-light: rgba(6, 182, 212, 0.2);
+            --shadow: rgba(14, 165, 233, 0.2);
+            --shadow-lg: 0 20px 40px rgba(14, 165, 233, 0.3), 0 0 60px rgba(16, 185, 129, 0.1);
+            --gradient: linear-gradient(135deg, #06b6d4 0%, #10b981 100%);
+            /* Bright Cyan to Emerald */
         }
 
         /* Reset & Base */
@@ -149,6 +149,464 @@
             margin: 0 auto;
             width: 100%;
         }
+
+        /* ===== PREMIUM CRICKET THEME ===== */
+
+        /* Cricket Field Background Animation */
+        @keyframes stadiumPulse {
+
+            0%,
+            100% {
+                opacity: 0.03;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.06;
+                transform: scale(1.02);
+            }
+        }
+
+        @keyframes ballBounce {
+
+            0%,
+            100% {
+                transform: translateY(0) rotate(0deg);
+            }
+
+            25% {
+                transform: translateY(-20px) rotate(90deg);
+            }
+
+            50% {
+                transform: translateY(0) rotate(180deg);
+            }
+
+            75% {
+                transform: translateY(-10px) rotate(270deg);
+            }
+        }
+
+        @keyframes pitchLine {
+            0% {
+                stroke-dashoffset: 1000;
+            }
+
+            100% {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        /* Hero Section with Cricket Field */
+        .hero-section {
+            position: relative;
+            text-align: center;
+            padding: 6rem 0 5rem;
+            margin-bottom: 4rem;
+            overflow: hidden;
+            background:
+                radial-gradient(ellipse at center, rgba(34, 139, 34, 0.05) 0%, transparent 70%),
+                linear-gradient(180deg, var(--bg) 0%, rgba(34, 139, 34, 0.02) 100%);
+        }
+
+        /* Cricket Field Pattern */
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            height: 100%;
+            background:
+                repeating-linear-gradient(90deg, transparent, transparent 49px, rgba(34, 139, 34, 0.03) 49px, rgba(34, 139, 34, 0.03) 50px),
+                repeating-linear-gradient(0deg, transparent, transparent 49px, rgba(34, 139, 34, 0.03) 49px, rgba(34, 139, 34, 0.03) 50px);
+            animation: stadiumPulse 8s ease-in-out infinite;
+            z-index: 0;
+            opacity: 0.5;
+        }
+
+        /* Cricket Ball Decorative Element */
+        .cricket-ball {
+            position: absolute;
+            top: 10%;
+            right: 5%;
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle at 30% 30%, #DC143C, #8B0000);
+            border-radius: 50%;
+            box-shadow:
+                inset -5px -5px 10px rgba(0, 0, 0, 0.3),
+                0 5px 20px rgba(220, 20, 60, 0.2);
+            animation: ballBounce 6s ease-in-out infinite;
+            z-index: 1;
+            opacity: 0.15;
+        }
+
+        .cricket-ball::before,
+        .cricket-ball::after {
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.3);
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .cricket-ball::before {
+            transform: translateX(-50%) rotate(20deg);
+        }
+
+        .cricket-ball::after {
+            transform: translateX(-50%) rotate(-20deg);
+        }
+
+        /* Stumps Decorative Elements */
+        .stumps-left,
+        .stumps-right {
+            position: absolute;
+            bottom: 20%;
+            width: 4px;
+            height: 80px;
+            background: linear-gradient(180deg, #8B4513, #654321);
+            opacity: 0.08;
+            z-index: 1;
+        }
+
+        .stumps-left {
+            left: 8%;
+            transform: rotate(-5deg);
+        }
+
+        .stumps-right {
+            right: 8%;
+            transform: rotate(5deg);
+        }
+
+        .stumps-left::before,
+        .stumps-left::after,
+        .stumps-right::before,
+        .stumps-right::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(180deg, #8B4513, #654321);
+        }
+
+        .stumps-left::before,
+        .stumps-right::before {
+            left: 12px;
+        }
+
+        .stumps-left::after,
+        .stumps-right::after {
+            left: 24px;
+        }
+
+        .hero-pretitle {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--accent);
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            display: block;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-pretitle::before,
+        .hero-pretitle::after {
+            content: '🏏';
+            margin: 0 0.5rem;
+            opacity: 0.6;
+        }
+
+        .hero-title {
+            font-size: 4rem;
+            font-weight: 900;
+            margin-bottom: 1.5rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            line-height: 1.1;
+            letter-spacing: -0.03em;
+            position: relative;
+            z-index: 2;
+            text-shadow: 0 0 40px rgba(59, 130, 246, 0.1);
+        }
+
+        .hero-subtitle {
+            font-size: 1.3rem;
+            color: var(--fg-secondary);
+            max-width: 700px;
+            margin: 0 auto 4rem;
+            line-height: 1.7;
+            position: relative;
+            z-index: 2;
+            font-weight: 400;
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 2.5rem;
+            margin-bottom: 5rem;
+        }
+
+        /* Cricket-Themed Cards */
+        .dashboard-card {
+            background: var(--card-bg);
+            border: 2px solid var(--card-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 260px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Cricket Pitch Stripe Effect on Cards */
+        .dashboard-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: repeating-linear-gradient(90deg,
+                    var(--accent) 0px,
+                    var(--accent) 20px,
+                    transparent 20px,
+                    transparent 40px);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .dashboard-card:hover::before {
+            opacity: 0.3;
+        }
+
+        /* Cricket Field Pattern on Hover */
+        .dashboard-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 80%, rgba(34, 139, 34, 0.03) 0%, transparent 50%),
+                linear-gradient(135deg, var(--accent-light) 0%, transparent 100%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow:
+                0 20px 50px rgba(0, 0, 0, 0.12),
+                0 0 0 2px var(--accent);
+            border-color: var(--accent);
+        }
+
+        .dashboard-card:hover::after {
+            opacity: 1;
+        }
+
+        .card-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Cricket-Themed Icon Wrapper */
+        .card-icon-wrapper {
+            width: 72px;
+            height: 72px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, var(--bg) 0%, var(--accent-light) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            border: 2px solid var(--card-border);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Cricket Ball Stitching Pattern on Icons */
+        .card-icon-wrapper::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background:
+                linear-gradient(45deg, transparent 48%, rgba(220, 20, 60, 0.1) 48%, rgba(220, 20, 60, 0.1) 52%, transparent 52%),
+                linear-gradient(-45deg, transparent 48%, rgba(220, 20, 60, 0.1) 48%, rgba(220, 20, 60, 0.1) 52%, transparent 52%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .dashboard-card:hover .card-icon-wrapper {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            transform: rotate(5deg) scale(1.1);
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+        }
+
+        .dashboard-card:hover .card-icon-wrapper::before {
+            opacity: 0.3;
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--fg);
+            margin-bottom: 1rem;
+            letter-spacing: -0.01em;
+        }
+
+        .card-description {
+            color: var(--fg-secondary);
+            font-size: 1rem;
+            line-height: 1.7;
+            margin-bottom: 0;
+        }
+
+        .card-action {
+            position: relative;
+            z-index: 1;
+            margin-top: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--accent);
+            opacity: 0;
+            transform: translateX(-15px);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dashboard-card:hover .card-action {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .card-action i {
+            transition: transform 0.3s ease;
+        }
+
+        .dashboard-card:hover .card-action i {
+            transform: translateX(5px);
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: var(--gradient);
+            color: white;
+            border: none;
+            padding: 0.875rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px var(--shadow);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px var(--shadow-hover);
+        }
+
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--fg);
+            border: 2px solid var(--card-border);
+            padding: 0.875rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-light);
+        }
+
+        /* Form Inputs */
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.875rem 1.25rem;
+            border: 2px solid var(--card-border);
+            border-radius: 12px;
+            background: var(--card-bg);
+            color: var(--fg);
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-light);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.8rem;
+            }
+
+            .hero-subtitle {
+                font-size: 1.1rem;
+            }
+
+            .cricket-ball {
+                width: 40px;
+                height: 40px;
+                top: 5%;
+                right: 5%;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .main-container {
+                padding: 1rem;
+            }
+        }
     </style>
 
     {% block extra_css %}{% endblock %}
@@ -164,16 +622,19 @@
         </a>
 
         <div class="nav-items">
+            {% block navbar_items %}
             {% if current_user.is_authenticated %}
             <a href="{{ url_for('home') }}" class="theme-toggle" title="Home"><i class="fas fa-home"></i></a>
             <a href="{{ url_for('logout') }}" class="theme-toggle" title="Logout"><i
                     class="fas fa-sign-out-alt"></i></a>
             {% endif %}
+            {% endblock %}
             <button id="theme-btn" class="theme-toggle" title="Toggle Theme">
                 <i class="fas fa-moon"></i>
             </button>
         </div>
     </nav>
+
 
     <!-- Main Content -->
     <main class="main-container">
