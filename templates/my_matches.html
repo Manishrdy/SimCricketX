@@ -951,19 +951,6 @@
             </h1>
             <p class="page-subtitle">Access and manage all your cricket match simulations</p>
         </section>
-        <!-- Flash Messages -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        {% for category, message in messages %}
-        <div class="flash flash-{{ category }}">
-            <i
-                class="fa-solid {{ 'fa-check-circle' if category == 'success' else 'fa-exclamation-triangle' if category == 'error' else 'fa-info-circle' }}"></i>
-            {{ message }}
-        </div>
-        {% endfor %}
-        {% endif %}
-        {% endwith %}
-
         <!-- Matches Grid -->
         <div class="matches-grid" id="files-grid">
             {% if files %}

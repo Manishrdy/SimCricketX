@@ -4,116 +4,319 @@
 
 {% block extra_css %}
 <style>
-    /* Hero Section */
+    /* Cricket Field Background Animation */
+    @keyframes stadiumPulse {
+
+        0%,
+        100% {
+            opacity: 0.03;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: 0.06;
+            transform: scale(1.02);
+        }
+    }
+
+    @keyframes ballBounce {
+
+        0%,
+        100% {
+            transform: translateY(0) rotate(0deg);
+        }
+
+        25% {
+            transform: translateY(-20px) rotate(90deg);
+        }
+
+        50% {
+            transform: translateY(0) rotate(180deg);
+        }
+
+        75% {
+            transform: translateY(-10px) rotate(270deg);
+        }
+    }
+
+    @keyframes pitchLine {
+        0% {
+            stroke-dashoffset: 1000;
+        }
+
+        100% {
+            stroke-dashoffset: 0;
+        }
+    }
+
+    /* Hero Section with Cricket Field */
     .hero-section {
         position: relative;
         text-align: center;
-        padding: 5rem 0 4rem;
-        background: radial-gradient(circle at center, var(--accent-light) 0%, transparent 70%);
-        border-radius: var(--border-radius);
-        margin-bottom: 3rem;
+        padding: 6rem 0 5rem;
+        margin-bottom: 4rem;
+        overflow: hidden;
+        background:
+            radial-gradient(ellipse at center, rgba(34, 139, 34, 0.05) 0%, transparent 70%),
+            linear-gradient(180deg, var(--bg) 0%, rgba(34, 139, 34, 0.02) 100%);
+    }
+
+    /* Cricket Field Pattern */
+    .hero-section::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 100%;
+        height: 100%;
+        background:
+            repeating-linear-gradient(90deg, transparent, transparent 49px, rgba(34, 139, 34, 0.03) 49px, rgba(34, 139, 34, 0.03) 50px),
+            repeating-linear-gradient(0deg, transparent, transparent 49px, rgba(34, 139, 34, 0.03) 49px, rgba(34, 139, 34, 0.03) 50px);
+        animation: stadiumPulse 8s ease-in-out infinite;
+        z-index: 0;
+        opacity: 0.5;
+    }
+
+    /* Cricket Ball Decorative Element */
+    .cricket-ball {
+        position: absolute;
+        top: 10%;
+        right: 5%;
+        width: 60px;
+        height: 60px;
+        background: radial-gradient(circle at 30% 30%, #DC143C, #8B0000);
+        border-radius: 50%;
+        box-shadow:
+            inset -5px -5px 10px rgba(0, 0, 0, 0.3),
+            0 5px 20px rgba(220, 20, 60, 0.2);
+        animation: ballBounce 6s ease-in-out infinite;
+        z-index: 1;
+        opacity: 0.15;
+    }
+
+    .cricket-ball::before,
+    .cricket-ball::after {
+        content: '';
+        position: absolute;
+        width: 2px;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.3);
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .cricket-ball::before {
+        transform: translateX(-50%) rotate(20deg);
+    }
+
+    .cricket-ball::after {
+        transform: translateX(-50%) rotate(-20deg);
+    }
+
+    /* Stumps Decorative Elements */
+    .stumps-left,
+    .stumps-right {
+        position: absolute;
+        bottom: 20%;
+        width: 4px;
+        height: 80px;
+        background: linear-gradient(180deg, #8B4513, #654321);
+        opacity: 0.08;
+        z-index: 1;
+    }
+
+    .stumps-left {
+        left: 8%;
+        transform: rotate(-5deg);
+    }
+
+    .stumps-right {
+        right: 8%;
+        transform: rotate(5deg);
+    }
+
+    .stumps-left::before,
+    .stumps-left::after,
+    .stumps-right::before,
+    .stumps-right::after {
+        content: '';
+        position: absolute;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(180deg, #8B4513, #654321);
+    }
+
+    .stumps-left::before,
+    .stumps-right::before {
+        left: 12px;
+    }
+
+    .stumps-left::after,
+    .stumps-right::after {
+        left: 24px;
     }
 
     .hero-pretitle {
         font-size: 0.875rem;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.15em;
         color: var(--accent);
         font-weight: 600;
-        margin-bottom: 1rem;
+        margin-bottom: 1.5rem;
         display: block;
+        position: relative;
+        z-index: 2;
+    }
+
+    .hero-pretitle::before,
+    .hero-pretitle::after {
+        content: '🏏';
+        margin: 0 0.5rem;
+        opacity: 0.6;
     }
 
     .hero-title {
-        font-size: 3.5rem;
-        font-weight: 800;
+        font-size: 4rem;
+        font-weight: 900;
         margin-bottom: 1.5rem;
         background: var(--gradient);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
         line-height: 1.1;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.03em;
+        position: relative;
+        z-index: 2;
+        text-shadow: 0 0 40px rgba(59, 130, 246, 0.1);
     }
 
     .hero-subtitle {
-        font-size: 1.25rem;
+        font-size: 1.3rem;
         color: var(--fg-secondary);
-        max-width: 600px;
-        margin: 0 auto 3rem;
-        line-height: 1.6;
+        max-width: 700px;
+        margin: 0 auto 4rem;
+        line-height: 1.7;
+        position: relative;
+        z-index: 2;
+        font-weight: 400;
     }
 
-    /* Stats Row */
+    /* Scoreboard-Inspired Stats */
     .hero-stats {
+        position: relative;
+        z-index: 2;
         display: inline-flex;
         align-items: center;
-        gap: 3rem;
+        gap: 3.5rem;
         background: var(--card-bg);
-        padding: 1.5rem 2.5rem;
-        border-radius: 100px;
-        /* Pill shape */
-        border: 1px solid var(--card-border);
-        box-shadow: var(--shadow-lg);
+        padding: 2rem 3rem;
+        border-radius: 20px;
+        border: 2px solid var(--card-border);
+        box-shadow:
+            0 10px 40px rgba(0, 0, 0, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    /* Cricket Scoreboard Style Border */
+    .hero-stats::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        left: -2px;
+        right: -2px;
+        bottom: -2px;
+        background: linear-gradient(135deg,
+                rgba(34, 139, 34, 0.3) 0%,
+                rgba(59, 130, 246, 0.3) 50%,
+                rgba(34, 139, 34, 0.3) 100%);
+        border-radius: 20px;
+        z-index: -1;
+        opacity: 0.5;
     }
 
     .stat-item {
         display: flex;
         flex-direction: column;
         align-items: center;
+        gap: 0.5rem;
     }
 
     .stat-number {
-        font-size: 1.5rem;
-        font-weight: 700;
+        font-size: 2.5rem;
+        font-weight: 900;
         color: var(--fg);
         line-height: 1;
-        margin-bottom: 0.25rem;
+        font-family: 'JetBrains Mono', monospace;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--fg) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
     }
 
     .stat-label {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         color: var(--fg-secondary);
-        font-weight: 500;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.08em;
     }
 
     .stat-divider {
-        width: 1px;
-        height: 40px;
-        background: var(--card-border);
+        width: 2px;
+        height: 50px;
+        background: linear-gradient(180deg,
+                transparent 0%,
+                var(--card-border) 50%,
+                transparent 100%);
     }
 
     /* Dashboard Grid */
     .dashboard-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-        gap: 2rem;
-        margin-bottom: 4rem;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 2.5rem;
+        margin-bottom: 5rem;
     }
 
+    /* Cricket-Themed Cards */
     .dashboard-card {
         background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: var(--border-radius);
-        padding: 2rem;
+        border: 2px solid var(--card-border);
+        border-radius: 24px;
+        padding: 2.5rem;
         cursor: pointer;
-        transition: var(--transition);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        min-height: 240px;
+        min-height: 260px;
         position: relative;
         overflow: hidden;
     }
 
-    .dashboard-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--shadow-lg);
-        border-color: var(--accent);
+    /* Cricket Pitch Stripe Effect on Cards */
+    .dashboard-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 6px;
+        background: repeating-linear-gradient(90deg,
+                var(--accent) 0px,
+                var(--accent) 20px,
+                transparent 20px,
+                transparent 40px);
+        opacity: 0;
+        transition: opacity 0.4s ease;
     }
 
+    .dashboard-card:hover::before {
+        opacity: 0.3;
+    }
+
+    /* Cricket Field Pattern on Hover */
     .dashboard-card::after {
         content: '';
         position: absolute;
@@ -121,14 +324,25 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background: linear-gradient(135deg, var(--accent-light) 0%, transparent 100%);
+        background:
+            radial-gradient(circle at 20% 80%, rgba(34, 139, 34, 0.03) 0%, transparent 50%),
+            linear-gradient(135deg, var(--accent-light) 0%, transparent 100%);
         opacity: 0;
-        transition: var(--transition);
+        transition: opacity 0.4s ease;
         z-index: 0;
+        pointer-events: none;
+    }
+
+    .dashboard-card:hover {
+        transform: translateY(-8px) scale(1.02);
+        box-shadow:
+            0 20px 50px rgba(0, 0, 0, 0.12),
+            0 0 0 2px var(--accent);
+        border-color: var(--accent);
     }
 
     .dashboard-card:hover::after {
-        opacity: 0.5;
+        opacity: 1;
     }
 
     .card-content {
@@ -136,54 +350,77 @@
         z-index: 1;
     }
 
+    /* Cricket-Themed Icon Wrapper */
     .card-icon-wrapper {
-        width: 56px;
-        height: 56px;
-        border-radius: 16px;
-        background: var(--bg);
+        width: 72px;
+        height: 72px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, var(--bg) 0%, var(--accent-light) 100%);
         display: flex;
         align-items: center;
         justify-content: center;
         color: var(--accent);
-        font-size: 1.5rem;
-        margin-bottom: 1.5rem;
-        border: 1px solid var(--card-border);
-        transition: var(--transition);
+        font-size: 2rem;
+        margin-bottom: 2rem;
+        border: 2px solid var(--card-border);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* Cricket Ball Stitching Pattern on Icons */
+    .card-icon-wrapper::before {
+        content: '';
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background:
+            linear-gradient(45deg, transparent 48%, rgba(220, 20, 60, 0.1) 48%, rgba(220, 20, 60, 0.1) 52%, transparent 52%),
+            linear-gradient(-45deg, transparent 48%, rgba(220, 20, 60, 0.1) 48%, rgba(220, 20, 60, 0.1) 52%, transparent 52%);
+        opacity: 0;
+        transition: opacity 0.4s ease;
     }
 
     .dashboard-card:hover .card-icon-wrapper {
         background: var(--accent);
         color: #fff;
         border-color: var(--accent);
+        transform: rotate(5deg) scale(1.1);
+        box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+    }
+
+    .dashboard-card:hover .card-icon-wrapper::before {
+        opacity: 0.3;
     }
 
     .card-title {
-        font-size: 1.25rem;
+        font-size: 1.4rem;
         font-weight: 700;
         color: var(--fg);
-        margin-bottom: 0.75rem;
+        margin-bottom: 1rem;
+        letter-spacing: -0.01em;
     }
 
     .card-description {
         color: var(--fg-secondary);
-        font-size: 0.95rem;
-        line-height: 1.6;
+        font-size: 1rem;
+        line-height: 1.7;
         margin-bottom: 0;
     }
 
     .card-action {
         position: relative;
         z-index: 1;
-        margin-top: 1.5rem;
+        margin-top: 2rem;
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        font-size: 0.9rem;
-        font-weight: 600;
+        gap: 0.75rem;
+        font-size: 0.95rem;
+        font-weight: 700;
         color: var(--accent);
         opacity: 0;
-        transform: translateX(-10px);
-        transition: all 0.3s ease;
+        transform: translateX(-15px);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .dashboard-card:hover .card-action {
@@ -191,36 +428,65 @@
         transform: translateX(0);
     }
 
+    .card-action i {
+        transition: transform 0.3s ease;
+    }
+
+    .dashboard-card:hover .card-action i {
+        transform: translateX(5px);
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
         .hero-title {
-            font-size: 2.5rem;
+            font-size: 2.8rem;
+        }
+
+        .hero-subtitle {
+            font-size: 1.1rem;
         }
 
         .hero-stats {
             flex-direction: column;
-            gap: 1.5rem;
-            padding: 1.5rem;
-            width: 100%;
-            border-radius: var(--border-radius);
+            gap: 2rem;
+            padding: 2rem;
+            width: 90%;
         }
 
         .stat-divider {
+            width: 60px;
+            height: 2px;
+        }
+
+        .cricket-ball {
             width: 40px;
-            height: 1px;
+            height: 40px;
+            top: 5%;
+            right: 5%;
+        }
+
+        .dashboard-grid {
+            grid-template-columns: 1fr;
+            gap: 2rem;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Hero Section -->
+<!-- Hero Section with Cricket Theme -->
 <section class="hero-section">
+    <!-- Cricket Decorative Elements -->
+    <div class="cricket-ball"></div>
+    <div class="stumps-left"></div>
+    <div class="stumps-right"></div>
+
     <span class="hero-pretitle">Welcome Back</span>
     <h1 class="hero-title">SimCricketX Dashboard</h1>
-    <p class="hero-subtitle">Manage your teams, simulate matches, and analyze performance with our advanced cricket
-        simulation engine.</p>
+    <p class="hero-subtitle">Experience the thrill of cricket management. Build dream teams, simulate epic battles, and
+        dominate the pitch with strategic excellence.</p>
 
+    <!-- Cricket Scoreboard Stats -->
     <div class="hero-stats">
         <div class="stat-item">
             <span class="stat-number">∞</span>
@@ -234,7 +500,7 @@
         <div class="stat-divider"></div>
         <div class="stat-item">
             <span class="stat-number">{{ total_visits }}</span>
-            <span class="stat-label">Visitors</span>
+            <span class="stat-label">Fans</span>
         </div>
     </div>
 </section>
@@ -244,80 +510,84 @@
     <div class="dashboard-card" onclick="location.href='/team/create'">
         <div class="card-content">
             <div class="card-icon-wrapper">
-                <i class="fa-solid fa-people-group"></i>
+                <i class="fa-solid fa-users"></i>
             </div>
             <h2 class="card-title">Create Team</h2>
-            <p class="card-description">Draft your dream squad. Customize player roles and build a winning composition.
-            </p>
+            <p class="card-description">Draft your championship squad. Handpick talent, assign roles, and craft a team
+                destined for glory.</p>
         </div>
         <div class="card-action">
-            Start Building <i class="fa-solid fa-arrow-right"></i>
+            Build Squad <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 
     <div class="dashboard-card" onclick="location.href='/teams/manage'">
         <div class="card-content">
             <div class="card-icon-wrapper">
-                <i class="fa-solid fa-layer-group"></i>
+                <i class="fa-solid fa-clipboard-list"></i>
             </div>
             <h2 class="card-title">Manage Teams</h2>
-            <p class="card-description">Edit strategies, update rosters, and keep your teams competition-ready.</p>
+            <p class="card-description">Fine-tune tactics, update lineups, and keep your squads match-ready for the next
+                big showdown.</p>
         </div>
         <div class="card-action">
-            View Teams <i class="fa-solid fa-arrow-right"></i>
+            Team Management <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 
     <div class="dashboard-card" onclick="location.href='/match/setup'">
         <div class="card-content">
             <div class="card-icon-wrapper">
-                <i class="fa-solid fa-play"></i>
+                <i class="fa-solid fa-circle-play"></i>
             </div>
             <h2 class="card-title">Simulate Match</h2>
-            <p class="card-description">Configure match settings, select teams, and watch the simulation unfold live.
-            </p>
+            <p class="card-description">Set the stage, choose your warriors, and witness the drama unfold ball by ball
+                in real-time.</p>
         </div>
         <div class="card-action">
-            Play Match <i class="fa-solid fa-arrow-right"></i>
+            Start Match <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 
     <div class="dashboard-card" onclick="location.href='/statistics'">
         <div class="card-content">
             <div class="card-icon-wrapper">
-                <i class="fa-solid fa-chart-pie"></i>
+                <i class="fa-solid fa-chart-line"></i>
             </div>
-            <h2 class="card-title">Statistics</h2>
-            <p class="card-description">Deep dive into analytics. Track player forms, match histories, and trends.</p>
+            <h2 class="card-title">Statistics Hub</h2>
+            <p class="card-description">Dive deep into numbers. Analyze player performances, uncover trends, and master
+                the data game.</p>
         </div>
         <div class="card-action">
-            View Stats <i class="fa-solid fa-arrow-right"></i>
+            View Analytics <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 
     <div class="dashboard-card" onclick="location.href='/my-matches'">
         <div class="card-content">
             <div class="card-icon-wrapper">
-                <i class="fa-solid fa-clock-rotate-left"></i>
+                <i class="fa-solid fa-trophy"></i>
             </div>
-            <h2 class="card-title">Match History</h2>
-            <p class="card-description">Access your archives. Replay past matches and analyze the outcomes.</p>
+            <h2 class="card-title">Match Archives</h2>
+            <p class="card-description">Relive your greatest victories. Access match histories, replay encounters, and
+                celebrate triumphs.</p>
         </div>
         <div class="card-action">
-            Go to Archive <i class="fa-solid fa-arrow-right"></i>
+            Browse History <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 
     <div class="dashboard-card" onclick="location.href='/logout'">
         <div class="card-content">
             <div class="card-icon-wrapper">
-                <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                <i class="fa-solid fa-right-from-bracket"></i>
             </div>
-            <h2 class="card-title">Logout</h2>
-            <p class="card-description">Securely sign out of your account. We'll keep your data safe.</p>
+            <h2 class="card-title">Sign Out</h2>
+            <p class="card-description">End your session securely. Your championship journey continues when you return.
+            </p>
         </div>
         <div class="card-action">
-            Sign Out <i class="fa-solid fa-arrow-right"></i>
+            Logout <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 </div>
