@@ -20,180 +20,432 @@
 
   <style>
     :root {
-      /* Light Theme - Minimalistic */
-      --bg: #ffffff;
-      --bg-secondary: #f8f9fa;
-      --fg: #1a1a1a;
-      --fg-secondary: #666666;
-      --card-bg: #ffffff;
-      --card-border: #e2e4e8;
-      --accent: #24292f;
-      --accent-hover: #000000;
-      --accent-light: #f3f4f6;
-      --shadow: rgba(0, 0, 0, 0.05);
-      --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
-      --nav-height: 64px;
-      --border-radius: 8px;
-      --transition: all 0.2s ease;
-      --gradient: linear-gradient(135deg, #24292f 0%, #4a5568 100%);
+      /* Premium Font Stack */
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+      /* Light Theme - Clean, Airy, Premium */
+      --bg-body: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-glass: rgba(255, 255, 255, 0.8);
+
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --text-on-accent: #ffffff;
+
+      --border-light: #e2e8f0;
+      --border-focused: #6366f1;
+
+      /* Brand Colors - Indigo/Violet Gradient */
+      --brand-primary: #4f46e5;
+      --brand-secondary: #818cf8;
+      --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
+
       --success: #10b981;
       --warning: #f59e0b;
       --danger: #ef4444;
+
+      /* Shadows & Elevation */
+      --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+      --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      --shadow-glow: 0 0 20px rgba(79, 70, 229, 0.3);
+
+      --radius-lg: 16px;
+      --radius-md: 10px;
+      --radius-sm: 6px;
+      --radius-full: 9999px;
+
+      --ease-elastic: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     [data-theme="dark"] {
-      /* Dark Theme - Vibrant Slate with Neon Accents */
-      --bg: #0f172a;
-      --bg-secondary: #1e293b;
-      --fg: #e2e8f0;
-      --fg-secondary: #94a3b8;
-      --card-bg: #1e293b;
-      --card-border: #0ea5e9;
-      --accent: #06b6d4;
-      --accent-hover: #22d3ee;
-      --accent-light: rgba(6, 182, 212, 0.2);
-      --shadow: rgba(14, 165, 233, 0.2);
-      --shadow-lg: 0 20px 40px rgba(14, 165, 233, 0.3), 0 0 60px rgba(16, 185, 129, 0.1);
-      --gradient: linear-gradient(135deg, #06b6d4 0%, #10b981 100%);
+      /* Dark Theme - Deep Blue/Slate, Cyberpunk undertones */
+      --bg-body: #020617;
+      /* Very dark slate */
+      --bg-surface: #0f172a;
+      --bg-glass: rgba(15, 23, 42, 0.7);
+
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+
+      --border-light: #1e293b;
+      --border-focused: #818cf8;
+
+      --brand-primary: #6366f1;
+      --brand-secondary: #a78bfa;
+      --brand-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+
+      --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+      --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
     }
 
-
-
-
+    /* Global Reset & Typography */
     * {
       box-sizing: border-box;
+      outline: none;
     }
 
     body {
-      background: var(--bg);
-      color: var(--fg);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      margin: 0;
+      padding: 0;
       line-height: 1.6;
-      font-size: 16px;
-      min-height: 100vh;
-      padding: 2rem;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 0.3s ease;
+      overflow-x: hidden;
     }
 
-    /* Navigation Header */
+    h1,
+    h2,
+    h3,
+    h4 {
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    /* Layout Container */
+    .main-content {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 120px 2rem 100px;
+      /* Top padding for fixed header */
+    }
+
+    /* ─── Ultra-Premium Navbar ─── */
     .nav-header {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
-      background: var(--card-bg);
-      border-bottom: 1px solid var(--card-border);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      height: 72px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-light);
       z-index: 1000;
-      padding: 1rem 2rem;
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      transition: all 0.3s ease;
     }
 
-    .nav-left {
+    .nav-brand {
       display: flex;
       align-items: center;
       gap: 1rem;
+      font-weight: 700;
+      color: var(--text-main);
+      font-size: 1.25rem;
     }
 
-    .home-link {
-      color: var(--accent);
-      font-size: 1.5rem;
-      text-decoration: none;
-      transition: var(--transition);
+    .home-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-full);
+      background: transparent;
+      border: 1px solid var(--border-light);
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--bg-secondary);
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: all 0.2s var(--ease-elastic);
     }
 
-    .home-link:hover {
-      background: var(--accent-light);
-      transform: scale(1.1);
-    }
-
-    .page-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      color: var(--fg);
-      margin: 0;
+    .home-btn:hover {
+      background: var(--bg-surface);
+      color: var(--brand-primary);
+      border-color: var(--brand-primary);
+      transform: scale(1.05);
+      box-shadow: var(--shadow-sm);
     }
 
     .theme-toggle {
-      background: var(--bg-secondary);
-      border: 1px solid var(--card-border);
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
+      background: transparent;
+      border: none;
+      font-size: 1.25rem;
       cursor: pointer;
-      font-size: 1.2rem;
-      color: var(--fg);
-      transition: var(--transition);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      padding: 8px;
+      color: var(--text-muted);
+      transition: transform 0.3s ease, color 0.3s ease;
     }
 
     .theme-toggle:hover {
-      background: var(--accent-light);
-      border-color: var(--accent);
-      transform: scale(1.05);
+      color: var(--text-main);
+      transform: rotate(15deg) scale(1.1);
     }
 
-    /* Main Content */
-    .main-content {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding-top: 100px;
-    }
-
+    /* ─── Page Header & Typography ─── */
     .page-header {
       text-align: center;
-      margin-bottom: 3rem;
+      margin-bottom: 4rem;
+      animation: fadeUp 0.6s ease-out;
     }
 
     .dynamic-title {
-      font-size: 2.5rem;
-      font-weight: 700;
-      background: var(--gradient-accent);
+      font-size: 3.5rem;
+      line-height: 1.1;
+      font-weight: 800;
+      background: var(--brand-gradient);
       -webkit-background-clip: text;
       background-clip: text;
-      color: transparent;
-      margin-bottom: 0.5rem;
-      line-height: 1.2;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1rem;
+      letter-spacing: -0.04em;
     }
 
     .page-subtitle {
-      color: var(--fg-secondary);
-      font-size: 1.125rem;
-      font-weight: 400;
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      max-width: 600px;
+      margin: 0 auto;
     }
 
-    /* Flash Messages */
-    .flash-messages {
+    /* ─── Cards & Sections ─── */
+    .glass-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
       margin-bottom: 2rem;
+      /* Overflow visible to allow dropdowns to pop out */
+      overflow: visible;
+      transition: box-shadow 0.3s ease, transform 0.3s ease;
     }
 
-    .flash {
-      padding: 1rem 1.25rem;
-      border-radius: var(--border-radius-sm);
-      margin-bottom: 1rem;
-      font-size: 0.875rem;
-      font-weight: 500;
+    .glass-card:hover {
+      box-shadow: var(--shadow-lg);
+    }
+
+    .section-header {
+      padding: 2rem;
+      border-bottom: 1px solid var(--border-light);
       display: flex;
       align-items: center;
-      gap: 0.75rem;
-      animation: slideInDown 0.3s ease-out;
+      gap: 1rem;
+      background: linear-gradient(to bottom, var(--bg-surface), rgba(255, 255, 255, 0.02));
     }
 
-    @keyframes slideInDown {
+    .section-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--brand-gradient);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 1.25rem;
+      box-shadow: var(--shadow-glow);
+    }
+
+    .section-title {
+      font-size: 1.5rem;
+      color: var(--text-main);
+    }
+
+    .section-body {
+      padding: 2rem;
+    }
+
+    /* ─── Form Elements ─── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      position: relative;
+    }
+
+    .form-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .form-input,
+    .form-select {
+      background: var(--bg-body);
+      border: 2px solid transparent;
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      font-size: 1rem;
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      transition: all 0.2s ease;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+    }
+
+    /* Premium Input Interaction */
+    .form-input:hover,
+    .form-select:hover {
+      background: var(--bg-surface);
+      border-color: var(--border-light);
+    }
+
+    .form-input:focus,
+    .form-select:focus {
+      background: var(--bg-surface);
+      border-color: var(--brand-primary);
+      box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+    }
+
+    /* Custom Color Picker */
+    .color-picker-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.5rem;
+      background: var(--bg-body);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .color-picker-wrapper:hover {
+      background: var(--bg-surface);
+      box-shadow: 0 0 0 2px var(--border-light);
+    }
+
+    .color-swatch {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* ─── Squad Management / Player Table ─── */
+    .squad-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      background: var(--bg-body);
+      padding: 1rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-light);
+    }
+
+    .squad-stats {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+    }
+
+    .stat-badge {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: var(--bg-surface);
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-full);
+      box-shadow: var(--shadow-xs);
+      border: 1px solid var(--border-light);
+    }
+
+    .player-counter {
+      color: var(--brand-primary);
+      font-weight: 700;
+    }
+
+    /* Action Buttons */
+    .btn-group {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1.5rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.2s var(--ease-elastic);
+      border: none;
+      text-decoration: none;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Primary Gradient Button */
+    .btn-primary {
+      background: var(--brand-gradient);
+      color: white;
+      box-shadow: var(--shadow-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.4);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    /* Secondary Glass Button */
+    .btn-secondary {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-light);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--brand-primary);
+      color: var(--brand-primary);
+      transform: translateY(-1px);
+      background: var(--bg-body);
+    }
+
+    /* ─── Player List Rows ─── */
+    .players-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .player-row {
+      display: grid;
+      /* Mobile layout by default, overridden by media query */
+      grid-template-columns: 1fr;
+      gap: 1rem;
+
+      background: var(--bg-surface);
+      border: 1px solid var(--border-light);
+      padding: 1.25rem;
+      border-radius: var(--radius-md);
+      position: relative;
+      transition: all 0.2s ease;
+      animation: slideIn 0.3s ease forwards;
+    }
+
+    @keyframes slideIn {
       from {
         opacity: 0;
-        transform: translateY(-20px);
+        transform: translateY(10px);
       }
 
       to {
@@ -202,408 +454,202 @@
       }
     }
 
-    .alert-success {
-      background: rgba(16, 185, 129, 0.1);
-      color: var(--success);
-      border: 1px solid rgba(16, 185, 129, 0.2);
+    .player-row:hover {
+      border-color: var(--brand-secondary);
+      box-shadow: var(--shadow-sm);
+      transform: translateX(4px);
     }
 
-    .alert-danger {
-      background: rgba(239, 68, 68, 0.1);
-      color: var(--danger);
-      border: 1px solid rgba(239, 68, 68, 0.2);
+    /* Responsive Desktop Grid for Players */
+    @media (min-width: 1024px) {
+      .player-row {
+        /* Adjusted grid pattern to be tighter and fit within 900-1000px container */
+        grid-template-columns: minmax(140px, 1.8fr) minmax(100px, 1.2fr) repeat(3, minmax(60px, 0.7fr)) repeat(3, minmax(80px, 0.9fr)) 40px;
+        padding: 0.75rem 1rem;
+        align-items: center;
+        gap: 0.5rem;
+        /* Reduced gap from 0.75rem to 0.5rem */
+      }
     }
 
-    /* Main Card */
-    .team-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--border-radius);
-      padding: 2.5rem;
-      box-shadow: 0 8px 32px var(--shadow-strong);
-      position: relative;
-    }
-
-    .team-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: var(--gradient-accent);
-      border-radius: var(--border-radius) var(--border-radius) 0 0;
-    }
-
-    /* Form Sections */
-    .form-section {
-      margin-bottom: 3rem;
-    }
-
-    .section-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      color: var(--fg);
-      margin-bottom: 1.5rem;
+    /* Horizontal Scroll Wrapper for smaller desktops/tablets */
+    .players-list {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       gap: 0.75rem;
+      /* Ensure it doesn't break layout if still too wide */
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+      /* Space for scrollbar if needed */
+      -webkit-overflow-scrolling: touch;
     }
 
-    .section-icon {
+    /* Sleek Inputs inside rows */
+    .player-row .form-input,
+    .player-row .form-select {
+      background: transparent;
+      border: 1px solid transparent;
+      padding: 0.5rem;
+      font-size: 0.9rem;
+      border-radius: var(--radius-sm);
+      box-shadow: none;
+    }
+
+    .player-row .form-input:hover,
+    .player-row .form-select:hover {
+      background: var(--bg-body);
+    }
+
+    .player-row .form-input:focus,
+    .player-row .form-select:focus {
+      background: var(--bg-body);
+      border-color: var(--brand-primary);
+      box-shadow: none;
+    }
+
+    /* Remove Button */
+    .btn-remove {
       width: 32px;
       height: 32px;
-      background: var(--accent-light);
-      color: var(--icon-color);
-      border-radius: var(--border-radius-sm);
+      border-radius: var(--radius-full);
+      border: none;
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--danger);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1rem;
-    }
-
-    /* Team Details Grid */
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 2rem;
-    }
-
-    .form-group {
-      position: relative;
-    }
-
-    .form-label {
-      display: block;
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: var(--fg);
-      margin-bottom: 0.5rem;
-    }
-
-    .form-input,
-    .form-select {
-      width: 100%;
-      padding: 0.875rem 1rem;
-      border: 1px solid var(--card-border);
-      border-radius: var(--border-radius-sm);
-      background: var(--bg-secondary);
-      color: var(--fg);
-      font-size: 1rem;
-      transition: var(--transition);
-      font-family: inherit;
-    }
-
-    .form-input:focus,
-    .form-select:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-      background: var(--card-bg);
-    }
-
-    .form-input::placeholder {
-      color: var(--fg-secondary);
-    }
-
-    /* Color Picker */
-    .color-picker-group {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .color-picker-wrapper {
-      position: relative;
-      width: 40px;
-      height: 40px;
-    }
-
-    .color-input {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
       cursor: pointer;
+      transition: all 0.2s ease;
     }
 
-    .color-swatch {
-      width: 100%;
-      height: 100%;
-      border: 2px solid var(--card-border);
-      border-radius: var(--border-radius-sm);
-      background: #ff4500;
-      cursor: pointer;
-      transition: var(--transition);
-    }
-
-    .color-swatch:hover {
-      border-color: var(--accent);
-      transform: scale(1.1);
-    }
-
-    /* Action Buttons */
-    .action-section {
-      background: var(--bg-secondary);
-      border-radius: var(--border-radius-sm);
-      padding: 1.5rem;
-      margin-bottom: 2rem;
-      border: 1px solid var(--card-border);
-    }
-
-    .action-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-
-    .action-title {
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: var(--fg);
-    }
-
-    .player-count {
-      font-size: 0.875rem;
-      font-weight: 500;
-      padding: 0.375rem 0.75rem;
-      border-radius: 20px;
-      background: var(--accent-light);
-      color: var(--accent);
-    }
-
-    .action-buttons {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1.25rem;
-      border-radius: var(--border-radius-sm);
-      font-size: 0.875rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: var(--transition);
-      text-decoration: none;
-      border: none;
-      font-family: inherit;
-    }
-
-    .btn-primary {
-      background: var(--gradient-accent);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
-    }
-
-    .btn-secondary {
-      background: transparent;
-      color: var(--accent);
-      border: 1px solid var(--accent);
-    }
-
-    .btn-secondary:hover {
-      background: var(--accent-light);
-      transform: translateY(-2px);
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none !important;
-    }
-
-    /* Players Grid */
-    .players-section {
-      margin-bottom: 3rem;
-    }
-
-    .players-container {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 2rem;
-    }
-
-    .player-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--border-radius-sm);
-      padding: 1.5rem;
-      position: relative;
-      transition: var(--transition);
-    }
-
-    .player-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px var(--shadow-hover);
-      border-color: var(--accent);
-    }
-
-    .player-remove {
-      position: absolute;
-      top: -8px;
-      right: -8px;
+    .btn-remove:hover {
       background: var(--danger);
       color: white;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
+      transform: rotate(90deg);
+    }
+
+    /* ─── Sticky Footer ─── */
+    .sticky-footer {
+      position: fixed;
+      bottom: 2rem;
+      padding: 1rem 2rem;
+      background: rgba(15, 23, 42, 0.9);
+      /* Dark background even on light mode for contrast */
+      backdrop-filter: blur(12px);
+      color: white;
+      border-radius: var(--radius-full);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      z-index: 900;
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
+      gap: 1rem;
       align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: var(--transition);
-      font-size: 0.875rem;
-      z-index: 10;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      width: 90%;
+      max-width: 600px;
+      justify-content: space-between;
     }
 
-    .player-remove:hover {
-      background: #dc2626;
-      transform: scale(1.1);
+    /* Template Helper Dropdown */
+    .template-dropdown {
+      position: relative;
+      display: inline-block;
     }
 
-    .player-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
+    .template-card {
+      position: absolute;
+      top: 100%;
+      /* Drop DOWN */
+      bottom: auto;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: 12px;
+      /* Small gap from button */
+      width: 340px;
+      max-width: 90vw;
+      /* Prevent mobile overflow */
+      background: var(--bg-surface);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-xl);
+      padding: 1.25rem;
+      display: none;
+      z-index: 1000;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.2s ease;
     }
 
-    .player-input,
-    .player-select {
-      width: 100%;
-      padding: 0.625rem 0.75rem;
-      border: 1px solid var(--card-border);
-      border-radius: 6px;
-      background: var(--bg-secondary);
-      color: var(--fg);
-      font-size: 0.875rem;
-      transition: var(--transition);
-      font-family: inherit;
+    /* Arrow pointing UP */
+    .template-card::after {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      margin-left: -6px;
+      border-width: 6px;
+      border-style: solid;
+      border-color: transparent transparent var(--bg-surface) transparent;
     }
 
-    .player-input:focus,
-    .player-select:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    .template-dropdown:hover .template-card {
+      display: block;
+      pointer-events: auto;
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
 
-    /* Team Leadership */
-    .leadership-section {
-      background: var(--bg-secondary);
-      border-radius: var(--border-radius-sm);
-      padding: 1.5rem;
-      margin-bottom: 2rem;
-      border: 1px solid var(--card-border);
+    .code-block {
+      background: #1e293b;
+      color: #a78bfa;
+      font-family: var(--font-mono);
+      padding: 1rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      overflow-x: auto;
+      margin: 0.5rem 0;
+      white-space: pre;
     }
 
-    .leadership-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1.5rem;
-    }
-
-    /* Submit Section */
-    .submit-section {
-      display: flex;
-      justify-content: flex-end;
-      gap: 1rem;
-      flex-wrap: wrap;
-      padding-top: 2rem;
-      border-top: 1px solid var(--card-border);
-    }
-
-    /* Responsive Design */
+    /* Media Queries */
     @media (max-width: 768px) {
+      .dynamic-title {
+        font-size: 2.5rem;
+      }
+
       .nav-header {
-        padding: 1rem;
+        padding: 0 1rem;
       }
 
       .main-content {
-        padding-top: 80px;
-        padding-left: 1rem;
-        padding-right: 1rem;
-      }
-
-      .team-card {
-        padding: 1.5rem;
-      }
-
-      .dynamic-title {
-        font-size: 2rem;
+        padding: 100px 1rem 120px;
       }
 
       .form-grid {
         grid-template-columns: 1fr;
-        gap: 1rem;
       }
 
-      .players-container {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-      }
-
-      .action-header {
+      .sticky-footer {
+        width: 95%;
+        bottom: 1rem;
         flex-direction: column;
-        align-items: flex-start;
-        gap: 1rem;
-      }
-
-      .action-buttons {
-        width: 100%;
+        border-radius: var(--radius-lg);
       }
 
       .btn {
-        flex: 1;
-        justify-content: center;
+        width: 100%;
       }
 
-      .submit-section {
-        flex-direction: column;
-      }
-
-      .leadership-grid {
+      .player-row {
         grid-template-columns: 1fr;
+        gap: 0.5rem;
+        padding: 1.5rem;
+        border-left: 4px solid var(--brand-primary);
       }
     }
 
-    @media (max-width: 480px) {
-      body {
-        padding: 1rem;
-      }
-
-      .main-content {
-        padding-top: 70px;
-      }
-
-      .team-card {
-        padding: 1rem;
-      }
-
-      .dynamic-title {
-        font-size: 1.75rem;
-      }
-
-      .player-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* Animation for new cards */
-    @keyframes fadeInUp {
+    @keyframes fadeUp {
       from {
         opacity: 0;
         transform: translateY(20px);
@@ -614,79 +660,76 @@
         transform: translateY(0);
       }
     }
-
-    .player-card {
-      animation: fadeInUp 0.3s ease-out;
-    }
   </style>
 </head>
 
 <body>
   <!-- Navigation Header -->
   <header class="nav-header">
-    <div class="nav-left">
-      <a href="{{ url_for('home') }}" class="home-link" title="Home">
+    <div class="nav-brand">
+      <a href="{{ url_for('home') }}" class="home-btn" title="Home">
         <i class="fa-solid fa-house"></i>
       </a>
-      <h1 class="page-title">Team Builder</h1>
+      <span>SimCricket<span style="color:var(--brand-primary)">X</span></span>
     </div>
 
-    <button class="theme-toggle" id="theme-toggle">🌙</button>
+    <button class="theme-toggle" id="theme-toggle">
+      <i class="fa-solid fa-moon"></i>
+    </button>
   </header>
 
   <!-- Main Content -->
   <main class="main-content">
     <!-- Page Header -->
     <div class="page-header">
-      <h1 class="dynamic-title" id="dynamic-title">{{ team.team_name if edit else 'Team Creation' }}</h1>
-      <p class="page-subtitle">Build your dream cricket squad with custom players and strategies</p>
+      <h1 class="dynamic-title" id="dynamic-title">{{ team.team_name if edit else 'Create Team' }}</h1>
+      <p class="page-subtitle">Design your championship winning squad with precision and style.</p>
     </div>
 
     <!-- Error Messages -->
     {% if error %}
-    <div class="flash-messages">
-      <div class="flash alert-danger">
-        <i class="fa-solid fa-exclamation-triangle"></i>
+    <div class="glass-card" style="border-left: 4px solid var(--danger); padding: 1rem;">
+      <div style="color: var(--danger); display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+        <i class="fa-solid fa-circle-exclamation"></i>
         {{ error }}
       </div>
     </div>
     {% endif %}
 
-    <!-- Main Team Card -->
-    <div class="team-card">
-      <form id="team-form" method="POST"
-        action="{{ url_for('edit_team', short_code=team.short_code) if edit else url_for('create_team') }}">
+    <!-- Main Team Form -->
+    <form id="team-form" method="POST"
+      action="{{ url_for('edit_team', short_code=team.short_code) if edit else url_for('create_team') }}">
 
-        <!-- Team Details Section -->
-        <div class="form-section">
-          <div class="section-title">
-            <div class="section-icon">
-              <i class="fa-solid fa-shield-halved"></i>
-            </div>
-            Team Information
+      <!-- Team Details Section -->
+      <div class="glass-card">
+        <div class="section-header">
+          <div class="section-icon">
+            <i class="fa-solid fa-shield-halved"></i>
           </div>
+          <div class="section-title">Team Identity</div>
+        </div>
 
+        <div class="section-body">
           <div class="form-grid">
             <div class="form-group">
               <label class="form-label" for="team_name">Team Name</label>
-              <input id="team_name" name="team_name" class="form-input" placeholder="Enter team name" required>
+              <input id="team_name" name="team_name" class="form-input" placeholder="e.g. Mumbai Indians" required>
             </div>
 
             <div class="form-group">
               <label class="form-label" for="short_code">Short Code</label>
-              <input name="short_code" class="form-input" placeholder="2-3 characters" minlength="2" maxlength="3"
-                required>
+              <input name="short_code" class="form-input" placeholder="e.g. MI" minlength="2" maxlength="3" required>
             </div>
 
             <div class="form-group">
               <label class="form-label" for="home_ground">Home Ground</label>
-              <input name="home_ground" class="form-input" placeholder="Stadium name" required>
+              <input name="home_ground" class="form-input" placeholder="e.g. Wankhede Stadium" required>
             </div>
 
             <div class="form-group">
               <label class="form-label" for="pitch_preference">Pitch Preference</label>
               <select name="pitch_preference" class="form-select" required>
-                <option value="">Select pitch type</option>
+                <option value="">Select Surface</option>
                 <option>Green</option>
                 <option>Flat</option>
                 <option>Dry</option>
@@ -697,137 +740,177 @@
 
             <div class="form-group">
               <label class="form-label">Team Color</label>
-              <div class="color-picker-group">
-                <div class="color-picker-wrapper">
-                  <input type="color" id="team_color" name="team_color" value="#ff4500" class="color-input" required>
-                  <div id="color-swatch" class="color-swatch"></div>
+              <div class="color-picker-wrapper" id="color-picker-trigger">
+                <div id="color-swatch" class="color-swatch"></div>
+                <span style="font-size: 0.9rem; font-weight: 500;">Select Brand Color</span>
+                <input type="color" id="team_color" name="team_color" value="#4f46e5" class="color-input" required>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Player Management Section -->
+      <div class="glass-card">
+        <div class="section-header">
+          <div class="section-icon">
+            <i class="fa-solid fa-users-line"></i>
+          </div>
+          <div class="section-title">Squad Roster</div>
+        </div>
+
+        <div class="section-body">
+          <!-- Toolbar -->
+          <div class="squad-toolbar">
+            <div class="squad-stats">
+              <div class="stat-badge">Squad: <span class="player-counter" id="player-count">0/25</span></div>
+              <!-- Future: Add role counts here -->
+            </div>
+
+            <div class="btn-group">
+              <button type="button" class="btn btn-secondary" id="import-json-btn">
+                <i class="fa-solid fa-file-import"></i> Import
+              </button>
+
+              <div class="template-dropdown">
+                <button type="button" class="btn btn-secondary" id="template-helper-btn">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> AI Prompt
+                </button>
+                <div class="template-card">
+                  <div
+                    style="display:flex; justify-content:space-between; margin-bottom:0.5rem; color:var(--text-muted); font-size:0.8rem; text-transform:uppercase; font-weight:700;">
+                    <span>JSON Format</span>
+                    <span id="copy-feedback" style="color:var(--success);"></span>
+                  </div>
+                  <div class="code-block" id="json-template-preview">[
+                    {
+                    "name": "Player Name",
+                    "role": "Batsman",
+                    "bat": 85,
+                    "bowl": 20,
+                    "field": 80,
+                    "bhand": "Right",
+                    "btype": "",
+                    "bhand2": ""
+                    }
+                    ]</div>
+                  <button type="button" class="btn btn-primary" style="width:100%; font-size:0.8rem; padding:0.5rem;"
+                    id="copy-template-btn">
+                    <i class="fa-regular fa-copy"></i> Copy Prompt for AI
+                  </button>
                 </div>
-                <span class="form-label" style="margin: 0;">Click to choose color</span>
               </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- Player Management Section -->
-        <div class="form-section">
-          <div class="section-title">
-            <div class="section-icon">
-              <i class="fa-solid fa-users"></i>
-            </div>
-            Squad Management
-          </div>
-
-          <div class="action-section">
-            <div class="action-header">
-              <div class="action-title">Build Your Squad</div>
-              <div class="player-count" id="player-count">0 / 25</div>
-            </div>
-
-            <div class="action-buttons">
-              <button type="button" class="btn btn-secondary" id="add-player">
-                <i class="fa-solid fa-user-plus"></i>
-                Add Player
-              </button>
-              <button type="button" class="btn btn-secondary" id="generate-team">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                Generate Team
+              <button type="button" class="btn btn-primary" id="add-player">
+                <i class="fa-solid fa-plus"></i> Add Player
               </button>
             </div>
           </div>
-        </div>
 
-        <!-- Players Grid -->
-        <div class="players-section">
-          <div class="players-container" id="players-container"></div>
+          <!-- Players Grid -->
+          <div class="players-list" id="players-container"></div>
         </div>
+      </div>
 
-        <!-- Team Leadership Section -->
-        <div class="form-section">
-          <div class="section-title">
-            <div class="section-icon">
-              <i class="fa-solid fa-crown"></i>
-            </div>
-            Team Leadership
+      <!-- Leadership Section -->
+      <div class="glass-card">
+        <div class="section-header">
+          <div class="section-icon">
+            <i class="fa-solid fa-chess-king"></i>
           </div>
-
-          <div class="leadership-section">
-            <div class="leadership-grid">
-              <div class="form-group">
-                <label class="form-label" for="select-captain">Team Captain</label>
-                <select name="captain" id="select-captain" class="form-select" required>
-                  <option value="">Select Captain</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label" for="select-wk">Wicketkeeper</label>
-                <select name="wicketkeeper" id="select-wk" class="form-select" required>
-                  <option value="">Select Wicketkeeper</option>
-                </select>
-              </div>
+          <div class="section-title">Leadership Core</div>
+        </div>
+        <div class="section-body">
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="form-group">
+              <label class="form-label" for="select-captain">Captain</label>
+              <select name="captain" id="select-captain" class="form-select" required>
+                <option value="">Select Captain</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="select-wk">Wicketkeeper</label>
+              <select name="wicketkeeper" id="select-wk" class="form-select" required>
+                <option value="">Select Wicketkeeper</option>
+              </select>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Submit Section -->
-        <div class="submit-section">
+      <!-- Sticky Footer Actions -->
+      <div class="sticky-footer">
+        <div style="font-size: 0.9rem; opacity: 0.8;">
+          {% if edit %}Editing <strong>{{ team.short_code }}</strong>{% else %}Creating New Team{% endif %}
+        </div>
+        <div class="btn-group">
           {% if edit %}
-          <a href="{{ url_for('manage_teams') }}" class="btn btn-secondary">
-            <i class="fa-solid fa-xmark"></i>
+          <a href="{{ url_for('manage_teams') }}" class="btn btn-secondary"
+            style="background: rgba(255,255,255,0.1); color: white; border: none;">
             Cancel
           </a>
+          {% else %}
+          <button type="button" class="btn btn-secondary" id="clear-draft"
+            style="background: rgba(255,255,255,0.1); color: white; border: none;">
+            Clear Draft
+          </button>
           {% endif %}
           <button type="submit" class="btn btn-primary">
-            <i class="fa-solid fa-save"></i>
-            {{ 'Update Team' if edit else 'Save Team' }}
+            <i class="fa-solid fa-floppy-disk"></i>
+            {{ 'Save Changes' if edit else 'Create Team' }}
           </button>
         </div>
+      </div>
 
-      </form>
-    </div>
+    </form>
   </main>
 
-  <!-- Player Template -->
+  <!-- Player Row Template -->
   <template id="player-template">
-    <div class="player-card">
-      <div class="player-remove"><i class="fa-solid fa-xmark"></i></div>
-      <div class="player-grid">
-        <input name="player_name" class="player-input" placeholder="Player Name" required>
-        <select name="player_role" class="player-select" required>
-          <option value="">Role</option>
-          <option>Batsman</option>
-          <option>Bowler</option>
-          <option>All-rounder</option>
-          <option>Wicketkeeper</option>
-        </select>
-        <input type="number" name="batting_rating" class="player-input" placeholder="Batting (0-100)" min="0" max="100"
-          required>
-        <input type="number" name="bowling_rating" class="player-input" placeholder="Bowling (0-100)" min="0" max="100"
-          required>
-        <input type="number" name="fielding_rating" class="player-input" placeholder="Fielding (0-100)" min="0"
-          max="100" required>
-        <select name="batting_hand" class="player-select" required>
-          <option value="">Batting Hand</option>
-          <option>Left</option>
-          <option>Right</option>
-        </select>
-        <select name="bowling_type" class="player-select">
-          <option value="">Bowling Type</option>
-          <option>Fast</option>
-          <option>Fast-medium</option>
-          <option>Medium-fast</option>
-          <option>Medium</option>
-          <option>Off spin</option>
-          <option>Leg spin</option>
-          <option>Finger spin</option>
-          <option>Wrist spin</option>
-        </select>
-        <select name="bowling_hand" class="player-select">
-          <option value="">Bowling Hand</option>
-          <option>Left</option>
-          <option>Right</option>
-        </select>
-      </div>
+    <div class="player-row">
+      <input name="player_name" class="form-input" placeholder="Player Name" required>
+      <select name="player_role" class="form-select" required>
+        <option value="">Role</option>
+        <option>Batsman</option>
+        <option>Bowler</option>
+        <option>All-rounder</option>
+        <option>Wicketkeeper</option>
+      </select>
+
+      <input type="number" name="batting_rating" class="form-input" placeholder="Bat" min="0" max="100"
+        title="Batting Rating" required>
+      <input type="number" name="bowling_rating" class="form-input" placeholder="Bowl" min="0" max="100"
+        title="Bowling Rating" required>
+      <input type="number" name="fielding_rating" class="form-input" placeholder="Fld" min="0" max="100"
+        title="Fielding Rating" required>
+
+      <select name="batting_hand" class="form-select" required>
+        <option value="">Bat Hand</option>
+        <option>Left</option>
+        <option>Right</option>
+      </select>
+
+      <select name="bowling_type" class="form-select">
+        <option value="">Bowl Type</option>
+        <option>Fast</option>
+        <option>Fast-medium</option>
+        <option>Medium-fast</option>
+        <option>Medium</option>
+        <option>Off spin</option>
+        <option>Leg spin</option>
+        <option>Finger spin</option>
+        <option>Wrist spin</option>
+      </select>
+
+      <select name="bowling_hand" class="form-select">
+        <option value="">Bowl Hand</option>
+        <option>Left</option>
+        <option>Right</option>
+      </select>
+
+      <button type="button" class="btn-remove player-remove" title="Remove Player">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
     </div>
   </template>
 
@@ -837,6 +920,7 @@
     const titleEl = document.getElementById('dynamic-title');
     teamInput.oninput = () => {
       titleEl.textContent = teamInput.value || 'Team Creation';
+      if (!EDIT_MODE) saveDraft();
     };
 
     // Player Logic
@@ -851,7 +935,8 @@
     // Validation function
     function validateForm() {
       const playerCount = container.children.length;
-      const cards = [...document.querySelectorAll('.player-card')];
+      // Fix: Selector updated to .player-row
+      const cards = [...document.querySelectorAll('.player-row')];
 
       // Check player count (15-25)
       if (playerCount < 15 || playerCount > 25) return false;
@@ -928,18 +1013,30 @@
 
       refreshRoleSelectors();
       updateSubmitButtons();
+      if (!EDIT_MODE) saveDraft();
     }
 
     function refreshRoleSelectors() {
-      const cards = [...document.querySelectorAll('.player-card')];
+      // Fix: Selector updated to .player-row
+      const cards = [...document.querySelectorAll('.player-row')];
       const cap = document.getElementById('select-captain');
       const wk = document.getElementById('select-wk');
+
+      // Preserve selection if possible
+      const currentCap = cap.value;
+      const currentWk = wk.value;
 
       // rebuild captain list from *all* player names
       cap.innerHTML = '<option value="">Select Captain</option>';
       cards.forEach(c => {
         const name = c.querySelector('[name=player_name]').value;
-        if (name) cap.innerHTML += `<option>${name}</option>`;
+        if (name) {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          if (name === currentCap) opt.selected = true;
+          cap.appendChild(opt);
+        }
       });
 
       // rebuild wicketkeeper list *only* from keeper-role cards
@@ -948,6 +1045,13 @@
         .filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper')
         .forEach(c => {
           const name = c.querySelector('[name=player_name]').value;
+          if (name) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (name === currentWk) opt.selected = true;
+            wk.appendChild(opt);
+          }
         });
     }
   </script>
@@ -974,15 +1078,20 @@
 
   <script>
     // Add one player card
-    function addPlayer(data) {
+    function addPlayer(data, autoUpdate = true) {
       if (container.children.length >= MAX) return;
       const tpl = document.getElementById('player-template').content.cloneNode(true);
-      const card = tpl.querySelector('.player-card');
+      // Correction: Template root class is now 'player-row', not 'player-card'
+      const card = tpl.querySelector('.player-row');
 
       // Fill if data passed (used in generate/edit)
       if (data) {
         card.querySelector('[name=player_name]').value = data.name;
-        card.querySelector('[name=player_role]').value = data.role;
+        // Ensure role matches strict Select values
+        const validRoles = ["Batsman", "Bowler", "All-rounder", "Wicketkeeper"];
+        const role = validRoles.includes(data.role) ? data.role : "Batsman";
+        card.querySelector('[name=player_role]').value = role;
+
         card.querySelector('[name=batting_rating]').value = data.bat;
         card.querySelector('[name=bowling_rating]').value = data.bowl;
         card.querySelector('[name=fielding_rating]').value = data.field;
@@ -1002,46 +1111,118 @@
         if (input) {
           input.addEventListener('input', updateSubmitButtons);
           input.addEventListener('change', updateSubmitButtons);
+          if (!EDIT_MODE) {
+            input.addEventListener('input', saveDraft);
+            input.addEventListener('change', saveDraft);
+          }
         }
       });
 
       card.querySelector('.player-remove').onclick = () => {
-        card.remove();
-        updateCount();
+        card.style.transform = 'translateX(20px)';
+        card.style.opacity = '0';
+        setTimeout(() => {
+          card.remove();
+          updateCount();
+        }, 300);
       };
 
       container.appendChild(card);
-      updateCount();
+      if (autoUpdate) updateCount();
     }
 
     // Manual add
     document.getElementById('add-player').onclick = () => addPlayer();
 
-    // Bind the generate-team button
-    const genBtn = document.getElementById('generate-team');
+    // Import JSON Handler
+    document.getElementById('import-json-btn').onclick = () => {
+      const jsonStr = prompt("Paste your Team JSON object here:");
+      if (!jsonStr) return;
 
-    genBtn.onclick = () => {
-      const current = container.children.length;
-      const needed = Math.max(0, MIN - current);
+      try {
+        const data = JSON.parse(jsonStr);
+        if (!Array.isArray(data)) throw new Error("JSON must be an array of player objects");
 
-      let roles = [];
-      if (![...container.children].some(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper'))
-        roles.push("Wicketkeeper");
-      while (roles.filter(r => r !== "Wicketkeeper" && r !== "Batsman").length < 6) roles.push(rand(["Bowler", "All-rounder"
-      ])); while (roles.length < needed) roles.push(rand(ROLES)); roles = roles.sort(() => Math.random() - 0.5);
+        if (container.children.length > 0) {
+          if (!confirm("This will replace current players. Continue?")) return;
+        }
 
-      roles.forEach(r => {
-        const data = {
-          name: `${rand(NAMES)} ${randInt(1, 99)}`,
-          role: r,
-          bat: randInt(40, 95),
-          bowl: randInt(40, 95),
-          field: randInt(40, 95),
-          bhand: rand(HANDS),
-          btype: (r === "Bowler" || r === "All-rounder") ? rand(TYPES) : "",
-          bhand2: (r === "Bowler" || r === "All-rounder") ? rand(HANDS) : ""
-        };
-        addPlayer(data);
+        container.innerHTML = "";
+
+        // Add all players without triggering updateCount 15-20 times
+        data.forEach(p => {
+          addPlayer({
+            name: p.name || "Player",
+            role: p.role || "Batsman",
+            bat: p.bat || p.batting_rating || 50,
+            bowl: p.bowl || p.bowling_rating || 50,
+            field: p.field || p.fielding_rating || 50,
+            bhand: p.bhand || p.batting_hand || "Right",
+            btype: p.btype || p.bowling_type || "",
+            bhand2: p.bhand2 || p.bowling_hand || ""
+          }, false); // Pass false to skip updateCount inside loop
+        });
+
+        // Single update at the end
+        updateCount();
+        alert("Team imported successfully! Please select your Captain and Wicketkeeper.");
+
+      } catch (e) {
+        alert("Invalid JSON: " + e.message);
+      }
+    };
+
+    // Copy Template Handler
+    document.getElementById('copy-template-btn').onclick = () => {
+      // 1. Gather Current Context
+      const teamName = document.getElementById('team_name').value || "[Team Name]";
+      const shortCode = document.querySelector('[name=short_code]').value || "[Short Code]";
+      const homeGround = document.querySelector('[name=home_ground]').value || "[Venue Name]";
+      const pitchPref = document.querySelector('[name=pitch_preference]').value || "Balanced";
+      const teamColor = document.getElementById('team_color').value || "Blue";
+
+      // 2. Construct the Rich Prompt
+      const templateText = document.getElementById('json-template-preview').innerText;
+
+      const promptText = `I need you to generate a JSON dataset for a Cricket Team named "${teamName}" (${shortCode}).
+      
+**Context:**
+- **Home Ground:** ${homeGround}
+- **Pitch Type:** ${pitchPref}
+- **Team Color:** ${teamColor}
+
+**Constraints:**
+1. The JSON must be a STRICT array of player objects.
+2. Total Players: 15-20.
+3. Roles Distribution:
+   - At least 5 Batsmen
+   - At least 1 Wicketkeeper
+   - At least 6 Bowlers/All-rounders separate from batsmen
+4. Ratings (0-100):
+   - Star players: 85-95
+   - Regulars: 75-84
+   - Youngsters: 60-70
+
+**Required JSON Format:**
+${templateText}
+
+Please generate the full JSON array only, no other text.`;
+
+      navigator.clipboard.writeText(promptText).then(() => {
+        const btn = document.getElementById('copy-template-btn');
+        const originalContent = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied AI Prompt!';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary'); // Visual feedback
+
+        setTimeout(() => {
+          btn.innerHTML = originalContent;
+          btn.classList.add('btn-primary');
+          btn.classList.remove('btn-secondary');
+        }, 2000);
+      }).catch(err => {
+        console.error('Failed to copy: ', err);
+        alert("Failed to copy to clipboard");
       });
     };
 
@@ -1099,12 +1280,20 @@
       if (field) {
         field.addEventListener('input', updateSubmitButtons);
         field.addEventListener('change', updateSubmitButtons);
+        if (!EDIT_MODE) {
+          field.addEventListener('input', saveDraft);
+          field.addEventListener('change', saveDraft);
+        }
       }
     });
 
     // Add listeners to captain/wicketkeeper selects
     document.getElementById('select-captain').addEventListener('change', updateSubmitButtons);
     document.getElementById('select-wk').addEventListener('change', updateSubmitButtons);
+    if (!EDIT_MODE) {
+      document.getElementById('select-captain').addEventListener('change', saveDraft);
+      document.getElementById('select-wk').addEventListener('change', saveDraft);
+    }
 
     // Initial validation check
     updateSubmitButtons();
@@ -1112,62 +1301,128 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const root = document.documentElement;
-      const theme = localStorage.getItem('theme') || 'light';
       const toggleBtn = document.getElementById('theme-toggle');
+      const icon = toggleBtn.querySelector('i');
 
-      // Apply base theme & restore Prototype variant if set
-      root.setAttribute('data-theme', theme);
-      toggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
+      // 1. Initialize
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      root.setAttribute('data-theme', savedTheme);
+      updateIcon(savedTheme);
 
-      if (theme === 'prototype') {
-        const p = localStorage.getItem('prototypePrimary');
-        const l = localStorage.getItem('prototypeLight');
-        if (p && l) {
-          root.style.setProperty('--accent', p);
-          root.style.setProperty('--accent-hover', l);
-          root.style.setProperty('--accent-light', `${p}1a`);
-          root.style.setProperty('--icon-color', p);
-          root.style.setProperty(
-            '--gradient',
-            `linear-gradient(135deg, ${p}, ${l})`
-          );
-          root.style.setProperty(
-            '--gradient-accent',
-            `linear-gradient(45deg, ${p}, #ffffff)`
-          );
-        }
-      }
-
-      // Toggle handler (dark ↔ light; leaves Prototype intact)
-      function applyTheme(t) {
-        root.setAttribute('data-theme', t);
-        localStorage.setItem('theme', t);
-        toggleBtn.textContent = t === 'dark' ? '☀️' : '🌙';
-        if (t === 'prototype') {
-          const p = localStorage.getItem('prototypePrimary');
-          const l = localStorage.getItem('prototypeLight');
-          if (p && l) {
-            root.style.setProperty('--accent', p);
-            root.style.setProperty('--accent-hover', l);
-            root.style.setProperty('--accent-light', `${p}1a`);
-            root.style.setProperty('--icon-color', p);
-            root.style.setProperty(
-              '--gradient',
-              `linear-gradient(135deg, ${p}, ${l})`
-            );
-            root.style.setProperty(
-              '--gradient-accent',
-              `linear-gradient(45deg, ${p}, #ffffff)`
-            );
-          }
-        }
-      }
-
+      // 2. Toggle Handler
       toggleBtn.addEventListener('click', () => {
-        const next = theme === 'dark' ? 'light' : theme;
-        applyTheme(next);
+        const current = root.getAttribute('data-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+
+        root.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        updateIcon(next);
       });
+
+      function updateIcon(theme) {
+        if (theme === 'dark') {
+          icon.classList.remove('fa-moon');
+          icon.classList.add('fa-sun');
+        } else {
+          icon.classList.remove('fa-sun');
+          icon.classList.add('fa-moon');
+        }
+      }
     });
+
+    // ─── Draft Management (LocalStorage) ────────────────────────
+    const DRAFT_KEY = 'team_create_draft';
+    const clearDraftBtn = document.getElementById('clear-draft');
+
+    // Save Draft
+    function saveDraft() {
+      if (EDIT_MODE) return; // Don't overwrite drafts with edit data or interfere
+
+      const players = [...container.children].map(card => ({
+        name: card.querySelector('[name=player_name]').value,
+        role: card.querySelector('[name=player_role]').value,
+        bat: card.querySelector('[name=batting_rating]').value,
+        bowl: card.querySelector('[name=bowling_rating]').value,
+        field: card.querySelector('[name=fielding_rating]').value,
+        bhand: card.querySelector('[name=batting_hand]').value,
+        btype: card.querySelector('[name=bowling_type]').value,
+        bhand2: card.querySelector('[name=bowling_hand]').value
+      }));
+
+      const draft = {
+        team_name: document.getElementById('team_name').value,
+        short_code: document.querySelector('[name=short_code]').value,
+        home_ground: document.querySelector('[name=home_ground]').value,
+        pitch_preference: document.querySelector('[name=pitch_preference]').value,
+        team_color: document.getElementById('team_color').value,
+        captain: document.getElementById('select-captain').value,
+        wicketkeeper: document.getElementById('select-wk').value,
+        players: players,
+        timestamp: Date.now()
+      };
+
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    }
+
+    // Load Draft
+    function loadDraft() {
+      if (EDIT_MODE) return;
+
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+
+      try {
+        const draft = JSON.parse(raw);
+
+        document.getElementById('team_name').value = draft.team_name || "";
+        document.querySelector('[name=short_code]').value = draft.short_code || "";
+        document.querySelector('[name=home_ground]').value = draft.home_ground || "";
+        document.querySelector('[name=pitch_preference]').value = draft.pitch_preference || "";
+
+        if (draft.team_color) {
+          document.getElementById('team_color').value = draft.team_color;
+          document.getElementById('color-swatch').style.background = draft.team_color;
+        }
+
+        // Players
+        container.innerHTML = "";
+        if (draft.players && draft.players.length > 0) {
+          draft.players.forEach(p => addPlayer(p));
+        }
+
+        updateCount();
+
+        // Leadership
+        setTimeout(() => {
+          if (draft.captain) document.getElementById('select-captain').value = draft.captain;
+          if (draft.wicketkeeper) document.getElementById('select-wk').value = draft.wicketkeeper;
+          updateSubmitButtons();
+        }, 100);
+
+      } catch (e) {
+        console.error("Error loading draft", e);
+      }
+    }
+
+    // Clear Draft
+    if (clearDraftBtn) {
+      clearDraftBtn.onclick = () => {
+        if (confirm("Are you sure you want to clear the form? This cannot be undone.")) {
+          localStorage.removeItem(DRAFT_KEY);
+          location.reload();
+        }
+      };
+    }
+
+    // Attach Draft Listeners (Load & Clear on Submit)
+    if (!EDIT_MODE) {
+      document.getElementById('team-form').addEventListener('submit', () => {
+        localStorage.removeItem(DRAFT_KEY);
+      });
+
+      // Load on startup
+      loadDraft();
+    }
   </script>
 
 </body>

@@ -606,6 +606,10 @@
 
 <script>
     let TEAMS = [];
+    let currentStep = 1;
+    let selectedTeamIndices = [];
+    const tournamentId = JSON.parse('{{ tournament_id | tojson | safe }}');
+    const fixtureId = JSON.parse('{{ fixture_id | tojson | safe }}');
     try {
         TEAMS = JSON.parse(document.getElementById('teams-data').textContent);
     } catch (e) {
@@ -628,9 +632,42 @@
                 toggleTeam(index, this);
             });
         });
+
+        // AUTO-SELECT TEAMS FOR TOURNAMENT FIXTURES
+        const preselectHome = JSON.parse('{{ preselect_home | tojson | safe }}');
+        const preselectAway = JSON.parse('{{ preselect_away | tojson | safe }}');
+
+        if (preselectHome !== null && preselectAway !== null) {
+            // Find team indices by matching team IDs
+            const homeIdx = TEAMS.findIndex(t => t.id === preselectHome);
+            const awayIdx = TEAMS.findIndex(t => t.id === preselectAway);
+
+            if (homeIdx !== -1 && awayIdx !== -1) {
+                // Auto-select both teams
+                const cards = document.querySelectorAll('.team-card');
+                if (cards[homeIdx]) {
+                    selectedTeamIndices.push(homeIdx);
+                    cards[homeIdx].classList.add('selected');
+                }
+                if (cards[awayIdx]) {
+                    selectedTeamIndices.push(awayIdx);
+                    cards[awayIdx].classList.add('selected');
+                }
+
+                // Enable next button
+                const nextBtn = document.getElementById('next-btn');
+                if (nextBtn && selectedTeamIndices.length === 2) {
+                    nextBtn.disabled = false;
+                    // Auto-advance to step 2 after a short delay
+                    setTimeout(() => {
+                        nextStep();
+                    }, 500);
+                }
+            }
+        }
     });
-    let currentStep = 1;
-    let selectedTeamIndices = [];
+
+
 
     // --- NAVIGATION ---
     function updateWizard() {
@@ -905,8 +942,8 @@
             };
 
             const payload = {
-                team_home: `${h.short_code}_${h.created_by_email}`,
-                team_away: `${a.short_code}_${a.created_by_email}`,
+                team_home: h.id,
+                team_away: a.id,
                 stadium: h.home_ground,
                 pitch: document.getElementById('pitch-select').value,
                 rain_probability: parseFloat(document.getElementById('rain-slider').value),
@@ -918,7 +955,9 @@
                 substitutes: {
                     home: getPlayers('home-substitutes'),
                     away: getPlayers('away-substitutes')
-                }
+                },
+                tournament_id: tournamentId,
+                fixture_id: fixtureId
             };
 
             const res = await fetch("/match/setup", {

@@ -1,0 +1,300 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="create-tournament-container">
+
+    <div class="form-header glass-panel">
+        <h1 class="gradient-text">Create Tournament</h1>
+        <p>Set up a league with your teams</p>
+    </div>
+
+    <form action="{{ url_for('create_tournament_route') }}" method="POST" onsubmit="return validateForm()">
+
+        <div class="form-section glass-panel">
+            <h2 class="section-title"><i class="fas fa-trophy"></i> Tournament Details</h2>
+            <div class="form-group">
+                <label>Tournament Name</label>
+                <input type="text" name="name" class="premium-input" placeholder="e.g. IPL 2026, World Cup..." required>
+            </div>
+        </div>
+
+        <div class="form-section glass-panel">
+            <h2 class="section-title"><i class="fas fa-users"></i> Select Teams <span class="counter"
+                    id="teamCounter">(0 selected)</span></h2>
+            <p class="section-desc">Select at least 2 teams to participate.</p>
+
+            <div class="teams-selection-grid">
+                {% for team in teams %}
+                <label class="team-select-card">
+                    <input type="checkbox" name="team_ids" value="{{ team.id }}" onchange="updateCounter()">
+                    <div class="card-inner">
+                        <div class="team-color-strip" style="--team-color: {{ team.team_color }}"></div>
+                        <div class="team-details">
+                            <span class="team-code">{{ team.short_code }}</span>
+                            <span class="team-name">{{ team.name }}</span>
+                        </div>
+                        <div class="checkbox-indicator">
+                            <i class="fas fa-check"></i>
+                        </div>
+                    </div>
+                </label>
+                {% else %}
+                <div class="no-teams">
+                    <p>No teams found. <a href="{{ url_for('manage_teams') }}">Create some teams first!</a></p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('tournaments') }}" class="cancel-btn">Cancel</a>
+            <button type="submit" class="submit-btn gradient-btn">Create Tournament</button>
+        </div>
+
+    </form>
+</div>
+
+<script>
+    function updateCounter() {
+        const checked = document.querySelectorAll('input[name="team_ids"]:checked').length;
+        document.getElementById('teamCounter').textContent = `(${checked} selected)`;
+    }
+
+    function validateForm() {
+        const checked = document.querySelectorAll('input[name="team_ids"]:checked').length;
+        if (checked < 2) {
+            alert("Please select at least 2 teams to create a tournament.");
+            return false;
+        }
+        return true;
+    }
+</script>
+
+<style>
+    /* Tournament Create - Premium Design with Light/Dark Mode */
+
+    /* Glass Panel Base */
+    .glass-panel {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        box-shadow: 0 4px 12px var(--shadow);
+    }
+
+    /* Gradient Text */
+    .gradient-text {
+        background: var(--gradient);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    /* Gradient Button */
+    .gradient-btn {
+        background: var(--gradient);
+        color: white !important;
+        border: none;
+    }
+
+    .gradient-btn:hover {
+        opacity: 0.9;
+        box-shadow: 0 8px 25px var(--shadow);
+    }
+
+    .create-tournament-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 3rem 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+    }
+
+    .form-header {
+        text-align: center;
+        padding: 2.5rem;
+        border-radius: 20px;
+    }
+
+    .form-header h1 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-header p {
+        color: var(--fg-secondary);
+        font-size: 1.1rem;
+    }
+
+    .form-section {
+        padding: 2rem;
+        border-radius: 20px;
+    }
+
+    .section-title {
+        font-size: 1.3rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.8rem;
+    }
+
+    .counter {
+        font-size: 0.9rem;
+        color: var(--accent);
+        font-weight: 600;
+    }
+
+    .section-desc {
+        color: var(--fg-secondary);
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+        margin-top: -1rem;
+    }
+
+    .premium-input {
+        width: 100%;
+        padding: 1rem;
+        background: var(--bg);
+        border: 2px solid var(--card-border);
+        border-radius: 10px;
+        color: var(--fg);
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+    }
+
+    .premium-input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
+    /* Teams Grid */
+    .teams-selection-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .team-select-card {
+        cursor: pointer;
+        position: relative;
+        user-select: none;
+    }
+
+    .team-select-card input {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .card-inner {
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 12px;
+        padding: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+
+    .card-inner:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px var(--shadow);
+    }
+
+    .team-color-strip {
+        width: 6px;
+        height: 30px;
+        border-radius: 3px;
+        background-color: var(--team-color);
+    }
+
+    .team-details {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .team-code {
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+
+    .team-name {
+        font-size: 0.85rem;
+        color: var(--fg-secondary);
+    }
+
+    .checkbox-indicator {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid var(--card-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: transparent;
+        transition: all 0.3s ease;
+        font-size: 0.8rem;
+        background: var(--bg);
+    }
+
+    /* Checked State */
+    .team-select-card input:checked+.card-inner {
+        border-color: var(--accent);
+        background: var(--accent-light);
+        box-shadow: 0 4px 12px var(--shadow), 0 0 20px var(--accent-light);
+    }
+
+    .team-select-card input:checked+.card-inner .checkbox-indicator {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+
+    /* Form Actions */
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .cancel-btn {
+        padding: 1rem 2rem;
+        border-radius: 10px;
+        color: var(--fg-secondary);
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: 2px solid var(--card-border);
+        background: var(--card-bg);
+    }
+
+    .cancel-btn:hover {
+        color: var(--fg);
+        border-color: var(--accent);
+        background: var(--accent-light);
+    }
+
+    .submit-btn {
+        padding: 1rem 3rem;
+        border-radius: 10px;
+        border: none;
+        font-size: 1.1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .submit-btn:hover {
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
