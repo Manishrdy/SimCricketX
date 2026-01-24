@@ -1,0 +1,676 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="tournament-hub">
+
+    <!-- Hero Header -->
+    <div class="tournament-hero glass-panel">
+        <div class="hero-content">
+            <div class="hero-left">
+                <div class="trophy-badge">
+                    <i class="fas fa-trophy"></i>
+                </div>
+                <div class="hero-text">
+                    <h1 class="hero-title gradient-text">{{ tournament.name }}</h1>
+                    <div class="hero-meta">
+                        <span class="status-pill {{ tournament.status|lower }}">
+                            <i class="fas fa-circle"></i> {{ tournament.status }}
+                        </span>
+                        <span class="meta-divider">•</span>
+                        <span class="meta-detail">
+                            <i class="fas fa-calendar"></i>
+                            {{ tournament.created_at.strftime('%b %d, %Y') }}
+                        </span>
+                        <span class="meta-divider">•</span>
+                        <span class="meta-detail">
+                            <i class="fas fa-users"></i>
+                            {{ tournament.participating_teams|length }} Teams
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-actions">
+                <a href="{{ url_for('tournaments') }}" class="back-btn">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
+                {% if tournament.status == 'Active' or tournament.status == 'open' %}
+                <form action="{{ url_for('delete_tournament', tournament_id=tournament.id) }}" method="POST"
+                    onsubmit="return confirm('Are you sure you want to delete this tournament?');">
+                    <button type="submit" class="delete-btn">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="quick-stats">
+            {% set total_matches = tournament.fixtures|length %}
+            {% set played = tournament.fixtures|selectattr('status', 'equalto', 'Completed')|list|length %}
+            {% set remaining = total_matches - played %}
+
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-flag-checkered"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ played }}</div>
+                    <div class="stat-label">Matches Played</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-calendar-alt"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ remaining }}</div>
+                    <div class="stat-label">Remaining</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ standings[0].points if standings else 0 }}</div>
+                    <div class="stat-label">Leader Points</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="dashboard-grid">
+
+        <!-- Standings Section -->
+        <div class="section-card glass-panel">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fas fa-ranking-star"></i> Points Table
+                </h2>
+                <div class="section-subtitle">League Standings</div>
+            </div>
+
+            <div class="standings-container">
+                {% if standings %}
+                {% for team in standings %}
+                <div class="standing-row {% if loop.index <= 4 %}qualified{% endif %}">
+                    <div class="rank-badge">
+                        <span class="rank-num">{{ loop.index }}</span>
+                    </div>
+                    <div class="team-section">
+                        <div class="team-stripe" style="--team-color: {{ team.team.team_color }}"></div>
+                        <div class="team-details">
+                            <div class="team-name-row">{{ team.team.name }}</div>
+                            <div class="team-stats-mini">{{ team.played }}P • {{ team.won }}W • {{ team.lost }}L</div>
+                        </div>
+                    </div>
+                    <div class="stats-section">
+                        <div class="stat-group">
+                            <div class="stat-label-mini">NRR</div>
+                            <div
+                                class="stat-value-mini {% if team.net_run_rate > 0 %}positive{% elif team.net_run_rate < 0 %}negative{% endif %}">
+                                {{ "%+.3f"|format(team.net_run_rate) }}
+                            </div>
+                        </div>
+                        <div class="stat-group">
+                            <div class="stat-label-mini">PTS</div>
+                            <div class="stat-value-pts">{{ team.points }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-chart-bar"></i>
+                    <p>No standings available yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Fixtures Section -->
+        <div class="section-card glass-panel">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fas fa-calendar-week"></i> Schedule
+                </h2>
+                <div class="section-subtitle">Fixtures & Results</div>
+            </div>
+
+            <div class="fixtures-grid">
+                {% for fixture in tournament.fixtures %}
+                <div class="fixture-card {% if fixture.status == 'Completed' %}completed{% else %}scheduled{% endif %}">
+                    <div class="fixture-header">
+                        <span class="round-badge">Match {{ fixture.round_number }}</span>
+                        <span class="status-badge {{ fixture.status|lower }}">
+                            {{ fixture.status }}
+                        </span>
+                    </div>
+
+                    <div class="teams-versus">
+                        <!-- Home Team -->
+                        <div class="team-block">
+                            <div class="team-logo-circle"
+                                style="--team-bg: {{ fixture.home_team.team_color }}; background: var(--team-bg);">
+                                {{ fixture.home_team.short_code }}
+                            </div>
+                            <div class="team-name-display">{{ fixture.home_team.name }}</div>
+                            {% if fixture.status == 'Completed' and fixture.match %}
+                            <div class="score-display">
+                                {{ fixture.match.home_team_score }}/{{ fixture.match.home_team_wickets }}
+                                <span class="overs">({{ fixture.match.home_team_overs }})</span>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="vs-divider">VS</div>
+
+                        <!-- Away Team -->
+                        <div class="team-block">
+                            <div class="team-logo-circle"
+                                style="--team-bg: {{ fixture.away_team.team_color }}; background: var(--team-bg);">
+                                {{ fixture.away_team.short_code }}
+                            </div>
+                            <div class="team-name-display">{{ fixture.away_team.name }}</div>
+                            {% if fixture.status == 'Completed' and fixture.match %}
+                            <div class="score-display">
+                                {{ fixture.match.away_team_score }}/{{ fixture.match.away_team_wickets }}
+                                <span class="overs">({{ fixture.match.away_team_overs }})</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if fixture.status == 'Completed' and fixture.match %}
+                    <div class="result-banner">
+                        <i class="fas fa-trophy"></i> {{ fixture.match.result_description }}
+                    </div>
+                    {% endif %}
+
+                    <div class="fixture-footer">
+                        {% if fixture.status != 'Completed' %}
+                        <form action="{{ url_for('match_setup') }}" method="GET" class="full-width-form">
+                            <input type="hidden" name="fixture_id" value="{{ fixture.id }}">
+                            <input type="hidden" name="tournament_id" value="{{ tournament.id }}">
+                            <button type="submit" class="action-btn play-btn">
+                                <i class="fas fa-play"></i> Play Match
+                            </button>
+                        </form>
+                        {% else %}
+                        <div class="completed-actions">
+                            {% if fixture.match_id %}
+                            <a href="{{ url_for('match_detail', match_id=fixture.match_id) }}"
+                                class="action-btn outline-btn">
+                                <i class="fas fa-file-alt"></i> Scorecard
+                            </a>
+                            {% endif %}
+
+                            <!-- Re-simulate Button -->
+                            <form action="{{ url_for('resimulate_fixture', fixture_id=fixture.id) }}" method="POST"
+                                class="inline-form"
+                                onsubmit="return confirm('Re-simulating will delete the current match result and stats. Continue?');">
+                                <button type="submit" class="action-btn danger-btn">
+                                    <i class="fas fa-redo"></i> Re-Simulate
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<style>
+    /* --- Dashboard Layout --- */
+    .tournament-hub {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 1rem;
+        gap: 1.5rem;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        /* Standings 1/3, Fixtures 2/3 */
+        gap: 1.5rem;
+    }
+
+    @media (max-width: 1024px) {
+        .dashboard-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* --- Hero Section --- */
+    .tournament-hero {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        padding: 2rem;
+        gap: 2rem;
+    }
+
+    .hero-left {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .trophy-badge {
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, #ffd700, #ffaa00);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.8rem;
+        color: #fff;
+        box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+    }
+
+    .hero-title {
+        font-size: 2.2rem;
+        margin: 0;
+        line-height: 1.2;
+    }
+
+    .hero-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        margin-top: 0.5rem;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+    }
+
+    .status-pill {
+        padding: 0.2rem 0.6rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        text-transform: capitalize;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .status-pill.active {
+        background: rgba(0, 255, 127, 0.15);
+        color: #00ff7f;
+    }
+
+    .status-pill.completed {
+        background: rgba(100, 149, 237, 0.15);
+        color: #6495ed;
+    }
+
+    /* --- Stats Cards --- */
+    .quick-stats {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .stat-card {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 0.8rem 1.2rem;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .stat-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--accent-primary);
+    }
+
+    .stat-value {
+        font-size: 1.2rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+
+    /* --- Section Headers --- */
+    .section-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+        font-size: 1.4rem;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+
+    .section-subtitle {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        margin-left: 2rem;
+    }
+
+    /* --- Fixtures Grid --- */
+    .fixtures-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+    }
+
+    .fixture-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 1.2rem;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .fixture-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .fixture-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .round-badge {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        background: rgba(255, 255, 255, 0.05);
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    .status-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-badge.scheduled {
+        color: var(--accent-secondary);
+    }
+
+    .status-badge.completed {
+        color: var(--success);
+    }
+
+    .teams-versus {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .team-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+        flex: 1;
+        text-align: center;
+    }
+
+    .team-logo-circle {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: #fff;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .team-name-display {
+        font-size: 0.9rem;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100px;
+    }
+
+    .vs-divider {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+        opacity: 0.5;
+    }
+
+    .score-display {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .score-display .overs {
+        font-size: 0.75rem;
+        font-weight: 400;
+        color: var(--text-secondary);
+    }
+
+    .result-banner {
+        background: rgba(0, 255, 127, 0.1);
+        color: var(--success);
+        font-size: 0.8rem;
+        padding: 0.4rem;
+        border-radius: 6px;
+        text-align: center;
+        border: 1px solid rgba(0, 255, 127, 0.2);
+    }
+
+    .fixture-footer {
+        margin-top: auto;
+    }
+
+    .full-width-form button {
+        width: 100%;
+    }
+
+    .inline-form {
+        display: inline-block;
+    }
+
+    .completed-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+    }
+
+    .action-btn {
+        padding: 0.6rem;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        width: 100%;
+        transition: all 0.2s;
+        text-decoration: none;
+    }
+
+    .play-btn {
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+        color: #fff;
+    }
+
+    .play-btn:hover {
+        filter: brightness(1.1);
+    }
+
+    .outline-btn {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: var(--text-primary);
+    }
+
+    .outline-btn:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .danger-btn {
+        background: rgba(255, 71, 87, 0.1);
+        color: #ff4757;
+        border: 1px solid rgba(255, 71, 87, 0.2);
+    }
+
+    .danger-btn:hover {
+        background: rgba(255, 71, 87, 0.2);
+    }
+
+    /* --- Standings Table --- */
+    .standing-row {
+        display: flex;
+        align-items: center;
+        padding: 0.8rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        transition: background 0.2s;
+    }
+
+    .standing-row:last-child {
+        border-bottom: none;
+    }
+
+    .standing-row:hover {
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .qualified .rank-badge {
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        color: #000;
+        font-weight: 800;
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+    }
+
+    .rank-badge {
+        width: 28px;
+        height: 28px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-right: 1rem;
+    }
+
+    .team-section {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+    }
+
+    .team-stripe {
+        width: 4px;
+        height: 32px;
+        background: var(--team-color);
+        border-radius: 2px;
+    }
+
+    .team-name-row {
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .team-stats-mini {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+
+    .stats-section {
+        display: flex;
+        gap: 1.5rem;
+        text-align: right;
+    }
+
+    .stat-label-mini {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        margin-bottom: 2px;
+    }
+
+    .stat-value-mini {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.9rem;
+    }
+
+    .stat-value-mini.positive {
+        color: var(--success);
+    }
+
+    .stat-value-mini.negative {
+        color: var(--danger);
+    }
+
+    .stat-value-pts {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: var(--accent-primary);
+    }
+
+    .back-btn,
+    .delete-btn {
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 0.9rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+
+    .back-btn {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text-primary);
+    }
+
+    .back-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+    .delete-btn {
+        background: rgba(255, 71, 87, 0.1);
+        color: #ff4757;
+    }
+
+    .delete-btn:hover {
+        background: rgba(255, 71, 87, 0.25);
+    }
+</style>
+{% endblock %}

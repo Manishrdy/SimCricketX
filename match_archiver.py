@@ -28,8 +28,12 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from tabulate import tabulate
+from tabulate import tabulate
 from typing import Dict, List, Any, Optional, Union
 import zipfile
+
+from database import db
+from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer
 
 # ─── Define PROJECT_ROOT so that we can write to /<project_root>/data/… ─────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -203,6 +207,10 @@ class MatchArchiver:
             if cleanup_temp:
                 self._cleanup_temporary_files()
             
+            # Save to Database
+            self._save_to_database()
+            self.logger.info(f"Match {self.match_id} saved to database")
+
             archive_size = os.path.getsize(zip_path)
             self.logger.info(f"Archive creation completed successfully: {zip_path} ({archive_size:,} bytes)")
             
@@ -252,6 +260,193 @@ class MatchArchiver:
             
         except Exception as e:
             raise MatchArchiverError(f"Failed to create archive directory: {e}")
+
+    def _save_to_database(self) -> None:
+        """Save match results and stats to SQLite database"""
+        try:
+            # 1. Resolve Team IDs from "SHORT_email" strings
+            # Only splitting once, expecting standard format
+            h_code, h_user = self.match_data['team_home'].split('_')
+            a_code, a_user = self.match_data['team_away'].split('_')
+            
+            home_team = DBTeam.query.filter_by(short_code=h_code, user_id=h_user).first()
+            away_team = DBTeam.query.filter_by(short_code=a_code, user_id=a_user).first()
+            
+            if not home_team or not away_team:
+                self.logger.error("Could not resolve teams for DB save")
+                return
+
+            # Determine Winner (Logic restored)
+            winner_team = None
+            if self.match.result:
+                if self.team_home in self.match.result:
+                    winner_team = home_team
+                elif self.team_away in self.match.result:
+                    winner_team = away_team
+
+            # 2. Check for Existing Match Record
+            db_match = DBMatch.query.get(self.match_id)
+            
+            if db_match:
+                self.logger.info(f"Match {self.match_id} already exists in DB. Updating record.")
+                # Update existing fields
+                db_match.user_id = self.username
+                db_match.home_team_id = home_team.id
+                db_match.away_team_id = away_team.id
+                db_match.winner_team_id = winner_team.id if winner_team else None
+                db_match.venue = self.match_data.get('stadium')
+                db_match.pitch_type = self.match_data.get('pitch')
+                db_match.date = datetime.utcnow()
+                db_match.result_description = self.match.result
+                db_match.match_json_path = self.filenames['json']
+                
+                # Clear existing scorecards to avoid duplication/stale data
+                MatchScorecard.query.filter_by(match_id=self.match_id).delete()
+            else:
+                self.logger.info(f"Creating new DB record for Match {self.match_id}")
+                db_match = DBMatch(
+                    id=self.match_id,
+                    user_id=self.username,
+                    home_team_id=home_team.id,
+                    away_team_id=away_team.id,
+                    winner_team_id=winner_team.id if winner_team else None,
+                    venue=self.match_data.get('stadium'),
+                    pitch_type=self.match_data.get('pitch'),
+                    date=datetime.utcnow(),
+                    result_description=self.match.result,
+                    # home_team_score will be set below
+                    match_json_path=self.filenames['json']
+                )
+                db.session.add(db_match)
+            
+            # Extract scores and overs accurately
+            first_bat_name = self.match.first_batting_team_name
+            
+            home_batting_stats = {}
+            away_batting_stats = {}
+            
+            # Helper to calculate total overs faced
+            def calc_overs(stats_dict):
+                balls = sum(p.get('balls', 0) for p in stats_dict.values())
+                return round(balls // 6 + (balls % 6) / 10.0, 1)
+
+            if first_bat_name == self.match.match_data["team_home"].split('_')[0]:
+                db_match.home_team_score = self.match.first_innings_score
+                db_match.home_team_wickets = sum(1 for p in self.match.first_innings_batting_stats.values() if p.get('wicket_type'))
+                db_match.home_team_overs = calc_overs(self.match.first_innings_batting_stats)
+                home_batting_stats = self.match.first_innings_batting_stats
+                
+                db_match.away_team_score = self.match.score
+                db_match.away_team_wickets = self.match.wickets
+                db_match.away_team_overs = calc_overs(self.match.second_innings_batting_stats)
+                away_batting_stats = self.match.second_innings_batting_stats
+            else:
+                db_match.away_team_score = self.match.first_innings_score
+                db_match.away_team_wickets = sum(1 for p in self.match.first_innings_batting_stats.values() if p.get('wicket_type'))
+                db_match.away_team_overs = calc_overs(self.match.first_innings_batting_stats)
+                away_batting_stats = self.match.first_innings_batting_stats
+                
+                db_match.home_team_score = self.match.score
+                db_match.home_team_wickets = self.match.wickets
+                db_match.home_team_overs = calc_overs(self.match.second_innings_batting_stats)
+                home_batting_stats = self.match.second_innings_batting_stats
+
+            db.session.flush() 
+            
+            # 3. Update Tournament Fixture & Standings
+            # Ensure tournament_id is set
+            if self.match_data.get('tournament_id'):
+                db_match.tournament_id = self.match_data.get('tournament_id')
+                from engine.tournament_engine import TournamentEngine
+                engine = TournamentEngine()
+                try:
+                    engine.update_standings(db_match)
+                    self.logger.info(f"Updated tournament standings for match {self.match_id}")
+                except Exception as te:
+                    self.logger.error(f"Failed to update tournament standings: {te}")
+
+            # 4. Save Scorecards
+            def save_stats(stats_dict, team_id, batting=True):
+                if not stats_dict: return
+                for p_name, s in stats_dict.items():
+                    # Find player ID
+                    player = DBPlayer.query.filter_by(name=p_name, team_id=team_id).first()
+                    if not player:
+                        continue
+                    
+                    card = MatchScorecard.query.filter_by(match_id=self.match_id, player_id=player.id).first()
+                    if not card:
+                        card = MatchScorecard(
+                            match_id=self.match_id,
+                            player_id=player.id,
+                            team_id=team_id
+                        )
+                        db.session.add(card)
+                    
+                    if batting:
+                        card.runs = s.get('runs', 0)
+                        card.balls = s.get('balls', 0)
+                        card.fours = s.get('fours', 0)
+                        card.sixes = s.get('sixes', 0)
+                        card.is_out = bool(s.get('wicket_type'))
+                        card.wicket_type = s.get('wicket_type')
+                    else:
+                        card.overs = s.get('overs', 0)
+                        card.balls_bowled = s.get('balls_bowled', 0)
+                        card.runs_conceded = s.get('runs', 0)
+                        card.wickets = s.get('wickets', 0)
+                        card.maidens = s.get('maidens', 0)
+                        card.wides = s.get('wides', 0)
+                        card.noballs = s.get('noballs', 0)
+
+            # Process Home Stats (Batting)
+            save_stats(home_batting_stats, home_team.id, batting=True)
+            
+            # Process Home Stats (Bowling - when Away batted)
+            h_bowl_stats = self.match.second_innings_bowling_stats if first_bat_name == self.match.match_data["team_home"].split('_')[0] else self.match.first_innings_bowling_stats
+            save_stats(h_bowl_stats, home_team.id, batting=False)
+            
+            # Process Away Stats (Batting)
+            save_stats(away_batting_stats, away_team.id, batting=True)
+            
+            # Process Away Stats (Bowling - when Home batted)
+            a_bowl_stats = self.match.first_innings_bowling_stats if first_bat_name == self.match.match_data["team_home"].split('_')[0] else self.match.second_innings_bowling_stats
+            save_stats(a_bowl_stats, away_team.id, batting=False)
+            
+            # Update Player Aggregates
+            for card in [c for c in db.session.new if isinstance(c, MatchScorecard)]:
+                # relationship loading fallback
+                p = DBPlayer.query.get(card.player_id)
+                if not p: continue
+                
+                p.matches_played += 1
+                p.total_runs += card.runs
+                p.total_balls_faced += card.balls
+                p.total_fours += card.fours
+                p.total_sixes += card.sixes
+                if card.runs >= 50 and card.runs < 100: p.total_fifties += 1
+                if card.runs >= 100: p.total_centuries += 1
+                if card.runs > p.highest_score: p.highest_score = card.runs
+                if not card.is_out and card.balls > 0: p.not_outs += 1
+                
+                p.total_balls_bowled += card.balls_bowled
+                p.total_runs_conceded += card.runs_conceded
+                p.total_wickets += card.wickets
+                p.total_maidens += card.maidens
+                if card.wickets >= 5: p.five_wicket_hauls += 1
+                
+                if card.wickets > p.best_bowling_wickets:
+                    p.best_bowling_wickets = card.wickets
+                    p.best_bowling_runs = card.runs_conceded
+                elif card.wickets == p.best_bowling_wickets:
+                    if card.runs_conceded < p.best_bowling_runs:
+                        p.best_bowling_runs = card.runs_conceded
+
+            db.session.commit()
+            
+        except Exception as e:
+            self.logger.error(f"DB Save Error: {e}", exc_info=True)
+            db.session.rollback()
 
     def _copy_json_file(self, original_path: str) -> None:
         """Copy original JSON file to archive with validation"""

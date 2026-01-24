@@ -73,10 +73,22 @@
             <button class="pace-btn" data-pace="50">MAX</button>
         </div>
 
-        <div class="commentary-box" id="commentary-log">
-            <p class="commentary-placeholder">
-                Match simulation starting soon...
-            </p>
+        <!-- Premium AI-Style Code Block Console -->
+        <div class="code-window">
+            <div class="window-header">
+                <div class="window-controls">
+                    <span class="window-title">simulation_log.txt</span>
+                </div>
+                <button class="copy-action-btn" id="copy-log-btn">
+                    <i class="fa-regular fa-clone"></i> <span>Copy</span>
+                </button>
+            </div>
+            <div class="commentary-box" id="commentary-log">
+                <div class="code-line system-msg">
+                    <span class="token-comment">// Match simulation ready. Waiting
+                        for toss...</span>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -88,6 +100,146 @@
             <h2 class="scorecard-title" id="scorecard-title">SCORECARD</h2>
             <button class="close-scorecard" onclick="closeScorecard()">Close</button>
         </div>
+        <style>
+            /* Modern IDE Theme (VS Code / AI Artifact Vibe) */
+            .code-window {
+                background: #1e1e1e;
+                /* VS Code Editor BG */
+                border: 1px solid #333;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+                display: flex;
+                flex-direction: column;
+                flex: 1;
+                min-height: 0;
+                margin-top: 1.5rem;
+                font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            }
+
+            .window-header {
+                background: #252526;
+                /* VS Code Header BG */
+                border-bottom: 1px solid #1e1e1e;
+                padding: 0.5rem 1rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .window-controls {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .dot {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                display: inline-block;
+            }
+
+            .dot.red {
+                background: #ff5f56;
+            }
+
+            .dot.yellow {
+                background: #ffbd2e;
+            }
+
+            .dot.green {
+                background: #27c93f;
+            }
+
+            .window-title {
+                margin-left: 0;
+                /* Adjusted margin */
+                color: #9cdcfe;
+                font-size: 0.8rem;
+                opacity: 0.8;
+            }
+
+            .copy-action-btn {
+                background: transparent;
+                border: none;
+                color: #d4d4d4;
+                font-family: inherit;
+                font-size: 0.75rem;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                padding: 0.4rem 0.6rem;
+                border-radius: 4px;
+                transition: all 0.2s ease;
+            }
+
+            .copy-action-btn:hover {
+                background: #3c3c3c;
+                color: #fff;
+            }
+
+            .commentary-box {
+                flex-grow: 1;
+                padding: 1rem;
+                overflow-y: auto;
+                color: #d4d4d4;
+                font-size: 0.9rem;
+                line-height: 1.6;
+            }
+
+            /* Syntax Highlighting Vibe */
+            .token-comment {
+                color: #6a9955;
+            }
+
+            /* Green comments */
+            .token-keyword {
+                color: #569cd6;
+            }
+
+            /* Blue keywords */
+            .token-string {
+                color: #ce9178;
+            }
+
+            /* Orange strings */
+            .token-number {
+                color: #b5cea8;
+            }
+
+            /* Light green numbers */
+            .token-error {
+                color: #f48771;
+            }
+
+            /* Red for wickets */
+
+            .code-line {
+                display: flex;
+                gap: 1rem;
+                padding: 0.1rem 0;
+            }
+
+            /* Custom Scrollbar */
+            .commentary-box::-webkit-scrollbar {
+                width: 10px;
+            }
+
+            .commentary-box::-webkit-scrollbar-track {
+                background: #1e1e1e;
+            }
+
+            .commentary-box::-webkit-scrollbar-thumb {
+                background: #424242;
+                border-radius: 0;
+            }
+
+            .commentary-box::-webkit-scrollbar-thumb:hover {
+                background: #4f4f4f;
+            }
+        </style>
 
         <div class="scorecard-body">
             <!-- Batting Section -->
@@ -215,4 +367,28 @@
 
 <!-- Load Main Logic -->
 <script src="{{ url_for('static', filename='js/match_detail.js') }}"></script>
+
+<script>
+    // Copy Log Functionality
+    document.getElementById('copy-log-btn').addEventListener('click', function () {
+        const logContent = document.getElementById('commentary-log').innerText;
+
+        navigator.clipboard.writeText(logContent).then(() => {
+            const btn = this;
+            const originalHTML = btn.innerHTML;
+
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+            btn.style.borderColor = '#10b981';
+            btn.style.color = '#10b981';
+
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.style.borderColor = '';
+                btn.style.color = '';
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy log:', err);
+        });
+    });
+</script>
 {% endblock %}
