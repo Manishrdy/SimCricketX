@@ -462,9 +462,8 @@
         <h2 style="text-align:center; margin-bottom: 2rem;">Select Opponents</h2>
         <div class="teams-grid">
             {% for team in teams %}
-            <div class="team-card" style="--team-color: {{ team.team_color }}"
-                onclick="toggleTeam({{ loop.index0 }}, this)">
-                <span class="color-dot" style="background: {{ team.team_color }}">🏏</span>
+            <div class="team-card" data-team-color="{{ team.team_color }}" data-index="{{ loop.index0 }}">
+                <span class="color-dot" data-bg="{{ team.team_color }}">🏏</span>
                 <div class="team-info">
                     <h3>{{ team.team_name }}</h3>
                     <div class="team-meta">
@@ -600,8 +599,36 @@
 {% endblock %}
 
 {% block extra_js %}
+
+<script id="teams-data" type="application/json">
+        {{ teams | tojson | safe}}
+</script>
+
 <script>
-    const TEAMS = {{ teams| tojson }};
+    let TEAMS = [];
+    try {
+        TEAMS = JSON.parse(document.getElementById('teams-data').textContent);
+    } catch (e) {
+        console.error("Failed to parse teams data", e);
+    }
+
+    // Apply styles and event listeners dynamically
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.team-card').forEach(card => {
+            const color = card.dataset.teamColor;
+            const index = parseInt(card.dataset.index);
+
+            // Set styles
+            card.style.setProperty('--team-color', color);
+            const dot = card.querySelector('.color-dot');
+            if (dot) dot.style.background = dot.dataset.bg;
+
+            // Add click listener
+            card.addEventListener('click', function () {
+                toggleTeam(index, this);
+            });
+        });
+    });
     let currentStep = 1;
     let selectedTeamIndices = [];
 
@@ -769,13 +796,13 @@
         const isBowler = ['Bowler', 'All-rounder'].includes(player.role);
         const bowlCheck = isBowler ?
             `<label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-size:0.75rem;">
-                <input type="checkbox" class="bowl-check" checked> Bowl
-             </label>` : '';
+        <input type="checkbox" class="bowl-check" checked> Bowl
+    </label>` : '';
 
         div.innerHTML = `
-            <span><span class="role-icon">${iconMap[player.role]}</span>${player.name}</span>
-            ${bowlCheck}
-        `;
+    <span><span class="role-icon">${iconMap[player.role]}</span>${player.name}</span>
+    ${bowlCheck}
+    `;
 
         div.ondragstart = e => {
             div.classList.add('dragging');

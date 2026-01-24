@@ -13,36 +13,43 @@
     <!-- Global CSS Variables -->
     <style>
         :root {
-            /* Light Theme (Default) */
-            --bg: #f3f4f6;
-            --bg-secondary: #ffffff;
-            --fg: #111827;
-            --fg-secondary: #6b7280;
+            /* Light Theme - Minimalistic */
+            --bg: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --fg: #1a1a1a;
+            --fg-secondary: #666666;
             --card-bg: #ffffff;
-            --card-border: #e5e7eb;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --accent-light: #eff6ff;
+            --card-border: #e2e4e8;
+            --accent: #24292f;
+            /* Very dark grey almost black for minimal look */
+            --accent-hover: #000000;
+            --accent-light: #f3f4f6;
             --shadow: rgba(0, 0, 0, 0.05);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
             --nav-height: 64px;
-            --border-radius: 12px;
+            --border-radius: 8px;
+            /* Slightly sharper for minimalism */
             --transition: all 0.2s ease;
+            --gradient: linear-gradient(135deg, #24292f 0%, #4a5568 100%);
         }
 
         [data-theme="dark"] {
-            /* Dark Theme */
-            --bg: #111827;
-            --bg-secondary: #1f2937;
-            --fg: #f9fafb;
-            --fg-secondary: #9ca3af;
-            --card-bg: #1f2937;
-            --card-border: #374151;
-            --accent: #60a5fa;
-            --accent-hover: #3b82f6;
-            --accent-light: rgba(59, 130, 246, 0.1);
+            /* Dark Theme - VS Code One Dark Pro Inspired */
+            --bg: #282c34;
+            --bg-secondary: #21252b;
+            --fg: #abb2bf;
+            --fg-secondary: #5c6370;
+            --card-bg: #2c313a;
+            --card-border: #3e4451;
+            /* Lighter border for definition */
+            --accent: #61afef;
+            /* One Dark Pro Blue */
+            --accent-hover: #528bff;
+            --accent-light: rgba(97, 175, 239, 0.15);
             --shadow: rgba(0, 0, 0, 0.3);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.4);
+            --gradient: linear-gradient(135deg, #61afef 0%, #c678dd 100%);
+            /* Blue to Purple */
         }
 
         /* Reset & Base */
@@ -175,6 +182,18 @@
 
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+
+    <!-- Hidden container for flash messages -->
+    <div id="flash-messages-container" style="display: none;">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div data-category="{{ category }}" class="flash-message-item">{{ message|safe }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+    </div>
+
     <script>
         // Theme Logic
         (function () {
@@ -203,16 +222,19 @@
 
         // Flask Flash Messages -> Toast Notifications
         document.addEventListener('DOMContentLoaded', function () {
+            const messageElements = document.querySelectorAll('#flash-messages-container .flash-message-item');
 
-            {% with messages = get_flashed_messages(with_categories = true) %}
-            {% if messages %}
-            {% for category, message in messages %}
-            var toastType = '{{ category }}';
-            if (toastType === 'danger') toastType = 'error';
-            Toast.show('{{ message|safe }}', toastType);
-            {% endfor %}
-            {% endif %}
-            {% endwith %}
+            messageElements.forEach(el => {
+                let category = el.getAttribute('data-category');
+                const message = el.innerHTML;
+
+                if (category === 'danger') category = 'error';
+
+                // Assuming Toast is available globally from notifications.js
+                if (window.Toast) {
+                    Toast.show(message, category);
+                }
+            });
         });
     </script>
 

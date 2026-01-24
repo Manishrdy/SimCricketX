@@ -198,8 +198,19 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <!-- Initialize Match Data from Jinja -->
+<!-- Match Data Container -->
+<script id="match-data-json" type="application/json">
+    {{ match | tojson | safe }}
+</script>
+
 <script>
-    window.matchData = {{ match | tojson }};
+    // Initialize Match Data safely
+    try {
+        window.matchData = JSON.parse(document.getElementById('match-data-json').textContent);
+    } catch (e) {
+        console.error("Failed to parse match data", e);
+        window.matchData = {};
+    }
 </script>
 
 <!-- Load Main Logic -->
