@@ -27,41 +27,54 @@
         /*                          CRICKET THEME VARIABLES                              */
         /* ──────────────────────────────────────────────────────────────────────────── */
         :root {
-            --bg: #fafbfc;
-            --fg: #1a202c;
-            --card-bg: rgba(255, 255, 255, 0.85);
-            --glass-bg: rgba(255, 255, 255, 0.15);
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --shadow: rgba(0, 0, 0, 0.1);
-            --shadow-strong: rgba(0, 0, 0, 0.15);
-            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --cricket-primary: #2d5016;
-            --cricket-secondary: #8b4513;
-            --cricket-field: #228b22;
-            --cricket-ball: #cd853f;
-            --border: rgba(59, 130, 246, 0.2);
+            /* Light Theme - Minimalistic */
+            --bg: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --fg: #1a1a1a;
+            --fg-secondary: #666666;
+            --card-bg: #ffffff;
+            --card-border: #e2e4e8;
+            --accent: #24292f;
+            --accent-hover: #000000;
+            --accent-light: #f3f4f6;
+            --shadow: rgba(0, 0, 0, 0.05);
+            --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --gradient: linear-gradient(135deg, #24292f 0%, #4a5568 100%);
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
             --danger-hover: #dc2626;
+            /* Cricket specific */
+            --glass-bg: rgba(255, 255, 255, 0.15);
+            --cricket-primary: #2d5016;
+            --cricket-secondary: #8b4513;
+            --cricket-field: #228b22;
+            --cricket-ball: #cd853f;
+            --border: rgba(34, 41, 47, 0.2);
             --modal-bg: rgba(0, 0, 0, 0.5);
         }
 
         [data-theme="dark"] {
-            --bg: #0f1419;
+            /* Dark Theme - Vibrant Slate with Neon Accents */
+            --bg: #0f172a;
+            --bg-secondary: #1e293b;
             --fg: #e2e8f0;
-            --card-bg: rgba(30, 41, 59, 0.85);
+            --fg-secondary: #94a3b8;
+            --card-bg: #1e293b;
+            --card-border: #0ea5e9;
+            --accent: #06b6d4;
+            --accent-hover: #22d3ee;
+            --accent-light: rgba(6, 182, 212, 0.2);
+            --shadow: rgba(14, 165, 233, 0.2);
+            --shadow-lg: 0 20px 40px rgba(14, 165, 233, 0.3), 0 0 60px rgba(16, 185, 129, 0.1);
+            --gradient: linear-gradient(135deg, #06b6d4 0%, #10b981 100%);
+            /* Cricket specific */
             --glass-bg: rgba(255, 255, 255, 0.05);
-            --accent: #60a5fa;
-            --accent-hover: #3b82f6;
-            --shadow: rgba(0, 0, 0, 0.3);
-            --shadow-strong: rgba(0, 0, 0, 0.5);
-            --gradient: linear-gradient(135deg, #4338ca 0%, #7c3aed 100%);
-            --cricket-primary: #4ade80;
+            --cricket-primary: #10b981;
             --cricket-secondary: #fbbf24;
-            --border: rgba(96, 165, 250, 0.3);
+            --border: rgba(14, 165, 233, 0.3);
         }
+
 
         /* ──────────────────────────────────────────────────────────────────────────── */
         /*                              GLOBAL FOUNDATION                                */
@@ -131,7 +144,7 @@
             left: 0;
             right: 0;
             background: var(--card-bg);
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--card-border);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             z-index: 1000;
@@ -142,21 +155,22 @@
         }
 
         .logo {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             font-weight: 700;
-            background: var(--gradient);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
             display: flex;
             align-items: center;
             gap: 0.5rem;
             text-decoration: none;
+            color: var(--fg);
         }
 
         .logo-icon {
-            font-size: 2rem;
-            background: var(--gradient);
+            font-size: 1.5rem;
+            color: var(--accent);
+        }
+
+        .nav-logo-text {
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
@@ -169,97 +183,25 @@
         }
 
         .theme-toggle {
-            background: var(--glass-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 0.5rem;
-            cursor: pointer;
-            font-size: 1.2rem;
-            color: var(--fg);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: var(--bg);
+            border: 1px solid var(--card-border);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 40px;
-            height: 40px;
+            color: var(--fg-secondary);
+            transition: var(--transition);
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 1rem;
         }
 
         .theme-toggle:hover {
-            background: rgba(59, 130, 246, 0.1);
-            border-color: var(--accent);
-            transform: scale(1.05);
-        }
-
-        .theme-dropdown {
-            position: relative;
-            display: inline-block;
-        }
-
-        .theme-dropdown-btn {
-            background: var(--glass-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-            cursor: pointer;
-            color: var(--fg);
-            font-size: 0.875rem;
-            font-weight: 500;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .theme-dropdown-btn:hover {
-            background: rgba(59, 130, 246, 0.1);
-            border-color: var(--accent);
-        }
-
-        .theme-dropdown-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            box-shadow: 0 10px 25px var(--shadow-strong);
-            min-width: 200px;
-            margin-top: 0.5rem;
-            padding: 0.5rem;
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-10px);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 1001;
-        }
-
-        .theme-dropdown.active .theme-dropdown-menu {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        .theme-option {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-
-        .theme-option:hover {
-            background: var(--glass-bg);
-        }
-
-        .theme-icon {
-            font-size: 1.1rem;
             color: var(--accent);
-            width: 20px;
-            text-align: center;
+            border-color: var(--accent);
+            background: var(--accent-light);
         }
 
         /* ──────────────────────────────────────────────────────────────────────────── */
@@ -897,47 +839,15 @@
     <!-- Header Navigation -->
     <header class="nav-header">
         <a href="{{ url_for('home') }}" class="logo">
-            <i class="fa-solid fa-cricket-bat-ball logo-icon"></i>
-            <span>SimCricketX <em>by Manish</em></span>
+            <i class="fa-solid fa-baseball-ball logo-icon"></i>
+            <span class="nav-logo-text">SimCricketX</span>
         </a>
 
         <div class="nav-controls">
-            <button class="theme-toggle" id="theme-toggle">🌙</button>
-
-            <div class="theme-dropdown" id="theme-dropdown">
-                <button class="theme-dropdown-btn" id="theme-dropdown-btn">
-                    <i class="fa-solid fa-palette"></i>
-                    <span class="theme-dropdown-text">Themes</span>
-                    <i class="fa-solid fa-chevron-down"></i>
-                </button>
-
-                <div class="theme-dropdown-menu" id="theme-dropdown-menu">
-                    <div class="theme-option" data-theme="nord">
-                        <i class="fa-solid fa-snowflake theme-icon"></i>
-                        <span>Nord</span>
-                    </div>
-                    <div class="theme-option" data-theme="retro">
-                        <i class="fa-solid fa-compact-disc theme-icon"></i>
-                        <span>Retro</span>
-                    </div>
-                    <div class="theme-option" data-theme="cupcake">
-                        <i class="fa-solid fa-birthday-cake theme-icon"></i>
-                        <span>Cupcake</span>
-                    </div>
-                    <div class="theme-option" data-theme="dim">
-                        <i class="fa-solid fa-adjust theme-icon"></i>
-                        <span>Dim</span>
-                    </div>
-                    <div class="theme-option" data-theme="dracula">
-                        <i class="fa-solid fa-ghost theme-icon"></i>
-                        <span>Dracula</span>
-                    </div>
-                    <div class="theme-option" data-theme="sunset">
-                        <i class="fa-solid fa-sun theme-icon"></i>
-                        <span>Sunset</span>
-                    </div>
-                </div>
-            </div>
+            <a href="{{ url_for('home') }}" class="theme-toggle" title="Home"><i class="fas fa-home"></i></a>
+            <a href="{{ url_for('logout') }}" class="theme-toggle" title="Logout"><i
+                    class="fas fa-sign-out-alt"></i></a>
+            <button class="theme-toggle" id="theme-toggle" title="Toggle Theme">🌙</button>
         </div>
     </header>
 
@@ -1080,34 +990,6 @@
             updateToggleIcon(nextTheme);
         });
 
-        // Theme Dropdown Functionality
-        const dropdown = document.getElementById('theme-dropdown');
-        const dropdownBtn = document.getElementById('theme-dropdown-btn');
-        const dropdownMenu = document.getElementById('theme-dropdown-menu');
-
-        dropdownBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            dropdown.classList.toggle('active');
-        });
-
-        document.addEventListener('click', () => {
-            dropdown.classList.remove('active');
-        });
-
-        dropdownMenu.addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
-
-        // Theme Selection
-        document.querySelectorAll('.theme-option').forEach(option => {
-            option.addEventListener('click', () => {
-                const theme = option.getAttribute('data-theme');
-                document.documentElement.setAttribute('data-theme', theme);
-                localStorage.setItem('theme', theme);
-                updateToggleIcon(theme);
-                dropdown.classList.remove('active');
-            });
-        });
 
         // ────────────────────────────────────────────────────────────────────────────
         //                           FILE PROCESSING & COUNTDOWN

@@ -23,43 +23,50 @@
 
     <style>
         :root {
-            /* Light Theme */
-            --bg-primary: #f0f8ff;
-            --bg-secondary: #e6f3ff;
-            --fg-primary: #1a1d23;
-            --fg-secondary: #6b7280;
-            --card-bg: rgba(255, 255, 255, 0.95);
-            --card-border: rgba(59, 130, 246, 0.2);
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --accent-light: #dbeafe;
-            --shadow: rgba(59, 130, 246, 0.15);
-            --shadow-strong: rgba(59, 130, 246, 0.25);
+            /* Light Theme - Minimalistic (from layout.html) */
+            --bg: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --fg: #1a1a1a;
+            --fg-secondary: #666666;
+            --card-bg: #ffffff;
+            --card-border: #e2e4e8;
+            --accent: #24292f;
+            /* Very dark grey almost black for minimal look */
+            --accent-hover: #000000;
+            --accent-light: #f3f4f6;
+            --shadow: rgba(0, 0, 0, 0.05);
+            --shadow-strong: 0 4px 12px rgba(0, 0, 0, 0.08);
+            /* Mapped to shadow-lg */
+            --nav-height: 64px;
+            --border-radius: 8px;
+            --transition: all 0.2s ease;
+            --gradient: linear-gradient(135deg, #24292f 0%, #4a5568 100%);
+
+            /* Status colors (kept from original login) */
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
-            --cricket-ball: #8b4513;
-            --cricket-stumps: #d2691e;
-            --cricket-field: #228b22;
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+            /* Login specific mappings */
+            --bg-primary: var(--bg);
+            --bg-secondary: var(--bg-secondary);
+            --fg-primary: var(--fg);
         }
 
         [data-theme="dark"] {
-            /* Dark Theme */
-            --bg-primary: #0a0f1c;
-            --bg-secondary: #1a2332;
-            --fg-primary: #f9fafb;
-            --fg-secondary: #9ca3af;
-            --card-bg: rgba(30, 41, 59, 0.95);
-            --card-border: rgba(96, 165, 250, 0.3);
-            --accent: #60a5fa;
-            --accent-hover: #3b82f6;
-            --accent-light: #1e3a8a;
-            --shadow: rgba(0, 0, 0, 0.3);
-            --shadow-strong: rgba(0, 0, 0, 0.5);
-            --cricket-ball: #cd853f;
-            --cricket-stumps: #daa520;
-            --cricket-field: #2e8b57;
+            /* Dark Theme - Vibrant Slate with Neon Accents (from layout.html) */
+            --bg: #0f172a;
+            --bg-secondary: #1e293b;
+            --fg: #e2e8f0;
+            --fg-secondary: #94a3b8;
+            --card-bg: #1e293b;
+            --card-border: #0ea5e9;
+            --accent: #06b6d4;
+            --accent-hover: #22d3ee;
+            --accent-light: rgba(6, 182, 212, 0.2);
+            --shadow: rgba(14, 165, 233, 0.2);
+            --shadow-strong: 0 20px 40px rgba(14, 165, 233, 0.3), 0 0 60px rgba(16, 185, 129, 0.1);
+            --gradient: linear-gradient(135deg, #06b6d4 0%, #10b981 100%);
         }
 
         * {
@@ -72,9 +79,47 @@
             overflow: hidden;
         }
 
+        /* Animations from home.html */
+        @keyframes stadiumPulse {
+
+            0%,
+            100% {
+                opacity: 0.03;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.06;
+                transform: scale(1.02);
+            }
+        }
+
+        @keyframes ballBounce {
+
+            0%,
+            100% {
+                transform: translateY(0) rotate(0deg);
+            }
+
+            25% {
+                transform: translateY(-20px) rotate(90deg);
+            }
+
+            50% {
+                transform: translateY(0) rotate(180deg);
+            }
+
+            75% {
+                transform: translateY(-10px) rotate(270deg);
+            }
+        }
+
         body {
-            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-            color: var(--fg-primary);
+            /* Hero Section Background from home.html */
+            background:
+                radial-gradient(ellipse at center, rgba(34, 139, 34, 0.05) 0%, transparent 70%),
+                linear-gradient(180deg, var(--bg) 0%, rgba(34, 139, 34, 0.02) 100%);
+            color: var(--fg);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             display: flex;
             align-items: center;
@@ -84,250 +129,103 @@
             padding: 0;
         }
 
-        /* Cricket Animation Background */
-        .cricket-field {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            z-index: 1;
-        }
-
-        .cricket-animation {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-        }
-
-        /* Cricket Stumps */
-        .stumps {
-            position: absolute;
-            right: 15%;
-            top: 50%;
-            transform: translateY(-50%);
-            display: flex;
-            gap: 4px;
-            opacity: 0.6;
-        }
-
-        .stump {
-            width: 8px;
-            height: 60px;
-            background: var(--cricket-stumps);
-            border-radius: 4px 4px 0 0;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        }
-
-        .bail {
-            position: absolute;
-            top: -6px;
-            left: -2px;
-            width: 32px;
-            height: 4px;
-            background: var(--cricket-stumps);
-            border-radius: 2px;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-        }
-
-        /* Cricket Ball */
-        .cricket-ball {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            background: var(--cricket-ball);
-            border-radius: 50%;
-            box-shadow:
-                inset -3px -3px 6px rgba(0, 0, 0, 0.3),
-                0 4px 12px rgba(0, 0, 0, 0.4);
-            opacity: 0;
-        }
-
-        .cricket-ball::before {
+        /* Cricket Field Pattern (adapted from .hero-section::before) */
+        body::before {
             content: '';
             position: absolute;
             top: 50%;
-            left: 2px;
-            right: 2px;
-            height: 1px;
-            background: #654321;
-            transform: translateY(-50%);
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            height: 100%;
+            background:
+                repeating-linear-gradient(90deg, transparent, transparent 49px, rgba(34, 139, 34, 0.03) 49px, rgba(34, 139, 34, 0.03) 50px),
+                repeating-linear-gradient(0deg, transparent, transparent 49px, rgba(34, 139, 34, 0.03) 49px, rgba(34, 139, 34, 0.03) 50px);
+            animation: stadiumPulse 8s ease-in-out infinite;
+            z-index: 0;
+            opacity: 0.5;
+            pointer-events: none;
         }
 
+        /* Cricket Ball Decoration (from home.html) */
+        .cricket-ball {
+            position: absolute;
+            top: 10%;
+            right: 5%;
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle at 30% 30%, #DC143C, #8B0000);
+            border-radius: 50%;
+            box-shadow:
+                inset -5px -5px 10px rgba(0, 0, 0, 0.3),
+                0 5px 20px rgba(220, 20, 60, 0.2);
+            animation: ballBounce 6s ease-in-out infinite;
+            z-index: 1;
+            opacity: 0.15;
+            pointer-events: none;
+        }
+
+        .cricket-ball::before,
         .cricket-ball::after {
             content: '';
             position: absolute;
-            top: 2px;
-            bottom: 2px;
+            width: 2px;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.3);
             left: 50%;
-            width: 1px;
-            background: #654321;
             transform: translateX(-50%);
         }
 
-        /* Ball Animation */
-        @keyframes ballFlight {
-            0% {
-                left: -5%;
-                top: 60%;
-                opacity: 1;
-                transform: scale(0.8) rotate(0deg);
-            }
-
-            25% {
-                left: 30%;
-                top: 30%;
-                transform: scale(1) rotate(90deg);
-            }
-
-            50% {
-                left: 60%;
-                top: 45%;
-                transform: scale(1.1) rotate(180deg);
-            }
-
-            75% {
-                left: 85%;
-                top: 48%;
-                transform: scale(1) rotate(270deg);
-            }
-
-            85% {
-                left: 95%;
-                top: 50%;
-                transform: scale(0.9) rotate(315deg);
-            }
-
-            100% {
-                left: 110%;
-                top: 50%;
-                opacity: 0;
-                transform: scale(0.7) rotate(360deg);
-            }
+        .cricket-ball::before {
+            transform: translateX(-50%) rotate(20deg);
         }
 
-        @keyframes stumpShake {
-
-            0%,
-            85% {
-                transform: translateY(-50%) rotate(0deg);
-            }
-
-            86% {
-                transform: translateY(-50%) rotate(-2deg);
-            }
-
-            87% {
-                transform: translateY(-50%) rotate(2deg);
-            }
-
-            88% {
-                transform: translateY(-50%) rotate(-1deg);
-            }
-
-            89% {
-                transform: translateY(-50%) rotate(1deg);
-            }
-
-            90%,
-            100% {
-                transform: translateY(-50%) rotate(0deg);
-            }
+        .cricket-ball::after {
+            transform: translateX(-50%) rotate(-20deg);
         }
 
-        @keyframes bailFall {
-
-            0%,
-            85% {
-                top: -6px;
-                opacity: 1;
-                transform: rotate(0deg);
-            }
-
-            86% {
-                top: -4px;
-                transform: rotate(5deg);
-            }
-
-            90% {
-                top: 10px;
-                transform: rotate(25deg);
-            }
-
-            95% {
-                top: 25px;
-                transform: rotate(45deg);
-            }
-
-            100% {
-                top: 40px;
-                opacity: 0;
-                transform: rotate(90deg);
-            }
-        }
-
-        /* Start animations */
-        .ball-animate {
-            animation: ballFlight 4s ease-in-out infinite;
-            animation-delay: 1s;
-        }
-
-        .stumps-animate {
-            animation: stumpShake 4s ease-in-out infinite;
-            animation-delay: 1s;
-        }
-
-        .bail-animate {
-            animation: bailFall 4s ease-in-out infinite;
-            animation-delay: 1s;
-        }
-
-        /* Floating Cricket Elements */
-        .floating-element {
+        /* Stumps Decoration (from home.html) */
+        .stumps-left,
+        .stumps-right {
             position: absolute;
-            opacity: 0.1;
-            animation: float 8s ease-in-out infinite;
+            bottom: 20%;
+            width: 4px;
+            height: 80px;
+            background: linear-gradient(180deg, #8B4513, #654321);
+            opacity: 0.08;
+            z-index: 1;
+            pointer-events: none;
         }
 
-        .floating-element:nth-child(1) {
-            top: 10%;
-            left: 10%;
-            animation-delay: 0s;
+        .stumps-left {
+            left: 8%;
+            transform: rotate(-5deg);
         }
 
-        .floating-element:nth-child(2) {
-            top: 20%;
-            left: 80%;
-            animation-delay: 2s;
+        .stumps-right {
+            right: 8%;
+            transform: rotate(5deg);
         }
 
-        .floating-element:nth-child(3) {
-            top: 70%;
-            left: 15%;
-            animation-delay: 4s;
+        .stumps-left::before,
+        .stumps-left::after,
+        .stumps-right::before,
+        .stumps-right::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(180deg, #8B4513, #654321);
         }
 
-        .floating-element:nth-child(4) {
-            top: 80%;
-            left: 75%;
-            animation-delay: 6s;
+        .stumps-left::before,
+        .stumps-right::before {
+            left: 12px;
         }
 
-        @keyframes float {
-
-            0%,
-            100% {
-                transform: translateY(0px) rotate(0deg);
-            }
-
-            33% {
-                transform: translateY(-15px) rotate(120deg);
-            }
-
-            66% {
-                transform: translateY(-10px) rotate(240deg);
-            }
+        .stumps-left::after,
+        .stumps-right::after {
+            left: 24px;
         }
 
         /* Theme Toggle */
@@ -348,7 +246,7 @@
             height: 50px;
             cursor: pointer;
             font-size: 1.25rem;
-            color: var(--fg-primary);
+            color: var(--fg);
             transition: var(--transition);
             display: flex;
             align-items: center;
@@ -361,6 +259,8 @@
         .theme-toggle:hover {
             transform: scale(1.1);
             box-shadow: 0 8px 25px var(--shadow-strong);
+            color: var(--accent);
+            border-color: var(--accent);
         }
 
         /* Main Container */
@@ -381,7 +281,7 @@
         .logo {
             font-size: 2.8rem;
             font-weight: 700;
-            color: var(--fg-primary);
+            color: var(--fg);
             margin-bottom: 1rem;
             display: flex;
             align-items: center;
@@ -392,7 +292,8 @@
 
         .logo-icon {
             font-size: 3.2rem;
-            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+            background: var(--gradient);
+            /* Using gradient from layout */
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
@@ -400,7 +301,7 @@
         }
 
         .logo-text {
-            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+            background: var(--gradient);
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
@@ -425,30 +326,36 @@
             }
         }
 
-        /* Login Card */
+        /* Login Card - Matched to dashboard-card style */
         .login-card {
             background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 20px;
-            padding: 2rem 2.5rem 2.5rem 2.5rem;
+            border: 2px solid var(--card-border);
+            /* Thicker border like dashboard */
+            border-radius: 24px;
+            /* More rounded */
+            padding: 2.5rem;
             box-shadow: 0 20px 60px var(--shadow-strong);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
             position: relative;
             overflow: hidden;
-            min-height: auto;
             width: 100%;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        /* Pitch Stripe Effect on Card */
         .login-card::before {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--accent), var(--accent-hover));
-            border-radius: 20px 20px 0 0;
+            width: 100%;
+            height: 6px;
+            background: repeating-linear-gradient(90deg,
+                    var(--accent) 0px,
+                    var(--accent) 20px,
+                    transparent 20px,
+                    transparent 40px);
+            opacity: 0.1;
+            /* Subtle always visible */
         }
 
         .card-header {
@@ -458,9 +365,10 @@
 
         .card-title {
             font-size: 1.8rem;
-            font-weight: 600;
-            color: var(--fg-primary);
+            font-weight: 700;
+            color: var(--fg);
             margin-bottom: 0.6rem;
+            letter-spacing: -0.01em;
         }
 
         .card-subtitle {
@@ -484,7 +392,6 @@
             align-items: center;
             gap: 0.75rem;
             animation: slideInDown 0.3s ease-out;
-            backdrop-filter: blur(10px);
         }
 
         @keyframes slideInDown {
@@ -511,12 +418,6 @@
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
-        .alert-info {
-            background: rgba(59, 130, 246, 0.15);
-            color: var(--accent);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-        }
-
         /* Form Styles */
         .login-form {
             display: flex;
@@ -531,8 +432,9 @@
         .form-label {
             display: block;
             font-size: 0.9rem;
-            font-weight: 500;
-            color: var(--fg-primary);
+            font-weight: 600;
+            /* Bolder label */
+            color: var(--fg);
             margin-bottom: 0.6rem;
         }
 
@@ -540,10 +442,11 @@
             width: 100%;
             padding: 1rem 1.2rem;
             padding-left: 3.2rem;
-            border: 1px solid var(--card-border);
+            border: 2px solid var(--card-border);
+            /* Matches card border */
             border-radius: 12px;
             background: var(--bg-secondary);
-            color: var(--fg-primary);
+            color: var(--fg);
             font-size: 1rem;
             transition: var(--transition);
             font-family: inherit;
@@ -553,7 +456,7 @@
         .form-input:focus {
             outline: none;
             border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            box-shadow: 0 0 0 4px var(--accent-light);
             background: var(--card-bg);
         }
 
@@ -582,7 +485,8 @@
             padding: 1.1rem;
             border: none;
             border-radius: 12px;
-            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+            background: var(--gradient);
+            /* Use gradient */
             color: white;
             font-size: 1.05rem;
             font-weight: 600;
@@ -595,26 +499,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-
-        .submit-btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-            transition: left 0.5s;
-        }
-
-        .submit-btn:hover::before {
-            left: 100%;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
 
         .submit-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            opacity: 0.95;
         }
 
         .submit-btn:active {
@@ -636,8 +527,9 @@
 
         .auth-link {
             color: var(--accent);
+            /* In dark mode accent is blue, in light it's dark grey */
             text-decoration: none;
-            font-weight: 500;
+            font-weight: 600;
             transition: var(--transition);
         }
 
@@ -652,190 +544,28 @@
             opacity: 0.7;
         }
 
-        .loading .submit-btn {
-            background: var(--fg-secondary);
-        }
-
-        /* Responsive Design */
+        /* Responsive */
         @media (max-width: 600px) {
             .auth-container {
-                max-width: 380px;
-                padding: 0 1rem;
-            }
-
-            .logo {
-                font-size: 2.3rem;
-            }
-
-            .logo-icon {
-                font-size: 2.8rem;
+                max-width: 90%;
             }
 
             .login-card {
-                padding: 1.8rem 2rem 2.2rem 2rem;
-            }
-
-            .card-title {
-                font-size: 1.6rem;
-            }
-
-            .form-input {
-                padding: 0.9rem 1rem;
-                padding-left: 3rem;
-                height: 48px;
-            }
-
-            .input-icon {
-                left: 1rem;
-                font-size: 1rem;
-            }
-
-            .submit-btn {
-                height: 50px;
-                font-size: 1rem;
-            }
-
-            .stumps {
-                right: 8%;
-                scale: 0.7;
-            }
-
-            .cricket-ball {
-                width: 16px;
-                height: 16px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .theme-controls {
-                top: 1rem;
-                right: 1rem;
-            }
-
-            .theme-toggle {
-                width: 45px;
-                height: 45px;
-            }
-
-            .auth-container {
-                max-width: 340px;
-                padding: 0 0.8rem;
-            }
-
-            .logo {
-                font-size: 2rem;
-            }
-
-            .logo-icon {
-                font-size: 2.4rem;
-            }
-
-            .login-card {
-                padding: 1.5rem 1.8rem 2rem 1.8rem;
-            }
-
-            .card-title {
-                font-size: 1.5rem;
-            }
-
-            .form-input {
-                padding: 0.8rem 0.9rem;
-                padding-left: 2.8rem;
-                height: 46px;
-            }
-
-            .input-icon {
-                left: 0.9rem;
-            }
-
-            .submit-btn {
-                height: 48px;
-            }
-
-            .stumps {
-                right: 5%;
-                scale: 0.6;
-            }
-
-            .cricket-ball {
-                width: 14px;
-                height: 14px;
-            }
-        }
-
-        @media (max-height: 700px) {
-            .logo-section {
-                margin-bottom: 2rem;
+                padding: 2rem;
             }
 
             .logo {
                 font-size: 2.2rem;
-                margin-bottom: 0.8rem;
             }
 
             .logo-icon {
                 font-size: 2.6rem;
             }
 
-            .login-card {
-                padding: 1.8rem 2.2rem 2.2rem 2.2rem;
-            }
-
-            .card-header {
-                margin-bottom: 1.5rem;
-            }
-
-            .login-form {
-                gap: 1.2rem;
-            }
-
-            .auth-footer {
-                margin-top: 1.5rem;
-            }
-        }
-
-        @media (max-height: 600px) {
-            .logo-section {
-                margin-bottom: 1.5rem;
-            }
-
-            .logo {
-                font-size: 2rem;
-                margin-bottom: 0.5rem;
-            }
-
-            .logo-icon {
-                font-size: 2.4rem;
-            }
-
-            .login-card {
-                padding: 1.5rem 2rem 2rem 2rem;
-            }
-
-            .card-header {
-                margin-bottom: 1.3rem;
-            }
-
-            .card-title {
-                font-size: 1.6rem;
-            }
-
-            .login-form {
-                gap: 1.1rem;
-            }
-
-            .form-input {
-                height: 48px;
-            }
-
-            .submit-btn {
-                height: 50px;
-                margin-top: 0.5rem;
-            }
-
-            .auth-footer {
-                margin-top: 1.3rem;
-                padding-top: 1.2rem;
+            .cricket-ball {
+                width: 40px;
+                height: 40px;
+                top: 5%;
             }
         }
     </style>
@@ -844,37 +574,23 @@
 <body>
     <!-- Theme Controls -->
     <div class="theme-controls">
-        <button class="theme-toggle" id="theme-toggle" title="Toggle Theme">🌙</button>
+        <button class="theme-toggle" id="theme-toggle" title="Toggle Theme">
+            <i class="fas fa-moon"></i>
+        </button>
     </div>
 
-    <!-- Cricket Field Background -->
-    <div class="cricket-field">
-        <div class="cricket-animation">
-            <!-- Cricket Ball -->
-            <div class="cricket-ball ball-animate"></div>
-
-            <!-- Cricket Stumps -->
-            <div class="stumps stumps-animate">
-                <div class="stump"></div>
-                <div class="stump"></div>
-                <div class="stump"></div>
-                <div class="bail bail-animate"></div>
-            </div>
-
-            <!-- Floating Cricket Elements -->
-            <div class="floating-element">🏏</div>
-            <div class="floating-element">⚾</div>
-            <div class="floating-element">🏆</div>
-            <div class="floating-element">🎯</div>
-        </div>
-    </div>
+    <!-- Decorative Elements (Home Theme) -->
+    <div class="cricket-ball"></div>
+    <div class="stumps-left"></div>
+    <div class="stumps-right"></div>
 
     <!-- Main Container -->
     <div class="auth-container">
         <!-- Logo Section -->
         <div class="logo-section">
             <div class="logo">
-                <i class="fa-solid fa-cricket-bat-ball logo-icon"></i>
+                <i class="fa-solid fa-baseball-ball logo-icon"></i>
+                <!-- Changed to baseball-ball to match home icon class -->
                 <span class="logo-text">SimCricketX</span>
             </div>
         </div>
@@ -882,7 +598,7 @@
         <!-- Login Card -->
         <div class="login-card">
             <div class="card-header">
-                <h1 class="card-title">Welcome Back!</h1>
+                <h1 class="card-title">Welcome Back</h1>
                 <p class="card-subtitle">Sign in to continue your cricket journey</p>
             </div>
 
@@ -934,134 +650,68 @@
     <script>
         // Theme Toggle Functionality
         const toggle = document.getElementById('theme-toggle');
+        const icon = toggle.querySelector('i');
         const root = document.documentElement;
 
         // Initialize theme
         const saved = localStorage.getItem('theme');
         if (saved) {
             root.setAttribute('data-theme', saved);
+            updateIcon(saved);
+        } else {
+            updateIcon('light');
         }
 
-        // Update toggle icon based on theme
-        function updateToggleIcon(theme) {
-            toggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        // Update toggle icon
+        function updateIcon(theme) {
+            icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         }
 
         // Theme toggle click handler
         toggle.onclick = () => {
-            const currentTheme = root.getAttribute('data-theme');
+            const currentTheme = root.getAttribute('data-theme') || 'light';
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             root.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
-            updateToggleIcon(newTheme);
+            updateIcon(newTheme);
         };
-
-        // Initialize theme independently (don't use localStorage)
-        window.addEventListener('DOMContentLoaded', () => {
-            // Start with light theme by default
-            updateToggleIcon('light');
-        });
 
         // Form Enhancement
         const loginForm = document.getElementById('loginForm');
         const submitBtn = document.getElementById('submitBtn');
 
         // Add loading state on form submit
-        loginForm.addEventListener('submit', function (e) {
-            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Signing In...';
-            submitBtn.disabled = true;
-            document.body.classList.add('loading');
-        });
+        if (loginForm) {
+            loginForm.addEventListener('submit', function (e) {
+                submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Signing In...';
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.8';
+                document.body.classList.add('loading');
+            });
+        }
 
         // Input focus effects
         document.querySelectorAll('.form-input').forEach(input => {
             input.addEventListener('focus', function () {
-                this.parentElement.parentElement.classList.add('focused');
+                this.parentElement.querySelector('.input-icon').style.color = 'var(--accent)';
             });
 
             input.addEventListener('blur', function () {
-                this.parentElement.parentElement.classList.remove('focused');
+                this.parentElement.querySelector('.input-icon').style.color = 'var(--fg-secondary)';
             });
         });
-
-        // Add ripple effect to submit button
-        submitBtn.addEventListener('click', function (e) {
-            const rect = this.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            const ripple = document.createElement('div');
-            ripple.style.cssText = `
-                position: absolute;
-                border-radius: 50%;
-                background: rgba(255, 255, 255, 0.3);
-                pointer-events: none;
-                transform: scale(0);
-                animation: ripple 0.6s ease-out;
-                left: ${x}px;
-                top: ${y}px;
-                width: 20px;
-                height: 20px;
-                margin-left: -10px;
-                margin-top: -10px;
-            `;
-
-            this.appendChild(ripple);
-
-            setTimeout(() => {
-                ripple.remove();
-            }, 600);
-        });
-
-        // Add CSS for ripple animation
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes ripple {
-                to {
-                    transform: scale(4);
-                    opacity: 0;
-                }
-            }
-        `;
-        document.head.appendChild(style);
 
         // Auto-dismiss flash messages after 5 seconds
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 document.querySelectorAll('.alert').forEach(el => {
+                    el.style.transition = 'opacity 0.3s, transform 0.3s';
                     el.style.opacity = '0';
                     el.style.transform = 'translateY(-20px)';
                     setTimeout(() => el.remove(), 300);
                 });
             }, 5000);
         });
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            // Alt + T to toggle theme
-            if (e.altKey && e.key === 't') {
-                e.preventDefault();
-                toggle.click();
-            }
-        });
-
-        // Cricket animation restart on ball completion
-        setInterval(() => {
-            const ball = document.querySelector('.cricket-ball');
-            const stumps = document.querySelector('.stumps');
-            const bail = document.querySelector('.bail');
-
-            // Restart animations
-            ball.style.animation = 'none';
-            stumps.style.animation = 'none';
-            bail.style.animation = 'none';
-
-            setTimeout(() => {
-                ball.style.animation = 'ballFlight 4s ease-in-out';
-                stumps.style.animation = 'stumpShake 4s ease-in-out';
-                bail.style.animation = 'bailFall 4s ease-in-out';
-            }, 100);
-        }, 5000);
     </script>
 </body>
 
