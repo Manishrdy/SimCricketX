@@ -56,3 +56,4 @@ UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: cha
 2026-01-23 17:59:46,538 - INFO - 127.0.0.1 - - [23/Jan/2026 17:59:46] "GET / HTTP/1.1" 200 -
 2026-01-23 17:59:46,604 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
 2026-01-23 17:59:46,604 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-23 17:59:46,718 - INFO - 127.0.0.1 - - [23/Jan/2026 17:59:46] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
