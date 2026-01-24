@@ -2598,6 +2598,15 @@ class Match:
 
         if self.current_over >= self.overs or self.wickets >= 10:
             if self.innings == 1:
+                # 🔧 USER REQUEST: Print team stats when all out
+                if self.wickets >= 10:
+                    print(f"\n🛑 All Out! {self.first_batting_team_name} {self.score}/10 in {self.current_over}.{self.current_ball} overs")
+                    not_out_batter = self.current_striker["name"] if not self.batsman_stats[self.current_striker["name"]]["wicket_type"] else self.current_non_striker["name"]
+                    not_out_score = self.batsman_stats[not_out_batter]["runs"]
+                    not_out_balls = self.batsman_stats[not_out_batter]["balls"]
+                    print(f"   Not Out: {not_out_batter} {not_out_score}*({not_out_balls})")
+                    print(f"   Total Score: {self.score}")
+
                 scorecard_data = self._generate_detailed_scorecard()
                 self.first_innings_score = self.score
                 self.target = self.score + 1
