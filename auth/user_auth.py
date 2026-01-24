@@ -23,14 +23,6 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 AUTH_DIR = os.path.join(PROJECT_ROOT, "auth")
 CREDENTIALS_FILE = os.path.join(AUTH_DIR, "credentials.json")
 
-print(f"[DEBUG] __file__ = {__file__}")
-print(f"[DEBUG] os.path.dirname(__file__) = {os.path.dirname(__file__)}")
-print(f"[DEBUG] PROJECT_ROOT = {PROJECT_ROOT}")
-print(f"[DEBUG] AUTH_DIR = {AUTH_DIR}")
-print(f"[DEBUG] CREDENTIALS_FILE = {CREDENTIALS_FILE}")
-print(f"[DEBUG] File exists = {os.path.exists(CREDENTIALS_FILE)}")
-print(f"[DEBUG] Current working directory = {os.getcwd()}")
-
 # Add these imports at the top of user_auth.py
 try:
     import fcntl
@@ -547,7 +539,7 @@ def load_credentials() -> dict:
         return credentials
 
     except json.JSONDecodeError:
-        print("[!] credentials.json is empty or corrupted. Reinitializing.")
+        logging.warning("[!] credentials.json is empty or corrupted. Reinitializing.")
         # Backup corrupted file
         backup_file = f"{CREDENTIALS_FILE}.corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         try:
@@ -607,7 +599,7 @@ def delete_user(email: str) -> bool:
         creds = load_credentials()
 
         if email not in creds:
-            print(f"❌ User not found: {email}")
+            logging.warning(f"User not found: {email}")
             return False
 
         user_data = creds[email]
@@ -632,7 +624,7 @@ def register_user(email: str, password: str) -> bool:
         creds = load_credentials()
 
         if email in creds:
-            print(f"[!] User already exists: {email}")
+            logging.warning(f"[!] User already exists: {email}")
             return False
 
         encrypted = encrypt_password(password)
@@ -669,8 +661,9 @@ def register_user(email: str, password: str) -> bool:
         }
         
         creds[email] = user_data
+        creds[email] = user_data
         save_credentials(creds)
-        print(f"[+] User registered successfully: {email}")
+        logging.info(f"[+] User registered successfully: {email}")
         return True
         
     except Exception as e:
@@ -682,12 +675,12 @@ def verify_user(email: str, password: str) -> bool:
     1. Check if user exists in local credentials.
     2. If exists, decrypt and compare password.
     """
-    print("Inside verify_user from user_auth.py")
+    # logging.debug("Inside verify_user from user_auth.py")
 
     try:
         creds = load_credentials()
         if email in creds:
-            print("Found user email: {}".format(email))
+            # logging.debug("Found user email: {}".format(email))
             
             user_data = creds[email]
             # Validate user data structure
@@ -697,17 +690,17 @@ def verify_user(email: str, password: str) -> bool:
             try:
                 decrypted = decrypt_password(user_data["encrypted_password"])
                 if decrypted == password:
-                    print(f"✅ Local login successful for: {email}")
+                    logging.info(f"Local login successful for: {email}")
                     return True
                 else:
-                    print("❌ Incorrect password.")
+                    logging.warning("Incorrect password.")
                     return False
                     
             except Exception as e:
-                print(f"[!] Error decrypting password: {e}")
+                logging.error(f"[!] Error decrypting password: {e}")
                 return False
 
-        print(f"❌ User not found: {email}")
+        logging.warning(f"User not found: {email}")
         return False
         
     except Exception as e:

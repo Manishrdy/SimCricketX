@@ -645,23 +645,15 @@
       <p class="page-subtitle">Build your dream cricket squad with custom players and strategies</p>
     </div>
 
-    <!-- Flash Messages -->
+    <!-- Error Messages -->
+    {% if error %}
     <div class="flash-messages">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-      {% for category, msg in messages %}
-      <div class="flash alert-{{category}}">
-        {% if category == 'success' %}
-        <i class="fa-solid fa-check-circle"></i>
-        {% else %}
+      <div class="flash alert-danger">
         <i class="fa-solid fa-exclamation-triangle"></i>
-        {% endif %}
-        {{msg}}
+        {{ error }}
       </div>
-      {% endfor %}
-      {% endif %}
-      {% endwith %}
     </div>
+    {% endif %}
 
     <!-- Main Team Card -->
     <div class="team-card">

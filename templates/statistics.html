@@ -1195,20 +1195,6 @@
             <p class="hero-subtitle">Comprehensive cricket analytics and player performance insights</p>
         </section>
 
-        <!-- Flash Messages -->
-        <div class="flash-container">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            {% for category, message in messages %}
-            <div class="alert alert-{{ category }}">
-                <i class="fa-solid fa-info-circle"></i>
-                <span>{{ message }}</span>
-            </div>
-            {% endfor %}
-            {% endif %}
-            {% endwith %}
-        </div>
-
         {% if not has_stats %}
         <!-- Upload Section -->
         <section class="upload-section">
