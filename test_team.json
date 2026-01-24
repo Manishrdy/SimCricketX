@@ -1,0 +1,122 @@
+[
+    {
+        "name": "David Warner",
+        "role": "Batsman",
+        "bat": 92,
+        "bowl": 10,
+        "field": 90,
+        "bhand": "Left",
+        "btype": "Leg spin",
+        "bhand2": "Right"
+    },
+    {
+        "name": "Travis Head",
+        "role": "Batsman",
+        "bat": 90,
+        "bowl": 40,
+        "field": 85,
+        "bhand": "Left",
+        "btype": "Off spin",
+        "bhand2": "Right"
+    },
+    {
+        "name": "Virat Kohli",
+        "role": "Batsman",
+        "bat": 98,
+        "bowl": 15,
+        "field": 95,
+        "bhand": "Right",
+        "btype": "Medium",
+        "bhand2": "Right"
+    },
+    {
+        "name": "Surya Kumar Yadav",
+        "role": "Batsman",
+        "bat": 94,
+        "bowl": 5,
+        "field": 85,
+        "bhand": "Right",
+        "btype": "Medium",
+        "bhand2": "Right"
+    },
+    {
+        "name": "Glenn Maxwell",
+        "role": "All-rounder",
+        "bat": 88,
+        "bowl": 75,
+        "field": 95,
+        "bhand": "Right",
+        "btype": "Off spin",
+        "bhand2": "Right"
+    },
+    {
+        "name": "MS Dhoni",
+        "role": "Wicketkeeper",
+        "bat": 90,
+        "bowl": 0,
+        "field": 98,
+        "bhand": "Right",
+        "btype": "Medium",
+        "bhand2": "Right"
+    },
+    {
+        "name": "Andre Russell",
+        "role": "All-rounder",
+        "bat": 89,
+        "bowl": 85,
+        "field": 88,
+        "bhand": "Right",
+        "btype": "Fast",
+        "bhand2": "Right"
+    },
+    {
+        "name": "Rashid Khan",
+        "role": "Bowler",
+        "bat": 65,
+        "bowl": 96,
+        "field": 90,
+        "bhand": "Right",
+        "btype": "Leg spin",
+        "bhand2": "Right"
+    },
+    {
+        "name": "Mitchell Starc",
+        "role": "Bowler",
+        "bat": 50,
+        "bowl": 95,
+        "field": 80,
+        "bhand": "Left",
+        "btype": "Fast",
+        "bhand2": "Left"
+    },
+    {
+        "name": "Manish Reddy",
+        "role": "Bowler",
+        "bat": 45,
+        "bowl": 92,
+        "field": 85,
+        "bhand": "Right",
+        "btype": "Fast-medium",
+        "bhand2": "Left"
+    },
+    {
+        "name": "Jasprit Bumrah",
+        "role": "Bowler",
+        "bat": 30,
+        "bowl": 98,
+        "field": 85,
+        "bhand": "Right",
+        "btype": "Fast",
+        "bhand2": "Right"
+    },
+    {
+        "name": "Ravindra Jadeja",
+        "role": "All-rounder",
+        "bat": 82,
+        "bowl": 88,
+        "field": 98,
+        "bhand": "Left",
+        "btype": "Off spin",
+        "bhand2": "Left"
+    }
+]

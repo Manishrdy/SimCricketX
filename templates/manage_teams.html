@@ -25,508 +25,401 @@
 
     <style>
         :root {
-            /* Light Theme - Minimalistic */
-            --bg: #ffffff;
-            --bg-secondary: #f8f9fa;
-            --fg: #1a1a1a;
-            --fg-secondary: #666666;
-            --card-bg: #ffffff;
-            --card-border: #e2e4e8;
-            --accent: #24292f;
-            --accent-hover: #000000;
-            --accent-light: #f3f4f6;
-            --shadow: rgba(0, 0, 0, 0.05);
-            --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
-            --nav-height: 64px;
-            --border-radius: 8px;
-            --transition: all 0.2s ease;
-            --gradient: linear-gradient(135deg, #24292f 0%, #4a5568 100%);
+            /* Premium Font Stack */
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+            /* Light Theme - Clean, Airy, Premium */
+            --bg-body: #f8fafc;
+            --bg-surface: #ffffff;
+            --bg-glass: rgba(255, 255, 255, 0.8);
+
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --text-on-accent: #ffffff;
+
+            --border-light: #e2e8f0;
+            --border-focused: #6366f1;
+
+            /* Brand Colors - Indigo/Violet Gradient */
+            --brand-primary: #4f46e5;
+            --brand-secondary: #818cf8;
+            --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
+
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
+
+            /* Shadows & Elevation */
+            --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --shadow-glow: 0 0 20px rgba(79, 70, 229, 0.3);
+
+            --radius-lg: 16px;
+            --radius-md: 10px;
+            --radius-sm: 6px;
+            --radius-full: 9999px;
+
+            --ease-elastic: cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         [data-theme="dark"] {
-            /* Dark Theme - Vibrant Slate with Neon Accents */
-            --bg: #0f172a;
-            --bg-secondary: #1e293b;
-            --fg: #e2e8f0;
-            --fg-secondary: #94a3b8;
-            --card-bg: #1e293b;
-            --card-border: #0ea5e9;
-            --accent: #06b6d4;
-            --accent-hover: #22d3ee;
-            --accent-light: rgba(6, 182, 212, 0.2);
-            --shadow: rgba(14, 165, 233, 0.2);
-            --shadow-lg: 0 20px 40px rgba(14, 165, 233, 0.3), 0 0 60px rgba(16, 185, 129, 0.1);
-            --gradient: linear-gradient(135deg, #06b6d4 0%, #10b981 100%);
+            /* Dark Theme - Deep Blue/Slate */
+            --bg-body: #020617;
+            --bg-surface: #0f172a;
+            --bg-glass: rgba(15, 23, 42, 0.7);
+
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+
+            --border-light: #1e293b;
+            --border-focused: #818cf8;
+
+            --brand-primary: #6366f1;
+            --brand-secondary: #a78bfa;
+            --brand-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+
+            --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
         }
 
-
-
-
+        /* Global Reset & Typography */
         * {
             box-sizing: border-box;
+            outline: none;
         }
 
         body {
-            background: var(--bg);
-            color: var(--fg);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            margin: 0;
+            padding: 0;
             line-height: 1.6;
-            font-size: 16px;
-            min-height: 100vh;
+            transition: background-color 0.3s ease;
+            overflow-x: hidden;
         }
 
-        /* Navigation Header */
+        h1,
+        h2,
+        h3,
+        h4 {
+            margin: 0;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        p {
+            margin: 0;
+        }
+
+        /* Layout Container */
+        .main-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 120px 2rem 100px;
+            /* Top padding for fixed header */
+        }
+
+        /* ─── Ultra-Premium Navbar ─── */
         .nav-header {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            background: var(--card-bg);
-            border-bottom: 1px solid var(--card-border);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            height: 72px;
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-light);
             z-index: 1000;
-            padding: 1rem 2rem;
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            align-items: center;
+            padding: 0 2rem;
+            transition: all 0.3s ease;
         }
 
-        .nav-left {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-        }
-
-        .home-link {
-            color: var(--accent);
-            font-size: 1.5rem;
-            text-decoration: none;
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            background: var(--bg-secondary);
-        }
-
-        .home-link:hover {
-            background: var(--accent-light);
-            transform: scale(1.1);
-        }
-
-        .page-title {
-            font-size: 1.75rem;
-            font-weight: 700;
-            background: var(--gradient-accent);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            margin: 0;
-        }
-
-        .nav-actions {
+        .nav-brand {
             display: flex;
             align-items: center;
             gap: 1rem;
+            font-weight: 700;
+            color: var(--text-main);
+            font-size: 1.25rem;
         }
 
-        .create-team-btn {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.75rem 1.25rem;
-            background: var(--gradient-accent);
-            color: white;
-            text-decoration: none;
-            border-radius: var(--border-radius-sm);
-            font-weight: 500;
-            font-size: 0.875rem;
-            transition: var(--transition);
-        }
-
-        .create-team-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
-        }
-
-        .theme-toggle {
-            background: var(--bg-secondary);
-            border: 1px solid var(--card-border);
-            border-radius: 50%;
-            width: 44px;
-            height: 44px;
-            cursor: pointer;
-            font-size: 1.2rem;
-            color: var(--fg);
-            transition: var(--transition);
+        .home-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-full);
+            background: transparent;
+            border: 1px solid var(--border-light);
             display: flex;
             align-items: center;
             justify-content: center;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: all 0.2s var(--ease-elastic);
+        }
+
+        .home-btn:hover {
+            background: var(--bg-surface);
+            color: var(--brand-primary);
+            border-color: var(--brand-primary);
+            transform: scale(1.05);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .theme-toggle {
+            background: transparent;
+            border: none;
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 8px;
+            color: var(--text-muted);
+            transition: transform 0.3s ease, color 0.3s ease;
         }
 
         .theme-toggle:hover {
-            background: var(--accent-light);
-            border-color: var(--accent);
-            transform: scale(1.05);
+            color: var(--text-main);
+            transform: rotate(15deg) scale(1.1);
         }
 
-        /* Main Content */
-        .main-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 120px 2rem 2rem 2rem;
+        .create-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--brand-gradient);
+            color: white;
+            padding: 0.6rem 1.25rem;
+            border-radius: var(--radius-full);
+            font-weight: 600;
+            text-decoration: none;
+            font-size: 0.9rem;
+            box-shadow: var(--shadow-glow);
+            transition: all 0.2s var(--ease-elastic);
         }
 
-        /* Stats Overview */
-        .stats-overview {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
+        .create-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px -4px rgba(79, 70, 229, 0.5);
+        }
+
+        /* ─── Page Header & Typography ─── */
+        .page-header {
             margin-bottom: 3rem;
+            animation: fadeUp 0.6s ease-out;
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+        }
+
+        .dynamic-title {
+            font-size: 3rem;
+            line-height: 1.1;
+            font-weight: 800;
+            background: var(--brand-gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.04em;
+        }
+
+        .page-subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin-top: 0.5rem;
+        }
+
+        /* ─── Stats Overview ─── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 4rem;
         }
 
         .stat-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius);
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
             padding: 1.5rem;
-            text-align: center;
-            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
 
         .stat-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 12px 32px var(--shadow-hover);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--brand-secondary);
         }
 
-        .stat-number {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--accent);
-            display: block;
-            margin-bottom: 0.5rem;
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--text-main);
+            line-height: 1;
         }
 
         .stat-label {
-            color: var(--fg-secondary);
-            font-size: 0.875rem;
-            font-weight: 500;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
         }
 
-        /* Flash Messages */
-        .flash-messages {
-            margin-bottom: 2rem;
+        .stat-icon {
+            position: absolute;
+            right: -10px;
+            bottom: -10px;
+            font-size: 5rem;
+            color: var(--border-light);
+            opacity: 0.5;
+            transform: rotate(-15deg);
+            z-index: 0;
         }
 
-        .flash {
-            padding: 1rem 1.25rem;
-            border-radius: var(--border-radius-sm);
-            margin-bottom: 1rem;
-            font-size: 0.875rem;
-            font-weight: 500;
+        /* ─── Teams Grid ─── */
+        .teams-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 2rem;
+        }
+
+        .glass-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            transition: all 0.3s var(--ease-elastic);
+            position: relative;
             display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            animation: slideInDown 0.3s ease-out;
+            flex-direction: column;
         }
 
-        @keyframes slideInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .glass-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--brand-primary);
         }
 
-        .alert-success {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-        }
-
-        .alert-danger {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
-        .flash.fade-out {
-            opacity: 0;
-            transform: translateY(-20px);
-        }
-
-        /* Teams Section */
-        .teams-section {
-            margin-bottom: 3rem;
-        }
-
-        .section-header {
+        .card-header {
+            padding: 1.5rem;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), transparent);
+            border-bottom: 1px solid var(--border-light);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 2rem;
         }
 
-        .section-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--fg);
+        .team-badge {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 1rem;
         }
 
-        .section-icon {
-            width: 36px;
-            height: 36px;
-            background: var(--accent-light);
-            color: var(--icon-color);
-            border-radius: var(--border-radius-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.125rem;
-        }
-
-        /* Teams Grid */
-        .teams-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        .team-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius);
-            padding: 0;
-            position: relative;
-            overflow: hidden;
-            transition: var(--transition);
-            cursor: pointer;
-
-        }
-
-        .team-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--gradient-accent);
-            transform: scaleX(0);
-            transition: var(--transition);
-        }
-
-        .team-card:hover::before {
-            transform: scaleX(1);
-        }
-
-        .team-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 20px 40px var(--shadow-hover);
-            border-color: var(--accent);
-        }
-
-        .team-header {
-            position: relative;
-            padding: 2rem 2rem 0 2rem;
-        }
-
-        .team-actions {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            display: flex;
-            gap: 0.5rem;
-            opacity: 0;
-            transition: var(--transition);
-        }
-
-        .team-card:hover .team-actions {
-            opacity: 1;
-        }
-
-        .action-btn {
-            width: 36px;
-            height: 36px;
+        .team-color-dot {
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.875rem;
-            transition: var(--transition);
-        }
-
-        .edit-btn {
-            background: var(--accent-light);
-            color: var(--accent);
-        }
-
-        .edit-btn:hover {
-            background: var(--accent);
-            color: white;
-            transform: scale(1.1);
-        }
-
-        .delete-btn {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--danger);
-        }
-
-        .delete-btn:hover {
-            background: var(--danger);
-            color: white;
-            transform: scale(1.1);
-        }
-
-        .team-info {
-            padding: 0 2rem 2rem 2rem;
+            box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--border-light);
         }
 
         .team-name {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--fg);
-            margin-bottom: 0.75rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-main);
         }
 
-        .team-color-swatch {
-            width: 24px;
-            height: 24px;
-            border-radius: 6px;
-            border: 2px solid var(--card-border);
-            transition: var(--transition);
+        .card-body {
+            padding: 1.5rem;
+            flex-grow: 1;
         }
 
-        .team-card:hover .team-color-swatch {
-            border-color: var(--accent);
-            transform: scale(1.1);
-        }
-
-        .team-details {
+        .info-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
+            gap: 1.5rem 1rem;
         }
 
-        .detail-item {
+        .info-item {
             display: flex;
             flex-direction: column;
             gap: 0.25rem;
         }
 
-        .detail-label {
+        .info-label {
             font-size: 0.75rem;
-            font-weight: 500;
-            color: var(--fg-secondary);
             text-transform: uppercase;
+            font-weight: 600;
+            color: var(--text-muted);
             letter-spacing: 0.05em;
         }
 
-        .detail-value {
-            font-size: 0.9375rem;
-            font-weight: 500;
-            color: var(--fg);
+        .info-value {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-main);
         }
 
-        .team-stats {
+        .card-footer {
+            padding: 1rem 1.5rem;
+            background: var(--bg-body);
+            border-top: 1px solid var(--border-light);
             display: flex;
             justify-content: space-between;
-            padding-top: 1rem;
-            border-top: 1px solid var(--card-border);
+            align-items: center;
         }
 
-        .team-stat {
-            text-align: center;
+        .action-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-light);
+            background: var(--bg-surface);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
         }
 
-        .team-stat-number {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--accent);
-            display: block;
+        .action-btn.edit:hover {
+            color: var(--brand-primary);
+            border-color: var(--brand-primary);
+            background: var(--bg-body);
         }
 
-        .team-stat-label {
-            font-size: 0.75rem;
-            color: var(--fg-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+        .action-btn.delete:hover {
+            color: var(--danger);
+            border-color: var(--danger);
+            background: rgba(239, 68, 68, 0.1);
         }
 
         /* Empty State */
         .empty-state {
+            grid-column: 1 / -1;
             text-align: center;
-            padding: 4rem 2rem;
-            background: var(--card-bg);
-            border: 2px dashed var(--card-border);
-            border-radius: var(--border-radius);
-            margin: 2rem 0;
+            padding: 6rem 2rem;
+            background: var(--bg-surface);
+            border: 2px dashed var(--border-light);
+            border-radius: var(--radius-lg);
+            color: var(--text-muted);
         }
 
         .empty-icon {
-            width: 80px;
-            height: 80px;
-            background: var(--bg-secondary);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 1.5rem;
-            font-size: 2rem;
-            color: var(--fg-secondary);
-        }
-
-        .empty-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--fg);
-            margin-bottom: 0.75rem;
-        }
-
-        .empty-description {
-            color: var(--fg-secondary);
-            margin-bottom: 2rem;
-            max-width: 400px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .empty-action {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 1rem 2rem;
-            background: var(--gradient-accent);
-            color: white;
-            text-decoration: none;
-            border-radius: var(--border-radius-sm);
-            font-weight: 500;
-            transition: var(--transition);
-        }
-
-        .empty-action:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+            font-size: 3rem;
+            color: var(--border-light);
+            margin-bottom: 1.5rem;
         }
 
         /* Modal */
@@ -537,187 +430,62 @@
             right: 0;
             bottom: 0;
             background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(4px);
-            display: none;
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 2000;
             opacity: 0;
-            transition: var(--transition);
+            pointer-events: none;
+            transition: opacity 0.3s ease;
         }
 
         .modal.active {
-            display: flex;
             opacity: 1;
+            pointer-events: auto;
         }
 
         .modal-content {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--border-radius);
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
             padding: 2.5rem;
-            text-align: center;
-            box-shadow: 0 20px 60px var(--shadow-strong);
-            max-width: 420px;
+            border-radius: var(--radius-lg);
+            max-width: 400px;
             width: 90%;
-            transform: scale(0.9);
-            transition: var(--transition);
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.95);
+            transition: transform 0.3s var(--ease-elastic);
         }
 
         .modal.active .modal-content {
             transform: scale(1);
         }
 
-        .modal-icon {
-            width: 64px;
-            height: 64px;
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--danger);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 1.5rem;
-            font-size: 1.5rem;
-        }
-
-        .modal-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--fg);
-            margin-bottom: 0.75rem;
-        }
-
-        .modal-description {
-            color: var(--fg-secondary);
-            margin-bottom: 2rem;
-            line-height: 1.5;
-        }
-
-        .modal-actions {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-        }
-
-        .modal-btn {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.75rem 1.5rem;
-            border-radius: var(--border-radius-sm);
-            font-weight: 500;
-            cursor: pointer;
-            transition: var(--transition);
-            border: none;
-            font-family: inherit;
-        }
-
-        .modal-btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-
-        .modal-btn-danger:hover {
-            background: #dc2626;
-            transform: translateY(-2px);
-        }
-
-        .modal-btn-secondary {
-            background: transparent;
-            color: var(--fg-secondary);
-            border: 1px solid var(--card-border);
-        }
-
-        .modal-btn-secondary:hover {
-            background: var(--bg-secondary);
-            border-color: var(--accent);
-        }
-
-        /* Responsive Design */
         @media (max-width: 768px) {
+            .page-header {
+                flex-direction: column;
+                align-items: start;
+                gap: 1rem;
+            }
+
+            .dynamic-title {
+                font-size: 2.5rem;
+            }
+
             .nav-header {
-                padding: 1rem;
-            }
-
-            .nav-actions {
-                gap: 0.5rem;
-            }
-
-            .create-team-btn {
-                padding: 0.75rem;
-                font-size: 0;
-            }
-
-            .create-team-btn i {
-                margin: 0;
+                padding: 0 1rem;
             }
 
             .main-content {
-                padding: 100px 1rem 2rem 1rem;
-            }
-
-            .page-title {
-                font-size: 1.5rem;
-            }
-
-            .teams-grid {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-            }
-
-            .team-details {
-                grid-template-columns: 1fr;
-            }
-
-            .stats-overview {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 1rem;
-            }
-
-            .section-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-
-            .modal-content {
-                padding: 2rem;
-                margin: 1rem;
-            }
-
-            .modal-actions {
-                flex-direction: column;
+                padding: 100px 1rem 4rem;
             }
         }
 
-        @media (max-width: 480px) {
-            .nav-left {
-                gap: 1rem;
-            }
-
-            .page-title {
-                font-size: 1.25rem;
-            }
-
-            .teams-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .team-card {
-                margin: 0;
-            }
-
-            .stats-overview {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Animation for cards */
-        @keyframes fadeInUp {
+        @keyframes fadeUp {
             from {
                 opacity: 0;
-                transform: translateY(30px);
+                transform: translateY(20px);
             }
 
             to {
@@ -725,79 +493,50 @@
                 transform: translateY(0);
             }
         }
-
-        .team-card {
-            animation: fadeInUp 0.6s ease-out;
-        }
-
-        .team-card:nth-child(1) {
-            animation-delay: 0.1s;
-        }
-
-        .team-card:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .team-card:nth-child(3) {
-            animation-delay: 0.3s;
-        }
-
-        .team-card:nth-child(4) {
-            animation-delay: 0.4s;
-        }
-
-        .team-card:nth-child(5) {
-            animation-delay: 0.5s;
-        }
-
-        .team-card:nth-child(6) {
-            animation-delay: 0.6s;
-        }
-
-        /* Theme-specific hover effects */
-        [data-theme="retro"] .team-card:hover {
-            box-shadow: 0 20px 40px rgba(234, 88, 12, 0.2);
-        }
-
-        [data-theme="cupcake"] .team-card:hover {
-            box-shadow: 0 20px 40px rgba(236, 72, 153, 0.2);
-        }
-
-        [data-theme="dracula"] .team-card:hover {
-            box-shadow: 0 20px 40px rgba(139, 233, 253, 0.2);
-        }
     </style>
 </head>
 
 <body>
     <!-- Navigation Header -->
     <header class="nav-header">
-        <div class="nav-left">
-            <a href="{{ url_for('home') }}" class="home-link" title="Home">
+        <div class="nav-brand">
+            <a href="{{ url_for('home') }}" class="home-btn" title="Home">
                 <i class="fa-solid fa-house"></i>
             </a>
-            <h1 class="page-title">Manage Teams</h1>
+            <span>SimCricket<span style="color:var(--brand-primary)">X</span></span>
         </div>
 
-        <div class="nav-actions">
-            <a href="/team/create" class="create-team-btn">
+        <div style="display:flex; gap:1rem; align-items:center;">
+            <a href="/team/create" class="create-btn">
                 <i class="fa-solid fa-plus"></i>
-                <span>Create Team</span>
+                <span class="desktop-only">New Team</span>
             </a>
-            <button class="theme-toggle" id="theme-toggle">🌙</button>
+            <button class="theme-toggle" id="theme-toggle">
+                <i class="fa-solid fa-moon"></i>
+            </button>
         </div>
     </header>
 
     <!-- Main Content -->
     <main class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div>
+                <h1 class="dynamic-title">Manage Teams</h1>
+                <p class="page-subtitle">Oversee your franchise, analyze squad depth, and fine-tune your lineup.</p>
+            </div>
+        </div>
+
         <!-- Stats Overview -->
-        <div class="stats-overview">
+        <div class="stats-grid">
             <div class="stat-card">
-                <span class="stat-number">{{ teams|length if teams else 0 }}</span>
-                <span class="stat-label">Total Teams</span>
+                <i class="fa-solid fa-layer-group stat-icon"></i>
+                <span class="stat-value">{{ teams|length if teams else 0 }}</span>
+                <span class="stat-label">Total Franchises</span>
             </div>
             <div class="stat-card">
-                <span class="stat-number">
+                <i class="fa-solid fa-users stat-icon"></i>
+                <span class="stat-value">
                     {% if teams %}
                     {{ (teams|map(attribute='players')|map('length')|sum // teams|length) }}
                     {% else %}
@@ -807,108 +546,69 @@
                 <span class="stat-label">Avg Squad Size</span>
             </div>
             <div class="stat-card">
-                <span class="stat-number">∞</span>
-                <span class="stat-label">Matches Possible</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-number">100%</span>
-                <span class="stat-label">Ready to Play</span>
+                <i class="fa-solid fa-trophy stat-icon"></i>
+                <span class="stat-value">Rank #1</span>
+                <span class="stat-label">Global Standing</span>
             </div>
         </div>
 
-        <!-- Teams Section -->
-        <div class="teams-section">
-            <div class="section-header">
-                <div class="section-title">
-                    <div class="section-icon">
-                        <i class="fa-solid fa-users"></i>
-                    </div>
-                    Your Cricket Teams
-                </div>
-            </div>
-
+        <!-- Teams Grid -->
+        <div class="teams-grid">
             {% if teams %}
-            <div class="teams-grid">
-                {% for t in teams %}
-                <div class="team-card" data-code="{{ t.short_code }}">
-                    <div class="team-header">
-                        <div class="team-actions">
-                            <button class="action-btn edit-btn" onclick="editTeam('{{ t.short_code }}')"
-                                title="Edit Team">
-                                <i class="fa-solid fa-pen"></i>
-                            </button>
-                            <button class="action-btn delete-btn" onclick="confirmDelete('{{ t.short_code }}')"
-                                title="Delete Team">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                        </div>
+            {% for t in teams %}
+            <div class="glass-card" data-code="{{ t.short_code }}">
+                <div class="card-header">
+                    <div class="team-badge">
+                        <div class="team-color-dot" style="background-color: {{ t.team_color }}"></div>
+                        <div class="team-name">{{t.team_name}}</div>
                     </div>
+                    <div style="font-family:var(--font-mono); font-weight:700; opacity:0.5;">{{ t.short_code }}</div>
+                </div>
 
-                    <div class="team-info">
-                        <div class="team-name">
-                            {{ t.team_name }}
-                            <div class="team-color-swatch" data-bg="{{ t.team_color }}"></div>
+                <div class="card-body">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Captain</span>
+                            <span class="info-value" style="color:var(--brand-primary);">{{ t.captain }}</span>
                         </div>
-
-                        <div class="team-details">
-                            <div class="detail-item">
-                                <span class="detail-label">Team Code</span>
-                                <span class="detail-value">{{ t.short_code }}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Home Ground</span>
-                                <span class="detail-value">{{ t.home_ground }}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Pitch Preference</span>
-                                <span class="detail-value">{{ t.pitch_preference }}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Captain</span>
-                                <span class="detail-value">{{ t.captain }}</span>
-                            </div>
+                        <div class="info-item">
+                            <span class="info-label">Home Ground</span>
+                            <span class="info-value">{{ t.home_ground }}</span>
                         </div>
-
-                        <div class="team-stats">
-                            <div class="team-stat">
-                                <span class="team-stat-number">{{ t.players|length }}</span>
-                                <span class="team-stat-label">Players</span>
-                            </div>
-                            <div class="team-stat">
-                                <span class="team-stat-number">{{ t.players|selectattr('role', 'equalto',
-                                    'Wicketkeeper')|list|length }}</span>
-                                <span class="team-stat-label">Keepers</span>
-                            </div>
-                            <div class="team-stat">
-                                <span class="team-stat-number">{{ (t.players|selectattr('role', 'equalto',
-                                    'Bowler')|list|length + t.players|selectattr('role', 'equalto',
-                                    'All-rounder')|list|length) }}</span>
-                                <span class="team-stat-label">Bowlers</span>
-                            </div>
-                            <div class="team-stat">
-                                <span class="team-stat-number">{{ t.players|selectattr('role', 'equalto',
-                                    'Batsman')|list|length }}</span>
-                                <span class="team-stat-label">Batsmen</span>
-                            </div>
+                        <div class="info-item">
+                            <span class="info-label">Squad Size</span>
+                            <span class="info-value">{{ t.players|length }} Players</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Pitch</span>
+                            <span class="info-value">{{ t.pitch_preference }}</span>
                         </div>
                     </div>
                 </div>
-                {% endfor %}
+
+                <div class="card-footer">
+                    <div style="display:flex; gap:0.5rem; font-size:0.8rem; color:var(--text-muted);">
+                        <i class="fa-solid fa-clock"></i> Updated just now
+                    </div>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button class="action-btn delete" onclick="confirmDelete('{{ t.short_code }}')"
+                            title="Delete Team">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
+            {% endfor %}
             {% else %}
             <div class="empty-state">
-                <div class="empty-icon">
-                    <i class="fa-solid fa-users-slash"></i>
-                </div>
-                <h2 class="empty-title">No Teams Created Yet</h2>
-                <p class="empty-description">
-                    Start building your cricket empire! Create your first team with custom players,
-                    assign roles, and get ready for exciting matches.
-                </p>
-                <a href="/team/create" class="empty-action">
-                    <i class="fa-solid fa-plus"></i>
-                    Create Your First Team
-                </a>
+                <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
+                <h2>No Teams Found</h2>
+                <p>It looks like you haven't created any teams yet. Start your journey by creating your first squad.</p>
+                <br>
+                <a href="/team/create" class="create-btn">Create First Team</a>
             </div>
             {% endif %}
         </div>
@@ -917,24 +617,22 @@
     <!-- Delete Confirmation Modal -->
     <div class="modal" id="confirmModal">
         <div class="modal-content">
-            <div class="modal-icon">
-                <i class="fa-solid fa-trash"></i>
+            <div style="font-size:3rem; color:var(--danger); margin-bottom:1rem;">
+                <i class="fa-solid fa-circle-exclamation"></i>
             </div>
-            <h2 class="modal-title">Delete Team</h2>
-            <p class="modal-description">
-                Are you sure you want to delete this team? This action cannot be undone and all team data will be
-                permanently lost.
+            <h2 style="margin-bottom:0.5rem;">Delete Team?</h2>
+            <p style="color:var(--text-muted); margin-bottom:2rem;">
+                This will permanently delete the team and all its players. This action cannot be undone.
             </p>
-            <form method="POST" action="/team/delete" style="display: contents;">
+            <form method="POST" action="/team/delete">
                 <input type="hidden" name="short_code" id="delete-code">
-                <div class="modal-actions">
-                    <button type="submit" class="modal-btn modal-btn-danger">
-                        <i class="fa-solid fa-trash"></i>
-                        Delete Team
-                    </button>
-                    <button type="button" class="modal-btn modal-btn-secondary" onclick="closeModal()">
-                        <i class="fa-solid fa-xmark"></i>
+                <div style="display:flex; gap:1rem; justify-content:center;">
+                    <button type="button" class="action-btn" style="width:auto; padding:0 1.5rem; border-radius:8px;"
+                        onclick="closeModal()">
                         Cancel
+                    </button>
+                    <button type="submit" class="create-btn" style="background:var(--danger); box-shadow:none;">
+                        Delete Forever
                     </button>
                 </div>
             </form>

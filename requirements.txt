@@ -13,3 +13,5 @@ cffi
 werkzeug
 pandas
 tabulate
+flask-sqlalchemy
+sqlalchemy

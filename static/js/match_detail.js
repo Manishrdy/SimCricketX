@@ -449,26 +449,43 @@ function enableReorderingMode() {
 
 // --- Simulation Loop ---
 
+function appendLog(message, type = 'normal') {
+    const logContainer = document.getElementById('commentary-log');
+    const div = document.createElement('div');
+    div.className = 'code-line';
+
+    // Determine token class based on message content regex or type
+    let tokenClass = 'token-string'; // Default orange
+    if (message.includes('OUT') || message.includes('Wicket')) tokenClass = 'token-error';
+    else if (message.includes('FOUR') || message.includes('SIX')) tokenClass = 'token-keyword';
+    else if (message.includes('End of Over') || message.includes('Innings')) tokenClass = 'token-comment';
+
+    div.innerHTML = `
+        <span class="${tokenClass}">${message}</span>
+    `;
+
+    logContainer.appendChild(div);
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
 function spinTossAndStartMatch() {
     const resultEl = document.getElementById('toss-result');
-    const commentaryLog = document.getElementById('commentary-log');
 
     fetch(`${window.location.pathname}/spin-toss`)
         .then(r => r.json())
         .then(d => {
             resultEl.textContent = `${d.toss_winner} chose to ${d.toss_decision}`;
-            commentaryLog.innerHTML += `<p>${d.toss_commentary}</p><br><br>`;
-            startMatch();
+            appendLog(`[TOSS] ${d.toss_commentary}`, 'comment');
+            setTimeout(startMatch, 1000);
         })
         .catch(err => {
-            commentaryLog.innerHTML += `<p style="color:red;">Toss error: ${err}</p>`;
+            appendLog(`[ERROR] Toss failed: ${err}`, 'error');
         });
 }
 
 function startMatch() {
     if (matchOver) return;
 
-    const commentaryLog = document.getElementById('commentary-log');
     const scoreElem = document.getElementById('score');
     const overInfoElem = document.getElementById('over-info');
 
@@ -476,14 +493,19 @@ function startMatch() {
         .then(res => res.json())
         .then(data => {
             if (data.error) {
-                commentaryLog.innerHTML += `<p style="color:red;">${data.error}</p>`;
+                appendLog(`[ERROR] ${data.error}`, 'error');
                 return;
+            }
+
+            // Update Scoreboard Header
+            if (data.score !== undefined) {
+                scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
+                overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
             }
 
             // End of First Innings
             if (data.innings_end && data.innings_number === 1) {
-                if (data.commentary) commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
-                commentaryLog.scrollTop = commentaryLog.scrollHeight;
+                if (data.commentary) appendLog(data.commentary, 'comment');
 
                 if (data.scorecard_data) {
                     showScorecard(data.scorecard_data, data);
@@ -501,8 +523,6 @@ function startMatch() {
 
                         // Just close and continue if already swapped or some other state
                         document.getElementById('scorecard-overlay').style.display = 'none';
-                        scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
-                        overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
                         setTimeout(startMatch, delay);
                     };
                     return; // Pause simulation
@@ -514,18 +534,16 @@ function startMatch() {
                 if (data.scorecard_data) {
                     isFinalScoreboard = true;
                     showScorecard(data.scorecard_data, data);
-
-                    // Archive if final
                     saveMatchArchive();
                 }
-                commentaryLog.innerHTML += `<p>${data.commentary || "<b>Match Over!</b>"}</p>`;
+                appendLog(data.commentary || "Match Concluded.", 'comment');
                 matchOver = true;
                 return;
             }
 
             // Match Tied / Super Over
             if (data.match_tied) {
-                commentaryLog.innerHTML += `<p style="color:green;"><b>MATCH TIED! Super Over Required!</b></p>`;
+                appendLog("MATCH TIED! Super Over Required!", 'keyword');
                 if (data.scorecard_data) {
                     setTimeout(() => {
                         showScorecard(data.scorecard_data, data);
@@ -537,18 +555,19 @@ function startMatch() {
 
                             // Show Super Over Options
                             setTimeout(() => {
-                                commentaryLog.innerHTML += `
-                                    <div style="margin: 1rem 0; text-align: center;">
-                                        <h3>Choose which team bats first in Super Over:</h3>
-                                        <button onclick="startSuperOver('home')" class="impact-btn primary" style="margin:0.5rem">
-                                            ${data.home_team} bats first
-                                        </button>
-                                        <button onclick="startSuperOver('away')" class="impact-btn primary" style="margin:0.5rem">
-                                            ${data.away_team} bats first
-                                        </button>
-                                    </div>
-                                 `;
-                                commentaryLog.scrollTop = commentaryLog.scrollHeight;
+                                appendLog("waiting for super over decision...", 'comment');
+                                const logContainer = document.getElementById('commentary-log');
+                                const div = document.createElement('div');
+                                div.className = 'code-line';
+                                div.innerHTML = `
+                                    <span class="line-number">${logLineCount++}</span>
+                                    <span class="token-keyword">
+                                        <button onclick="startSuperOver('home')" class="impact-btn primary" style="font-size:0.7rem; padding:2px 8px;">Option 1: ${data.home_team}</button>
+                                        <button onclick="startSuperOver('away')" class="impact-btn primary" style="font-size:0.7rem; padding:2px 8px;">Option 2: ${data.away_team}</button>
+                                    </span>
+                                `;
+                                logContainer.appendChild(div);
+                                logContainer.scrollTop = logContainer.scrollHeight;
                             }, 500);
                         };
                     }, 1500);
@@ -558,21 +577,10 @@ function startMatch() {
             }
 
             // Normal Ball
-            if (data.match_over) {
-                // Should have been caught by innings_end check but safety net
-                commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
-                matchOver = true;
-                return;
-            }
-
-            commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
-            commentaryLog.scrollTop = commentaryLog.scrollHeight;
-            scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
-            overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
-
+            appendLog(data.commentary);
             setTimeout(startMatch, delay);
         })
-        .catch(err => commentaryLog.innerHTML += `<p style="color:red;">Match error: ${err}</p>`);
+        .catch(err => appendLog(`[system_error] ${err}`, 'error'));
 }
 
 
