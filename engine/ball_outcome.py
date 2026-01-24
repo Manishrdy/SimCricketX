@@ -413,13 +413,15 @@ DEFAULT_SCORING_MATRIX = {
     # Sum: 1.00 ✅
 }
 
+
 def _validate_scoring_matrices():
     """Validate that all pitch scoring matrices sum to 1.0"""
-    print("🔍 Validating pitch scoring matrices:")
+    print("Validating pitch scoring matrices:")
     
     for pitch_type, matrix in PITCH_SCORING_MATRIX.items():
         total = sum(matrix.values())
-        print(f"  {pitch_type}: {total:.3f} {'✅' if abs(total - 1.0) < 0.001 else '❌'}")
+        status = "OK" if abs(total - 1.0) < 0.001 else "FAIL"
+        print(f"  {pitch_type}: {total:.3f} [{status}]")
         
         if abs(total - 1.0) >= 0.001:
             print(f"    Warning: {pitch_type} matrix doesn't sum to 1.0!")

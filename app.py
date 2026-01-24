@@ -580,11 +580,11 @@ def create_app():
             return render_template("login.html")
             
         except Exception as route_error:
-            flash("❌ System error during login!", "danger")
+            flash("[ERROR] System error during login!", "danger")
             return render_template("login.html")
             
         finally:
-            print(f"🏁🏁🏁 LOGIN SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+            print(f"[COMPLETE] LOGIN SESSION {debug_session_id} COMPLETED")
 
     @app.route("/delete_account", methods=["POST"])
     @login_required
@@ -2066,9 +2066,9 @@ if __name__ == "__main__":
         url = f"http://{HOST}:{PORT}"
 
         # Console info
-        print("✅ SimCricketX is up and running!")
-        print(f"🌐 Access the app at: {url}")
-        print("🔐 Press Ctrl+C to stop the server.\n")
+        print("[OK] SimCricketX is up and running!")
+        print(f"[WEB] Access the app at: {url}")
+        print("[INFO] Press Ctrl+C to stop the server.\n")
 
         # Cleanup tasks
         cleanup_temp_scorecard_images()
@@ -2088,5 +2088,6 @@ if __name__ == "__main__":
         app.run(host="0.0.0.0", port=7860, debug=False, use_reloader=False)
 
     except Exception as e:
-        print("❌ Failed to start SimCricketX:")
+        print("[ERROR] Failed to start SimCricketX:")
         traceback.print_exc()
+
