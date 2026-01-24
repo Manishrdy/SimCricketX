@@ -6,234 +6,208 @@
 <style>
     /* Hero Section */
     .hero-section {
+        position: relative;
         text-align: center;
+        padding: 5rem 0 4rem;
+        background: radial-gradient(circle at center, var(--accent-light) 0%, transparent 70%);
+        border-radius: var(--border-radius);
         margin-bottom: 3rem;
-        padding: 2rem 0;
     }
 
-    .hero-title {
-        font-size: 3rem;
-        font-weight: 700;
-        margin-bottom: 1rem;
-        background: linear-gradient(135deg, var(--accent), #8b5cf6);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-        line-height: 1.2;
-    }
-
-    .hero-subtitle {
-        font-size: 1.125rem;
-        color: var(--fg-secondary);
-        margin-bottom: 2rem;
-        max-width: 600px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-
-    .hero-stats {
-        display: flex;
-        justify-content: center;
-        gap: 2rem;
-        flex-wrap: wrap;
-    }
-
-    .stat-item {
-        text-align: center;
-    }
-
-    .stat-number {
-        font-size: 2rem;
-        font-weight: 700;
+    .hero-pretitle {
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
         color: var(--accent);
+        font-weight: 600;
+        margin-bottom: 1rem;
         display: block;
     }
 
+    .hero-title {
+        font-size: 3.5rem;
+        font-weight: 800;
+        margin-bottom: 1.5rem;
+        background: var(--gradient);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+    }
+
+    .hero-subtitle {
+        font-size: 1.25rem;
+        color: var(--fg-secondary);
+        max-width: 600px;
+        margin: 0 auto 3rem;
+        line-height: 1.6;
+    }
+
+    /* Stats Row */
+    .hero-stats {
+        display: inline-flex;
+        align-items: center;
+        gap: 3rem;
+        background: var(--card-bg);
+        padding: 1.5rem 2.5rem;
+        border-radius: 100px;
+        /* Pill shape */
+        border: 1px solid var(--card-border);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .stat-number {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--fg);
+        line-height: 1;
+        margin-bottom: 0.25rem;
+    }
+
     .stat-label {
-        font-size: 0.875rem;
+        font-size: 0.75rem;
         color: var(--fg-secondary);
         font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .stat-divider {
+        width: 1px;
+        height: 40px;
+        background: var(--card-border);
     }
 
     /* Dashboard Grid */
     .dashboard-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 2rem;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 2rem;
+        margin-bottom: 4rem;
     }
 
     .dashboard-card {
         background: var(--card-bg);
         border: 1px solid var(--card-border);
         border-radius: var(--border-radius);
-        padding: 1.5rem;
+        padding: 2rem;
         cursor: pointer;
         transition: var(--transition);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 240px;
         position: relative;
         overflow: hidden;
-        box-shadow: 0 2px 8px var(--shadow);
     }
 
-    .dashboard-card::before {
+    .dashboard-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--accent);
+    }
+
+    .dashboard-card::after {
         content: '';
         position: absolute;
         top: 0;
         left: 0;
-        right: 0;
-        height: 3px;
-        background: linear-gradient(135deg, var(--accent), #8b5cf6);
-        transform: scaleX(0);
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, var(--accent-light) 0%, transparent 100%);
+        opacity: 0;
         transition: var(--transition);
+        z-index: 0;
     }
 
-    .dashboard-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 20px var(--shadow-lg);
-        border-color: var(--accent);
+    .dashboard-card:hover::after {
+        opacity: 0.5;
     }
 
-    .dashboard-card:hover::before {
-        transform: scaleX(1);
+    .card-content {
+        position: relative;
+        z-index: 1;
     }
 
-    .card-header {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    .card-icon {
-        width: 48px;
-        height: 48px;
-        background: var(--accent-light);
-        color: var(--accent);
-        border-radius: 8px;
+    .card-icon-wrapper {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: var(--bg);
         display: flex;
         align-items: center;
         justify-content: center;
+        color: var(--accent);
         font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid var(--card-border);
+        transition: var(--transition);
+    }
+
+    .dashboard-card:hover .card-icon-wrapper {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
     }
 
     .card-title {
         font-size: 1.25rem;
-        font-weight: 600;
+        font-weight: 700;
         color: var(--fg);
-        margin: 0;
+        margin-bottom: 0.75rem;
     }
 
     .card-description {
         color: var(--fg-secondary);
-        font-size: 0.9375rem;
-        line-height: 1.5;
-        margin-bottom: 1rem;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin-bottom: 0;
     }
 
-    .card-footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-size: 0.875rem;
-        color: var(--fg-secondary);
-    }
-
-    .card-status {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #10b981;
-    }
-
-    .card-arrow {
-        color: var(--accent);
-        transition: var(--transition);
-    }
-
-    .dashboard-card:hover .card-arrow {
-        transform: translateX(4px);
-    }
-
-    /* Logout Button */
-    .logout-btn {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        color: var(--fg);
-        cursor: pointer;
-        transition: var(--transition);
+    .card-action {
+        position: relative;
+        z-index: 1;
+        margin-top: 1.5rem;
         display: flex;
         align-items: center;
         gap: 0.5rem;
         font-size: 0.9rem;
-    }
-
-    .logout-btn:hover {
-        background: var(--accent-light);
-        border-color: var(--accent);
+        font-weight: 600;
         color: var(--accent);
+        opacity: 0;
+        transform: translateX(-10px);
+        transition: all 0.3s ease;
     }
 
-    /* Animations */
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .dashboard-card {
-        animation: fadeInUp 0.5s ease-out;
-    }
-
-    .dashboard-card:nth-child(1) {
-        animation-delay: 0.1s;
-    }
-
-    .dashboard-card:nth-child(2) {
-        animation-delay: 0.2s;
-    }
-
-    .dashboard-card:nth-child(3) {
-        animation-delay: 0.3s;
-    }
-
-    .dashboard-card:nth-child(4) {
-        animation-delay: 0.4s;
-    }
-
-    .dashboard-card:nth-child(5) {
-        animation-delay: 0.5s;
-    }
-
-    .dashboard-card:nth-child(6) {
-        animation-delay: 0.6s;
+    .dashboard-card:hover .card-action {
+        opacity: 1;
+        transform: translateX(0);
     }
 
     /* Responsive */
     @media (max-width: 768px) {
         .hero-title {
-            font-size: 2rem;
+            font-size: 2.5rem;
         }
 
         .hero-stats {
-            gap: 1rem;
+            flex-direction: column;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            width: 100%;
+            border-radius: var(--border-radius);
         }
 
-        .dashboard-grid {
-            grid-template-columns: 1fr;
+        .stat-divider {
+            width: 40px;
+            height: 1px;
         }
     }
 </style>
@@ -242,26 +216,25 @@
 {% block content %}
 <!-- Hero Section -->
 <section class="hero-section">
+    <span class="hero-pretitle">Welcome Back</span>
     <h1 class="hero-title">SimCricketX Dashboard</h1>
-    <p class="hero-subtitle">Your complete cricket simulation platform - create teams, simulate matches, and track your
-        cricket journey</p>
+    <p class="hero-subtitle">Manage your teams, simulate matches, and analyze performance with our advanced cricket
+        simulation engine.</p>
 
     <div class="hero-stats">
         <div class="stat-item">
             <span class="stat-number">∞</span>
-            <span class="stat-label">Teams Created</span>
+            <span class="stat-label">Teams</span>
         </div>
-        <div class="stat-item">
-            <span class="stat-number">6</span>
-            <span class="stat-label">Features Available</span>
-        </div>
+        <div class="stat-divider"></div>
         <div class="stat-item">
             <span class="stat-number">{{ matches_simulated }}</span>
-            <span class="stat-label">Matches Simulated</span>
+            <span class="stat-label">Matches</span>
         </div>
+        <div class="stat-divider"></div>
         <div class="stat-item">
             <span class="stat-number">{{ total_visits }}</span>
-            <span class="stat-label">Total Visitors</span>
+            <span class="stat-label">Visitors</span>
         </div>
     </div>
 </section>
@@ -269,110 +242,82 @@
 <!-- Dashboard Grid -->
 <div class="dashboard-grid">
     <div class="dashboard-card" onclick="location.href='/team/create'">
-        <div class="card-header">
-            <div class="card-icon">
+        <div class="card-content">
+            <div class="card-icon-wrapper">
                 <i class="fa-solid fa-people-group"></i>
             </div>
             <h2 class="card-title">Create Team</h2>
+            <p class="card-description">Draft your dream squad. Customize player roles and build a winning composition.
+            </p>
         </div>
-        <p class="card-description">Build your dream cricket squad with custom players, assign roles, and create the
-            perfect team composition for your matches.</p>
-        <div class="card-footer">
-            <div class="card-status">
-                <div class="status-dot"></div>
-                <span>Ready to use</span>
-            </div>
-            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        <div class="card-action">
+            Start Building <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 
     <div class="dashboard-card" onclick="location.href='/teams/manage'">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fa-solid fa-pen-to-square"></i>
+        <div class="card-content">
+            <div class="card-icon-wrapper">
+                <i class="fa-solid fa-layer-group"></i>
             </div>
             <h2 class="card-title">Manage Teams</h2>
+            <p class="card-description">Edit strategies, update rosters, and keep your teams competition-ready.</p>
         </div>
-        <p class="card-description">View, edit, or delete your existing teams. Update player details, modify team
-            strategies, and keep your squads up to date.</p>
-        <div class="card-footer">
-            <div class="card-status">
-                <div class="status-dot"></div>
-                <span>Ready to use</span>
-            </div>
-            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        <div class="card-action">
+            View Teams <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 
     <div class="dashboard-card" onclick="location.href='/match/setup'">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fa-solid fa-people-roof"></i>
+        <div class="card-content">
+            <div class="card-icon-wrapper">
+                <i class="fa-solid fa-play"></i>
             </div>
             <h2 class="card-title">Simulate Match</h2>
+            <p class="card-description">Configure match settings, select teams, and watch the simulation unfold live.
+            </p>
         </div>
-        <p class="card-description">Set up exciting cricket matches between your teams. Pick playing XI, configure match
-            settings, and watch the simulation unfold.</p>
-        <div class="card-footer">
-            <div class="card-status">
-                <div class="status-dot"></div>
-                <span>Ready to use</span>
-            </div>
-            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        <div class="card-action">
+            Play Match <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 
     <div class="dashboard-card" onclick="location.href='/statistics'">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fa-solid fa-chart-simple"></i>
+        <div class="card-content">
+            <div class="card-icon-wrapper">
+                <i class="fa-solid fa-chart-pie"></i>
             </div>
             <h2 class="card-title">Statistics</h2>
+            <p class="card-description">Deep dive into analytics. Track player forms, match histories, and trends.</p>
         </div>
-        <p class="card-description">Comprehensive analytics and insights about your teams' performance, player
-            statistics, and match history trends.</p>
-        <div class="card-footer">
-            <div class="card-status">
-                <div class="status-dot"></div>
-                <span>Ready to use</span>
-            </div>
-            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        <div class="card-action">
+            View Stats <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 
     <div class="dashboard-card" onclick="location.href='/my-matches'">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fa-solid fa-folder-open"></i>
+        <div class="card-content">
+            <div class="card-icon-wrapper">
+                <i class="fa-solid fa-clock-rotate-left"></i>
             </div>
-            <h2 class="card-title">My Matches</h2>
+            <h2 class="card-title">Match History</h2>
+            <p class="card-description">Access your archives. Replay past matches and analyze the outcomes.</p>
         </div>
-        <p class="card-description">Access your complete match archive. Review past simulations, analyze results, and
-            relive your favorite cricket moments.</p>
-        <div class="card-footer">
-            <div class="card-status">
-                <div class="status-dot"></div>
-                <span>Ready to use</span>
-            </div>
-            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        <div class="card-action">
+            Go to Archive <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 
     <div class="dashboard-card" onclick="location.href='/logout'">
-        <div class="card-header">
-            <div class="card-icon">
-                <i class="fa-solid fa-right-from-bracket"></i>
+        <div class="card-content">
+            <div class="card-icon-wrapper">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i>
             </div>
             <h2 class="card-title">Logout</h2>
+            <p class="card-description">Securely sign out of your account. We'll keep your data safe.</p>
         </div>
-        <p class="card-description">Securely sign out of your SimCricketX account. Your data will be saved and ready
-            when you return.</p>
-        <div class="card-footer">
-            <div class="card-status">
-                <div class="status-dot"></div>
-                <span>Secure</span>
-            </div>
-            <i class="fa-solid fa-arrow-right card-arrow"></i>
+        <div class="card-action">
+            Sign Out <i class="fa-solid fa-arrow-right"></i>
         </div>
     </div>
 </div>

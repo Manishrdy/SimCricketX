@@ -12352,3 +12352,279 @@ jinja2.exceptions.TemplateSyntaxError: Missing end of comment tag
 2026-01-23 12:37:34,611 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
 2026-01-23 12:37:34,611 - INFO - 127.0.0.1 GET /static/css/match_detail.css
 2026-01-23 12:37:34,614 - INFO - 127.0.0.1 - - [23/Jan/2026 12:37:34] "[36mGET /static/css/match_detail.css HTTP/1.1[0m" 304 -
+2026-01-23 12:47:44,512 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-23 12:47:44,575 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-23 12:47:44,575 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-23 12:47:44,669 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:47:44,669 - INFO - 127.0.0.1 GET /
+2026-01-23 12:47:44,679 - INFO - 127.0.0.1 - - [23/Jan/2026 12:47:44] "GET / HTTP/1.1" 200 -
+2026-01-23 12:47:44,708 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:47:44,708 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-23 12:47:44,743 - INFO - 127.0.0.1 - - [23/Jan/2026 12:47:44] "GET /static/js/notifications.js HTTP/1.1" 200 -
+2026-01-23 12:49:04,170 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:04,171 - INFO - 127.0.0.1 GET /
+2026-01-23 12:49:04,172 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:04] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-23 12:49:04,178 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:04,178 - INFO - 127.0.0.1 GET /login
+2026-01-23 12:49:04,223 - ERROR - Exception on /login [GET]
+Traceback (most recent call last):
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\app.py", line 587, in login
+    print(f"🏁🏁🏁 LOGIN SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>
+2026-01-23 12:49:04,250 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:04] "[35m[1mGET /login?next=/ HTTP/1.1[0m" 500 -
+2026-01-23 12:49:04,290 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:04,291 - INFO - 127.0.0.1 GET /favicon.ico
+2026-01-23 12:49:04,292 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:04] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2026-01-23 12:49:08,514 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:08,514 - INFO - 127.0.0.1 GET /
+2026-01-23 12:49:08,516 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:08] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-23 12:49:08,521 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:08,521 - INFO - 127.0.0.1 GET /login
+2026-01-23 12:49:08,522 - ERROR - Exception on /login [GET]
+Traceback (most recent call last):
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\app.py", line 587, in login
+    print(f"🏁🏁🏁 LOGIN SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>
+2026-01-23 12:49:08,523 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:08] "[35m[1mGET /login?next=/ HTTP/1.1[0m" 500 -
+2026-01-23 12:49:15,563 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:15,563 - INFO - 127.0.0.1 GET /match_setup
+2026-01-23 12:49:15,565 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:15] "[33mGET /match_setup HTTP/1.1[0m" 404 -
+2026-01-23 12:49:24,646 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:24,647 - INFO - 127.0.0.1 GET /
+2026-01-23 12:49:24,648 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:24] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-23 12:49:24,654 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:24,656 - INFO - 127.0.0.1 GET /login
+2026-01-23 12:49:24,657 - ERROR - Exception on /login [GET]
+Traceback (most recent call last):
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\app.py", line 587, in login
+    print(f"🏁🏁🏁 LOGIN SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>
+2026-01-23 12:49:24,660 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:24] "[35m[1mGET /login?next=/ HTTP/1.1[0m" 500 -
+2026-01-23 12:49:36,530 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:36,531 - INFO - 127.0.0.1 GET /
+2026-01-23 12:49:36,534 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:36] "GET / HTTP/1.1" 200 -
+2026-01-23 12:49:36,577 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:36,578 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-23 12:49:36,580 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:36] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-23 12:49:39,453 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:39,454 - INFO - 127.0.0.1 GET /static/css/match_detail.css
+2026-01-23 12:49:39,457 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:39] "GET /static/css/match_detail.css HTTP/1.1" 200 -
+2026-01-23 12:49:44,336 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:44,337 - INFO - 127.0.0.1 GET /
+2026-01-23 12:49:44,339 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:44] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-23 12:49:44,344 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:44,346 - INFO - 127.0.0.1 GET /login
+2026-01-23 12:49:44,347 - ERROR - Exception on /login [GET]
+Traceback (most recent call last):
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\app.py", line 587, in login
+    print(f"🏁🏁🏁 LOGIN SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>
+2026-01-23 12:49:44,349 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:44] "[35m[1mGET /login?next=/ HTTP/1.1[0m" 500 -
+2026-01-23 12:49:51,914 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:51,914 - INFO - 127.0.0.1 GET /match-setup
+2026-01-23 12:49:51,914 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:51] "[33mGET /match-setup HTTP/1.1[0m" 404 -
+2026-01-23 12:49:55,170 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:55,172 - INFO - 127.0.0.1 GET /
+2026-01-23 12:49:55,174 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:55] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-23 12:49:55,177 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:49:55,179 - INFO - 127.0.0.1 GET /login
+2026-01-23 12:49:55,180 - ERROR - Exception on /login [GET]
+Traceback (most recent call last):
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\app.py", line 587, in login
+    print(f"🏁🏁🏁 LOGIN SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>
+2026-01-23 12:49:55,181 - INFO - 127.0.0.1 - - [23/Jan/2026 12:49:55] "[35m[1mGET /login?next=/ HTTP/1.1[0m" 500 -
+2026-01-23 12:50:02,898 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:50:02,899 - INFO - 127.0.0.1 GET /match_detail
+2026-01-23 12:50:02,899 - INFO - 127.0.0.1 - - [23/Jan/2026 12:50:02] "[33mGET /match_detail HTTP/1.1[0m" 404 -
+2026-01-23 12:50:20,180 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:50:20,180 - INFO - 127.0.0.1 GET /
+2026-01-23 12:50:20,182 - INFO - 127.0.0.1 - - [23/Jan/2026 12:50:20] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-23 12:50:20,187 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 12:50:20,188 - INFO - 127.0.0.1 GET /login
+2026-01-23 12:50:20,189 - ERROR - Exception on /login [GET]
+Traceback (most recent call last):
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\app.py", line 587, in login
+    print(f"🏁🏁🏁 LOGIN SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>
+2026-01-23 12:50:20,191 - INFO - 127.0.0.1 - - [23/Jan/2026 12:50:20] "[35m[1mGET /login?next=/ HTTP/1.1[0m" 500 -
+2026-01-23 13:00:56,297 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-23 13:00:56,394 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-23 13:00:56,394 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-23 13:00:56,553 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:00:56,553 - INFO - 127.0.0.1 GET /
+2026-01-23 13:00:56,557 - INFO - 127.0.0.1 - - [23/Jan/2026 13:00:56] "GET / HTTP/1.1" 200 -
+2026-01-23 13:00:56,585 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:00:56,585 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-23 13:00:56,588 - INFO - 127.0.0.1 - - [23/Jan/2026 13:00:56] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-23 13:01:11,924 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:01:11,925 - INFO - 127.0.0.1 GET /
+2026-01-23 13:01:11,927 - INFO - 127.0.0.1 - - [23/Jan/2026 13:01:11] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-23 13:01:11,932 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:01:11,933 - INFO - 127.0.0.1 GET /login
+2026-01-23 13:01:11,935 - ERROR - Exception on /login [GET]
+Traceback (most recent call last):
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\app.py", line 587, in login
+    print(f"[COMPLETE] LOGIN SESSION {debug_session_id} COMPLETED")
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>
+2026-01-23 13:01:11,936 - INFO - 127.0.0.1 - - [23/Jan/2026 13:01:11] "[35m[1mGET /login?next=/ HTTP/1.1[0m" 500 -
+2026-01-23 13:01:11,971 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:01:11,972 - INFO - 127.0.0.1 GET /favicon.ico
+2026-01-23 13:01:11,972 - INFO - 127.0.0.1 - - [23/Jan/2026 13:01:11] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2026-01-23 13:01:23,401 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:01:23,401 - INFO - 127.0.0.1 GET /login
+2026-01-23 13:01:23,403 - ERROR - Exception on /login [GET]
+Traceback (most recent call last):
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\app.py", line 587, in login
+    print(f"[COMPLETE] LOGIN SESSION {debug_session_id} COMPLETED")
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>
+2026-01-23 13:01:23,404 - INFO - 127.0.0.1 - - [23/Jan/2026 13:01:23] "[35m[1mGET /login HTTP/1.1[0m" 500 -
+2026-01-23 13:01:27,534 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:01:27,535 - INFO - 127.0.0.1 GET /
+2026-01-23 13:01:27,537 - INFO - 127.0.0.1 - - [23/Jan/2026 13:01:27] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-23 13:01:27,545 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:01:27,545 - INFO - 127.0.0.1 GET /login
+2026-01-23 13:01:27,546 - ERROR - Exception on /login [GET]
+Traceback (most recent call last):
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\app.py", line 587, in login
+    print(f"[COMPLETE] LOGIN SESSION {debug_session_id} COMPLETED")
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>
+2026-01-23 13:01:27,546 - INFO - 127.0.0.1 - - [23/Jan/2026 13:01:27] "[35m[1mGET /login?next=/ HTTP/1.1[0m" 500 -
+2026-01-23 13:01:33,066 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:01:33,067 - INFO - 127.0.0.1 GET /register
+2026-01-23 13:01:33,215 - ERROR - Exception on /register [GET]
+Traceback (most recent call last):
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\app.py", line 483, in register
+    print(f"🏁🏁🏁 REGISTRATION SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+  File "C:\Users\manis\AppData\Local\Programs\Python\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>
+2026-01-23 13:01:33,216 - INFO - 127.0.0.1 - - [23/Jan/2026 13:01:33] "[35m[1mGET /register HTTP/1.1[0m" 500 -
+2026-01-23 13:02:27,398 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-23 13:02:27,491 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-23 13:02:27,491 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-23 13:02:27,592 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:02:27,594 - INFO - 127.0.0.1 GET /
+2026-01-23 13:02:27,597 - INFO - 127.0.0.1 - - [23/Jan/2026 13:02:27] "GET / HTTP/1.1" 200 -
+2026-01-23 13:02:27,632 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:02:27,632 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-23 13:02:27,635 - INFO - 127.0.0.1 - - [23/Jan/2026 13:02:27] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-23 13:02:42,303 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:02:42,303 - INFO - 127.0.0.1 GET /
+2026-01-23 13:02:42,306 - INFO - 127.0.0.1 - - [23/Jan/2026 13:02:42] "GET / HTTP/1.1" 200 -
+2026-01-23 13:02:42,346 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:02:42,346 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-23 13:02:42,350 - INFO - 127.0.0.1 - - [23/Jan/2026 13:02:42] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-23 13:02:43,066 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:02:43,066 - INFO - 127.0.0.1 GET /
+2026-01-23 13:02:43,071 - INFO - 127.0.0.1 - - [23/Jan/2026 13:02:43] "GET / HTTP/1.1" 200 -
+2026-01-23 13:02:43,117 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-23 13:02:43,119 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-23 13:02:43,122 - INFO - 127.0.0.1 - - [23/Jan/2026 13:02:43] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -

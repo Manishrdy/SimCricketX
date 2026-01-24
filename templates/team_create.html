@@ -61,7 +61,7 @@
       --icon-color: #60a5fa;
     }
 
-    }
+
 
     * {
       box-sizing: border-box;
@@ -959,13 +959,31 @@
         .filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper')
         .forEach(c => {
           const name = c.querySelector('[name=player_name]').value;
-          wk.innerHTML += `<option>${name}</option>`;
         });
     }
+  </script>
 
-    const EDIT_MODE = {{ 'true' if edit else 'false' }};
-    const TEAM_DATA = {{ team | tojson | safe if edit else 'null' }};
+  <!-- Data Injection -->
+  <script id="edit-mode-data" type="application/json">
+      {{ 'true' if edit else 'false' }}
+  </script>
+  <script id="team-data-json" type="application/json">
+      {{ team | tojson | safe if edit else 'null' }}
+    </script>
 
+  <script>
+    const EDIT_MODE = JSON.parse(document.getElementById('edit-mode-data').textContent);
+    let TEAM_DATA = null;
+    try {
+      TEAM_DATA = JSON.parse(document.getElementById('team-data-json').textContent);
+    } catch (e) {
+      console.error("Failed to parse team data", e);
+    }
+  </script>
+
+
+
+  <script>
     // Add one player card
     function addPlayer(data) {
       if (container.children.length >= MAX) return;
@@ -1020,10 +1038,8 @@
       let roles = [];
       if (![...container.children].some(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper'))
         roles.push("Wicketkeeper");
-      while (roles.filter(r => r !== "Wicketkeeper" && r !== "Batsman").length < 6)
-        roles.push(rand(["Bowler", "All-rounder"]));
-      while (roles.length < needed) roles.push(rand(ROLES));
-      roles = roles.sort(() => Math.random() - 0.5);
+      while (roles.filter(r => r !== "Wicketkeeper" && r !== "Batsman").length < 6) roles.push(rand(["Bowler", "All-rounder"
+      ])); while (roles.length < needed) roles.push(rand(ROLES)); roles = roles.sort(() => Math.random() - 0.5);
 
       roles.forEach(r => {
         const data = {
