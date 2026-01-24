@@ -886,25 +886,15 @@
         <p class="card-subtitle">Join the premier cricket simulation platform</p>
       </div>
 
-      <!-- Flash Messages -->
+      <!-- Error Messages -->
+      {% if error %}
       <div class="flash-messages">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category }}">
-          {% if category == 'success' %}
-          <i class="fa-solid fa-check-circle"></i>
-          {% elif category == 'danger' %}
+        <div class="alert alert-danger">
           <i class="fa-solid fa-exclamation-triangle"></i>
-          {% else %}
-          <i class="fa-solid fa-info-circle"></i>
-          {% endif %}
-          <span>{{ message }}</span>
+          <span>{{ error }}</span>
         </div>
-        {% endfor %}
-        {% endif %}
-        {% endwith %}
       </div>
+      {% endif %}
 
       <!-- Registration Form -->
       <form class="register-form" method="POST" action="/register" id="registerForm">

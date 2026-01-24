@@ -5,19 +5,21 @@
     <script>
         // Login page has independent theme system - don't inherit from localStorage
     </script>
-    
+
     <meta charset="UTF-8">
     <title>SimCricketX - Login</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    
+
     <!-- Modern CSS Reset -->
     <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
-    
+
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    
+
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
 
     <style>
         :root {
@@ -64,7 +66,8 @@
             box-sizing: border-box;
         }
 
-        html, body {
+        html,
+        body {
             height: 100%;
             overflow: hidden;
         }
@@ -135,7 +138,7 @@
             height: 20px;
             background: var(--cricket-ball);
             border-radius: 50%;
-            box-shadow: 
+            box-shadow:
                 inset -3px -3px 6px rgba(0, 0, 0, 0.3),
                 0 4px 12px rgba(0, 0, 0, 0.4);
             opacity: 0;
@@ -171,26 +174,31 @@
                 opacity: 1;
                 transform: scale(0.8) rotate(0deg);
             }
+
             25% {
                 left: 30%;
                 top: 30%;
                 transform: scale(1) rotate(90deg);
             }
+
             50% {
                 left: 60%;
                 top: 45%;
                 transform: scale(1.1) rotate(180deg);
             }
+
             75% {
                 left: 85%;
                 top: 48%;
                 transform: scale(1) rotate(270deg);
             }
+
             85% {
                 left: 95%;
                 top: 50%;
                 transform: scale(0.9) rotate(315deg);
             }
+
             100% {
                 left: 110%;
                 top: 50%;
@@ -200,34 +208,60 @@
         }
 
         @keyframes stumpShake {
-            0%, 85% { transform: translateY(-50%) rotate(0deg); }
-            86% { transform: translateY(-50%) rotate(-2deg); }
-            87% { transform: translateY(-50%) rotate(2deg); }
-            88% { transform: translateY(-50%) rotate(-1deg); }
-            89% { transform: translateY(-50%) rotate(1deg); }
-            90%, 100% { transform: translateY(-50%) rotate(0deg); }
+
+            0%,
+            85% {
+                transform: translateY(-50%) rotate(0deg);
+            }
+
+            86% {
+                transform: translateY(-50%) rotate(-2deg);
+            }
+
+            87% {
+                transform: translateY(-50%) rotate(2deg);
+            }
+
+            88% {
+                transform: translateY(-50%) rotate(-1deg);
+            }
+
+            89% {
+                transform: translateY(-50%) rotate(1deg);
+            }
+
+            90%,
+            100% {
+                transform: translateY(-50%) rotate(0deg);
+            }
         }
 
         @keyframes bailFall {
-            0%, 85% { 
-                top: -6px; 
-                opacity: 1; 
+
+            0%,
+            85% {
+                top: -6px;
+                opacity: 1;
                 transform: rotate(0deg);
             }
-            86% { 
-                top: -4px; 
+
+            86% {
+                top: -4px;
                 transform: rotate(5deg);
             }
-            90% { 
-                top: 10px; 
+
+            90% {
+                top: 10px;
                 transform: rotate(25deg);
             }
-            95% { 
-                top: 25px; 
+
+            95% {
+                top: 25px;
                 transform: rotate(45deg);
             }
-            100% { 
-                top: 40px; 
+
+            100% {
+                top: 40px;
                 opacity: 0;
                 transform: rotate(90deg);
             }
@@ -256,15 +290,44 @@
             animation: float 8s ease-in-out infinite;
         }
 
-        .floating-element:nth-child(1) { top: 10%; left: 10%; animation-delay: 0s; }
-        .floating-element:nth-child(2) { top: 20%; left: 80%; animation-delay: 2s; }
-        .floating-element:nth-child(3) { top: 70%; left: 15%; animation-delay: 4s; }
-        .floating-element:nth-child(4) { top: 80%; left: 75%; animation-delay: 6s; }
+        .floating-element:nth-child(1) {
+            top: 10%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .floating-element:nth-child(2) {
+            top: 20%;
+            left: 80%;
+            animation-delay: 2s;
+        }
+
+        .floating-element:nth-child(3) {
+            top: 70%;
+            left: 15%;
+            animation-delay: 4s;
+        }
+
+        .floating-element:nth-child(4) {
+            top: 80%;
+            left: 75%;
+            animation-delay: 6s;
+        }
 
         @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(0deg); }
-            33% { transform: translateY(-15px) rotate(120deg); }
-            66% { transform: translateY(-10px) rotate(240deg); }
+
+            0%,
+            100% {
+                transform: translateY(0px) rotate(0deg);
+            }
+
+            33% {
+                transform: translateY(-15px) rotate(120deg);
+            }
+
+            66% {
+                transform: translateY(-10px) rotate(240deg);
+            }
         }
 
         /* Theme Toggle */
@@ -344,9 +407,22 @@
         }
 
         @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-            40% { transform: translateY(-10px); }
-            60% { transform: translateY(-5px); }
+
+            0%,
+            20%,
+            50%,
+            80%,
+            100% {
+                transform: translateY(0);
+            }
+
+            40% {
+                transform: translateY(-10px);
+            }
+
+            60% {
+                transform: translateY(-5px);
+            }
         }
 
         /* Login Card */
@@ -416,6 +492,7 @@
                 opacity: 0;
                 transform: translateY(-20px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -775,7 +852,7 @@
         <div class="cricket-animation">
             <!-- Cricket Ball -->
             <div class="cricket-ball ball-animate"></div>
-            
+
             <!-- Cricket Stumps -->
             <div class="stumps stumps-animate">
                 <div class="stump"></div>
@@ -783,7 +860,7 @@
                 <div class="stump"></div>
                 <div class="bail bail-animate"></div>
             </div>
-            
+
             <!-- Floating Cricket Elements -->
             <div class="floating-element">🏏</div>
             <div class="floating-element">⚾</div>
@@ -809,25 +886,15 @@
                 <p class="card-subtitle">Sign in to continue your cricket journey</p>
             </div>
 
-            <!-- Flash Messages -->
+            <!-- Error Messages -->
+            {% if error %}
             <div class="flash-messages">
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">
-                        {% if category == 'success' %}
-                        <i class="fa-solid fa-check-circle"></i>
-                        {% elif category == 'danger' %}
-                        <i class="fa-solid fa-exclamation-triangle"></i>
-                        {% else %}
-                        <i class="fa-solid fa-info-circle"></i>
-                        {% endif %}
-                        <span>{{ message }}</span>
-                    </div>
-                    {% endfor %}
-                {% endif %}
-                {% endwith %}
+                <div class="alert alert-danger">
+                    <i class="fa-solid fa-exclamation-triangle"></i>
+                    <span>{{ error }}</span>
+                </div>
             </div>
+            {% endif %}
 
             <!-- Login Form -->
             <form class="login-form" method="POST" action="/login" id="loginForm">
@@ -835,15 +902,8 @@
                     <label for="email" class="form-label">Email Address</label>
                     <div style="position: relative;">
                         <i class="fa-solid fa-envelope input-icon"></i>
-                        <input 
-                            type="email" 
-                            id="email"
-                            name="email" 
-                            class="form-input" 
-                            placeholder="Enter your email"
-                            required 
-                            autofocus
-                        >
+                        <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email"
+                            required autofocus>
                     </div>
                 </div>
 
@@ -851,14 +911,8 @@
                     <label for="password" class="form-label">Password</label>
                     <div style="position: relative;">
                         <i class="fa-solid fa-lock input-icon"></i>
-                        <input 
-                            type="password" 
-                            id="password"
-                            name="password" 
-                            class="form-input" 
-                            placeholder="Enter your password"
-                            required
-                        >
+                        <input type="password" id="password" name="password" class="form-input"
+                            placeholder="Enter your password" required>
                     </div>
                 </div>
 
@@ -870,7 +924,7 @@
             <!-- Footer -->
             <div class="auth-footer">
                 <p>
-                    Don't have an account? 
+                    Don't have an account?
                     <a href="/register" class="auth-link">Create one here</a>
                 </p>
             </div>
@@ -881,18 +935,18 @@
         // Theme Toggle Functionality
         const toggle = document.getElementById('theme-toggle');
         const root = document.documentElement;
-        
+
         // Initialize theme
         const saved = localStorage.getItem('theme');
         if (saved) {
             root.setAttribute('data-theme', saved);
         }
-        
+
         // Update toggle icon based on theme
         function updateToggleIcon(theme) {
             toggle.textContent = theme === 'dark' ? '☀️' : '🌙';
         }
-        
+
         // Theme toggle click handler
         toggle.onclick = () => {
             const currentTheme = root.getAttribute('data-theme');
@@ -913,7 +967,7 @@
         const submitBtn = document.getElementById('submitBtn');
 
         // Add loading state on form submit
-        loginForm.addEventListener('submit', function(e) {
+        loginForm.addEventListener('submit', function (e) {
             submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Signing In...';
             submitBtn.disabled = true;
             document.body.classList.add('loading');
@@ -921,21 +975,21 @@
 
         // Input focus effects
         document.querySelectorAll('.form-input').forEach(input => {
-            input.addEventListener('focus', function() {
+            input.addEventListener('focus', function () {
                 this.parentElement.parentElement.classList.add('focused');
             });
-            
-            input.addEventListener('blur', function() {
+
+            input.addEventListener('blur', function () {
                 this.parentElement.parentElement.classList.remove('focused');
             });
         });
 
         // Add ripple effect to submit button
-        submitBtn.addEventListener('click', function(e) {
+        submitBtn.addEventListener('click', function (e) {
             const rect = this.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            
+
             const ripple = document.createElement('div');
             ripple.style.cssText = `
                 position: absolute;
@@ -951,9 +1005,9 @@
                 margin-left: -10px;
                 margin-top: -10px;
             `;
-            
+
             this.appendChild(ripple);
-            
+
             setTimeout(() => {
                 ripple.remove();
             }, 600);
@@ -996,12 +1050,12 @@
             const ball = document.querySelector('.cricket-ball');
             const stumps = document.querySelector('.stumps');
             const bail = document.querySelector('.bail');
-            
+
             // Restart animations
             ball.style.animation = 'none';
             stumps.style.animation = 'none';
             bail.style.animation = 'none';
-            
+
             setTimeout(() => {
                 ball.style.animation = 'ballFlight 4s ease-in-out';
                 stumps.style.animation = 'stumpShake 4s ease-in-out';

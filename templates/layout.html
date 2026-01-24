@@ -183,17 +183,6 @@
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
 
-    <!-- Hidden container for flash messages -->
-    <div id="flash-messages-container" style="display: none;">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        {% for category, message in messages %}
-        <div data-category="{{ category }}" class="flash-message-item">{{ message|safe }}</div>
-        {% endfor %}
-        {% endif %}
-        {% endwith %}
-    </div>
-
     <script>
         // Theme Logic
         (function () {
@@ -219,23 +208,6 @@
                 applyTheme(next);
             });
         })();
-
-        // Flask Flash Messages -> Toast Notifications
-        document.addEventListener('DOMContentLoaded', function () {
-            const messageElements = document.querySelectorAll('#flash-messages-container .flash-message-item');
-
-            messageElements.forEach(el => {
-                let category = el.getAttribute('data-category');
-                const message = el.innerHTML;
-
-                if (category === 'danger') category = 'error';
-
-                // Assuming Toast is available globally from notifications.js
-                if (window.Toast) {
-                    Toast.show(message, category);
-                }
-            });
-        });
     </script>
 
     {% block extra_js %}{% endblock %}

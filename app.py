@@ -1,4 +1,23 @@
+# -*- coding: utf-8 -*-
+"""SimCricketX Flask Application"""
+
+# CRITICAL: Fix Windows console encoding BEFORE any other imports
+import sys
+import io
 import os
+
+# Force UTF-8 encoding for all I/O operations on Windows
+if sys.platform == "win32":
+    # Ensure stdout and stderr use UTF-8
+    if hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'buffer'):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    
+    # Set environment variables for UTF-8
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+# Now import everything else
 import json
 import logging
 import yaml
@@ -6,7 +25,7 @@ import uuid
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file
 from engine.match import Match
 from flask_login import (
     LoginManager,
@@ -22,24 +41,13 @@ from auth.user_auth import (
     delete_user,
     load_credentials
 )
-from flask import Flask, render_template, redirect, url_for, flash
-from flask_login import LoginManager, login_required, logout_user, current_user
-from flask import session
-from flask import request, render_template, flash, redirect, url_for
-from flask_login import login_required, current_user
 from engine.team import Team, save_team, PITCH_PREFERENCES
 from engine.player import Player, PLAYER_ROLES, BATTING_HANDS, BOWLING_TYPES, BOWLING_HANDS
-from flask import send_from_directory
 import random
 import shutil
-from flask import send_file
-from flask import Flask, request, jsonify, send_file
 import time
 import threading
-import logging
-import sys
 import traceback
-from flask_login import UserMixin
 from auth.user_auth import load_credentials, save_credentials
 from werkzeug.utils import secure_filename
 from engine.stats_aggregator import StatsAggregator 
@@ -47,8 +55,6 @@ import glob
 import pandas as pd 
 from tabulate import tabulate
 from flask import Response
-import io
-
 
 # Add this import for system monitoring
 try:
@@ -60,7 +66,7 @@ except ImportError:
 
 MATCH_INSTANCES = {}
 
-# How old is “too old”? 7 days → 7*24*3600 seconds
+# How old is "too old"? 7 days -> 7*24*3600 seconds
 PROD_MAX_AGE = 7 * 24 * 3600
 
 # Make sure PROJECT_ROOT is defined near the top of app.py:
@@ -208,7 +214,7 @@ class User(UserMixin):
     def __init__(self, email):
         self.id = email
 
-# ────── App Factory ──────
+# ?????? App Factory ??????
 def create_app():
     # --- Flask setup ---
     app = Flask(__name__)
@@ -233,7 +239,7 @@ def create_app():
         secret = os.getenv("FLASK_SECRET_KEY", None)
         if not secret:
             secret = os.urandom(24).hex()
-            print("[WARN] Using random Flask SECRET_KEY—sessions won't persist across restarts")
+            print("[WARN] Using random Flask SECRET_KEY--sessions won't persist across restarts")
 
     app.config["SECRET_KEY"] = secret
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -257,8 +263,8 @@ def create_app():
     )
     file_handler.setLevel(logging.DEBUG)
 
-    # Console handler for terminal visibility
-    console_handler = logging.StreamHandler()
+    # Console handler for terminal visibility using stderr
+    console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(logging.DEBUG)
 
     # Formatter for both
@@ -385,17 +391,13 @@ def create_app():
                                 bowling_filename=os.path.basename(latest_bowling_file))
         except Exception as e:
             app.logger.error(f"Error in _render_statistics_page for user {user_id}: {e}", exc_info=True)
-            flash("An error occurred while loading the statistics page.", "danger")
             return render_template("statistics.html", has_stats=False, user=current_user)
 
-    # ───── Routes ─────
+    # ????? Routes ?????
 
     @app.route("/")
     @login_required
     def home():
-        print(f"[DEBUG] current_user.is_authenticated = {current_user.is_authenticated}")
-        print(f"[DEBUG] current_user.get_id() = {current_user.get_id()}")
-
         if not session.get("visit_counted"):
             increment_visit_counter()
             session["visit_counted"] = True
@@ -405,186 +407,59 @@ def create_app():
     @app.route("/register", methods=["GET", "POST"])
     def register():
         """
-        Enhanced registration route with comprehensive debugging
+        Simplified registration route
         """
-        
-        # Initialize debug session
-        debug_session_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        
         try:
-            
             if request.method == "GET":
                 return render_template("register.html")
             
-            try:
-                raw_email = request.form.get("email", "")
-                raw_password = request.form.get("password", "")
-                
-                # Process email
-                if not raw_email:
-                    flash("❌ Email is required!", "danger")
-                    return render_template("register.html")
-                
-                email = raw_email.strip().lower()
-                # Validate email format
-                if "@" not in email or "." not in email:
-                    flash("❌ Invalid email format!", "danger")
-                    return render_template("register.html")
-                
-                # Process password
-                if not raw_password:
-                    flash("❌ Password is required!", "danger")
-                    return render_template("register.html")
-                
-                password = raw_password
-                # Call register_user with timing
-                registration_start = datetime.now()
-                
-                try:
-                    registration_result = register_user(email, password)
-                    registration_end = datetime.now()
-                    registration_duration = (registration_end - registration_start).total_seconds()
-                    
-                    if registration_result:
-                        # Check if user appears in credentials now
-                        try:
-                            from auth.user_auth import load_credentials
-                            post_reg_creds = load_credentials()
-                            if email in post_reg_creds:
-                                user_data_keys = list(post_reg_creds[email].keys())
-                            else:
-                                print(f"[{debug_session_id}] ⚠️ User NOT found in local credentials after registration")
-                                print(f"[{debug_session_id}] Available users in credentials: {list(post_reg_creds.keys())}")
-                        except Exception as cred_check_error:
-                            print(f"[{debug_session_id}] ❌ Error checking post-registration credentials: {cred_check_error}")
-                            print(f"[{debug_session_id}] Credentials check traceback: {traceback.format_exc()}")
-                        
-                        flash("✅ Registration successful! Please log in.", "success")
-                        
-                        return redirect(url_for("login"))
-                        
-                    else:
-                        flash("❌ User already exists!", "danger")
-                        
-                except Exception as reg_func_error:
-                    flash("❌ Registration failed due to system error!", "danger")
-                    
-            except Exception as form_error:
-                flash("❌ Error processing registration form!", "danger")
+            email = request.form.get("email", "").strip().lower()
+            password = request.form.get("password", "")
             
-            # Return to registration form
-            return render_template("register.html")
+            if not email or "@" not in email or "." not in email:
+                return render_template("register.html", error="Invalid email")
             
-        except Exception as route_error:
-            flash("❌ System error during registration!", "danger")
-            return render_template("register.html")
+            if not password:
+                return render_template("register.html", error="Password required")
             
-        finally:
-            print(f"🏁🏁🏁 REGISTRATION SESSION {debug_session_id} COMPLETED 🏁🏁🏁")
+            if register_user(email, password):
+                return redirect(url_for("login"))
+            else:
+                return render_template("register.html", error="User already exists")
+            
+        except Exception as e:
+            app.logger.error(f"Registration error: {e}")
+            return render_template("register.html", error="System error")
 
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
         """
-        Enhanced login route with comprehensive debugging
+        Simplified login route
         """
-        
-        # Initialize debug session
-        debug_session_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         try:
-            
             if request.method == "GET":
                 if current_user.is_authenticated:
                     return redirect(url_for("home"))
                 return render_template("login.html")
             
-            try:
-                raw_email = request.form.get("email", "")
-                raw_password = request.form.get("password", "")
-                
-                # Process email
-                if not raw_email:
-                    flash("❌ Email is required!", "danger")
-                    return render_template("login.html")
-                
-                email = raw_email.strip().lower()
-                # Validate email format
-                if "@" not in email or "." not in email:
-                    flash("❌ Invalid email format!", "danger")
-                    return render_template("login.html")
-                
-                # Process password
-                if not raw_password:
-                    flash("❌ Password is required!", "danger")
-                    return render_template("login.html")
-                
-                password = raw_password
-
-                try:
-                    from auth.user_auth import load_credentials
-                    pre_verify_creds = load_credentials()
-                    if email in pre_verify_creds:
-                        user_data_keys = list(pre_verify_creds[email].keys())
-                    else:
-                        print(f"[{debug_session_id}] ⚠️ User NOT found in local credentials before verification")
-                        print(f"[{debug_session_id}] Will attempt Google Sheets fallback during verification")
-                        
-                except Exception as pre_cred_error:
-                    print(f"[{debug_session_id}] ❌ Error loading pre-verification credentials: {pre_cred_error}")
-                    print(f"[{debug_session_id}] Pre-verification credentials error traceback: {traceback.format_exc()}")
-                
-
-                # Call verify_user with timing
-                verification_start = datetime.now()
-                try:
-                    verification_result = verify_user(email, password)
-                    verification_end = datetime.now()
-                    verification_duration = (verification_end - verification_start).total_seconds()
-
-                    if verification_result:
-                        try:
-                            post_verify_creds = load_credentials()
-                            if email in post_verify_creds:
-                                user_data_keys = list(post_verify_creds[email].keys())
-                            else:
-                                print(f"[{debug_session_id}] ⚠️ User still NOT found in local credentials after verification")
-                                print(f"[{debug_session_id}] Available users in credentials: {list(post_verify_creds.keys())}")
-                        except Exception as post_cred_error:
-                            print("error")
-                        try:
-                            user = User(email)
-                            login_user(user)
-                            session.pop('_flashes', None)
-                            
-                            # Set success flash message
-                            flash("✅ Logged in successfully!", "success")
-                            
-                            # Log successful login
-                            app.logger.info(f"Successful login for {email}")
-                            
-                            return redirect(url_for("home"))
-                            
-                        except Exception as login_obj_error:
-                            flash("❌ Login system error!", "danger")
-                        
-                    else:
-                        flash("❌ Invalid email or password.", "danger")
-                        
-                except Exception as verify_func_error:
-                    flash("❌ Login failed due to system error!", "danger")
-                    
-            except Exception as form_error:
-                flash("❌ Error processing login form!", "danger")
+            email = request.form.get("email", "").strip().lower()
+            password = request.form.get("password", "")
             
-            # Return to login form
-            return render_template("login.html")
+            if not email or not password:
+                return render_template("login.html", error="Email and password required")
+
+            if verify_user(email, password):
+                user = User(email)
+                login_user(user)
+                app.logger.info(f"Successful login for {email}")
+                return redirect(url_for("home"))
+            else:
+                return render_template("login.html", error="Invalid email or password")
             
-        except Exception as route_error:
-            flash("[ERROR] System error during login!", "danger")
-            return render_template("login.html")
-            
-        finally:
-            print(f"[COMPLETE] LOGIN SESSION {debug_session_id} COMPLETED")
+        except Exception as e:
+            app.logger.error(f"Login error: {e}")
+            return render_template("login.html", error="System error")
 
     @app.route("/delete_account", methods=["POST"])
     @login_required
@@ -593,11 +468,9 @@ def create_app():
         app.logger.info(f"Account deletion requested for {email}")
         if delete_user(email):
             logout_user()
-            flash("Your account has been deleted.", "info")
             return redirect(url_for("register"))
         else:
-            flash("Account deletion failed.", "danger")
-            return redirect(url_for("home"))
+            return redirect(url_for("home")) # Failed to delete
 
     @app.route("/logout")
     @login_required
@@ -605,8 +478,7 @@ def create_app():
         session.pop("visit_counted", None)
         app.logger.info(f"Logout for {current_user.id}")
         logout_user()
-        session.pop('_flashes', None)  # ⬅️ Clear previous flash messages
-        flash("✅ You have been logged out.", "success")
+        session.pop('_flashes', None) 
         return redirect(url_for("login"))
     
     def load_user_teams(user_email):
@@ -644,8 +516,7 @@ def create_app():
 
                 # Validate required fields
                 if not (name and short_code and home_ground and pitch):
-                    flash("❌ All team fields are required.", "danger")
-                    return render_template("team_create.html")
+                    return render_template("team_create.html", error="All team fields are required.")
 
                 # 2. Collect player fields from form data
                 player_names = request.form.getlist("player_name")
@@ -672,26 +543,22 @@ def create_app():
                         )
                         players.append(player)
                     except Exception as e:
-                        flash(f"❌ Error in player {i+1}: {e}", "danger")
                         app.logger.error(f"Error in player creation: {e}", exc_info=True)
-                        return render_template("team_create.html")
+                        return render_template("team_create.html", error=f"Error in player {i+1}: {e}")
 
                 # Validate player count
                 if len(players) < 15 or len(players) > 18:
-                    flash("❌ You must enter between 15 and 18 players.", "danger")
-                    return render_template("team_create.html")
+                    return render_template("team_create.html", error="You must enter between 15 and 18 players.")
                 
                 # Validate at least 1 wicketkeeper
                 wk_count = sum(1 for p in players if p.role == "Wicketkeeper")
                 if wk_count < 1:
-                    flash("❌ You need at least one Wicketkeeper.", "danger")
-                    return render_template("team_create.html")
+                    return render_template("team_create.html", error="You need at least one Wicketkeeper.")
 
                 # Validate minimum 6 bowlers/all-rounders
                 bowl_count = sum(1 for p in players if p.role in ["Bowler", "All-rounder"])
                 if bowl_count < 6:
-                    flash("❌ You need at least six Bowler/All-rounder roles.", "danger")
-                    return render_template("team_create.html")
+                    return render_template("team_create.html", error="You need at least six Bowler/All-rounder roles.")
                 
                 # Read team color
                 color = request.form["team_color"]
@@ -700,8 +567,7 @@ def create_app():
                 captain = next((p.name for p in players if p.role in ["Batsman", "All-rounder", "Wicketkeeper"]), players[0].name)
                 wicketkeeper = next((p.name for p in players if p.role == "Wicketkeeper"), None)
                 if not wicketkeeper:
-                    flash("❌ At least one player must be a Wicketkeeper.", "danger")
-                    return render_template("team_create.html")
+                    return render_template("team_create.html", error="At least one player must be a Wicketkeeper.")
 
                 # 3. Create and save team
                 team = Team(
@@ -734,15 +600,13 @@ def create_app():
                 with open(path, "w") as f:
                     json.dump(data, f, indent=2)
 
-                # 3d. Log, flash, redirect
+                # 3d. Log, redirect
                 app.logger.info(f"Team '{team.name}' created by {email} ({user_id})")
-                flash(f"✅ Team '{team.name}' saved!", "success")
                 return redirect(url_for("home"))
 
             except Exception as e:
                 app.logger.error(f"Unexpected error saving team '{name}': {e}", exc_info=True)
-                flash(f"❌ Unexpected error saving team: {e}", "danger")
-                return render_template("team_create.html")
+                return render_template("team_create.html", error=f"Unexpected error saving team: {e}")
 
         # GET: Show form
         return render_template("team_create.html")
@@ -777,7 +641,6 @@ def create_app():
     def delete_team():
         short_code = request.form.get("short_code")
         if not short_code:
-            flash("❌ No team specified for deletion.", "danger")
             return redirect(url_for("manage_teams"))
 
         # Build the path to the JSON file
@@ -788,7 +651,6 @@ def create_app():
 
         # Check file exists
         if not os.path.exists(team_path):
-            flash(f"❌ Team '{short_code}' not found.", "danger")
             return redirect(url_for("manage_teams"))
 
         # Verify ownership
@@ -797,22 +659,18 @@ def create_app():
                 data = json.load(f)
             owner = data.get("created_by_email")
             if owner != current_user.id:
-                flash("❌ You don’t have permission to delete this team.", "danger")
                 app.logger.warning(f"Unauthorized delete attempt by {current_user.id} on {short_code}")
                 return redirect(url_for("manage_teams"))
         except Exception as e:
             app.logger.error(f"Error reading team file for deletion: {e}", exc_info=True)
-            flash("❌ Could not verify team ownership.", "danger")
             return redirect(url_for("manage_teams"))
 
         # Perform deletion
         try:
             os.remove(team_path)
             app.logger.info(f"Team '{short_code}' deleted by {current_user.id}")
-            flash(f"✅ Team '{short_code}' has been deleted.", "success")
         except Exception as e:
             app.logger.error(f"Error deleting team file: {e}", exc_info=True)
-            flash("❌ Error deleting the team. Please try again.", "danger")
 
         return redirect(url_for("manage_teams"))
 
@@ -831,7 +689,6 @@ def create_app():
 
         # 1. Must exist
         if not os.path.exists(team_path):
-            flash(f"❌ Team '{short_code}' not found.", "danger")
             return redirect(url_for("manage_teams"))
 
         # 2. Load & verify ownership
@@ -840,11 +697,9 @@ def create_app():
                 raw = json.load(f)
         except Exception as e:
             app.logger.error(f"Error reading team for edit: {e}", exc_info=True)
-            flash("❌ Could not load team.", "danger")
             return redirect(url_for("manage_teams"))
 
         if raw.get("created_by_email") != current_user.id:
-            flash("❌ You don’t have permission to edit this team.", "danger")
             app.logger.warning(f"Unauthorized edit attempt by {current_user.id} on {short_code}")
             return redirect(url_for("manage_teams"))
 
@@ -882,20 +737,16 @@ def create_app():
                     )
                     players.append(p)
                 except Exception as e:
-                    flash(f"❌ Error in player {i+1}: {e}", "danger")
                     app.logger.error(f"Team creation failed: {e}", exc_info=True)
-                    return render_template("team_create.html", team=raw, edit=True)
+                    return render_template("team_create.html", team=raw, edit=True, error=f"Error in player {i+1}: {e}")
 
             # Validate counts
             if not (15 <= len(players) <= 18):
-                flash("❌ You must have between 15 and 18 players.", "danger")
-                return render_template("team_create.html", team=raw, edit=True)
+                return render_template("team_create.html", team=raw, edit=True, error="You must have between 15 and 18 players.")
             if sum(1 for p in players if p.role == "Wicketkeeper") < 1:
-                flash("❌ You need at least one Wicketkeeper.", "danger")
-                return render_template("team_create.html", team=raw, edit=True)
+                return render_template("team_create.html", team=raw, edit=True, error="You need at least one Wicketkeeper.")
             if sum(1 for p in players if p.role in ["Bowler","All-rounder"]) < 6:
-                flash("❌ You need at least six Bowlers/All-rounders.", "danger")
-                return render_template("team_create.html", team=raw, edit=True)
+                return render_template("team_create.html", team=raw, edit=True, error="You need at least six Bowlers/All-rounders.")
 
             # Determine captain & wicketkeeper from dropdowns
             captain     = request.form.get("captain")
@@ -918,8 +769,8 @@ def create_app():
             new_team["created_by_user_id"] = raw["created_by_user_id"]
 
             # inside if request.method=="POST":, after reading form short_code:
-            orig_code = short_code             # the URL‐param code
-            new_code  = code                   # the form‐submitted code
+            orig_code = short_code             # the URLto-param code
+            new_code  = code                   # the formto-submitted code
 
             teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
             user_id = raw.get("created_by_user_id")
@@ -927,25 +778,23 @@ def create_app():
             old_path = os.path.join(teams_dir, f"{orig_code}_{current_user.id}.json")
 
 
-            # 1️⃣ If the short code changed, rename the file on disk
+            # 1. If the short code changed, rename the file on disk
             if orig_code != new_code:
                 try:
                     os.rename(old_path, new_path)
-                    app.logger.info(f"Renamed team file {orig_code}.json → {new_code}.json")
+                    app.logger.info(f"Renamed team file {orig_code}.json -> {new_code}.json")
                 except Exception as rename_err:
                     app.logger.error(f"Error renaming team file: {rename_err}", exc_info=True)
-                    flash("❌ Could not rename team file on short code change.", "danger")
-                    return redirect(url_for("manage_teams"))
+                    return render_template("team_create.html", team=raw, edit=True, error="Could not rename team file on short code change.")
 
             # Overwrite JSON file
             try:
                 with open(new_path if orig_code != new_code else old_path, "w") as f:
                     json.dump(new_team, f, indent=2)
                 app.logger.info(f"Team '{code}' updated by {current_user.id}")
-                flash("✅ Team updated successfully!", "success")
             except Exception as e:
                 app.logger.error(f"Error saving edited team: {e}", exc_info=True)
-                flash("❌ Error saving team. Please try again.", "danger")
+                return render_template("team_create.html", team=raw, edit=True, error="Error saving team. Please try again.")
 
             return redirect(url_for("manage_teams"))
 
@@ -1049,7 +898,6 @@ def create_app():
                 app.logger.error(f"[MatchDetail] error loading {fn}: {e}", exc_info=True)
 
         if not match_data:
-            flash("❌ Match not found or access denied.", "danger")
             return redirect(url_for("home"))
 
         increment_matches_simulated()
@@ -1140,7 +988,7 @@ def create_app():
         with open(match_path, "w") as f:
             json.dump(match_data, f, indent=2)
         
-        # ───── NEW: update the in-memory Match, if created
+        # ????? NEW: update the in-memory Match, if created
         if match_id in MATCH_INSTANCES:
             inst = MATCH_INSTANCES[match_id]
             inst.toss_winner   = toss_winner
@@ -1171,8 +1019,8 @@ def create_app():
         # Build complete toss commentary with correct batsmen
         full_commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
                         f"{toss_winner} won the toss and choose to {toss_decision} first.<br>" \
-                        f"<br>🧢 <strong>Striker:</strong> {batting_team[0]['name']}<br>" \
-                        f"🎯 <strong>Non-striker:</strong> {batting_team[1]['name']}"
+                        f"<br>? <strong>Striker:</strong> {batting_team[0]['name']}<br>" \
+                        f"? <strong>Non-striker:</strong> {batting_team[1]['name']}"
         
         return jsonify({
             "toss_commentary": full_commentary,
@@ -1248,7 +1096,7 @@ def create_app():
             match_data["impact_players_swapped"] = True
             
             # =================================================================
-            # 🟢 START: CRITICAL FIX - UPDATE IN-MEMORY INSTANCE
+            # ? START: CRITICAL FIX - UPDATE IN-MEMORY INSTANCE
             # =================================================================
             if match_id in MATCH_INSTANCES:
                 app.logger.info(f"[ImpactSwap] Found active match instance for {match_id}. Updating state.")
@@ -1265,7 +1113,7 @@ def create_app():
             else:
                 app.logger.warning(f"[ImpactSwap] No active match instance found for {match_id}. File will be updated, but live game may not reflect changes until reload.")
             # =================================================================
-            # 🔴 END: CRITICAL FIX
+            # ? END: CRITICAL FIX
             # =================================================================
             
             # Save the updated data back to the JSON file
@@ -1417,11 +1265,11 @@ def create_app():
 )
 
             return jsonify({
-                "innings_end":     True,                              # ← flag it as an innings end
-                "innings_number":  2,                                 # ← second innings
+                "innings_end":     True,                              # <- flag it as an innings end
+                "innings_number":  2,                                 # <- second innings
                 "match_over":      True,
                 "commentary":      outcome.get("commentary", "<b>Match Over!</b>"),
-                "scorecard_data":  outcome.get("scorecard_data"),     # ← your detailed card
+                "scorecard_data":  outcome.get("scorecard_data"),     # <- your detailed card
                 "score":           outcome.get("final_score", match.score),
                 "wickets":         outcome.get("wickets",  match.wickets),
                 "result":          outcome.get("result",  "Match ended")
@@ -1466,14 +1314,14 @@ def create_app():
     def save_commentary(match_id):
         """Receive and store the complete frontend commentary for archiving"""
         try:
-            print(f"🐛 DEBUG: Received commentary request for match {match_id}")
+            print(f"DEBUG: Received commentary request for match {match_id}")
             
             data = request.get_json()
             commentary_html = data.get('commentary_html', '')
             
-            print(f"🐛 DEBUG: Commentary HTML length: {len(commentary_html)}")
-            print(f"🐛 DEBUG: Contains 'End of over': {'End of over' in commentary_html}")
-            print(f"🐛 DEBUG: First 300 chars: {commentary_html[:300]}")
+            print(f"DEBUG: Commentary HTML length: {len(commentary_html)}")
+            print(f"DEBUG: Contains 'End of over': {'End of over' in commentary_html}")
+            print(f"DEBUG: First 300 chars: {commentary_html[:300]}")
             
             if not commentary_html:
                 return jsonify({"error": "No commentary provided"}), 400
@@ -1484,23 +1332,23 @@ def create_app():
                 
                 # Convert HTML to clean text list for archiving
                 frontend_commentary = html_to_commentary_list(commentary_html)
-                print(f"🐛 DEBUG: Converted to {len(frontend_commentary)} commentary items")
+                print(f"DEBUG: Converted to {len(frontend_commentary)} commentary items")
                 
                 # Replace the backend commentary with frontend commentary
                 match_instance.frontend_commentary_captured = frontend_commentary
                 
                 # DON'T trigger archive creation here - it already happened
                 # Just store the commentary for next time
-                print(f"🐛 DEBUG: Stored frontend commentary for future use")
+                print(f"DEBUG: Stored frontend commentary for future use")
                 
                 app.logger.info(f"[Commentary] Captured {len(frontend_commentary)} items for match {match_id}")
                 return jsonify({"message": "Commentary captured successfully"}), 200
             else:
-                print(f"🐛 DEBUG: Match instance {match_id} not found in MATCH_INSTANCES")
+                print(f"DEBUG: Match instance {match_id} not found in MATCH_INSTANCES")
                 return jsonify({"error": "Match instance not found"}), 404
                 
         except Exception as e:
-            print(f"🐛 DEBUG: Error in save_commentary: {e}")
+            print(f"DEBUG: Error in save_commentary: {e}")
             app.logger.error(f"Error saving commentary: {e}", exc_info=True)
             return jsonify({"error": "Failed to save commentary"}), 500
 
@@ -1537,7 +1385,7 @@ def create_app():
         try:
             app.logger.info(f"[DownloadArchive] Starting archive creation for match '{match_id}'")
 
-            # ─── A) Extract HTML content from request ───────────────────────────
+            # ??? A) Extract HTML content from request ???????????????????????????
             payload = request.get_json() or {}
             html_content = payload.get("html_content")
             if not html_content:
@@ -1548,7 +1396,7 @@ def create_app():
             if len(html_content) < 1000:
                 app.logger.warning("[DownloadArchive] HTML content seems unusually short (< 1,000 chars)")
 
-            # ─── B) Load match metadata ─────────────────────────────────────────
+            # ??? B) Load match metadata ?????????????????????????????????????????
             match_meta = load_match_metadata(match_id)
             if not match_meta:
                 app.logger.error(f"[DownloadArchive] Match metadata not found for match_id='{match_id}'")
@@ -1560,14 +1408,14 @@ def create_app():
                 app.logger.warning(f"[DownloadArchive] Unauthorized access: user='{current_user.id}' attempted to archive match='{match_id}'")
                 return jsonify({"error": "Unauthorized"}), 403
 
-            # ─── C) Retrieve or rehydrate match instance ─────────────────────────
+            # ??? C) Retrieve or rehydrate match instance ?????????????????????????
             match_instance = MATCH_INSTANCES.get(match_id)
             if not match_instance:
                 app.logger.info(f"[DownloadArchive] Match instance not in memory; recreating minimal Match for '{match_id}'")
                 from engine.match import Match
                 match_instance = Match(match_meta)
 
-            # ─── D) Locate original JSON file on disk ───────────────────────────
+            # ??? D) Locate original JSON file on disk ???????????????????????????
             from match_archiver import find_original_json_file
             original_json_path = find_original_json_file(match_id)
             if not original_json_path:
@@ -1576,7 +1424,7 @@ def create_app():
 
             app.logger.debug(f"[DownloadArchive] Found original JSON at '{original_json_path}'")
 
-            # ─── E) Extract commentary log ───────────────────────────────────────
+            # ??? E) Extract commentary log ???????????????????????????????????????
             if getattr(match_instance, "frontend_commentary_captured", None):
                 commentary_log = match_instance.frontend_commentary_captured
                 app.logger.info(f"[DownloadArchive] Using frontend commentary (items={len(commentary_log)})")
@@ -1587,7 +1435,7 @@ def create_app():
                 commentary_log = ["Match completed - commentary preserved in HTML"]
                 app.logger.warning("[DownloadArchive] No commentary found; using fallback single-line log")
 
-            # ─── F) Instantiate MatchArchiver and create ZIP ────────────────────
+            # ??? F) Instantiate MatchArchiver and create ZIP ????????????????????
             from match_archiver import MatchArchiver
             archiver = MatchArchiver(match_meta, match_instance)
             zip_name = f"{archiver.folder_name}.zip"
@@ -1610,7 +1458,7 @@ def create_app():
                 app.logger.error(f"[DownloadArchive] Failed to create archive for match '{match_id}': {arch_err}", exc_info=True)
                 return jsonify({"error": "Failed to create archive"}), 500
 
-            # ─── G) Compute and confirm ZIP path on disk ─────────────────────────
+            # ??? G) Compute and confirm ZIP path on disk ?????????????????????????
             zip_path = os.path.join(PROJECT_ROOT, "data", zip_name)
             if not os.path.isfile(zip_path):
                 app.logger.error(f"[DownloadArchive] ZIP file missing after creation: '{zip_path}'")
@@ -1619,7 +1467,7 @@ def create_app():
             zip_size = os.path.getsize(zip_path)
             app.logger.info(f"[DownloadArchive] ZIP successfully created: '{zip_name}' ({zip_size:,} bytes)")
 
-            # ─── H) Stream the ZIP file back to the browser ─────────────────────
+            # ??? H) Stream the ZIP file back to the browser ?????????????????????
             try:
                 app.logger.debug(f"[DownloadArchive] Sending ZIP to client: '{zip_path}'")
                 return send_file(
@@ -1735,7 +1583,7 @@ def create_app():
         """
         DELETE endpoint to remove an archive file.
         Production considerations:
-        - Prevent path traversal by normalizing and checking for “..” segments.
+        - Prevent path traversal by normalizing and checking for ".." segments.
         - Use a configured ARCHIVES_FOLDER to locate files.
         - Log each attempt and handle exceptions cleanly.
         - Return appropriate status codes and JSON messages.
@@ -1865,12 +1713,10 @@ def create_app():
     @login_required
     def upload_stats():
         if 'stats_files' not in request.files:
-            flash('No file part in the request.', 'danger')
             return redirect(url_for('statistics'))
 
         files = request.files.getlist('stats_files')
         if not files or files[0].filename == '':
-            flash('No files selected for upload.', 'danger')
             return redirect(url_for('statistics'))
 
         uploaded_filepaths = []
@@ -1901,15 +1747,12 @@ def create_app():
                 uploaded_filepaths.append(filepath)
                 app.logger.debug(f"[DEBUG] Saved file: {filepath}")
             else:
-                flash(f"Invalid file type for {file.filename}. Only CSV files are allowed.", 'danger')
                 return redirect(url_for('statistics'))
 
         try:
             aggregator = StatsAggregator(uploaded_filepaths, current_user.id)
             aggregator.process_and_save()
-            flash("Statistics processed successfully!", "success")
         except Exception as e:
-            flash(f"An error occurred during statistics processing: {e}", "danger")
             app.logger.error(f"Error processing stats for user {current_user.id}: {e}", exc_info=True)
         finally:
             for filepath in uploaded_filepaths:
@@ -2043,7 +1886,7 @@ def create_app():
 
     return app
 
-# ────── Run Server ──────
+# ?????? Run Server ??????
 if __name__ == "__main__":
     import socket
     import webbrowser
