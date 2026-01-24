@@ -346,57 +346,59 @@ def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
 # 3) Pitch-specific outcome probabilities (realistic scoring patterns)
 # -----------------------------------------------------------------------------
 PITCH_SCORING_MATRIX = {
-        "Green": {
-        "Dot":     0.4000,
-        "Single":  0.3619,
-        "Double":  0.0556,
-        "Three":   0.0079,
-        "Four":    0.0556,
-        "Six":     0.0198,
-        "Wicket":  0.0595,
-        "Extras":  0.0397
+    "Green": {
+        "Dot":     0.42,   # High dot ball % (difficult to score)
+        "Single":  0.34,
+        "Double":  0.06,
+        "Three":   0.005,
+        "Four":    0.05,   # Low boundaries
+        "Six":     0.015,
+        "Wicket":  0.07,   # High wicket chance (favors pacers)
+        "Extras":  0.04
     },
     "Dry": {
-        "Dot":     0.4000,
-        "Single":  0.3355,
-        "Double":  0.0725,
-        "Three":   0.0290,
-        "Four":    0.0507,
-        "Six":     0.0181,
-        "Wicket":  0.0543,
-        "Extras":  0.0399
+        "Dot":     0.38,   # Spin friendly = difficult scoring
+        "Single":  0.35,
+        "Double":  0.07,
+        "Three":   0.02,
+        "Four":    0.06,
+        "Six":     0.02,
+        "Wicket":  0.06,   # Favors spinners
+        "Extras":  0.04
     },
     "Hard": {
-        # Balanced pitch (150-170 average, ~6-7 wickets)
-        "Dot":     0.28,   # Increased from 0.27 (slightly less scoring)
-        "Single":  0.32,   # Increased from 0.31
-        "Double":  0.11,   
-        "Three":   0.06,
-        "Four":    0.08,   # Reduced from 0.09
-        "Six":     0.04,   # Reduced from 0.05
-        "Wicket":  0.065,  # Increased from 0.06
-        "Extras":  0.045   # Reduced from 0.050
+        # 80/20 Batting/Bowling split implemented in compute_weighted_prob
+        # Base matrix should be good for batting but not excessive
+        "Dot":     0.28,
+        "Single":  0.33,
+        "Double":  0.10,
+        "Three":   0.05,
+        "Four":    0.10,   # Good boundaries
+        "Six":     0.06,
+        "Wicket":  0.04,   # Lower wicket chance (batsman dominated)
+        "Extras":  0.04
     },
     "Flat": {
-    "Dot":     0.23,   # ↓ Lowered from 0.26 (encourage more scoring)
-    "Single":  0.30,   # ~ kept same
-    "Double":  0.12,   # — same
-    "Three":   0.04,   # — same
-    "Four":    0.15,   # ↑ Increased from 0.12
-    "Six":     0.07,   # ↑ Increased from 0.05
-    "Wicket":  0.045,  # ↓ Slightly reduced from 0.055 to protect batsmen
-    "Extras":  0.045   # — same
+        # Pure batting paradise
+        "Dot":     0.20,   # Very low dot %
+        "Single":  0.30,
+        "Double":  0.12,
+        "Three":   0.03,
+        "Four":    0.18,   # High boundaries
+        "Six":     0.12,   # High sixes
+        "Wicket":  0.03,   # Very low wickets
+        "Extras":  0.02
     },
     "Dead": {
         # Batting paradise (200+ average, ~4-5 wickets)
-        "Dot":     0.18,   # Increased from 0.15 (less scoring)
-        "Single":  0.29,   # Increased from 0.29
-        "Double":  0.13,   # Increased from 0.12
-        "Three":   0.03,   # Increased from 0.02
-        "Four":    0.18,   # Reduced from 0.21
-        "Six":     0.10,   # Reduced from 0.13
-        "Wicket":  0.045,  # Increased from 0.035
-        "Extras":  0.045   
+        "Dot":     0.18,
+        "Single":  0.32,
+        "Double":  0.14,
+        "Three":   0.01,
+        "Four":    0.19,
+        "Six":     0.10,
+        "Wicket":  0.03,
+        "Extras":  0.03
     }
 }
 
@@ -444,78 +446,105 @@ def compute_weighted_prob(
     fielding: int,
     pitch: str,
     bowling_type: str,
-    streak: dict
+    streak: dict,
+    batter_runs: int = 0
 ) -> float:
     """
     Returns a raw weight for one outcome (Dot/Single/Double/Three/Four/Six/Wicket/Extras),
-    combining 60% pitch-influence + 40% player-skill.
-    Includes print statements to trace the computation.
+    combining pitch-influence + player-skill.
+    Includes special handling for "Hard" pitch (80/20 split) and "Set Batter" bonus.
     """
-    # print(f"\n[compute_weighted_prob] Outcome: {outcome_type}")
-    # print(f"  BaseProb: {base_prob}")
-    # print(f"  PlayerStats -> Batting: {batting}, Bowling: {bowling}, Fielding: {fielding}")
-    # print(f"  Pitch: {pitch}, BowlingType: {bowling_type}, Streak: {streak}")
+    # 0) Apply "Set Batter" bonus
+    # Batter gets a boost if they have scored > 20 runs
+    effective_batting = batting
+    if batter_runs >= 20:
+        effective_batting *= 1.15  # 15% skill boost for set batter
+        # print(f"  [Set Batter] Rating boosted: {batting} -> {effective_batting:.1f}")
 
     # 1) Player-skill fraction
+    skill_frac = 0.5
+    
     if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
-        if (batting + bowling) > 0:
-            skill_frac = batting / (batting + bowling)
+        # Run scoring: defined by Batting vs Bowling
+        if (effective_batting + bowling) > 0:
+            # Standard calculation
+            skill_frac = effective_batting / (effective_batting + bowling)
+            
+            # 🔧 USER REQUEST: "If hard, batsman will have 80 and bowlers will have 20"
+            # We interpret this as: On Hard pitches, the batting skill contributes 80% to the contest,
+            # or the contest is heavily skewed towards batting rating.
+            # Implementation: Weight the batting rating 4x more than bowling rating in the contest ratio.
+            if pitch == "Hard":
+                # 80% weight to batting, 20% to bowling
+                skill_frac = (effective_batting * 0.8) / ((effective_batting * 0.8) + (bowling * 0.2))
+                # print(f"  [Hard Pitch] Adjusted skill_frac (favors bat): {skill_frac:.4f}")
+                
         else:
             skill_frac = 0.5
-        # print(f"  SkillFrac (run): {skill_frac:.4f}")
+
     elif outcome_type == "Wicket":
-        if (batting + bowling) > 0:
-            skill_frac = (bowling / (batting + bowling)) * (fielding / 100.0)
+        # Wicket taking: defined by Bowling vs Batting (and Fielding)
+        if (effective_batting + bowling) > 0:
+            # Base contest
+            # Normal: Prob ~ Bowling / (Bat + Bowl)
+            contest_frac = bowling / (effective_batting + bowling)
+            
+            # Adjust regarding fielding
+            skill_frac = contest_frac * (fielding / 100.0)
+            
+            # 🔧 USER REQUEST: Hard pitch favors batsman (bowlers only 20%)
+            if pitch == "Hard":
+                # Bowler struggles: Reduce the effectiveness of the bowling rating
+                # contest_frac = (bowling * 0.2) / ((effective_batting * 0.8) + (bowling * 0.2))
+                # Actually, let's just apply a dampener to the final skill_frac for wickets on Hard pitch
+                skill_frac *= 0.5 # significantly reduce wicket taking skill impact
         else:
             skill_frac = 0.5
-        # print(f"  SkillFrac (wicket): {skill_frac:.4f}")
-    else:  # "Extras"
-        skill_frac = None
-        # print(f"  SkillFrac (extra): N/A")
 
     # 2) Pitch-influence fraction
+    pitch_frac = 1.0
     if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
         pitch_frac = get_pitch_run_multiplier(pitch)
-        # print(f"  PitchFrac (run): {pitch_frac:.4f}")
     elif outcome_type == "Wicket":
         pitch_frac = get_pitch_wicket_multiplier(pitch, bowling_type)
-        # print(f"  PitchFrac (wicket): {pitch_frac:.4f}")
-    else:  # "Extras"
-        pitch_frac = None
-        # print(f"  PitchFrac (extra): N/A")
 
-    # 3) Compute raw weight
-    if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
-        # Boundary streak penalty for Four/Six
-        boundary_penalty = 1.0
-        if outcome_type in ("Four", "Six") and streak.get("boundaries", 0) >= 2:
-            boundary_penalty = 0.8
-            # print(f"  BoundaryPenalty applied: {boundary_penalty}")
+    # 3) Blend Pitch & Skill
+    # Default is 60% Pitch, 40% Skill. 
+    # But for "Hard", we want to emphasize the skew we just calculated.
+    
+    # 🔧 USER REQUEST: "If flat, batsman will have advantage over bowlers"
+    # Logic: Boosting the skill component if favorable to bat
+    
+    alpha = 0.6 # Pitch weight
+    beta = 0.4  # Skill weight
 
-        blended_frac = 0.4 * skill_frac + 0.6 * pitch_frac
-        raw_weight = base_prob * blended_frac * boundary_penalty
-        # print(f"  BlendedFrac (run): {blended_frac:.4f}")
-        # print(f"  RawWeight (run): {raw_weight:.6f}")
-        return raw_weight
+    if pitch == "Hard":
+        # User explicitly mentioned 80/20. We applied that in skill logic.
+        # Let's keep standard blending but rely on the skewed skill_frac.
+        pass
+    
+    blended_frac = (alpha * pitch_frac) + (beta * skill_frac)
 
-    elif outcome_type == "Wicket":
-        # Boundary streak boost for wicket
-        boundary_boost = 1.0
-        if streak.get("boundaries", 0) >= 2:
-            boundary_boost = 1.5
-            # print(f"  BoundaryBoost applied: {boundary_boost}")
-
-        blended_frac = 0.4 * skill_frac + 0.6 * pitch_frac
-        raw_weight = base_prob * blended_frac * boundary_boost
-        # print(f"  BlendedFrac (wicket): {blended_frac:.4f}")
-        # print(f"  RawWeight (wicket): {raw_weight:.6f}")
-        return raw_weight
-
-    else:  # "Extras"
-        # Extras depend solely on bowler error (no pitch component)
+    # 4) Compute raw weight
+    if outcome_type == "Extras":
+         # Extras depend solely on bowler error
         raw_weight = base_prob * ((100 - bowling) / 100.0)
-        # print(f"  RawWeight (extra): {raw_weight:.6f}")
-        return raw_weight
+        return max(raw_weight, 0.0)
+
+    # Apply specific boosts/penalties logic
+    # Boundary streak penalty (same as before)
+    boundary_penalty = 1.0
+    if outcome_type in ("Four", "Six") and streak.get("boundaries", 0) >= 2:
+        boundary_penalty = 0.8
+    
+    # Wicket boundary streak boost (same as before)
+    wicket_boost = 1.0
+    if outcome_type == "Wicket" and streak.get("boundaries", 0) >= 2:
+        wicket_boost = 1.5
+
+    raw_weight = base_prob * blended_frac * boundary_penalty * wicket_boost
+    
+    return max(raw_weight, 0.0)
 
 # -----------------------------------------------------------------------------
 # 5) Main outcome selection function: calculate_outcome
@@ -575,7 +604,7 @@ def calculate_outcome(
             weight = compute_weighted_prob(
                 outcome, base,
                 batting, bowling, fielding,
-                pitch, bowling_type, streak
+                pitch, bowling_type, streak, batter_runs
             )
         elif outcome == "Wicket":
             # Additional left-arm vs right-hand boost on Green
@@ -591,7 +620,7 @@ def calculate_outcome(
             weight = compute_weighted_prob(
                 outcome, base,
                 batting, bowling, fielding,
-                pitch, bowling_type, streak
+                pitch, bowling_type, streak, batter_runs
             ) * lr_boost
             # print(f"  RawWeight after LeftVsRightBoost: {weight:.6f}")
         else:  # "Extras"
@@ -602,36 +631,51 @@ def calculate_outcome(
             )
 
         # 3) Death-over adjustments (overs 17–20 → over_number 16–19)
-        if over_number >= 16:
-            # Boundaries (4, 6) boost
-            if outcome in ("Four", "Six"):
-                if pitch in ("Flat", "Dead"):
-                    boundary_boost = 1.25  # Reduced from 1.3
-                elif pitch == "Hard":
-                    boundary_boost = 1.15   # Reduced from 1.2
-                else:  # Green or Dry
-                    boundary_boost = 1.08  # Reduced from 1.1
-                print(f"  DeathOver: Boosting boundary ({outcome}) on {pitch} by factor {boundary_boost}")
-                weight *= boundary_boost
+        
+            # 🔧 USER REQUEST: "In power play first 6 overs, we can keep some boundaries"
+            # Powerplay boosts (Overs 0-5)
+            if over_number < 6:
+                if outcome in ("Four", "Six"):
+                    pp_boost = 1.25 # 25% more boundaries in PP
+                    print(f"  [Powerplay] Boosting {outcome} by {pp_boost}x")
+                    weight *= pp_boost
+                elif outcome == "Wicket":
+                    # Wickets slightly less likely in PP if batsman is just attacking gaps
+                    # But we don't want to make it too safe.
+                    # Let's leave wicket as is or slight reduction unless reckless.
+                    pass
 
-            # Wicket boost (slight increase)
-            if outcome == "Wicket":
-                wicket_boost = 1.1  # Reduced from 1.2
-                print(f"  DeathOver: Boosting wicket on {pitch} by factor {wicket_boost}")
-                weight *= wicket_boost
+            # 3) Death-over adjustments (overs 17–20 → over_number 16–19)
+            if over_number >= 16:
+                # 🔧 USER REQUEST: "last 4 overs, we can increasing runs scoring + wickets fall a bit more"
+                
+                # Boundaries (4, 6) boost
+                if outcome in ("Four", "Six"):
+                    if pitch in ("Flat", "Dead", "Hard"): # Hard added to high scoring list
+                        boundary_boost = 1.4  # Increased from 1.25
+                    else:  # Green or Dry
+                        boundary_boost = 1.15  # Increased from 1.08
+                    print(f"  DeathOver: Boosting boundary ({outcome}) on {pitch} by factor {boundary_boost}")
+                    weight *= boundary_boost
+
+                # Wicket boost (Increased per user request)
+                if outcome == "Wicket":
+                    wicket_boost = 1.3  # Increased from 1.1 to 1.3
+                    print(f"  DeathOver: Boosting wicket on {pitch} by factor {wicket_boost}")
+                    weight *= wicket_boost
 
             # 4) Second innings special boosts (last 4 overs)
-            if innings == 2:
+            if innings == 2 and over_number >= 16:
                 # Scoring boost by 15% for all run-scoring outcomes
                 if outcome in ("Single", "Double", "Three", "Four", "Six"):
                     second_innings_scoring_boost = 1.15
-                    print(f"  SecondInnings: Boosting scoring ({outcome}) by factor {second_innings_scoring_boost}")
+                    # print(f"  SecondInnings: Boosting scoring ({outcome}) by factor {second_innings_scoring_boost}")
                     weight *= second_innings_scoring_boost
                 
                 # Wicket boost by 3% additional
                 if outcome == "Wicket":
-                    second_innings_wicket_boost = 1.03
-                    print(f"  SecondInnings: Additional wicket boost by factor {second_innings_wicket_boost}")
+                    second_innings_wicket_boost = 1.1 # Increased from 1.03
+                    # print(f"  SecondInnings: Additional wicket boost by factor {second_innings_wicket_boost}")
                     weight *= second_innings_wicket_boost
 
         # Ensure no negative weights
