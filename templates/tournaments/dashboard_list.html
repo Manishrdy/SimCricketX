@@ -15,9 +15,10 @@
         </div>
     </div>
 
+    {% if tournaments %}
     <div class="tournaments-grid">
 
-        <!-- Create New Card -->
+        <!-- Create New Card (only shown when there are existing tournaments) -->
         <a href="{{ url_for('create_tournament_route') }}" class="tournament-card create-card">
             <div class="create-content">
                 <div class="icon-circle">
@@ -70,13 +71,11 @@
                 </div>
             </div>
         </a>
-        {% else %}
-        <!-- Empty State when no tournaments -->
         {% endfor %}
 
     </div>
-
-    {% if not tournaments %}
+    {% else %}
+    <!-- Empty State when no tournaments -->
     <div class="empty-state-container">
         <div class="empty-state">
             <div class="empty-icon">
