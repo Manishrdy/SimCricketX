@@ -2125,22 +2125,68 @@ def create_app():
         if request.method == "POST":
             name = request.form.get("name")
             team_ids = request.form.getlist("team_ids")
-            
-            if not name or len(team_ids) < 2:
-                return "Invalid data", 400
-                
-            try:
-                # Convert string IDs to int if necessary
-                team_ids = [int(tid) for tid in team_ids]
-                t = tournament_engine.create_tournament(name, current_user.id, team_ids)
-                return redirect(url_for("tournament_dashboard", tournament_id=t.id))
-            except Exception as e:
-                app.logger.error(f"Error creating tournament: {e}")
-                return str(e), 500
+            mode = request.form.get("mode", "round_robin")
 
-        # GET
+            if not name or len(team_ids) < 2:
+                flash("Please provide a tournament name and select at least 2 teams.", "error")
+                return redirect(url_for("create_tournament_route"))
+
+            try:
+                # Convert string IDs to int
+                team_ids = [int(tid) for tid in team_ids]
+
+                # Handle custom series configuration
+                series_config = None
+                if mode == "custom_series":
+                    if len(team_ids) != 2:
+                        flash("Custom series requires exactly 2 teams.", "error")
+                        return redirect(url_for("create_tournament_route"))
+
+                    num_matches = int(request.form.get("series_matches", 3))
+                    series_config = {
+                        "series_name": name,
+                        "matches": []
+                    }
+                    # Alternate home/away for each match
+                    for i in range(num_matches):
+                        series_config["matches"].append({
+                            "match_num": i + 1,
+                            "home": i % 2,  # Alternate home team
+                            "venue_name": f"Match {i + 1}"
+                        })
+
+                # Validate mode requirements
+                min_teams = tournament_engine.MIN_TEAMS.get(mode, 2)
+                if len(team_ids) < min_teams:
+                    flash(f"{mode.replace('_', ' ').title()} requires at least {min_teams} teams.", "error")
+                    return redirect(url_for("create_tournament_route"))
+
+                t = tournament_engine.create_tournament(
+                    name=name,
+                    user_id=current_user.id,
+                    team_ids=team_ids,
+                    mode=mode,
+                    series_config=series_config
+                )
+                flash(f"Tournament '{name}' created successfully!", "success")
+                return redirect(url_for("tournament_dashboard", tournament_id=t.id))
+
+            except ValueError as e:
+                flash(str(e), "error")
+                return redirect(url_for("create_tournament_route"))
+            except Exception as e:
+                app.logger.error(f"Error creating tournament: {e}", exc_info=True)
+                flash("An error occurred while creating the tournament.", "error")
+                return redirect(url_for("create_tournament_route"))
+
+        # GET - Show form with available modes
         teams = DBTeam.query.filter_by(user_id=current_user.id).all()
-        return render_template("tournaments/create.html", teams=teams)
+        num_teams = len(teams)
+
+        # Get available modes based on team count
+        available_modes = tournament_engine.get_available_modes(num_teams) if num_teams >= 2 else []
+
+        return render_template("tournaments/create.html", teams=teams, available_modes=available_modes)
 
     @app.route("/tournaments/<int:tournament_id>")
     @login_required
