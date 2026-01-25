@@ -1378,7 +1378,7 @@ def create_app():
                         date=datetime.now()
                     )
                     
-                    # Link fixture
+                    # Link fixture and update its status
                     fix_id = match.data.get("fixture_id")
                     if fix_id:
                         fixture = db.session.get(TournamentFixture, fix_id)
@@ -1386,6 +1386,8 @@ def create_app():
                             db_match.home_team_id = fixture.home_team_id
                             db_match.away_team_id = fixture.away_team_id
                             fixture.match_id = match_id
+                            fixture.status = 'Completed'  # Mark fixture as completed
+                            app.logger.info(f"[Tournament] Fixture {fix_id} marked as Completed")
                     else:
                         # Fallback if no fixture ID (shouldn't happen in tournament mode)
                         pass
@@ -1497,8 +1499,10 @@ def create_app():
                         if fixture:
                             db_match.home_team_id = fixture.home_team_id
                             db_match.away_team_id = fixture.away_team_id
-                            # Link fixture
+                            # Link fixture and mark as completed
                             fixture.match_id = match_id
+                            fixture.status = 'Completed'  # Mark fixture as completed
+                            app.logger.info(f"[Tournament] Fixture {fix_id} marked as Completed")
                     
                     # Set Scores
                     if match.innings == 2 and match.is_complete:
