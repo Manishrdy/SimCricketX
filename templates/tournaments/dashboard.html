@@ -139,7 +139,11 @@
                     <div class="fixture-header">
                         <span class="round-badge">Match {{ fixture.round_number }}</span>
                         <span class="status-badge {{ fixture.status|lower }}">
-                            {{ fixture.status }}
+                            {% if fixture.status == 'Completed' %}
+                            <i class="fas fa-check-circle"></i> Game Over
+                            {% else %}
+                            <i class="fas fa-clock"></i> Scheduled
+                            {% endif %}
                         </span>
                     </div>
 
@@ -627,19 +631,28 @@
         font-size: 0.7rem;
         font-weight: 600;
         text-transform: uppercase;
-        padding: 0.2rem 0.5rem;
-        border-radius: 4px;
+        padding: 0.25rem 0.625rem;
+        border-radius: 6px;
         letter-spacing: 0.5px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .status-badge i {
+        font-size: 0.65rem;
     }
 
     .status-badge.scheduled {
         color: var(--warning);
         background: rgba(229, 192, 123, 0.15);
+        border: 1px solid rgba(229, 192, 123, 0.25);
     }
 
     .status-badge.completed {
         color: var(--success);
         background: rgba(152, 195, 121, 0.15);
+        border: 1px solid rgba(152, 195, 121, 0.25);
     }
 
     .teams-versus {
