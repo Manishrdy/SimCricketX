@@ -152,8 +152,25 @@ class Tournament(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
-    status = db.Column(db.String(20), default='Active') # Active, Completed
+    status = db.Column(db.String(20), default='Active')  # Active, Completed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Tournament Mode Configuration
+    # Modes: 'round_robin', 'double_round_robin', 'knockout',
+    #        'round_robin_knockout', 'double_round_robin_knockout', 'ipl_style', 'custom_series'
+    mode = db.Column(db.String(50), default='round_robin', nullable=False)
+
+    # Current stage for multi-stage tournaments
+    # Stages: 'league', 'qualifier', 'eliminator', 'semifinal', 'final', 'completed'
+    current_stage = db.Column(db.String(30), default='league', nullable=False)
+
+    # Number of teams that qualify from league stage (for knockout/IPL modes)
+    # Default 4 for IPL-style, can be 2/4/8 for knockout modes
+    playoff_teams = db.Column(db.Integer, default=4, nullable=False)
+
+    # Custom series configuration (JSON string for flexibility)
+    # Example: {"matches": [{"home": 1, "away": 2, "venue": "home"}, ...], "series_name": "Ashes"}
+    series_config = db.Column(db.Text, nullable=True)
 
     # Relationships
     participating_teams = relationship('TournamentTeam', backref='tournament', cascade="all, delete-orphan")
@@ -198,22 +215,43 @@ class TournamentFixture(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
 
-    # Teams
-    home_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
-    away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+    # Teams (nullable for knockout fixtures where teams are TBD)
+    home_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
+    away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
 
     # Meta
     round_number = db.Column(db.Integer, default=1, nullable=False)
-    status = db.Column(db.String(20), default='Scheduled', nullable=False)  # Scheduled, Completed
-    match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=True)  # Link to actual simulated match
+    status = db.Column(db.String(20), default='Scheduled', nullable=False)  # Scheduled, Completed, Locked
+
+    # Stage information for multi-stage tournaments
+    # Stages: 'league', 'qualifier_1', 'qualifier_2', 'eliminator', 'semifinal_1', 'semifinal_2', 'final'
+    stage = db.Column(db.String(30), default='league', nullable=False)
+
+    # For knockout/playoff: describes what this match determines
+    # e.g., "Winner plays Final", "Loser Eliminated", "Winner to Qualifier 2"
+    stage_description = db.Column(db.String(100), nullable=True)
+
+    # Position in bracket (for knockout display ordering)
+    bracket_position = db.Column(db.Integer, nullable=True)
+
+    # Link to actual simulated match
+    match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=True)
+
+    # Winner team for knockout progression
+    winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
+
+    # For custom series: match number in the series
+    series_match_number = db.Column(db.Integer, nullable=True)
 
     # Relationships
     home_team = relationship('Team', foreign_keys=[home_team_id])
     away_team = relationship('Team', foreign_keys=[away_team_id])
+    winner_team = relationship('Team', foreign_keys=[winner_team_id])
     match = relationship('Match')
 
     # Add index for common queries
     __table_args__ = (
         db.Index('ix_fixture_tournament_status', 'tournament_id', 'status'),
+        db.Index('ix_fixture_tournament_stage', 'tournament_id', 'stage'),
     )
 
