@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 
 <head>
     <meta charset="UTF-8">
@@ -8,40 +8,71 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Chosen Palette: Warm Neutrals -->
-    <!-- Application Structure Plan: A two-column dashboard layout. The left column contains all user inputs (sliders for player ratings, buttons for pitch conditions) to control the simulation. The right column displays the outputs dynamically: key calculated metrics (Skill Difference, Skill Factor), a step-by-step breakdown of how probabilities are adjusted, and a final, clear bar chart visualizing the outcome probabilities. This structure was chosen to create a direct, intuitive cause-and-effect relationship for the user, turning a static formula into an interactive learning tool where they can immediately see the impact of their changes. -->
-    <!-- Visualization & Content Choices: Report Info: Player ratings, pitch conditions. Goal: Allow interactive exploration. Viz/Method: Sliders for ratings, Buttons for pitch selection. Justification: Tactile and immediate input. Report Info: Formula steps. Goal: Explain the process. Viz/Method: Dynamic text and a table. Justification: Clearly shows intermediate calculations. Report Info: Final probabilities. Goal: Summarize the result. Viz/Method: Chart.js Bar Chart. Justification: Provides an immediate, powerful visual comparison of outcomes. Library/Method: Vanilla JS for logic, Chart.js for visualization. -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
+        :root {
+            /* Light Theme */
+            --bg: #fdfdfd;
+            --bg-secondary: #f4f2f0;
+            --fg: #333333;
+            --fg-secondary: #5a5a5a;
+            --card-bg: #ffffff;
+            --card-border: #e5e1dd;
+            --accent: #c0392b;
+            --accent-light: rgba(192, 57, 43, 0.1);
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme - VS Code One Dark Pro */
+            --bg: #282c34;
+            --bg-secondary: #21252b;
+            --fg: #abb2bf;
+            --fg-secondary: #5c6370;
+            --card-bg: #21252b;
+            --card-border: #3e4451;
+            --accent: #61afef;
+            --accent-light: rgba(97, 175, 239, 0.15);
+
+            /* One Dark Pro Extended Palette */
+            --one-dark-red: #e06c75;
+            --one-dark-green: #98c379;
+            --one-dark-yellow: #e5c07b;
+            --one-dark-blue: #61afef;
+            --one-dark-purple: #c678dd;
+            --one-dark-cyan: #56b6c2;
+            --one-dark-orange: #d19a66;
+        }
+
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #fdfdfd;
-            color: #333;
+            background-color: var(--bg);
+            color: var(--fg);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         .control-panel-bg {
-            background-color: #f4f2f0;
+            background-color: var(--bg-secondary);
         }
 
         .output-panel-bg {
-            background-color: #ffffff;
+            background-color: var(--card-bg);
         }
 
         .slider-track {
-            background-color: #dcd9d5;
+            background-color: var(--card-border);
         }
 
         .slider-thumb {
-            background-color: #c0392b;
+            background-color: var(--accent);
         }
 
         .btn-pitch {
-            background-color: #e5e1dd;
-            color: #5a5a5a;
+            background-color: var(--card-border);
+            color: var(--fg-secondary);
+            transition: all 0.2s ease;
         }
 
         .btn-pitch.active {
-            background-color: #c0392b;
+            background-color: var(--accent);
             color: #ffffff;
         }
 
@@ -60,10 +91,57 @@
                 height: 350px;
             }
         }
+
+        /* Theme Toggle Button */
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            font-size: 1.25rem;
+            color: var(--fg);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Override Tailwind colors for dark mode compatibility */
+        [data-theme="dark"] .bg-white { background-color: var(--card-bg) !important; }
+        [data-theme="dark"] .bg-gray-50 { background-color: var(--bg-secondary) !important; }
+        [data-theme="dark"] .text-gray-800 { color: var(--fg) !important; }
+        [data-theme="dark"] .text-gray-600 { color: var(--fg-secondary) !important; }
+        [data-theme="dark"] .text-gray-700 { color: var(--fg) !important; }
+        [data-theme="dark"] .text-gray-500 { color: var(--fg-secondary) !important; }
+        [data-theme="dark"] .text-gray-900 { color: var(--fg) !important; }
+        [data-theme="dark"] .border-b { border-color: var(--card-border) !important; }
+        [data-theme="dark"] .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.3) !important; }
+        [data-theme="dark"] .shadow-md { box-shadow: 0 4px 6px rgba(0,0,0,0.3) !important; }
+        [data-theme="dark"] .text-blue-600 { color: var(--accent) !important; }
+        [data-theme="dark"] table thead { background-color: var(--bg-secondary) !important; }
+        [data-theme="dark"] table tbody tr { background-color: var(--card-bg) !important; }
+        [data-theme="dark"] table tbody tr:hover { background-color: var(--bg-secondary) !important; }
     </style>
 </head>
 
 <body class="antialiased">
+    <!-- Theme Toggle Button -->
+    <button class="theme-toggle" id="theme-toggle" title="Toggle Theme">
+        <span id="theme-icon">🌙</span>
+    </button>
 
     <div class="min-h-screen">
         <header class="bg-white shadow-sm">
@@ -324,6 +402,26 @@
 
             initializeChart();
             updateSimulation();
+
+            // Theme Toggle Functionality
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeIcon = document.getElementById('theme-icon');
+            const root = document.documentElement;
+
+            // Initialize theme from localStorage
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                root.setAttribute('data-theme', savedTheme);
+                themeIcon.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+            }
+
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = root.getAttribute('data-theme') || 'light';
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                root.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                themeIcon.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+            });
         });
     </script>
 </body>
