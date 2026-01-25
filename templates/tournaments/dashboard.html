@@ -4,14 +4,14 @@
 <div class="tournament-hub">
 
     <!-- Hero Header -->
-    <div class="tournament-hero glass-panel">
+    <div class="tournament-hero">
         <div class="hero-content">
             <div class="hero-left">
                 <div class="trophy-badge">
                     <i class="fas fa-trophy"></i>
                 </div>
                 <div class="hero-text">
-                    <h1 class="hero-title gradient-text">{{ tournament.name }}</h1>
+                    <h1 class="hero-title">{{ tournament.name }}</h1>
                     <div class="hero-meta">
                         <span class="status-pill {{ tournament.status|lower }}">
                             <i class="fas fa-circle"></i> {{ tournament.status }}
@@ -51,21 +51,21 @@
             {% set remaining = total_matches - played %}
 
             <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-flag-checkered"></i></div>
+                <div class="stat-icon matches-played"><i class="fas fa-flag-checkered"></i></div>
                 <div class="stat-content">
                     <div class="stat-value">{{ played }}</div>
                     <div class="stat-label">Matches Played</div>
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-calendar-alt"></i></div>
+                <div class="stat-icon remaining"><i class="fas fa-calendar-alt"></i></div>
                 <div class="stat-content">
                     <div class="stat-value">{{ remaining }}</div>
                     <div class="stat-label">Remaining</div>
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="stat-icon leader"><i class="fas fa-chart-line"></i></div>
                 <div class="stat-content">
                     <div class="stat-value">{{ standings[0].points if standings else 0 }}</div>
                     <div class="stat-label">Leader Points</div>
@@ -75,10 +75,10 @@
     </div>
 
     <!-- Main Content Grid -->
-    <div class="dashboard-grid">
+    <div class="dashboard-content">
 
         <!-- Standings Section -->
-        <div class="section-card glass-panel">
+        <div class="section-card standings-section">
             <div class="section-header">
                 <h2 class="section-title">
                     <i class="fas fa-ranking-star"></i> Points Table
@@ -125,7 +125,7 @@
         </div>
 
         <!-- Fixtures Section -->
-        <div class="section-card glass-panel">
+        <div class="section-card fixtures-section">
             <div class="section-header">
                 <h2 class="section-title">
                     <i class="fas fa-calendar-week"></i> Schedule
@@ -147,7 +147,7 @@
                         <!-- Home Team -->
                         <div class="team-block">
                             <div class="team-logo-circle"
-                                style="--team-bg: {{ fixture.home_team.team_color }}; background: var(--team-bg);">
+                                style="background: {{ fixture.home_team.team_color }};">
                                 {{ fixture.home_team.short_code }}
                             </div>
                             <div class="team-name-display">{{ fixture.home_team.name }}</div>
@@ -164,7 +164,7 @@
                         <!-- Away Team -->
                         <div class="team-block">
                             <div class="team-logo-circle"
-                                style="--team-bg: {{ fixture.away_team.team_color }}; background: var(--team-bg);">
+                                style="background: {{ fixture.away_team.team_color }};">
                                 {{ fixture.away_team.short_code }}
                             </div>
                             <div class="team-name-display">{{ fixture.away_team.name }}</div>
@@ -189,7 +189,7 @@
                             <input type="hidden" name="fixture_id" value="{{ fixture.id }}">
                             <input type="hidden" name="tournament_id" value="{{ tournament.id }}">
                             <button type="submit" class="action-btn play-btn">
-                                <i class="fas fa-play"></i> Play Match
+                                <i class="fas fa-play"></i> Play Now
                             </button>
                         </form>
                         {% else %}
@@ -205,8 +205,8 @@
                             <form action="{{ url_for('resimulate_fixture', fixture_id=fixture.id) }}" method="POST"
                                 class="inline-form"
                                 onsubmit="return confirm('Re-simulating will delete the current match result and stats. Continue?');">
-                                <button type="submit" class="action-btn danger-btn">
-                                    <i class="fas fa-redo"></i> Re-Simulate
+                                <button type="submit" class="action-btn resimulate-btn">
+                                    <i class="fas fa-redo"></i> Resimulate
                                 </button>
                             </form>
                         </div>
@@ -221,148 +221,360 @@
 </div>
 
 <style>
+    /* ========================================
+       Tournament Dashboard - One Dark Pro Theme
+       ======================================== */
+
+    /* CSS Variables for tournament-specific colors */
+    .tournament-hub {
+        --success: #98c379;
+        --danger: #e06c75;
+        --warning: #e5c07b;
+        --info: #61afef;
+        --purple: #c678dd;
+        --cyan: #56b6c2;
+        --orange: #d19a66;
+    }
+
     /* --- Dashboard Layout --- */
     .tournament-hub {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 1rem;
+        padding: 1.5rem;
         gap: 1.5rem;
         display: flex;
         flex-direction: column;
     }
 
-    .dashboard-grid {
+    .dashboard-content {
         display: grid;
-        grid-template-columns: 1fr 2fr;
-        /* Standings 1/3, Fixtures 2/3 */
+        grid-template-columns: 380px 1fr;
         gap: 1.5rem;
     }
 
     @media (max-width: 1024px) {
-        .dashboard-grid {
+        .dashboard-content {
             grid-template-columns: 1fr;
         }
     }
 
     /* --- Hero Section --- */
     .tournament-hero {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 1.5rem 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .hero-content {
         display: flex;
         flex-wrap: wrap;
         justify-content: space-between;
         align-items: center;
-        padding: 2rem;
-        gap: 2rem;
+        gap: 1.5rem;
     }
 
     .hero-left {
         display: flex;
         align-items: center;
-        gap: 1.5rem;
+        gap: 1.25rem;
     }
 
     .trophy-badge {
-        width: 60px;
-        height: 60px;
-        background: linear-gradient(135deg, #ffd700, #ffaa00);
-        border-radius: 50%;
+        width: 56px;
+        height: 56px;
+        background: linear-gradient(135deg, #e5c07b, #d19a66);
+        border-radius: 14px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.8rem;
-        color: #fff;
-        box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+        font-size: 1.5rem;
+        color: #21252b;
+        box-shadow: 0 4px 12px rgba(229, 192, 123, 0.3);
     }
 
     .hero-title {
-        font-size: 2.2rem;
+        font-size: 1.75rem;
+        font-weight: 700;
         margin: 0;
         line-height: 1.2;
+        color: var(--fg);
     }
 
     .hero-meta {
         display: flex;
         align-items: center;
-        gap: 0.8rem;
+        gap: 0.75rem;
         margin-top: 0.5rem;
-        color: var(--text-secondary);
-        font-size: 0.95rem;
+        color: var(--fg-secondary);
+        font-size: 0.9rem;
+        flex-wrap: wrap;
+    }
+
+    .meta-divider {
+        opacity: 0.4;
+    }
+
+    .meta-detail {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
     }
 
     .status-pill {
-        padding: 0.2rem 0.6rem;
+        padding: 0.25rem 0.75rem;
         border-radius: 20px;
         font-size: 0.8rem;
         text-transform: capitalize;
         display: flex;
         align-items: center;
         gap: 0.4rem;
+        font-weight: 500;
     }
 
-    .status-pill.active {
-        background: rgba(0, 255, 127, 0.15);
-        color: #00ff7f;
+    .status-pill i {
+        font-size: 0.5rem;
+    }
+
+    .status-pill.active,
+    .status-pill.open {
+        background: rgba(152, 195, 121, 0.15);
+        color: var(--success);
+        border: 1px solid rgba(152, 195, 121, 0.3);
     }
 
     .status-pill.completed {
-        background: rgba(100, 149, 237, 0.15);
-        color: #6495ed;
+        background: rgba(97, 175, 239, 0.15);
+        color: var(--info);
+        border: 1px solid rgba(97, 175, 239, 0.3);
+    }
+
+    .hero-actions {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
     }
 
     /* --- Stats Cards --- */
     .quick-stats {
         display: flex;
         gap: 1rem;
+        flex-wrap: wrap;
     }
 
     .stat-card {
-        background: rgba(255, 255, 255, 0.05);
-        padding: 0.8rem 1.2rem;
+        background: var(--bg);
+        padding: 0.875rem 1.25rem;
         border-radius: 12px;
         display: flex;
         align-items: center;
         gap: 1rem;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid var(--card-border);
+        flex: 1;
+        min-width: 160px;
     }
 
     .stat-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-        background: rgba(255, 255, 255, 0.1);
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: var(--accent-primary);
+        font-size: 1rem;
+    }
+
+    .stat-icon.matches-played {
+        background: rgba(152, 195, 121, 0.15);
+        color: var(--success);
+    }
+
+    .stat-icon.remaining {
+        background: rgba(229, 192, 123, 0.15);
+        color: var(--warning);
+    }
+
+    .stat-icon.leader {
+        background: rgba(198, 120, 221, 0.15);
+        color: var(--purple);
     }
 
     .stat-value {
-        font-size: 1.2rem;
+        font-size: 1.5rem;
         font-weight: 700;
         line-height: 1;
+        color: var(--fg);
     }
 
     .stat-label {
         font-size: 0.75rem;
-        color: var(--text-secondary);
+        color: var(--fg-secondary);
+        margin-top: 0.25rem;
     }
 
-    /* --- Section Headers --- */
+    /* --- Section Cards --- */
+    .section-card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 1.5rem;
+    }
+
     .section-header {
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.25rem;
+        border-bottom: 1px solid var(--card-border);
+        padding-bottom: 1rem;
     }
 
     .section-title {
-        font-size: 1.4rem;
+        font-size: 1.2rem;
+        font-weight: 600;
         margin: 0;
         display: flex;
         align-items: center;
         gap: 0.6rem;
+        color: var(--fg);
+    }
+
+    .section-title i {
+        color: var(--accent);
     }
 
     .section-subtitle {
+        font-size: 0.85rem;
+        color: var(--fg-secondary);
+        margin-top: 0.25rem;
+        margin-left: 1.8rem;
+    }
+
+    /* --- Standings Table --- */
+    .standings-container {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .standing-row {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem;
+        border-radius: 10px;
+        transition: background 0.2s;
+        margin-bottom: 0.25rem;
+    }
+
+    .standing-row:hover {
+        background: var(--bg);
+    }
+
+    .rank-badge {
+        width: 28px;
+        height: 28px;
+        background: var(--bg);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-right: 0.875rem;
+        color: var(--fg-secondary);
+    }
+
+    .qualified .rank-badge {
+        background: linear-gradient(135deg, #e5c07b, #d19a66);
+        border: none;
+        color: #21252b;
+        font-weight: 700;
+        box-shadow: 0 2px 8px rgba(229, 192, 123, 0.3);
+    }
+
+    .team-section {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+    }
+
+    .team-stripe {
+        width: 4px;
+        height: 32px;
+        background: var(--team-color);
+        border-radius: 2px;
+        flex-shrink: 0;
+    }
+
+    .team-details {
+        min-width: 0;
+    }
+
+    .team-name-row {
+        font-weight: 600;
         font-size: 0.9rem;
-        color: var(--text-secondary);
-        margin-left: 2rem;
+        color: var(--fg);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .team-stats-mini {
+        font-size: 0.75rem;
+        color: var(--fg-secondary);
+    }
+
+    .stats-section {
+        display: flex;
+        gap: 1.25rem;
+        text-align: right;
+        flex-shrink: 0;
+    }
+
+    .stat-group {
+        min-width: 45px;
+    }
+
+    .stat-label-mini {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        color: var(--fg-secondary);
+        margin-bottom: 2px;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-value-mini {
+        font-family: 'JetBrains Mono', 'SF Mono', monospace;
+        font-size: 0.85rem;
+        color: var(--fg);
+    }
+
+    .stat-value-mini.positive {
+        color: var(--success);
+    }
+
+    .stat-value-mini.negative {
+        color: var(--danger);
+    }
+
+    .stat-value-pts {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: var(--accent);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--fg-secondary);
+    }
+
+    .empty-state i {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
     }
 
     /* --- Fixtures Grid --- */
@@ -373,20 +585,27 @@
     }
 
     .fixture-card {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 16px;
-        padding: 1.2rem;
-        transition: transform 0.2s, box-shadow 0.2s;
+        background: var(--bg);
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        padding: 1.25rem;
+        transition: all 0.2s ease;
         display: flex;
         flex-direction: column;
         gap: 1rem;
     }
 
     .fixture-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-        border-color: rgba(255, 255, 255, 0.1);
+        border-color: var(--accent);
+        box-shadow: 0 4px 16px var(--shadow);
+    }
+
+    .fixture-card.completed {
+        border-left: 3px solid var(--success);
+    }
+
+    .fixture-card.scheduled {
+        border-left: 3px solid var(--warning);
     }
 
     .fixture-header {
@@ -397,24 +616,30 @@
 
     .round-badge {
         font-size: 0.8rem;
-        color: var(--text-secondary);
-        background: rgba(255, 255, 255, 0.05);
-        padding: 2px 8px;
-        border-radius: 4px;
+        color: var(--fg-secondary);
+        background: var(--card-bg);
+        padding: 0.25rem 0.625rem;
+        border-radius: 6px;
+        border: 1px solid var(--card-border);
     }
 
     .status-badge {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         font-weight: 600;
         text-transform: uppercase;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        letter-spacing: 0.5px;
     }
 
     .status-badge.scheduled {
-        color: var(--accent-secondary);
+        color: var(--warning);
+        background: rgba(229, 192, 123, 0.15);
     }
 
     .status-badge.completed {
         color: var(--success);
+        background: rgba(152, 195, 121, 0.15);
     }
 
     .teams-versus {
@@ -428,7 +653,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.4rem;
+        gap: 0.5rem;
         flex: 1;
         text-align: center;
     }
@@ -441,15 +666,16 @@
         align-items: center;
         justify-content: center;
         font-weight: 700;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         color: #fff;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
     }
 
     .team-name-display {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         font-weight: 500;
+        color: var(--fg);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -457,36 +683,46 @@
     }
 
     .vs-divider {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         font-weight: 700;
-        color: var(--text-secondary);
+        color: var(--fg-secondary);
         opacity: 0.5;
     }
 
     .score-display {
         font-size: 0.95rem;
         font-weight: 700;
-        color: var(--text-primary);
+        color: var(--fg);
     }
 
     .score-display .overs {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         font-weight: 400;
-        color: var(--text-secondary);
+        color: var(--fg-secondary);
     }
 
     .result-banner {
-        background: rgba(0, 255, 127, 0.1);
+        background: rgba(152, 195, 121, 0.1);
         color: var(--success);
         font-size: 0.8rem;
-        padding: 0.4rem;
-        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        border-radius: 8px;
         text-align: center;
-        border: 1px solid rgba(0, 255, 127, 0.2);
+        border: 1px solid rgba(152, 195, 121, 0.2);
+        font-weight: 500;
+    }
+
+    .result-banner i {
+        margin-right: 0.4rem;
+        color: var(--warning);
     }
 
     .fixture-footer {
         margin-top: auto;
+    }
+
+    .full-width-form {
+        width: 100%;
     }
 
     .full-width-form button {
@@ -495,6 +731,7 @@
 
     .inline-form {
         display: inline-block;
+        width: 100%;
     }
 
     .completed-actions {
@@ -504,7 +741,7 @@
     }
 
     .action-btn {
-        padding: 0.6rem;
+        padding: 0.625rem 0.875rem;
         border: none;
         border-radius: 8px;
         font-size: 0.85rem;
@@ -520,133 +757,46 @@
     }
 
     .play-btn {
-        background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+        background: linear-gradient(135deg, var(--success), #7cb367);
         color: #fff;
+        box-shadow: 0 2px 8px rgba(152, 195, 121, 0.3);
     }
 
     .play-btn:hover {
-        filter: brightness(1.1);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(152, 195, 121, 0.4);
+    }
+
+    .resimulate-btn {
+        background: rgba(97, 175, 239, 0.15);
+        color: var(--info);
+        border: 1px solid rgba(97, 175, 239, 0.3);
+    }
+
+    .resimulate-btn:hover {
+        background: rgba(97, 175, 239, 0.25);
     }
 
     .outline-btn {
-        background: transparent;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        color: var(--text-primary);
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        color: var(--fg);
     }
 
     .outline-btn:hover {
-        background: rgba(255, 255, 255, 0.05);
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-light);
     }
 
-    .danger-btn {
-        background: rgba(255, 71, 87, 0.1);
-        color: #ff4757;
-        border: 1px solid rgba(255, 71, 87, 0.2);
-    }
-
-    .danger-btn:hover {
-        background: rgba(255, 71, 87, 0.2);
-    }
-
-    /* --- Standings Table --- */
-    .standing-row {
-        display: flex;
-        align-items: center;
-        padding: 0.8rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        transition: background 0.2s;
-    }
-
-    .standing-row:last-child {
-        border-bottom: none;
-    }
-
-    .standing-row:hover {
-        background: rgba(255, 255, 255, 0.02);
-    }
-
-    .qualified .rank-badge {
-        background: linear-gradient(135deg, #FFD700, #FFA500);
-        color: #000;
-        font-weight: 800;
-        box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
-    }
-
-    .rank-badge {
-        width: 28px;
-        height: 28px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.85rem;
-        font-weight: 600;
-        margin-right: 1rem;
-    }
-
-    .team-section {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        gap: 0.8rem;
-    }
-
-    .team-stripe {
-        width: 4px;
-        height: 32px;
-        background: var(--team-color);
-        border-radius: 2px;
-    }
-
-    .team-name-row {
-        font-weight: 600;
-        font-size: 0.95rem;
-    }
-
-    .team-stats-mini {
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-    }
-
-    .stats-section {
-        display: flex;
-        gap: 1.5rem;
-        text-align: right;
-    }
-
-    .stat-label-mini {
-        font-size: 0.65rem;
-        text-transform: uppercase;
-        color: var(--text-secondary);
-        margin-bottom: 2px;
-    }
-
-    .stat-value-mini {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.9rem;
-    }
-
-    .stat-value-mini.positive {
-        color: var(--success);
-    }
-
-    .stat-value-mini.negative {
-        color: var(--danger);
-    }
-
-    .stat-value-pts {
-        font-size: 1.1rem;
-        font-weight: 800;
-        color: var(--accent-primary);
-    }
-
+    /* --- Action Buttons --- */
     .back-btn,
     .delete-btn {
         padding: 0.5rem 1rem;
         border-radius: 8px;
         text-decoration: none;
-        font-size: 0.9rem;
+        font-size: 0.875rem;
+        font-weight: 500;
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
@@ -656,21 +806,57 @@
     }
 
     .back-btn {
-        background: rgba(255, 255, 255, 0.1);
-        color: var(--text-primary);
+        background: var(--bg);
+        border: 1px solid var(--card-border);
+        color: var(--fg);
     }
 
     .back-btn:hover {
-        background: rgba(255, 255, 255, 0.15);
+        border-color: var(--accent);
+        color: var(--accent);
     }
 
     .delete-btn {
-        background: rgba(255, 71, 87, 0.1);
-        color: #ff4757;
+        background: rgba(224, 108, 117, 0.1);
+        color: var(--danger);
+        border: 1px solid rgba(224, 108, 117, 0.2);
     }
 
     .delete-btn:hover {
-        background: rgba(255, 71, 87, 0.25);
+        background: rgba(224, 108, 117, 0.2);
+    }
+
+    /* --- Responsive --- */
+    @media (max-width: 768px) {
+        .tournament-hub {
+            padding: 1rem;
+        }
+
+        .hero-content {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .hero-actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+
+        .quick-stats {
+            flex-direction: column;
+        }
+
+        .stat-card {
+            min-width: 100%;
+        }
+
+        .fixtures-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .completed-actions {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 {% endblock %}
