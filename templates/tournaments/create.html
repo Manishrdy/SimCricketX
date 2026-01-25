@@ -13,13 +13,14 @@
             </div>
             <div class="header-text">
                 <h1>Create Tournament</h1>
-                <p>Set up a new league with your teams</p>
+                <p>Set up a new league, knockout, or series</p>
             </div>
         </div>
     </div>
 
-    <form action="{{ url_for('create_tournament_route') }}" method="POST" onsubmit="return validateForm()">
+    <form action="{{ url_for('create_tournament_route') }}" method="POST" id="tournamentForm" onsubmit="return validateForm()">
 
+        <!-- Tournament Name -->
         <div class="form-section">
             <div class="section-header">
                 <i class="fas fa-edit"></i>
@@ -28,24 +29,25 @@
             <div class="form-group">
                 <label for="tournament-name">Tournament Name</label>
                 <input type="text" id="tournament-name" name="name" class="form-input"
-                       placeholder="e.g. IPL 2026, World Cup..." required>
+                       placeholder="e.g. IPL 2026, World Cup, Ashes Series..." required>
                 <span class="input-hint">Give your tournament a memorable name</span>
             </div>
         </div>
 
+        <!-- Team Selection -->
         <div class="form-section">
             <div class="section-header">
                 <i class="fas fa-users"></i>
                 <h2>Select Teams</h2>
                 <span class="team-counter" id="teamCounter">0 selected</span>
             </div>
-            <p class="section-desc">Select at least 2 teams to participate in this tournament.</p>
+            <p class="section-desc">Select teams to participate. Available modes will update based on your selection.</p>
 
             {% if teams %}
             <div class="teams-selection-grid">
                 {% for team in teams %}
                 <label class="team-select-card">
-                    <input type="checkbox" name="team_ids" value="{{ team.id }}" onchange="updateCounter()">
+                    <input type="checkbox" name="team_ids" value="{{ team.id }}" onchange="updateTeamSelection()">
                     <div class="card-inner">
                         <div class="team-avatar" style="background: {{ team.team_color }};">
                             {{ team.short_code }}
@@ -75,45 +77,325 @@
             {% endif %}
         </div>
 
+        <!-- Tournament Mode Selection -->
         {% if teams %}
+        <div class="form-section" id="modeSection">
+            <div class="section-header">
+                <i class="fas fa-cogs"></i>
+                <h2>Tournament Format</h2>
+            </div>
+            <p class="section-desc">Choose how matches will be structured. Some modes require minimum team counts.</p>
+
+            <div class="mode-selection-grid" id="modeGrid">
+                <!-- Modes will be dynamically populated -->
+                <div class="mode-placeholder">
+                    <i class="fas fa-hand-pointer"></i>
+                    <p>Select at least 2 teams to see available formats</p>
+                </div>
+            </div>
+
+            <!-- Custom Series Options (hidden by default) -->
+            <div class="custom-series-options" id="customSeriesOptions" style="display: none;">
+                <div class="form-group">
+                    <label for="series-matches">Number of Matches</label>
+                    <div class="series-input-group">
+                        <button type="button" class="series-btn" onclick="adjustSeriesMatches(-1)">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <input type="number" id="series-matches" name="series_matches" value="3" min="1" max="7" class="series-input" readonly>
+                        <button type="button" class="series-btn" onclick="adjustSeriesMatches(1)">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <span class="input-hint">Best of 3, 5, or 7 match series</span>
+                </div>
+            </div>
+        </div>
+
         <div class="form-actions">
             <a href="{{ url_for('tournaments') }}" class="cancel-btn">
                 <i class="fas fa-times"></i> Cancel
             </a>
-            <button type="submit" class="submit-btn">
+            <button type="submit" class="submit-btn" id="submitBtn" disabled>
                 <i class="fas fa-trophy"></i> Create Tournament
             </button>
         </div>
         {% endif %}
 
+        <input type="hidden" name="mode" id="selectedMode" value="">
     </form>
 </div>
 
 <script>
-    function updateCounter() {
-        const checked = document.querySelectorAll('input[name="team_ids"]:checked').length;
-        const counter = document.getElementById('teamCounter');
-        counter.textContent = `${checked} selected`;
+    // Mode definitions with icons and colors
+    const modeConfig = {
+        'round_robin': {
+            icon: 'fa-circle-nodes',
+            color: '#61afef',
+            shortName: 'Round Robin'
+        },
+        'double_round_robin': {
+            icon: 'fa-arrows-rotate',
+            color: '#c678dd',
+            shortName: 'Double RR'
+        },
+        'knockout': {
+            icon: 'fa-sitemap',
+            color: '#e06c75',
+            shortName: 'Knockout'
+        },
+        'round_robin_knockout': {
+            icon: 'fa-layer-group',
+            color: '#98c379',
+            shortName: 'League + SF + F'
+        },
+        'double_round_robin_knockout': {
+            icon: 'fa-layer-group',
+            color: '#56b6c2',
+            shortName: 'DRR + SF + F'
+        },
+        'ipl_style': {
+            icon: 'fa-crown',
+            color: '#e5c07b',
+            shortName: 'IPL Style'
+        },
+        'custom_series': {
+            icon: 'fa-handshake',
+            color: '#d19a66',
+            shortName: 'Series'
+        }
+    };
 
-        if (checked >= 2) {
+    let selectedMode = null;
+
+    function updateTeamSelection() {
+        const checked = document.querySelectorAll('input[name="team_ids"]:checked');
+        const count = checked.length;
+        const counter = document.getElementById('teamCounter');
+        counter.textContent = `${count} selected`;
+
+        // Update counter styling
+        if (count >= 2) {
             counter.classList.add('valid');
             counter.classList.remove('invalid');
-        } else if (checked > 0) {
+        } else if (count > 0) {
             counter.classList.add('invalid');
             counter.classList.remove('valid');
         } else {
             counter.classList.remove('valid', 'invalid');
         }
+
+        // Update available modes
+        updateAvailableModes(count);
+    }
+
+    function updateAvailableModes(numTeams) {
+        const modeGrid = document.getElementById('modeGrid');
+        const submitBtn = document.getElementById('submitBtn');
+
+        if (numTeams < 2) {
+            modeGrid.innerHTML = `
+                <div class="mode-placeholder">
+                    <i class="fas fa-hand-pointer"></i>
+                    <p>Select at least 2 teams to see available formats</p>
+                </div>
+            `;
+            submitBtn.disabled = true;
+            selectedMode = null;
+            document.getElementById('selectedMode').value = '';
+            document.getElementById('customSeriesOptions').style.display = 'none';
+            return;
+        }
+
+        // Calculate available modes based on team count
+        const modes = [];
+
+        // Round Robin - always available with 2+ teams
+        modes.push({
+            id: 'round_robin',
+            name: 'Round Robin',
+            desc: `Each team plays every other once (${countRRMatches(numTeams)} matches)`
+        });
+
+        // Double Round Robin
+        modes.push({
+            id: 'double_round_robin',
+            name: 'Double Round Robin',
+            desc: `Home & away for all teams (${countRRMatches(numTeams) * 2} matches)`
+        });
+
+        // Knockout
+        const byes = nextPowerOf2(numTeams) - numTeams;
+        if (byes === 0) {
+            modes.push({
+                id: 'knockout',
+                name: 'Pure Knockout',
+                desc: `Single elimination (${numTeams - 1} matches)`
+            });
+        } else {
+            modes.push({
+                id: 'knockout',
+                name: 'Pure Knockout',
+                desc: `Single elimination with ${byes} bye(s) (${numTeams - 1} matches)`
+            });
+        }
+
+        // Modes requiring 4+ teams
+        if (numTeams >= 4) {
+            modes.push({
+                id: 'round_robin_knockout',
+                name: 'League + Semis + Final',
+                desc: `Round robin then top 4 knockouts (${countRRMatches(numTeams) + 3} matches)`
+            });
+
+            modes.push({
+                id: 'double_round_robin_knockout',
+                name: 'Double League + Playoffs',
+                desc: `Double RR then top 4 knockouts (${countRRMatches(numTeams) * 2 + 3} matches)`
+            });
+
+            modes.push({
+                id: 'ipl_style',
+                name: 'IPL Style Playoffs',
+                desc: `League + Q1, Eliminator, Q2, Final (${countRRMatches(numTeams) + 4} matches)`
+            });
+        }
+
+        // Custom Series (only for exactly 2 teams)
+        if (numTeams === 2) {
+            modes.push({
+                id: 'custom_series',
+                name: 'Custom Series',
+                desc: 'Design your own series between two teams'
+            });
+        }
+
+        // Render mode cards
+        let html = '';
+        modes.forEach((mode, index) => {
+            const config = modeConfig[mode.id] || { icon: 'fa-trophy', color: '#61afef' };
+            const isSelected = selectedMode === mode.id;
+            html += `
+                <div class="mode-card ${isSelected ? 'selected' : ''}" onclick="selectMode('${mode.id}')" data-mode="${mode.id}">
+                    <div class="mode-icon" style="background: ${config.color}20; color: ${config.color};">
+                        <i class="fas ${config.icon}"></i>
+                    </div>
+                    <div class="mode-content">
+                        <h4 class="mode-name">${mode.name}</h4>
+                        <p class="mode-desc">${mode.desc}</p>
+                    </div>
+                    <div class="mode-check">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            `;
+        });
+
+        modeGrid.innerHTML = html;
+
+        // Re-select previously selected mode if still valid
+        if (selectedMode) {
+            const modeExists = modes.some(m => m.id === selectedMode);
+            if (!modeExists) {
+                selectedMode = null;
+                document.getElementById('selectedMode').value = '';
+                submitBtn.disabled = true;
+            }
+        }
+
+        // Show custom series options if that mode is selected
+        updateCustomSeriesVisibility();
+    }
+
+    function selectMode(modeId) {
+        selectedMode = modeId;
+        document.getElementById('selectedMode').value = modeId;
+
+        // Update UI
+        document.querySelectorAll('.mode-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        const selectedCard = document.querySelector(`[data-mode="${modeId}"]`);
+        if (selectedCard) {
+            selectedCard.classList.add('selected');
+        }
+
+        // Enable submit button
+        document.getElementById('submitBtn').disabled = false;
+
+        // Show/hide custom series options
+        updateCustomSeriesVisibility();
+    }
+
+    function updateCustomSeriesVisibility() {
+        const customOptions = document.getElementById('customSeriesOptions');
+        if (selectedMode === 'custom_series') {
+            customOptions.style.display = 'block';
+        } else {
+            customOptions.style.display = 'none';
+        }
+    }
+
+    function adjustSeriesMatches(delta) {
+        const input = document.getElementById('series-matches');
+        let value = parseInt(input.value) + delta;
+        // Clamp to odd numbers between 1 and 7
+        value = Math.max(1, Math.min(7, value));
+        // Force odd number for "best of" format
+        if (value % 2 === 0) {
+            value = delta > 0 ? value + 1 : value - 1;
+        }
+        value = Math.max(1, Math.min(7, value));
+        input.value = value;
+    }
+
+    function countRRMatches(n) {
+        return (n * (n - 1)) / 2;
+    }
+
+    function nextPowerOf2(n) {
+        return Math.pow(2, Math.ceil(Math.log2(n)));
     }
 
     function validateForm() {
         const checked = document.querySelectorAll('input[name="team_ids"]:checked').length;
-        if (checked < 2) {
-            alert("Please select at least 2 teams to create a tournament.");
+        const mode = document.getElementById('selectedMode').value;
+        const name = document.getElementById('tournament-name').value.trim();
+
+        if (!name) {
+            alert("Please enter a tournament name.");
             return false;
         }
+
+        if (checked < 2) {
+            alert("Please select at least 2 teams.");
+            return false;
+        }
+
+        if (!mode) {
+            alert("Please select a tournament format.");
+            return false;
+        }
+
+        // Mode-specific validation
+        if (mode === 'custom_series' && checked !== 2) {
+            alert("Custom series requires exactly 2 teams.");
+            return false;
+        }
+
+        const modesWith4Teams = ['round_robin_knockout', 'double_round_robin_knockout', 'ipl_style'];
+        if (modesWith4Teams.includes(mode) && checked < 4) {
+            alert("This format requires at least 4 teams.");
+            return false;
+        }
+
         return true;
     }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateTeamSelection();
+    });
 </script>
 
 <style>
@@ -127,6 +409,8 @@
         --warning: #e5c07b;
         --info: #61afef;
         --purple: #c678dd;
+        --cyan: #56b6c2;
+        --orange: #d19a66;
 
         max-width: 900px;
         margin: 0 auto;
@@ -167,7 +451,7 @@
     .header-icon {
         width: 56px;
         height: 56px;
-        background: linear-gradient(135deg, var(--warning), var(--orange, #d19a66));
+        background: linear-gradient(135deg, var(--warning), var(--orange));
         border-radius: 14px;
         display: flex;
         align-items: center;
@@ -292,8 +576,8 @@
     /* --- Teams Selection Grid --- */
     .teams-selection-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 0.875rem;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 0.75rem;
     }
 
     .team-select-card {
@@ -312,10 +596,10 @@
         background: var(--bg);
         border: 2px solid var(--card-border);
         border-radius: 12px;
-        padding: 1rem;
+        padding: 0.875rem;
         display: flex;
         align-items: center;
-        gap: 0.875rem;
+        gap: 0.75rem;
         transition: all 0.2s ease;
         height: 100%;
     }
@@ -326,14 +610,14 @@
     }
 
     .team-avatar {
-        width: 40px;
-        height: 40px;
-        border-radius: 10px;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: 700;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         color: #fff;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
         flex-shrink: 0;
@@ -348,12 +632,12 @@
 
     .team-code {
         font-weight: 700;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         color: var(--fg);
     }
 
     .team-name {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: var(--fg-secondary);
         white-space: nowrap;
         overflow: hidden;
@@ -361,8 +645,8 @@
     }
 
     .checkbox-indicator {
-        width: 24px;
-        height: 24px;
+        width: 22px;
+        height: 22px;
         border-radius: 6px;
         border: 2px solid var(--card-border);
         display: flex;
@@ -370,12 +654,11 @@
         justify-content: center;
         color: transparent;
         transition: all 0.2s ease;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         background: var(--card-bg);
         flex-shrink: 0;
     }
 
-    /* Checked State */
     .team-select-card input:checked + .card-inner {
         border-color: var(--accent);
         background: var(--accent-light);
@@ -385,6 +668,145 @@
         background: var(--accent);
         border-color: var(--accent);
         color: #fff;
+    }
+
+    /* --- Mode Selection Grid --- */
+    .mode-selection-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .mode-placeholder {
+        text-align: center;
+        padding: 2.5rem 1rem;
+        color: var(--fg-secondary);
+        background: var(--bg);
+        border-radius: 12px;
+        border: 2px dashed var(--card-border);
+    }
+
+    .mode-placeholder i {
+        font-size: 2rem;
+        margin-bottom: 0.75rem;
+        opacity: 0.5;
+    }
+
+    .mode-placeholder p {
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    .mode-card {
+        background: var(--bg);
+        border: 2px solid var(--card-border);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .mode-card:hover {
+        border-color: var(--accent);
+        background: var(--accent-light);
+    }
+
+    .mode-card.selected {
+        border-color: var(--accent);
+        background: var(--accent-light);
+    }
+
+    .mode-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+
+    .mode-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .mode-name {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0;
+        color: var(--fg);
+    }
+
+    .mode-desc {
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+        margin: 0.25rem 0 0;
+    }
+
+    .mode-check {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: transparent;
+        font-size: 1.1rem;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .mode-card.selected .mode-check {
+        color: var(--accent);
+    }
+
+    /* --- Custom Series Options --- */
+    .custom-series-options {
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--card-border);
+    }
+
+    .series-input-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        max-width: 200px;
+    }
+
+    .series-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        border: 2px solid var(--card-border);
+        background: var(--bg);
+        color: var(--fg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .series-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .series-input {
+        width: 60px;
+        height: 40px;
+        text-align: center;
+        font-size: 1.1rem;
+        font-weight: 600;
+        background: var(--bg);
+        border: 2px solid var(--card-border);
+        border-radius: 8px;
+        color: var(--fg);
     }
 
     /* --- No Teams State --- */
@@ -477,9 +899,15 @@
         box-shadow: 0 4px 12px rgba(152, 195, 121, 0.3);
     }
 
-    .submit-btn:hover {
+    .submit-btn:hover:not(:disabled) {
         transform: translateY(-2px);
         box-shadow: 0 6px 16px rgba(152, 195, 121, 0.4);
+    }
+
+    .submit-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
     }
 
     /* --- Responsive --- */
