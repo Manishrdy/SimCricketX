@@ -220,6 +220,19 @@ class User(UserMixin):
     def __init__(self, email):
         self.id = email
 
+
+def _safe_get_attr(obj, attr, default=None):
+    """
+    Safely get an attribute from an object, returning default if:
+    - Attribute doesn't exist
+    - Attribute value is None
+
+    This is more robust than hasattr() which returns True for None values.
+    """
+    value = getattr(obj, attr, None)
+    return value if value is not None else default
+
+
 # ?????? App Factory ??????
 def create_app():
     # --- Flask setup ---
@@ -1377,29 +1390,30 @@ def create_app():
                         # Fallback if no fixture ID (shouldn't happen in tournament mode)
                         pass
 
-                    # Set Scores from match Instance
-                    db_match.home_team_score = match.score if match.batting_team == match.home_xi else match.first_innings_score
-                    db_match.home_team_wickets = match.wickets if match.batting_team == match.home_xi else match.first_innings_wickets
-                    db_match.home_team_overs = match.overs if match.batting_team == match.home_xi else match.first_innings_overs
-                    
-                    # Correct logic involves knowing who batted 1st. 
-                    # Assuming standard flow managed by engine.
-                    # Simplified for V1:
-                    db_match.home_team_score = match.home_score if hasattr(match, 'home_score') else 0
-                    db_match.home_team_wickets = match.home_wickets if hasattr(match, 'home_wickets') else 0
-                    db_match.home_team_overs = match.home_overs if hasattr(match, 'home_overs') else 0.0
-                    
-                    db_match.away_team_score = match.away_score if hasattr(match, 'away_score') else 0
-                    db_match.away_team_wickets = match.away_wickets if hasattr(match, 'away_wickets') else 0
-                    db_match.away_team_overs = match.away_overs if hasattr(match, 'away_overs') else 0.0
+                    # Set Scores from match Instance (with None-safe extraction)
+                    db_match.home_team_score = _safe_get_attr(match, 'home_score', 0)
+                    db_match.home_team_wickets = _safe_get_attr(match, 'home_wickets', 0)
+                    db_match.home_team_overs = _safe_get_attr(match, 'home_overs', 0.0)
 
-                    # Determine Winner ID
-                    winner_name = match.winner 
+                    db_match.away_team_score = _safe_get_attr(match, 'away_score', 0)
+                    db_match.away_team_wickets = _safe_get_attr(match, 'away_wickets', 0)
+                    db_match.away_team_overs = _safe_get_attr(match, 'away_overs', 0.0)
+
+                    # Determine Winner ID (case-insensitive matching)
+                    winner_name = getattr(match, 'winner', None)
                     if winner_name and fixture:
-                        if winner_name == fixture.home_team.name or winner_name == fixture.home_team.short_code:
+                        winner_name_lower = winner_name.lower().strip()
+                        home_name = (fixture.home_team.name or '').lower().strip()
+                        home_code = (fixture.home_team.short_code or '').lower().strip()
+                        away_name = (fixture.away_team.name or '').lower().strip()
+                        away_code = (fixture.away_team.short_code or '').lower().strip()
+
+                        if winner_name_lower in (home_name, home_code):
                             db_match.winner_team_id = fixture.home_team_id
-                        elif winner_name == fixture.away_team.name or winner_name == fixture.away_team.short_code:
+                        elif winner_name_lower in (away_name, away_code):
                             db_match.winner_team_id = fixture.away_team_id
+                        else:
+                            app.logger.warning(f"[Tournament] Could not match winner '{winner_name}' to teams")
 
                     db.session.add(db_match)
                     db.session.commit()
@@ -1493,39 +1507,30 @@ def create_app():
                         # Using match instance properties
                         pass # StatsAggregator handles this better.
                     
-                    # Lets use TournamentEngine to just update standings if we can trust the 'match' object has scores?
-                    # TournamentEngine.update_standings takes a DB Match object with scores.
-                    # So we MUST populate the scores in db_match.
-                    
-                    # Extract scores from match instance
-                    # Home is home_xi, Away is away_xi.
-                    # If Home batted 1st:
-                    # home_score = match.first_innings_score
-                    # away_score = match.score (current)
-                    
-                    # Using existing properties
-                    # We need to know who is Home Team (Tournament Context)
-                    # match.home_xi matches fixture.home_team_id players?
-                    
-                    # Lets just extract from match.data['innings'] if available, or current state.
-                    # Simplified:
-                    db_match.home_team_score = match.home_score if hasattr(match, 'home_score') else 0
-                    db_match.home_team_wickets = match.home_wickets if hasattr(match, 'home_wickets') else 0
-                    db_match.home_team_overs = match.home_overs if hasattr(match, 'home_overs') else 0.0
-                    
-                    db_match.away_team_score = match.away_score if hasattr(match, 'away_score') else 0
-                    db_match.away_team_wickets = match.away_wickets if hasattr(match, 'away_wickets') else 0
-                    db_match.away_team_overs = match.away_overs if hasattr(match, 'away_overs') else 0.0
-                    
-                    # Determine Winner ID
-                    # If result says "won"
-                    winner_name = match.winner # Short code or name?
-                    # Map back to ID.
-                    if winner_name:
-                        if winner_name == fixture.home_team.name or winner_name == fixture.home_team.short_code:
+                    # Extract scores from match instance (with None-safe extraction)
+                    db_match.home_team_score = _safe_get_attr(match, 'home_score', 0)
+                    db_match.home_team_wickets = _safe_get_attr(match, 'home_wickets', 0)
+                    db_match.home_team_overs = _safe_get_attr(match, 'home_overs', 0.0)
+
+                    db_match.away_team_score = _safe_get_attr(match, 'away_score', 0)
+                    db_match.away_team_wickets = _safe_get_attr(match, 'away_wickets', 0)
+                    db_match.away_team_overs = _safe_get_attr(match, 'away_overs', 0.0)
+
+                    # Determine Winner ID (case-insensitive matching)
+                    winner_name = getattr(match, 'winner', None)
+                    if winner_name and fixture:
+                        winner_name_lower = winner_name.lower().strip()
+                        home_name = (fixture.home_team.name or '').lower().strip()
+                        home_code = (fixture.home_team.short_code or '').lower().strip()
+                        away_name = (fixture.away_team.name or '').lower().strip()
+                        away_code = (fixture.away_team.short_code or '').lower().strip()
+
+                        if winner_name_lower in (home_name, home_code):
                             db_match.winner_team_id = fixture.home_team_id
-                        elif winner_name == fixture.away_team.name or winner_name == fixture.away_team.short_code:
+                        elif winner_name_lower in (away_name, away_code):
                             db_match.winner_team_id = fixture.away_team_id
+                        else:
+                            app.logger.warning(f"[Tournament] Could not match winner '{winner_name}' to teams")
                             
                     db.session.add(db_match)
                     db.session.commit()
@@ -2160,41 +2165,52 @@ def create_app():
         """
         Reset a tournament fixture to allow re-simulation.
         Deletes the associated match data and resets standings.
+
+        All operations are performed in a single transaction to ensure
+        data consistency - if any operation fails, everything is rolled back.
         """
         fixture = db.session.get(TournamentFixture, fixture_id)
-        if not fixture or fixture.tournament.user_id != current_user.id:
+        if not fixture:
             return "Fixture not found", 404
-        
+
+        # Authorization check
+        if fixture.tournament.user_id != current_user.id:
+            app.logger.warning(f"Unauthorized resimulate attempt: user {current_user.id} on fixture {fixture_id}")
+            return "Unauthorized", 403
+
+        # Check if fixture is actually completed
+        if fixture.status != 'Completed':
+            return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament_id))
+
         tournament_id = fixture.tournament_id
-        
+
         try:
-            # If there's an associated match, delete it and reverse standings
+            # If there's an associated match, reverse standings and delete it
             if fixture.match_id:
                 match = db.session.get(Match, fixture.match_id)
                 if match:
-                    # Reverse the standings update
-                    from engine.tournament_engine import TournamentEngine
-                    engine = TournamentEngine()
-                    engine.reverse_standings(match)
-                    
-                    # Delete match scorecards
+                    # Reverse the standings update (commit=False for transaction safety)
+                    tournament_engine.reverse_standings(match, commit=False)
+
+                    # Delete match scorecards first (foreign key constraint)
                     MatchScorecard.query.filter_by(match_id=fixture.match_id).delete()
-                    
+
                     # Delete the match record
                     db.session.delete(match)
-            
+
             # Reset fixture status
             fixture.status = 'Scheduled'
             fixture.match_id = None
-            
+
+            # Single commit for all operations - atomic transaction
             db.session.commit()
-            app.logger.info(f"Fixture {fixture_id} reset for re-simulation")
-            
+            app.logger.info(f"Fixture {fixture_id} reset for re-simulation successfully")
+
         except Exception as e:
             db.session.rollback()
-            app.logger.error(f"Error resimulating fixture {fixture_id}: {e}")
+            app.logger.error(f"Error resimulating fixture {fixture_id}: {e}", exc_info=True)
             return f"Error: {str(e)}", 500
-        
+
         return redirect(url_for("tournament_dashboard", tournament_id=tournament_id))
 
     

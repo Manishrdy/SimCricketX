@@ -168,23 +168,28 @@ class TournamentTeam(db.Model):
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
 
     # Standings Stats
-    played = db.Column(db.Integer, default=0)
-    won = db.Column(db.Integer, default=0)
-    lost = db.Column(db.Integer, default=0)
-    tied = db.Column(db.Integer, default=0)
-    no_result = db.Column(db.Integer, default=0)
-    points = db.Column(db.Integer, default=0)
+    played = db.Column(db.Integer, default=0, nullable=False)
+    won = db.Column(db.Integer, default=0, nullable=False)
+    lost = db.Column(db.Integer, default=0, nullable=False)
+    tied = db.Column(db.Integer, default=0, nullable=False)
+    no_result = db.Column(db.Integer, default=0, nullable=False)
+    points = db.Column(db.Integer, default=0, nullable=False)
 
     # NRR Components
-    runs_scored = db.Column(db.Integer, default=0)
-    overs_faced = db.Column(db.Float, default=0.0)
-    runs_conceded = db.Column(db.Integer, default=0)
-    overs_bowled = db.Column(db.Float, default=0.0)
+    runs_scored = db.Column(db.Integer, default=0, nullable=False)
+    overs_faced = db.Column(db.Float, default=0.0, nullable=False)
+    runs_conceded = db.Column(db.Integer, default=0, nullable=False)
+    overs_bowled = db.Column(db.Float, default=0.0, nullable=False)
 
-    net_run_rate = db.Column(db.Float, default=0.0)
+    net_run_rate = db.Column(db.Float, default=0.0, nullable=False)
 
     # Relationship to access Team details (name, etc.)
     team = relationship('Team')
+
+    # Ensure each team can only appear once per tournament
+    __table_args__ = (
+        db.UniqueConstraint('tournament_id', 'team_id', name='uq_tournament_team'),
+    )
 
 class TournamentFixture(db.Model):
     """Scheduled Match in a Tournament"""
@@ -198,12 +203,17 @@ class TournamentFixture(db.Model):
     away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
 
     # Meta
-    round_number = db.Column(db.Integer, default=1)
-    status = db.Column(db.String(20), default='Scheduled') # Scheduled, Completed
-    match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=True) # Link to actual simulated match
+    round_number = db.Column(db.Integer, default=1, nullable=False)
+    status = db.Column(db.String(20), default='Scheduled', nullable=False)  # Scheduled, Completed
+    match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=True)  # Link to actual simulated match
 
     # Relationships
     home_team = relationship('Team', foreign_keys=[home_team_id])
     away_team = relationship('Team', foreign_keys=[away_team_id])
     match = relationship('Match')
+
+    # Add index for common queries
+    __table_args__ = (
+        db.Index('ix_fixture_tournament_status', 'tournament_id', 'status'),
+    )
 
