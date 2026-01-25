@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
@@ -12,11 +12,53 @@
         rel="stylesheet">
 
     <style>
+        :root {
+            /* Light Theme */
+            --bg: #f8f9fa;
+            --bg-secondary: #e9ecef;
+            --fg: #212529;
+            --fg-secondary: #6c757d;
+            --card-bg: #ffffff;
+            --card-border: #dee2e6;
+            --accent: #0d6efd;
+            --accent-light: rgba(13, 110, 253, 0.1);
+            --success: #198754;
+            --danger: #dc3545;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme - VS Code One Dark Pro */
+            --bg: #282c34;
+            --bg-secondary: #21252b;
+            --fg: #abb2bf;
+            --fg-secondary: #5c6370;
+            --card-bg: #21252b;
+            --card-border: #3e4451;
+            --accent: #61afef;
+            --accent-light: rgba(97, 175, 239, 0.15);
+            --success: #98c379;
+            --danger: #e06c75;
+
+            /* One Dark Pro Extended Palette */
+            --one-dark-red: #e06c75;
+            --one-dark-green: #98c379;
+            --one-dark-yellow: #e5c07b;
+            --one-dark-blue: #61afef;
+            --one-dark-purple: #c678dd;
+            --one-dark-cyan: #56b6c2;
+            --one-dark-orange: #d19a66;
+        }
+
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-            color: #e2e8f0;
+            background: var(--bg);
+            color: var(--fg);
             min-height: 100vh;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        [data-theme="dark"] body {
+            background: linear-gradient(135deg, #282c34 0%, #21252b 50%, #282c34 100%);
         }
 
         .cricket-heading {
@@ -25,38 +67,39 @@
         }
 
         .glass-panel {
-            background: rgba(30, 41, 59, 0.8);
+            background: var(--card-bg);
             backdrop-filter: blur(20px);
-            border: 1px solid rgba(148, 163, 184, 0.1);
+            border: 1px solid var(--card-border);
         }
 
         .pitch-card {
-            background: linear-gradient(145deg, #1e293b, #334155);
+            background: var(--bg-secondary);
             transition: all 0.3s ease;
-            border: 2px solid transparent;
+            border: 2px solid var(--card-border);
         }
 
         .pitch-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            border-color: var(--accent);
         }
 
         .pitch-card.active {
-            border-color: #10b981;
-            background: linear-gradient(145deg, #064e3b, #065f46);
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+            border-color: var(--one-dark-green, #98c379);
+            background: rgba(152, 195, 121, 0.15);
+            box-shadow: 0 0 20px rgba(152, 195, 121, 0.3);
         }
 
         .role-card {
-            background: linear-gradient(145deg, #374151, #4b5563);
-            border: 1px solid rgba(156, 163, 175, 0.2);
+            background: var(--bg-secondary);
+            border: 1px solid var(--card-border);
             transition: all 0.3s ease;
         }
 
         .role-card.active {
-            background: linear-gradient(145deg, #1f2937, #374151);
-            border-color: #3b82f6;
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+            background: var(--accent-light);
+            border-color: var(--accent);
+            box-shadow: 0 0 15px rgba(97, 175, 239, 0.3);
         }
 
         .performance-meter {
@@ -118,14 +161,15 @@
         }
 
         .phase-tab {
-            background: rgba(51, 65, 85, 0.6);
-            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: var(--bg-secondary);
+            border: 1px solid var(--card-border);
             transition: all 0.3s ease;
+            color: var(--fg);
         }
 
         .phase-tab.active {
-            background: linear-gradient(145deg, #059669, #10b981);
-            border-color: #10b981;
+            background: linear-gradient(145deg, var(--accent), var(--one-dark-purple, #c678dd));
+            border-color: var(--accent);
             color: white;
         }
 
@@ -164,10 +208,55 @@
             background: linear-gradient(45deg, #6b7280, #9ca3af);
             color: white;
         }
+
+        /* Theme Toggle Button */
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            font-size: 1.25rem;
+            color: var(--fg);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Dark mode specific overrides */
+        [data-theme="dark"] .bg-slate-800 { background-color: var(--bg-secondary) !important; }
+        [data-theme="dark"] .text-slate-200 { color: var(--fg) !important; }
+        [data-theme="dark"] .text-slate-300 { color: var(--fg) !important; }
+        [data-theme="dark"] .text-slate-400 { color: var(--fg-secondary) !important; }
+        [data-theme="dark"] .text-green-400 { color: var(--one-dark-green, #98c379) !important; }
+        [data-theme="dark"] .text-red-400 { color: var(--one-dark-red, #e06c75) !important; }
+        [data-theme="dark"] .text-blue-400 { color: var(--one-dark-blue, #61afef) !important; }
+        [data-theme="dark"] .text-yellow-400 { color: var(--one-dark-yellow, #e5c07b) !important; }
+        [data-theme="dark"] .text-purple-400 { color: var(--one-dark-purple, #c678dd) !important; }
+        [data-theme="dark"] .border-slate-700 { border-color: var(--card-border) !important; }
+        [data-theme="dark"] .border-slate-600 { border-color: var(--card-border) !important; }
     </style>
 </head>
 
 <body class="antialiased">
+    <!-- Theme Toggle Button -->
+    <button class="theme-toggle" id="theme-toggle" title="Toggle Theme">
+        <span id="theme-icon">☀️</span>
+    </button>
+
     <div class="min-h-screen">
         <!-- Header -->
         <header class="glass-panel border-b border-slate-700">
@@ -917,6 +1006,24 @@
         // Initialize the analyzer when DOM is loaded
         document.addEventListener('DOMContentLoaded', () => {
             new CricketAnalyzer();
+
+            // Theme Toggle Functionality
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeIcon = document.getElementById('theme-icon');
+            const root = document.documentElement;
+
+            // Initialize theme from localStorage (default to dark for this page)
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            root.setAttribute('data-theme', savedTheme);
+            themeIcon.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = root.getAttribute('data-theme') || 'dark';
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                root.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                themeIcon.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+            });
         });
     </script>
 </body>
