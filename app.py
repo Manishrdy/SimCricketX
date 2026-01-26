@@ -2188,21 +2188,22 @@ def create_app():
 
         try:
             # If there's an associated match, reverse standings and delete it
-            if fixture.match_id:
-                match = db.session.get(Match, fixture.match_id)
-                if match:
-                    # Reverse the standings update (commit=False for transaction safety)
-                    tournament_engine.reverse_standings(match, commit=False)
+            if not fixture.match_id:
+                return "Cannot resimulate: fixture has no match data.", 409
 
-                    # Delete match scorecards first (foreign key constraint)
-                    MatchScorecard.query.filter_by(match_id=fixture.match_id).delete()
+            match = db.session.get(Match, fixture.match_id)
+            if not match:
+                return "Cannot resimulate: match record not found.", 409
 
-                    # Delete the match record
-                    db.session.delete(match)
+            # Reverse the standings update (commit=False for transaction safety)
+            if not tournament_engine.reverse_standings(match, commit=False):
+                return "Cannot resimulate: failed to reverse standings.", 409
 
-            # Reset fixture status
-            fixture.status = 'Scheduled'
-            fixture.match_id = None
+            # Delete match scorecards first (foreign key constraint)
+            MatchScorecard.query.filter_by(match_id=fixture.match_id).delete()
+
+            # Delete the match record
+            db.session.delete(match)
 
             # Single commit for all operations - atomic transaction
             db.session.commit()
