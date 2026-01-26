@@ -214,33 +214,15 @@ class TournamentFixture(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
-
-    # Teams (nullable for knockout fixtures where teams are TBD)
     home_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
     away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
-
-    # Meta
     round_number = db.Column(db.Integer, default=1, nullable=False)
-    status = db.Column(db.String(20), default='Scheduled', nullable=False)  # Scheduled, Completed, Locked
-
-    # Stage information for multi-stage tournaments
-    # Stages: 'league', 'qualifier_1', 'qualifier_2', 'eliminator', 'semifinal_1', 'semifinal_2', 'final'
+    status = db.Column(db.String(20), default='Scheduled', nullable=False)
     stage = db.Column(db.String(30), default='league', nullable=False)
-
-    # For knockout/playoff: describes what this match determines
-    # e.g., "Winner plays Final", "Loser Eliminated", "Winner to Qualifier 2"
     stage_description = db.Column(db.String(100), nullable=True)
-
-    # Position in bracket (for knockout display ordering)
     bracket_position = db.Column(db.Integer, nullable=True)
-
-    # Link to actual simulated match
     match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=True)
-
-    # Winner team for knockout progression
     winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
-
-    # For custom series: match number in the series
     series_match_number = db.Column(db.Integer, nullable=True)
 
     # Relationships
@@ -249,7 +231,6 @@ class TournamentFixture(db.Model):
     winner_team = relationship('Team', foreign_keys=[winner_team_id])
     match = relationship('Match')
 
-    # Add index for common queries
     __table_args__ = (
         db.Index('ix_fixture_tournament_status', 'tournament_id', 'status'),
         db.Index('ix_fixture_tournament_stage', 'tournament_id', 'stage'),
