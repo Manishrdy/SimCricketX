@@ -375,8 +375,8 @@ class TournamentEngine:
                 # Bye match. Create it as completed.
                 winner = t1 if t1 is not None else t2
 
-                home_id = t1 if t1 is not None else None
-                away_id = t2 if t2 is not None else None
+                home_id = t1 if t1 is not None else bye_id
+                away_id = t2 if t2 is not None else bye_id
 
                 fixture = TournamentFixture(
                     tournament_id=tournament_id,
@@ -463,6 +463,8 @@ class TournamentEngine:
             stage=self.STAGE_LEAGUE
         ).scalar() or 0
 
+        tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
+
         # Semi-final 1: 1st vs 4th
         sf1 = TournamentFixture(
             tournament_id=tournament_id,
@@ -514,6 +516,8 @@ class TournamentEngine:
             tournament_id=tournament_id,
             stage=self.STAGE_LEAGUE
         ).scalar() or 0
+
+        tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
 
         # Qualifier 1: 1st vs 2nd
         q1 = TournamentFixture(
@@ -1253,6 +1257,7 @@ class TournamentEngine:
             fixture.winner_team_id = None
             fixture.status = 'Scheduled'
             fixture.standings_applied = False
+            fixture.match_id = None
 
             if fixture.stage != self.STAGE_LEAGUE:
                 self._reset_knockout_bracket(match.tournament_id, fixture.bracket_position)
@@ -1277,6 +1282,7 @@ class TournamentEngine:
         This clears dependent teams, match links, and winners, and locks fixtures
         that should be repopulated once earlier rounds are replayed.
         """
+        tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
         downstream = TournamentFixture.query.filter(
             TournamentFixture.tournament_id == tournament_id,
             TournamentFixture.bracket_position != None,
@@ -1284,12 +1290,33 @@ class TournamentEngine:
         ).all()
 
         for fixture in downstream:
-            fixture.home_team_id = None
-            fixture.away_team_id = None
+            fixture.home_team_id = tbd_id
+            fixture.away_team_id = tbd_id
             fixture.winner_team_id = None
             fixture.match_id = None
             fixture.status = 'Locked'
             fixture.standings_applied = False
+
+    def _get_placeholder_team_id(self, tournament_id: int, label: str) -> int:
+        """
+        Ensure a per-user placeholder team (BYE/TBD) exists and return its ID.
+        """
+        tournament = db.session.get(Tournament, tournament_id)
+        if not tournament:
+            raise ValueError(f"Tournament {tournament_id} not found.")
+
+        placeholder = Team.query.filter_by(user_id=tournament.user_id, name=label).first()
+        if placeholder:
+            return placeholder.id
+
+        placeholder = Team(
+            user_id=tournament.user_id,
+            name=label,
+            short_code=label
+        )
+        db.session.add(placeholder)
+        db.session.flush()
+        return placeholder.id
 
     def _reverse_nrr_components(self, home_stats, away_stats, match):
         """Reverse the NRR component updates from a match."""

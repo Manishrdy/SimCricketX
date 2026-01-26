@@ -2195,12 +2195,14 @@ def create_app():
             if not match:
                 return "Cannot resimulate: match record not found.", 409
 
+            match_id = match.id
+
             # Reverse the standings update (commit=False for transaction safety)
             if not tournament_engine.reverse_standings(match, commit=False):
                 return "Cannot resimulate: failed to reverse standings.", 409
 
-            # Delete match scorecards first (foreign key constraint)
-            MatchScorecard.query.filter_by(match_id=fixture.match_id).delete()
+            # Delete match scorecards (foreign key constraint)
+            MatchScorecard.query.filter_by(match_id=match_id).delete()
 
             # Delete the match record
             db.session.delete(match)
