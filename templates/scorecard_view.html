@@ -1,0 +1,212 @@
+{% extends "layout.html" %}
+
+{% block title %}
+Match Result - SimCricketX
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .result-header {
+        text-align: center;
+        margin-bottom: 2rem;
+        padding: 2rem;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+    }
+
+    .match-result-text {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--accent);
+        margin-bottom: 0.5rem;
+    }
+
+    .match-meta {
+        color: var(--fg-secondary);
+        font-size: 0.9rem;
+    }
+
+    .scorecard-section {
+        margin-bottom: 2rem;
+    }
+
+    .innings-header {
+        background: var(--bg-secondary);
+        padding: 0.75rem 1rem;
+        border-radius: 8px 8px 0 0;
+        font-weight: 600;
+        border: 1px solid var(--card-border);
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .score-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-top: none;
+    }
+
+    .score-table th,
+    .score-table td {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--card-border);
+    }
+
+    .score-table th {
+        color: var(--fg-secondary);
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+    }
+
+    .score-table td {
+        font-size: 0.9rem;
+    }
+
+    .batter-name {
+        font-weight: 500;
+        color: var(--fg);
+    }
+
+    .dismissal-info {
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+    }
+
+    .nav-actions {
+        margin-top: 2rem;
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="result-header">
+    <div class="match-result-text">{{ match.result_description or "Match Completed" }}</div>
+    <div class="match-meta">
+        {{ match.team_home.split('_')[0] }} vs {{ match.team_away.split('_')[0] }} • {{ match.stadium }}
+    </div>
+</div>
+
+<div class="container">
+    {% set first_innings_stats = match.first_innings_batting_stats %}
+    {% set second_innings_stats = match.batsman_stats %}
+
+    {#
+    NOTE: The JSON structure might store stats differently depending on who batted first.
+    Usually:
+    - Innings 1 Batting: match.first_innings_batting_stats
+    - Innings 1 Bowling: match.first_innings_bowling_stats
+    - Innings 2 Batting: match.batsman_stats (current state)
+    - Innings 2 Bowling: match.bowler_stats (current state)
+    #}
+
+    <!-- 1st Innings -->
+    <div class="scorecard-section">
+        <div class="innings-header">
+            <span>1st Innings</span>
+            <span>{{ match.first_innings_score or 0 }}/{{ match.first_innings_wickets or 0 }}</span>
+        </div>
+
+        <!-- Batting -->
+        <table class="score-table">
+            <thead>
+                <tr>
+                    <th>Batter</th>
+                    <th>Dismissal</th>
+                    <th>R</th>
+                    <th>B</th>
+                    <th>4s</th>
+                    <th>6s</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, stats in match.first_innings_batting_stats.items() %}
+                <tr>
+                    <td class="batter-name">{{ name }}</td>
+                    <td class="dismissal-info">
+                        {% if stats.wicket_type %}
+                        {{ stats.wicket_type }}
+                        {% if stats.bowler_out %} b {{ stats.bowler_out }}{% endif %}
+                        {% else %}
+                        not out
+                        {% endif %}
+                    </td>
+                    <td><b>{{ stats.runs }}</b></td>
+                    <td>{{ stats.balls }}</td>
+                    <td>{{ stats.fours }}</td>
+                    <td>{{ stats.sixes }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align:center">No stats available</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 2nd Innings -->
+    <div class="scorecard-section">
+        <div class="innings-header">
+            <span>2nd Innings</span>
+            <span>{{ match.score }}/{{ match.wickets }}</span>
+        </div>
+
+        <!-- Batting -->
+        <table class="score-table">
+            <thead>
+                <tr>
+                    <th>Batter</th>
+                    <th>Dismissal</th>
+                    <th>R</th>
+                    <th>B</th>
+                    <th>4s</th>
+                    <th>6s</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, stats in match.batsman_stats.items() %}
+                <tr>
+                    <td class="batter-name">{{ name }}</td>
+                    <td class="dismissal-info">
+                        {% if stats.wicket_type %}
+                        {{ stats.wicket_type }}
+                        {% if stats.bowler_out %} b {{ stats.bowler_out }}{% endif %}
+                        {% else %}
+                        not out
+                        {% endif %}
+                    </td>
+                    <td><b>{{ stats.runs }}</b></td>
+                    <td>{{ stats.balls }}</td>
+                    <td>{{ stats.fours }}</td>
+                    <td>{{ stats.sixes }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align:center">No stats available</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="nav-actions">
+        {% if match.tournament_id %}
+        <a href="{{ url_for('tournament_dashboard', tournament_id=match.tournament_id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Tournament
+        </a>
+        {% else %}
+        <a href="{{ url_for('home') }}" class="btn btn-secondary">
+            <i class="fas fa-home"></i> Back Home
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
