@@ -228,6 +228,7 @@ class TournamentFixture(db.Model):
     match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=True)
     winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
     series_match_number = db.Column(db.Integer, nullable=True)
+    standings_applied = db.Column(db.Boolean, default=False, nullable=False)
 
     # Relationships
     home_team = relationship('Team', foreign_keys=[home_team_id])
@@ -239,4 +240,3 @@ class TournamentFixture(db.Model):
         db.Index('ix_fixture_tournament_status', 'tournament_id', 'status'),
         db.Index('ix_fixture_tournament_stage', 'tournament_id', 'stage'),
     )
-
