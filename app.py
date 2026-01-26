@@ -896,6 +896,20 @@ def create_app():
             if not home_db or not away_db:
                 return jsonify({"error": "Invalid team selection"}), 400
 
+            if req_fixture_id:
+                fixture = db.session.get(TournamentFixture, req_fixture_id)
+                if not fixture or fixture.tournament.user_id != current_user.id:
+                    return jsonify({"error": "Invalid tournament fixture"}), 403
+                if req_tournament_id and fixture.tournament_id != int(req_tournament_id):
+                    return jsonify({"error": "Fixture does not match tournament"}), 400
+                if fixture.home_team_id != home_id or fixture.away_team_id != away_id:
+                    return jsonify({"error": "Fixture teams do not match selection"}), 400
+                req_tournament_id = fixture.tournament_id
+            elif req_tournament_id:
+                tournament = db.session.get(Tournament, int(req_tournament_id))
+                if not tournament or tournament.user_id != current_user.id:
+                    return jsonify({"error": "Invalid tournament"}), 403
+
             # Fix: Define codes for filename generation later
             home_code = home_db.short_code
             away_code = away_db.short_code
@@ -956,7 +970,7 @@ def create_app():
 
 
             # Step 4: Generate metadata and save file
-            match_id = uuid.uuid4().hex[:8]
+            match_id = str(uuid.uuid4())
             ts = datetime.now().strftime("%Y%m%d%H%M%S")
             user = current_user.id
             fname = f"playing_{home_code}_vs_{away_code}_{user}_{ts}.json"
@@ -2063,6 +2077,16 @@ def create_app():
                 # Convert string IDs to int
                 team_ids = [int(tid) for tid in team_ids]
 
+                owned_team_ids = {
+                    team.id
+                    for team in DBTeam.query.filter_by(user_id=current_user.id)
+                    .filter(DBTeam.id.in_(team_ids))
+                    .all()
+                }
+                if len(owned_team_ids) != len(team_ids):
+                    flash("One or more selected teams are not owned by you.", "error")
+                    return redirect(url_for("create_tournament_route"))
+
                 # Handle custom series configuration
                 series_config = None
                 if mode == "custom_series":
@@ -2123,8 +2147,8 @@ def create_app():
         if not t or t.user_id != current_user.id:
             return "Tournament not found", 404
             
-        # Get Standings (Manual Sort for now)
-        standings = sorted(t.participating_teams, key=lambda x: (-x.points, -x.net_run_rate))
+        # Get Standings (use engine tie-breakers)
+        standings = tournament_engine.get_standings(tournament_id)
         
         return render_template("tournaments/dashboard.html", tournament=t, standings=standings)
 
@@ -2303,4 +2327,3 @@ if __name__ == "__main__":
     except Exception as e:
         print("[ERROR] Failed to start SimCricketX:")
         traceback.print_exc()
-
