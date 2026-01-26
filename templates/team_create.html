@@ -935,6 +935,24 @@
     </div>
   </template>
 
+  <!-- Data Injection -->
+  <script id="edit-mode-data" type="application/json">
+      {{ 'true' if edit else 'false' }}
+  </script>
+  <script id="team-data-json" type="application/json">
+      {{ team | tojson | safe if edit else 'null' }}
+    </script>
+
+  <script>
+    const EDIT_MODE = JSON.parse(document.getElementById('edit-mode-data').textContent);
+    let TEAM_DATA = null;
+    try {
+      TEAM_DATA = JSON.parse(document.getElementById('team-data-json').textContent);
+    } catch (e) {
+      console.error("Failed to parse team data", e);
+    }
+  </script>
+
   <script>
     // Dynamic Title
     const teamInput = document.getElementById('team_name');
@@ -1077,26 +1095,6 @@
     }
   </script>
 
-  <!-- Data Injection -->
-  <script id="edit-mode-data" type="application/json">
-      {{ 'true' if edit else 'false' }}
-  </script>
-  <script id="team-data-json" type="application/json">
-      {{ team | tojson | safe if edit else 'null' }}
-    </script>
-
-  <script>
-    const EDIT_MODE = JSON.parse(document.getElementById('edit-mode-data').textContent);
-    let TEAM_DATA = null;
-    try {
-      TEAM_DATA = JSON.parse(document.getElementById('team-data-json').textContent);
-    } catch (e) {
-      console.error("Failed to parse team data", e);
-    }
-  </script>
-
-
-
   <script>
     // Add one player card
     function addPlayer(data, autoUpdate = true) {
@@ -1186,11 +1184,11 @@
 
         // Single update at the end
         updateCount();
-        const { publishValid } = checkValidity();
-        if (publishValid) {
+        const isValid = checkValidity();
+        if (isValid) {
           alert("Team imported successfully! Please select your Captain and Wicketkeeper.");
         } else {
-          alert("Imported. Review roles to enable publishing. You can Save as Draft now.");
+          alert("Imported. Review the lineup and leadership selections to enable saving.");
         }
 
       } catch (e) {
