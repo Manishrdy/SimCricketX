@@ -657,17 +657,28 @@
         // Theme Toggle
         const toggle = document.getElementById('theme-toggle');
         const docRoot = document.documentElement;
+        const icon = toggle.querySelector('i');
 
-        if (localStorage.theme) docRoot.setAttribute('data-theme', localStorage.theme);
+        const savedTheme = localStorage.theme || 'light';
+        docRoot.setAttribute('data-theme', savedTheme);
+        updateIcon(savedTheme);
 
         toggle.onclick = () => {
             const next = docRoot.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
             docRoot.setAttribute('data-theme', next);
             localStorage.theme = next;
-            toggle.textContent = next === 'dark' ? '☀️' : '🌙';
+            updateIcon(next);
         };
 
-        toggle.textContent = docRoot.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+        function updateIcon(theme) {
+            if (theme === 'dark') {
+                icon.classList.remove('fa-moon');
+                icon.classList.add('fa-sun');
+            } else {
+                icon.classList.remove('fa-sun');
+                icon.classList.add('fa-moon');
+            }
+        }
 
         // Team Management Functions
         function editTeam(code) {
@@ -727,18 +738,17 @@
         });
 
         // Add click to edit functionality on cards (excluding action buttons)
-        document.querySelectorAll('.team-card').forEach(card => {
+        document.querySelectorAll('.glass-card[data-code]').forEach(card => {
             card.addEventListener('click', (e) => {
                 // Don't trigger if clicking on action buttons
-                if (!e.target.closest('.team-actions')) {
-                    const code = card.getAttribute('data-code');
-                    editTeam(code);
-                }
+                if (e.target.closest('.action-btn')) return;
+                const code = card.getAttribute('data-code');
+                editTeam(code);
             });
         });
 
         // Enhanced hover effects with cursor indication
-        document.querySelectorAll('.team-card').forEach(card => {
+        document.querySelectorAll('.glass-card[data-code]').forEach(card => {
             card.addEventListener('mouseenter', () => {
                 card.style.cursor = 'pointer';
             });
