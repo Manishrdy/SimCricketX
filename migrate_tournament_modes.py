@@ -155,6 +155,16 @@ def migrate():
         else:
             print("  Column 'series_match_number' already exists")
 
+        # Add 'standings_applied' column
+        if 'standings_applied' not in existing_cols:
+            cursor.execute("""
+                ALTER TABLE tournament_fixtures
+                ADD COLUMN standings_applied BOOLEAN DEFAULT 0 NOT NULL
+            """)
+            print("  Added column: standings_applied")
+        else:
+            print("  Column 'standings_applied' already exists")
+
         # ========================================
         # CREATE NEW INDEX
         # ========================================
