@@ -33,7 +33,7 @@ from typing import Dict, List, Any, Optional, Union
 import zipfile
 
 from database import db
-from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer
+from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, Tournament
 
 # ─── Define PROJECT_ROOT so that we can write to /<project_root>/data/… ─────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -356,14 +356,22 @@ class MatchArchiver:
             # 3. Update Tournament Fixture & Standings
             # Ensure tournament_id is set
             if self.match_data.get('tournament_id'):
-                db_match.tournament_id = self.match_data.get('tournament_id')
-                from engine.tournament_engine import TournamentEngine
-                engine = TournamentEngine()
-                try:
-                    engine.update_standings(db_match)
-                    self.logger.info(f"Updated tournament standings for match {self.match_id}")
-                except Exception as te:
-                    self.logger.error(f"Failed to update tournament standings: {te}")
+                tournament_id = self.match_data.get('tournament_id')
+                tournament = db.session.get(Tournament, tournament_id)
+                if tournament and tournament.user_id == db_match.user_id:
+                    db_match.tournament_id = tournament_id
+                    from engine.tournament_engine import TournamentEngine
+                    engine = TournamentEngine()
+                    try:
+                        engine.update_standings(db_match)
+                        self.logger.info(f"Updated tournament standings for match {self.match_id}")
+                    except Exception as te:
+                        self.logger.error(f"Failed to update tournament standings: {te}")
+                else:
+                    self.logger.warning(
+                        "Skipped tournament standings update for match %s due to ownership mismatch",
+                        self.match_id
+                    )
 
             # 4. Save Scorecards
             def save_stats(stats_dict, team_id, batting=True):
