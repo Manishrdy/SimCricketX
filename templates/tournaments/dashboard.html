@@ -151,7 +151,7 @@
                         <!-- Home Team -->
                         <div class="team-block">
                             <div class="team-logo-circle"
-                                style="background: {{ fixture.home_team.team_color }};">
+                                style="--team-color: {{ fixture.home_team.team_color }}; background: var(--team-color);">
                                 {{ fixture.home_team.short_code }}
                             </div>
                             <div class="team-name-display">{{ fixture.home_team.name }}</div>
@@ -168,7 +168,7 @@
                         <!-- Away Team -->
                         <div class="team-block">
                             <div class="team-logo-circle"
-                                style="background: {{ fixture.away_team.team_color }};">
+                                style="--team-color: {{ fixture.away_team.team_color }}; background: var(--team-color);">
                                 {{ fixture.away_team.short_code }}
                             </div>
                             <div class="team-name-display">{{ fixture.away_team.name }}</div>
@@ -188,7 +188,11 @@
                     {% endif %}
 
                     <div class="fixture-footer">
-                        {% if fixture.status != 'Completed' %}
+                        {% if fixture.status == 'Locked' %}
+                        <button class="action-btn outline-btn" disabled style="opacity: 0.6; cursor: not-allowed;">
+                            <i class="fas fa-lock"></i> Locked
+                        </button>
+                        {% elif fixture.status != 'Completed' %}
                         <form action="{{ url_for('match_setup') }}" method="GET" class="full-width-form">
                             <input type="hidden" name="fixture_id" value="{{ fixture.id }}">
                             <input type="hidden" name="tournament_id" value="{{ tournament.id }}">
