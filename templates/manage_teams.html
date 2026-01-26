@@ -573,7 +573,7 @@
             <div class="glass-card" data-code="{{ t.short_code }}">
                 <div class="card-header">
                     <div class="team-badge">
-                        <div class="team-color-dot" style="background-color: {{ t.team_color }}"></div>
+                        <div class="team-color-dot" data-bg="{{ t.team_color }}"></div>
                         <div class="team-name">{{t.team_name}}</div>
                     </div>
                     <div style="font-family:var(--font-mono); font-weight:700; opacity:0.5;">{{ t.short_code }}</div>
@@ -714,7 +714,7 @@
         // Auto-dismiss flash messages
         window.addEventListener('DOMContentLoaded', () => {
             // Apply team colors from data attributes to avoid inline style linter errors
-            document.querySelectorAll('.team-color-swatch').forEach(swatch => {
+            document.querySelectorAll('.team-color-swatch, .team-color-dot').forEach(swatch => {
                 swatch.style.background = swatch.getAttribute('data-bg');
             });
 
