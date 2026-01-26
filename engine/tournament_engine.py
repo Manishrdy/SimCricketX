@@ -324,6 +324,8 @@ class TournamentEngine:
         Generate Pure Knockout/Elimination tournament fixtures.
         Handles non-power-of-2 teams with byes.
         """
+        bye_id = self._get_placeholder_team_id(tournament_id, "BYE")
+        tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
         n = len(team_ids)
         next_power = self._next_power_of_two(n)
         
