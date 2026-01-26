@@ -2147,8 +2147,8 @@ def create_app():
         if not t or t.user_id != current_user.id:
             return "Tournament not found", 404
             
-        # Get Standings (Manual Sort for now)
-        standings = sorted(t.participating_teams, key=lambda x: (-x.points, -x.net_run_rate))
+        # Get Standings (use engine tie-breakers)
+        standings = tournament_engine.get_standings(tournament_id)
         
         return render_template("tournaments/dashboard.html", tournament=t, standings=standings)
 
