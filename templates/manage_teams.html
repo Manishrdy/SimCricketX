@@ -667,6 +667,12 @@
             toggle.textContent = next === 'dark' ? '☀️' : '🌙';
         };
 
+        // CLEANUP: If we landed on the Manage page, team creation was likely successful.
+        // Clear the draft to prevent old data from reappearing next time.
+        if (localStorage.getItem('team_create_draft')) {
+            localStorage.removeItem('team_create_draft');
+        }
+
         toggle.textContent = docRoot.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
 
         // Team Management Functions

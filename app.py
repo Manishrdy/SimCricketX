@@ -575,6 +575,10 @@ def create_app():
                 players = []
                 for i in range(len(player_names)):
                     try:
+                        # Safe retrieval with defaults to prevent IndexError if form data is sparse
+                        b_type = bowl_types[i] if i < len(bowl_types) else ""
+                        b_hand = bowl_hands[i] if i < len(bowl_hands) else ""
+                        
                         player = Player(
                             name=player_names[i],
                             role=roles[i],
@@ -582,8 +586,8 @@ def create_app():
                             bowling_rating=int(bowl_ratings[i]),
                             fielding_rating=int(field_ratings[i]),
                             batting_hand=bat_hands[i],
-                            bowling_type=bowl_types[i] if bowl_types[i] else "",
-                            bowling_hand=bowl_hands[i] if bowl_hands[i] else ""
+                            bowling_type=b_type if b_type else "",
+                            bowling_hand=b_hand if b_hand else ""
                         )
                         players.append(player)
                     except Exception as e:
@@ -1067,14 +1071,41 @@ def create_app():
         if not match_data:
             return redirect(url_for("home"))
 
-        increment_matches_simulated()
+        # increment_matches_simulated()  <-- REMOVED: Caused premature counting on page load/reload
         
         # Check if match is completed
         if match_data.get("current_state") == "completed":
-            return render_template("scorecard_view.html", match=match_data)
+             # Redirect to the dedicated scoreboard view
+             return redirect(url_for("view_scoreboard", match_id=match_id))
             
         # Render the detail page, passing the loaded JSON
         return render_template("match_detail.html", match=match_data)
+    
+    @app.route("/match/<match_id>/scoreboard")
+    @login_required
+    def view_scoreboard(match_id):
+        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+        match_data = None
+
+        # Search for the JSON whose match_id field matches
+        for fn in os.listdir(match_dir):
+            if not fn.endswith(".json"):
+                continue
+            path = os.path.join(match_dir, fn)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("match_id") == match_id and data.get("created_by") == current_user.id:
+                    match_data = data
+                    break
+            except Exception:
+                continue
+
+        if not match_data:
+            flash("Match not found", "error")
+            return redirect(url_for("home"))
+            
+        return render_template("scorecard_view.html", match=match_data)
     
     @app.route("/teams/<short_code>/delete", methods=["DELETE"])
     @login_required
@@ -1430,6 +1461,11 @@ def create_app():
 
         # Explicitly send final score and wickets clearly
         if outcome.get("match_over"):
+            # Only increment if this is the first time we're seeing the match end
+            # (Checking if it wasn't already marked completed prevents double counting on repeated API calls)
+            if match.data.get("current_state") != "completed":
+                 increment_matches_simulated()
+                 
             # If this is a tournament match, autosave to DB and update standings
             if match.data.get("tournament_id"):
                 try:
@@ -2322,6 +2358,74 @@ def create_app():
         except Exception as e:
             app.logger.error(f"Error generating tabular text: {e}", exc_info=True)
             return f"Error generating tabular text: {str(e)}", 500
+
+    @app.route("/fixture/<fixture_id>/resimulate", methods=["POST"])
+    @login_required
+    def resimulate_fixture(fixture_id):
+        """
+        Resets a fixture to 'Scheduled' state and deletes match data for re-simulation.
+        """
+        try:
+            # 1. Fetch Fixture
+            fixture = db.session.get(TournamentFixture, fixture_id)
+            if not fixture:
+                flash("Fixture not found.", "danger")
+                return redirect(url_for('tournaments'))
+
+            # Verify authorization (fixture -> tournament -> user)
+            if fixture.tournament.user_id != current_user.id:
+                flash("Unauthorized to modify this fixture.", "danger")
+                return redirect(url_for('tournament_dashboard', tournament_id=fixture.tournament_id))
+
+            match_id = fixture.match_id
+            if not match_id:
+                flash("No match data found to reset.", "warning")
+                return redirect(url_for('tournament_dashboard', tournament_id=fixture.tournament_id))
+
+            # 2. Reverse DB Stats (if match exists)
+            db_match = db.session.get(DBMatch, match_id)
+            if db_match:
+                app.logger.info(f"Reversing stats for match {match_id}")
+                tournament_engine.reverse_standings(db_match, commit=False)
+                db.session.delete(db_match)
+            else:
+                 # Fallback: if DBMatch missing but fixture has ID, manually reset fixture
+                 fixture.status = 'Scheduled' 
+                 fixture.winner_team_id = None
+                 fixture.match_id = None
+                 fixture.standings_applied = False
+            
+            # 3. Delete JSON File (FileSystem)
+            match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+            for fn in os.listdir(match_dir):
+                if fn.endswith(".json"):
+                    path = os.path.join(match_dir, fn)
+                    try:
+                        with open(path, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        if data.get("match_id") == match_id:
+                            f.close()
+                            os.remove(path)
+                            app.logger.info(f"Deleted match JSON: {fn}")
+                            break
+                    except Exception:
+                        continue
+
+            # 4. Clear In-Memory Instance
+            if match_id in MATCH_INSTANCES:
+                del MATCH_INSTANCES[match_id]
+
+            db.session.commit()
+            flash("Match reset successfully. You can now re-simulate.", "success")
+            
+            # 5. Redirect to Match Setup
+            return redirect(url_for('match_setup', fixture_id=fixture.id, tournament_id=fixture.tournament_id))
+
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Resimulation error: {e}", exc_info=True)
+            flash("Failed to reset match.", "danger")
+            return redirect(url_for('tournament_dashboard', tournament_id=fixture.tournament_id if fixture else 0))
 
 
     return app

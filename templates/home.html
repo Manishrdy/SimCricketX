@@ -605,4 +605,15 @@
         </div>
     </div>
 </div>
+
+<script>
+    // CLEANUP: If we landed here, it means we successfully created/submitted something.
+    // Specifically clear the team draft if it exists.
+    document.addEventListener('DOMContentLoaded', () => {
+        if (localStorage.getItem('team_create_draft')) {
+            console.log("SimCricketX: Clearing successful team draft.");
+            localStorage.removeItem('team_create_draft');
+        }
+    });
+</script>
 {% endblock %}
