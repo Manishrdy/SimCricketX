@@ -395,8 +395,8 @@ class TournamentEngine:
                 # Both are None (Phantom match)
                 fixture = TournamentFixture(
                     tournament_id=tournament_id,
-                    home_team_id=bye_id,
-                    away_team_id=bye_id,
+                    home_team_id=None,
+                    away_team_id=None,
                     round_number=current_round,
                     stage=round_name,
                     status='Completed',
@@ -418,8 +418,8 @@ class TournamentEngine:
             for i in range(num_matches_current_round):
                 fixture = TournamentFixture(
                     tournament_id=tournament_id,
-                    home_team_id=tbd_id,
-                    away_team_id=tbd_id,
+                    home_team_id=None,
+                    away_team_id=None,
                     round_number=current_round,
                     stage=round_name,
                     stage_description="Winner advances" if round_name != self.STAGE_FINAL else "Tournament Winner",
@@ -468,8 +468,8 @@ class TournamentEngine:
         # Semi-final 1: 1st vs 4th
         sf1 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_SEMIFINAL_1,
             stage_description="1st vs 4th - Winner to Final",
@@ -481,8 +481,8 @@ class TournamentEngine:
         # Semi-final 2: 2nd vs 3rd
         sf2 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_SEMIFINAL_2,
             stage_description="2nd vs 3rd - Winner to Final",
@@ -494,8 +494,8 @@ class TournamentEngine:
         # Final
         final = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 2,
             stage=self.STAGE_FINAL,
             stage_description="Tournament Final",
@@ -522,8 +522,8 @@ class TournamentEngine:
         # Qualifier 1: 1st vs 2nd
         q1 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_QUALIFIER_1,
             stage_description="1st vs 2nd - Winner to Final, Loser to Qualifier 2",
@@ -535,8 +535,8 @@ class TournamentEngine:
         # Eliminator: 3rd vs 4th
         elim = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_ELIMINATOR,
             stage_description="3rd vs 4th - Winner to Qualifier 2, Loser Eliminated",
@@ -548,8 +548,8 @@ class TournamentEngine:
         # Qualifier 2: Loser Q1 vs Winner Eliminator
         q2 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 2,
             stage=self.STAGE_QUALIFIER_2,
             stage_description="Loser Q1 vs Winner Eliminator - Winner to Final",
@@ -561,8 +561,8 @@ class TournamentEngine:
         # Final
         final = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 3,
             stage=self.STAGE_FINAL,
             stage_description="Winner Q1 vs Winner Q2 - Tournament Champion",
@@ -1047,6 +1047,7 @@ class TournamentEngine:
                 return False
             fixture.status = 'Completed'
             fixture.winner_team_id = match.winner_team_id
+            fixture.standings_applied = True
 
         # Get team stats records
         home_team_stats = TournamentTeam.query.filter_by(
