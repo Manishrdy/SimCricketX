@@ -5630,3 +5630,472 @@ AttributeError: 'Match' object has no attribute 'is_complete'
 2026-01-25 19:43:31,093 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
 2026-01-25 19:43:31,093 - INFO - 127.0.0.1 GET /static/js/notifications.js
 2026-01-25 19:43:31,104 - INFO - 127.0.0.1 - - [25/Jan/2026 19:43:31] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 19:48:17,958 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-25 19:48:18,039 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-25 19:48:18,039 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-25 19:48:18,142 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:18,142 - INFO - 127.0.0.1 GET /
+2026-01-25 19:48:18,161 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:18] "GET / HTTP/1.1" 200 -
+2026-01-25 19:48:18,190 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:18,190 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 19:48:18,220 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:18] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 19:48:21,173 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:21,174 - INFO - 127.0.0.1 GET /tournaments
+2026-01-25 19:48:21,270 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:21] "GET /tournaments HTTP/1.1" 200 -
+2026-01-25 19:48:21,337 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:21,337 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 19:48:21,343 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:21] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 19:48:23,243 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:23,243 - INFO - 127.0.0.1 GET /tournaments/8
+2026-01-25 19:48:23,312 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:23] "GET /tournaments/8 HTTP/1.1" 200 -
+2026-01-25 19:48:23,375 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:23,376 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 19:48:23,379 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:23] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 19:48:34,279 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:34,279 - INFO - 127.0.0.1 POST /tournaments/8/delete
+2026-01-25 19:48:34,299 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:34] "[32mPOST /tournaments/8/delete HTTP/1.1[0m" 302 -
+2026-01-25 19:48:34,313 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:34,315 - INFO - 127.0.0.1 GET /tournaments
+2026-01-25 19:48:34,322 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:34] "GET /tournaments HTTP/1.1" 200 -
+2026-01-25 19:48:34,482 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:34,483 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 19:48:34,487 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:34] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 19:48:39,810 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:39,812 - INFO - 127.0.0.1 POST /tournaments/8/delete
+2026-01-25 19:48:39,817 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:39] "[32mPOST /tournaments/8/delete HTTP/1.1[0m" 302 -
+2026-01-25 19:48:39,829 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:39,829 - INFO - 127.0.0.1 GET /tournaments
+2026-01-25 19:48:39,837 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:39] "GET /tournaments HTTP/1.1" 200 -
+2026-01-25 19:48:39,889 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:48:39,889 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 19:48:39,893 - INFO - 127.0.0.1 - - [25/Jan/2026 19:48:39] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:02:37,605 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-25 21:02:37,674 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-25 21:02:37,674 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-25 21:02:37,766 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:02:37,766 - INFO - 127.0.0.1 GET /
+2026-01-25 21:02:37,780 - INFO - 127.0.0.1 - - [25/Jan/2026 21:02:37] "GET / HTTP/1.1" 200 -
+2026-01-25 21:02:37,800 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:02:37,800 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:02:37,835 - INFO - 127.0.0.1 - - [25/Jan/2026 21:02:37] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:02:41,877 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:02:41,877 - INFO - 127.0.0.1 GET /tournaments
+2026-01-25 21:02:41,944 - INFO - 127.0.0.1 - - [25/Jan/2026 21:02:41] "GET /tournaments HTTP/1.1" 200 -
+2026-01-25 21:02:41,989 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:02:41,991 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:02:41,993 - INFO - 127.0.0.1 - - [25/Jan/2026 21:02:41] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:02:43,969 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:02:43,970 - INFO - 127.0.0.1 GET /tournaments/create
+2026-01-25 21:02:43,987 - INFO - 127.0.0.1 - - [25/Jan/2026 21:02:43] "GET /tournaments/create HTTP/1.1" 200 -
+2026-01-25 21:02:44,034 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:02:44,035 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:02:44,039 - INFO - 127.0.0.1 - - [25/Jan/2026 21:02:44] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:06:59,901 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-25 21:06:59,971 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-25 21:06:59,973 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-25 21:07:00,068 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:07:00,068 - INFO - 127.0.0.1 GET /
+2026-01-25 21:07:00,080 - INFO - 127.0.0.1 - - [25/Jan/2026 21:07:00] "GET / HTTP/1.1" 200 -
+2026-01-25 21:07:00,101 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:07:00,102 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:07:00,136 - INFO - 127.0.0.1 - - [25/Jan/2026 21:07:00] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:07:03,686 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:07:03,687 - INFO - 127.0.0.1 GET /tournaments
+2026-01-25 21:07:03,753 - INFO - 127.0.0.1 - - [25/Jan/2026 21:07:03] "GET /tournaments HTTP/1.1" 200 -
+2026-01-25 21:07:03,800 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:07:03,800 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:07:03,801 - INFO - 127.0.0.1 - - [25/Jan/2026 21:07:03] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:07:06,516 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:07:06,517 - INFO - 127.0.0.1 GET /
+2026-01-25 21:07:06,521 - INFO - 127.0.0.1 - - [25/Jan/2026 21:07:06] "GET / HTTP/1.1" 200 -
+2026-01-25 21:07:06,562 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:07:06,564 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:07:06,568 - INFO - 127.0.0.1 - - [25/Jan/2026 21:07:06] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:07:08,235 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:07:08,235 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:07:08,253 - INFO - 127.0.0.1 - - [25/Jan/2026 21:07:08] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:07:14,096 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:07:14,097 - INFO - 127.0.0.1 GET /
+2026-01-25 21:07:14,101 - INFO - 127.0.0.1 - - [25/Jan/2026 21:07:14] "GET / HTTP/1.1" 200 -
+2026-01-25 21:07:14,140 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:07:14,141 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:07:14,145 - INFO - 127.0.0.1 - - [25/Jan/2026 21:07:14] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:07:15,984 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:07:15,995 - INFO - 127.0.0.1 GET /team/create
+2026-01-25 21:07:16,013 - INFO - 127.0.0.1 - - [25/Jan/2026 21:07:16] "GET /team/create HTTP/1.1" 200 -
+2026-01-25 21:08:43,534 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:08:43,536 - INFO - 127.0.0.1 GET /
+2026-01-25 21:08:43,540 - INFO - 127.0.0.1 - - [25/Jan/2026 21:08:43] "GET / HTTP/1.1" 200 -
+2026-01-25 21:08:43,581 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:08:43,583 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:08:43,586 - INFO - 127.0.0.1 - - [25/Jan/2026 21:08:43] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:08:45,810 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:08:45,810 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:08:45,826 - INFO - 127.0.0.1 - - [25/Jan/2026 21:08:45] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:08:49,114 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:08:49,115 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:08:49,152 - INFO - Team 'CSK' (ID: 1) deleted by admin@projectx.com
+2026-01-25 21:08:49,154 - INFO - 127.0.0.1 - - [25/Jan/2026 21:08:49] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:08:49,163 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:08:49,163 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:08:49,177 - INFO - 127.0.0.1 - - [25/Jan/2026 21:08:49] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:08:51,597 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:08:51,597 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:08:51,616 - INFO - Team 'DCC' (ID: 2) deleted by admin@projectx.com
+2026-01-25 21:08:51,616 - INFO - 127.0.0.1 - - [25/Jan/2026 21:08:51] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:08:51,616 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:08:51,616 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:08:51,634 - INFO - 127.0.0.1 - - [25/Jan/2026 21:08:51] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:08:58,382 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:08:58,383 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:08:58,401 - INFO - Team 'DC' (ID: 3) deleted by admin@projectx.com
+2026-01-25 21:08:58,401 - INFO - 127.0.0.1 - - [25/Jan/2026 21:08:58] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:08:58,401 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:08:58,401 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:08:58,417 - INFO - 127.0.0.1 - - [25/Jan/2026 21:08:58] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:09:00,752 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:00,752 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:09:00,769 - INFO - Team 'GT' (ID: 4) deleted by admin@projectx.com
+2026-01-25 21:09:00,779 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:00] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:09:00,788 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:00,790 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:09:00,797 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:00] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:09:03,230 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:03,230 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:09:03,256 - INFO - Team 'KKR' (ID: 5) deleted by admin@projectx.com
+2026-01-25 21:09:03,256 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:03] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:09:03,267 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:03,267 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:09:03,274 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:03] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:09:06,228 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:06,229 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:09:06,247 - INFO - Team 'LSG' (ID: 6) deleted by admin@projectx.com
+2026-01-25 21:09:06,250 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:06] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:09:06,251 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:06,251 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:09:06,264 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:06] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:09:08,712 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:08,713 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:09:08,733 - INFO - Team 'MI' (ID: 7) deleted by admin@projectx.com
+2026-01-25 21:09:08,733 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:08] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:09:08,740 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:08,740 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:09:08,740 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:08] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:09:11,301 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:11,303 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:09:11,330 - INFO - Team 'PBKS' (ID: 8) deleted by admin@projectx.com
+2026-01-25 21:09:11,330 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:11] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:09:11,333 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:11,333 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:09:11,339 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:11] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:09:15,353 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:15,354 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:09:15,366 - INFO - Team 'RCB' (ID: 9) deleted by admin@projectx.com
+2026-01-25 21:09:15,366 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:15] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:09:15,383 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:15,383 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:09:15,383 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:15] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:09:18,276 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:18,280 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:09:18,307 - INFO - Team 'RR' (ID: 10) deleted by admin@projectx.com
+2026-01-25 21:09:18,308 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:18] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:09:18,314 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:18,316 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:09:18,316 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:18] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:09:20,717 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:20,718 - INFO - 127.0.0.1 POST /team/delete
+2026-01-25 21:09:20,734 - INFO - Team 'SRH' (ID: 11) deleted by admin@projectx.com
+2026-01-25 21:09:20,734 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:20] "[32mPOST /team/delete HTTP/1.1[0m" 302 -
+2026-01-25 21:09:20,740 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:20,740 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:09:20,740 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:20] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:09:22,252 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:22,252 - INFO - 127.0.0.1 GET /
+2026-01-25 21:09:22,252 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:22] "GET / HTTP/1.1" 200 -
+2026-01-25 21:09:22,294 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:22,296 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:09:22,297 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:22] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:09:25,241 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:25,241 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:09:25,241 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:25] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:09:28,421 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:28,432 - INFO - 127.0.0.1 GET /
+2026-01-25 21:09:28,435 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:28] "GET / HTTP/1.1" 200 -
+2026-01-25 21:09:28,473 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:28,474 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:09:28,476 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:28] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:09:31,161 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:31,161 - INFO - 127.0.0.1 GET /statistics
+2026-01-25 21:09:31,207 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:31] "GET /statistics HTTP/1.1" 200 -
+2026-01-25 21:09:34,151 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:34,153 - INFO - 127.0.0.1 GET /
+2026-01-25 21:09:34,156 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:34] "GET / HTTP/1.1" 200 -
+2026-01-25 21:09:34,194 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:34,194 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:09:34,197 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:34] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:09:36,151 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:36,151 - INFO - 127.0.0.1 GET /tournaments
+2026-01-25 21:09:36,168 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:36] "GET /tournaments HTTP/1.1" 200 -
+2026-01-25 21:09:36,206 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:36,208 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:09:36,213 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:36] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:09:39,564 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:39,569 - INFO - 127.0.0.1 GET /
+2026-01-25 21:09:39,574 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:39] "GET / HTTP/1.1" 200 -
+2026-01-25 21:09:39,611 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:39,611 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:09:39,617 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:39] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:09:41,507 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:41,508 - INFO - 127.0.0.1 GET /my-matches
+2026-01-25 21:09:41,509 - INFO - User 'admin@projectx.com' requested /my-matches
+2026-01-25 21:09:41,511 - INFO - User 'admin@projectx.com' has 9 valid archives
+2026-01-25 21:09:41,521 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:41] "GET /my-matches HTTP/1.1" 200 -
+2026-01-25 21:09:45,375 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:45,375 - INFO - 127.0.0.1 DELETE /archives/playing_CSK_vs_MI_admin@projectx.com_20260124210801.zip
+2026-01-25 21:09:45,378 - INFO - Deleted archive: D:\SimCricketX\data\playing_CSK_vs_MI_admin@projectx.com_20260124210801.zip
+2026-01-25 21:09:45,379 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:45] "DELETE /archives/playing_CSK_vs_MI_admin@projectx.com_20260124210801.zip HTTP/1.1" 200 -
+2026-01-25 21:09:47,764 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:47,764 - INFO - 127.0.0.1 DELETE /archives/playing_MR_vs_SRH_admin@projectx.com_20260123231212.zip
+2026-01-25 21:09:47,770 - INFO - Deleted archive: D:\SimCricketX\data\playing_MR_vs_SRH_admin@projectx.com_20260123231212.zip
+2026-01-25 21:09:47,772 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:47] "DELETE /archives/playing_MR_vs_SRH_admin@projectx.com_20260123231212.zip HTTP/1.1" 200 -
+2026-01-25 21:09:50,536 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:50,536 - INFO - 127.0.0.1 DELETE /archives/playing_RCB_vs_MI_admin@projectx.com_20260123114219.zip
+2026-01-25 21:09:50,539 - INFO - Deleted archive: D:\SimCricketX\data\playing_RCB_vs_MI_admin@projectx.com_20260123114219.zip
+2026-01-25 21:09:50,539 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:50] "DELETE /archives/playing_RCB_vs_MI_admin@projectx.com_20260123114219.zip HTTP/1.1" 200 -
+2026-01-25 21:09:52,986 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:52,986 - INFO - 127.0.0.1 DELETE /archives/playing_RCB_vs_SRH_admin@projectx.com_20260125182250.zip
+2026-01-25 21:09:52,986 - INFO - Deleted archive: D:\SimCricketX\data\playing_RCB_vs_SRH_admin@projectx.com_20260125182250.zip
+2026-01-25 21:09:52,986 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:52] "DELETE /archives/playing_RCB_vs_SRH_admin@projectx.com_20260125182250.zip HTTP/1.1" 200 -
+2026-01-25 21:09:55,563 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:55,563 - INFO - 127.0.0.1 DELETE /archives/playing_SRH_vs_CSK_admin@projectx.com_20260123111147.zip
+2026-01-25 21:09:55,563 - INFO - Deleted archive: D:\SimCricketX\data\playing_SRH_vs_CSK_admin@projectx.com_20260123111147.zip
+2026-01-25 21:09:55,579 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:55] "DELETE /archives/playing_SRH_vs_CSK_admin@projectx.com_20260123111147.zip HTTP/1.1" 200 -
+2026-01-25 21:09:57,543 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:09:57,543 - INFO - 127.0.0.1 DELETE /archives/playing_RCB_vs_SRH_admin@projectx.com_20260125184733.zip
+2026-01-25 21:09:57,546 - INFO - Deleted archive: D:\SimCricketX\data\playing_RCB_vs_SRH_admin@projectx.com_20260125184733.zip
+2026-01-25 21:09:57,546 - INFO - 127.0.0.1 - - [25/Jan/2026 21:09:57] "DELETE /archives/playing_RCB_vs_SRH_admin@projectx.com_20260125184733.zip HTTP/1.1" 200 -
+2026-01-25 21:10:00,335 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:10:00,335 - INFO - 127.0.0.1 DELETE /archives/playing_SRH_vs_KKR_admin@projectx.com_20260124130630.zip
+2026-01-25 21:10:00,335 - INFO - Deleted archive: D:\SimCricketX\data\playing_SRH_vs_KKR_admin@projectx.com_20260124130630.zip
+2026-01-25 21:10:00,335 - INFO - 127.0.0.1 - - [25/Jan/2026 21:10:00] "DELETE /archives/playing_SRH_vs_KKR_admin@projectx.com_20260124130630.zip HTTP/1.1" 200 -
+2026-01-25 21:10:02,542 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:10:02,543 - INFO - 127.0.0.1 DELETE /archives/playing_SRH_vs_KKR_admin@projectx.com_20260124142710.zip
+2026-01-25 21:10:02,545 - INFO - Deleted archive: D:\SimCricketX\data\playing_SRH_vs_KKR_admin@projectx.com_20260124142710.zip
+2026-01-25 21:10:02,545 - INFO - 127.0.0.1 - - [25/Jan/2026 21:10:02] "DELETE /archives/playing_SRH_vs_KKR_admin@projectx.com_20260124142710.zip HTTP/1.1" 200 -
+2026-01-25 21:10:04,566 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:10:04,568 - INFO - 127.0.0.1 DELETE /archives/playing_SRH_vs_KKR_admin@projectx.com_20260124145844.zip
+2026-01-25 21:10:04,571 - INFO - Deleted archive: D:\SimCricketX\data\playing_SRH_vs_KKR_admin@projectx.com_20260124145844.zip
+2026-01-25 21:10:04,571 - INFO - 127.0.0.1 - - [25/Jan/2026 21:10:04] "DELETE /archives/playing_SRH_vs_KKR_admin@projectx.com_20260124145844.zip HTTP/1.1" 200 -
+2026-01-25 21:10:07,313 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:10:07,313 - INFO - 127.0.0.1 GET /
+2026-01-25 21:10:07,319 - INFO - 127.0.0.1 - - [25/Jan/2026 21:10:07] "GET / HTTP/1.1" 200 -
+2026-01-25 21:10:07,368 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:10:07,369 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:10:07,372 - INFO - 127.0.0.1 - - [25/Jan/2026 21:10:07] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:10:09,788 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:10:09,792 - INFO - 127.0.0.1 GET /team/create
+2026-01-25 21:10:09,796 - INFO - 127.0.0.1 - - [25/Jan/2026 21:10:09] "GET /team/create HTTP/1.1" 200 -
+2026-01-25 21:12:59,867 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:12:59,867 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:12:59,874 - INFO - 127.0.0.1 - - [25/Jan/2026 21:12:59] "POST /team/create HTTP/1.1" 200 -
+2026-01-25 21:13:14,147 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:13:14,147 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:13:14,151 - INFO - 127.0.0.1 - - [25/Jan/2026 21:13:14] "POST /team/create HTTP/1.1" 200 -
+2026-01-25 21:17:06,399 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:17:06,400 - INFO - 127.0.0.1 GET /
+2026-01-25 21:17:06,403 - INFO - 127.0.0.1 - - [25/Jan/2026 21:17:06] "GET / HTTP/1.1" 200 -
+2026-01-25 21:17:06,436 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:17:06,437 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:17:06,440 - INFO - 127.0.0.1 - - [25/Jan/2026 21:17:06] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:17:09,018 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:17:09,020 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:17:09,028 - INFO - 127.0.0.1 - - [25/Jan/2026 21:17:09] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 21:21:27,634 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:21:27,634 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:21:27,653 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:21:27,655 - INFO - 127.0.0.1 GET /login
+2026-01-25 21:21:27,852 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:21:27,852 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:21:27,860 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:21:27,860 - INFO - 127.0.0.1 GET /login
+2026-01-25 21:21:27,945 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:21:27,945 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:21:27,949 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:21:27,949 - INFO - 127.0.0.1 GET /login
+2026-01-25 21:22:03,833 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:03,833 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:22:03,835 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:03,836 - INFO - 127.0.0.1 GET /login
+2026-01-25 21:22:03,885 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:03,885 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:22:03,892 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:03,893 - INFO - 127.0.0.1 GET /login
+2026-01-25 21:22:03,935 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:03,935 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:22:03,944 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:03,944 - INFO - 127.0.0.1 GET /login
+2026-01-25 21:22:34,936 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:34,936 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:22:34,936 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:34,936 - INFO - 127.0.0.1 GET /login
+2026-01-25 21:22:35,001 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:35,001 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:22:35,001 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:35,001 - INFO - 127.0.0.1 GET /login
+2026-01-25 21:22:35,060 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:35,075 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:22:35,075 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:22:35,075 - INFO - 127.0.0.1 GET /login
+2026-01-25 21:23:19,256 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:23:19,256 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:23:19,270 - INFO - Team 'Draft Kings' (ID: 1) created as Draft by test@example.com
+2026-01-25 21:23:19,271 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:23:19,271 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 21:23:19,409 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:23:19,410 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:23:19,537 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:23:19,537 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:23:19,551 - INFO - Team 'Valid Team' (ID: 1) created as Active by test@example.com
+2026-01-25 21:23:19,552 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:23:19,552 - INFO - 127.0.0.1 GET /
+2026-01-25 21:24:24,252 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-25 21:24:24,318 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-25 21:24:24,318 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-25 21:24:24,414 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:24:24,414 - INFO - 127.0.0.1 GET /
+2026-01-25 21:24:24,433 - INFO - 127.0.0.1 - - [25/Jan/2026 21:24:24] "GET / HTTP/1.1" 200 -
+2026-01-25 21:24:24,467 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:24:24,467 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:24:24,531 - INFO - 127.0.0.1 - - [25/Jan/2026 21:24:24] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:24:49,807 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:24:49,809 - INFO - 127.0.0.1 GET /team/create
+2026-01-25 21:24:49,821 - INFO - 127.0.0.1 - - [25/Jan/2026 21:24:49] "GET /team/create HTTP/1.1" 200 -
+2026-01-25 21:31:37,291 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-25 21:31:37,339 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-25 21:31:37,339 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-25 21:31:37,435 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:31:37,436 - INFO - 127.0.0.1 GET /
+2026-01-25 21:31:37,447 - INFO - 127.0.0.1 - - [25/Jan/2026 21:31:37] "GET / HTTP/1.1" 200 -
+2026-01-25 21:31:37,486 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:31:37,486 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:31:37,519 - INFO - 127.0.0.1 - - [25/Jan/2026 21:31:37] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:31:43,191 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:31:43,191 - INFO - 127.0.0.1 GET /team/create
+2026-01-25 21:31:43,206 - INFO - 127.0.0.1 - - [25/Jan/2026 21:31:43] "GET /team/create HTTP/1.1" 200 -
+2026-01-25 21:33:38,283 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:33:38,284 - INFO - 127.0.0.1 GET /
+2026-01-25 21:33:38,286 - INFO - 127.0.0.1 - - [25/Jan/2026 21:33:38] "GET / HTTP/1.1" 200 -
+2026-01-25 21:33:38,327 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:33:38,329 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:33:38,332 - INFO - 127.0.0.1 - - [25/Jan/2026 21:33:38] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:33:40,351 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:33:40,351 - INFO - 127.0.0.1 GET /team/create
+2026-01-25 21:33:40,360 - INFO - 127.0.0.1 - - [25/Jan/2026 21:33:40] "GET /team/create HTTP/1.1" 200 -
+2026-01-25 21:35:04,784 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:35:04,784 - INFO - 127.0.0.1 POST /team/create
+2026-01-25 21:35:04,834 - ERROR - Database error saving team: (sqlite3.OperationalError) no such table: teams
+[SQL: INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at, is_draft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: ('admin@projectx.com', 'Sunrisers Hyderabad', 'SRH', 'Rajiv Gandhi Stadium, Hyderabad', 'Hard', '#ff7b00', '2026-01-26 05:35:04.834038', 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such table: teams
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\SimCricketX\app.py", line 642, in create_team
+    db.session.flush() # Get ID for foreign keys
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\scoping.py", line 924, in flush
+    return self._proxied.flush(objects=objects)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: teams
+[SQL: INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at, is_draft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: ('admin@projectx.com', 'Sunrisers Hyderabad', 'SRH', 'Rajiv Gandhi Stadium, Hyderabad', 'Hard', '#ff7b00', '2026-01-26 05:35:04.834038', 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2026-01-25 21:35:05,161 - INFO - 127.0.0.1 - - [25/Jan/2026 21:35:05] "POST /team/create HTTP/1.1" 200 -
+2026-01-25 21:45:34,149 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-25 21:45:34,211 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-25 21:45:34,211 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-25 21:45:34,308 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:45:34,308 - INFO - 127.0.0.1 GET /
+2026-01-25 21:45:34,325 - INFO - 127.0.0.1 - - [25/Jan/2026 21:45:34] "GET / HTTP/1.1" 200 -
+2026-01-25 21:45:34,362 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:45:34,363 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:45:34,407 - INFO - 127.0.0.1 - - [25/Jan/2026 21:45:34] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:45:37,730 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:45:37,732 - INFO - 127.0.0.1 GET /team/create
+2026-01-25 21:45:37,763 - INFO - 127.0.0.1 - - [25/Jan/2026 21:45:37] "GET /team/create HTTP/1.1" 200 -
+2026-01-25 21:45:58,765 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:45:58,768 - INFO - 127.0.0.1 GET /team/create
+2026-01-25 21:45:58,771 - INFO - 127.0.0.1 - - [25/Jan/2026 21:45:58] "GET /team/create HTTP/1.1" 200 -
+2026-01-25 21:46:22,384 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:46:22,386 - INFO - 127.0.0.1 GET /team/create
+2026-01-25 21:46:22,390 - INFO - 127.0.0.1 - - [25/Jan/2026 21:46:22] "GET /team/create HTTP/1.1" 200 -
+2026-01-25 21:50:42,794 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-25 21:50:42,866 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-25 21:50:42,866 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-25 21:50:42,971 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:50:42,972 - INFO - 127.0.0.1 GET /
+2026-01-25 21:50:42,985 - INFO - 127.0.0.1 - - [25/Jan/2026 21:50:42] "GET / HTTP/1.1" 200 -
+2026-01-25 21:50:43,014 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:50:43,014 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 21:50:43,054 - INFO - 127.0.0.1 - - [25/Jan/2026 21:50:43] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 21:50:44,560 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 21:50:44,560 - INFO - 127.0.0.1 GET /team/create
+2026-01-25 21:50:44,573 - INFO - 127.0.0.1 - - [25/Jan/2026 21:50:44] "GET /team/create HTTP/1.1" 200 -
