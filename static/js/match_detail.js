@@ -465,7 +465,13 @@ function appendLog(message, type = 'normal') {
     `;
 
     logContainer.appendChild(div);
-    logContainer.scrollTop = logContainer.scrollHeight;
+
+    // Auto-scroll logic
+    requestAnimationFrame(() => {
+        div.scrollIntoView({ behavior: "smooth", block: "end" });
+        // Backup: force ScrollTop as well for some browsers
+        logContainer.scrollTop = logContainer.scrollHeight;
+    });
 }
 
 function spinTossAndStartMatch() {
@@ -529,7 +535,20 @@ function startMatch() {
                 }
             }
 
-            // End of Match (2nd Innings)
+            // End of Match (Generic Catch-all)
+            if (data.match_over) {
+                if (data.scorecard_data) {
+                    isFinalScoreboard = true;
+                    showScorecard(data.scorecard_data, data);
+                    // Only Archive if it's the first time we see this
+                    if (!matchOver) saveMatchArchive();
+                }
+                appendLog(data.commentary || "Match Concluded.", 'comment');
+                matchOver = true;
+                return;
+            }
+
+            // End of Match (2nd Innings) - Keeping for legacy safety but above check should catch it
             if (data.innings_end && data.innings_number === 2) {
                 if (data.scorecard_data) {
                     isFinalScoreboard = true;

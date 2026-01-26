@@ -3336,7 +3336,22 @@ class Match:
                 # This ensures 0-ball ducks are shown correctly.
                 if stats.get("wicket_type") or stats.get("balls", 0) > 0:
                     strike_rate = (stats["runs"] * 100) / stats["balls"] if stats["balls"] > 0 else 0
-                    status = stats.get("wicket_type") if stats.get("wicket_type") else "not out"
+                    status_raw = stats.get("wicket_type") if stats.get("wicket_type") else "not out"
+                    status = status_raw
+                    
+                    if status_raw != "not out":
+                        if status_raw == "Caught":
+                            status = f"c {stats.get('fielder_out', '?')} b {stats.get('bowler_out', '?')}"
+                        elif status_raw == "Bowled":
+                            status = f"b {stats.get('bowler_out', '?')}"
+                        elif status_raw == "LBW":
+                            status = f"lbw b {stats.get('bowler_out', '?')}"
+                        elif status_raw == "Run Out":
+                            status = f"run out ({stats.get('fielder_out', '?')})"
+                        elif status_raw == "Stumped":
+                            status = f"st {stats.get('fielder_out', '?')} b {stats.get('bowler_out', '?')}"
+                        elif status_raw == "Hit Wicket":
+                             status = f"hit wicket b {stats.get('bowler_out', '?')}"
                     
                     players.append({
                         "name": player_name,
