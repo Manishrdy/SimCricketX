@@ -25,7 +25,7 @@ import uuid
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash
 from engine.match import Match
 from flask_login import (
     LoginManager,
@@ -862,6 +862,11 @@ def create_app():
         if fixture_id:
             fixture = db.session.get(TournamentFixture, fixture_id)
             if fixture and fixture.tournament.user_id == current_user.id:
+                # Prevent starting locked matches
+                if fixture.status == 'Locked':
+                    flash("Cannot start a locked match. Wait for previous rounds to complete.", "error")
+                    return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament.id))
+
                 preselect_home = fixture.home_team_id
                 preselect_away = fixture.away_team_id
                 tournament_id = fixture.tournament_id

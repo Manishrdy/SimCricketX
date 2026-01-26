@@ -60,7 +60,8 @@
                         <span class="progress-text">{{ played }}/{{ total }} Matches</span>
                     </div>
                     <div class="progress-bar">
-                        <div class="progress-fill" style="width: {{ percent }}%"></div>
+                        <div class="progress-fill"
+                            style="--progress: {{ percent|default(0) }}%; width: var(--progress);"></div>
                     </div>
                 </div>
 

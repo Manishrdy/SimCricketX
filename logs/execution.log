@@ -1958,3 +1958,802 @@ sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) UNIQUE constraint failed
 2026-01-24 21:17:39,812 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
 2026-01-24 21:17:39,814 - INFO - 127.0.0.1 GET /static/js/notifications.js
 2026-01-24 21:17:39,819 - INFO - 127.0.0.1 - - [24/Jan/2026 21:17:39] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 22:39:42,085 - ERROR - Failed to create tournament: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id]
+[parameters: (2, None, None, 2, 'Locked', 'knockout_sf', 'Winner advances', 4, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-01-24 22:41:37,907 - ERROR - Failed to create tournament: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id]
+[parameters: (2, None, None, 2, 'Locked', 'knockout_sf', 'Winner advances', 4, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-01-24 22:47:05,607 - INFO - BEGIN (implicit)
+2026-01-24 22:47:05,607 - INFO - PRAGMA main.table_info("users")
+2026-01-24 22:47:05,608 - INFO - [raw sql] ()
+2026-01-24 22:47:05,609 - INFO - PRAGMA main.table_info("teams")
+2026-01-24 22:47:05,609 - INFO - [raw sql] ()
+2026-01-24 22:47:05,609 - INFO - PRAGMA main.table_info("players")
+2026-01-24 22:47:05,609 - INFO - [raw sql] ()
+2026-01-24 22:47:05,609 - INFO - PRAGMA main.table_info("matches")
+2026-01-24 22:47:05,610 - INFO - [raw sql] ()
+2026-01-24 22:47:05,610 - INFO - PRAGMA main.table_info("match_scorecards")
+2026-01-24 22:47:05,610 - INFO - [raw sql] ()
+2026-01-24 22:47:05,611 - INFO - PRAGMA main.table_info("tournaments")
+2026-01-24 22:47:05,611 - INFO - [raw sql] ()
+2026-01-24 22:47:05,611 - INFO - PRAGMA main.table_info("tournament_teams")
+2026-01-24 22:47:05,611 - INFO - [raw sql] ()
+2026-01-24 22:47:05,611 - INFO - PRAGMA main.table_info("tournament_fixtures")
+2026-01-24 22:47:05,612 - INFO - [raw sql] ()
+2026-01-24 22:47:05,613 - INFO - COMMIT
+2026-01-24 22:47:05,636 - INFO - BEGIN (implicit)
+2026-01-24 22:47:05,638 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,638 - INFO - [generated in 0.00033s] ('test_user_3ea3f147', 'Team 1', 'T1', 'Stadium', 'Balanced', None, '2026-01-25 06:47:05.638444')
+2026-01-24 22:47:05,640 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,641 - INFO - [cached since 0.002859s ago] ('test_user_3ea3f147', 'Team 2', 'T2', 'Stadium', 'Balanced', None, '2026-01-25 06:47:05.640485')
+2026-01-24 22:47:05,641 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,642 - INFO - [cached since 0.004037s ago] ('test_user_3ea3f147', 'Team 3', 'T3', 'Stadium', 'Balanced', None, '2026-01-25 06:47:05.641903')
+2026-01-24 22:47:05,643 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,643 - INFO - [cached since 0.005225s ago] ('test_user_3ea3f147', 'Team 4', 'T4', 'Stadium', 'Balanced', None, '2026-01-25 06:47:05.643191')
+2026-01-24 22:47:05,644 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,644 - INFO - [cached since 0.006337s ago] ('test_user_3ea3f147', 'Team 5', 'T5', 'Stadium', 'Balanced', None, '2026-01-25 06:47:05.644412')
+2026-01-24 22:47:05,644 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,645 - INFO - [cached since 0.007306s ago] ('test_user_3ea3f147', 'Team 6', 'T6', 'Stadium', 'Balanced', None, '2026-01-25 06:47:05.644986')
+2026-01-24 22:47:05,647 - INFO - INSERT INTO tournaments (user_id, name, status, created_at, mode, current_stage, playoff_teams, series_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,648 - INFO - [generated in 0.00039s] ('test_user_3ea3f147', 'Testing Knockout', 'Active', '2026-01-25 06:47:05.647791', 'knockout', 'knockout_r1', 4, None)
+2026-01-24 22:47:05,650 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:47:05,651 - INFO - [generated in 0.00028s] (3, 12, 1, 0)
+2026-01-24 22:47:05,652 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,652 - INFO - [generated in 0.00027s] (3, 12, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:47:05,653 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:47:05,653 - INFO - [cached since 0.002499s ago] (3, 13, 1, 0)
+2026-01-24 22:47:05,654 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,654 - INFO - [cached since 0.001717s ago] (3, 13, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:47:05,654 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:47:05,655 - INFO - [cached since 0.003824s ago] (3, 14, 1, 0)
+2026-01-24 22:47:05,655 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,655 - INFO - [cached since 0.003053s ago] (3, 14, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:47:05,655 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:47:05,656 - INFO - [cached since 0.005139s ago] (3, 15, 1, 0)
+2026-01-24 22:47:05,656 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,657 - INFO - [cached since 0.004348s ago] (3, 15, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:47:05,657 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:47:05,657 - INFO - [cached since 0.006555s ago] (3, 16, 1, 0)
+2026-01-24 22:47:05,658 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:47:05,658 - INFO - [cached since 0.005775s ago] (3, 16, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:47:05,658 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:47:05,658 - INFO - [cached since 0.008009s ago] (3, 17, 1, 0)
+2026-01-24 22:47:05,660 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:47:05,660 - INFO - [generated in 0.00012s (insertmanyvalues) 1/6 (ordered; batch not supported)] (3, 16, 17, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 0, None, None, None)
+2026-01-24 22:47:05,661 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:47:05,661 - INFO - [insertmanyvalues 2/6 (ordered; batch not supported)] (3, 13, 12, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 1, None, None, None)
+2026-01-24 22:47:05,661 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:47:05,661 - INFO - [insertmanyvalues 3/6 (ordered; batch not supported)] (3, 15, 14, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 2, None, None, None)
+2026-01-24 22:47:05,661 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:47:05,661 - INFO - [insertmanyvalues 4/6 (ordered; batch not supported)] (3, None, None, 2, 'Locked', 'knockout_sf', 'Winner advances', 4, None, None, None)
+2026-01-24 22:47:05,661 - INFO - ROLLBACK
+2026-01-24 22:47:05,663 - ERROR - Failed to create tournament: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id]
+[parameters: (3, None, None, 2, 'Locked', 'knockout_sf', 'Winner advances', 4, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-01-24 22:50:12,507 - INFO - BEGIN (implicit)
+2026-01-24 22:50:12,507 - INFO - PRAGMA main.table_info("users")
+2026-01-24 22:50:12,507 - INFO - [raw sql] ()
+2026-01-24 22:50:12,510 - INFO - PRAGMA main.table_info("teams")
+2026-01-24 22:50:12,510 - INFO - [raw sql] ()
+2026-01-24 22:50:12,511 - INFO - PRAGMA main.table_info("players")
+2026-01-24 22:50:12,511 - INFO - [raw sql] ()
+2026-01-24 22:50:12,512 - INFO - PRAGMA main.table_info("matches")
+2026-01-24 22:50:12,512 - INFO - [raw sql] ()
+2026-01-24 22:50:12,512 - INFO - PRAGMA main.table_info("match_scorecards")
+2026-01-24 22:50:12,512 - INFO - [raw sql] ()
+2026-01-24 22:50:12,513 - INFO - PRAGMA main.table_info("tournaments")
+2026-01-24 22:50:12,513 - INFO - [raw sql] ()
+2026-01-24 22:50:12,513 - INFO - PRAGMA main.table_info("tournament_teams")
+2026-01-24 22:50:12,514 - INFO - [raw sql] ()
+2026-01-24 22:50:12,514 - INFO - PRAGMA main.table_info("tournament_fixtures")
+2026-01-24 22:50:12,514 - INFO - [raw sql] ()
+2026-01-24 22:50:12,515 - INFO - COMMIT
+2026-01-24 22:50:12,537 - INFO - BEGIN (implicit)
+2026-01-24 22:50:12,548 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,548 - INFO - [generated in 0.00043s] ('test_user_f40a1659', 'Team 1', 'T1', 'Stadium', 'Balanced', None, '2026-01-25 06:50:12.548956')
+2026-01-24 22:50:12,558 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,558 - INFO - [cached since 0.009135s ago] ('test_user_f40a1659', 'Team 2', 'T2', 'Stadium', 'Balanced', None, '2026-01-25 06:50:12.558293')
+2026-01-24 22:50:12,558 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,558 - INFO - [cached since 0.01005s ago] ('test_user_f40a1659', 'Team 3', 'T3', 'Stadium', 'Balanced', None, '2026-01-25 06:50:12.558293')
+2026-01-24 22:50:12,560 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,560 - INFO - [cached since 0.01099s ago] ('test_user_f40a1659', 'Team 4', 'T4', 'Stadium', 'Balanced', None, '2026-01-25 06:50:12.560173')
+2026-01-24 22:50:12,561 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,561 - INFO - [cached since 0.01187s ago] ('test_user_f40a1659', 'Team 5', 'T5', 'Stadium', 'Balanced', None, '2026-01-25 06:50:12.561366')
+2026-01-24 22:50:12,562 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,563 - INFO - [cached since 0.01335s ago] ('test_user_f40a1659', 'Team 6', 'T6', 'Stadium', 'Balanced', None, '2026-01-25 06:50:12.562531')
+2026-01-24 22:50:12,564 - INFO - INSERT INTO tournaments (user_id, name, status, created_at, mode, current_stage, playoff_teams, series_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,565 - INFO - [generated in 0.00059s] ('test_user_f40a1659', 'Testing Knockout', 'Active', '2026-01-25 06:50:12.564673', 'knockout', 'knockout_r1', 4, None)
+2026-01-24 22:50:12,569 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:50:12,570 - INFO - [generated in 0.00034s] (3, 12, 1, 0)
+2026-01-24 22:50:12,571 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,572 - INFO - [generated in 0.00035s] (3, 12, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:50:12,572 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:50:12,572 - INFO - [cached since 0.003184s ago] (3, 13, 1, 0)
+2026-01-24 22:50:12,573 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,573 - INFO - [cached since 0.002267s ago] (3, 13, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:50:12,574 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:50:12,574 - INFO - [cached since 0.004896s ago] (3, 14, 1, 0)
+2026-01-24 22:50:12,575 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,575 - INFO - [cached since 0.003963s ago] (3, 14, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:50:12,576 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:50:12,576 - INFO - [cached since 0.006541s ago] (3, 15, 1, 0)
+2026-01-24 22:50:12,576 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,577 - INFO - [cached since 0.005625s ago] (3, 15, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:50:12,577 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:50:12,577 - INFO - [cached since 0.008309s ago] (3, 16, 1, 0)
+2026-01-24 22:50:12,578 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:50:12,578 - INFO - [cached since 0.007375s ago] (3, 16, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:50:12,578 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:50:12,579 - INFO - [cached since 0.009977s ago] (3, 17, 1, 0)
+2026-01-24 22:50:12,582 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:50:12,582 - INFO - [generated in 0.00013s (insertmanyvalues) 1/6 (ordered; batch not supported)] (3, 14, 15, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 0, None, None, None)
+2026-01-24 22:50:12,582 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:50:12,583 - INFO - [insertmanyvalues 2/6 (ordered; batch not supported)] (3, 13, 16, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 1, None, None, None)
+2026-01-24 22:50:12,583 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:50:12,583 - INFO - [insertmanyvalues 3/6 (ordered; batch not supported)] (3, 12, 17, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 2, None, None, None)
+2026-01-24 22:50:12,583 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:50:12,584 - INFO - [insertmanyvalues 4/6 (ordered; batch not supported)] (3, None, None, 2, 'Locked', 'knockout_sf', 'Winner advances', 4, None, None, None)
+2026-01-24 22:50:12,584 - INFO - ROLLBACK
+2026-01-24 22:50:12,585 - ERROR - Failed to create tournament: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id]
+[parameters: (3, None, None, 2, 'Locked', 'knockout_sf', 'Winner advances', 4, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-01-24 22:51:08,885 - INFO - BEGIN (implicit)
+2026-01-24 22:51:08,885 - INFO - PRAGMA main.table_info("users")
+2026-01-24 22:51:08,885 - INFO - [raw sql] ()
+2026-01-24 22:51:08,889 - INFO - PRAGMA main.table_info("teams")
+2026-01-24 22:51:08,889 - INFO - [raw sql] ()
+2026-01-24 22:51:08,890 - INFO - PRAGMA main.table_info("players")
+2026-01-24 22:51:08,890 - INFO - [raw sql] ()
+2026-01-24 22:51:08,890 - INFO - PRAGMA main.table_info("matches")
+2026-01-24 22:51:08,891 - INFO - [raw sql] ()
+2026-01-24 22:51:08,891 - INFO - PRAGMA main.table_info("match_scorecards")
+2026-01-24 22:51:08,891 - INFO - [raw sql] ()
+2026-01-24 22:51:08,891 - INFO - PRAGMA main.table_info("tournaments")
+2026-01-24 22:51:08,891 - INFO - [raw sql] ()
+2026-01-24 22:51:08,892 - INFO - PRAGMA main.table_info("tournament_teams")
+2026-01-24 22:51:08,892 - INFO - [raw sql] ()
+2026-01-24 22:51:08,892 - INFO - PRAGMA main.table_info("tournament_fixtures")
+2026-01-24 22:51:08,892 - INFO - [raw sql] ()
+2026-01-24 22:51:08,893 - INFO - COMMIT
+2026-01-24 22:51:08,911 - INFO - BEGIN (implicit)
+2026-01-24 22:51:08,913 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,913 - INFO - [generated in 0.00029s] ('test_user_a9b32782', 'Team 1', 'T1', 'Stadium', 'Balanced', None, '2026-01-25 06:51:08.913790')
+2026-01-24 22:51:08,921 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,921 - INFO - [cached since 0.007527s ago] ('test_user_a9b32782', 'Team 2', 'T2', 'Stadium', 'Balanced', None, '2026-01-25 06:51:08.920517')
+2026-01-24 22:51:08,921 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,921 - INFO - [cached since 0.008297s ago] ('test_user_a9b32782', 'Team 3', 'T3', 'Stadium', 'Balanced', None, '2026-01-25 06:51:08.921960')
+2026-01-24 22:51:08,922 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,922 - INFO - [cached since 0.008921s ago] ('test_user_a9b32782', 'Team 4', 'T4', 'Stadium', 'Balanced', None, '2026-01-25 06:51:08.922533')
+2026-01-24 22:51:08,923 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,923 - INFO - [cached since 0.009627s ago] ('test_user_a9b32782', 'Team 5', 'T5', 'Stadium', 'Balanced', None, '2026-01-25 06:51:08.923324')
+2026-01-24 22:51:08,923 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,923 - INFO - [cached since 0.01028s ago] ('test_user_a9b32782', 'Team 6', 'T6', 'Stadium', 'Balanced', None, '2026-01-25 06:51:08.923885')
+2026-01-24 22:51:08,925 - INFO - INSERT INTO tournaments (user_id, name, status, created_at, mode, current_stage, playoff_teams, series_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,925 - INFO - [generated in 0.00024s] ('test_user_a9b32782', 'Testing Knockout', 'Active', '2026-01-25 06:51:08.925100', 'knockout', 'knockout_r1', 4, None)
+2026-01-24 22:51:08,928 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:08,928 - INFO - [generated in 0.00027s] (3, 12, 1, 0)
+2026-01-24 22:51:08,929 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,930 - INFO - [generated in 0.00027s] (3, 12, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:08,930 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:08,930 - INFO - [cached since 0.002417s ago] (3, 13, 1, 0)
+2026-01-24 22:51:08,931 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,931 - INFO - [cached since 0.00172s ago] (3, 13, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:08,932 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:08,932 - INFO - [cached since 0.003697s ago] (3, 14, 1, 0)
+2026-01-24 22:51:08,932 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,932 - INFO - [cached since 0.00305s ago] (3, 14, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:08,933 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:08,933 - INFO - [cached since 0.00504s ago] (3, 15, 1, 0)
+2026-01-24 22:51:08,933 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,933 - INFO - [cached since 0.004302s ago] (3, 15, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:08,934 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:08,934 - INFO - [cached since 0.006245s ago] (3, 16, 1, 0)
+2026-01-24 22:51:08,934 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:08,935 - INFO - [cached since 0.005628s ago] (3, 16, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:08,935 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:08,936 - INFO - [cached since 0.007609s ago] (3, 17, 1, 0)
+2026-01-24 22:51:08,939 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:51:08,939 - INFO - [generated in 0.00019s (insertmanyvalues) 1/6 (ordered; batch not supported)] (3, 14, 17, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 0, None, None, None)
+2026-01-24 22:51:08,940 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:51:08,940 - INFO - [insertmanyvalues 2/6 (ordered; batch not supported)] (3, 13, 16, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 1, None, None, None)
+2026-01-24 22:51:08,940 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:51:08,941 - INFO - [insertmanyvalues 3/6 (ordered; batch not supported)] (3, 12, 15, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 2, None, None, None)
+2026-01-24 22:51:08,941 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+2026-01-24 22:51:08,941 - INFO - [insertmanyvalues 4/6 (ordered; batch not supported)] (3, None, None, 2, 'Locked', 'knockout_sf', 'Winner advances', 4, None, None, None)
+2026-01-24 22:51:08,942 - INFO - ROLLBACK
+2026-01-24 22:51:08,942 - ERROR - Failed to create tournament: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id]
+[parameters: (3, None, None, 2, 'Locked', 'knockout_sf', 'Winner advances', 4, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-01-24 22:51:47,637 - INFO - BEGIN (implicit)
+2026-01-24 22:51:47,637 - INFO - PRAGMA main.table_info("users")
+2026-01-24 22:51:47,638 - INFO - [raw sql] ()
+2026-01-24 22:51:47,639 - INFO - PRAGMA main.table_info("teams")
+2026-01-24 22:51:47,640 - INFO - [raw sql] ()
+2026-01-24 22:51:47,640 - INFO - PRAGMA main.table_info("players")
+2026-01-24 22:51:47,641 - INFO - [raw sql] ()
+2026-01-24 22:51:47,641 - INFO - PRAGMA main.table_info("matches")
+2026-01-24 22:51:47,642 - INFO - [raw sql] ()
+2026-01-24 22:51:47,643 - INFO - PRAGMA main.table_info("match_scorecards")
+2026-01-24 22:51:47,643 - INFO - [raw sql] ()
+2026-01-24 22:51:47,644 - INFO - PRAGMA main.table_info("tournaments")
+2026-01-24 22:51:47,644 - INFO - [raw sql] ()
+2026-01-24 22:51:47,644 - INFO - PRAGMA main.table_info("tournament_teams")
+2026-01-24 22:51:47,645 - INFO - [raw sql] ()
+2026-01-24 22:51:47,645 - INFO - PRAGMA main.table_info("tournament_fixtures")
+2026-01-24 22:51:47,645 - INFO - [raw sql] ()
+2026-01-24 22:51:47,646 - INFO - COMMIT
+2026-01-24 22:51:47,660 - INFO - BEGIN (implicit)
+2026-01-24 22:51:47,667 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,667 - INFO - [generated in 0.00028s] ('test_user_e3fd62a0', 'Team 1', 'T1', 'Stadium', 'Balanced', None, '2026-01-25 06:51:47.667410')
+2026-01-24 22:51:47,670 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,670 - INFO - [cached since 0.002978s ago] ('test_user_e3fd62a0', 'Team 2', 'T2', 'Stadium', 'Balanced', None, '2026-01-25 06:51:47.670333')
+2026-01-24 22:51:47,671 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,671 - INFO - [cached since 0.004456s ago] ('test_user_e3fd62a0', 'Team 3', 'T3', 'Stadium', 'Balanced', None, '2026-01-25 06:51:47.671633')
+2026-01-24 22:51:47,672 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,673 - INFO - [cached since 0.006041s ago] ('test_user_e3fd62a0', 'Team 4', 'T4', 'Stadium', 'Balanced', None, '2026-01-25 06:51:47.672869')
+2026-01-24 22:51:47,674 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,674 - INFO - [cached since 0.006769s ago] ('test_user_e3fd62a0', 'Team 5', 'T5', 'Stadium', 'Balanced', None, '2026-01-25 06:51:47.674085')
+2026-01-24 22:51:47,674 - INFO - INSERT INTO teams (user_id, name, short_code, home_ground, pitch_preference, team_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,674 - INFO - [cached since 0.007425s ago] ('test_user_e3fd62a0', 'Team 6', 'T6', 'Stadium', 'Balanced', None, '2026-01-25 06:51:47.674813')
+2026-01-24 22:51:47,676 - INFO - INSERT INTO tournaments (user_id, name, status, created_at, mode, current_stage, playoff_teams, series_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,676 - INFO - [generated in 0.00067s] ('test_user_e3fd62a0', 'Testing Knockout', 'Active', '2026-01-25 06:51:47.675435', 'knockout', 'knockout_r1', 4, None)
+2026-01-24 22:51:47,678 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:47,679 - INFO - [generated in 0.00025s] (3, 12, 1, 0)
+2026-01-24 22:51:47,680 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,680 - INFO - [generated in 0.00026s] (3, 12, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:47,680 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:47,681 - INFO - [cached since 0.002372s ago] (3, 13, 1, 0)
+2026-01-24 22:51:47,682 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,682 - INFO - [cached since 0.001658s ago] (3, 13, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:47,682 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:47,682 - INFO - [cached since 0.00362s ago] (3, 14, 1, 0)
+2026-01-24 22:51:47,683 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,683 - INFO - [cached since 0.002869s ago] (3, 14, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:47,683 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:47,683 - INFO - [cached since 0.004843s ago] (3, 15, 1, 0)
+2026-01-24 22:51:47,684 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,685 - INFO - [cached since 0.004321s ago] (3, 15, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:47,685 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:47,685 - INFO - [cached since 0.006283s ago] (3, 16, 1, 0)
+2026-01-24 22:51:47,685 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,685 - INFO - [cached since 0.005528s ago] (3, 16, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:47,686 - INFO - SELECT tournament_teams.id AS tournament_teams_id, tournament_teams.tournament_id AS tournament_teams_tournament_id, tournament_teams.team_id AS tournament_teams_team_id, tournament_teams.played AS tournament_teams_played, tournament_teams.won AS tournament_teams_won, tournament_teams.lost AS tournament_teams_lost, tournament_teams.tied AS tournament_teams_tied, tournament_teams.no_result AS tournament_teams_no_result, tournament_teams.points AS tournament_teams_points, tournament_teams.runs_scored AS tournament_teams_runs_scored, tournament_teams.overs_faced AS tournament_teams_overs_faced, tournament_teams.runs_conceded AS tournament_teams_runs_conceded, tournament_teams.overs_bowled AS tournament_teams_overs_bowled, tournament_teams.net_run_rate AS tournament_teams_net_run_rate 
+FROM tournament_teams 
+WHERE tournament_teams.tournament_id = ? AND tournament_teams.team_id = ?
+ LIMIT ? OFFSET ?
+2026-01-24 22:51:47,686 - INFO - [cached since 0.007678s ago] (3, 17, 1, 0)
+2026-01-24 22:51:47,687 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,688 - INFO - [generated in 0.00022s] (3, 16, 17, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 0, None, None, None)
+2026-01-24 22:51:47,688 - INFO - INSERT INTO tournament_teams (tournament_id, team_id, played, won, lost, tied, no_result, points, runs_scored, overs_faced, runs_conceded, overs_bowled, net_run_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,688 - INFO - [cached since 0.007974s ago] (3, 17, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0.0, 0.0)
+2026-01-24 22:51:47,688 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,688 - INFO - [cached since 0.001496s ago] (3, 13, 12, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 1, None, None, None)
+2026-01-24 22:51:47,689 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,689 - INFO - [cached since 0.002087s ago] (3, 15, 14, 1, 'Scheduled', 'knockout_qf', 'Winner advances to knockout_sf', 2, None, None, None)
+2026-01-24 22:51:47,690 - INFO - INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-24 22:51:47,690 - INFO - [cached since 0.002674s ago] (3, None, None, 2, 'Locked', 'knockout_sf', 'Winner advances', 4, None, None, None)
+2026-01-24 22:51:47,690 - INFO - ROLLBACK
+2026-01-24 22:51:47,691 - ERROR - Failed to create tournament: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (3, None, None, 2, 'Locked', 'knockout_sf', 'Winner advances', 4, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-01-24 23:28:15,908 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-24 23:28:16,012 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-24 23:28:16,012 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-24 23:28:16,151 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:16,157 - INFO - 127.0.0.1 GET /
+2026-01-24 23:28:16,160 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:16] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-24 23:28:16,174 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:16,174 - INFO - 127.0.0.1 GET /login
+2026-01-24 23:28:16,184 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:16] "GET /login?next=/ HTTP/1.1" 200 -
+2026-01-24 23:28:16,434 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:16,442 - INFO - 127.0.0.1 GET /favicon.ico
+2026-01-24 23:28:16,444 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:16] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2026-01-24 23:28:20,520 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:20,520 - INFO - 127.0.0.1 POST /login
+2026-01-24 23:28:20,578 - INFO - Local login successful for: admin@projectx.com
+2026-01-24 23:28:20,581 - INFO - Successful login for admin@projectx.com
+2026-01-24 23:28:20,586 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:20] "[32mPOST /login HTTP/1.1[0m" 302 -
+2026-01-24 23:28:20,601 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:20,604 - INFO - 127.0.0.1 GET /
+2026-01-24 23:28:20,634 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:20] "GET / HTTP/1.1" 200 -
+2026-01-24 23:28:20,717 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:20,719 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:28:20,814 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:20] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:28:33,485 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:33,485 - INFO - 127.0.0.1 GET /statistics
+2026-01-24 23:28:33,666 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:33] "GET /statistics HTTP/1.1" 200 -
+2026-01-24 23:28:37,743 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:37,746 - INFO - 127.0.0.1 GET /
+2026-01-24 23:28:37,746 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:37] "GET / HTTP/1.1" 200 -
+2026-01-24 23:28:37,825 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:37,825 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:28:37,831 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:37] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:28:42,890 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:42,890 - INFO - 127.0.0.1 GET /tournaments
+2026-01-24 23:28:42,943 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:42] "GET /tournaments HTTP/1.1" 200 -
+2026-01-24 23:28:43,004 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:43,006 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:28:43,012 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:43] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:28:46,613 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:46,613 - INFO - 127.0.0.1 GET /tournaments/1
+2026-01-24 23:28:46,684 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:46] "GET /tournaments/1 HTTP/1.1" 200 -
+2026-01-24 23:28:46,750 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:46,750 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:28:46,758 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:46] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:28:50,541 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:50,541 - INFO - 127.0.0.1 POST /tournaments/1/delete
+2026-01-24 23:28:50,581 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:50] "[32mPOST /tournaments/1/delete HTTP/1.1[0m" 302 -
+2026-01-24 23:28:50,592 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:50,592 - INFO - 127.0.0.1 GET /tournaments
+2026-01-24 23:28:50,602 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:50] "GET /tournaments HTTP/1.1" 200 -
+2026-01-24 23:28:50,662 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:50,663 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:28:50,671 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:50] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:28:55,125 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:55,130 - INFO - 127.0.0.1 GET /
+2026-01-24 23:28:55,137 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:55] "GET / HTTP/1.1" 200 -
+2026-01-24 23:28:55,205 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:55,206 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:28:55,208 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:55] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:28:56,886 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:56,899 - INFO - 127.0.0.1 GET /tournaments
+2026-01-24 23:28:56,904 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:56] "GET /tournaments HTTP/1.1" 200 -
+2026-01-24 23:28:56,959 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:56,961 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:28:56,966 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:56] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:28:58,276 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:58,276 - INFO - 127.0.0.1 GET /tournaments/create
+2026-01-24 23:28:58,306 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:58] "GET /tournaments/create HTTP/1.1" 200 -
+2026-01-24 23:28:58,363 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:28:58,366 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:28:58,371 - INFO - 127.0.0.1 - - [24/Jan/2026 23:28:58] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:29:50,738 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:29:50,739 - INFO - 127.0.0.1 POST /tournaments/create
+2026-01-24 23:29:50,776 - ERROR - Failed to create tournament: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (3, None, 8, 1, 'Completed', 'knockout_sf', 'Bye - Advances to next round', 0, None, 8, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-01-24 23:29:50,776 - ERROR - Error creating tournament: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (3, None, 8, 1, 'Completed', 'knockout_sf', 'Bye - Advances to next round', 0, None, 8, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Traceback (most recent call last):
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.IntegrityError: NOT NULL constraint failed: tournament_fixtures.home_team_id
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\SimCricketX\app.py", line 2164, in create_tournament_route
+    t = tournament_engine.create_tournament(
+  File "D:\SimCricketX\engine\tournament_engine.py", line 224, in create_tournament
+    self._generate_fixtures_for_mode(tournament, team_ids, mode, series_config)
+  File "D:\SimCricketX\engine\tournament_engine.py", line 247, in _generate_fixtures_for_mode
+    self._generate_knockout(tournament.id, team_ids)
+  File "D:\SimCricketX\engine\tournament_engine.py", line 389, in _generate_knockout
+    db.session.flush()
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\scoping.py", line 924, in flush
+    return self._proxied.flush(objects=objects)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (3, None, 8, 1, 'Completed', 'knockout_sf', 'Bye - Advances to next round', 0, None, 8, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-01-24 23:29:51,188 - ERROR - Exception on /tournaments/create [POST]
+Traceback (most recent call last):
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.IntegrityError: NOT NULL constraint failed: tournament_fixtures.home_team_id
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\SimCricketX\app.py", line 2164, in create_tournament_route
+    t = tournament_engine.create_tournament(
+  File "D:\SimCricketX\engine\tournament_engine.py", line 224, in create_tournament
+    self._generate_fixtures_for_mode(tournament, team_ids, mode, series_config)
+  File "D:\SimCricketX\engine\tournament_engine.py", line 247, in _generate_fixtures_for_mode
+    self._generate_knockout(tournament.id, team_ids)
+  File "D:\SimCricketX\engine\tournament_engine.py", line 389, in _generate_knockout
+    db.session.flush()
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\scoping.py", line 924, in flush
+    return self._proxied.flush(objects=objects)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (3, None, 8, 1, 'Completed', 'knockout_sf', 'Bye - Advances to next round', 0, None, 8, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\SimCricketX\venv\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "D:\SimCricketX\venv\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "D:\SimCricketX\venv\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "D:\SimCricketX\venv\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\venv\lib\site-packages\flask_login\utils.py", line 290, in decorated_view
+    return current_app.ensure_sync(func)(*args, **kwargs)
+  File "D:\SimCricketX\app.py", line 2179, in create_tournament_route
+    flash("An error occurred while creating the tournament.", "error")
+NameError: name 'flash' is not defined
+2026-01-24 23:29:51,284 - INFO - 127.0.0.1 - - [24/Jan/2026 23:29:51] "[35m[1mPOST /tournaments/create HTTP/1.1[0m" 500 -
+2026-01-24 23:37:36,434 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-24 23:37:36,498 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-24 23:37:36,501 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-24 23:37:36,592 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:37:36,592 - INFO - 127.0.0.1 GET /
+2026-01-24 23:37:36,600 - INFO - 127.0.0.1 - - [24/Jan/2026 23:37:36] "GET / HTTP/1.1" 200 -
+2026-01-24 23:37:36,629 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:37:36,630 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:37:36,664 - INFO - 127.0.0.1 - - [24/Jan/2026 23:37:36] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:37:39,092 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:37:39,093 - INFO - 127.0.0.1 GET /tournaments
+2026-01-24 23:37:39,184 - INFO - 127.0.0.1 - - [24/Jan/2026 23:37:39] "GET /tournaments HTTP/1.1" 200 -
+2026-01-24 23:37:39,251 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:37:39,253 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:37:39,256 - INFO - 127.0.0.1 - - [24/Jan/2026 23:37:39] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:37:40,771 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:37:40,771 - INFO - 127.0.0.1 GET /tournaments/create
+2026-01-24 23:37:40,797 - INFO - 127.0.0.1 - - [24/Jan/2026 23:37:40] "GET /tournaments/create HTTP/1.1" 200 -
+2026-01-24 23:37:40,847 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:37:40,853 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:37:40,855 - INFO - 127.0.0.1 - - [24/Jan/2026 23:37:40] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:37:57,494 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:37:57,494 - INFO - 127.0.0.1 POST /tournaments/create
+2026-01-24 23:37:57,523 - ERROR - Failed to create tournament: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (3, None, None, 2, 'Locked', 'final', 'Tournament Winner', 2, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-01-24 23:37:57,523 - ERROR - Error creating tournament: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (3, None, None, 2, 'Locked', 'final', 'Tournament Winner', 2, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Traceback (most recent call last):
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.IntegrityError: NOT NULL constraint failed: tournament_fixtures.home_team_id
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\SimCricketX\app.py", line 2164, in create_tournament_route
+    t = tournament_engine.create_tournament(
+  File "D:\SimCricketX\engine\tournament_engine.py", line 224, in create_tournament
+    self._generate_fixtures_for_mode(tournament, team_ids, mode, series_config)
+  File "D:\SimCricketX\engine\tournament_engine.py", line 247, in _generate_fixtures_for_mode
+    self._generate_knockout(tournament.id, team_ids)
+  File "D:\SimCricketX\engine\tournament_engine.py", line 439, in _generate_knockout
+    db.session.flush()
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\scoping.py", line 924, in flush
+    return self._proxied.flush(objects=objects)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (3, None, None, 2, 'Locked', 'final', 'Tournament Winner', 2, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-01-24 23:37:57,541 - ERROR - Exception on /tournaments/create [POST]
+Traceback (most recent call last):
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.IntegrityError: NOT NULL constraint failed: tournament_fixtures.home_team_id
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\SimCricketX\app.py", line 2164, in create_tournament_route
+    t = tournament_engine.create_tournament(
+  File "D:\SimCricketX\engine\tournament_engine.py", line 224, in create_tournament
+    self._generate_fixtures_for_mode(tournament, team_ids, mode, series_config)
+  File "D:\SimCricketX\engine\tournament_engine.py", line 247, in _generate_fixtures_for_mode
+    self._generate_knockout(tournament.id, team_ids)
+  File "D:\SimCricketX\engine\tournament_engine.py", line 439, in _generate_knockout
+    db.session.flush()
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\scoping.py", line 924, in flush
+    return self._proxied.flush(objects=objects)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\SimCricketX\venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) NOT NULL constraint failed: tournament_fixtures.home_team_id
+[SQL: INSERT INTO tournament_fixtures (tournament_id, home_team_id, away_team_id, round_number, status, stage, stage_description, bracket_position, match_id, winner_team_id, series_match_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (3, None, None, 2, 'Locked', 'final', 'Tournament Winner', 2, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\SimCricketX\venv\lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "D:\SimCricketX\venv\lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "D:\SimCricketX\venv\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "D:\SimCricketX\venv\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "D:\SimCricketX\venv\lib\site-packages\flask_login\utils.py", line 290, in decorated_view
+    return current_app.ensure_sync(func)(*args, **kwargs)
+  File "D:\SimCricketX\app.py", line 2179, in create_tournament_route
+    flash("An error occurred while creating the tournament.", "error")
+NameError: name 'flash' is not defined
+2026-01-24 23:37:57,574 - INFO - 127.0.0.1 - - [24/Jan/2026 23:37:57] "[35m[1mPOST /tournaments/create HTTP/1.1[0m" 500 -
+2026-01-24 23:41:01,298 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-24 23:41:01,364 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-24 23:41:01,365 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-24 23:41:01,479 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:01,479 - INFO - 127.0.0.1 GET /
+2026-01-24 23:41:01,487 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:01] "GET / HTTP/1.1" 200 -
+2026-01-24 23:41:01,527 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:01,527 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:41:01,561 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:01] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:41:04,351 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:04,353 - INFO - 127.0.0.1 GET /tournaments
+2026-01-24 23:41:04,444 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:04] "GET /tournaments HTTP/1.1" 200 -
+2026-01-24 23:41:04,505 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:04,505 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:41:04,511 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:04] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:41:05,628 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:05,628 - INFO - 127.0.0.1 GET /tournaments/create
+2026-01-24 23:41:05,652 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:05] "GET /tournaments/create HTTP/1.1" 200 -
+2026-01-24 23:41:05,706 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:05,708 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:41:05,708 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:05] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:41:20,608 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:20,608 - INFO - 127.0.0.1 POST /tournaments/create
+2026-01-24 23:41:20,655 - INFO - Tournament 'Manish' created with mode 'knockout' and 4 teams
+2026-01-24 23:41:20,660 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:20] "[32mPOST /tournaments/create HTTP/1.1[0m" 302 -
+2026-01-24 23:41:20,678 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:20,679 - INFO - 127.0.0.1 GET /tournaments/3
+2026-01-24 23:41:20,739 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:20] "GET /tournaments/3 HTTP/1.1" 200 -
+2026-01-24 23:41:20,797 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:20,797 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:41:20,801 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:20] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:41:30,471 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:30,471 - INFO - 127.0.0.1 GET /match/setup
+2026-01-24 23:41:30,527 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:30] "GET /match/setup?fixture_id=3&tournament_id=3 HTTP/1.1" 200 -
+2026-01-24 23:41:30,582 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:41:30,582 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:41:30,588 - INFO - 127.0.0.1 - - [24/Jan/2026 23:41:30] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:42:04,438 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:42:04,439 - INFO - 127.0.0.1 GET /
+2026-01-24 23:42:04,440 - INFO - 127.0.0.1 - - [24/Jan/2026 23:42:04] "GET / HTTP/1.1" 200 -
+2026-01-24 23:42:04,512 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:42:04,512 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:42:04,516 - INFO - 127.0.0.1 - - [24/Jan/2026 23:42:04] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:42:07,039 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:42:07,039 - INFO - 127.0.0.1 GET /tournaments
+2026-01-24 23:42:07,051 - INFO - 127.0.0.1 - - [24/Jan/2026 23:42:07] "GET /tournaments HTTP/1.1" 200 -
+2026-01-24 23:42:07,089 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:42:07,089 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:42:07,095 - INFO - 127.0.0.1 - - [24/Jan/2026 23:42:07] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:42:08,328 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:42:08,330 - INFO - 127.0.0.1 GET /tournaments/3
+2026-01-24 23:42:08,348 - INFO - 127.0.0.1 - - [24/Jan/2026 23:42:08] "GET /tournaments/3 HTTP/1.1" 200 -
+2026-01-24 23:42:08,412 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-24 23:42:08,414 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-24 23:42:08,422 - INFO - 127.0.0.1 - - [24/Jan/2026 23:42:08] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-24 23:48:08,079 - ERROR - Failed to create tournament: name 'tbd_id' is not defined
+2026-01-24 23:48:08,091 - INFO - Tournament 'RR Test' created with mode 'round_robin_knockout' and 4 teams
+2026-01-24 23:48:39,072 - ERROR - Failed to create tournament: name 'tbd_id' is not defined
+2026-01-24 23:48:39,084 - INFO - Tournament 'RR Test' created with mode 'round_robin_knockout' and 4 teams
+2026-01-24 23:48:56,590 - INFO - IPL Generation: Resolved TBD ID to 13
+2026-01-24 23:48:56,602 - INFO - Tournament 'IPL Test' created with mode 'ipl_style' and 4 teams
+2026-01-24 23:48:56,614 - INFO - Tournament 'RR Test' created with mode 'round_robin_knockout' and 4 teams
