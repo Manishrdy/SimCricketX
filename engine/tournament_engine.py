@@ -1032,8 +1032,16 @@ class TournamentEngine:
         # Find and update the Fixture Record
         fixture = TournamentFixture.query.filter_by(match_id=match.id).first()
         if fixture:
+            if fixture.standings_applied:
+                logger.info(
+                    "Standings already applied for fixture %s (match %s); skipping update.",
+                    fixture.id,
+                    match.id
+                )
+                return False
             fixture.status = 'Completed'
             fixture.winner_team_id = match.winner_team_id
+            fixture.standings_applied = True
 
         # Get team stats records
         home_team_stats = TournamentTeam.query.filter_by(
@@ -1231,20 +1239,48 @@ class TournamentEngine:
             self._calculate_nrr(home_team_stats)
             self._calculate_nrr(away_team_stats)
 
-        # Reset fixture winner
+        # Reset fixture winner and standings state
         if fixture:
             fixture.winner_team_id = None
+            fixture.status = 'Scheduled'
+            fixture.standings_applied = False
+
+            if fixture.stage != self.STAGE_LEAGUE:
+                self._reset_knockout_bracket(match.tournament_id, fixture.bracket_position)
 
         # Reset tournament status if it was completed
         tournament = db.session.get(Tournament, match.tournament_id)
         if tournament and tournament.status == 'Completed':
             tournament.status = 'Active'
+        if tournament and fixture and fixture.stage != self.STAGE_LEAGUE:
+            tournament.current_stage = fixture.stage
 
         if commit:
             db.session.commit()
 
         logger.info(f"Reversed standings for match {match.id}")
         return True
+
+    def _reset_knockout_bracket(self, tournament_id: int, from_bracket_position: int):
+        """
+        Reset downstream knockout fixtures when a completed fixture is re-simulated.
+
+        This clears dependent teams, match links, and winners, and locks fixtures
+        that should be repopulated once earlier rounds are replayed.
+        """
+        downstream = TournamentFixture.query.filter(
+            TournamentFixture.tournament_id == tournament_id,
+            TournamentFixture.bracket_position != None,
+            TournamentFixture.bracket_position > from_bracket_position
+        ).all()
+
+        for fixture in downstream:
+            fixture.home_team_id = None
+            fixture.away_team_id = None
+            fixture.winner_team_id = None
+            fixture.match_id = None
+            fixture.status = 'Locked'
+            fixture.standings_applied = False
 
     def _reverse_nrr_components(self, home_stats, away_stats, match):
         """Reverse the NRR component updates from a match."""
