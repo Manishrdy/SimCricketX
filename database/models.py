@@ -28,6 +28,7 @@ class Team(db.Model):
     pitch_preference = db.Column(db.String(50))
     team_color = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_draft = db.Column(db.Boolean, default=False)
     
     # Relationships
     players = relationship('Player', backref='team', cascade="all, delete-orphan")

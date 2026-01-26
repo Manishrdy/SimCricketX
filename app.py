@@ -555,8 +555,10 @@ def create_app():
                 short_code = request.form["short_code"].strip().upper()
                 home_ground = request.form["home_ground"].strip()
                 pitch = request.form["pitch_preference"]
+                action = request.form.get("action", "publish")
+                is_draft = (action == "save_draft")
 
-                # Validate required fields
+                # Validate required fields (Basic info always required)
                 if not (name and short_code and home_ground and pitch):
                     return render_template("team_create.html", error="All team fields are required.")
 
@@ -588,28 +590,42 @@ def create_app():
                         app.logger.error(f"Error in player creation: {e}", exc_info=True)
                         return render_template("team_create.html", error=f"Error in player {i+1}: {e}")
 
-                # Validate player count
-                if len(players) < 15 or len(players) > 18:
-                    return render_template("team_create.html", error="You must enter between 15 and 18 players.")
-                
-                # Validate at least 1 wicketkeeper
-                wk_count = sum(1 for p in players if p.role == "Wicketkeeper")
-                if wk_count < 1:
-                    return render_template("team_create.html", error="You need at least one Wicketkeeper.")
+                # --- Validation Logic ---
+                if not is_draft:
+                    # Enforce strict rules for Published/Active teams
+                    
+                    # Validate player count (Updated limits: 12-25)
+                    if len(players) < 12 or len(players) > 25:
+                        return render_template("team_create.html", error="You must enter between 12 and 25 players.")
+                    
+                    # Validate at least 1 wicketkeeper
+                    wk_count = sum(1 for p in players if p.role == "Wicketkeeper")
+                    if wk_count < 1:
+                        return render_template("team_create.html", error="You need at least one Wicketkeeper.")
 
-                # Validate minimum 6 bowlers/all-rounders
-                bowl_count = sum(1 for p in players if p.role in ["Bowler", "All-rounder"])
-                if bowl_count < 6:
-                    return render_template("team_create.html", error="You need at least six Bowler/All-rounder roles.")
-                
+                    # Validate minimum 6 bowlers/all-rounders
+                    bowl_count = sum(1 for p in players if p.role in ["Bowler", "All-rounder"])
+                    if bowl_count < 6:
+                        return render_template("team_create.html", error="You need at least six Bowler/All-rounder roles.")
+                    
+                    # Validate leadership selection
+                    captain_name = request.form.get("captain")
+                    wk_name = request.form.get("wicketkeeper")
+                    
+                    if not captain_name or not wk_name:
+                         # Fallback if not selected but required
+                         return render_template("team_create.html", error="Captain and Wicketkeeper selection required.")
+                else:
+                    # Relaxed rules for Drafts
+                    if len(players) < 1:
+                         return render_template("team_create.html", error="Draft must have at least 1 player.")
+                    
+                    # Optional leadership for drafts
+                    captain_name = request.form.get("captain")
+                    wk_name = request.form.get("wicketkeeper")
+
                 # Read team color
                 color = request.form["team_color"]
-
-                # For now: auto-pick captain and wicketkeeper as first ones matching
-                captain = next((p.name for p in players if p.role in ["Batsman", "All-rounder", "Wicketkeeper"]), players[0].name)
-                wicketkeeper = next((p.name for p in players if p.role == "Wicketkeeper"), None)
-                if not wicketkeeper:
-                    return render_template("team_create.html", error="At least one player must be a Wicketkeeper.")
 
                 # 3. Create and save team to DB
                 try:
@@ -619,15 +635,16 @@ def create_app():
                         short_code=short_code,
                         home_ground=home_ground,
                         pitch_preference=pitch,
-                        team_color=color
+                        team_color=color,
+                        is_draft=is_draft
                     )
                     db.session.add(new_team)
                     db.session.flush() # Get ID for foreign keys
 
                     # Add players
                     for p in players:
-                        is_captain = (p.name == captain)
-                        is_wk = (p.name == wicketkeeper)
+                        is_captain = (p.name == captain_name) if captain_name else False
+                        is_wk = (p.name == wk_name) if wk_name else False
                         
                         db_player = DBPlayer(
                             team_id=new_team.id,
@@ -645,8 +662,13 @@ def create_app():
                         db.session.add(db_player)
                     
                     db.session.commit()
-                    app.logger.info(f"Team '{new_team.name}' (ID: {new_team.id}) created by {current_user.id}")
-                    return redirect(url_for("home"))
+                    status_msg = "Draft" if is_draft else "Active"
+                    app.logger.info(f"Team '{new_team.name}' (ID: {new_team.id}) created as {status_msg} by {current_user.id}")
+                    if is_draft:
+                         flash("Team saved as draft.", "success")
+                         return redirect(url_for("manage_teams"))
+                    else:
+                         return redirect(url_for("home"))
 
                 except Exception as db_err:
                     db.session.rollback()
@@ -690,7 +712,8 @@ def create_app():
                     "pitch_preference": t.pitch_preference,
                     "team_color": t.team_color,
                     "captain": captain_name,
-                    "players": players_list
+                    "players": players_list,
+                    "is_draft": getattr(t, 'is_draft', False)
                 })
         except Exception as e:
             app.logger.error(f"Error loading teams from DB: {e}", exc_info=True)
@@ -751,20 +774,13 @@ def create_app():
                     
                     # Update Short Code
                     team.short_code = new_short_code
+                    
+                    # Check Action (Draft handling)
+                    action = request.form.get("action", "publish")
+                    is_draft = (action == "save_draft")
+                    team.is_draft = is_draft
 
-                    # Update Players: Delete all and re-add (Simplest way to handle reordering/edits)
-                    # Note: In a real prod app with history, we might soft-delete or diff, 
-                    # but for this sim, hard replace is fine as stats link by Player Name/Team internally for now.
-                    # Wait, if we link stats by PlayerID, deleting players breaks foreign keys!
-                    # For now, let's assuming stats are aggregated by Name/Team string in the current stats engine.
-                    # If we use ForeignKeys in MatchScorecard, we CANNOT delete players.
-                    # We must diff them.
-                    
-                    # Correction: For this phase, I will stick to "Delete All & Re-Insert" 
-                    # UNLESS foreign keys prevent it. Since we just migrated, we have no matches linking to these NEW player IDs yet.
-                    # But future matches will. 
-                    # Simpler approach for now: Delete existing players for this team.
-                    
+                    # Update Players: Delete all and re-add
                     DBPlayer.query.filter_by(team_id=team.id).delete()
                     
                     # Gather players from form
@@ -779,6 +795,31 @@ def create_app():
                     
                     captain_name = request.form.get("captain")
                     wk_name = request.form.get("wicketkeeper")
+                    
+                    # --- Validation for Edit ---
+                    if not is_draft:
+                        if len(names) < 12 or len(names) > 25:
+                            db.session.rollback()
+                            return render_template("team_create.html", team=team, edit=True, error="Active teams must have 12-25 players.")
+                        
+                        # Validate Roles
+                        wk_count = roles.count("Wicketkeeper")
+                        bowl_count = sum(1 for r in roles if r in ["Bowler", "All-rounder"])
+                        
+                        if wk_count < 1:
+                            db.session.rollback()
+                            return render_template("team_create.html", team=team, edit=True, error="Active teams need at least one Wicketkeeper.")
+                        if bowl_count < 6:
+                            db.session.rollback()
+                            return render_template("team_create.html", team=team, edit=True, error="Active teams need at least six Bowler/All-rounder roles.")
+                        
+                        if not captain_name or not wk_name:
+                             db.session.rollback()
+                             return render_template("team_create.html", team=team, edit=True, error="Active teams require a Captain and Wicketkeeper.")
+                    else:
+                        if len(names) < 1:
+                             db.session.rollback()
+                             return render_template("team_create.html", team=team, edit=True, error="Drafts must have at least 1 player.")
 
                     for i in range(len(names)):
                         p_name = names[i]
@@ -792,13 +833,15 @@ def create_app():
                             batting_hand=bhands[i],
                             bowling_type=btypes[i] or "",
                             bowling_hand=bhand2s[i] or "",
-                            is_captain=(p_name == captain_name),
-                            is_wicketkeeper=(p_name == wk_name)
+                            is_captain=(p_name == captain_name) if captain_name else False,
+                            is_wicketkeeper=(p_name == wk_name) if wk_name else False
                         )
                         db.session.add(db_player)
 
                     db.session.commit()
-                    app.logger.info(f"Team '{team.short_code}' (ID: {team.id}) updated by {user_id}")
+                    status_msg = "Draft" if is_draft else "Active"
+                    app.logger.info(f"Team '{team.short_code}' (ID: {team.id}) updated as {status_msg} by {user_id}")
+                    flash(f"Team updated as {status_msg}.", "success")
                     return redirect(url_for("manage_teams"))
 
                 except Exception as e:

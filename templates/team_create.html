@@ -853,8 +853,12 @@
 
       <!-- Sticky Footer Actions -->
       <div class="sticky-footer">
-        <div style="font-size: 0.9rem; opacity: 0.8;">
-          {% if edit %}Editing <strong>{{ team.short_code }}</strong>{% else %}Creating New Team{% endif %}
+        <div style="font-size: 0.9rem; opacity: 0.8; display: flex; flex-direction: column;">
+          <span>{% if edit %}Editing <strong>{{ team.short_code }}</strong>{% else %}Creating New Team{% endif %}</span>
+          <span id="auto-save-status"
+            style="font-size: 0.75rem; color: var(--success); opacity: 0; transition: opacity 0.5s ease;">
+            <i class="fa-solid fa-check"></i> Saved to browser
+          </span>
         </div>
         <div class="btn-group">
           {% if edit %}
@@ -862,13 +866,17 @@
             style="background: rgba(255,255,255,0.1); color: white; border: none;">
             Cancel
           </a>
+          <!-- Save as Draft removed -->
           {% else %}
           <button type="button" class="btn btn-secondary" id="clear-draft"
             style="background: rgba(255,255,255,0.1); color: white; border: none;">
             Clear Draft
           </button>
+
+          <!-- Save as Draft removed -->
           {% endif %}
-          <button type="submit" class="btn btn-primary">
+
+          <button type="submit" name="action" value="publish" class="btn btn-primary" id="btn-publish">
             <i class="fa-solid fa-floppy-disk"></i>
             {{ 'Save Changes' if edit else 'Create Team' }}
           </button>
@@ -939,22 +947,29 @@
     // Player Logic
     const container = document.getElementById('players-container');
     const countEl = document.getElementById('player-count');
-    const MAX = 25, MIN = 15;
+    const MAX = 25, MIN = 12; // Updated Limits
 
     // Helpers
     const rand = arr => arr[Math.floor(Math.random() * arr.length)];
     const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
     // Validation function
-    function validateForm() {
+    function checkValidity() {
       const playerCount = container.children.length;
-      // Fix: Selector updated to .player-row
       const cards = [...document.querySelectorAll('.player-row')];
 
-      // Check player count (15-25)
-      if (playerCount < 15 || playerCount > 25) return false;
+      // 1. Basic Team Info
+      const teamName = document.getElementById('team_name').value.trim();
+      const shortCode = document.querySelector('[name=short_code]').value.trim();
+      const homeGround = document.querySelector('[name=home_ground]').value.trim();
+      const pitchPref = document.querySelector('[name=pitch_preference]').value;
 
-      // Check all players have required fields
+      if (!teamName || !shortCode || !homeGround || !pitchPref) return false;
+
+      // 2. Count check (Strict: 12-25)
+      if (playerCount < MIN || playerCount > MAX) return false;
+
+      // 3. Field checks
       for (let card of cards) {
         const name = card.querySelector('[name=player_name]').value.trim();
         const role = card.querySelector('[name=player_role]').value;
@@ -966,22 +981,14 @@
         if (!name || !role || !bat || !bowl || !field || !bhand) return false;
       }
 
-      // Check role requirements
+      // 4. Role checks
       const wicketkeepers = cards.filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper');
       const bowlers = cards.filter(c => ['Bowler', 'All-rounder'].includes(c.querySelector('[name=player_role]').value));
 
       if (wicketkeepers.length < 1) return false;
       if (bowlers.length < 6) return false;
 
-      // Check basic team info
-      const teamName = document.getElementById('team_name').value.trim();
-      const shortCode = document.querySelector('[name=short_code]').value.trim();
-      const homeGround = document.querySelector('[name=home_ground]').value.trim();
-      const pitchPref = document.querySelector('[name=pitch_preference]').value;
-
-      if (!teamName || !shortCode || !homeGround || !pitchPref) return false;
-
-      // Check captain and wicketkeeper selection
+      // 5. Captain/WK selected
       const captain = document.getElementById('select-captain').value;
       const wk = document.getElementById('select-wk').value;
 
@@ -991,14 +998,15 @@
     }
 
     function updateSubmitButtons() {
-      const isValid = validateForm();
-      const submitButtons = document.querySelectorAll('button[type="submit"]');
+      const isValid = checkValidity();
+      const btnPublish = document.getElementById('btn-publish');
 
-      submitButtons.forEach(btn => {
-        btn.disabled = !isValid;
-        btn.style.opacity = isValid ? '1' : '0.5';
-        btn.style.cursor = isValid ? 'pointer' : 'not-allowed';
-      });
+      // Publish Button
+      if (btnPublish) {
+        btnPublish.disabled = !isValid;
+        btnPublish.style.opacity = isValid ? '1' : '0.5';
+        btnPublish.style.cursor = isValid ? 'pointer' : 'not-allowed';
+      }
     }
 
     // Sample data
@@ -1118,18 +1126,18 @@
         card.querySelector(`[name=${field}]`).addEventListener('input', refreshRoleSelectors);
       });
 
-      // Add validation listeners to all player fields
-      ["player_name", "player_role", "batting_rating", "bowling_rating", "fielding_rating", "batting_hand"].forEach(field => {
-        const input = card.querySelector(`[name=${field}]`);
-        if (input) {
-          input.addEventListener('input', updateSubmitButtons);
-          input.addEventListener('change', updateSubmitButtons);
-          if (!EDIT_MODE) {
-            input.addEventListener('input', saveDraft);
-            input.addEventListener('change', saveDraft);
-          }
+      // Add validation and auto-save listeners to ALL fields in the card
+      const inputs = card.querySelectorAll('input, select');
+      inputs.forEach(input => {
+        input.addEventListener('input', updateSubmitButtons);
+        input.addEventListener('change', updateSubmitButtons);
+        if (!EDIT_MODE) {
+          input.addEventListener('input', saveDraft);
+          input.addEventListener('change', saveDraft);
         }
       });
+
+      if (!EDIT_MODE) saveDraft(); // Save immediately on add
 
       card.querySelector('.player-remove').onclick = () => {
         card.style.transform = 'translateX(20px)';
@@ -1178,7 +1186,12 @@
 
         // Single update at the end
         updateCount();
-        alert("Team imported successfully! Please select your Captain and Wicketkeeper.");
+        const { publishValid } = checkValidity();
+        if (publishValid) {
+          alert("Team imported successfully! Please select your Captain and Wicketkeeper.");
+        } else {
+          alert("Imported. Review roles to enable publishing. You can Save as Draft now.");
+        }
 
       } catch (e) {
         alert("Invalid JSON: " + e.message);
@@ -1206,7 +1219,7 @@
 
 **Constraints:**
 1. The JSON must be a STRICT array of player objects.
-2. Total Players: 15-20.
+2. Total Players: 12-25.
 3. Roles Distribution:
    - At least 5 Batsmen
    - At least 1 Wicketkeeper
@@ -1215,6 +1228,15 @@
    - Star players: 85-95
    - Regulars: 75-84
    - Youngsters: 60-70
+5. Bowling Types (Must match exactly):
+   - Fast
+   - Fast-medium
+   - Medium-fast
+   - Medium
+   - Off spin
+   - Leg spin
+   - Finger spin
+   - Wrist spin
 
 **Required JSON Format:**
 ${templateText}
@@ -1268,8 +1290,12 @@ Please generate the full JSON array only, no other text.`;
       updateCount();
 
       // 5. Populate captain & wicketkeeper selects
-      document.getElementById('select-captain').value = TEAM_DATA.captain;
-      document.getElementById('select-wk').value = TEAM_DATA.wicketkeeper;
+      // Timeout to allow DOM update
+      setTimeout(() => {
+        document.getElementById('select-captain').value = TEAM_DATA.captain;
+        document.getElementById('select-wk').value = TEAM_DATA.wicketkeeper;
+        updateSubmitButtons();
+      }, 0);
     }
     // ──────────────────────────────────────────────────────────
 
@@ -1284,8 +1310,14 @@ Please generate the full JSON array only, no other text.`;
     swatch.onclick = () => colorInput.click();
 
     // update on both input and change events
-    colorInput.addEventListener('input', e => swatch.style.background = e.target.value);
-    colorInput.addEventListener('change', e => swatch.style.background = e.target.value);
+    colorInput.addEventListener('input', e => {
+      swatch.style.background = e.target.value;
+      if (!EDIT_MODE) saveDraft();
+    });
+    colorInput.addEventListener('change', e => {
+      swatch.style.background = e.target.value;
+      if (!EDIT_MODE) saveDraft();
+    });
 
     // Add validation listeners to team info fields
     ['team_name', 'short_code', 'home_ground', 'pitch_preference'].forEach(name => {
@@ -1375,6 +1407,16 @@ Please generate the full JSON array only, no other text.`;
       };
 
       localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+
+      // Show auto-save indicator
+      const status = document.getElementById('auto-save-status');
+      if (status) {
+        status.style.opacity = '1';
+        clearTimeout(window.saveTimeout);
+        window.saveTimeout = setTimeout(() => {
+          status.style.opacity = '0';
+        }, 2000);
+      }
     }
 
     // Load Draft
