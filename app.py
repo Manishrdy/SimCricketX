@@ -795,12 +795,35 @@ def create_app():
                     
                     captain_name = request.form.get("captain")
                     wk_name = request.form.get("wicketkeeper")
+
+                    team_form_data = {
+                        "team_name": team.name,
+                        "short_code": new_short_code,
+                        "home_ground": team.home_ground,
+                        "pitch_preference": team.pitch_preference,
+                        "team_color": team.team_color,
+                        "created_by_email": team.user_id,
+                        "captain": captain_name or "",
+                        "wicketkeeper": wk_name or "",
+                        "players": []
+                    }
+                    for i in range(len(names)):
+                        team_form_data["players"].append({
+                            "name": names[i],
+                            "role": roles[i],
+                            "batting_rating": bats[i],
+                            "bowling_rating": bowls[i],
+                            "fielding_rating": fields[i],
+                            "batting_hand": bhands[i],
+                            "bowling_type": btypes[i] or "",
+                            "bowling_hand": bhand2s[i] or ""
+                        })
                     
                     # --- Validation for Edit ---
                     if not is_draft:
                         if len(names) < 12 or len(names) > 25:
                             db.session.rollback()
-                            return render_template("team_create.html", team=team, edit=True, error="Active teams must have 12-25 players.")
+                            return render_template("team_create.html", team=team_form_data, edit=True, error="Active teams must have 12-25 players.")
                         
                         # Validate Roles
                         wk_count = roles.count("Wicketkeeper")
@@ -808,18 +831,18 @@ def create_app():
                         
                         if wk_count < 1:
                             db.session.rollback()
-                            return render_template("team_create.html", team=team, edit=True, error="Active teams need at least one Wicketkeeper.")
+                            return render_template("team_create.html", team=team_form_data, edit=True, error="Active teams need at least one Wicketkeeper.")
                         if bowl_count < 6:
                             db.session.rollback()
-                            return render_template("team_create.html", team=team, edit=True, error="Active teams need at least six Bowler/All-rounder roles.")
+                            return render_template("team_create.html", team=team_form_data, edit=True, error="Active teams need at least six Bowler/All-rounder roles.")
                         
                         if not captain_name or not wk_name:
                              db.session.rollback()
-                             return render_template("team_create.html", team=team, edit=True, error="Active teams require a Captain and Wicketkeeper.")
+                             return render_template("team_create.html", team=team_form_data, edit=True, error="Active teams require a Captain and Wicketkeeper.")
                     else:
                         if len(names) < 1:
                              db.session.rollback()
-                             return render_template("team_create.html", team=team, edit=True, error="Drafts must have at least 1 player.")
+                             return render_template("team_create.html", team=team_form_data, edit=True, error="Drafts must have at least 1 player.")
 
                     for i in range(len(names)):
                         p_name = names[i]
