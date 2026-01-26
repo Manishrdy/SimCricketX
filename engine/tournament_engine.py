@@ -375,8 +375,8 @@ class TournamentEngine:
                 # Bye match. Create it as completed.
                 winner = t1 if t1 is not None else t2
 
-                home_id = t1 if t1 is not None else bye_id
-                away_id = t2 if t2 is not None else bye_id
+                home_id = t1 if t1 is not None else None
+                away_id = t2 if t2 is not None else None
 
                 fixture = TournamentFixture(
                     tournament_id=tournament_id,
@@ -395,8 +395,8 @@ class TournamentEngine:
                 # Both are None (Phantom match)
                 fixture = TournamentFixture(
                     tournament_id=tournament_id,
-                    home_team_id=bye_id,
-                    away_team_id=bye_id,
+                    home_team_id=None,
+                    away_team_id=None,
                     round_number=current_round,
                     stage=round_name,
                     status='Completed',
@@ -418,8 +418,8 @@ class TournamentEngine:
             for i in range(num_matches_current_round):
                 fixture = TournamentFixture(
                     tournament_id=tournament_id,
-                    home_team_id=tbd_id,
-                    away_team_id=tbd_id,
+                    home_team_id=None,
+                    away_team_id=None,
                     round_number=current_round,
                     stage=round_name,
                     stage_description="Winner advances" if round_name != self.STAGE_FINAL else "Tournament Winner",
@@ -463,13 +463,11 @@ class TournamentEngine:
             stage=self.STAGE_LEAGUE
         ).scalar() or 0
 
-        tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
-
         # Semi-final 1: 1st vs 4th
         sf1 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_SEMIFINAL_1,
             stage_description="1st vs 4th - Winner to Final",
@@ -481,8 +479,8 @@ class TournamentEngine:
         # Semi-final 2: 2nd vs 3rd
         sf2 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_SEMIFINAL_2,
             stage_description="2nd vs 3rd - Winner to Final",
@@ -494,8 +492,8 @@ class TournamentEngine:
         # Final
         final = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 2,
             stage=self.STAGE_FINAL,
             stage_description="Tournament Final",
@@ -517,13 +515,11 @@ class TournamentEngine:
             stage=self.STAGE_LEAGUE
         ).scalar() or 0
 
-        tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
-
         # Qualifier 1: 1st vs 2nd
         q1 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_QUALIFIER_1,
             stage_description="1st vs 2nd - Winner to Final, Loser to Qualifier 2",
@@ -535,8 +531,8 @@ class TournamentEngine:
         # Eliminator: 3rd vs 4th
         elim = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_ELIMINATOR,
             stage_description="3rd vs 4th - Winner to Qualifier 2, Loser Eliminated",
@@ -548,8 +544,8 @@ class TournamentEngine:
         # Qualifier 2: Loser Q1 vs Winner Eliminator
         q2 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 2,
             stage=self.STAGE_QUALIFIER_2,
             stage_description="Loser Q1 vs Winner Eliminator - Winner to Final",
@@ -561,8 +557,8 @@ class TournamentEngine:
         # Final
         final = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 3,
             stage=self.STAGE_FINAL,
             stage_description="Winner Q1 vs Winner Q2 - Tournament Champion",
@@ -1047,6 +1043,7 @@ class TournamentEngine:
                 return False
             fixture.status = 'Completed'
             fixture.winner_team_id = match.winner_team_id
+            fixture.standings_applied = True
 
         # Get team stats records
         home_team_stats = TournamentTeam.query.filter_by(
@@ -1256,7 +1253,6 @@ class TournamentEngine:
             fixture.winner_team_id = None
             fixture.status = 'Scheduled'
             fixture.standings_applied = False
-            fixture.match_id = None
 
             if fixture.stage != self.STAGE_LEAGUE:
                 self._reset_knockout_bracket(match.tournament_id, fixture.bracket_position)
@@ -1281,7 +1277,6 @@ class TournamentEngine:
         This clears dependent teams, match links, and winners, and locks fixtures
         that should be repopulated once earlier rounds are replayed.
         """
-        tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
         downstream = TournamentFixture.query.filter(
             TournamentFixture.tournament_id == tournament_id,
             TournamentFixture.bracket_position != None,
@@ -1289,33 +1284,12 @@ class TournamentEngine:
         ).all()
 
         for fixture in downstream:
-            fixture.home_team_id = tbd_id
-            fixture.away_team_id = tbd_id
+            fixture.home_team_id = None
+            fixture.away_team_id = None
             fixture.winner_team_id = None
             fixture.match_id = None
             fixture.status = 'Locked'
             fixture.standings_applied = False
-
-    def _get_placeholder_team_id(self, tournament_id: int, label: str) -> int:
-        """
-        Ensure a per-user placeholder team (BYE/TBD) exists and return its ID.
-        """
-        tournament = db.session.get(Tournament, tournament_id)
-        if not tournament:
-            raise ValueError(f"Tournament {tournament_id} not found.")
-
-        placeholder = Team.query.filter_by(user_id=tournament.user_id, name=label).first()
-        if placeholder:
-            return placeholder.id
-
-        placeholder = Team(
-            user_id=tournament.user_id,
-            name=label,
-            short_code=label
-        )
-        db.session.add(placeholder)
-        db.session.flush()
-        return placeholder.id
 
     def _reverse_nrr_components(self, home_stats, away_stats, match):
         """Reverse the NRR component updates from a match."""
