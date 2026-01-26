@@ -209,7 +209,8 @@
                             </a>
                             {% endif %}
 
-                            <!-- Re-simulate Button -->
+                            <!-- Resimulate Disabled for Strict Locking -->
+                            <!--
                             <form action="{{ url_for('resimulate_fixture', fixture_id=fixture.id) }}" method="POST"
                                 class="inline-form"
                                 onsubmit="return confirm('Re-simulating will delete the current match result and stats. Continue?');">
@@ -217,6 +218,7 @@
                                     <i class="fas fa-redo"></i> Resimulate
                                 </button>
                             </form>
+                            -->
                         </div>
                         {% endif %}
                     </div>

@@ -5597,3 +5597,36 @@ AttributeError: 'Match' object has no attribute 'is_complete'
 2026-01-25 19:30:56,807 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
 2026-01-25 19:30:56,807 - INFO - 127.0.0.1 GET /match/2713cccf/next-ball
 2026-01-25 19:30:56,816 - INFO - 127.0.0.1 - - [25/Jan/2026 19:30:56] "GET /match/2713cccf/next-ball HTTP/1.1" 200 -
+2026-01-25 19:43:13,310 - DEBUG - [Cleanup] Temp scorecard images directory does not exist: D:\SimCricketX\data\temp_scorecard_images
+2026-01-25 19:43:13,387 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:7860
+ * Running on http://192.168.254.131:7860
+2026-01-25 19:43:13,388 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-25 19:43:13,530 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:43:13,532 - INFO - 127.0.0.1 GET /
+2026-01-25 19:43:13,540 - INFO - 127.0.0.1 - - [25/Jan/2026 19:43:13] "GET / HTTP/1.1" 200 -
+2026-01-25 19:43:13,577 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:43:13,579 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 19:43:13,615 - INFO - 127.0.0.1 - - [25/Jan/2026 19:43:13] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 19:43:22,234 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:43:22,234 - INFO - 127.0.0.1 GET /teams/manage
+2026-01-25 19:43:22,360 - INFO - 127.0.0.1 - - [25/Jan/2026 19:43:22] "GET /teams/manage HTTP/1.1" 200 -
+2026-01-25 19:43:26,405 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:43:26,410 - INFO - 127.0.0.1 GET /
+2026-01-25 19:43:26,412 - INFO - 127.0.0.1 - - [25/Jan/2026 19:43:26] "GET / HTTP/1.1" 200 -
+2026-01-25 19:43:26,467 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:43:26,470 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 19:43:26,477 - INFO - 127.0.0.1 - - [25/Jan/2026 19:43:26] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 19:43:29,057 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:43:29,061 - INFO - 127.0.0.1 GET /tournaments
+2026-01-25 19:43:29,091 - INFO - 127.0.0.1 - - [25/Jan/2026 19:43:29] "GET /tournaments HTTP/1.1" 200 -
+2026-01-25 19:43:29,135 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:43:29,136 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 19:43:29,139 - INFO - 127.0.0.1 - - [25/Jan/2026 19:43:29] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
+2026-01-25 19:43:30,975 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:43:30,980 - INFO - 127.0.0.1 GET /tournaments/8
+2026-01-25 19:43:31,032 - INFO - 127.0.0.1 - - [25/Jan/2026 19:43:31] "GET /tournaments/8 HTTP/1.1" 200 -
+2026-01-25 19:43:31,093 - INFO - [Session] Setting SESSION_COOKIE_SECURE to False (HTTPS: http, X-Forwarded-Proto: None)
+2026-01-25 19:43:31,093 - INFO - 127.0.0.1 GET /static/js/notifications.js
+2026-01-25 19:43:31,104 - INFO - 127.0.0.1 - - [25/Jan/2026 19:43:31] "[36mGET /static/js/notifications.js HTTP/1.1[0m" 304 -
