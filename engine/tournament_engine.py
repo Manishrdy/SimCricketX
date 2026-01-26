@@ -196,17 +196,15 @@ class TournamentEngine:
             db.session.flush()
 
             # 2. Add Teams to Tournament
-            # Verify teams exist before adding
-            Teams = db.session.query(TournamentTeam.team_id).filter(TournamentTeam.id.in_(team_ids)).all()
-            # Actually we need to check the Teams table, not TournamentTeam (circular logic error in head, reading code)
-            # Re-reading code: The Review said "Verify Team IDs actually exist in database".
-            
-            # Correct logic:
-            existing_teams = Team.query.filter(Team.id.in_(team_ids)).all()
+            # Verify teams exist and belong to the user before adding.
+            existing_teams = Team.query.filter(
+                Team.id.in_(team_ids),
+                Team.user_id == user_id
+            ).all()
             if len(existing_teams) != len(team_ids):
                 found_ids = {t.id for t in existing_teams}
                 missing = set(team_ids) - found_ids
-                raise ValueError(f"Teams with IDs {missing} do not exist.")
+                raise ValueError(f"Teams with IDs {missing} are not available for this user.")
 
             for tid in team_ids:
                 existing = TournamentTeam.query.filter_by(
