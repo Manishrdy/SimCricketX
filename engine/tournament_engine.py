@@ -1098,6 +1098,9 @@ class TournamentEngine:
         # Check if we need to progress to next stage
         self.check_and_progress_tournament(match.tournament_id)
 
+        if fixture:
+            fixture.standings_applied = True
+
         if commit:
             db.session.commit()
 
