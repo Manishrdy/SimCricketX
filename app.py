@@ -862,9 +862,13 @@ def create_app():
         if fixture_id:
             fixture = db.session.get(TournamentFixture, fixture_id)
             if fixture and fixture.tournament.user_id == current_user.id:
-                # Prevent starting locked matches
+                # Prevent starting locked or completed matches
                 if fixture.status == 'Locked':
                     flash("Cannot start a locked match. Wait for previous rounds to complete.", "error")
+                    return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament.id))
+                
+                if fixture.status == 'Completed':
+                    flash("This match is already completed.", "info")
                     return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament.id))
 
                 preselect_home = fixture.home_team_id
@@ -1007,6 +1011,11 @@ def create_app():
             return redirect(url_for("home"))
 
         increment_matches_simulated()
+        
+        # Check if match is completed
+        if match_data.get("current_state") == "completed":
+            return render_template("scorecard_view.html", match=match_data)
+            
         # Render the detail page, passing the loaded JSON
         return render_template("match_detail.html", match=match_data)
     
@@ -1404,14 +1413,41 @@ def create_app():
                             fixture.match_id = match_id
                             fixture.status = 'Completed'  # Mark fixture as completed
                             
-                    # Set Scores from match Instance
-                    db_match.home_team_score = _safe_get_attr(match, 'home_score', 0)
-                    db_match.home_team_wickets = _safe_get_attr(match, 'home_wickets', 0)
-                    db_match.home_team_overs = _safe_get_attr(match, 'home_overs', 0.0)
+                    # --- FIX: Calculate scores from stats for accuracy ---
+                    # Determine who batted first
+                    team_home_code = match.data["team_home"].split("_")[0]
+                    first_bat_is_home = (match.toss_winner == team_home_code and match.toss_decision == "Bat") or \
+                                        (match.toss_winner != team_home_code and match.toss_decision == "Bowl")
 
-                    db_match.away_team_score = _safe_get_attr(match, 'away_score', 0)
-                    db_match.away_team_wickets = _safe_get_attr(match, 'away_wickets', 0)
-                    db_match.away_team_overs = _safe_get_attr(match, 'away_overs', 0.0)
+                    def calculate_innings_stats(batting_stats, bowling_stats):
+                        runs = sum(p["runs"] for p in batting_stats.values())
+                        wickets = sum(1 for p in batting_stats.values() if p.get("wicket_type"))
+                        overs = sum(b.get("balls_bowled", 0) for b in bowling_stats.values()) // 6 + \
+                               (sum(b.get("balls_bowled", 0) for b in bowling_stats.values()) % 6) / 10.0
+                        return runs, wickets, overs
+
+                    # 1st Innings Stats
+                    s1_runs, s1_wickets, s1_overs = calculate_innings_stats(match.first_innings_batting_stats, match.first_innings_bowling_stats)
+                    
+                    # 2nd Innings Stats (current stats)
+                    s2_runs, s2_wickets, s2_overs = calculate_innings_stats(match.batsman_stats, match.bowler_stats)
+
+                    if first_bat_is_home:
+                        db_match.home_team_score = s1_runs
+                        db_match.home_team_wickets = s1_wickets
+                        db_match.home_team_overs = s1_overs
+                        
+                        db_match.away_team_score = s2_runs
+                        db_match.away_team_wickets = s2_wickets
+                        db_match.away_team_overs = s2_overs
+                    else:
+                        db_match.away_team_score = s1_runs
+                        db_match.away_team_wickets = s1_wickets
+                        db_match.away_team_overs = s1_overs
+                        
+                        db_match.home_team_score = s2_runs
+                        db_match.home_team_wickets = s2_wickets
+                        db_match.home_team_overs = s2_overs
 
                     # Determine Winner ID (case-insensitive matching)
                     winner_name = getattr(match, 'winner', None)
