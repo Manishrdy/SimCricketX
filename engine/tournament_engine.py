@@ -1195,6 +1195,9 @@ class TournamentEngine:
 
         # Get fixture to check stage
         fixture = TournamentFixture.query.filter_by(match_id=match.id).first()
+        if not fixture:
+            logger.error("No fixture found for match %s; cannot reverse standings.", match.id)
+            return False
 
         home_team_stats = TournamentTeam.query.filter_by(
             tournament_id=match.tournament_id,
@@ -1206,6 +1209,7 @@ class TournamentEngine:
         ).first()
 
         if not home_team_stats or not away_team_stats:
+            logger.error("Stats records missing for match %s; cannot reverse standings.", match.id)
             return False
 
         # Only reverse league standings
