@@ -970,7 +970,7 @@ def create_app():
 
 
             # Step 4: Generate metadata and save file
-            match_id = uuid.uuid4().hex[:8]
+            match_id = str(uuid.uuid4())
             ts = datetime.now().strftime("%Y%m%d%H%M%S")
             user = current_user.id
             fname = f"playing_{home_code}_vs_{away_code}_{user}_{ts}.json"
