@@ -690,9 +690,16 @@
         if (currentStep === 3) {
             nextBtn.innerHTML = '<i class="fas fa-rocket"></i> Simulate';
             nextBtn.onclick = simulateMatch;
+            validateSquads(); // Re-validate to set button state
         } else {
             nextBtn.innerHTML = 'Next <i class="fas fa-arrow-right"></i>';
             nextBtn.onclick = nextStep;
+
+            if (currentStep === 1) {
+                nextBtn.disabled = selectedTeamIndices.length !== 2;
+            } else if (currentStep === 2) {
+                nextBtn.disabled = false; // Step 2 is always valid
+            }
         }
     }
 

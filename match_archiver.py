@@ -390,6 +390,9 @@ class MatchArchiver:
                         card.sixes = s.get('sixes', 0)
                         card.is_out = bool(s.get('wicket_type'))
                         card.wicket_type = s.get('wicket_type')
+                        # New fields for detailed scorecard
+                        card.wicket_taker_name = s.get('bowler_out')
+                        card.fielder_name = s.get('fielder_out')
                     else:
                         card.overs = s.get('overs', 0)
                         card.balls_bowled = s.get('balls_bowled', 0)

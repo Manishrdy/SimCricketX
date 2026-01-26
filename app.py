@@ -1367,7 +1367,17 @@ def create_app():
             # If this is a tournament match, autosave to DB and update standings
             if match.data.get("tournament_id"):
                 try:
-                    app.logger.info(f"[Tournament] Auto-saving match {match_id} for Tournament {match.data.get('tournament_id')}")
+                    tournament_id = int(match.data["tournament_id"])
+                    
+                    # 1. Resimulation Check: If a match record already exists, reverse its stats first
+                    existing_match = db.session.get(DBMatch, match_id)
+                    if existing_match:
+                        app.logger.info(f"[Tournament] Existing match {match_id} found. Reversing stats for resimulation.")
+                        tournament_engine.reverse_standings(existing_match, commit=False) # Commit later
+                        db.session.delete(existing_match)
+                        db.session.flush()
+
+                    app.logger.info(f"[Tournament] Auto-saving match {match_id} for Tournament {tournament_id}")
                     
                     final_res = outcome.get("result", "Match Ended")
                     match.data["result_description"] = final_res
@@ -1377,7 +1387,7 @@ def create_app():
                     db_match = DBMatch(
                         id=match_id,
                         user_id=current_user.id,
-                        tournament_id=int(match.data["tournament_id"]),
+                        tournament_id=tournament_id,
                         match_json_path="autosaved",
                         result_description=final_res,
                         date=datetime.now()
@@ -1385,6 +1395,7 @@ def create_app():
                     
                     # Link fixture and update its status
                     fix_id = match.data.get("fixture_id")
+                    fixture = None
                     if fix_id:
                         fixture = db.session.get(TournamentFixture, fix_id)
                         if fixture:
@@ -1392,12 +1403,8 @@ def create_app():
                             db_match.away_team_id = fixture.away_team_id
                             fixture.match_id = match_id
                             fixture.status = 'Completed'  # Mark fixture as completed
-                            app.logger.info(f"[Tournament] Fixture {fix_id} marked as Completed")
-                    else:
-                        # Fallback if no fixture ID (shouldn't happen in tournament mode)
-                        pass
-
-                    # Set Scores from match Instance (with None-safe extraction)
+                            
+                    # Set Scores from match Instance
                     db_match.home_team_score = _safe_get_attr(match, 'home_score', 0)
                     db_match.home_team_wickets = _safe_get_attr(match, 'home_wickets', 0)
                     db_match.home_team_overs = _safe_get_attr(match, 'home_overs', 0.0)
@@ -1431,10 +1438,11 @@ def create_app():
 
                 except Exception as e:
                     app.logger.error(f"[Tournament] Failed to auto-update tournament: {e}", exc_info=True)
+                    db.session.rollback()
 
             return jsonify({
-                "innings_end":     True,
-                "innings_number":  2,
+                "innings_end":     match.innings == 2, # Flag generic innings end
+                "innings_number":  match.innings,
                 "match_over":      True,
                 "commentary":      outcome.get("commentary", "<b>Match Over!</b>"),
                 "scorecard_data":  outcome.get("scorecard_data"),
@@ -1442,127 +1450,6 @@ def create_app():
                 "wickets":         outcome.get("wickets",  match.wickets),
                 "result":          outcome.get("result",  "Match ended")
             })
-
-        # Check for Match End to Auto-Update Tournament
-        if outcome.get("match_over"):
-            # If this is a tournament match, autosave to DB and update standings
-            if match.data.get("tournament_id"):
-                try:
-                    app.logger.info(f"[Tournament] Auto-saving match {match_id} for Tournament {match.data.get('tournament_id')}")
-                    # Create DB Match Record
-                    from engine.stats_aggregator import StatsAggregator
-                    agg = StatsAggregator(db.session)
-                    
-                    # We need the full match data, which match instance has updated
-                    # But we also need the 'result_description' if possible. 
-                    # Outcome usually has 'result' string (e.g. "Sim won by 10 runs")
-                    
-                    # We can use the existing save_match_to_db logic if we extract it, 
-                    # but simple direct call here is safer for now.
-                    # We will use StatsAggregator to save it properly.
-                    
-                    # Wait, StatsAggregator parses JSON files. We have the data in memory 'match.data'
-                    # Or we can dump it to file first (which is done by simulator implicitly? No match.data is updated in memory)
-                    # Simulator updates match.data? Let's check. 
-                    # Usually simulator updates state but maybe not the raw 'match.data' dict perfectly for serialization?
-                    # The 'match.data' is usually kept in sync. 
-                    
-                    # Let's save the file first to be sure
-                    match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
-                    # Find filename... usually 'match_id.json' or similar if constructed.
-                    # Actually we loop listdir to find it usually.
-                    # Assuming we can find it or overwrite it.
-                    
-                    # Better: Pass the match_instance.data to StatsAggregator if we can refactor it? 
-                    # StatsAggregator.process_match_data(match_data)
-                    
-                    # For now, let's manually create the DBMatch object to avoid complexity
-                    
-                    # 1. Update In-Memory Data with Result
-                    final_res = outcome.get("result", "Match Ended")
-                    match.data["result_description"] = final_res
-                    match.data["current_state"] = "completed"
-                    
-                    # 2. Persist to DB
-                    db_match = DBMatch(
-                        id=match_id,
-                        user_id=current_user.id,
-                        home_team_id=db.session.get(DBTeam, int(match.data['team_home'].split('_')[0])).id if '_' not in str(match.data.get('tournament_id', '')) else None, # Complex ID handling... 
-                        # Actually match.data['team_home'] is "CODE_UserID". We need the DB ID.
-                        # Wait, we know the fixture logic.
-                        # But wait, we stored IDs in 'tournament_id' ? No 'tournament_id' is integer.
-                        tournament_id=int(match.data["tournament_id"]),
-                        match_json_path="autosaved",
-                        result_description=final_res,
-                        date=datetime.now()
-                    )
-                    
-                    # Resolve Team IDs from ShortCodes if needed, OR use the fixture info if we have fixture_id
-                    fix_id = match.data.get("fixture_id")
-                    if fix_id:
-                        fixture = db.session.get(TournamentFixture, fix_id)
-                        if fixture:
-                            db_match.home_team_id = fixture.home_team_id
-                            db_match.away_team_id = fixture.away_team_id
-                            # Link fixture and mark as completed
-                            fixture.match_id = match_id
-                            fixture.status = 'Completed'  # Mark fixture as completed
-                            app.logger.info(f"[Tournament] Fixture {fix_id} marked as Completed")
-                    
-                    # Set Scores
-                    if match.innings == 2 and match.is_complete:
-                        # Assuming Home batted first for simplicity to extract logic, but need to be robust
-                        # match.data['innings'] has the list.
-                        # Using match instance properties
-                        pass # StatsAggregator handles this better.
-                    
-                    # Extract scores from match instance (with None-safe extraction)
-                    db_match.home_team_score = _safe_get_attr(match, 'home_score', 0)
-                    db_match.home_team_wickets = _safe_get_attr(match, 'home_wickets', 0)
-                    db_match.home_team_overs = _safe_get_attr(match, 'home_overs', 0.0)
-
-                    db_match.away_team_score = _safe_get_attr(match, 'away_score', 0)
-                    db_match.away_team_wickets = _safe_get_attr(match, 'away_wickets', 0)
-                    db_match.away_team_overs = _safe_get_attr(match, 'away_overs', 0.0)
-
-                    # Determine Winner ID (case-insensitive matching)
-                    winner_name = getattr(match, 'winner', None)
-                    if winner_name and fixture:
-                        winner_name_lower = winner_name.lower().strip()
-                        home_name = (fixture.home_team.name or '').lower().strip()
-                        home_code = (fixture.home_team.short_code or '').lower().strip()
-                        away_name = (fixture.away_team.name or '').lower().strip()
-                        away_code = (fixture.away_team.short_code or '').lower().strip()
-
-                        if winner_name_lower in (home_name, home_code):
-                            db_match.winner_team_id = fixture.home_team_id
-                        elif winner_name_lower in (away_name, away_code):
-                            db_match.winner_team_id = fixture.away_team_id
-                        else:
-                            app.logger.warning(f"[Tournament] Could not match winner '{winner_name}' to teams")
-                            
-                    db.session.add(db_match)
-                    db.session.commit()
-                    
-                    # UPDATE STANDINGS
-                    tournament_engine.update_standings(db_match)
-                    app.logger.info(f"[Tournament] Standings updated for Tournament {db_match.tournament_id}")
-                    
-                except Exception as e:
-                    app.logger.error(f"[Tournament] Failed to auto-update tournament: {e}", exc_info=True)
-
-
-            return jsonify({
-                "innings_end":     True,                              # <- flag it as an innings end
-                "innings_number":  2,                                 # <- second innings
-                "match_over":      True,
-                "commentary":      outcome.get("commentary", "<b>Match Over!</b>"),
-                "scorecard_data":  outcome.get("scorecard_data"),     # <- your detailed card
-                "score":           outcome.get("final_score", match.score),
-                "wickets":         outcome.get("wickets",  match.wickets),
-                "result":          outcome.get("result",  "Match ended")
-            })
-
 
         return jsonify(outcome)
     
