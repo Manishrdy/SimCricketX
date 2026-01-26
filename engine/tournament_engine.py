@@ -744,8 +744,14 @@ class TournamentEngine:
         if not q1 or not elim:
             return False
 
-        # Both Q1 and Eliminator must be completed to populate Q2
+        # Both Q1 and Eliminator must be completed with winners to populate Q2
         if q1.status == 'Completed' and elim.status == 'Completed':
+            if not q1.winner_team_id or not elim.winner_team_id:
+                logger.warning(
+                    "Tournament %s playoff progression blocked: missing winner in Q1/Eliminator",
+                    tournament.id
+                )
+                return False
             q2 = TournamentFixture.query.filter_by(
                 tournament_id=tournament.id,
                 stage=self.STAGE_QUALIFIER_2
@@ -782,6 +788,12 @@ class TournamentEngine:
             return False
 
         if q2.status == 'Completed':
+            if not q1.winner_team_id or not q2.winner_team_id:
+                logger.warning(
+                    "Tournament %s playoff progression blocked: missing winner in Q1/Q2",
+                    tournament.id
+                )
+                return False
             final = TournamentFixture.query.filter_by(
                 tournament_id=tournament.id,
                 stage=self.STAGE_FINAL
@@ -815,6 +827,12 @@ class TournamentEngine:
             return False
 
         if sf1.status == 'Completed' and sf2.status == 'Completed':
+            if not sf1.winner_team_id or not sf2.winner_team_id:
+                logger.warning(
+                    "Tournament %s playoff progression blocked: missing winner in semifinals",
+                    tournament.id
+                )
+                return False
             final = TournamentFixture.query.filter_by(
                 tournament_id=tournament.id,
                 stage=self.STAGE_FINAL
@@ -838,12 +856,12 @@ class TournamentEngine:
         current_stage = tournament.current_stage
         
         # Check if all matches in current stage are completed
-        pending = TournamentFixture.query.filter_by(
-            tournament_id=tournament.id,
-            stage=current_stage,
-            status='Scheduled'
+        pending = TournamentFixture.query.filter(
+            TournamentFixture.tournament_id == tournament.id,
+            TournamentFixture.stage == current_stage,
+            TournamentFixture.status != 'Completed'
         ).count()
-        
+
         if pending > 0:
             return False
             
@@ -889,6 +907,15 @@ class TournamentEngine:
         matches_per_round = temp_mpr
         next_round_start = current_round_start + matches_per_round
         
+        # Advance winners (ensure winners are present)
+        if any(match.winner_team_id is None for match in matches):
+            logger.warning(
+                "Tournament %s knockout progression blocked: missing winners in stage %s",
+                tournament.id,
+                current_stage
+            )
+            return False
+
         # Advance winners
         for i in range(0, len(matches), 2):
             if i + 1 >= len(matches):
