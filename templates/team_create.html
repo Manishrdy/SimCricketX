@@ -861,6 +861,11 @@
           </span>
         </div>
         <div class="btn-group">
+          <!-- Validation Feedback -->
+          <div id="validation-feedback"
+            style="display: flex; flex-direction: column; justify-content: center; align-items: flex-end; margin-right: 1rem; font-size: 0.8rem; color: var(--warning);">
+            <!-- Dynamic errors will appear here -->
+          </div>
           {% if edit %}
           <a href="{{ url_for('manage_teams') }}" class="btn btn-secondary"
             style="background: rgba(255,255,255,0.1); color: white; border: none;">
@@ -955,6 +960,7 @@
 
     // Validation function
     function checkValidity() {
+      const errors = [];
       const playerCount = container.children.length;
       const cards = [...document.querySelectorAll('.player-row')];
 
@@ -964,48 +970,81 @@
       const homeGround = document.querySelector('[name=home_ground]').value.trim();
       const pitchPref = document.querySelector('[name=pitch_preference]').value;
 
-      if (!teamName || !shortCode || !homeGround || !pitchPref) return false;
+      if (!teamName) errors.push("Team Name required");
+      if (!shortCode) errors.push("Short Code required");
+      if (!homeGround) errors.push("Home Ground required");
+      if (!pitchPref) errors.push("Pitch Preference required");
 
       // 2. Count check (Strict: 12-25)
-      if (playerCount < MIN || playerCount > MAX) return false;
+      if (playerCount < MIN) errors.push(`Need at least ${MIN} players (Current: ${playerCount})`);
+      if (playerCount > MAX) errors.push(`Max ${MAX} players allowed`);
 
       // 3. Field checks
+      let missingFields = false;
+      let invalidBowlingForWk = false;
+
       for (let card of cards) {
         const name = card.querySelector('[name=player_name]').value.trim();
         const role = card.querySelector('[name=player_role]').value;
-        const bat = card.querySelector('[name=batting_rating]').value;
-        const bowl = card.querySelector('[name=bowling_rating]').value;
-        const field = card.querySelector('[name=fielding_rating]').value;
         const bhand = card.querySelector('[name=batting_hand]').value;
+        const btype = card.querySelector('[name=bowling_type]').value;
+        const bhand2 = card.querySelector('[name=bowling_hand]').value;
 
-        if (!name || !role || !bat || !bowl || !field || !bhand) return false;
+        if (!name || !role || !bhand) {
+          missingFields = true;
+          break;
+        }
+
+        // Validation: If Bowling Type set, Bowling Hand must be set
+        if (btype && !bhand2) {
+          errors.push(`Set Bowling Hand for ${name}`);
+        }
       }
+      if (missingFields) errors.push("Complete all player fields (Name, Role, Hand)");
 
       // 4. Role checks
       const wicketkeepers = cards.filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper');
       const bowlers = cards.filter(c => ['Bowler', 'All-rounder'].includes(c.querySelector('[name=player_role]').value));
 
-      if (wicketkeepers.length < 1) return false;
-      if (bowlers.length < 6) return false;
+      if (wicketkeepers.length < 1) errors.push("Need 1+ Wicketkeeper");
+      if (bowlers.length < 6) errors.push("Need 6+ Bowlers/All-rounders");
 
       // 5. Captain/WK selected
       const captain = document.getElementById('select-captain').value;
       const wk = document.getElementById('select-wk').value;
 
-      if (!captain || !wk) return false;
+      if (!captain) errors.push("Select a Captain");
+      if (!wk) errors.push("Select a Wicketkeeper");
 
-      return true;
+      return {
+        valid: errors.length === 0,
+        errors: errors
+      };
     }
 
     function updateSubmitButtons() {
-      const isValid = checkValidity();
+      const { valid, errors } = checkValidity();
       const btnPublish = document.getElementById('btn-publish');
+      const feedbackEl = document.getElementById('validation-feedback');
+
+      // Update Feedback UI
+      if (feedbackEl) {
+        if (!valid) {
+          // Show top 1-2 errors to save space
+          const displayErrors = errors.slice(0, 2);
+          const more = errors.length > 2 ? `(+${errors.length - 2} more)` : '';
+          feedbackEl.innerHTML = displayErrors.map(e => `<span><i class="fa-solid fa-circle-exclamation"></i> ${e}</span>`).join('') + (more ? `<span>${more}</span>` : '');
+          feedbackEl.style.color = 'var(--warning)';
+        } else {
+          feedbackEl.innerHTML = '<span style="color: var(--success);"><i class="fa-solid fa-check"></i> Ready to Publish</span>';
+        }
+      }
 
       // Publish Button
       if (btnPublish) {
-        btnPublish.disabled = !isValid;
-        btnPublish.style.opacity = isValid ? '1' : '0.5';
-        btnPublish.style.cursor = isValid ? 'pointer' : 'not-allowed';
+        btnPublish.disabled = !valid;
+        btnPublish.style.opacity = valid ? '1' : '0.5';
+        btnPublish.style.cursor = valid ? 'pointer' : 'not-allowed';
       }
     }
 
@@ -1122,9 +1161,39 @@
       }
 
       // Hook into name or role changes → refresh captain/WK selectors
-      ["player_name", "player_role"].forEach(field => {
+      ["player_name"].forEach(field => {
         card.querySelector(`[name=${field}]`).addEventListener('input', refreshRoleSelectors);
       });
+
+      // Special Handler for Role Change: Wicketkeeper Rule
+      const roleSelect = card.querySelector('[name=player_role]');
+      const btypeSelect = card.querySelector('[name=bowling_type]');
+      const bhand2Select = card.querySelector('[name=bowling_hand]');
+
+      function updateRoleConstraints() {
+        const role = roleSelect.value;
+        if (role === "Wicketkeeper") {
+          // Rule: WK cannot bowl -> Clear and Disable
+          btypeSelect.value = "";
+          bhand2Select.value = "";
+          btypeSelect.disabled = true;
+          bhand2Select.disabled = true;
+          btypeSelect.style.opacity = "0.5";
+          bhand2Select.style.opacity = "0.5";
+        } else {
+          // Enable
+          btypeSelect.disabled = false;
+          bhand2Select.disabled = false;
+          btypeSelect.style.opacity = "1";
+          bhand2Select.style.opacity = "1";
+        }
+        refreshRoleSelectors();
+        updateSubmitButtons();
+      }
+
+      roleSelect.addEventListener('change', updateRoleConstraints);
+      // Run once on init
+      updateRoleConstraints();
 
       // Add validation and auto-save listeners to ALL fields in the card
       const inputs = card.querySelectorAll('input, select');
@@ -1145,11 +1214,17 @@
         setTimeout(() => {
           card.remove();
           updateCount();
+          refreshRoleSelectors(); // Ensure deleted players are removed from dropdowns
+          updateSubmitButtons();  // Re-run validation
         }, 300);
       };
 
       container.appendChild(card);
-      if (autoUpdate) updateCount();
+      if (autoUpdate) {
+        updateCount();
+        refreshRoleSelectors(); // Important: Update selector options!
+        updateSubmitButtons();  // Trigger global validation
+      }
     }
 
     // Manual add
@@ -1184,13 +1259,27 @@
           }, false); // Pass false to skip updateCount inside loop
         });
 
-        // Single update at the end
+        // Major fix: Refresh Role Selectors FIRST, then update count and buttons
+        refreshRoleSelectors();
         updateCount();
-        const { publishValid } = checkValidity();
-        if (publishValid) {
+
+        // Timeout to let DOM settle before final validation check
+        setTimeout(() => {
+          updateSubmitButtons();
+          const { valid } = checkValidity();
+          if (valid) {
+            alert("Team imported! Select Captain & Wicketkeeper.");
+          } else {
+            // The visual feedback is now updated by updateSubmitButtons()
+          }
+        }, 100);
+        if (valid) {
           alert("Team imported successfully! Please select your Captain and Wicketkeeper.");
         } else {
-          alert("Imported. Review roles to enable publishing. You can Save as Draft now.");
+          // Even if not fully valid (e.g. Captain missing), we imported. 
+          // The realtime UI will show what is missing.
+          // Trigger a UI update to ensure errors are shown.
+          updateSubmitButtons();
         }
 
       } catch (e) {
@@ -1335,6 +1424,12 @@ Please generate the full JSON array only, no other text.`;
     // Add listeners to captain/wicketkeeper selects
     document.getElementById('select-captain').addEventListener('change', updateSubmitButtons);
     document.getElementById('select-wk').addEventListener('change', updateSubmitButtons);
+
+    // Global Form Listener for Realtime Validation
+    const form = document.getElementById('team-form');
+    form.addEventListener('input', () => { setTimeout(updateSubmitButtons, 0); }); // Debounce slightly
+    form.addEventListener('change', () => { setTimeout(updateSubmitButtons, 0); });
+
     if (!EDIT_MODE) {
       document.getElementById('select-captain').addEventListener('change', saveDraft);
       document.getElementById('select-wk').addEventListener('change', saveDraft);
@@ -1472,7 +1567,10 @@ Please generate the full JSON array only, no other text.`;
     // Attach Draft Listeners (Load & Clear on Submit)
     if (!EDIT_MODE) {
       document.getElementById('team-form').addEventListener('submit', () => {
-        localStorage.removeItem(DRAFT_KEY);
+        // Fix: DO NOT clear draft on submit. 
+        // We only clear if explicity requested or perhaps handled by success page.
+        // This prevents data loss if backend validation fails.
+        // localStorage.removeItem(DRAFT_KEY); 
       });
 
       // Load on startup

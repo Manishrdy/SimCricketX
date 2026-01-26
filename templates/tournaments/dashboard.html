@@ -203,22 +203,20 @@
                         {% else %}
                         <div class="completed-actions">
                             {% if fixture.match_id %}
-                            <a href="{{ url_for('match_detail', match_id=fixture.match_id) }}"
+                            <a href="{{ url_for('view_scoreboard', match_id=fixture.match_id) }}"
                                 class="action-btn outline-btn">
-                                <i class="fas fa-file-alt"></i> Scorecard
+                                <i class="fas fa-list-ol"></i> Scoreboard
                             </a>
-                            {% endif %}
 
-                            <!-- Resimulate Disabled for Strict Locking -->
-                            <!--
+                            <!-- Re-simulate Button -->
                             <form action="{{ url_for('resimulate_fixture', fixture_id=fixture.id) }}" method="POST"
                                 class="inline-form"
                                 onsubmit="return confirm('Re-simulating will delete the current match result and stats. Continue?');">
                                 <button type="submit" class="action-btn resimulate-btn">
-                                    <i class="fas fa-redo"></i> Resimulate
+                                    <i class="fas fa-redo"></i> Re-simulate
                                 </button>
                             </form>
-                            -->
+                            {% endif %}
                         </div>
                         {% endif %}
                     </div>
