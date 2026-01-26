@@ -145,6 +145,10 @@ class MatchScorecard(db.Model):
     catches = db.Column(db.Integer, default=0)
     run_outs = db.Column(db.Integer, default=0)
 
+    # New fields for detailed scorecard
+    wicket_taker_name = db.Column(db.String(100), nullable=True)
+    fielder_name = db.Column(db.String(100), nullable=True)
+
 class Tournament(db.Model):
     """Tournament / League Container"""
     __tablename__ = 'tournaments'
