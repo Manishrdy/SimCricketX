@@ -196,17 +196,15 @@ class TournamentEngine:
             db.session.flush()
 
             # 2. Add Teams to Tournament
-            # Verify teams exist before adding
-            Teams = db.session.query(TournamentTeam.team_id).filter(TournamentTeam.id.in_(team_ids)).all()
-            # Actually we need to check the Teams table, not TournamentTeam (circular logic error in head, reading code)
-            # Re-reading code: The Review said "Verify Team IDs actually exist in database".
-            
-            # Correct logic:
-            existing_teams = Team.query.filter(Team.id.in_(team_ids)).all()
+            # Verify teams exist and belong to the user before adding.
+            existing_teams = Team.query.filter(
+                Team.id.in_(team_ids),
+                Team.user_id == user_id
+            ).all()
             if len(existing_teams) != len(team_ids):
                 found_ids = {t.id for t in existing_teams}
                 missing = set(team_ids) - found_ids
-                raise ValueError(f"Teams with IDs {missing} do not exist.")
+                raise ValueError(f"Teams with IDs {missing} are not available for this user.")
 
             for tid in team_ids:
                 existing = TournamentTeam.query.filter_by(
@@ -374,17 +372,9 @@ class TournamentEngine:
             elif t1 is not None or t2 is not None:
                 # Bye match. Create it as completed.
                 winner = t1 if t1 is not None else t2
-                
-                # Get or Create BYE team ID for the placeholder
-                # We need a valid ID for the empty slot to satisfy NOT NULL constraint if schema is strict
-                # Trying to load it
-                bye_team = Team.query.filter_by(name="BYE").first()
-                bye_id = bye_team.id if bye_team else 1 # Fallback to 1 or any existing ID if BYE missing? unsafe.
-                # Assuming fix_schema.py ran, bye_team should exist. 
-                # If t1 is None, home is BYE. If t2 is None, away is BYE.
-                
-                home_id = t1 if t1 is not None else bye_id
-                away_id = t2 if t2 is not None else bye_id
+
+                home_id = t1 if t1 is not None else None
+                away_id = t2 if t2 is not None else None
 
                 fixture = TournamentFixture(
                     tournament_id=tournament_id,
@@ -401,13 +391,10 @@ class TournamentEngine:
                 db.session.flush()
             else:
                 # Both are None (Phantom match)
-                bye_team = Team.query.filter_by(name="BYE").first()
-                bye_id = bye_team.id if bye_team else 1
-                
                 fixture = TournamentFixture(
                     tournament_id=tournament_id,
-                    home_team_id=bye_id,
-                    away_team_id=bye_id,
+                    home_team_id=None,
+                    away_team_id=None,
                     round_number=current_round,
                     stage=round_name,
                     status='Completed',
@@ -427,14 +414,10 @@ class TournamentEngine:
         while num_matches_current_round >= 1:
             round_name = self._get_knockout_round_name(next_power, current_round)
             for i in range(num_matches_current_round):
-                # Use TBD team ID for placeholder
-                tbd_team = Team.query.filter_by(name="TBD").first()
-                tbd_id = tbd_team.id if tbd_team else 13
-
                 fixture = TournamentFixture(
                     tournament_id=tournament_id,
-                    home_team_id=tbd_id,
-                    away_team_id=tbd_id,
+                    home_team_id=None,
+                    away_team_id=None,
                     round_number=current_round,
                     stage=round_name,
                     stage_description="Winner advances" if round_name != self.STAGE_FINAL else "Tournament Winner",
@@ -478,15 +461,11 @@ class TournamentEngine:
             stage=self.STAGE_LEAGUE
         ).scalar() or 0
 
-        # Get TBD team ID
-        tbd_team = Team.query.filter_by(name="TBD").first()
-        tbd_id = tbd_team.id if tbd_team else 13
-
         # Semi-final 1: 1st vs 4th
         sf1 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_SEMIFINAL_1,
             stage_description="1st vs 4th - Winner to Final",
@@ -498,8 +477,8 @@ class TournamentEngine:
         # Semi-final 2: 2nd vs 3rd
         sf2 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_SEMIFINAL_2,
             stage_description="2nd vs 3rd - Winner to Final",
@@ -511,8 +490,8 @@ class TournamentEngine:
         # Final
         final = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 2,
             stage=self.STAGE_FINAL,
             stage_description="Tournament Final",
@@ -534,15 +513,11 @@ class TournamentEngine:
             stage=self.STAGE_LEAGUE
         ).scalar() or 0
 
-        # Get TBD team ID
-        tbd_team = Team.query.filter_by(name="TBD").first()
-        tbd_id = tbd_team.id if tbd_team else 13
-
         # Qualifier 1: 1st vs 2nd
         q1 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_QUALIFIER_1,
             stage_description="1st vs 2nd - Winner to Final, Loser to Qualifier 2",
@@ -554,8 +529,8 @@ class TournamentEngine:
         # Eliminator: 3rd vs 4th
         elim = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 1,
             stage=self.STAGE_ELIMINATOR,
             stage_description="3rd vs 4th - Winner to Qualifier 2, Loser Eliminated",
@@ -567,8 +542,8 @@ class TournamentEngine:
         # Qualifier 2: Loser Q1 vs Winner Eliminator
         q2 = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 2,
             stage=self.STAGE_QUALIFIER_2,
             stage_description="Loser Q1 vs Winner Eliminator - Winner to Final",
@@ -580,8 +555,8 @@ class TournamentEngine:
         # Final
         final = TournamentFixture(
             tournament_id=tournament_id,
-            home_team_id=tbd_id,
-            away_team_id=tbd_id,
+            home_team_id=None,
+            away_team_id=None,
             round_number=last_league_round + 3,
             stage=self.STAGE_FINAL,
             stage_description="Winner Q1 vs Winner Q2 - Tournament Champion",
@@ -769,8 +744,14 @@ class TournamentEngine:
         if not q1 or not elim:
             return False
 
-        # Both Q1 and Eliminator must be completed to populate Q2
+        # Both Q1 and Eliminator must be completed with winners to populate Q2
         if q1.status == 'Completed' and elim.status == 'Completed':
+            if not q1.winner_team_id or not elim.winner_team_id:
+                logger.warning(
+                    "Tournament %s playoff progression blocked: missing winner in Q1/Eliminator",
+                    tournament.id
+                )
+                return False
             q2 = TournamentFixture.query.filter_by(
                 tournament_id=tournament.id,
                 stage=self.STAGE_QUALIFIER_2
@@ -807,6 +788,12 @@ class TournamentEngine:
             return False
 
         if q2.status == 'Completed':
+            if not q1.winner_team_id or not q2.winner_team_id:
+                logger.warning(
+                    "Tournament %s playoff progression blocked: missing winner in Q1/Q2",
+                    tournament.id
+                )
+                return False
             final = TournamentFixture.query.filter_by(
                 tournament_id=tournament.id,
                 stage=self.STAGE_FINAL
@@ -840,6 +827,12 @@ class TournamentEngine:
             return False
 
         if sf1.status == 'Completed' and sf2.status == 'Completed':
+            if not sf1.winner_team_id or not sf2.winner_team_id:
+                logger.warning(
+                    "Tournament %s playoff progression blocked: missing winner in semifinals",
+                    tournament.id
+                )
+                return False
             final = TournamentFixture.query.filter_by(
                 tournament_id=tournament.id,
                 stage=self.STAGE_FINAL
@@ -863,12 +856,12 @@ class TournamentEngine:
         current_stage = tournament.current_stage
         
         # Check if all matches in current stage are completed
-        pending = TournamentFixture.query.filter_by(
-            tournament_id=tournament.id,
-            stage=current_stage,
-            status='Scheduled'
+        pending = TournamentFixture.query.filter(
+            TournamentFixture.tournament_id == tournament.id,
+            TournamentFixture.stage == current_stage,
+            TournamentFixture.status != 'Completed'
         ).count()
-        
+
         if pending > 0:
             return False
             
@@ -914,6 +907,15 @@ class TournamentEngine:
         matches_per_round = temp_mpr
         next_round_start = current_round_start + matches_per_round
         
+        # Advance winners (ensure winners are present)
+        if any(match.winner_team_id is None for match in matches):
+            logger.warning(
+                "Tournament %s knockout progression blocked: missing winners in stage %s",
+                tournament.id,
+                current_stage
+            )
+            return False
+
         # Advance winners
         for i in range(0, len(matches), 2):
             if i + 1 >= len(matches):
@@ -1030,8 +1032,16 @@ class TournamentEngine:
         # Find and update the Fixture Record
         fixture = TournamentFixture.query.filter_by(match_id=match.id).first()
         if fixture:
+            if fixture.standings_applied:
+                logger.info(
+                    "Standings already applied for fixture %s (match %s); skipping update.",
+                    fixture.id,
+                    match.id
+                )
+                return False
             fixture.status = 'Completed'
             fixture.winner_team_id = match.winner_team_id
+            fixture.standings_applied = True
 
         # Get team stats records
         home_team_stats = TournamentTeam.query.filter_by(
@@ -1229,20 +1239,48 @@ class TournamentEngine:
             self._calculate_nrr(home_team_stats)
             self._calculate_nrr(away_team_stats)
 
-        # Reset fixture winner
+        # Reset fixture winner and standings state
         if fixture:
             fixture.winner_team_id = None
+            fixture.status = 'Scheduled'
+            fixture.standings_applied = False
+
+            if fixture.stage != self.STAGE_LEAGUE:
+                self._reset_knockout_bracket(match.tournament_id, fixture.bracket_position)
 
         # Reset tournament status if it was completed
         tournament = db.session.get(Tournament, match.tournament_id)
         if tournament and tournament.status == 'Completed':
             tournament.status = 'Active'
+        if tournament and fixture and fixture.stage != self.STAGE_LEAGUE:
+            tournament.current_stage = fixture.stage
 
         if commit:
             db.session.commit()
 
         logger.info(f"Reversed standings for match {match.id}")
         return True
+
+    def _reset_knockout_bracket(self, tournament_id: int, from_bracket_position: int):
+        """
+        Reset downstream knockout fixtures when a completed fixture is re-simulated.
+
+        This clears dependent teams, match links, and winners, and locks fixtures
+        that should be repopulated once earlier rounds are replayed.
+        """
+        downstream = TournamentFixture.query.filter(
+            TournamentFixture.tournament_id == tournament_id,
+            TournamentFixture.bracket_position != None,
+            TournamentFixture.bracket_position > from_bracket_position
+        ).all()
+
+        for fixture in downstream:
+            fixture.home_team_id = None
+            fixture.away_team_id = None
+            fixture.winner_team_id = None
+            fixture.match_id = None
+            fixture.status = 'Locked'
+            fixture.standings_applied = False
 
     def _reverse_nrr_components(self, home_stats, away_stats, match):
         """Reverse the NRR component updates from a match."""
