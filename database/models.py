@@ -124,6 +124,9 @@ class MatchScorecard(db.Model):
     match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=False)
     player_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+    innings_number = db.Column(db.Integer, default=1, nullable=False)
+    record_type = db.Column(db.String(20), default="batting", nullable=False)
+    position = db.Column(db.Integer, nullable=True)
     
     # Batting
     runs = db.Column(db.Integer, default=0)
