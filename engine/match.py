@@ -8,7 +8,7 @@ from engine.pressure_engine import PressureEngine
 
 logger = logging.getLogger(__name__)
 
-
+# Guard console output on Windows consoles that choke on emoji/unicode.
 def safe_print(*args, **kwargs):
     try:
         builtins.print(*args, **kwargs)
@@ -21,8 +21,9 @@ def safe_print(*args, **kwargs):
                 sanitized.append(arg)
         builtins.print(*sanitized, **kwargs)
 
-
+# Override module-level print to the safe version
 print = safe_print
+
 
 class Match:
     def __init__(self, match_data):
@@ -235,20 +236,20 @@ class Match:
 
     def _check_for_rain(self):
         """Simple probability-based rain check - only once per match"""
-        print(f"🌧️  RAIN CHECK: Over {self.current_over + 1}, Innings {self.innings}")
-        
+        logger.debug(f"RAIN CHECK: Over {self.current_over + 1}, Innings {self.innings}")
+
         if self.rain_occurred:  # Rain already happened
-            print(f"🌧️  Rain already occurred - skipping")
+            logger.debug(f"Rain already occurred - skipping")
             return False
-            
+
         # Only check after 5 overs in 1st innings, or any time in 2nd innings
         if self.innings == 1 and self.current_over < 5:
-            print(f"🌧️  Too early for rain (over {self.current_over + 1} < 5)")
+            logger.debug(f"Too early for rain (over {self.current_over + 1} < 5)")
             return False
-        
+
         rain_roll = random.random()
         will_rain = rain_roll < self.rain_probability
-        print(f"🌧️  Rain roll: {rain_roll:.3f} < {self.rain_probability} = {will_rain}")
+        logger.debug(f"Rain roll: {rain_roll:.3f} < {self.rain_probability} = {will_rain}")
             
         return will_rain
 
@@ -2774,12 +2775,12 @@ class Match:
         if self.current_ball == 0 and not getattr(self, "prev_delivery_was_extra", False):
 
             # ===== 🌧️ RAIN CHECK =====
-            print(f"🌧️  Checking for rain...")
+            logger.debug(f"Checking for rain...")
             if self._check_for_rain():
-                print(f"🌧️  RAIN DETECTED! Handling rain event...")
+                logger.info(f"RAIN DETECTED! Handling rain event...")
                 rain_result = self._handle_rain_event()
-                print(f"🐛 RAIN RESULT: {rain_result}")
-                print(f"🐛 RAIN COMMENTARY: {rain_result.get('commentary', 'NO COMMENTARY FOUND')}")
+                logger.debug(f"RAIN RESULT: {rain_result}")
+                logger.debug(f"RAIN COMMENTARY: {rain_result.get('commentary', 'NO COMMENTARY FOUND')}")
                 return rain_result
             # ===== END RAIN CHECK =====
 
@@ -2829,7 +2830,7 @@ class Match:
             pressure_effects['wicket_modifier'] *= (1 - defensive_effects['wicket_reduction'])
             pressure_effects['dot_bonus'] += defensive_effects['dot_increase']
             pressure_effects['single_boost'] = defensive_effects['single_boost']
-            print(f"🛡️ {defensive_effects['mode']}: Playing defensively!")
+            logger.info(f"{defensive_effects['mode']}: Playing defensively!")
 
         else:
             # Apply fair risk-based effects
@@ -2844,7 +2845,7 @@ class Match:
                 
                 if cluster_trigger:
                     pressure_effects['wicket_modifier'] *= 1.3  # Reduced from 1.5
-                    print(f"💀 WICKET CLUSTER: 1.3x additional wicket boost!")
+                    logger.info(f"WICKET CLUSTER: 1.3x additional wicket boost!")
                 
                 # Apply effects
                 pressure_effects['boundary_modifier'] *= risk_effects['boundary_boost']
@@ -2868,18 +2869,18 @@ class Match:
         self.pressure_engine.update_recent_events(outcome)
         self._update_partnership_tracking(outcome)
 
-        # 🐛 ENHANCED DEBUG - Show ALL outcome details
-        print(f"🐛 Ball {self.current_over}.{self.current_ball + 1} FULL OUTCOME:")
-        print(f"   type: {outcome.get('type')}")
-        print(f"   runs: {outcome.get('runs')}")
-        print(f"   batter_out: {outcome.get('batter_out')}")
-        print(f"   wicket_type: {outcome.get('wicket_type')}")
-        print(f"   description: '{outcome.get('description')}'")
-        print(f"   is_extra: {outcome.get('is_extra')}")
+        # ENHANCED DEBUG - Show ALL outcome details
+        logger.debug(f"Ball {self.current_over}.{self.current_ball + 1} FULL OUTCOME:")
+        logger.debug(f"   type: {outcome.get('type')}")
+        logger.debug(f"   runs: {outcome.get('runs')}")
+        logger.debug(f"   batter_out: {outcome.get('batter_out')}")
+        logger.debug(f"   wicket_type: {outcome.get('wicket_type')}")
+        logger.debug(f"   description: '{outcome.get('description')}'")
+        logger.debug(f"   is_extra: {outcome.get('is_extra')}")
 
         # Debug wicket outcomes to catch future issues
         if outcome.get("batter_out", False):
-            print(f"🐛 Ball {self.current_over}.{self.current_ball + 1} WICKET: type={outcome.get('wicket_type')}, desc='{outcome.get('description')}'")
+            logger.debug(f"Ball {self.current_over}.{self.current_ball + 1} WICKET: type={outcome.get('wicket_type')}, desc='{outcome.get('description')}'")
 
         ball_number = f"{self.current_over}.{self.current_ball + 1}"
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
@@ -2893,10 +2894,10 @@ class Match:
             self.recent_wickets_tracker.append(self.current_over * 6 + self.current_ball)
             # Keep only last 12 balls (2 overs)
             current_ball_number = self.current_over * 6 + self.current_ball
-            self.recent_wickets_tracker = [w for w in self.recent_wickets_tracker 
+            self.recent_wickets_tracker = [w for w in self.recent_wickets_tracker
                                         if current_ball_number - w <= 12]
             self.recent_wickets_count = len(self.recent_wickets_tracker)
-            print(f"💀 Wicket tracking: {self.recent_wickets_count} wickets in last 12 balls")
+            logger.info(f"Wicket tracking: {self.recent_wickets_count} wickets in last 12 balls")
 
         
         self.prev_delivery_was_extra = extra

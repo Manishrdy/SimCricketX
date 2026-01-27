@@ -1,4 +1,7 @@
 import random
+import logging
+
+logger = logging.getLogger(__name__)
 
 class PressureEngine:
     def __init__(self):
@@ -50,9 +53,9 @@ class PressureEngine:
             risk_components.append(f"Final desperation: +{final_desperation:.1f}")
         
         if risk_factor > 1.1:  # Only log if significant risk
-            print(f"🎲 UNIFIED RISK FACTOR: {risk_factor:.2f}")
+            logger.info(f"UNIFIED RISK FACTOR: {risk_factor:.2f}")
             for component in risk_components:
-                print(f"   {component}")
+                logger.info(f"   {component}")
         
         return risk_factor
 
@@ -95,8 +98,8 @@ class PressureEngine:
                 'single_boost': 1.0 + (defensive_level * 0.8),        # 80% more singles
                 'mode': mode
             }
-            
-            print(f"🛡️ {mode}: Defensive level {defensive_level:.1f} - Protecting wickets!")
+
+            logger.info(f"{mode}: Defensive level {defensive_level:.1f} - Protecting wickets!")
             return effects
         
         return None
@@ -164,7 +167,7 @@ class PressureEngine:
                 chaos_level = "DESPERATE_SWINGING"
             
             wicket_multiplier *= extreme_boost
-            print(f"💀 {chaos_level}: RRR {required_rr:.1f} = {extreme_boost:.1f}x wicket boost!")
+            logger.info(f"{chaos_level}: RRR {required_rr:.1f} = {extreme_boost:.1f}x wicket boost!")
         
         effects = {
             'risk_active': True,
@@ -186,8 +189,8 @@ class PressureEngine:
             effects['mode'] = 'DESPERATE_SWINGING'
         elif wicket_multiplier >= 2.0:
             effects['mode'] = 'HIGH_RISK_CRICKET'
-        
-        print(f"🔥 {effects['mode']}: Boundaries={effects['boundary_boost']:.1f}x, Wickets={effects['wicket_boost']:.1f}x")
+
+        logger.info(f"{effects['mode']}: Boundaries={effects['boundary_boost']:.1f}x, Wickets={effects['wicket_boost']:.1f}x")
         
         return effects
 
@@ -342,7 +345,7 @@ class PressureEngine:
                 'boundary_boost': 1.12,  # 12% more boundaries
                 'wicket_reduction': 0.92,  # 8% fewer wickets
             })
-            print(f"🎯 CHASING ADVANTAGE: Death overs with {wickets_remaining} wickets - Enhanced scoring!")
+            logger.info(f"CHASING ADVANTAGE: Death overs with {wickets_remaining} wickets - Enhanced scoring!")
         
         return base_advantage
 

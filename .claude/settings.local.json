@@ -4,7 +4,8 @@
       "Bash(tree:*)",
       "Bash(grep:*)",
       "Bash(git log:*)",
-      "Bash(python migrate_tournament_modes.py:*)"
+      "Bash(python migrate_tournament_modes.py:*)",
+      "Bash(find:*)"
     ]
   }
 }
