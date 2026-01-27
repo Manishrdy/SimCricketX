@@ -2448,65 +2448,6 @@ class Match:
                 f"<strong>🎯 STEPPING UP!</strong> Need boundaries to stay alive!"
             ])
 
-    def _calculate_winning_probability(self):
-        """Calculate winning probability for chasing team based on match situation"""
-        if self.innings != 2:
-            return None
-        
-        runs_needed = self.target - self.score
-        balls_remaining = (self.overs - self.current_over) * 6 - self.current_ball
-        wickets_remaining = 10 - self.wickets
-        required_rr = (runs_needed * 6) / balls_remaining if balls_remaining > 0 else 0
-        
-        # Base probability factors
-        if runs_needed <= 0:
-            return 100.0  # Already won
-        
-        if balls_remaining <= 0 or wickets_remaining <= 0:
-            return 0.0   # Can't win
-        
-        # Winning probability based on required run rate and resources
-        if required_rr <= 6:
-            base_prob = 85
-        elif required_rr <= 8:
-            base_prob = 70
-        elif required_rr <= 10:
-            base_prob = 50
-        elif required_rr <= 12:
-            base_prob = 25
-        elif required_rr <= 15:
-            base_prob = 10
-        else:
-            base_prob = 3
-        
-        # Adjust for wickets remaining
-        wicket_factor = min(wickets_remaining / 7, 1.0)  # 7+ wickets = full factor
-        
-        # Adjust for balls remaining (less time = harder)
-        if balls_remaining < 12:  # Less than 2 overs
-            time_factor = 0.7
-        elif balls_remaining < 24:  # Less than 4 overs  
-            time_factor = 0.85
-        else:
-            time_factor = 1.0
-        
-        win_prob = base_prob * wicket_factor * time_factor
-        return max(0.0, min(100.0, win_prob))
-
-    def _generate_win_probability_commentary(self, win_prob):
-        """Generate commentary for winning probability"""
-        if win_prob >= 80:
-            return f"<strong>🟢 Win Probability: {win_prob:.1f}%</strong> - Chasing team in control!"
-        elif win_prob >= 60:
-            return f"<strong>🟡 Win Probability: {win_prob:.1f}%</strong> - Advantage to chasing team"
-        elif win_prob >= 40:
-            return f"<strong>🟠 Win Probability: {win_prob:.1f}%</strong> - Evenly poised!"
-        elif win_prob >= 20:
-            return f"<strong>🔴 Win Probability: {win_prob:.1f}%</strong> - Bowling team on top"
-        else:
-            return f"<strong>⚫ Win Probability: {win_prob:.1f}%</strong> - Mountain to climb!"
-
-
     def _generate_pressure_commentary(self, pressure_score, match_state):
         """Generate contextual pressure commentary based on match situation"""
         
@@ -2800,12 +2741,6 @@ class Match:
         match_state = self._calculate_current_match_state()
         pressure_score = self.pressure_engine.calculate_pressure(match_state)
 
-        # Calculate win probability for 2nd innings
-        win_probability = None
-        if self.innings == 2:
-            win_probability = self._calculate_winning_probability()
-
-        
         # Get base pressure effects (now fair)
         pressure_effects = self.pressure_engine.get_pressure_effects(
             pressure_score, 
@@ -2834,7 +2769,7 @@ class Match:
 
         else:
             # Apply fair risk-based effects
-            risk_effects = self.pressure_engine.get_risk_based_effects(match_state, win_probability)
+            risk_effects = self.pressure_engine.get_risk_based_effects(match_state)
             
             if risk_effects and risk_effects['risk_active']:
                 # Check wicket cluster
@@ -3288,13 +3223,6 @@ class Match:
             all_commentary.append(f"<br><strong>End of over {self.current_over + 1}</strong> (Score: {self.score}/{self.wickets}, RR: {current_rr:.2f})<br>")
             
 
-            # ADD WINNING PROBABILITY HERE
-            if self.innings == 2:
-                win_prob = self._calculate_winning_probability()
-                if win_prob is not None:
-                    win_prob_commentary = self._generate_win_probability_commentary(win_prob)
-                    all_commentary.append(win_prob_commentary)
-
             if self.innings == 2:
                 balls_remaining = (self.overs - self.current_over - 1) * 6
                 if balls_remaining > 0:
@@ -3389,7 +3317,7 @@ class Match:
                     # Player didn't bat - show with empty stats
                     players.append({
                         "name": player_name,
-                        "status": "-",
+                        "status": "",
                         "runs": "",
                         "balls": "",
                         "fours": "",
@@ -3398,6 +3326,19 @@ class Match:
                         "bowler_out": "",
                         "fielder_out": ""
                     })
+            else:
+                # Player not in stats - did not bat
+                players.append({
+                    "name": player_name,
+                    "status": "",
+                    "runs": "",
+                    "balls": "",
+                    "fours": "",
+                    "sixes": "",
+                    "strike_rate": "",
+                    "bowler_out": "",
+                    "fielder_out": ""
+                })
 
         # Generate bowler stats - all players marked will_bowl
         bowlers = []

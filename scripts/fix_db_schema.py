@@ -7,37 +7,46 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import create_app, db
 from database.models import User, Team, Player, Match, MatchScorecard, Tournament, TournamentTeam, TournamentFixture
 
+def ensure_schema(engine):
+    """
+    Idempotent schema guard. Safe to run at startup.
+    """
+    from sqlalchemy import inspect
+
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+
+    # Teams.is_draft
+    if "teams" in tables:
+        cols = [c["name"] for c in inspector.get_columns("teams")]
+        if "is_draft" not in cols:
+            with engine.begin() as conn:
+                conn.execute("ALTER TABLE teams ADD COLUMN is_draft BOOLEAN DEFAULT 0")
+
+    # match_scorecards required columns
+    if "match_scorecards" in tables:
+        cols = [c["name"] for c in inspector.get_columns("match_scorecards")]
+        alters = []
+        if "innings_number" not in cols:
+            alters.append("ALTER TABLE match_scorecards ADD COLUMN innings_number INTEGER NOT NULL DEFAULT 1")
+        if "record_type" not in cols:
+            alters.append("ALTER TABLE match_scorecards ADD COLUMN record_type VARCHAR(20) NOT NULL DEFAULT 'batting'")
+        if "position" not in cols:
+            alters.append("ALTER TABLE match_scorecards ADD COLUMN position INTEGER")
+        if alters:
+            with engine.begin() as conn:
+                for stmt in alters:
+                    conn.execute(stmt)
+
+
 def fix_db_schema():
     app = create_app()
     with app.app_context():
         print("Creating all missing database tables...")
         try:
             db.create_all()
-            print("Successfully ran db.create_all().")
-            
-            # Verify teams table exists
-            from sqlalchemy import inspect
-            inspector = inspect(db.engine)
-            tables = inspector.get_table_names()
-            if 'teams' in tables:
-                print("✅ Table 'teams' exists.")
-                
-                # Verify column
-                columns = [c['name'] for c in inspector.get_columns('teams')]
-                if 'is_draft' in columns:
-                    print("✅ Column 'is_draft' exists in 'teams'.")
-                else:
-                    print("❌ Column 'is_draft' MISSING in 'teams'. Attempting migration...")
-                    try:
-                        with db.engine.connect() as conn:
-                            conn.execute("ALTER TABLE teams ADD COLUMN is_draft BOOLEAN DEFAULT 0")
-                        print("✅ Added 'is_draft' column to 'teams'.")
-                    except Exception as e:
-                        print(f"Failed to add column: {e}")
-
-            else:
-                print("❌ Table 'teams' failed to create.")
-
+            ensure_schema(db.engine)
+            print("✅ Schema check complete.")
         except Exception as e:
             print(f"Error creating tables: {e}")
 
