@@ -55,6 +55,7 @@ import glob
 import pandas as pd 
 from tabulate import tabulate
 from flask import Response
+from sqlalchemy.orm import joinedload
 
 # Add this import for system monitoring
 try:
@@ -1107,28 +1108,101 @@ def create_app():
     @app.route("/match/<match_id>/scoreboard")
     @login_required
     def view_scoreboard(match_id):
-        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
-        match_data = None
-
-        # Search for the JSON whose match_id field matches
-        for fn in os.listdir(match_dir):
-            if not fn.endswith(".json"):
-                continue
-            path = os.path.join(match_dir, fn)
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if data.get("match_id") == match_id and data.get("created_by") == current_user.id:
-                    match_data = data
-                    break
-            except Exception:
-                continue
-
-        if not match_data:
+        db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
+        if not db_match:
             flash("Match not found", "error")
             return redirect(url_for("home"))
-            
-        return render_template("scorecard_view.html", match=match_data)
+
+        scorecards = (
+            MatchScorecard.query.options(joinedload(MatchScorecard.player_ref))
+            .filter_by(match_id=match_id)
+            .all()
+        )
+        if not scorecards:
+            flash("Scorecard data not available yet", "error")
+            return redirect(url_for("home"))
+
+        teams = {
+            team.id: team
+            for team in DBTeam.query.filter(DBTeam.id.in_([db_match.home_team_id, db_match.away_team_id])).all()
+        }
+
+        def format_overs(card):
+            if card.balls_bowled:
+                return f"{card.balls_bowled // 6}.{card.balls_bowled % 6}"
+            if card.overs:
+                return f"{card.overs:.1f}"
+            return "0.0"
+
+        innings_data = {}
+        for card in scorecards:
+            entry = innings_data.setdefault(
+                card.innings_number,
+                {
+                    "number": card.innings_number,
+                    "batting": [],
+                    "bowling": [],
+                    "batting_team_id": None,
+                    "bowling_team_id": None,
+                },
+            )
+            player_name = card.player_ref.name if card.player_ref else "Unknown"
+
+            if card.record_type == "batting":
+                entry["batting_team_id"] = card.team_id
+                entry["batting"].append(
+                    {
+                        "name": player_name,
+                        "runs": card.runs,
+                        "balls": card.balls,
+                        "fours": card.fours,
+                        "sixes": card.sixes,
+                        "is_out": card.is_out,
+                        "wicket_type": card.wicket_type,
+                        "wicket_taker_name": card.wicket_taker_name,
+                        "fielder_name": card.fielder_name,
+                        "position": card.position or 9999,
+                    }
+                )
+            elif card.record_type == "bowling":
+                entry["bowling_team_id"] = card.team_id
+                entry["bowling"].append(
+                    {
+                        "name": player_name,
+                        "overs": format_overs(card),
+                        "runs_conceded": card.runs_conceded,
+                        "wickets": card.wickets,
+                        "maidens": card.maidens,
+                        "wides": card.wides,
+                        "noballs": card.noballs,
+                        "position": card.position or 9999,
+                    }
+                )
+
+        innings_list = []
+        for innings_number in sorted(innings_data.keys()):
+            entry = innings_data[innings_number]
+            entry["batting"].sort(key=lambda item: item["position"])
+            entry["bowling"].sort(key=lambda item: item["position"])
+            entry["score"] = sum(item["runs"] for item in entry["batting"])
+            entry["wickets"] = sum(1 for item in entry["batting"] if item["is_out"])
+            entry["batting_team_name"] = teams.get(entry["batting_team_id"]).name if entry["batting_team_id"] in teams else "Unknown"
+            entry["bowling_team_name"] = teams.get(entry["bowling_team_id"]).name if entry["bowling_team_id"] in teams else "Unknown"
+            innings_list.append(entry)
+
+        match_summary = {
+            "result_description": db_match.result_description or "Match Completed",
+            "team_home": teams.get(db_match.home_team_id).name if db_match.home_team_id in teams else "Home",
+            "team_away": teams.get(db_match.away_team_id).name if db_match.away_team_id in teams else "Away",
+            "venue": db_match.venue or "Stadium",
+            "tournament_id": db_match.tournament_id,
+        }
+
+        return render_template(
+            "scorecard_view.html",
+            match=match_summary,
+            innings_list=innings_list,
+        )
     
     @app.route("/teams/<short_code>/delete", methods=["DELETE"])
     @login_required

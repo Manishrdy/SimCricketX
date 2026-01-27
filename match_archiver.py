@@ -374,24 +374,37 @@ class MatchArchiver:
                     )
 
             # 4. Save Scorecards
-            def save_stats(stats_dict, team_id, batting=True):
-                if not stats_dict: return
-                for p_name, s in stats_dict.items():
+            def save_stats(stats_dict, team_id, innings_number, record_type):
+                if not stats_dict:
+                    return
+                for position, (p_name, s) in enumerate(stats_dict.items(), start=1):
                     # Find player ID
                     player = DBPlayer.query.filter_by(name=p_name, team_id=team_id).first()
                     if not player:
                         continue
                     
-                    card = MatchScorecard.query.filter_by(match_id=self.match_id, player_id=player.id).first()
+                    card = MatchScorecard.query.filter_by(
+                        match_id=self.match_id,
+                        player_id=player.id,
+                        innings_number=innings_number,
+                        record_type=record_type
+                    ).first()
                     if not card:
                         card = MatchScorecard(
                             match_id=self.match_id,
                             player_id=player.id,
-                            team_id=team_id
+                            team_id=team_id,
+                            innings_number=innings_number,
+                            record_type=record_type
                         )
                         db.session.add(card)
+                    else:
+                        card.team_id = team_id
+                        card.innings_number = innings_number
+                        card.record_type = record_type
+                    card.position = position
                     
-                    if batting:
+                    if record_type == "batting":
                         card.runs = s.get('runs', 0)
                         card.balls = s.get('balls', 0)
                         card.fours = s.get('fours', 0)
@@ -410,48 +423,60 @@ class MatchArchiver:
                         card.wides = s.get('wides', 0)
                         card.noballs = s.get('noballs', 0)
 
-            # Process Home Stats (Batting)
-            save_stats(home_batting_stats, home_team.id, batting=True)
-            
-            # Process Home Stats (Bowling - when Away batted)
-            h_bowl_stats = self.match.second_innings_bowling_stats if first_bat_name == self.match.match_data["team_home"].split('_')[0] else self.match.first_innings_bowling_stats
-            save_stats(h_bowl_stats, home_team.id, batting=False)
-            
-            # Process Away Stats (Batting)
-            save_stats(away_batting_stats, away_team.id, batting=True)
-            
-            # Process Away Stats (Bowling - when Home batted)
-            a_bowl_stats = self.match.first_innings_bowling_stats if first_bat_name == self.match.match_data["team_home"].split('_')[0] else self.match.second_innings_bowling_stats
-            save_stats(a_bowl_stats, away_team.id, batting=False)
+            if first_bat_name == self.match.match_data["team_home"].split('_')[0]:
+                innings_plan = [
+                    (1, home_team.id, away_team.id, self.match.first_innings_batting_stats, self.match.first_innings_bowling_stats),
+                    (2, away_team.id, home_team.id, self.match.second_innings_batting_stats, self.match.second_innings_bowling_stats),
+                ]
+            else:
+                innings_plan = [
+                    (1, away_team.id, home_team.id, self.match.first_innings_batting_stats, self.match.first_innings_bowling_stats),
+                    (2, home_team.id, away_team.id, self.match.second_innings_batting_stats, self.match.second_innings_bowling_stats),
+                ]
+
+            for innings_number, batting_team_id, bowling_team_id, batting_stats, bowling_stats in innings_plan:
+                save_stats(batting_stats, batting_team_id, innings_number, "batting")
+                save_stats(bowling_stats, bowling_team_id, innings_number, "bowling")
             
             # Update Player Aggregates
+            updated_players = set()
             for card in [c for c in db.session.new if isinstance(c, MatchScorecard)]:
                 # relationship loading fallback
                 p = DBPlayer.query.get(card.player_id)
                 if not p: continue
                 
-                p.matches_played += 1
-                p.total_runs += card.runs
-                p.total_balls_faced += card.balls
-                p.total_fours += card.fours
-                p.total_sixes += card.sixes
-                if card.runs >= 50 and card.runs < 100: p.total_fifties += 1
-                if card.runs >= 100: p.total_centuries += 1
-                if card.runs > p.highest_score: p.highest_score = card.runs
-                if not card.is_out and card.balls > 0: p.not_outs += 1
+                if card.player_id not in updated_players:
+                    p.matches_played += 1
+                    updated_players.add(card.player_id)
                 
-                p.total_balls_bowled += card.balls_bowled
-                p.total_runs_conceded += card.runs_conceded
-                p.total_wickets += card.wickets
-                p.total_maidens += card.maidens
-                if card.wickets >= 5: p.five_wicket_hauls += 1
-                
-                if card.wickets > p.best_bowling_wickets:
-                    p.best_bowling_wickets = card.wickets
-                    p.best_bowling_runs = card.runs_conceded
-                elif card.wickets == p.best_bowling_wickets:
-                    if card.runs_conceded < p.best_bowling_runs:
+                if card.record_type == "batting":
+                    p.total_runs += card.runs
+                    p.total_balls_faced += card.balls
+                    p.total_fours += card.fours
+                    p.total_sixes += card.sixes
+                    if card.runs >= 50 and card.runs < 100:
+                        p.total_fifties += 1
+                    if card.runs >= 100:
+                        p.total_centuries += 1
+                    if card.runs > p.highest_score:
+                        p.highest_score = card.runs
+                    if not card.is_out and card.balls > 0:
+                        p.not_outs += 1
+
+                if card.record_type == "bowling":
+                    p.total_balls_bowled += card.balls_bowled
+                    p.total_runs_conceded += card.runs_conceded
+                    p.total_wickets += card.wickets
+                    p.total_maidens += card.maidens
+                    if card.wickets >= 5:
+                        p.five_wicket_hauls += 1
+                    
+                    if card.wickets > p.best_bowling_wickets:
+                        p.best_bowling_wickets = card.wickets
                         p.best_bowling_runs = card.runs_conceded
+                    elif card.wickets == p.best_bowling_wickets:
+                        if card.runs_conceded < p.best_bowling_runs:
+                            p.best_bowling_runs = card.runs_conceded
 
             db.session.commit()
             
