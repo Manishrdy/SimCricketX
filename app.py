@@ -2263,62 +2263,7 @@ def create_app():
             db.session.commit()
         return redirect(url_for("tournaments"))
 
-    @app.route("/tournaments/fixtures/<int:fixture_id>/resimulate", methods=["POST"])
-    @login_required
-    def resimulate_fixture(fixture_id):
-        """
-        Reset a tournament fixture to allow re-simulation.
-        Deletes the associated match data and resets standings.
 
-        All operations are performed in a single transaction to ensure
-        data consistency - if any operation fails, everything is rolled back.
-        """
-        fixture = db.session.get(TournamentFixture, fixture_id)
-        if not fixture:
-            return "Fixture not found", 404
-
-        # Authorization check
-        if fixture.tournament.user_id != current_user.id:
-            app.logger.warning(f"Unauthorized resimulate attempt: user {current_user.id} on fixture {fixture_id}")
-            return "Unauthorized", 403
-
-        # Check if fixture is actually completed
-        if fixture.status != 'Completed':
-            return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament_id))
-
-        tournament_id = fixture.tournament_id
-
-        try:
-            # If there's an associated match, reverse standings and delete it
-            if not fixture.match_id:
-                return "Cannot resimulate: fixture has no match data.", 409
-
-            match = db.session.get(Match, fixture.match_id)
-            if not match:
-                return "Cannot resimulate: match record not found.", 409
-
-            match_id = match.id
-
-            # Reverse the standings update (commit=False for transaction safety)
-            if not tournament_engine.reverse_standings(match, commit=False):
-                return "Cannot resimulate: failed to reverse standings.", 409
-
-            # Delete match scorecards (foreign key constraint)
-            MatchScorecard.query.filter_by(match_id=match_id).delete()
-
-            # Delete the match record
-            db.session.delete(match)
-
-            # Single commit for all operations - atomic transaction
-            db.session.commit()
-            app.logger.info(f"Fixture {fixture_id} reset for re-simulation successfully")
-
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"Error resimulating fixture {fixture_id}: {e}", exc_info=True)
-            return f"Error: {str(e)}", 500
-
-        return redirect(url_for("tournament_dashboard", tournament_id=tournament_id))
 
     
     @app.route("/download_stats_tab/<leaderboard>")
