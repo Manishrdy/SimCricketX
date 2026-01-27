@@ -1,8 +1,28 @@
+import builtins
+import logging
 import random
 from engine.ball_outcome import calculate_outcome
 from engine.super_over_outcome import calculate_super_over_outcome
 from match_archiver import MatchArchiver, find_original_json_file
 from engine.pressure_engine import PressureEngine
+
+logger = logging.getLogger(__name__)
+
+
+def safe_print(*args, **kwargs):
+    try:
+        builtins.print(*args, **kwargs)
+    except OSError:
+        sanitized = []
+        for arg in args:
+            if isinstance(arg, str):
+                sanitized.append(arg.encode("ascii", "ignore").decode())
+            else:
+                sanitized.append(arg)
+        builtins.print(*sanitized, **kwargs)
+
+
+print = safe_print
 
 class Match:
     def __init__(self, match_data):
