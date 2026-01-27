@@ -1,4 +1,7 @@
 import random
+import logging
+
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # ball_outcome.py
@@ -418,15 +421,15 @@ DEFAULT_SCORING_MATRIX = {
 
 def _validate_scoring_matrices():
     """Validate that all pitch scoring matrices sum to 1.0"""
-    print("Validating pitch scoring matrices:")
-    
+    logger.info("Validating pitch scoring matrices:")
+
     for pitch_type, matrix in PITCH_SCORING_MATRIX.items():
         total = sum(matrix.values())
         status = "OK" if abs(total - 1.0) < 0.001 else "FAIL"
-        print(f"  {pitch_type}: {total:.3f} [{status}]")
-        
+        logger.info(f"  {pitch_type}: {total:.3f} [{status}]")
+
         if abs(total - 1.0) >= 0.001:
-            print(f"    Warning: {pitch_type} matrix doesn't sum to 1.0!")
+            logger.warning(f"    Warning: {pitch_type} matrix doesn't sum to 1.0!")
     
     # Validate default matrix too
     default_total = sum(DEFAULT_SCORING_MATRIX.values())
@@ -637,7 +640,7 @@ def calculate_outcome(
             if over_number < 6:
                 if outcome in ("Four", "Six"):
                     pp_boost = 1.25 # 25% more boundaries in PP
-                    print(f"  [Powerplay] Boosting {outcome} by {pp_boost}x")
+                    logger.debug(f"  [Powerplay] Boosting {outcome} by {pp_boost}x")
                     weight *= pp_boost
                 elif outcome == "Wicket":
                     # Wickets slightly less likely in PP if batsman is just attacking gaps
@@ -655,13 +658,13 @@ def calculate_outcome(
                         boundary_boost = 1.4  # Increased from 1.25
                     else:  # Green or Dry
                         boundary_boost = 1.15  # Increased from 1.08
-                    print(f"  DeathOver: Boosting boundary ({outcome}) on {pitch} by factor {boundary_boost}")
+                    logger.debug(f"  DeathOver: Boosting boundary ({outcome}) on {pitch} by factor {boundary_boost}")
                     weight *= boundary_boost
 
                 # Wicket boost (Increased per user request)
                 if outcome == "Wicket":
                     wicket_boost = 1.3  # Increased from 1.1 to 1.3
-                    print(f"  DeathOver: Boosting wicket on {pitch} by factor {wicket_boost}")
+                    logger.debug(f"  DeathOver: Boosting wicket on {pitch} by factor {wicket_boost}")
                     weight *= wicket_boost
 
             # 4) Second innings special boosts (last 4 overs)
@@ -688,14 +691,14 @@ def calculate_outcome(
 
     # 3.6) Apply pressure effects if provided
     if pressure_effects:
-        print(f"  [PRESSURE] Applying pressure effects: {pressure_effects}")
+        logger.debug(f"  [PRESSURE] Applying pressure effects: {pressure_effects}")
         
         # Increase dot ball probability
         if "Dot" in raw_weights:
             original_dot = raw_weights["Dot"]
             dot_bonus = pressure_effects.get('dot_bonus', 0.0)
             raw_weights["Dot"] += dot_bonus * total_weight
-            print(f"  [PRESSURE] Dot: {original_dot:.6f} → {raw_weights['Dot']:.6f}")
+            logger.debug(f"  [PRESSURE] Dot: {original_dot:.6f} -> {raw_weights['Dot']:.6f}")
         
         # Modify boundary probabilities
         boundary_modifier = pressure_effects.get('boundary_modifier', 1.0)
@@ -703,13 +706,13 @@ def calculate_outcome(
             if boundary_type in raw_weights:
                 original_boundary = raw_weights[boundary_type]
                 raw_weights[boundary_type] *= boundary_modifier
-                print(f"  [PRESSURE] {boundary_type}: {original_boundary:.6f} → {raw_weights[boundary_type]:.6f}")
+                logger.debug(f"  [PRESSURE] {boundary_type}: {original_boundary:.6f} -> {raw_weights[boundary_type]:.6f}")
         
         # Modify wicket probability
         if "Wicket" in raw_weights:
             original_wicket = raw_weights["Wicket"]
             raw_weights["Wicket"] *= pressure_effects.get('wicket_modifier', 1.0)
-            print(f"  [PRESSURE] Wicket: {original_wicket:.6f} → {raw_weights['Wicket']:.6f}")
+            logger.debug(f"  [PRESSURE] Wicket: {original_wicket:.6f} -> {raw_weights['Wicket']:.6f}")
         
         # 🔧 NEW: Handle singles (boost or penalty with floor)
         if "Single" in raw_weights:
@@ -718,7 +721,7 @@ def calculate_outcome(
             # Apply single boost (defensive mode)
             if 'single_boost' in pressure_effects:
                 raw_weights["Single"] *= pressure_effects['single_boost']
-                print(f"  [PRESSURE] Single BOOST: {original_single:.6f} → {raw_weights['Single']:.6f}")
+                logger.debug(f"  [PRESSURE] Single BOOST: {original_single:.6f} -> {raw_weights['Single']:.6f}")
             
             # Apply single penalty with floor (aggressive mode)
             elif 'strike_rotation_penalty' in pressure_effects:
@@ -729,8 +732,8 @@ def calculate_outcome(
                 new_single_weight = original_single * (1 - penalty)
                 floor_weight = single_floor * total_weight
                 raw_weights["Single"] = max(new_single_weight, floor_weight)
-                
-                print(f"  [PRESSURE] Single PENALTY: {original_single:.6f} → {raw_weights['Single']:.6f} (floor: {floor_weight:.6f})")
+
+                logger.debug(f"  [PRESSURE] Single PENALTY: {original_single:.6f} -> {raw_weights['Single']:.6f} (floor: {floor_weight:.6f})")
         
         # Reduce strike rotation for threes
         if "Three" in raw_weights:
@@ -738,7 +741,7 @@ def calculate_outcome(
             if strike_rotation_penalty > 0:
                 original_three = raw_weights["Three"]
                 raw_weights["Three"] *= (1 - strike_rotation_penalty)
-                print(f"  [PRESSURE] Three: {original_three:.6f} → {raw_weights['Three']:.6f}")
+                logger.debug(f"  [PRESSURE] Three: {original_three:.6f} -> {raw_weights['Three']:.6f}")
         
         # Recalculate total weight after pressure modifications
         total_weight = sum(raw_weights.values())
@@ -751,9 +754,9 @@ def calculate_outcome(
         # print("[calculate_outcome] Warning: Total weight <= 0, defaulting to Dot ball")
     else:
         normalized_weights = [raw_weights[o] / total_weight for o in raw_weights]
-        # print(f"[calculate_outcome] Normalized weights:")
+        # logger.debug(f"[calculate_outcome] Normalized weights:")
         for o, nw in zip(raw_weights.keys(), normalized_weights):
-            print(f"  {o}: {nw:.4f}")
+            logger.debug(f"  {o}: {nw:.4f}")
         chosen = random.choices(list(raw_weights.keys()), weights=normalized_weights)[0]
 
     # print(f"[calculate_outcome] Chosen outcome: {chosen}")
@@ -840,9 +843,9 @@ def calculate_outcome(
         template = random.choice(commentary_templates[chosen])
         result["description"] = f"{template}"
 
-        # print(f"[calculate_outcome] RUN! Outcome: {chosen}, Runs: {result['runs']}, Description: {template}")
+        # logger.debug(f"[calculate_outcome] RUN! Outcome: {chosen}, Runs: {result['runs']}, Description: {template}")
 
-    print("=======================================================\n")
+    logger.debug("=======================================================\n")
     return result
 
 

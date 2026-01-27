@@ -7,3 +7,25 @@ def load_config():
     config_path = os.path.join(PROJECT_ROOT, "config", "config.yaml")
     with open(config_path, "r") as f:
         return yaml.safe_load(f)
+
+def safe_print(*args, **kwargs):
+    """
+    Print function that handles OSError/UnicodeEncodeError on Windows systems
+    happening due to emojis or special characters.
+    """
+    import builtins
+    try:
+        builtins.print(*args, **kwargs)
+    except (OSError, UnicodeEncodeError):
+        sanitized = []
+        for arg in args:
+            if isinstance(arg, str):
+                # Remove non-ascii characters or replace them
+                sanitized.append(arg.encode("ascii", "ignore").decode())
+            else:
+                sanitized.append(arg)
+        try:
+            builtins.print(*sanitized, **kwargs)
+        except (OSError, UnicodeEncodeError):
+            pass # If it still fails, just suppress it
+
