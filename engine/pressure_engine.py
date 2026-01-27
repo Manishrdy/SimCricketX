@@ -16,8 +16,8 @@ class PressureEngine:
         self.recent_events = []
     
 
-    def calculate_unified_risk_factor(self, match_state, win_probability=None):
-        """Calculate unified risk factor based on death overs, win probability, and required rate"""
+    def calculate_unified_risk_factor(self, match_state):
+        """Calculate unified risk factor based on death overs and required rate"""
         if match_state['innings'] != 2:
             return 1.0  # No risk in first innings
         
@@ -34,19 +34,13 @@ class PressureEngine:
             risk_factor += death_risk
             risk_components.append(f"Death overs: +{death_risk:.1f}")
         
-        # 2. Low win probability risk (only in death overs)
-        if current_over >= 16 and win_probability is not None and win_probability < 5.0:
-            win_prob_risk = (5.0 - win_probability) * 0.25  # Max +1.25 for 0% win prob
-            risk_factor += win_prob_risk
-            risk_components.append(f"Low win prob ({win_probability:.1f}%): +{win_prob_risk:.1f}")
-        
-        # 3. High required rate risk (throughout 2nd innings)
+        # 2. High required rate risk (throughout 2nd innings)
         if required_rr > 12:
             rr_risk = min((required_rr - 12) * 0.15, 0.8)  # Max +0.8 for very high RR
             risk_factor += rr_risk
             risk_components.append(f"High RRR ({required_rr:.1f}): +{rr_risk:.1f}")
         
-        # 4. Final overs desperation (overs 19-20 only)
+        # 3. Final overs desperation (overs 19-20 only)
         if current_over >= 18 and overs_remaining <= 2:
             final_desperation = 0.4
             risk_factor += final_desperation
@@ -138,9 +132,9 @@ class PressureEngine:
         
         return False
 
-    def get_risk_based_effects(self, match_state, win_probability=None):
+    def get_risk_based_effects(self, match_state):
         """Get FAIR risk-based effects - boom-or-bust without unfair restrictions"""
-        risk_factor = self.calculate_unified_risk_factor(match_state, win_probability)
+        risk_factor = self.calculate_unified_risk_factor(match_state)
         
         if risk_factor <= 1.1:
             return None

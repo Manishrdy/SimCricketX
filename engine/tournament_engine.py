@@ -1020,6 +1020,28 @@ class TournamentEngine:
             TournamentTeam.runs_scored.desc()  # Deterministic tie-breaker
         ).all()
 
+    def _ensure_team_stats(self, tournament_id: int, team_id: int):
+        stats = TournamentTeam.query.filter_by(tournament_id=tournament_id, team_id=team_id).first()
+        if stats:
+            return stats
+        stats = TournamentTeam(
+            tournament_id=tournament_id,
+            team_id=team_id,
+            played=0,
+            won=0,
+            lost=0,
+            tied=0,
+            no_result=0,
+            points=0,
+            net_run_rate=0.0,
+            runs_scored=0,
+            runs_conceded=0,
+            overs_faced=0.0,
+            overs_bowled=0.0,
+        )
+        db.session.add(stats)
+        return stats
+
     def update_standings(self, match, commit=True):
         """
         Updates the standings table based on a completed match.
@@ -1050,18 +1072,8 @@ class TournamentEngine:
             fixture.standings_applied = True
 
         # Get team stats records
-        home_team_stats = TournamentTeam.query.filter_by(
-            tournament_id=match.tournament_id,
-            team_id=match.home_team_id
-        ).first()
-        away_team_stats = TournamentTeam.query.filter_by(
-            tournament_id=match.tournament_id,
-            team_id=match.away_team_id
-        ).first()
-
-        if not home_team_stats or not away_team_stats:
-            logger.error(f"Stats record not found for match {match.id}")
-            return False
+        home_team_stats = self._ensure_team_stats(match.tournament_id, match.home_team_id)
+        away_team_stats = self._ensure_team_stats(match.tournament_id, match.away_team_id)
 
         # Only update league standings (not knockout stats)
         if fixture and fixture.stage == self.STAGE_LEAGUE:
@@ -1206,18 +1218,8 @@ class TournamentEngine:
             logger.error("No fixture found for match %s; cannot reverse standings.", match.id)
             return False
 
-        home_team_stats = TournamentTeam.query.filter_by(
-            tournament_id=match.tournament_id,
-            team_id=match.home_team_id
-        ).first()
-        away_team_stats = TournamentTeam.query.filter_by(
-            tournament_id=match.tournament_id,
-            team_id=match.away_team_id
-        ).first()
-
-        if not home_team_stats or not away_team_stats:
-            logger.error("Stats records missing for match %s; cannot reverse standings.", match.id)
-            return False
+        home_team_stats = self._ensure_team_stats(match.tournament_id, match.home_team_id)
+        away_team_stats = self._ensure_team_stats(match.tournament_id, match.away_team_id)
 
         # Only reverse league standings
         if fixture and fixture.stage == self.STAGE_LEAGUE:
