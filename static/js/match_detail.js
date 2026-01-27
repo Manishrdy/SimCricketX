@@ -615,16 +615,17 @@ function showScorecard(data, completeData) {
     // Batsmen - Compact format
     const tbody = document.getElementById('scorecard-tbody');
     tbody.innerHTML = '';
+    const displayValue = (value) => (value === null || value === undefined || value === '') ? '' : value;
     data.players.forEach(player => {
         const row = tbody.insertRow();
         row.innerHTML = `
-            <td>${player.name}</td>
-            <td style="font-size:0.7rem;color:var(--fg-secondary)">${player.status}</td>
-            <td><strong>${player.runs}</strong></td>
-            <td>${player.balls}</td>
-            <td>${player.fours}</td>
-            <td>${player.sixes}</td>
-            <td>${player.strike_rate || '-'}</td>
+            <td>${displayValue(player.name)}</td>
+            <td style="font-size:0.7rem;color:var(--fg-secondary)">${displayValue(player.status)}</td>
+            <td><strong>${displayValue(player.runs)}</strong></td>
+            <td>${displayValue(player.balls)}</td>
+            <td>${displayValue(player.fours)}</td>
+            <td>${displayValue(player.sixes)}</td>
+            <td>${displayValue(player.strike_rate)}</td>
         `;
     });
 
