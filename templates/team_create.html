@@ -940,6 +940,24 @@
     </div>
   </template>
 
+  <!-- Data Injection -->
+  <script id="edit-mode-data" type="application/json">
+      {{ 'true' if edit else 'false' }}
+  </script>
+  <script id="team-data-json" type="application/json">
+      {{ team | tojson | safe if edit else 'null' }}
+    </script>
+
+  <script>
+    const EDIT_MODE = JSON.parse(document.getElementById('edit-mode-data').textContent);
+    let TEAM_DATA = null;
+    try {
+      TEAM_DATA = JSON.parse(document.getElementById('team-data-json').textContent);
+    } catch (e) {
+      console.error("Failed to parse team data", e);
+    }
+  </script>
+
   <script>
     // Dynamic Title
     const teamInput = document.getElementById('team_name');
@@ -1115,26 +1133,6 @@
         });
     }
   </script>
-
-  <!-- Data Injection -->
-  <script id="edit-mode-data" type="application/json">
-      {{ 'true' if edit else 'false' }}
-  </script>
-  <script id="team-data-json" type="application/json">
-      {{ team | tojson | safe if edit else 'null' }}
-    </script>
-
-  <script>
-    const EDIT_MODE = JSON.parse(document.getElementById('edit-mode-data').textContent);
-    let TEAM_DATA = null;
-    try {
-      TEAM_DATA = JSON.parse(document.getElementById('team-data-json').textContent);
-    } catch (e) {
-      console.error("Failed to parse team data", e);
-    }
-  </script>
-
-
 
   <script>
     // Add one player card
