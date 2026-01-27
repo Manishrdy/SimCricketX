@@ -31,6 +31,21 @@ Match Result - SimCricketX
         margin-bottom: 2rem;
     }
 
+    .innings-subtitle {
+        margin-top: 0.5rem;
+        font-size: 0.95rem;
+        color: var(--fg-secondary);
+    }
+
+    .section-title {
+        margin: 1rem 0 0.5rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--fg-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
     .innings-header {
         background: var(--bg-secondary);
         padding: 0.75rem 1rem;
@@ -90,31 +105,20 @@ Match Result - SimCricketX
 <div class="result-header">
     <div class="match-result-text">{{ match.result_description or "Match Completed" }}</div>
     <div class="match-meta">
-        {{ match.team_home.split('_')[0] }} vs {{ match.team_away.split('_')[0] }} • {{ match.stadium }}
+        {{ match.team_home }} vs {{ match.team_away }} • {{ match.venue }}
     </div>
 </div>
 
 <div class="container">
-    {% set first_innings_stats = match.first_innings_batting_stats %}
-    {% set second_innings_stats = match.batsman_stats %}
-
-    {#
-    NOTE: The JSON structure might store stats differently depending on who batted first.
-    Usually:
-    - Innings 1 Batting: match.first_innings_batting_stats
-    - Innings 1 Bowling: match.first_innings_bowling_stats
-    - Innings 2 Batting: match.batsman_stats (current state)
-    - Innings 2 Bowling: match.bowler_stats (current state)
-    #}
-
-    <!-- 1st Innings -->
+    {% for innings in innings_list %}
     <div class="scorecard-section">
         <div class="innings-header">
-            <span>1st Innings</span>
-            <span>{{ match.first_innings_score or 0 }}/{{ match.first_innings_wickets or 0 }}</span>
+            <span>{{ innings.number }}{% if innings.number == 1 %}st{% elif innings.number == 2 %}nd{% else %}th{% endif %} Innings</span>
+            <span>{{ innings.score }}/{{ innings.wickets }}</span>
         </div>
+        <div class="innings-subtitle">{{ innings.batting_team_name }} batting • {{ innings.bowling_team_name }} bowling</div>
 
-        <!-- Batting -->
+        <div class="section-title">Batting</div>
         <table class="score-table">
             <thead>
                 <tr>
@@ -127,75 +131,77 @@ Match Result - SimCricketX
                 </tr>
             </thead>
             <tbody>
-                {% for name, stats in match.first_innings_batting_stats.items() %}
+                {% for batter in innings.batting %}
                 <tr>
-                    <td class="batter-name">{{ name }}</td>
+                    <td class="batter-name">{{ batter.name }}</td>
                     <td class="dismissal-info">
-                        {% if stats.wicket_type %}
-                        {{ stats.wicket_type }}
-                        {% if stats.bowler_out %} b {{ stats.bowler_out }}{% endif %}
+                        {% if batter.is_out %}
+                        {% if batter.wicket_type == "Caught" %}
+                        c {{ batter.fielder_name or "?" }} b {{ batter.wicket_taker_name or "?" }}
+                        {% elif batter.wicket_type == "Bowled" %}
+                        b {{ batter.wicket_taker_name or "?" }}
+                        {% elif batter.wicket_type == "LBW" %}
+                        lbw b {{ batter.wicket_taker_name or "?" }}
+                        {% elif batter.wicket_type == "Run Out" %}
+                        run out ({{ batter.fielder_name or "?" }})
+                        {% elif batter.wicket_type == "Stumped" %}
+                        st {{ batter.fielder_name or "?" }} b {{ batter.wicket_taker_name or "?" }}
+                        {% elif batter.wicket_type == "Hit Wicket" %}
+                        hit wicket b {{ batter.wicket_taker_name or "?" }}
+                        {% else %}
+                        {{ batter.wicket_type }}
+                        {% if batter.wicket_taker_name %} b {{ batter.wicket_taker_name }}{% endif %}
+                        {% endif %}
                         {% else %}
                         not out
                         {% endif %}
                     </td>
-                    <td><b>{{ stats.runs }}</b></td>
-                    <td>{{ stats.balls }}</td>
-                    <td>{{ stats.fours }}</td>
-                    <td>{{ stats.sixes }}</td>
+                    <td><b>{{ batter.runs }}</b></td>
+                    <td>{{ batter.balls }}</td>
+                    <td>{{ batter.fours }}</td>
+                    <td>{{ batter.sixes }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" style="text-align:center">No stats available</td>
+                    <td colspan="6" style="text-align:center">No batting stats available</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-    </div>
 
-    <!-- 2nd Innings -->
-    <div class="scorecard-section">
-        <div class="innings-header">
-            <span>2nd Innings</span>
-            <span>{{ match.score }}/{{ match.wickets }}</span>
-        </div>
-
-        <!-- Batting -->
+        <div class="section-title">Bowling</div>
         <table class="score-table">
             <thead>
                 <tr>
-                    <th>Batter</th>
-                    <th>Dismissal</th>
+                    <th>Bowler</th>
+                    <th>O</th>
                     <th>R</th>
-                    <th>B</th>
-                    <th>4s</th>
-                    <th>6s</th>
+                    <th>W</th>
+                    <th>M</th>
+                    <th>Wd</th>
+                    <th>Nb</th>
                 </tr>
             </thead>
             <tbody>
-                {% for name, stats in match.batsman_stats.items() %}
+                {% for bowler in innings.bowling %}
                 <tr>
-                    <td class="batter-name">{{ name }}</td>
-                    <td class="dismissal-info">
-                        {% if stats.wicket_type %}
-                        {{ stats.wicket_type }}
-                        {% if stats.bowler_out %} b {{ stats.bowler_out }}{% endif %}
-                        {% else %}
-                        not out
-                        {% endif %}
-                    </td>
-                    <td><b>{{ stats.runs }}</b></td>
-                    <td>{{ stats.balls }}</td>
-                    <td>{{ stats.fours }}</td>
-                    <td>{{ stats.sixes }}</td>
+                    <td class="batter-name">{{ bowler.name }}</td>
+                    <td>{{ bowler.overs }}</td>
+                    <td>{{ bowler.runs_conceded }}</td>
+                    <td><b>{{ bowler.wickets }}</b></td>
+                    <td>{{ bowler.maidens }}</td>
+                    <td>{{ bowler.wides }}</td>
+                    <td>{{ bowler.noballs }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" style="text-align:center">No stats available</td>
+                    <td colspan="7" style="text-align:center">No bowling stats available</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    {% endfor %}
 
     <div class="nav-actions">
         {% if match.tournament_id %}
