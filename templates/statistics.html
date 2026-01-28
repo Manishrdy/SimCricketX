@@ -3,246 +3,127 @@
 {% block title %}Statistics Hub - SimCricketX{% endblock %}
 
 {% block extra_css %}
-<!-- Google Fonts for Stats Numbers -->
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
 <style>
-    /* Stats Page Specific Styles */
+    /* Stats-specific styling matching the app theme */
 
-    /* Search Bar - Moved from Nav to Content */
-    .stats-search-container {
-        position: relative;
-        max-width: 400px;
-        margin: 0 auto 2rem;
-    }
-
-    .search-input {
-        width: 100%;
-        padding: 0.8rem 1rem 0.8rem 2.5rem;
+    /* Dashboard Control Panel */
+    .stats-controls {
+        background: var(--card-bg);
         border: 2px solid var(--card-border);
-        border-radius: var(--border-radius);
-        background: var(--card-bg);
-        color: var(--fg);
-        font-size: 1rem;
-        transition: var(--transition);
-        outline: none;
-    }
-
-    .search-input:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px var(--accent-light);
-    }
-
-    .search-icon {
-        position: absolute;
-        left: 1rem;
-        top: 50%;
-        transform: translateY(-50%);
-        color: var(--fg-secondary);
-        pointer-events: none;
-    }
-
-    .search-clear {
-        position: absolute;
-        right: 1rem;
-        top: 50%;
-        transform: translateY(-50%);
-        color: var(--fg-secondary);
-        cursor: pointer;
-        opacity: 0;
-        transition: var(--transition);
-        display: none;
-    }
-
-    .search-clear.visible {
-        opacity: 1;
-        display: block;
-    }
-
-    .search-clear:hover {
-        color: var(--accent);
-    }
-
-    .search-suggestions {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-top: none;
-        border-radius: 0 0 var(--border-radius) var(--border-radius);
-        box-shadow: 0 4px 12px var(--shadow-lg);
-        max-height: 300px;
-        overflow-y: auto;
-        z-index: 100;
-        display: none;
-        margin-top: 4px;
-    }
-
-    .search-suggestions.visible {
-        display: block;
-    }
-
-    .search-suggestion {
-        padding: 0.8rem 1rem;
-        cursor: pointer;
-        transition: var(--transition);
-        border-bottom: 1px solid var(--card-border);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .search-suggestion:last-child {
-        border-bottom: none;
-    }
-
-    .search-suggestion:hover,
-    .search-suggestion.highlighted {
-        background: var(--bg-secondary);
-    }
-
-    .suggestion-name {
-        font-weight: 600;
-        color: var(--fg);
-    }
-
-    .suggestion-info {
-        font-size: 0.8rem;
-        color: var(--fg-secondary);
-        margin-top: 0.2rem;
-    }
-
-    /* Flash Messages */
-    .flash-container {
-        margin-bottom: 2rem;
-    }
-
-    .alert {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-left: 4px solid var(--accent);
-        border-radius: var(--border-radius);
-        padding: 1rem 1.5rem;
-        margin-bottom: 1rem;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 3rem;
         box-shadow: 0 2px 8px var(--shadow);
-        transition: var(--transition);
+    }
+
+    .controls-header {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+        color: var(--fg);
         display: flex;
         align-items: center;
         gap: 0.75rem;
     }
 
-    .alert-success {
-        border-left-color: var(--success, #10b981);
-    }
-
-    .alert-danger {
-        border-left-color: var(--danger, #ef4444);
-    }
-
-    /* Upload Section */
-    .upload-section {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: var(--border-radius);
-        padding: 3rem 2rem;
-        margin-bottom: 3rem;
-        text-align: center;
-        box-shadow: 0 2px 8px var(--shadow);
-        transition: var(--transition);
-    }
-
-    .upload-section:hover {
-        box-shadow: 0 8px 16px var(--shadow-lg);
-    }
-
-    .upload-icon {
-        font-size: 3rem;
-        color: var(--accent);
+    .view-toggle {
+        display: flex;
+        gap: 0.75rem;
         margin-bottom: 1.5rem;
-        opacity: 0.8;
-    }
-
-    .file-input-wrapper {
-        position: relative;
-        display: inline-block;
-        margin-bottom: 2rem;
-        width: 100%;
-        max-width: 500px;
-    }
-
-    .file-input {
-        position: absolute;
-        opacity: 0;
-        width: 100%;
-        height: 100%;
-        cursor: pointer;
-        z-index: 2;
-    }
-
-    .file-input-display {
-        border: 2px dashed var(--card-border);
-        border-radius: var(--border-radius);
-        padding: 2rem;
-        background: var(--bg-secondary);
-        transition: var(--transition);
-        cursor: pointer;
-        position: relative;
-    }
-
-    .file-input-display:hover,
-    .file-input-display.drag-over {
-        border-color: var(--accent);
-        background: var(--accent-light);
-    }
-
-    /* Dashboard Header */
-    .dashboard-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
         flex-wrap: wrap;
-        gap: 1rem;
-        border-bottom: 2px solid var(--card-border);
-        padding-bottom: 1rem;
     }
 
-    .dashboard-title {
-        font-size: 1.8rem;
-        font-weight: 700;
-        margin: 0;
+    .view-btn {
+        padding: 0.875rem 1.75rem;
+        border: 2px solid var(--card-border);
+        border-radius: 12px;
+        background: var(--card-bg);
         color: var(--fg);
-    }
-
-    .action-buttons {
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.95rem;
         display: flex;
+        align-items: center;
         gap: 0.5rem;
     }
 
+    .view-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-light);
+        transform: translateY(-2px);
+    }
+
+    .view-btn.active {
+        background: var(--gradient);
+        color: white;
+        border-color: var(--accent);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .tournament-selector-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .tournament-selector-wrapper label {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--fg-secondary);
+    }
+
+    .tournament-select {
+        padding: 0.875rem 1.25rem;
+        border: 2px solid var(--card-border);
+        border-radius: 12px;
+        background: var(--card-bg);
+        color: var(--fg);
+        font-size: 0.95rem;
+        font-family: inherit;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .tournament-select:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
     /* Leaderboard Grid */
+    .leaderboard-section {
+        margin-bottom: 4rem;
+    }
+
+    .section-title {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 2rem;
+        color: var(--fg);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
     .leaderboard-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 4rem;
+        gap: 1.75rem;
     }
 
     .leaderboard-card {
         background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: var(--border-radius);
-        padding: 1.5rem;
+        border: 2px solid var(--card-border);
+        border-radius: 16px;
+        padding: 2rem;
         box-shadow: 0 2px 8px var(--shadow);
-        transition: var(--transition);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
         overflow: hidden;
-    }
-
-    .leaderboard-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 24px var(--shadow-lg);
     }
 
     .leaderboard-card::before {
@@ -256,6 +137,12 @@
         opacity: 0.8;
     }
 
+    .leaderboard-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 12px 24px var(--shadow-lg);
+        border-color: var(--accent);
+    }
+
     .leaderboard-header {
         display: flex;
         align-items: center;
@@ -266,8 +153,7 @@
     }
 
     .leaderboard-icon {
-        color: var(--accent);
-        font-size: 1.25rem;
+        font-size: 1.5rem;
     }
 
     .leaderboard-title {
@@ -276,51 +162,82 @@
         margin: 0;
     }
 
+    .leaderboard-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
     .leaderboard-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.75rem 0.5rem;
-        font-size: 0.9rem;
-        border-bottom: 1px solid var(--bg-secondary);
-        transition: var(--transition);
-        border-radius: 4px;
+        padding: 0.75rem 1rem;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        transition: all 0.3s ease;
     }
 
     .leaderboard-item:hover {
-        background: var(--bg-secondary);
-        padding-left: 1rem;
-        padding-right: 1rem;
+        background: var(--accent-light);
+        transform: translateX(4px);
+    }
+
+    .player-info {
+        display: flex;
+        flex-direction: column;
     }
 
     .player-name {
-        font-weight: 500;
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: var(--fg);
+    }
+
+    .player-team {
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+        margin-top: 0.15rem;
     }
 
     .stat-value {
         font-weight: 700;
         font-family: 'JetBrains Mono', monospace;
         color: var(--accent);
+        font-size: 1.1rem;
     }
 
-    /* Tabs & Tables */
-    .stats-section {
+    /* DetailedStats Section */
+    .detailed-stats {
         background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: var(--border-radius);
-        padding: 2rem;
+        border: 2px solid var(--card-border);
+        border-radius: 16px;
+        padding: 2.5rem;
         box-shadow: 0 2px 8px var(--shadow);
-        margin-bottom: 3rem;
     }
 
-    .tabs {
+    /* Tabs */
+    .stats-tabs {
         display: flex;
         border-bottom: 2px solid var(--card-border);
         margin-bottom: 2rem;
         overflow-x: auto;
+        gap: 0.5rem;
     }
 
-    .tab-button {
+    .stats-tabs::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .stats-tabs::-webkit-scrollbar-thumb {
+        background: var(--accent);
+        border-radius: 2px;
+    }
+
+    .tab-btn {
         padding: 1rem 2rem;
         cursor: pointer;
         background: none;
@@ -329,267 +246,394 @@
         font-weight: 600;
         color: var(--fg-secondary);
         border-bottom: 3px solid transparent;
-        margin-bottom: -2px;
-        transition: var(--transition);
+        transition: all 0.3s ease;
         white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
 
-    .tab-button.active {
+    .tab-btn.active {
         color: var(--accent);
         border-bottom-color: var(--accent);
     }
 
-    .tab-button:hover {
+    .tab-btn:hover {
         color: var(--accent);
-        background: var(--bg-secondary);
+        background: var(--accent-light);
     }
 
-    .tab-content {
+    .tab-panel {
         display: none;
     }
 
-    .tab-content.active {
+    .tab-panel.active {
         display: block;
     }
 
-    /* Filters */
-    .filter-controls {
+    /* Download Controls */
+    .export-controls {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
+        gap: 0.75rem;
         margin-bottom: 1.5rem;
+        justify-content: flex-end;
         flex-wrap: wrap;
-        gap: 1rem;
-        padding: 1rem;
-        background: var(--bg-secondary);
-        border-radius: var(--border-radius);
-        border: 1px solid var(--card-border);
     }
 
-    .filter-group {
+    .btn-export {
+        padding: 0.75rem 1.5rem;
+        background: var(--gradient);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
         display: flex;
         align-items: center;
-        gap: 1rem;
-        flex: 1;
-    }
-
-    .team-filter {
-        padding: 0.5rem 1rem;
-        border: 1px solid var(--card-border);
-        border-radius: 6px;
-        background: var(--card-bg);
-        color: var(--fg);
-        min-width: 200px;
-    }
-
-    .table-container {
-        overflow-x: auto;
-        border-radius: var(--border-radius);
-        border: 1px solid var(--card-border);
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
+        gap: 0.5rem;
         font-size: 0.9rem;
     }
 
-    th,
-    td {
-        padding: 1rem;
-        text-align: left;
-        border-bottom: 1px solid var(--card-border);
-        white-space: nowrap;
+    .btn-export:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
     }
 
-    thead {
+    /* Table */
+    .table-wrapper {
+        overflow-x: auto;
+        border-radius: 12px;
+        border: 2px solid var(--card-border);
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
+    .table-wrapper::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .table-wrapper::-webkit-scrollbar-thumb {
+        background: var(--accent);
+        border-radius: 4px;
+    }
+
+    .table-wrapper::-webkit-scrollbar-track {
         background: var(--bg-secondary);
     }
 
-    th {
+    .stats-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+    }
+
+    .stats-table th {
+        background: var(--bg-secondary);
+        padding: 1rem 0.75rem;
         font-weight: 600;
-        cursor: pointer;
-        user-select: none;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        text-align: left;
+        white-space: nowrap;
+        border-bottom: 2px solid var(--card-border);
+        color: var(--fg);
     }
 
-    th:hover {
-        background: var(--card-border);
+    .stats-table td {
+        padding: 0.875rem 0.75rem;
+        border-bottom: 1px solid var(--card-border);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85rem;
     }
 
-    /* Highlighter */
-    .table-row-highlighted {
-        background: var(--accent-light) !important;
-        border-left: 3px solid var(--accent);
+    .stats-table tbody tr {
+        transition: all 0.2s ease;
     }
 
-    .table-row-hidden {
-        display: none !important;
+    .stats-table tbody tr:hover {
+        background: var(--accent-light);
+    }
+
+    /* Player Name Column */
+    .stats-table td:first-child {
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 6rem 2rem;
+    }
+
+    .empty-icon {
+        font-size: 5rem;
+        color: var(--fg-secondary);
+        margin-bottom: 2rem;
+        opacity: 0.3;
+    }
+
+    .empty-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        color: var(--fg);
+    }
+
+    .empty-subtitle {
+        color: var(--fg-secondary);
+        margin-bottom: 2.5rem;
+        font-size: 1.1rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .stats-controls {
+            padding: 1.5rem;
+        }
+
+        .view-toggle {
+            flex-direction: column;
+        }
+
+        .view-btn {
+            justify-content: center;
+        }
+
+        .leaderboard-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .detailed-stats {
+            padding: 1.5rem;
+        }
+
+        .stats-table {
+            font-size: 0.75rem;
+        }
+
+        .stats-table th,
+        .stats-table td {
+            padding: 0.5rem 0.4rem;
+        }
+
+        .export-controls {
+            flex-direction: column;
+        }
+
+        .btn-export {
+            width: 100%;
+            justify-content: center;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Removed local .main-content wrapper as layout provides .main-container -->
 
+<!-- Hero Section -->
 <div class="hero-section">
-    <h1 class="hero-title">Statistics Hub</h1>
-    <p class="hero-subtitle">Analyze tournament performance, player records, and match insights.</p>
+    <div class="cricket-ball"></div>
+    <div class="stumps-left"></div>
+    <div class="stumps-right"></div>
 
-    <!-- Moved Search Bar Here -->
-    <div class="stats-search-container">
-        <div class="search-container">
-            <i class="fa-solid fa-magnifying-glass search-icon"></i>
-            <input type="text" id="global-search-input" class="search-input" placeholder="Search for a player...">
-            <i class="fa-solid fa-xmark search-clear" id="search-clear"></i>
-            <div class="search-suggestions" id="search-suggestions"></div>
-        </div>
-    </div>
+    <span class="hero-pretitle">Real-Time Analytics</span>
+    <h1 class="hero-title">📊 Statistics Hub</h1>
+    <p class="hero-subtitle">Comprehensive cricket statistics and leaderboards powered by your match data</p>
 </div>
 
-<!-- Flash Messages -->
-{% with messages = get_flashed_messages(with_categories=true) %}
-{% if messages %}
-<div class="flash-container">
-    {% for category, message in messages %}
-    <div class="alert alert-{{ category }}">
-        <i class="fas fa-info-circle"></i> {{ message }}
+<!-- Stats Controls -->
+<div class="stats-controls">
+    <div class="controls-header">
+        <i class="fas fa-sliders-h"></i>
+        View Options
     </div>
-    {% endfor %}
-</div>
-{% endif %}
-{% endwith %}
 
-<!-- File Upload Section -->
-<div class="upload-section">
-    <div class="upload-icon">
-        <i class="fa-solid fa-cloud-arrow-up"></i>
-    </div>
-    <h2 class="upload-title">Import Stats</h2>
-    <p class="upload-subtitle">Drag and drop CSV files here or click to browse</p>
-
-    <form action="{{ url_for('upload_stats') }}" method="post" enctype="multipart/form-data">
-        <input type="hidden" name="tournament_id" value="{{ selected_tid }}">
-        <div class="file-input-wrapper">
-            <input type="file" name="stats_files" id="stats-files" class="file-input" multiple accept=".csv" required>
-            <div class="file-input-display" id="file-display">
-                <span class="btn-secondary">Choose Files</span>
-            </div>
-        </div>
-        <button type="submit" class="btn-primary">
-            <i class="fa-solid fa-upload"></i> Upload & Process
+    <div class="view-toggle">
+        <button class="view-btn {% if view_type == 'overall' or not view_type %}active{% endif %}"
+            onclick="switchView('overall')">
+            <i class="fas fa-globe"></i>
+            Overall Statistics
         </button>
-    </form>
-</div>
-
-{% if has_stats %}
-
-<!-- Dashboard Overview -->
-<div class="dashboard-header">
-    <h2 class="dashboard-title">Tournament Overview</h2>
-    <div class="action-buttons">
-        <a href="#" class="btn-secondary"><i class="fa-solid fa-download"></i> Export All</a>
-        <!-- Add more actions if needed -->
+        <button class="view-btn {% if view_type == 'tournament' %}active{% endif %}" onclick="switchView('tournament')">
+            <i class="fas fa-trophy"></i>
+            Tournament Stats
+        </button>
     </div>
+
+    {% if view_type == 'tournament' or tournaments %}
+    <div class="tournament-selector-wrapper" id="tournament-selector"
+        style="{% if view_type != 'tournament' %}display:none;{% endif %}">
+        <label for="tournament-select">
+            <i class="fas fa-filter"></i> Select Tournament
+        </label>
+        <select id="tournament-select" class="tournament-select" onchange="selectTournament(this.value)">
+            <option value="">Choose a tournament...</option>
+            {% for t in tournaments %}
+            <option value="{{ t.id }}" {% if tournament_id==t.id %}selected{% endif %}>
+                {{ t.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
 </div>
+
+{% if not has_stats %}
+<!-- Empty State -->
+<div class="empty-state">
+    <div class="empty-icon">
+        <i class="fas fa-chart-line"></i>
+    </div>
+    <h2 class="empty-title">No Statistics Available</h2>
+    <p class="empty-subtitle">
+        {% if view_type == 'tournament' and not tournament_id %}
+        Please select a tournament to view statistics.
+        {% elif view_type == 'tournament' %}
+        This tournament doesn't have any match data yet. Simulate some matches to see statistics!
+        {% else %}
+        Start by simulating matches or creating tournaments to generate statistics.
+        {% endif %}
+    </p>
+    <a href="{{ url_for('home') }}" class="btn-primary">
+        <i class="fas fa-home"></i> Go to Dashboard
+    </a>
+</div>
+
+{% else %}
 
 <!-- Leaderboards -->
-<div class="leaderboard-grid">
-    <!-- Orange Cap (Highest Rounds) -->
-    <div class="leaderboard-card">
-        <div class="leaderboard-header">
-            <i class="fa-solid fa-trophy leaderboard-icon" style="color: #f97316;"></i>
-            <h3 class="leaderboard-title">Top Run Scorers</h3>
-        </div>
-        <ul class="leaderboard-list">
-            {% for p in leaderboards.most_runs %}
-            <li class="leaderboard-item">
-                <div class="player-info">
-                    <span class="player-name">{{ p.player }}</span>
-                    <span class="player-team" style="font-size: 0.75rem; color: var(--fg-secondary);">{{ p.team
-                        }}</span>
-                </div>
-                <span class="stat-value">{{ p.runs }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
+{% if leaderboards and (leaderboards.most_runs or leaderboards.most_wickets or leaderboards.highest_sr or
+leaderboards.best_average) %}
+<section class="leaderboard-section">
+    <h2 class="section-title">
+        <i class="fas fa-award"></i>
+        Top Performers
+    </h2>
 
-    <!-- Purple Cap (Highest Wickets) -->
-    <div class="leaderboard-card">
-        <div class="leaderboard-header">
-            <i class="fa-solid fa-medal leaderboard-icon" style="color: #8b5cf6;"></i>
-            <h3 class="leaderboard-title">Top Wicket Takers</h3>
+    <div class="leaderboard-grid">
+        {% if leaderboards.most_runs %}
+        <div class="leaderboard-card">
+            <div class="leaderboard-header">
+                <i class="fa-solid fa-trophy leaderboard-icon" style="color: #f97316;"></i>
+                <h3 class="leaderboard-title">Top Run Scorers</h3>
+            </div>
+            <ul class="leaderboard-list">
+                {% for p in leaderboards.most_runs %}
+                <li class="leaderboard-item">
+                    <div class="player-info">
+                        <span class="player-name">{{ p.player }}</span>
+                        <span class="player-team">{{ p.team }}</span>
+                    </div>
+                    <span class="stat-value">{{ p.runs }}</span>
+                </li>
+                {% endfor %}
+            </ul>
         </div>
-        <ul class="leaderboard-list">
-            {% for p in leaderboards.most_wickets %}
-            <li class="leaderboard-item">
-                <div class="player-info">
-                    <span class="player-name">{{ p.player }}</span>
-                    <span class="player-team" style="font-size: 0.75rem; color: var(--fg-secondary);">{{ p.team
-                        }}</span>
-                </div>
-                <span class="stat-value">{{ p.wickets }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
+        {% endif %}
 
-    <!-- Highest Scores -->
-    <div class="leaderboard-card">
-        <div class="leaderboard-header">
-            <i class="fa-solid fa-fire leaderboard-icon" style="color: #ef4444;"></i>
-            <h3 class="leaderboard-title">Highest Strike Rates</h3>
+        {% if leaderboards.most_wickets %}
+        <div class="leaderboard-card">
+            <div class="leaderboard-header">
+                <i class="fa-solid fa-medal leaderboard-icon" style="color: #8b5cf6;"></i>
+                <h3 class="leaderboard-title">Top Wicket Takers</h3>
+            </div>
+            <ul class="leaderboard-list">
+                {% for p in leaderboards.most_wickets %}
+                <li class="leaderboard-item">
+                    <div class="player-info">
+                        <span class="player-name">{{ p.player }}</span>
+                        <span class="player-team">{{ p.team }}</span>
+                    </div>
+                    <span class="stat-value">{{ p.wickets }}</span>
+                </li>
+                {% endfor %}
+            </ul>
         </div>
-        <ul class="leaderboard-list">
-            {% for p in leaderboards.highest_sr %}
-            <li class="leaderboard-item">
-                <div class="player-info">
-                    <span class="player-name">{{ p.player }}</span>
-                    <span class="player-team" style="font-size: 0.75rem; color: var(--fg-secondary);">{{ p.team
-                        }}</span>
-                </div>
-                <span class="stat-value">{{ p.sr }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
-</div>
+        {% endif %}
 
-<!-- Detailed Stats Tables -->
-<section class="stats-section">
-    <div class="tabs">
-        <button class="tab-button active" data-tab="batting">Batting Records</button>
-        <button class="tab-button" data-tab="bowling">Bowling Records</button>
-        <button class="tab-button" data-tab="fielding">Fielding Records</button>
+        {% if leaderboards.highest_sr %}
+        <div class="leaderboard-card">
+            <div class="leaderboard-header">
+                <i class="fa-solid fa-fire leaderboard-icon" style="color: #ef4444;"></i>
+                <h3 class="leaderboard-title">Highest Strike Rates</h3>
+            </div>
+            <ul class="leaderboard-list">
+                {% for p in leaderboards.highest_sr %}
+                <li class="leaderboard-item">
+                    <div class="player-info">
+                        <span class="player-name">{{ p.player }}</span>
+                        <span class="player-team">{{ p.team }}</span>
+                    </div>
+                    <span class="stat-value">{{ p.sr }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if leaderboards.best_average %}
+        <div class="leaderboard-card">
+            <div class="leaderboard-header">
+                <i class="fa-solid fa-star leaderboard-icon" style="color: #10b981;"></i>
+                <h3 class="leaderboard-title">Best Averages</h3>
+            </div>
+            <ul class="leaderboard-list">
+                {% for p in leaderboards.best_average %}
+                <li class="leaderboard-item">
+                    <div class="player-info">
+                        <span class="player-name">{{ p.player }}</span>
+                        <span class="player-team">{{ p.team }}</span>
+                    </div>
+                    <span class="stat-value">{{ p.average }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+<!-- Detailed Statistics -->
+<section class="detailed-stats">
+    <h2 class="section-title">
+        <i class="fas fa-table"></i>
+        Detailed Statistics
+    </h2>
+
+    <div class="stats-tabs">
+        <button class="tab-btn active" data-tab="batting">
+            <i class="fas fa-baseball-ball"></i> Batting
+        </button>
+        <button class="tab-btn" data-tab="bowling">
+            <i class="fas fa-bowling-ball"></i> Bowling
+        </button>
+        <button class="tab-btn" data-tab="fielding">
+            <i class="fas fa-hand-paper"></i> Fielding
+        </button>
     </div>
 
     <!-- Batting Table -->
-    <div id="batting" class="tab-content active">
-        <div class="filter-controls">
-            <div class="filter-group">
-                <label class="filter-label">Filter Team:</label>
-                <select id="batting-team-filter" class="team-filter">
-                    <option value="">All Teams</option>
-                </select>
-            </div>
-            <div class="filter-actions">
-                <span id="batting-filter-info" style="font-size: 0.85rem; color: var(--fg-secondary);"></span>
-                <button id="batting-clear-filter" class="btn-secondary"
-                    style="padding: 0.5rem 1rem; font-size: 0.85rem;">Clear</button>
-                <button id="batting-download-csv" class="btn-secondary"
-                    style="padding: 0.5rem 1rem; font-size: 0.85rem;"><i class="fa-solid fa-file-csv"></i> CSV</button>
-                <button id="batting-download-txt" class="btn-secondary"
-                    style="padding: 0.5rem 1rem; font-size: 0.85rem;"><i class="fa-solid fa-file-lines"></i>
-                    TXT</button>
-            </div>
+    <div id="batting" class="tab-panel active">
+        {% if batting_stats %}
+        <div class="export-controls">
+            <button class="btn-export" onclick="downloadStats('batting', 'csv')">
+                <i class="fas fa-file-csv"></i> CSV
+            </button>
+            <button class="btn-export" onclick="downloadStats('batting', 'txt')">
+                <i class="fas fa-file-alt"></i> TXT
+            </button>
         </div>
-        <div class="table-container">
-            <table id="batting-table">
+        <div class="table-wrapper">
+            <table class="stats-table">
                 <thead>
                     <tr>
                         {% for header in batting_headers %}
-                        <th data-column="{{ header|lower }}">{{ header }} <i class="fa-solid fa-sort sort-icon"></i>
-                        </th>
+                        <th>{{ header }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
@@ -602,88 +646,98 @@
                         <td>{{ row.innings }}</td>
                         <td>{{ row.runs }}</td>
                         <td>{{ row.balls }}</td>
-                        <td>{{ row.average }}</td>
-                        <td>{{ row.strike_rate }}</td>
-                        <td>{{ row.sixes }}</td>
-                        <td>{{ row.fours }}</td>
                         <td>{{ row.not_outs }}</td>
+                        <td>{{ row.strike_rate }}</td>
+                        <td>{{ row.average }}</td>
+                        <td>{{ row.zeros }}</td>
+                        <td>{{ row.ones }}</td>
+                        <td>{{ row.twos }}</td>
+                        <td>{{ row.threes }}</td>
+                        <td>{{ row.fours }}</td>
+                        <td>{{ row.sixes }}</td>
+                        <td>{{ row.thirties }}</td>
+                        <td>{{ row.fifties }}</td>
+                        <td>{{ row.hundreds }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <p style="text-align: center; padding: 3rem; color: var(--fg-secondary);">
+            <i class="fas fa-info-circle"></i> No batting data available
+        </p>
+        {% endif %}
     </div>
 
     <!-- Bowling Table -->
-    <div id="bowling" class="tab-content">
-        <div class="filter-controls">
-            <div class="filter-group">
-                <label class="filter-label">Filter Team:</label>
-                <select id="bowling-team-filter" class="team-filter">
-                    <option value="">All Teams</option>
-                </select>
-            </div>
-            <div class="filter-actions">
-                <span id="bowling-filter-info" style="font-size: 0.85rem; color: var(--fg-secondary);"></span>
-                <button id="bowling-clear-filter" class="btn-secondary"
-                    style="padding: 0.5rem 1rem; font-size: 0.85rem;">Clear</button>
-                <button id="bowling-download-csv" class="btn-secondary"
-                    style="padding: 0.5rem 1rem; font-size: 0.85rem;"><i class="fa-solid fa-file-csv"></i> CSV</button>
-                <button id="bowling-download-txt" class="btn-secondary"
-                    style="padding: 0.5rem 1rem; font-size: 0.85rem;"><i class="fa-solid fa-file-lines"></i>
-                    TXT</button>
-            </div>
+    <div id="bowling" class="tab-panel">
+        {% if bowling_stats %}
+        <div class="export-controls">
+            <button class="btn-export" onclick="downloadStats('bowling', 'csv')">
+                <i class="fas fa-file-csv"></i> CSV
+            </button>
+            <button class="btn-export" onclick="downloadStats('bowling', 'txt')">
+                <i class="fas fa-file-alt"></i> TXT
+            </button>
         </div>
-        <div class="table-container">
-            <table id="bowling-table">
+        <div class="table-wrapper">
+            <table class="stats-table">
                 <thead>
                     <tr>
                         {% for header in bowling_headers %}
-                        <th data-column="{{ header|lower }}">{{ header }} <i class="fa-solid fa-sort sort-icon"></i>
-                        </th>
+                        <th>{{ header }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in bowling_stats %}
                     <tr>
-                        <td>{{ row.player }}</td>
                         <td>{{ row.team }}</td>
+                        <td>{{ row.player }}</td>
                         <td>{{ row.matches }}</td>
                         <td>{{ row.innings }}</td>
-                        <td>{{ row.wickets }}</td>
                         <td>{{ row.overs }}</td>
-                        <td>{{ row.economy }}</td>
+                        <td>{{ row.runs }}</td>
+                        <td>{{ row.wickets }}</td>
                         <td>{{ row.average }}</td>
-                        <td>{{ row.best }}</td>
+                        <td>{{ row.economy }}</td>
+                        <td>{{ row.dots }}</td>
+                        <td>{{ row.bowled }}</td>
+                        <td>{{ row.lbw }}</td>
+                        <td>{{ row.byes }}</td>
+                        <td>{{ row.leg_byes }}</td>
+                        <td>{{ row.wides }}</td>
+                        <td>{{ row.no_balls }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <p style="text-align: center; padding: 3rem; color: var(--fg-secondary);">
+            <i class="fas fa-info-circle"></i> No bowling data available
+        </p>
+        {% endif %}
     </div>
 
     <!-- Fielding Table -->
-    <div id="fielding" class="tab-content">
-        <div class="filter-controls">
-            <div class="filter-group">
-                <label class="filter-label">Filter Team:</label>
-                <select id="fielding-team-filter" class="team-filter">
-                    <option value="">All Teams</option>
-                </select>
-            </div>
-            <div class="filter-actions">
-                <button id="fielding-clear-filter" class="btn-secondary"
-                    style="padding: 0.5rem 1rem; font-size: 0.85rem;">Clear</button>
-            </div>
+    <div id="fielding" class="tab-panel">
+        {% if fielding_stats %}
+        <div class="export-controls">
+            <button class="btn-export" onclick="downloadStats('fielding', 'csv')">
+                <i class="fas fa-file-csv"></i> CSV
+            </button>
+            <button class="btn-export" onclick="downloadStats('fielding', 'txt')">
+                <i class="fas fa-file-alt"></i> TXT
+            </button>
         </div>
-        <div class="table-container">
-            <table id="fielding-table">
+        <div class="table-wrapper">
+            <table class="stats-table">
                 <thead>
                     <tr>
                         {% for header in fielding_headers %}
-                        <th data-column="{{ header|lower }}">{{ header }} <i class="fa-solid fa-sort sort-icon"></i>
-                        </th>
+                        <th>{{ header }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
@@ -693,15 +747,18 @@
                         <td>{{ row.player }}</td>
                         <td>{{ row.team }}</td>
                         <td>{{ row.matches }}</td>
-                        <td>{{ row.innings }}</td>
                         <td>{{ row.catches }}</td>
                         <td>{{ row.run_outs }}</td>
-                        <td>{{ row.stumpings }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <p style="text-align: center; padding: 3rem; color: var(--fg-secondary);">
+            <i class="fas fa-info-circle"></i> No fielding data available yet
+        </p>
+        {% endif %}
     </div>
 </section>
 
@@ -711,245 +768,48 @@
 
 {% block extra_js %}
 <script>
-    // Global player search variables
-    let allPlayers = [];
-    let currentSearchTimeout = null;
+    // Tab Switching
+    document.querySelectorAll('.tab-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            // Remove active from all
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
 
-    document.addEventListener('DOMContentLoaded', function () {
-        // Auto-dismiss flash messages
-        setTimeout(() => {
-            document.querySelectorAll('.alert').forEach(el => {
-                el.style.opacity = '0';
-                setTimeout(() => el.remove(), 300);
-            });
-        }, 4000);
-
-        // Tab Switching
-        const tabs = document.querySelector('.tabs');
-        if (tabs) {
-            tabs.addEventListener('click', (e) => {
-                const button = e.target.closest('.tab-button');
-                if (!button) return;
-
-                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-                button.classList.add('active');
-
-                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-                document.getElementById(button.dataset.tab).classList.add('active');
-            });
-        }
-
-        // Initialize Player Search
-        initializePlayerSearch();
-
-        // Initialize Team Filters
-        initializeTeamFilters();
-
-        // Initialize Upload Drag & Drop
-        initializeUpload();
+            // Activate clicked
+            button.classList.add('active');
+            const tabId = button.getAttribute('data-tab');
+            document.getElementById(tabId).classList.add('active');
+        });
     });
 
-    // --- Player Search Logic ---
-    function initializePlayerSearch() {
-        const searchInput = document.getElementById('global-search-input');
-        const searchClear = document.getElementById('search-clear');
-
-        if (!searchInput) return;
-
-        // Extract players from tables
-        extractAllPlayers();
-
-        searchInput.addEventListener('input', function (e) {
-            const query = e.target.value.trim();
-            if (query.length === 0) {
-                hideSearchSuggestions();
-                searchClear.classList.remove('visible');
-                clearHighlights();
-                return;
-            }
-            searchClear.classList.add('visible');
-
-            if (currentSearchTimeout) clearTimeout(currentSearchTimeout);
-            currentSearchTimeout = setTimeout(() => performPlayerSearch(query), 200);
-        });
-
-        searchClear.addEventListener('click', () => {
-            searchInput.value = '';
-            searchClear.classList.remove('visible');
-            hideSearchSuggestions();
-            clearHighlights();
-        });
-
-        // Close on clean
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.search-container')) hideSearchSuggestions();
-        });
-    }
-
-    function extractAllPlayers() {
-        allPlayers = [];
-        const playerSet = new Set();
-
-        ['batting-table', 'bowling-table', 'fielding-table'].forEach(tableId => {
-            const table = document.getElementById(tableId);
-            if (!table) return;
-
-            const rows = table.querySelectorAll('tbody tr');
-            // Assuming col 0 is Player, col 1 is Team. Adjust if headers change.
-            rows.forEach(row => {
-                const name = row.cells[0]?.textContent.trim();
-                const team = row.cells[1]?.textContent.trim();
-                if (name && !playerSet.has(name + '|' + team)) {
-                    playerSet.add(name + '|' + team);
-                    allPlayers.push({ name, team });
-                }
-            });
-        });
-    }
-
-    function performPlayerSearch(query) {
-        const queryLower = query.toLowerCase();
-        const matches = allPlayers.filter(p =>
-            p.name.toLowerCase().includes(queryLower) ||
-            p.team.toLowerCase().includes(queryLower)
-        ).slice(0, 10);
-
-        displaySearchSuggestions(matches);
-    }
-
-    function displaySearchSuggestions(matches) {
-        const container = document.getElementById('search-suggestions');
-        if (matches.length === 0) {
-            container.innerHTML = '<div class="search-suggestion">No players found</div>';
+    // Switch View
+    function switchView(view) {
+        if (view === 'tournament') {
+            document.getElementById('tournament-selector').style.display = 'flex';
         } else {
-            container.innerHTML = matches.map(p => `
-                <div class="search-suggestion" onclick="selectPlayer('${p.name}')">
-                    <div>
-                        <div class="suggestion-name">${p.name}</div>
-                        <div class="suggestion-info">${p.team}</div>
-                    </div>
-                </div>
-            `).join('');
+            window.location.href = '/statistics?view=overall';
         }
-        container.classList.add('visible');
     }
 
-    function hideSearchSuggestions() {
-        document.getElementById('search-suggestions').classList.remove('visible');
+    // Select Tournament
+    function selectTournament(tournamentId) {
+        if (tournamentId) {
+            window.location.href = `/statistics?view=tournament&tournament_id=${tournamentId}`;
+        }
     }
 
-    function selectPlayer(name) {
-        const input = document.getElementById('global-search-input');
-        input.value = name;
-        hideSearchSuggestions();
-        highlightPlayerInTables(name);
+    // Download Stats
+    function downloadStats(statType, format) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const view = urlParams.get('view') || 'overall';
+        const tournamentId = urlParams.get('tournament_id') || '';
+
+        let downloadUrl = `/statistics/export/${statType}/${format}?view=${view}`;
+        if (tournamentId) {
+            downloadUrl += `&tournament_id=${tournamentId}`;
+        }
+
+        window.location.href = downloadUrl;
     }
-
-    function highlightPlayerInTables(name) {
-        clearHighlights();
-        const lowerName = name.toLowerCase();
-
-        document.querySelectorAll('tbody tr').forEach(row => {
-            const rowName = row.cells[0]?.textContent.trim().toLowerCase();
-            if (rowName === lowerName) {
-                row.classList.add('table-row-highlighted');
-                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        });
-    }
-
-    function clearHighlights() {
-        document.querySelectorAll('.table-row-highlighted').forEach(r => r.classList.remove('table-row-highlighted'));
-    }
-
-    // --- Team Filters & CSV Export ---
-    function initializeTeamFilters() {
-        ['batting', 'bowling', 'fielding'].forEach(type => {
-            const table = document.getElementById(`${type}-table`);
-            const select = document.getElementById(`${type}-team-filter`);
-            if (!table || !select) return;
-
-            // Populate teams
-            const teams = new Set();
-            table.querySelectorAll('tbody tr').forEach(row => {
-                const team = row.cells[1]?.textContent.trim(); // Assuming col 1 is Team
-                if (team) teams.add(team);
-            });
-
-            Array.from(teams).sort().forEach(team => {
-                const opt = document.createElement('option');
-                opt.value = team;
-                opt.textContent = team;
-                select.appendChild(opt);
-            });
-
-            // Filter Change
-            select.addEventListener('change', () => {
-                const filter = select.value;
-                table.querySelectorAll('tbody tr').forEach(row => {
-                    const rowTeam = row.cells[1]?.textContent.trim();
-                    if (!filter || rowTeam === filter) row.style.display = '';
-                    else row.style.display = 'none';
-                });
-
-                // Update info
-                const visible = table.querySelectorAll('tbody tr[style=""]').length;
-                const info = document.getElementById(`${type}-filter-info`);
-                if (info) info.textContent = filter ? `Showing ${visible} players` : '';
-            });
-
-            // Clear Button
-            document.getElementById(`${type}-clear-filter`)?.addEventListener('click', () => {
-                select.value = '';
-                select.dispatchEvent(new Event('change'));
-            });
-
-            // CSV/TXT Download (Simple implementation)
-            document.getElementById(`${type}-download-csv`)?.addEventListener('click', () => downloadTable(table, 'csv'));
-            document.getElementById(`${type}-download-txt`)?.addEventListener('click', () => downloadTable(table, 'txt'));
-        });
-    }
-
-    function downloadTable(table, format) {
-        // Implement simple client-side export if needed, or rely on server-side if buttons point to routes
-        // For now, these buttons are placeholders in the refactor unless logic was strictly required.
-        // The original code had complex JS export. I will leave it as 'todo' or copy the logic if essential.
-        // User asked to 'Revamp', so cleaner code is better. 
-        alert("Export feature coming soon in refined JS!");
-    }
-
-    // --- Sorting ---
-    document.querySelectorAll('th[data-column]').forEach(th => {
-        th.addEventListener('click', () => {
-            const table = th.closest('table');
-            const tbody = table.querySelector('tbody');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            const colIndex = Array.from(th.parentNode.children).indexOf(th);
-            const asc = !th.classList.contains('asc');
-
-            rows.sort((a, b) => {
-                const aVal = a.cells[colIndex].textContent.trim();
-                const bVal = b.cells[colIndex].textContent.trim();
-                return asc ? aVal.localeCompare(bVal, undefined, { numeric: true }) : bVal.localeCompare(aVal, undefined, { numeric: true });
-            });
-
-            rows.forEach(row => tbody.appendChild(row));
-            table.querySelectorAll('th').forEach(t => t.classList.remove('asc', 'desc'));
-            th.classList.add(asc ? 'asc' : 'desc');
-        });
-    });
-
-    // --- File Upload ---
-    function initializeUpload() {
-        const display = document.getElementById('file-display');
-        const input = document.getElementById('stats-files');
-        if (!display || !input) return;
-
-        display.addEventListener('click', () => input.click());
-        input.addEventListener('change', () => {
-            display.innerHTML = `<span class="btn-secondary">${input.files.length} Files Selected</span>`;
-        });
-    }
-
 </script>
 {% endblock %}
