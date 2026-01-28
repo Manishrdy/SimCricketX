@@ -582,7 +582,13 @@ def create_app():
         )
 
         records = q.all()
+        app.logger.info(f"STATS DEBUG: User {user_id} Tournament {tournament_id} - Found {len(records)} records")
         if not records:
+            try:
+                total = MatchScorecard.query.join(DBMatch).filter(DBMatch.tournament_id == tournament_id).count()
+                app.logger.info(f"STATS DEBUG: Total scorecards for tournament {tournament_id} (ignoring user filter): {total}")
+            except Exception as e:
+                app.logger.error(f"STATS DEBUG: Error checking total: {e}")
             return [], [], [], {}
 
         agg = {}
