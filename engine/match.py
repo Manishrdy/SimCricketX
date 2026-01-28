@@ -95,7 +95,12 @@ class Match:
         self.first_innings_batting_stats = {}   # First batting team's batting stats
         self.first_innings_bowling_stats = {}   # First bowling team's bowling stats  
         self.second_innings_batting_stats = {}  # Second batting team's batting stats
+        self.second_innings_batting_stats = {}  # Second batting team's batting stats
         self.second_innings_bowling_stats = {}  # Second bowling team's bowling stats
+        
+        # Partnership storage
+        self.first_innings_partnerships = []    # List of partnership dicts for 1st innings
+        self.second_innings_partnerships = []   # List of partnership dicts for 2nd innings
         
         # Track which team batted first for correct CSV naming
         self.first_batting_team_name = ""  # e.g., "CSK" 
@@ -110,9 +115,15 @@ class Match:
         # Initialize pressure engine
         self.pressure_engine = PressureEngine()
 
-        # Track partnership for pressure calculation
+        # Track partnership for pressure calculation AND archiving
         self.current_partnership_balls = 0
         self.current_partnership_runs = 0
+        self.current_partnership_start_over = 0.0
+        self.current_partnership_contributions = {
+            'batsman1': {'name': '', 'runs': 0, 'balls': 0},
+            'batsman2': {'name': '', 'runs': 0, 'balls': 0}
+        }
+        
         self.recent_wickets_count = 0  # Track wickets in last few balls
         self.recent_wickets_tracker = []  # Track when wickets fell
 
@@ -147,16 +158,54 @@ class Match:
         return state
 
     def _update_partnership_tracking(self, outcome):
-        """Update partnership tracking for pressure calculation"""
+        """Update partnership tracking for pressure calculation (simpler version)"""
         if outcome.get('batter_out'):
-            # Partnership broken
-            self.current_partnership_balls = 0
-            self.current_partnership_runs = 0
+            # Partnership broken - handled in next_ball via _save_partnership
+            pass
         else:
             # Continue partnership
             if not outcome.get('is_extra'):
                 self.current_partnership_balls += 1
             self.current_partnership_runs += outcome.get('runs', 0)
+
+    def _save_partnership(self, wicket_type=None):
+        """Save the current partnership and reset for next wicket"""
+        partnership_data = {
+            "innings_number": self.innings,
+            "wicket_number": self.wickets + 1,
+            "batsman1_id": None,  # Will be resolved to player ID later
+            "batsman1_name": self.current_striker["name"],
+            "batsman2_id": None,
+            "batsman2_name": self.current_non_striker["name"],
+            "runs": self.current_partnership_runs,
+            "balls": self.current_partnership_balls,
+            "batsman1_contribution": self.current_partnership_contributions['batsman1']['runs'],
+            "batsman1_balls": self.current_partnership_contributions['batsman1']['balls'],
+            "batsman2_contribution": self.current_partnership_contributions['batsman2']['runs'],
+            "batsman2_balls": self.current_partnership_contributions['batsman2']['balls'],
+            "start_over": self.current_partnership_start_over,
+            "end_over": self.current_over + (self.current_ball / 6),
+        }
+        
+        if self.innings == 1:
+            self.first_innings_partnerships.append(partnership_data)
+        else:
+            self.second_innings_partnerships.append(partnership_data)
+            
+        print(f"🤝 Partnership Saved: {self.current_partnership_runs} runs off {self.current_partnership_balls} balls ({self.current_striker['name']} & {self.current_non_striker['name']})")
+        
+        # Reset tracking
+        self.current_partnership_runs = 0
+        self.current_partnership_balls = 0
+        self.current_partnership_start_over = self.current_over + (self.current_ball / 6)
+        
+        # Reset contributions - one batter stays, one goes.
+        # But for tracking simplicity, we'll reset both and accumulate fresh
+        # The surviving batter's new partnership starts from 0 runs for THIS partnership
+        self.current_partnership_contributions = {
+            'batsman1': {'name': '', 'runs': 0, 'balls': 0},
+            'batsman2': {'name': '', 'runs': 0, 'balls': 0}
+        }
 
     def _save_first_innings_stats(self):
         """Save first innings stats before resetting for second innings"""
@@ -1268,6 +1317,15 @@ class Match:
         self.over_bowler_log = {}
         # Restore any modified bowler ratings
         self._restore_bowler_ratings()
+        
+        # Reset partnership tracking
+        self.current_partnership_balls = 0
+        self.current_partnership_runs = 0
+        self.current_partnership_start_over = 0.0
+        self.current_partnership_contributions = {
+            'batsman1': {'name': '', 'runs': 0, 'balls': 0},
+            'batsman2': {'name': '', 'runs': 0, 'balls': 0}
+        }
 
     def _restore_bowler_ratings(self):
         """Restore original bowling ratings after matchup bonuses"""
@@ -2559,6 +2617,10 @@ class Match:
 
 
         if self.current_over >= self.overs or self.wickets >= 10:
+            # 🤝 SAVE UNFINISHED PARTNERSHIP (if overs completed and not all out)
+            if self.wickets < 10 and self.current_partnership_balls > 0:
+                 self._save_partnership("not_out")
+
             if self.innings == 1:
                 # 🔧 USER REQUEST: Print team stats when all out
                 if self.wickets >= 10:
@@ -2603,6 +2665,9 @@ class Match:
                         self.batting_team, self.bowling_team = self.away_xi, self.home_xi
                 # --- END FIX ---
 
+                # Capture first innings wickets before reset
+                first_innings_wickets = self.wickets
+
                 # Reset all innings-specific state
                 self.score = 0
                 self.wickets = 0
@@ -2630,7 +2695,7 @@ class Match:
                     "wickets": 0,
                     "over": 0,
                     "ball": 0,
-                    "commentary": f"End of 1st Innings: {self.first_innings_score}/{10 if self.wickets >= 10 else self.wickets}. Target: {self.target}",
+                    "commentary": f"End of 1st Innings: {self.first_innings_score}/{10 if first_innings_wickets >= 10 else first_innings_wickets}. Target: {self.target}",
                     "striker": self.current_striker["name"],
                     "non_striker": self.current_non_striker["name"],
                     "bowler": ""
@@ -2639,6 +2704,10 @@ class Match:
             else:
                 scorecard_data = self._generate_detailed_scorecard()
                 if self.score >= self.target:
+                    # 🤝 SAVE UNFINISHED PARTNERSHIP (Match Won)
+                    if self.wickets < 10:
+                        self._save_partnership("not_out")
+
                     winner_code = self.data["team_home"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_away"].split("_")[0]
                     wkts_left = 10 - self.wickets
 
@@ -2657,6 +2726,10 @@ class Match:
                     # Check for tie
                     if self.score == self.target - 1:
                         self.result = "Match Tied"
+                        
+                        # 🤝 SAVE UNFINISHED PARTNERSHIP (Match Tied)
+                        if self.wickets < 10:
+                            self._save_partnership("not_out")
                         
                         # ✅ Save main match state
                         self._save_second_innings_stats()
@@ -2714,6 +2787,11 @@ class Match:
                 }
 
         if self.current_ball == 0 and not getattr(self, "prev_delivery_was_extra", False):
+            # Initialize partnership contributions if new partnership (moved from inner block)
+            if self.current_partnership_balls == 0 and self.current_partnership_runs == 0:
+                 if self.current_partnership_contributions['batsman1']['name'] == '':
+                     self.current_partnership_contributions['batsman1']['name'] = self.current_striker['name']
+                     self.current_partnership_contributions['batsman2']['name'] = self.current_non_striker['name']
 
             # ===== 🌧️ RAIN CHECK =====
             logger.debug(f"Checking for rain...")
@@ -2724,6 +2802,8 @@ class Match:
                 logger.debug(f"RAIN COMMENTARY: {rain_result.get('commentary', 'NO COMMENTARY FOUND')}")
                 return rain_result
             # ===== END RAIN CHECK =====
+            
+
 
             self.current_bowler = self.pick_bowler()
             self.commentary.append(
@@ -2740,6 +2820,7 @@ class Match:
         # Calculate pressure and effects
         match_state = self._calculate_current_match_state()
         pressure_score = self.pressure_engine.calculate_pressure(match_state)
+
 
         # Get base pressure effects (now fair)
         pressure_effects = self.pressure_engine.get_pressure_effects(
@@ -2802,6 +2883,8 @@ class Match:
 
         # Update pressure engine with outcome
         self.pressure_engine.update_recent_events(outcome)
+        
+        # 🤝 PARTNERSHIP TRACKING UPDATE
         self._update_partnership_tracking(outcome)
 
         # ENHANCED DEBUG - Show ALL outcome details
@@ -2846,6 +2929,9 @@ class Match:
 
         if wicket:
             self.wickets += 1
+            # 🤝 SAVE PARTNERSHIP ON WICKET
+            self._save_partnership(outcome["wicket_type"])
+
             # self.bowler_stats[self.current_bowler["name"]]["wickets"] += 1
             
             wicket_type = outcome["wicket_type"]
@@ -2960,6 +3046,12 @@ class Match:
                     }
                 else:
                     # ✅ SECOND INNINGS ALL OUT - Match over
+                    
+                    # Determine winner (Bowling team won)
+                    winner_code = self.data["team_home"].split("_")[0] if self.bowling_team is self.home_xi else self.data["team_away"].split("_")[0]
+                    run_diff = self.target - self.score - 1
+                    self.result = f"{winner_code} won by {run_diff} run(s)."
+
                     self._save_second_innings_stats()
                     self._create_match_archive()
 
