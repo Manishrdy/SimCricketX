@@ -459,7 +459,7 @@
 
     <!-- STEP 1: TEAMS -->
     <div class="wizard-step active" id="step-1">
-        <h2 style="text-align:center; margin-bottom: 2rem;">Select Opponents</h2>
+        <h2 style="text-align:center; margin-bottom: 2rem;">Select Teams</h2>
         <div class="teams-grid">
             {% for team in teams %}
             <div class="team-card" data-team-color="{{ team.team_color }}" data-index="{{ loop.index0 }}">
@@ -588,9 +588,9 @@
 
     <!-- CONTROLS -->
     <div class="wizard-controls">
-        <button class="btn btn-secondary" id="back-btn" onclick="prevStep()" disabled>
+        <a href="/" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Back
-        </button>
+        </a>
         <button class="btn btn-primary" id="next-btn" onclick="nextStep()" disabled>
             Next <i class="fas fa-arrow-right"></i>
         </button>

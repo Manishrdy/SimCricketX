@@ -110,11 +110,24 @@ class Match(db.Model):
     away_team_wickets = db.Column(db.Integer)
     away_team_overs = db.Column(db.Float)
     
+    # Margin of Victory
+    margin_type = db.Column(db.String(10))  # 'runs', 'wickets', or 'tie'
+    margin_value = db.Column(db.Integer)    # Number of runs/wickets
+    
+    # Toss Information
+    toss_winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
+    toss_decision = db.Column(db.String(10))  # 'Bat' or 'Bowl'
+    
+    # Match Format
+    match_format = db.Column(db.String(20), default='T20')
+    overs_per_side = db.Column(db.Integer, default=20)
+    
     # Technical
     match_json_path = db.Column(db.String(255)) # Path to legacy full JSON
     
     # Relationships
     scorecards = relationship('MatchScorecard', backref='match', cascade="all, delete-orphan")
+    toss_winner = relationship('Team', foreign_keys=[toss_winner_team_id])
 
 class MatchScorecard(db.Model):
     """Detailed stats for a player in a specific match"""
@@ -152,6 +165,23 @@ class MatchScorecard(db.Model):
     # New fields for detailed scorecard
     wicket_taker_name = db.Column(db.String(100), nullable=True)
     fielder_name = db.Column(db.String(100), nullable=True)
+    
+    # Detailed Batting Stats
+    ones = db.Column(db.Integer, default=0)
+    twos = db.Column(db.Integer, default=0)
+    threes = db.Column(db.Integer, default=0)
+    dot_balls = db.Column(db.Integer, default=0)
+    strike_rate = db.Column(db.Float, default=0.0)
+    batting_position = db.Column(db.Integer)
+    
+    # Detailed Bowling Stats
+    dot_balls_bowled = db.Column(db.Integer, default=0)
+    wickets_bowled = db.Column(db.Integer, default=0)
+    wickets_caught = db.Column(db.Integer, default=0)
+    wickets_lbw = db.Column(db.Integer, default=0)
+    wickets_stumped = db.Column(db.Integer, default=0)
+    wickets_run_out = db.Column(db.Integer, default=0)
+    wickets_hit_wicket = db.Column(db.Integer, default=0)
 
 class Tournament(db.Model):
     """Tournament / League Container"""
@@ -183,6 +213,89 @@ class Tournament(db.Model):
     # Relationships
     participating_teams = relationship('TournamentTeam', backref='tournament', cascade="all, delete-orphan")
     fixtures = relationship('TournamentFixture', backref='tournament', cascade="all, delete-orphan")
+
+class MatchPartnership(db.Model):
+    """Batting partnership records for each innings"""
+    __tablename__ = 'match_partnerships'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=False)
+    innings_number = db.Column(db.Integer, nullable=False)   # 1 or 2
+    wicket_number = db.Column(db.Integer, nullable=False)   # 1st wicket, 2nd wicket, etc.
+    
+    # Partnership participants
+    batsman1_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
+    batsman2_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
+    
+    # Partnership statistics
+    runs = db.Column(db.Integer, default=0)
+    balls = db.Column(db.Integer, default=0)
+    batsman1_contribution = db.Column(db.Integer, default=0)
+    batsman2_contribution = db.Column(db.Integer, default=0)
+    
+    # Partnership duration
+    start_over = db.Column(db.Float)
+    end_over = db.Column(db.Float)
+    
+    # Relationships
+    batsman1 = relationship('Player', foreign_keys=[batsman1_id])
+    batsman2 = relationship('Player', foreign_keys=[batsman2_id])
+    match = relationship('Match', backref='partnerships')
+    
+    # Indexes for efficient queries
+    __table_args__ = (
+        db.Index('ix_partnership_match_innings', 'match_id', 'innings_number'),
+    )
+
+class TournamentPlayerStatsCache(db.Model):
+    """Cached player statistics for a specific tournament"""
+    __tablename__ = 'tournament_player_stats_cache'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+
+    # Batting Stats
+    matches_played = db.Column(db.Integer, default=0)
+    innings_batted = db.Column(db.Integer, default=0)
+    runs_scored = db.Column(db.Integer, default=0)
+    balls_faced = db.Column(db.Integer, default=0)
+    fours = db.Column(db.Integer, default=0)
+    sixes = db.Column(db.Integer, default=0)
+    not_outs = db.Column(db.Integer, default=0)
+    highest_score = db.Column(db.Integer, default=0)
+    fifties = db.Column(db.Integer, default=0)
+    centuries = db.Column(db.Integer, default=0)
+    batting_average = db.Column(db.Float, default=0.0)
+    batting_strike_rate = db.Column(db.Float, default=0.0)
+
+    # Bowling Stats
+    innings_bowled = db.Column(db.Integer, default=0)
+    overs_bowled = db.Column(db.Float, default=0.0)
+    runs_conceded = db.Column(db.Integer, default=0)
+    wickets_taken = db.Column(db.Integer, default=0)
+    maidens = db.Column(db.Integer, default=0)
+    best_bowling_wickets = db.Column(db.Integer, default=0)
+    best_bowling_runs = db.Column(db.Integer, default=0)
+    five_wicket_hauls = db.Column(db.Integer, default=0)
+    bowling_average = db.Column(db.Float, default=0.0)
+    bowling_economy = db.Column(db.Float, default=0.0)
+    bowling_strike_rate = db.Column(db.Float, default=0.0)
+
+    # Fielding Stats
+    catches = db.Column(db.Integer, default=0)
+    run_outs = db.Column(db.Integer, default=0)
+    stumpings = db.Column(db.Integer, default=0)
+
+    # Relationships
+    player = relationship('Player')
+    team = relationship('Team')
+
+    __table_args__ = (
+        db.UniqueConstraint('tournament_id', 'player_id', name='uq_tournament_player_cache'),
+        db.Index('ix_tournament_player_cache_tournament_id', 'tournament_id'),
+    )
 
 class TournamentTeam(db.Model):
     """Team stats within a specific tournament"""

@@ -1053,30 +1053,60 @@ class TournamentEngine:
         Returns:
             bool: True if standings were updated, False otherwise
         """
+        logger.info(
+            f"[Standings] update_standings called for match {match.id}, "
+            f"tournament {match.tournament_id}, commit={commit}"
+        )
+        
         if not match.tournament_id:
             logger.debug(f"Match {match.id} has no tournament_id, skipping standings update")
             return False
 
         # Find and update the Fixture Record
         fixture = TournamentFixture.query.filter_by(match_id=match.id).first()
-        if fixture:
+        if not fixture:
+            logger.warning(f"[Standings] No fixture found for match {match.id}")
+        else:
+            logger.info(
+                f"[Standings] Found fixture {fixture.id} for match {match.id}, "
+                f"status={fixture.status}, standings_applied={fixture.standings_applied}"
+            )
+            
             if fixture.standings_applied:
                 logger.info(
-                    "Standings already applied for fixture %s (match %s); skipping update.",
+                    "[Standings] Standings already applied for fixture %s (match %s); skipping update.",
                     fixture.id,
                     match.id
                 )
                 return False
+            
+            # Update fixture status - this is critical for UI display
             fixture.status = 'Completed'
             fixture.winner_team_id = match.winner_team_id
             fixture.standings_applied = True
+            logger.info(
+                f"[Standings] Updated fixture {fixture.id}: status='Completed', "
+                f"winner_team_id={match.winner_team_id}, standings_applied=True"
+            )
 
         # Get team stats records
         home_team_stats = self._ensure_team_stats(match.tournament_id, match.home_team_id)
         away_team_stats = self._ensure_team_stats(match.tournament_id, match.away_team_id)
+        
+        logger.info(
+            f"[Standings] Team stats - Home (ID {match.home_team_id}): "
+            f"P={home_team_stats.played}, W={home_team_stats.won}, L={home_team_stats.lost}, "
+            f"Pts={home_team_stats.points}, NRR={home_team_stats.net_run_rate:.3f}"
+        )
+        logger.info(
+            f"[Standings] Team stats - Away (ID {match.away_team_id}): "
+            f"P={away_team_stats.played}, W={away_team_stats.won}, L={away_team_stats.lost}, "
+            f"Pts={away_team_stats.points}, NRR={away_team_stats.net_run_rate:.3f}"
+        )
 
         # Only update league standings (not knockout stats)
         if fixture and fixture.stage == self.STAGE_LEAGUE:
+            logger.info(f"[Standings] Updating league standings for fixture {fixture.id}")
             # Update Played count
             home_team_stats.played += 1
             away_team_stats.played += 1
@@ -1107,18 +1137,36 @@ class TournamentEngine:
             # Update NRR components
             if not is_no_result:
                 self._update_nrr_components(home_team_stats, away_team_stats, match)
+            
+            logger.info(
+                f"[Standings] After update - Home: P={home_team_stats.played}, "
+                f"W={home_team_stats.won}, L={home_team_stats.lost}, Pts={home_team_stats.points}, "
+                f"NRR={home_team_stats.net_run_rate:.3f}"
+            )
+            logger.info(
+                f"[Standings] After update - Away: P={away_team_stats.played}, "
+                f"W={away_team_stats.won}, L={away_team_stats.lost}, Pts={away_team_stats.points}, "
+                f"NRR={away_team_stats.net_run_rate:.3f}"
+            )
+        else:
+            logger.info(f"[Standings] Skipping league standings update (stage={fixture.stage if fixture else 'unknown'})")
 
         # Check tournament progression
+        logger.info(f"[Standings] Checking tournament completion for tournament {match.tournament_id}")
         self._check_tournament_completion(match.tournament_id)
 
         # Check if we need to progress to next stage
+        logger.info(f"[Standings] Checking tournament progression for tournament {match.tournament_id}")
         self.check_and_progress_tournament(match.tournament_id)
 
-        if fixture:
-            fixture.standings_applied = True
+        # Note: fixture.standings_applied already set above, no need to set again
 
         if commit:
+            logger.info(f"[Standings] Committing standings changes for match {match.id}")
             db.session.commit()
+            logger.info(f"[Standings] ✓ Standings committed successfully for match {match.id}")
+        else:
+            logger.info(f"[Standings] Skipping commit (commit=False) for match {match.id}")
 
         return True
 

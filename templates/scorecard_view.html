@@ -1,205 +1,358 @@
 {% extends "layout.html" %}
 
 {% block title %}
-Match Result - SimCricketX
+Match Scorecard - SimCricketX
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    .result-header {
+    .scorecard-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem 1rem;
+    }
+
+    .result-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
         text-align: center;
-        margin-bottom: 2rem;
-        padding: 2rem;
+        padding: 3rem 2rem;
+        border-radius: 16px;
+        margin-bottom: 3rem;
+        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .result-banner::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        animation: pulse 4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 0.5; }
+        50% { transform: scale(1.1); opacity: 0.8; }
+    }
+
+    .result-banner h1 {
+        font-size: 2rem;
+        font-weight: 800;
+        margin: 0 0 0.5rem 0;
+        position: relative;
+        z-index: 1;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    .match-info {
+        font-size: 1rem;
+        opacity: 0.95;
+        position: relative;
+        z-index: 1;
+        font-weight: 500;
+    }
+
+    .innings-card {
         background: var(--card-bg);
         border: 1px solid var(--card-border);
         border-radius: 12px;
+        margin-bottom: 2.5rem;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
 
-    .match-result-text {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--accent);
-        margin-bottom: 0.5rem;
-    }
-
-    .match-meta {
-        color: var(--fg-secondary);
-        font-size: 0.9rem;
-    }
-
-    .scorecard-section {
-        margin-bottom: 2rem;
-    }
-
-    .innings-subtitle {
-        margin-top: 0.5rem;
-        font-size: 0.95rem;
-        color: var(--fg-secondary);
-    }
-
-    .section-title {
-        margin: 1rem 0 0.5rem;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--fg-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
+    .innings-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.12);
     }
 
     .innings-header {
-        background: var(--bg-secondary);
-        padding: 0.75rem 1rem;
-        border-radius: 8px 8px 0 0;
-        font-weight: 600;
-        border: 1px solid var(--card-border);
+        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--card-bg) 100%);
+        padding: 1.25rem 1.5rem;
         display: flex;
         justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid var(--accent);
     }
 
-    .score-table {
-        width: 100%;
-        border-collapse: collapse;
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-top: none;
-    }
-
-    .score-table th,
-    .score-table td {
-        padding: 0.75rem 1rem;
-        text-align: left;
-        border-bottom: 1px solid var(--card-border);
-    }
-
-    .score-table th {
-        color: var(--fg-secondary);
-        font-weight: 600;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-    }
-
-    .score-table td {
-        font-size: 0.9rem;
-    }
-
-    .batter-name {
-        font-weight: 500;
+    .innings-title {
+        font-size: 1.1rem;
+        font-weight: 700;
         color: var(--fg);
     }
 
-    .dismissal-info {
-        font-size: 0.8rem;
+    .innings-score {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--accent);
+        letter-spacing: -0.5px;
+    }
+
+    .team-info {
+        font-size: 0.9rem;
         color: var(--fg-secondary);
+        padding: 0.75rem 1.5rem;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--card-border);
+    }
+
+    .stats-section {
+        padding: 1.5rem;
+    }
+
+    .section-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--accent);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .section-label::before {
+        content: '';
+        width: 4px;
+        height: 16px;
+        background: var(--accent);
+        border-radius: 2px;
+    }
+
+    .stats-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .stats-table thead th {
+        background: var(--bg-secondary);
+        color: var(--fg-secondary);
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 2px solid var(--card-border);
+    }
+
+    .stats-table tbody tr {
+        transition: background-color 0.2s ease;
+    }
+
+    .stats-table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    .stats-table tbody td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--card-border);
+        font-size: 0.9rem;
+    }
+
+    .stats-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .player-name {
+        font-weight: 600;
+        color: var(--fg);
+    }
+
+    .dismissal-text {
+        font-size: 0.85rem;
+        color: var(--fg-secondary);
+        font-style: italic;
+    }
+
+    .dismissal-text.dnb {
+        color: #888;
+        font-weight: 500;
+    }
+
+    .stat-highlight {
+        font-weight: 700;
+        color: var(--accent);
+    }
+
+    .stat-number {
+        font-variant-numeric: tabular-nums;
     }
 
     .nav-actions {
-        margin-top: 2rem;
+        margin-top: 3rem;
         display: flex;
-        gap: 1rem;
         justify-content: center;
+        gap: 1rem;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .btn-secondary {
+        background: var(--card-bg);
+        color: var(--fg);
+        border: 2px solid var(--card-border);
+    }
+
+    .btn-secondary:hover {
+        background: var(--bg-secondary);
+        border-color: var(--accent);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    @media (max-width: 768px) {
+        .result-banner h1 {
+            font-size: 1.5rem;
+        }
+        
+        .stats-table {
+            font-size: 0.85rem;
+        }
+        
+        .stats-table thead th,
+        .stats-table tbody td {
+            padding: 0.5rem;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="result-header">
-    <div class="match-result-text">{{ match.result_description or "Match Completed" }}</div>
-    <div class="match-meta">
-        {{ match.team_home }} vs {{ match.team_away }} • {{ match.venue }}
-    </div>
-</div>
-
-<div class="container">
-    {% for innings in innings_list %}
-    <div class="scorecard-section">
-        <div class="innings-header">
-            <span>{{ innings.number }}{% if innings.number == 1 %}st{% elif innings.number == 2 %}nd{% else %}th{% endif %} Innings</span>
-            <span>{{ innings.score }}/{{ innings.wickets }}</span>
+<div class="scorecard-container">
+    <div class="result-banner">
+        <h1>{{ match.result_description or "Match Completed" }}</h1>
+        <div class="match-info">
+            {{ match.team_home }} vs {{ match.team_away }} • {{ match.venue }}
         </div>
-        <div class="innings-subtitle">{{ innings.batting_team_name }} batting • {{ innings.bowling_team_name }} bowling</div>
+    </div>
 
-        <div class="section-title">Batting</div>
-        <table class="score-table">
-            <thead>
-                <tr>
-                    <th>Batter</th>
-                    <th>Dismissal</th>
-                    <th>R</th>
-                    <th>B</th>
-                    <th>4s</th>
-                    <th>6s</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for batter in innings.batting %}
-                <tr>
-                    <td class="batter-name">{{ batter.name }}</td>
-                    <td class="dismissal-info">
-                        {% if batter.is_out %}
-                        {% if batter.wicket_type == "Caught" %}
-                        c {{ batter.fielder_name or "?" }} b {{ batter.wicket_taker_name or "?" }}
-                        {% elif batter.wicket_type == "Bowled" %}
-                        b {{ batter.wicket_taker_name or "?" }}
-                        {% elif batter.wicket_type == "LBW" %}
-                        lbw b {{ batter.wicket_taker_name or "?" }}
-                        {% elif batter.wicket_type == "Run Out" %}
-                        run out ({{ batter.fielder_name or "?" }})
-                        {% elif batter.wicket_type == "Stumped" %}
-                        st {{ batter.fielder_name or "?" }} b {{ batter.wicket_taker_name or "?" }}
-                        {% elif batter.wicket_type == "Hit Wicket" %}
-                        hit wicket b {{ batter.wicket_taker_name or "?" }}
-                        {% else %}
-                        {{ batter.wicket_type }}
-                        {% if batter.wicket_taker_name %} b {{ batter.wicket_taker_name }}{% endif %}
-                        {% endif %}
-                        {% else %}
-                        not out
-                        {% endif %}
-                    </td>
-                    <td><b>{{ batter.runs }}</b></td>
-                    <td>{{ batter.balls }}</td>
-                    <td>{{ batter.fours }}</td>
-                    <td>{{ batter.sixes }}</td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6" style="text-align:center">No batting stats available</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    {% for innings in innings_list %}
+    <div class="innings-card">
+        <div class="innings-header">
+            <div class="innings-title">
+                {{ innings.number }}{% if innings.number == 1 %}st{% elif innings.number == 2 %}nd{% else %}th{% endif %} Innings
+            </div>
+            <div class="innings-score">{{ innings.score }}/{{ innings.wickets }}</div>
+        </div>
+        
+        <div class="team-info">
+            <strong>{{ innings.batting_team_name }}</strong> batting • {{ innings.bowling_team_name }} bowling
+        </div>
 
-        <div class="section-title">Bowling</div>
-        <table class="score-table">
-            <thead>
-                <tr>
-                    <th>Bowler</th>
-                    <th>O</th>
-                    <th>R</th>
-                    <th>W</th>
-                    <th>M</th>
-                    <th>Wd</th>
-                    <th>Nb</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for bowler in innings.bowling %}
-                <tr>
-                    <td class="batter-name">{{ bowler.name }}</td>
-                    <td>{{ bowler.overs }}</td>
-                    <td>{{ bowler.runs_conceded }}</td>
-                    <td><b>{{ bowler.wickets }}</b></td>
-                    <td>{{ bowler.maidens }}</td>
-                    <td>{{ bowler.wides }}</td>
-                    <td>{{ bowler.noballs }}</td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="7" style="text-align:center">No bowling stats available</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="stats-section">
+            <div class="section-label">
+                <span>Batting Performance</span>
+            </div>
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Batter</th>
+                        <th>Dismissal</th>
+                        <th>R</th>
+                        <th>B</th>
+                        <th>4s</th>
+                        <th>6s</th>
+                        <th>SR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for batter in innings.batting %}
+                    <tr>
+                        <td class="player-name">{{ batter.name }}</td>
+                        <td class="dismissal-text {% if batter.runs == 0 and batter.balls == 0 and not batter.is_out %}dnb{% endif %}">
+                            {% if batter.runs == 0 and batter.balls == 0 and not batter.is_out %}
+                            DNB
+                            {% elif batter.is_out %}
+                                {% if batter.wicket_type == "Caught" %}
+                                c {{ batter.fielder_name or "?" }} b {{ batter.wicket_taker_name or "?" }}
+                                {% elif batter.wicket_type == "Bowled" %}
+                                b {{ batter.wicket_taker_name or "?" }}
+                                {% elif batter.wicket_type == "LBW" %}
+                                lbw b {{ batter.wicket_taker_name or "?" }}
+                                {% elif batter.wicket_type == "Run Out" %}
+                                run out ({{ batter.fielder_name or "?" }})
+                                {% elif batter.wicket_type == "Stumped" %}
+                                st {{ batter.fielder_name or "?" }} b {{ batter.wicket_taker_name or "?" }}
+                                {% elif batter.wicket_type == "Hit Wicket" %}
+                                hit wicket b {{ batter.wicket_taker_name or "?" }}
+                                {% else %}
+                                {{ batter.wicket_type }}
+                                {% if batter.wicket_taker_name %} b {{ batter.wicket_taker_name }}{% endif %}
+                                {% endif %}
+                            {% else %}
+                            not out*
+                            {% endif %}
+                        </td>
+                        <td class="stat-highlight stat-number">{{ batter.runs }}</td>
+                        <td class="stat-number">{{ batter.balls }}</td>
+                        <td class="stat-number">{{ batter.fours }}</td>
+                        <td class="stat-number">{{ batter.sixes }}</td>
+                        <td class="stat-number">{{ "%.2f"|format(batter.strike_rate) if batter.strike_rate else "-" }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" style="text-align:center; color: var(--fg-secondary);">No batting stats available</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="stats-section">
+            <div class="section-label">
+                <span>Bowling Performance</span>
+            </div>
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Bowler</th>
+                        <th>O</th>
+                        <th>M</th>
+                        <th>R</th>
+                        <th>W</th>
+                        <th>Wd</th>
+                        <th>Nb</th>
+                        <th>Econ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bowler in innings.bowling %}
+                    <tr>
+                        <td class="player-name">{{ bowler.name }}</td>
+                        <td class="stat-number">{{ bowler.overs }}</td>
+                        <td class="stat-number">{{ bowler.maidens }}</td>
+                        <td class="stat-number">{{ bowler.runs_conceded }}</td>
+                        <td class="stat-highlight stat-number">{{ bowler.wickets }}</td>
+                        <td class="stat-number">{{ bowler.wides }}</td>
+                        <td class="stat-number">{{ bowler.noballs }}</td>
+                        <td class="stat-number">{{ "%.2f"|format(bowler.economy) if bowler.economy else "-" }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" style="text-align:center; color: var(--fg-secondary);">No bowling stats available</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
     {% endfor %}
 

@@ -1204,36 +1204,22 @@
             <p class="hero-subtitle">Comprehensive cricket analytics and player performance insights</p>
         </section>
 
-        {% if not has_stats %}
-        <!-- Upload Section -->
-        <section class="upload-section">
-            <div class="upload-icon">
-                <i class="fa-solid fa-cloud-arrow-up"></i>
-            </div>
-            <h2 class="upload-title">Upload Your Cricket Statistics</h2>
-            <p class="upload-subtitle">Upload your batting and bowling CSV files to generate comprehensive player
-                statistics and insights</p>
-
-            <form action="{{ url_for('upload_stats') }}" method="post" enctype="multipart/form-data">
-                <div class="file-input-wrapper">
-                    <input type="file" name="stats_files" class="file-input" required multiple accept=".csv"
-                        id="stats-files">
-                    <div class="file-input-display" id="file-display">
-                        <i class="fa-solid fa-file-csv"
-                            style="font-size: 2rem; color: var(--accent); margin-bottom: 1rem;"></i>
-                        <div>Click to select CSV files or drag and drop</div>
-                        <div style="font-size: 0.875rem; color: var(--fg-secondary); margin-top: 0.5rem;">Supports
-                            multiple CSV files</div>
-                    </div>
-                </div>
-
-                <button type="submit" class="upload-btn">
-                    <i class="fa-solid fa-cogs"></i>
-                    Process Statistics
+        <section class="upload-section" style="margin-bottom:1.5rem;">
+            <h2 class="upload-title">Tournament Stats</h2>
+            <p class="upload-subtitle">Choose a tournament to view live-computed batting, bowling, and fielding stats.</p>
+            <form method="get" action="{{ url_for('statistics') }}" class="flex-row" style="gap:0.75rem; flex-wrap:wrap;">
+                <select name="tournament_id" class="file-input" style="max-width:320px; padding:0.6rem 0.8rem;">
+                    {% for t in tournaments or [] %}
+                    <option value="{{ t.id }}" {% if selected_tid==t.id %}selected{% endif %}>{{ t.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="upload-btn" style="padding:0.6rem 1.2rem;">
+                    <i class="fa-solid fa-chart-line"></i> Show Stats
                 </button>
             </form>
         </section>
-        {% else %}
+
+        {% if has_stats %}
 
         <!-- Dashboard Header -->
         <div class="dashboard-header">
@@ -1472,6 +1458,10 @@
                     <i class="fa-solid fa-bowling-ball"></i>
                     Bowling Statistics
                 </button>
+                <button class="tab-button" data-tab="fielding">
+                    <i class="fa-solid fa-hands-clapping"></i>
+                    Fielding Statistics
+                </button>
             </div>
 
             <div id="batting" class="tab-content active">
@@ -1565,6 +1555,44 @@
                             {% for row in bowling_stats %}
                             <tr>
                                 {% for header in bowling_headers %}
+                                <td>{{ row[header] }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="fielding" class="tab-content">
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label class="filter-label" for="fielding-team-filter">
+                            <i class="fa-solid fa-filter"></i> Filter by Team:
+                        </label>
+                        <select id="fielding-team-filter" class="team-filter">
+                            <option value="">All Teams</option>
+                        </select>
+                        <span class="filter-info" id="fielding-filter-info">Showing all players</span>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table id="fielding-table">
+                        <thead>
+                            <tr>
+                                {% for header in fielding_headers %}
+                                <th data-column="{{ header }}">
+                                    {{ header }}
+                                    <i class="fa-solid fa-sort sort-icon"></i>
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in fielding_stats %}
+                            <tr>
+                                {% for header in fielding_headers %}
                                 <td>{{ row[header] }}</td>
                                 {% endfor %}
                             </tr>
@@ -1854,6 +1882,36 @@
                     });
                 }
             }
+
+            // Extract from fielding table
+            const fieldingTable = document.getElementById('fielding-table');
+            if (fieldingTable) {
+                const rows = fieldingTable.querySelectorAll('tbody tr');
+                const playerColumnIndex = getPlayerColumnIndex(fieldingTable);
+                const teamColumnIndex = getTeamColumnIndex(fieldingTable);
+
+                if (playerColumnIndex !== -1) {
+                    rows.forEach(row => {
+                        const playerCell = row.cells[playerColumnIndex];
+                        const teamCell = teamColumnIndex !== -1 ? row.cells[teamColumnIndex] : null;
+
+                        if (playerCell && playerCell.textContent.trim()) {
+                            const playerName = playerCell.textContent.trim();
+                            const teamName = teamCell ? teamCell.textContent.trim() : '';
+                            const playerKey = `${playerName}|${teamName}`;
+
+                            if (!playerSet.has(playerKey)) {
+                                playerSet.add(playerKey);
+                                allPlayers.push({
+                                    name: playerName,
+                                    team: teamName,
+                                    type: 'fielding'
+                                });
+                            }
+                        }
+                    });
+                }
+            }
         }
 
         function performPlayerSearch(query) {
@@ -1888,10 +1946,18 @@
                 searchSuggestions.innerHTML = '<div class="no-results">No players found</div>';
             } else {
                 const suggestionsHTML = matches.map(player => {
-                    const typeIcon = player.type === 'batting' ? '🏏' :
-                        player.type === 'bowling' ? '⚾' : '🏏⚾';
-                    const typeText = player.type === 'batting' ? 'Batting' :
-                        player.type === 'bowling' ? 'Bowling' : 'Both';
+                    let typeIcon = '🏏';
+                    let typeText = 'Batting';
+                    if (player.type === 'bowling') {
+                        typeIcon = '⚾';
+                        typeText = 'Bowling';
+                    } else if (player.type === 'both') {
+                        typeIcon = '🏏⚾';
+                        typeText = 'Bat & Bowl';
+                    } else if (player.type === 'fielding') {
+                        typeIcon = '🧤';
+                        typeText = 'Fielding';
+                    }
 
                     return `
                         <div class="search-suggestion" data-player="${player.name}" data-team="${player.team}" data-type="${player.type}">
@@ -2054,12 +2120,16 @@
             function initializeTeamFilters() {
                 const battingTable = document.getElementById('batting-table');
                 const bowlingTable = document.getElementById('bowling-table');
+                const fieldingTable = document.getElementById('fielding-table');
 
                 if (battingTable) {
                     setupTeamFilter('batting', battingTable);
                 }
                 if (bowlingTable) {
                     setupTeamFilter('bowling', bowlingTable);
+                }
+                if (fieldingTable) {
+                    setupTeamFilter('fielding', fieldingTable);
                 }
             }
 
@@ -2069,6 +2139,8 @@
                 const downloadCsv = document.getElementById(`${type}-download-csv`);
                 const downloadTxt = document.getElementById(`${type}-download-txt`);
                 const filterInfo = document.getElementById(`${type}-filter-info`);
+
+                if (!teamFilter || !filterInfo) return;
 
                 // Extract unique teams from table data
                 const teams = new Set();
@@ -2100,21 +2172,27 @@
                 });
 
                 // Clear filter handler
-                clearFilter.addEventListener('click', function () {
-                    teamFilter.value = '';
-                    filterTableByTeam(type, '', table, teamColumnIndex);
-                    updateFilterInfo(type, '', rows.length);
-                });
+                if (clearFilter) {
+                    clearFilter.addEventListener('click', function () {
+                        teamFilter.value = '';
+                        filterTableByTeam(type, '', table, teamColumnIndex);
+                        updateFilterInfo(type, '', rows.length);
+                    });
+                }
 
                 // CSV download handler
-                downloadCsv.addEventListener('click', function () {
-                    downloadFilteredData(type, table, teamFilter.value, 'csv');
-                });
+                if (downloadCsv) {
+                    downloadCsv.addEventListener('click', function () {
+                        downloadFilteredData(type, table, teamFilter.value, 'csv');
+                    });
+                }
 
                 // TXT download handler
-                downloadTxt.addEventListener('click', function () {
-                    downloadFilteredData(type, table, teamFilter.value, 'txt');
-                });
+                if (downloadTxt) {
+                    downloadTxt.addEventListener('click', function () {
+                        downloadFilteredData(type, table, teamFilter.value, 'txt');
+                    });
+                }
             }
 
             function getTeamColumnIndex(table) {
