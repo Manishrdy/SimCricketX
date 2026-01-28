@@ -357,6 +357,75 @@ class MatchArchiver:
         
         return wicket_counts
 
+    def _save_fielding_stats(self, batting_stats: dict, fielding_team_id: int, innings_number: int) -> None:
+        """
+        Save fielding statistics (catches, run outs) for the fielding team.
+        Analyzes batting dismissals to attribute fielding contributions.
+        
+        Args:
+            batting_stats: Dictionary of batting statistics for the innings
+            fielding_team_id: ID of the fielding team
+            innings_number: 1 or 2
+        """
+        if not batting_stats:
+            return
+        
+        # Track fielding contributions by player name
+        fielding_contributions = {}
+        
+        for player_stats in batting_stats.values():
+            wicket_type = player_stats.get('wicket_type', '').lower()
+            fielder_name = player_stats.get('fielder_out', '').strip()
+            
+            if not wicket_type:
+                continue
+            
+            # Track catches
+            if ('caught' in wicket_type or 'c ' in wicket_type) and fielder_name:
+                if fielder_name not in fielding_contributions:
+                    fielding_contributions[fielder_name] = {'catches': 0, 'run_outs': 0}
+                fielding_contributions[fielder_name]['catches'] += 1
+            
+            # Track run outs
+            elif 'run out' in wicket_type and fielder_name:
+                if fielder_name not in fielding_contributions:
+                    fielding_contributions[fielder_name] = {'catches': 0, 'run_outs': 0}
+                fielding_contributions[fielder_name]['run_outs'] += 1
+        
+        # Save to database - update existing batting/bowling records or create new fielding records
+        for fielder_name, contributions in fielding_contributions.items():
+            # Find the fielder in the fielding team
+            fielder = DBPlayer.query.filter_by(name=fielder_name, team_id=fielding_team_id).first()
+            if not fielder:
+                self.logger.warning(f"Fielder {fielder_name} not found in team {fielding_team_id}")
+                continue
+            
+            # Try to find existing scorecard entry (batting or bowling) for this player
+            existing_card = MatchScorecard.query.filter_by(
+                match_id=self.match_id,
+                player_id=fielder.id,
+                innings_number=innings_number
+            ).first()
+            
+            if existing_card:
+                # Update existing record with fielding stats
+                existing_card.catches = (existing_card.catches or 0) + contributions['catches']
+                existing_card.run_outs = (existing_card.run_outs or 0) + contributions['run_outs']
+                self.logger.debug(f"Updated fielding stats for {fielder_name}: {contributions}")
+            else:
+                # Create new fielding-only record
+                fielding_card = MatchScorecard(
+                    match_id=self.match_id,
+                    player_id=fielder.id,
+                    team_id=fielding_team_id,
+                    innings_number=innings_number,
+                    record_type="fielding",
+                    catches=contributions['catches'],
+                    run_outs=contributions['run_outs']
+                )
+                db.session.add(fielding_card)
+                self.logger.debug(f"Created fielding record for {fielder_name}: {contributions}")
+
     def _save_to_database(self) -> None:
         """Save match results and stats to SQLite database"""
         try:
@@ -603,6 +672,9 @@ class MatchArchiver:
             for innings_number, batting_team_id, bowling_team_id, batting_stats, bowling_stats in innings_plan:
                 save_stats(batting_stats, batting_team_id, innings_number, "batting")
                 save_stats(bowling_stats, bowling_team_id, innings_number, "bowling", batting_stats)
+                
+                # NEW: Save fielding stats for the bowling/fielding team
+                self._save_fielding_stats(batting_stats, bowling_team_id, innings_number)
             
             # Update Player Aggregates
             updated_players = set()

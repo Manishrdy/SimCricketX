@@ -52,6 +52,7 @@ import traceback
 from auth.user_auth import load_credentials, save_credentials
 from werkzeug.utils import secure_filename
 from engine.stats_aggregator import StatsAggregator 
+from engine.stats_service import StatsService
 import glob
 import pandas as pd 
 from tabulate import tabulate
@@ -2349,117 +2350,6 @@ def create_app():
             print(f"Error saving scorecard images: {e}")
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/statistics")
-    @login_required
-    def statistics():
-        return _render_statistics_page(current_user.id)
-
-    @app.route('/upload_stats', methods=['POST'])
-    @login_required
-    def upload_stats():
-        if 'stats_files' not in request.files:
-            return redirect(url_for('statistics'))
-
-        files = request.files.getlist('stats_files')
-        if not files or files[0].filename == '':
-            return redirect(url_for('statistics'))
-
-        uploaded_filepaths = []
-        seen_filenames = set()
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        prefix = current_user.id.replace("@", "_").replace(".", "_")
-
-        for file in files:
-            if file and allowed_file(file.filename):
-                original = secure_filename(file.filename)
-                if original in seen_filenames:
-                    app.logger.warning(f"[Upload] Duplicate skipped: {original}")
-                    continue
-                seen_filenames.add(original)
-
-                # Detect file tag
-                if 'bat' in original.lower():
-                    tag = "batting"
-                elif 'bowl' in original.lower():
-                    tag = "bowling"
-                else:
-                    tag = "misc"
-
-                basename = os.path.splitext(original)[0]  # e.g., MI_batting
-                filename = f"{prefix}_{basename}_{timestamp}.csv"
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(filepath)
-                uploaded_filepaths.append(filepath)
-                app.logger.debug(f"[DEBUG] Saved file: {filepath}")
-            else:
-                return redirect(url_for('statistics'))
-
-        try:
-            aggregator = StatsAggregator(uploaded_filepaths, current_user.id)
-            aggregator.process_and_save()
-        except Exception as e:
-            app.logger.error(f"Error processing stats for user {current_user.id}: {e}", exc_info=True)
-        finally:
-            for filepath in uploaded_filepaths:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-
-        return _render_statistics_page(current_user.id)
-
-    
-    @app.route("/download_stats_csv/<leaderboard>")
-    @login_required
-    def download_stats_csv(leaderboard):
-        try:
-            user_id = current_user.get_id()
-            stats_dir = "data/stats"
-            batting_file = max(glob.glob(os.path.join(stats_dir, f"{user_id}_batting_*.csv")), key=os.path.getctime)
-            bowling_file = max(glob.glob(os.path.join(stats_dir, f"{user_id}_bowling_*.csv")), key=os.path.getctime)
-
-            if leaderboard in ["top_run_scorers", "most_sixes", "best_strikers", "most_catches"]:
-                df = pd.read_csv(batting_file)
-            else:
-                df = pd.read_csv(bowling_file)
-
-            if leaderboard == "top_run_scorers":
-                data = df.sort_values(by="Runs", ascending=False)[["Player", "Team", "Runs"]]
-            elif leaderboard == "most_sixes":
-                data = df.sort_values(by="6s", ascending=False)[["Player", "Team", "6s"]]
-            elif leaderboard == "most_catches":
-                data = df.sort_values(by="Catches", ascending=False)[["Player", "Team", "Catches"]]
-            elif leaderboard == "best_strikers":
-                filtered = df[df["Balls"] >= 50]
-                data = filtered.sort_values(by="Strike Rate", ascending=False)[["Player", "Team", "Strike Rate"]]
-            elif leaderboard == "top_wicket_takers":
-                data = df.sort_values(by="Wickets", ascending=False)[["Player", "Team", "Wickets"]]
-            elif leaderboard == "best_economy":
-                df["total_balls"] = df["Overs"].apply(lambda x: int(str(x).split('.')[0]) * 6 + int(str(x).split('.')[1]) if '.' in str(x) else int(x) * 6)
-                df["Economy"] = df.apply(lambda row: round(row["Runs"] / (row["total_balls"] / 6), 2) if row["total_balls"] > 0 else 0.00, axis=1)
-                filtered = df[df["total_balls"] >= 60]
-                data = filtered.sort_values(by="Economy")[["Player", "Team", "Economy"]]
-            elif leaderboard == "batting_full":
-                df = pd.read_csv(batting_file)
-                data = df
-            elif leaderboard == "bowling_full":
-                df = pd.read_csv(bowling_file)
-                data = df
-            elif leaderboard == "best_average":
-                df = pd.read_csv(batting_file)
-                df["Average"] = pd.to_numeric(df["Average"], errors="coerce")
-                df = df[df["Average"].notnull()]
-                df = df.sort_values(by="Average", ascending=False)[["Player", "Team", "Average"]]
-                data = df
-            elif leaderboard == "best_figures":
-                df = pd.read_csv(bowling_file)
-                df["Best"] = df["Best"].astype(str)
-                data = df.sort_values(by="Wickets", ascending=False)[["Player", "Team", "Best", "Wickets"]]
-
-            return jsonify(data.to_dict(orient="records"))
-
-        except Exception as e:
-            app.logger.error(f"Error fetching stats: {e}")
-            return jsonify({"error": "Failed to fetch stats"}), 500
-
     # --- TOURNAMENT ROUTES ---
 
     @app.route("/tournaments")
@@ -2570,69 +2460,6 @@ def create_app():
         return redirect(url_for("tournaments"))
 
 
-
-    
-    @app.route("/download_stats_tab/<leaderboard>")
-    @login_required
-    def download_stats_tab(leaderboard):
-        try:
-            stats_dir = "data/stats"
-            user_id = current_user.get_id()
-            batting_file = max(glob.glob(os.path.join(stats_dir, f"{user_id}_batting_*.csv")), key=os.path.getctime)
-            bowling_file = max(glob.glob(os.path.join(stats_dir, f"{user_id}_bowling_*.csv")), key=os.path.getctime)
-
-            # Determine source file
-            if leaderboard in ["top_run_scorers", "most_sixes", "best_strikers", "most_catches", "best_average", "batting_full"]:
-                df = pd.read_csv(batting_file)
-            else:
-                df = pd.read_csv(bowling_file)
-
-            # Handle leaderboard logic
-            if leaderboard == "top_run_scorers":
-                df = df.sort_values(by="Runs", ascending=False)[["Player", "Team", "Runs"]]
-
-            elif leaderboard == "most_sixes":
-                df = df.sort_values(by="6s", ascending=False)[["Player", "Team", "6s"]]
-
-            elif leaderboard == "best_strikers":
-                df = df[df["Balls"] >= 50].sort_values(by="Strike Rate", ascending=False)[["Player", "Team", "Strike Rate"]]
-
-            elif leaderboard == "most_catches":
-                if "Catches" in df.columns:
-                    df = df.sort_values(by="Catches", ascending=False)[["Player", "Team", "Catches"]]
-                else:
-                    df = pd.DataFrame(columns=["Player", "Team", "Catches"])
-
-            elif leaderboard == "best_average":
-                df["Average"] = pd.to_numeric(df["Average"], errors="coerce")
-                df = df.sort_values(by="Average", ascending=False)[["Player", "Team", "Average"]]
-
-
-            elif leaderboard == "top_wicket_takers":
-                df = df.sort_values(by="Wickets", ascending=False)[["Player", "Team", "Wickets"]]
-
-            elif leaderboard == "best_economy":
-                df["total_balls"] = df["Overs"].apply(lambda x: int(str(x).split('.')[0]) * 6 + int(str(x).split('.')[1]) if '.' in str(x) else int(x) * 6)
-                df["Economy"] = df.apply(lambda row: round(row["Runs"] / (row["total_balls"] / 6), 2) if row["total_balls"] > 0 else 0.00, axis=1)
-                df = df[df["total_balls"] >= 60].sort_values(by="Economy")[["Player", "Team", "Economy"]]
-
-            elif leaderboard == "best_figures":
-                df["Best"] = df["Best"].astype(str)
-                df = df.sort_values(by="Wickets", ascending=False)[["Player", "Team", "Best"]]
-
-            elif leaderboard in ["batting_full", "bowling_full"]:
-                pass
-
-            else:
-                return "Leaderboard not found", 404
-
-            text = tabulate(df, headers="keys", tablefmt="pretty")
-            return Response(text, mimetype='text/plain')
-
-        except Exception as e:
-            app.logger.error(f"Error generating tabular text: {e}", exc_info=True)
-            return f"Error generating tabular text: {str(e)}", 500
-
     @app.route("/fixture/<fixture_id>/resimulate", methods=["POST"])
     @login_required
     def resimulate_fixture(fixture_id):
@@ -2700,6 +2527,134 @@ def create_app():
             app.logger.error(f"Resimulation error: {e}", exc_info=True)
             flash("Failed to reset match.", "danger")
             return redirect(url_for('tournament_dashboard', tournament_id=fixture.tournament_id if fixture else 0))
+
+    # ===== Statistics Hub Routes =====
+    
+    @app.route("/statistics")
+    @login_required
+    def statistics():
+        """Display statistics dashboard with overall or tournament-specific stats"""
+        try:
+            # Initialize stats service
+            stats_service = StatsService(logger=app.logger)
+            
+            # Get view type from query params
+            view_type = request.args.get('view', 'overall')  # 'overall' or 'tournament'
+            tournament_id = request.args.get('tournament_id', type=int)
+            
+            # Get user's tournaments for selector
+            tournaments = Tournament.query.filter_by(user_id=current_user.id).all()
+            
+            # Initialize empty stats
+            stats_data = None
+            has_stats = False
+            
+            # Fetch stats based on view type
+            if view_type == 'overall':
+                app.logger.info(f"Fetching overall stats for user {current_user.id}")
+                stats_data = stats_service.get_overall_stats(current_user.id)
+            elif view_type == 'tournament' and tournament_id:
+                app.logger.info(f"Fetching tournament stats for user {current_user.id}, tournament {tournament_id}")
+                stats_data = stats_service.get_tournament_stats(current_user.id, tournament_id)
+            
+            # Check if we have data
+            if stats_data and (stats_data['batting'] or stats_data['bowling'] or stats_data['fielding']):
+                has_stats = True
+            
+            # Prepare headers for tables
+            batting_headers = ['Player', 'Team', 'Matches', 'Innings', 'Runs', 'Balls', 'Not Outs', 
+                             'Strike Rate', 'Average', '0s', '1s', '2s', '3s', '4s', '6s', 
+                             '30s', '50s', '100s']
+            
+            bowling_headers = ['Team', 'Player', 'Matches', 'Innings', 'Overs', 'Runs', 'Wickets', 
+                             'Average', 'Economy', 'Dots', 'Bowled', 'LBW', 'Byes', 'Leg Byes', 
+                             'Wides', 'No Balls']
+            
+            fielding_headers = ['Player', 'Team', 'Matches', 'Catches', 'Run Outs']
+            
+            return render_template(
+                'statistics.html',
+                view_type=view_type,
+                tournament_id=tournament_id,
+                tournaments=tournaments,
+                has_stats=has_stats,
+                batting_stats=stats_data['batting'] if stats_data else [],
+                bowling_stats=stats_data['bowling'] if stats_data else [],
+                fielding_stats=stats_data['fielding'] if stats_data else [],
+                leaderboards=stats_data['leaderboards'] if stats_data else {},
+                batting_headers=batting_headers,
+                bowling_headers=bowling_headers,
+                fielding_headers=fielding_headers,
+                user=current_user
+            )
+            
+        except Exception as e:
+            app.logger.error(f"Error in statistics route: {e}", exc_info=True)
+            flash("Error loading statistics", "danger")
+            return render_template('statistics.html', has_stats=False, user=current_user)
+    
+    @app.route("/statistics/export/<stat_type>/<format_type>")
+    @login_required
+    def export_statistics(stat_type, format_type):
+        """Export statistics to CSV or TXT format"""
+        try:
+            # Initialize stats service
+            stats_service = StatsService(logger=app.logger)
+            
+            # Get view type and tournament from query params
+            view_type = request.args.get('view', 'overall')
+            tournament_id = request.args.get('tournament_id', type=int)
+            
+            # Fetch stats
+            if view_type == 'overall':
+                stats_data = stats_service.get_overall_stats(current_user.id)
+            elif tournament_id:
+                stats_data = stats_service.get_tournament_stats(current_user.id, tournament_id)
+            else:
+                flash("Please select a tournament", "warning")
+                return redirect(url_for('statistics'))
+            
+            # Get the appropriate stats based on type
+            if stat_type == 'batting':
+                data = stats_data['batting']
+            elif stat_type == 'bowling':
+                data = stats_data['bowling']
+            elif stat_type == 'fielding':
+                data = stats_data['fielding']
+            else:
+                flash("Invalid stat type", "danger")
+                return redirect(url_for('statistics'))
+            
+            if not data:
+                flash(f"No {stat_type} data available", "warning")
+                return redirect(url_for('statistics'))
+            
+            # Generate filename
+            view_label = f"tournament_{tournament_id}" if view_type == 'tournament' else "overall"
+            filename = f"{view_label}_{stat_type}_stats.{format_type}"
+            
+            # Export based on format
+            if format_type == 'csv':
+                content = stats_service.export_to_csv(data, stat_type)
+                mimetype = 'text/csv'
+            elif format_type == 'txt':
+                content = stats_service.export_to_txt(data, stat_type)
+                mimetype = 'text/plain'
+            else:
+                flash("Invalid format type", "danger")
+                return redirect(url_for('statistics'))
+            
+            # Create response
+            return Response(
+                content,
+                mimetype=mimetype,
+                headers={"Content-Disposition": f"attachment;filename={filename}"}
+            )
+            
+        except Exception as e:
+            app.logger.error(f"Error exporting statistics: {e}", exc_info=True)
+            flash("Error exporting statistics", "danger")
+            return redirect(url_for('statistics'))
 
 
     return app
