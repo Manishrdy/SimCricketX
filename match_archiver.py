@@ -188,8 +188,7 @@ class MatchArchiver:
             self._create_commentary_text_file(commentary_log)
             self._create_all_csv_files()
             
-            # Copy CSV files to data folder before any cleanup
-            self._copy_csv_files_to_data_folder()
+
             
             self._include_scorecard_images()
             
@@ -221,30 +220,7 @@ class MatchArchiver:
             self._cleanup_on_error()
             return False
 
-    def get_csv_files_in_data_folder(self) -> List[str]:
-        """Get list of CSV file paths that were copied to the data folder"""
-        data_folder = Path("data")
-        csv_files = []
-        
-        try:
-            team_order = self._determine_team_batting_order()
-            
-            expected_csv_files = [
-                f"{self.match_id}_{self.username}_{team_order['first_batting']}_batting.csv",
-                f"{self.match_id}_{self.username}_{team_order['first_bowling']}_bowling.csv", 
-                f"{self.match_id}_{self.username}_{team_order['second_batting']}_batting.csv",
-                f"{self.match_id}_{self.username}_{team_order['second_bowling']}_bowling.csv"
-            ]
-            
-            for filename in expected_csv_files:
-                csv_path = data_folder / filename
-                if csv_path.exists():
-                    csv_files.append(str(csv_path))
-            
-        except Exception as e:
-            self.logger.warning(f"Error getting CSV file paths: {e}")
-        
-        return csv_files
+
 
     def _create_archive_directory(self) -> None:
         """Create archive directory with proper permissions"""
@@ -755,10 +731,8 @@ class MatchArchiver:
                  batsman2_id=b2.id if b2 else None,
                  runs=p_data['runs'],
                  balls=p_data['balls'],
-                 batsman1_runs=p_data.get('batsman1_contribution', 0),
-                 batsman1_balls=p_data.get('batsman1_balls', 0),
-                 batsman2_runs=p_data.get('batsman2_contribution', 0),
-                 batsman2_balls=p_data.get('batsman2_balls', 0),
+                 batsman1_contribution=p_data.get('batsman1_contribution', 0),
+                 batsman2_contribution=p_data.get('batsman2_contribution', 0),
                  start_over=p_data['start_over'],
                  end_over=p_data['end_over']
              )
@@ -1071,28 +1045,7 @@ class MatchArchiver:
         
         return "\n".join(lines)
 
-    def _copy_csv_files_to_data_folder(self) -> None:
-        """Copy all CSV files to the main data folder for permanent storage"""
-        try:
-            data_folder = Path("data")
-            data_folder.mkdir(parents=True, exist_ok=True)
-            
-            csv_files_copied = 0
-            for file_path in self.created_files:
-                if file_path.suffix.lower() == '.csv':
-                    destination = data_folder / file_path.name
-                    try:
-                        shutil.copy2(file_path, destination)
-                        csv_files_copied += 1
-                        self.logger.debug(f"CSV copied to data folder: {file_path.name}")
-                    except Exception as copy_error:
-                        self.logger.warning(f"Failed to copy CSV {file_path.name} to data folder: {copy_error}")
-            
-            self.logger.info(f"Copied {csv_files_copied} CSV files to data folder")
-            
-        except Exception as e:
-            self.logger.warning(f"Error copying CSV files to data folder: {e}")
-            # Don't raise exception as this is not critical for archive creation
+
 
     def _create_all_csv_files(self) -> None:
         """Create all CSV files for batting and bowling statistics"""

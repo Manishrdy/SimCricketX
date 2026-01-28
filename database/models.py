@@ -12,6 +12,14 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # New fields for auth migration
+    last_login = db.Column(db.DateTime)
+    ip_address = db.Column(db.String(50))
+    mac_address = db.Column(db.String(50))
+    hostname = db.Column(db.String(100))
+    display_name = db.Column(db.String(100))
+
+    
     # Relationships
     teams = relationship('Team', backref='owner', lazy=True)
     matches = relationship('Match', backref='user', lazy=True)
