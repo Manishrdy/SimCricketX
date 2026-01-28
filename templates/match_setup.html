@@ -516,13 +516,7 @@
                 </p>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">
-                    Rain Probability: <span id="rain-val">0%</span>
-                </label>
-                <input type="range" id="rain-slider" min="0" max="0.30" step="0.01" value="0"
-                    oninput="document.getElementById('rain-val').textContent = Math.round(this.value*100) + '%'">
-            </div>
+
         </div>
     </div>
 
@@ -588,9 +582,9 @@
 
     <!-- CONTROLS -->
     <div class="wizard-controls">
-        <a href="/" class="btn btn-secondary">
+        <button class="btn btn-secondary" id="back-btn" onclick="prevStep()">
             <i class="fas fa-arrow-left"></i> Back
-        </a>
+        </button>
         <button class="btn btn-primary" id="next-btn" onclick="nextStep()" disabled>
             Next <i class="fas fa-arrow-right"></i>
         </button>
@@ -953,7 +947,6 @@
                 team_away: a.id,
                 stadium: h.home_ground,
                 pitch: document.getElementById('pitch-select').value,
-                rain_probability: parseFloat(document.getElementById('rain-slider').value),
                 toss: document.querySelector('input[name="toss"]:checked').value,
                 playing_xi: {
                     home: getPlayers('home-selected'),

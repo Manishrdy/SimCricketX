@@ -1378,8 +1378,7 @@ def create_app():
                 "created_by": user,
                 "tournament_id": req_tournament_id,
                 "fixture_id": req_fixture_id,
-                "timestamp": ts,
-                "rain_probability": data.get("rain_probability", 0.0)
+                "timestamp": ts
             })
 
             with open(path, "w") as f:
