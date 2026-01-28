@@ -26,6 +26,7 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash
+from match_archiver import MatchArchiver, find_original_json_file
 from engine.match import Match
 from flask_login import (
     LoginManager,
@@ -65,7 +66,7 @@ except ImportError:
 
 from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, Tournament, TournamentTeam, TournamentFixture
-from database.models import Match as DBMatch, MatchScorecard # Distinct from engine.match.Match
+from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache # Distinct from engine.match.Match
 from engine.tournament_engine import TournamentEngine
 
 
@@ -350,84 +351,398 @@ def create_app():
     def log_request():
         app.logger.info(f"{request.remote_addr} {request.method} {request.path}")
 
+    # --- Tournament Match Completion Handler ---
+    def _handle_tournament_match_completion(match, match_id, outcome, logger):
+        """
+        Handle tournament match completion with proper transaction management.
+        
+        This function follows SOLID principles:
+        - Single Responsibility: Handles only tournament match completion
+        - Open/Closed: Extensible through tournament_engine methods
+        - Dependency Inversion: Depends on abstractions (logger, db.session)
+        
+        Args:
+            match: Match instance with completed game data
+            match_id: Unique identifier for the match
+            outcome: Match outcome dictionary from engine
+            logger: Logger instance for tracking operations
+            
+        Raises:
+            ValueError: If required tournament data is missing
+            Exception: For any database or processing errors
+        """
+        try:
+            # Step 1: Validate tournament context
+            tournament_id = match.data.get("tournament_id")
+            fixture_id = match.data.get("fixture_id")
+            
+            if not tournament_id:
+                logger.error(f"[Tournament] Match {match_id} missing tournament_id")
+                return
+                
+            if not fixture_id:
+                logger.error(f"[Tournament] Match {match_id} missing fixture_id")
+                return
+            
+            tournament_id = int(tournament_id)
+            logger.info(f"[Tournament] Starting completion handler for match {match_id} in tournament {tournament_id}")
+            
+            # Step 2: Begin explicit transaction (not nested)
+            # Using manual transaction control for better error handling
+            try:
+                # Step 2a: Handle resimulation - reverse previous standings if match exists
+                existing_match = db.session.get(DBMatch, match_id)
+                if existing_match:
+                    logger.info(f"[Tournament] Existing match {match_id} found. Reversing previous standings.")
+                    tournament_engine.reverse_standings(existing_match, commit=False)
+                    db.session.delete(existing_match)
+                    db.session.flush()
+                    logger.info(f"[Tournament] Previous match data cleared for {match_id}")
+                
+                # Step 3: Validate fixture exists and is accessible
+                fixture = db.session.get(TournamentFixture, fixture_id)
+                if not fixture:
+                    raise ValueError(f"Tournament fixture {fixture_id} not found; cannot proceed safely.")
+                
+                if not fixture.home_team_id or not fixture.away_team_id:
+                    raise ValueError(f"Fixture {fixture_id} missing team assignments")
+                
+                logger.info(f"[Tournament] Validated fixture {fixture_id}: {fixture.home_team.name} vs {fixture.away_team.name}")
+                
+                # Step 4: Prepare match result data
+                final_result = outcome.get("result", "Match Ended")
+                match.data["result_description"] = final_result
+                match.data["current_state"] = "completed"
+                
+                # Step 5: Create database match record
+                db_match = DBMatch(
+                    id=match_id,
+                    user_id=current_user.id,
+                    tournament_id=tournament_id,
+                    home_team_id=fixture.home_team_id,
+                    away_team_id=fixture.away_team_id,
+                    match_json_path="autosaved",
+                    result_description=final_result,
+                    date=datetime.now()
+                )
+                
+                logger.info(f"[Tournament] Created DBMatch record for {match_id}")
+                
+                # Step 6: Calculate and assign innings statistics
+                team_home_code = match.data["team_home"].split("_")[0]
+                first_bat_is_home = (
+                    (match.toss_winner == team_home_code and match.toss_decision == "Bat") or
+                    (match.toss_winner != team_home_code and match.toss_decision == "Bowl")
+                )
+                
+                def calculate_innings_stats(batting_stats, bowling_stats):
+                    """Calculate runs, wickets, and overs from stats dictionaries."""
+                    runs = sum(p.get("runs", 0) for p in batting_stats.values())
+                    wickets = sum(1 for p in batting_stats.values() if p.get("wicket_type"))
+                    balls_total = sum(b.get("balls_bowled", 0) for b in bowling_stats.values())
+                    overs = (balls_total // 6) + (balls_total % 6) / 10.0
+                    return runs, wickets, overs
+                
+                # First innings stats
+                s1_runs, s1_wickets, s1_overs = calculate_innings_stats(
+                    match.first_innings_batting_stats,
+                    match.first_innings_bowling_stats
+                )
+                
+                # Second innings stats
+                s2_runs, s2_wickets, s2_overs = calculate_innings_stats(
+                    match.batsman_stats,
+                    match.bowler_stats
+                )
+                
+                # Assign scores based on batting order
+                if first_bat_is_home:
+                    db_match.home_team_score = s1_runs
+                    db_match.home_team_wickets = s1_wickets
+                    db_match.home_team_overs = s1_overs
+                    db_match.away_team_score = s2_runs
+                    db_match.away_team_wickets = s2_wickets
+                    db_match.away_team_overs = s2_overs
+                else:
+                    db_match.away_team_score = s1_runs
+                    db_match.away_team_wickets = s1_wickets
+                    db_match.away_team_overs = s1_overs
+                    db_match.home_team_score = s2_runs
+                    db_match.home_team_wickets = s2_wickets
+                    db_match.home_team_overs = s2_overs
+                
+                logger.info(
+                    f"[Tournament] Match scores - Home: {db_match.home_team_score}/{db_match.home_team_wickets} "
+                    f"({db_match.home_team_overs}), Away: {db_match.away_team_score}/{db_match.away_team_wickets} "
+                    f"({db_match.away_team_overs})"
+                )
+                
+                # Step 7: Resolve winner team ID
+                winner_name = getattr(match, 'winner', None)
+                if winner_name:
+                    winner_name_lower = winner_name.lower().strip()
+                    home_name = (fixture.home_team.name or '').lower().strip()
+                    home_code = (fixture.home_team.short_code or '').lower().strip()
+                    away_name = (fixture.away_team.name or '').lower().strip()
+                    away_code = (fixture.away_team.short_code or '').lower().strip()
+                    
+                    if winner_name_lower in (home_name, home_code):
+                        db_match.winner_team_id = fixture.home_team_id
+                        logger.info(f"[Tournament] Winner: {fixture.home_team.name} (Home)")
+                    elif winner_name_lower in (away_name, away_code):
+                        db_match.winner_team_id = fixture.away_team_id
+                        logger.info(f"[Tournament] Winner: {fixture.away_team.name} (Away)")
+                    else:
+                        logger.warning(
+                            f"[Tournament] Could not match winner '{winner_name}' to teams. "
+                            f"Home: {home_name}/{home_code}, Away: {away_name}/{away_code}"
+                        )
+                else:
+                    logger.info(f"[Tournament] Match ended without clear winner (tie/no result)")
+                
+                # Step 8: Add match to session
+                db.session.add(db_match)
+                db.session.flush()  # Ensure match is persisted before scorecard
+                logger.info(f"[Tournament] DBMatch added to session for {match_id}")
+                
+                # Step 9: Save detailed scorecard data
+                scorecard_data = outcome.get("scorecard_data")
+                if scorecard_data:
+                    logger.info(f"[Tournament] Saving detailed scorecard for match {match_id}")
+                    try:
+                        # Fix: MatchArchiver takes (match_data, match_instance)
+                        # and created_by should be in match_data
+                        archiver = MatchArchiver(match.data, match)
+                        archiver._save_to_database()
+                        logger.info(f"[Tournament] Scorecard saved successfully for {match_id}")
+                    except Exception as scorecard_err:
+                        logger.error(f"[Tournament] Scorecard save failed: {scorecard_err}", exc_info=True)
+                        # Continue - scorecard is supplementary data
+                
+                # Step 10: Update fixture status and link to match
+                fixture.match_id = match_id
+                fixture.status = 'Completed'
+                fixture.winner_team_id = db_match.winner_team_id
+                logger.info(f"[Tournament] Fixture {fixture_id} marked as Completed")
+                
+                # Step 11: Update tournament standings (critical operation)
+                logger.info(f"[Tournament] Updating standings for tournament {tournament_id}")
+                standings_updated = tournament_engine.update_standings(db_match, commit=False)
+                
+                if standings_updated:
+                    logger.info(f"[Tournament] Standings updated successfully for tournament {tournament_id}")
+                else:
+                    logger.warning(f"[Tournament] Standings update returned False for match {match_id}")
+                
+                # Step 12: Commit all changes atomically
+                db.session.commit()
+                logger.info(
+                    f"[Tournament] ✓ Match {match_id} completed successfully. "
+                    f"Tournament {tournament_id} standings updated."
+                )
+                
+            except ValueError as ve:
+                # Validation errors - log and rollback
+                logger.error(f"[Tournament] Validation error for match {match_id}: {ve}", exc_info=True)
+                db.session.rollback()
+                raise
+                
+            except Exception as db_err:
+                # Database or processing errors - rollback and log
+                logger.error(
+                    f"[Tournament] Database error during match {match_id} completion: {db_err}",
+                    exc_info=True
+                )
+                db.session.rollback()
+                raise
+                
+        except Exception as outer_err:
+            # Catch-all for any unexpected errors
+            logger.error(
+                f"[Tournament] Critical error in match completion handler for {match_id}: {outer_err}",
+                exc_info=True
+            )
+            # Ensure rollback even if inner try didn't catch it
+            try:
+                db.session.rollback()
+            except:
+                pass
+
+    def _compute_tournament_stats(user_id, tournament_id, use_cache=False):
+        """
+        Aggregate batting/bowling/fielding stats from match_scorecards for a given tournament.
+        """
+        q = (
+            db.session.query(MatchScorecard, DBMatch, DBPlayer, DBTeam)
+            .join(DBMatch, MatchScorecard.match_id == DBMatch.id)
+            .join(DBPlayer, MatchScorecard.player_id == DBPlayer.id)
+            .join(DBTeam, DBPlayer.team_id == DBTeam.id)
+            .filter(DBMatch.tournament_id == tournament_id)
+            .filter(DBTeam.user_id == user_id)
+        )
+
+        records = q.all()
+        if not records:
+            return [], [], [], {}
+
+        agg = {}
+        match_sets = {}
+
+        for card, match, player, team in records:
+            pid = player.id
+            if pid not in agg:
+                agg[pid] = {
+                    "player": player.name,
+                    "team": team.name,
+                    "bat_runs": 0,
+                    "bat_balls": 0,
+                    "bat_fours": 0,
+                    "bat_sixes": 0,
+                    "bat_innings": 0,
+                    "bat_not_outs": 0,
+                    "bowl_balls": 0,
+                    "bowl_runs": 0,
+                    "bowl_wkts": 0,
+                    "bowl_maidens": 0,
+                    "bowl_best": (0, 9999),  # (wkts, runs)
+                    "bowl_innings": 0,
+                    "catches": 0,
+                    "run_outs": 0,
+                }
+                match_sets[pid] = set()
+
+            match_sets[pid].add(card.match_id)
+
+            if card.record_type == "batting":
+                faced = (card.balls or 0) > 0 or (card.runs or 0) > 0 or bool(card.is_out)
+                if faced:
+                    agg[pid]["bat_innings"] += 1
+                    if not card.is_out:
+                        agg[pid]["bat_not_outs"] += 1
+                agg[pid]["bat_runs"] += card.runs or 0
+                agg[pid]["bat_balls"] += card.balls or 0
+                agg[pid]["bat_fours"] += card.fours or 0
+                agg[pid]["bat_sixes"] += card.sixes or 0
+
+            if card.record_type == "bowling":
+                balls = card.balls_bowled or 0
+                if balls > 0 or (card.overs or 0) > 0:
+                    agg[pid]["bowl_innings"] += 1
+                agg[pid]["bowl_balls"] += balls
+                agg[pid]["bowl_runs"] += card.runs_conceded or 0
+                agg[pid]["bowl_wkts"] += card.wickets or 0
+                agg[pid]["bowl_maidens"] += card.maidens or 0
+                # best figure: higher wickets, then lower runs
+                best_w, best_r = agg[pid]["bowl_best"]
+                if (card.wickets or 0) > best_w or ((card.wickets or 0) == best_w and (card.runs_conceded or 0) < best_r):
+                    agg[pid]["bowl_best"] = (card.wickets or 0, card.runs_conceded or 0)
+
+            agg[pid]["catches"] += card.catches or 0
+            agg[pid]["run_outs"] += card.run_outs or 0
+
+        batting_stats = []
+        bowling_stats = []
+        fielding_stats = []
+
+        for pid, d in agg.items():
+            matches_played = len(match_sets[pid])
+
+            # Batting
+            if matches_played > 0:
+                outs = max(d["bat_innings"] - d["bat_not_outs"], 0)
+                bat_avg = d["bat_runs"] / outs if outs > 0 else d["bat_runs"]
+                sr = (d["bat_runs"] * 100 / d["bat_balls"]) if d["bat_balls"] > 0 else 0
+                batting_stats.append({
+                    "Player": d["player"],
+                    "Team": d["team"],
+                    "Matches": matches_played,
+                    "Innings": d["bat_innings"],
+                    "Runs": d["bat_runs"],
+                    "Balls": d["bat_balls"],
+                    "Average": round(bat_avg, 2),
+                    "Strike Rate": round(sr, 2),
+                    "6s": d["bat_sixes"],
+                    "4s": d["bat_fours"],
+                    "Not Outs": d["bat_not_outs"],
+                })
+
+            # Bowling
+            if matches_played > 0 and (d["bowl_balls"] > 0 or d["bowl_wkts"] > 0):
+                overs_float = (d["bowl_balls"] // 6) + (d["bowl_balls"] % 6) / 10.0
+                econ = d["bowl_runs"] / (d["bowl_balls"] / 6) if d["bowl_balls"] > 0 else 0
+                bowl_avg = d["bowl_runs"] / d["bowl_wkts"] if d["bowl_wkts"] > 0 else 0
+                best_w, best_r = d["bowl_best"]
+                bowling_stats.append({
+                    "Player": d["player"],
+                    "Team": d["team"],
+                    "Matches": matches_played,
+                    "Innings": d["bowl_innings"],
+                    "Wickets": d["bowl_wkts"],
+                    "Overs": overs_float,
+                    "Economy": round(econ, 2),
+                    "Average": round(bowl_avg, 2) if bowl_avg else 0,
+                    "Best": f"{best_w}/{best_r}" if best_w or best_r < 9999 else "-",
+                })
+
+            # Fielding
+            if matches_played > 0:
+                fielding_stats.append({
+                    "Player": d["player"],
+                    "Team": d["team"],
+                    "Matches": matches_played,
+                    "Innings": matches_played,  # fielded if in match
+                    "Catches": d["catches"],
+                    "Run Outs": d["run_outs"],
+                    "Stumpings": 0,  # not tracked yet
+                })
+
+        # Leaderboards
+        leaderboards = {
+            "top_run_scorers": sorted(batting_stats, key=lambda x: x["Runs"], reverse=True)[:5],
+            "top_wicket_takers": sorted(bowling_stats, key=lambda x: x["Wickets"], reverse=True)[:5],
+            "most_catches": sorted(fielding_stats, key=lambda x: x["Catches"], reverse=True)[:5],
+            "best_strikers": sorted([p for p in batting_stats if p["Balls"] > 20], key=lambda x: x["Strike Rate"], reverse=True)[:5],
+            "best_economy": sorted([p for p in bowling_stats if p["Overs"] > 5], key=lambda x: x["Economy"])[:5],
+        }
+
+        return batting_stats, bowling_stats, fielding_stats, leaderboards
+
     def _render_statistics_page(user_id):
         try:
-            # Query all players for this user
-            players = DBPlayer.query.join(DBTeam).filter(DBTeam.user_id == user_id).all()
-            
-            if not players:
+            tournaments = Tournament.query.filter_by(user_id=user_id).all()
+            selected_tid = request.args.get("tournament_id", type=int)
+
+            if not tournaments:
                 return render_template("statistics.html", has_stats=False, user=current_user)
 
-            batting_stats = []
-            bowling_stats = []
-            
-            for p in players:
-                # Batting Calculation
-                innings = p.matches_played # Naive approximation, or track real innings
-                dismissals = p.matches_played - p.not_outs 
-                # Better dismissal count: we don't have it explicitly stored, 
-                # but we updated not_outs only if they played.
-                # Let's assume matches_played tracks innings batted? 
-                # MatchArchiver increments matches_played for everyone in the scorecard.
-                # If they didn't bat, balls=0. 
-                # Let's refine MatchArchiver later, but for now use safe math.
-                
-                avg = p.total_runs / dismissals if dismissals > 0 else p.total_runs
-                sr = (p.total_runs / p.total_balls_faced * 100) if p.total_balls_faced > 0 else 0.0
-                
-                if p.total_balls_faced > 0: # Only include in batting stats if they faced a ball
-                    batting_stats.append({
-                        "Player": p.name,
-                        "Team": p.team.name,
-                        "Runs": p.total_runs,
-                        "Balls": p.total_balls_faced,
-                        "6s": p.total_sixes,
-                        "4s": p.total_fours,
-                        "Average": round(avg, 2),
-                        "Strike Rate": round(sr, 2),
-                        "Catches": 0 # Not tracking catches in DB yet? Added schema but assumed 0
-                    })
+            if not selected_tid:
+                return render_template("statistics.html", has_stats=False, user=current_user, tournaments=tournaments, selected_tid=None)
 
-                # Bowling Calculation
-                if p.total_balls_bowled > 0:
-                    overs = p.total_balls_bowled / 6
-                    econ = p.total_runs_conceded / overs if overs > 0 else 0.0
-                    
-                    bowling_stats.append({
-                        "Player": p.name,
-                        "Team": p.team.name,
-                        "Wickets": p.total_wickets,
-                        "Overs": round(overs, 1),
-                        "Runs": p.total_runs_conceded,
-                        "Economy": round(econ, 2),
-                        "Best": f"{p.best_bowling_wickets}/{p.best_bowling_runs}" if p.best_bowling_wickets > 0 else "-"
-                    })
+            batting_stats, bowling_stats, fielding_stats, leaderboards = _compute_tournament_stats(user_id, selected_tid)
 
-            # Leaderboards (Derive from the calculated lists)
-            leaderboards = {}
-            leaderboards['top_run_scorers'] = sorted(batting_stats, key=lambda x: x['Runs'], reverse=True)[:5]
-            leaderboards['top_wicket_takers'] = sorted(bowling_stats, key=lambda x: x['Wickets'], reverse=True)[:5]
-            leaderboards['most_sixes'] = sorted(batting_stats, key=lambda x: x['6s'], reverse=True)[:5]
-            leaderboards['best_strikers'] = sorted([p for p in batting_stats if p['Balls'] > 20], key=lambda x: x['Strike Rate'], reverse=True)[:5]
-            leaderboards['best_economy'] = sorted([p for p in bowling_stats if p['Overs'] > 5], key=lambda x: x['Economy'])[:5]
-            leaderboards['best_average'] = sorted([p for p in batting_stats if p['Runs'] > 50], key=lambda x: x['Average'], reverse=True)[:5]
-            
-            # TODO: Add 'catches' and 'best_figures' proper sorting if needed
-            leaderboards['most_catches'] = [] 
-            
-            # Headers expected by template
-            batting_headers = ['Player', 'Team', 'Runs', 'Balls', 'Average', 'Strike Rate', '6s', '4s']
-            bowling_headers = ['Player', 'Team', 'Wickets', 'Overs', 'Runs', 'Economy', 'Best']
+            if not batting_stats and not bowling_stats and not fielding_stats:
+                return render_template("statistics.html", has_stats=False, user=current_user, tournaments=tournaments, selected_tid=selected_tid)
 
-            return render_template("statistics.html",
-                                has_stats=True, user=current_user,
-                                batting_stats=batting_stats,
-                                bowling_stats=bowling_stats,
-                                batting_headers=batting_headers,
-                                bowling_headers=bowling_headers,
-                                leaderboards=leaderboards,
-                                batting_filename="DB_Live_Stats",
-                                bowling_filename="DB_Live_Stats")
+            batting_headers = ['Player', 'Team', 'Matches', 'Innings', 'Runs', 'Balls', 'Average', 'Strike Rate', '6s', '4s', 'Not Outs']
+            bowling_headers = ['Player', 'Team', 'Matches', 'Innings', 'Wickets', 'Overs', 'Economy', 'Average', 'Best']
+            fielding_headers = ['Player', 'Team', 'Matches', 'Innings', 'Catches', 'Run Outs', 'Stumpings']
+
+            return render_template(
+                "statistics.html",
+                has_stats=True,
+                user=current_user,
+                tournaments=tournaments,
+                selected_tid=selected_tid,
+                batting_stats=batting_stats,
+                bowling_stats=bowling_stats,
+                fielding_stats=fielding_stats,
+                batting_headers=batting_headers,
+                bowling_headers=bowling_headers,
+                fielding_headers=fielding_headers,
+                leaderboards=leaderboards,
+                batting_filename=f"tournament_{selected_tid}_batting",
+                bowling_filename=f"tournament_{selected_tid}_bowling"
+            )
         except Exception as e:
             app.logger.error(f"Error in _render_statistics_page for user {user_id}: {e}", exc_info=True)
             return render_template("statistics.html", has_stats=False, user=current_user)
@@ -1127,8 +1442,9 @@ def create_app():
             .all()
         )
         if not scorecards:
-            flash("Scorecard data not available yet", "error")
-            return redirect(url_for("home"))
+            flash("Detailed scorecard stats unavailable - showing summary only", "warning")
+            # Don't redirect, just continue with empty scorecards
+
 
         teams = {
             team.id: team
@@ -1169,6 +1485,7 @@ def create_app():
                         "wicket_type": card.wicket_type,
                         "wicket_taker_name": card.wicket_taker_name,
                         "fielder_name": card.fielder_name,
+                        "strike_rate": card.strike_rate if card.strike_rate else (card.runs * 100.0 / card.balls if card.balls > 0 else 0),
                         "position": card.position or 9999,
                     }
                 )
@@ -1183,6 +1500,7 @@ def create_app():
                         "maidens": card.maidens,
                         "wides": card.wides,
                         "noballs": card.noballs,
+                        "economy": (card.runs_conceded / card.overs) if card.overs and card.overs > 0 else 0,
                         "position": card.position or 9999,
                     }
                 )
@@ -1573,118 +1891,7 @@ def create_app():
                  
             # If this is a tournament match, autosave to DB and update standings
             if match.data.get("tournament_id"):
-                try:
-                    with db.session.begin():
-                        tournament_id = int(match.data["tournament_id"])
-
-                        # 1) Resimulation check
-                        existing_match = db.session.get(DBMatch, match_id)
-                        if existing_match:
-                            app.logger.info(f"[Tournament] Existing match {match_id} found. Reversing stats for resimulation.")
-                            tournament_engine.reverse_standings(existing_match, commit=False)
-                            db.session.delete(existing_match)
-                            db.session.flush()
-
-                        app.logger.info(f"[Tournament] Auto-saving match {match_id} for Tournament {tournament_id}")
-
-                        final_res = outcome.get("result", "Match Ended")
-                        match.data["result_description"] = final_res
-                        match.data["current_state"] = "completed"
-
-                        db_match = DBMatch(
-                            id=match_id,
-                            user_id=current_user.id,
-                            tournament_id=tournament_id,
-                            match_json_path="autosaved",
-                            result_description=final_res,
-                            date=datetime.now()
-                        )
-
-                        # Fixture must exist
-                        fix_id = match.data.get("fixture_id")
-                        fixture = db.session.get(TournamentFixture, fix_id) if fix_id else None
-                        if not fixture:
-                            raise ValueError("Tournament fixture missing; cannot apply standings safely.")
-                        db_match.home_team_id = fixture.home_team_id
-                        db_match.away_team_id = fixture.away_team_id
-                        fixture.match_id = match_id
-                        fixture.status = 'Completed'
-
-                        # Calculate innings stats
-                        team_home_code = match.data["team_home"].split("_")[0]
-                        first_bat_is_home = (match.toss_winner == team_home_code and match.toss_decision == "Bat") or \
-                                            (match.toss_winner != team_home_code and match.toss_decision == "Bowl")
-
-                        def calculate_innings_stats(batting_stats, bowling_stats):
-                            runs = sum(p.get("runs", 0) for p in batting_stats.values())
-                            wickets = sum(1 for p in batting_stats.values() if p.get("wicket_type"))
-                            balls_total = sum(b.get("balls_bowled", 0) for b in bowling_stats.values())
-                            overs = (balls_total // 6) + (balls_total % 6) / 10.0
-                            return runs, wickets, overs
-
-                        s1_runs, s1_wickets, s1_overs = calculate_innings_stats(
-                            match.first_innings_batting_stats, match.first_innings_bowling_stats
-                        )
-                        s2_runs, s2_wickets, s2_overs = calculate_innings_stats(
-                            match.batsman_stats, match.bowler_stats
-                        )
-
-                        if first_bat_is_home:
-                            db_match.home_team_score = s1_runs
-                            db_match.home_team_wickets = s1_wickets
-                            db_match.home_team_overs = s1_overs
-
-                            db_match.away_team_score = s2_runs
-                            db_match.away_team_wickets = s2_wickets
-                            db_match.away_team_overs = s2_overs
-                        else:
-                            db_match.away_team_score = s1_runs
-                            db_match.away_team_wickets = s1_wickets
-                            db_match.away_team_overs = s1_overs
-
-                            db_match.home_team_score = s2_runs
-                            db_match.home_team_wickets = s2_wickets
-                            db_match.home_team_overs = s2_overs
-
-                        # Winner resolution
-                        winner_name = getattr(match, 'winner', None)
-                        if winner_name and fixture:
-                            winner_name_lower = winner_name.lower().strip()
-                            home_name = (fixture.home_team.name or '').lower().strip()
-                            home_code = (fixture.home_team.short_code or '').lower().strip()
-                            away_name = (fixture.away_team.name or '').lower().strip()
-                            away_code = (fixture.away_team.short_code or '').lower().strip()
-
-                            if winner_name_lower in (home_name, home_code):
-                                db_match.winner_team_id = fixture.home_team_id
-                            elif winner_name_lower in (away_name, away_code):
-                                db_match.winner_team_id = fixture.away_team_id
-                            else:
-                                app.logger.warning(f"[Tournament] Could not match winner '{winner_name}' to teams")
-
-                        db.session.add(db_match)
-
-                        # Save scorecard within same transaction
-                        scorecard_data = outcome.get("scorecard_data")
-                        if scorecard_data:
-                            app.logger.info(f"[Tournament] Saving scorecard for match {match_id}")
-                            archiver = MatchArchiver(
-                                match,
-                                match_id,
-                                match_data["team_home"].split('_')[0],
-                                match_data["team_away"].split('_')[0],
-                                user=current_user
-                            )
-                            archiver._save_to_database()
-
-                        # Update standings (no internal commit)
-                        tournament_engine.update_standings(db_match, commit=False)
-
-                    app.logger.info(f"[Tournament] Match {match_id} saved and standings updated.")
-
-                except Exception as e:
-                    app.logger.error(f"[Tournament] Failed to auto-update tournament: {e}", exc_info=True)
-                    db.session.rollback()
+                _handle_tournament_match_completion(match, match_id, outcome, app.logger)
 
             return jsonify({
                 "innings_end":     match.innings == 2, # Flag generic innings end

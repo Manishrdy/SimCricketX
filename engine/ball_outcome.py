@@ -277,10 +277,11 @@ commentary_templates = {
 # 2) Pitch-influence definitions (60% weight)
 # -----------------------------------------------------------------------------
 PITCH_RUN_FACTOR = {
-    "Green": 0.70,   # run-suppressing → 150–170 average
-    "Dry":   0.70,   # spin-friendly → 150–170 average
+    # Slightly boost scoring on Green/Dry (+15%), reduce Flat (-10%)
+    "Green": 0.70 * 1.15,   # run-suppressing → ~150–170 average
+    "Dry":   0.70 * 1.15,   # spin-friendly → ~150–170 average
     "Hard":  1.10,   # balanced (batting edge) → 160–180
-    "Flat":  1.20,   # batting paradise → 180–200
+    "Flat":  1.20 * 0.90,   # batting paradise → 180–200 (slightly toned down)
     "Dead":  1.30    # batting festival → 200–230
 }
 
@@ -633,8 +634,8 @@ def calculate_outcome(
                 pitch, bowling_type, streak
             )
 
-        # 3) Death-over adjustments (overs 17–20 → over_number 16–19)
-        
+            # 3) Death-over adjustments
+            
             # 🔧 USER REQUEST: "In power play first 6 overs, we can keep some boundaries"
             # Powerplay boosts (Overs 0-5)
             if over_number < 6:
@@ -648,22 +649,21 @@ def calculate_outcome(
                     # Let's leave wicket as is or slight reduction unless reckless.
                     pass
 
-            # 3) Death-over adjustments (overs 17–20 → over_number 16–19)
-            if over_number >= 16:
-                # 🔧 USER REQUEST: "last 4 overs, we can increasing runs scoring + wickets fall a bit more"
-                
-                # Boundaries (4, 6) boost
+            # 3) Death-over adjustments
+            # First innings: last 5 overs (over_number >= 15)
+            # Second innings: last 4 overs (over_number >= 16)
+            in_death = (innings == 1 and over_number >= 15) or (innings == 2 and over_number >= 16)
+            if in_death:
                 if outcome in ("Four", "Six"):
-                    if pitch in ("Flat", "Dead", "Hard"): # Hard added to high scoring list
-                        boundary_boost = 1.4  # Increased from 1.25
+                    if pitch in ("Flat", "Dead", "Hard"):
+                        boundary_boost = 1.25 if innings == 1 else 1.40
                     else:  # Green or Dry
-                        boundary_boost = 1.15  # Increased from 1.08
+                        boundary_boost = 1.15 if innings == 1 else 1.20
                     logger.debug(f"  DeathOver: Boosting boundary ({outcome}) on {pitch} by factor {boundary_boost}")
                     weight *= boundary_boost
 
-                # Wicket boost (Increased per user request)
                 if outcome == "Wicket":
-                    wicket_boost = 1.3  # Increased from 1.1 to 1.3
+                    wicket_boost = 1.15 if innings == 1 else 1.30
                     logger.debug(f"  DeathOver: Boosting wicket on {pitch} by factor {wicket_boost}")
                     weight *= wicket_boost
 

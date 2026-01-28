@@ -38,6 +38,11 @@ def ensure_schema(engine):
                 for stmt in alters:
                     conn.execute(stmt)
 
+    # Ensure tournament_player_stats_cache exists (create_all will create table if missing)
+    if "tournament_player_stats_cache" not in tables:
+        from database.models import TournamentPlayerStatsCache  # noqa: F401
+        db.create_all()
+
 
 def fix_db_schema():
     app = create_app()

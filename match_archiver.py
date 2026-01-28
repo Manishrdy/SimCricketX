@@ -33,7 +33,7 @@ from typing import Dict, List, Any, Optional, Union
 import zipfile
 
 from database import db
-from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, Tournament
+from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, Tournament, MatchPartnership
 
 # ─── Define PROJECT_ROOT so that we can write to /<project_root>/data/… ─────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -261,28 +261,150 @@ class MatchArchiver:
         except Exception as e:
             raise MatchArchiverError(f"Failed to create archive directory: {e}")
 
+    def _calculate_margin_of_victory(self) -> tuple:
+        """
+        Calculate margin of victory from match result.
+        
+        Returns:
+            tuple: (margin_type, margin_value)
+                   margin_type: 'runs', 'wickets', or 'tie'
+                   margin_value: integer value or None for tie
+        """
+        if not self.match.result:
+            return None, None
+        
+        result_lower = self.match.result.lower()
+        
+        # Check for tie
+        if 'tie' in result_lower or 'tied' in result_lower:
+            return 'tie', 0
+        
+        # Extract runs margin: "Team won by X runs"
+        runs_match = re.search(r'(\d+)\s+runs?', result_lower)
+        if runs_match:
+            return 'runs', int(runs_match.group(1))
+        
+        # Extract wickets margin: "Team won by X wickets"
+        wickets_match = re.search(r'(\d+)\s+wickets?', result_lower)
+        if wickets_match:
+            return 'wickets', int(wickets_match.group(1))
+        
+        return None, None
+    
+    def _resolve_toss_winner_id(self, home_team, away_team) -> int:
+        """
+        Resolve toss winner team ID from match data.
+        
+        Args:
+            home_team: Home team database object
+            away_team: Away team database object
+        
+        Returns:
+            int: Team ID of toss winner, or None
+        """
+        toss_winner = self.match_data.get('toss_winner')
+        if not toss_winner:
+            return None
+        
+        # Match against team short codes
+        if toss_winner == home_team.short_code:
+            return home_team.id
+        elif toss_winner == away_team.short_code:
+            return away_team.id
+        
+        return None
+    
+    def _count_wicket_types_for_bowler(self, bowler_name: str, batting_stats: dict) -> dict:
+        """
+        Count different types of wickets taken by a bowler.
+        
+        Args:
+            bowler_name: Name of the bowler
+            batting_stats: Dictionary of batting statistics
+        
+        Returns:
+            dict: Count of each wicket type
+        """
+        wicket_counts = {
+            'bowled': 0,
+            'caught': 0,
+            'lbw': 0,
+            'stumped': 0,
+            'run out': 0,
+            'hit wicket': 0
+        }
+        
+        for player_stats in batting_stats.values():
+            wicket_type = player_stats.get('wicket_type', '').lower()
+            bowler_out = player_stats.get('bowler_out', '')
+            
+            # Only count if this bowler took the wicket
+            if bowler_out != bowler_name:
+                continue
+            
+            if 'bowled' in wicket_type:
+                wicket_counts['bowled'] += 1
+            elif 'caught' in wicket_type or 'c ' in wicket_type:
+                wicket_counts['caught'] += 1
+            elif 'lbw' in wicket_type:
+                wicket_counts['lbw'] += 1
+            elif 'stumped' in wicket_type or 'st ' in wicket_type:
+                wicket_counts['stumped'] += 1
+            elif 'run out' in wicket_type:
+                wicket_counts['run out'] += 1
+            elif 'hit wicket' in wicket_type:
+                wicket_counts['hit wicket'] += 1
+        
+        return wicket_counts
+
     def _save_to_database(self) -> None:
         """Save match results and stats to SQLite database"""
         try:
-            # 1. Resolve Team IDs from "SHORT_email" strings
-            # Only splitting once, expecting standard format
-            h_code, h_user = self.match_data['team_home'].split('_')
-            a_code, a_user = self.match_data['team_away'].split('_')
-            
-            home_team = DBTeam.query.filter_by(short_code=h_code, user_id=h_user).first()
-            away_team = DBTeam.query.filter_by(short_code=a_code, user_id=a_user).first()
+            home_team = None
+            away_team = None
+            db_match = DBMatch.query.get(self.match_id)
+
+            if db_match:
+                # Use existing match record to identify teams (More robust)
+                home_team = DBTeam.query.get(db_match.home_team_id)
+                away_team = DBTeam.query.get(db_match.away_team_id)
+                self.logger.info(f"Resolved teams from existing DBMatch: {home_team.name} vs {away_team.name}")
             
             if not home_team or not away_team:
-                self.logger.error("Could not resolve teams for DB save")
+                # Fallback to string parsing
+                try:
+                    # Try splitting by first underscore (standard format expectation: CODE_email)
+                    if '_' in self.match_data['team_home']:
+                        h_parts = self.match_data['team_home'].split('_', 1)
+                        h_code, h_user = h_parts[0], h_parts[1]
+                        home_team = DBTeam.query.filter_by(short_code=h_code, user_id=h_user).first()
+                    
+                    if '_' in self.match_data['team_away']:
+                        a_parts = self.match_data['team_away'].split('_', 1)
+                        a_code, a_user = a_parts[0], a_parts[1]
+                        away_team = DBTeam.query.filter_by(short_code=a_code, user_id=a_user).first()
+
+                except Exception as parse_err:
+                     self.logger.warning(f"Team string parsing failed: {parse_err}")
+
+            if not home_team or not away_team:
+                self.logger.error(f"Could not resolve teams for DB save. Match ID: {self.match_id}")
                 return
 
             # Determine Winner (Logic restored)
             winner_team = None
             if self.match.result:
-                if self.team_home in self.match.result:
+                result_lower = self.match.result.lower()
+                if home_team.name.lower() in result_lower:
                     winner_team = home_team
-                elif self.team_away in self.match.result:
+                elif away_team.name.lower() in result_lower:
                     winner_team = away_team
+            
+            # Calculate margin of victory
+            margin_type, margin_value = self._calculate_margin_of_victory()
+            
+            # Resolve toss winner
+            toss_winner_id = self._resolve_toss_winner_id(home_team, away_team)
 
             # 2. Check for Existing Match Record
             db_match = DBMatch.query.get(self.match_id)
@@ -300,8 +422,23 @@ class MatchArchiver:
                 db_match.result_description = self.match.result
                 db_match.match_json_path = self.filenames['json']
                 
+                # NEW: Margin of victory
+                db_match.margin_type = margin_type
+                db_match.margin_value = margin_value
+                
+                # NEW: Toss information
+                db_match.toss_winner_team_id = toss_winner_id
+                db_match.toss_decision = self.match_data.get('toss_decision')
+                
+                # NEW: Match format
+                db_match.match_format = self.match_data.get('format', 'T20')
+                db_match.overs_per_side = self.match_data.get('overs', 20)
+                
                 # Clear existing scorecards to avoid duplication/stale data
                 MatchScorecard.query.filter_by(match_id=self.match_id).delete()
+                
+                # Clear existing partnerships
+                MatchPartnership.query.filter_by(match_id=self.match_id).delete()
             else:
                 self.logger.info(f"Creating new DB record for Match {self.match_id}")
                 db_match = DBMatch(
@@ -314,8 +451,16 @@ class MatchArchiver:
                     pitch_type=self.match_data.get('pitch'),
                     date=datetime.utcnow(),
                     result_description=self.match.result,
-                    # home_team_score will be set below
-                    match_json_path=self.filenames['json']
+                    match_json_path=self.filenames['json'],
+                    # NEW: Margin of victory
+                    margin_type=margin_type,
+                    margin_value=margin_value,
+                    # NEW: Toss information
+                    toss_winner_team_id=toss_winner_id,
+                    toss_decision=self.match_data.get('toss_decision'),
+                    # NEW: Match format
+                    match_format=self.match_data.get('format', 'T20'),
+                    overs_per_side=self.match_data.get('overs', 20)
                 )
                 db.session.add(db_match)
             
@@ -374,7 +519,7 @@ class MatchArchiver:
                     )
 
             # 4. Save Scorecards
-            def save_stats(stats_dict, team_id, innings_number, record_type):
+            def save_stats(stats_dict, team_id, innings_number, record_type, batting_stats=None):
                 if not stats_dict:
                     return
                 for position, (p_name, s) in enumerate(stats_dict.items(), start=1):
@@ -414,6 +559,14 @@ class MatchArchiver:
                         # New fields for detailed scorecard
                         card.wicket_taker_name = s.get('bowler_out')
                         card.fielder_name = s.get('fielder_out')
+                        
+                        # NEW: Detailed batting stats
+                        card.ones = s.get('ones', 0)
+                        card.twos = s.get('twos', 0)
+                        card.threes = s.get('threes', 0)
+                        card.dot_balls = s.get('dots', 0)
+                        card.strike_rate = (s['runs'] * 100.0 / s['balls']) if s.get('balls', 0) > 0 else 0.0
+                        card.batting_position = position
                     else:
                         card.overs = s.get('overs', 0)
                         card.balls_bowled = s.get('balls_bowled', 0)
@@ -422,6 +575,19 @@ class MatchArchiver:
                         card.maidens = s.get('maidens', 0)
                         card.wides = s.get('wides', 0)
                         card.noballs = s.get('noballs', 0)
+                        
+                        # NEW: Detailed bowling stats
+                        card.dot_balls_bowled = s.get('dots', 0)
+                        
+                        # Count wicket types for this bowler (only if batting_stats provided)
+                        if batting_stats:
+                            wicket_counts = self._count_wicket_types_for_bowler(p_name, batting_stats)
+                            card.wickets_bowled = wicket_counts.get('bowled', 0)
+                            card.wickets_caught = wicket_counts.get('caught', 0)
+                            card.wickets_lbw = wicket_counts.get('lbw', 0)
+                            card.wickets_stumped = wicket_counts.get('stumped', 0)
+                            card.wickets_run_out = wicket_counts.get('run out', 0)
+                            card.wickets_hit_wicket = wicket_counts.get('hit wicket', 0)
 
             if first_bat_name == self.match.match_data["team_home"].split('_')[0]:
                 innings_plan = [
@@ -436,7 +602,7 @@ class MatchArchiver:
 
             for innings_number, batting_team_id, bowling_team_id, batting_stats, bowling_stats in innings_plan:
                 save_stats(batting_stats, batting_team_id, innings_number, "batting")
-                save_stats(bowling_stats, bowling_team_id, innings_number, "bowling")
+                save_stats(bowling_stats, bowling_team_id, innings_number, "bowling", batting_stats)
             
             # Update Player Aggregates
             updated_players = set()
@@ -462,11 +628,11 @@ class MatchArchiver:
                         p.highest_score = card.runs
                     if not card.is_out and card.balls > 0:
                         p.not_outs += 1
-
+                    
                 if card.record_type == "bowling":
+                    p.total_wickets += card.wickets
                     p.total_balls_bowled += card.balls_bowled
                     p.total_runs_conceded += card.runs_conceded
-                    p.total_wickets += card.wickets
                     p.total_maidens += card.maidens
                     if card.wickets >= 5:
                         p.five_wicket_hauls += 1
@@ -478,11 +644,53 @@ class MatchArchiver:
                         if card.runs_conceded < p.best_bowling_runs:
                             p.best_bowling_runs = card.runs_conceded
 
+            # Save Partnerships
+            # Determine which team batted first/second
+            first_bat_team_id = innings_plan[0][1] # batting_team_id of 1st innings
+            second_bat_team_id = innings_plan[1][1] # batting_team_id of 2nd innings
+            
+            self._save_partnerships_to_db(self.match.first_innings_partnerships, 1, first_bat_team_id)
+            self._save_partnerships_to_db(self.match.second_innings_partnerships, 2, second_bat_team_id)
+
             db.session.commit()
             
         except Exception as e:
             self.logger.error(f"DB Save Error: {e}", exc_info=True)
             db.session.rollback()
+
+    def _save_partnerships_to_db(self, partnerships: List[Dict], innings_number: int, batting_team_id: int) -> None:
+        """
+        Save partnerships for an innings to the database.
+        
+        Args:
+            partnerships: List of partnership dictionaries from Match engine
+            innings_number: 1 or 2
+            batting_team_id: ID of the batting team
+        """
+        if not partnerships:
+            return
+
+        for p_data in partnerships:
+             # Resolve player IDs 
+             b1 = DBPlayer.query.filter_by(name=p_data['batsman1_name'], team_id=batting_team_id).first()
+             b2 = DBPlayer.query.filter_by(name=p_data['batsman2_name'], team_id=batting_team_id).first()
+             
+             mp = MatchPartnership(
+                 match_id=self.match_id,
+                 innings_number=innings_number,
+                 wicket_number=p_data.get('wicket_number'),
+                 batsman1_id=b1.id if b1 else None,
+                 batsman2_id=b2.id if b2 else None,
+                 runs=p_data['runs'],
+                 balls=p_data['balls'],
+                 batsman1_runs=p_data.get('batsman1_contribution', 0),
+                 batsman1_balls=p_data.get('batsman1_balls', 0),
+                 batsman2_runs=p_data.get('batsman2_contribution', 0),
+                 batsman2_balls=p_data.get('batsman2_balls', 0),
+                 start_over=p_data['start_over'],
+                 end_over=p_data['end_over']
+             )
+             db.session.add(mp)
 
     def _copy_json_file(self, original_path: str) -> None:
         """Copy original JSON file to archive with validation"""
