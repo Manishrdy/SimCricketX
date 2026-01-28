@@ -4,7 +4,7 @@ import os
 from tabulate import tabulate
 from app import create_app
 from database import db
-from database.models import User, Team, Player, Match, MatchScorecard, Tournament, TournamentFixture, TournamentTeam
+from database.models import User, Team, Player, Match, MatchScorecard, Tournament, TournamentFixture, TournamentTeam, MatchPartnership, TournamentPlayerStatsCache
 
 # Map friendly names to Models
 MODELS = {
@@ -15,7 +15,9 @@ MODELS = {
     "5": ("Tournaments", Tournament),
     "6": ("TournamentFixtures", TournamentFixture),
     "7": ("TournamentStats (Standings)", TournamentTeam),
-    "8": ("Scorecards", MatchScorecard)
+    "8": ("Scorecards", MatchScorecard),
+    "9": ("MatchPartnerships", MatchPartnership),
+    "10": ("TournamentPlayerStatsCache", TournamentPlayerStatsCache)
 }
 
 def view_table(model_name, model_class):

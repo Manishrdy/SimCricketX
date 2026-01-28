@@ -39,8 +39,7 @@ from flask_login import (
 from auth.user_auth import (
     register_user,
     verify_user,
-    delete_user,
-    load_credentials
+    delete_user
 )
 from engine.team import Team, save_team, PITCH_PREFERENCES
 from engine.player import Player, PLAYER_ROLES, BATTING_HANDS, BOWLING_TYPES, BOWLING_HANDS
@@ -49,7 +48,7 @@ import shutil
 import time
 import threading
 import traceback
-from auth.user_auth import load_credentials, save_credentials
+
 from werkzeug.utils import secure_filename
 from engine.stats_aggregator import StatsAggregator 
 from engine.stats_service import StatsService
@@ -219,9 +218,6 @@ def cleanup_temp_scorecard_images():
     except Exception as e:
         app.logger.error(f"[Cleanup] Error removing temp scorecard images directory: {e}", exc_info=True)
 
-class User(UserMixin):
-    def __init__(self, email):
-        self.id = email
 
 
 def _safe_get_attr(obj, attr, default=None):
@@ -342,10 +338,8 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(email):
-        creds = load_credentials()
-        if email in creds:
-            return User(email)
-        return None
+        # Use DBUser (User model) directly
+        return db.session.get(DBUser, email)
 
     # --- Request logging ---
     @app.before_request
@@ -811,8 +805,11 @@ def create_app():
                 return render_template("login.html", error="Email and password required")
 
             if verify_user(email, password):
-                user = User(email)
-                login_user(user)
+                # Fetch user model from DB (aliased as DBUser or just User from models)
+                # In app.py imports: from database.models import User as DBUser
+                user = db.session.get(DBUser, email)
+                if user:
+                    login_user(user)
                 app.logger.info(f"Successful login for {email}")
                 return redirect(url_for("home"))
             else:
