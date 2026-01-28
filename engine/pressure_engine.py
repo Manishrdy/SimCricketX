@@ -86,8 +86,8 @@ class PressureEngine:
             effects = {
                 'defensive_active': True,
                 'defensive_level': defensive_level,
-                'boundary_reduction': 0.4 + (defensive_level * 0.4),  # 40-80% fewer boundaries
-                'wicket_reduction': 0.3 + (defensive_level * 0.5),    # 30-80% fewer wickets
+                'boundary_reduction': 0.1 + (defensive_level * 0.2),  # 🔧 RELAXED: Max 30% reduction (was 80%)
+                'wicket_reduction': 0.1 + (defensive_level * 0.3),    # 🔧 RELAXED: Max 40% reduction (was 80%)
                 'dot_increase': defensive_level * 0.3,                 # More defensive dots
                 'single_boost': 1.0 + (defensive_level * 0.8),        # 80% more singles
                 'mode': mode

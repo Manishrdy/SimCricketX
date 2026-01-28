@@ -650,21 +650,27 @@ def calculate_outcome(
                     pass
 
             # 3) Death-over adjustments
-            # First innings: last 5 overs (over_number >= 15)
-            # Second innings: last 4 overs (over_number >= 16)
-            in_death = (innings == 1 and over_number >= 15) or (innings == 2 and over_number >= 16)
+            # AGGRESSIVE DEATH OVERS (Last 4 overs: 17-20)
+            in_death = over_number >= 16  # Overs 16, 17, 18, 19 (which are 17th to 20th overs)
+            
             if in_death:
                 if outcome in ("Four", "Six"):
+                    # 🔧 USER REQUEST: "Last 4 overs scoring to be little aggressive"
+                    # Significantly increased boost factors for chaos
                     if pitch in ("Flat", "Dead", "Hard"):
-                        boundary_boost = 1.25 if innings == 1 else 1.40
+                        # Super aggressive on batting pitches
+                        boundary_boost = 2.2  # Was 1.4
                     else:  # Green or Dry
-                        boundary_boost = 1.15 if innings == 1 else 1.20
-                    logger.debug(f"  DeathOver: Boosting boundary ({outcome}) on {pitch} by factor {boundary_boost}")
+                        # Still very aggressive on bowling pitches
+                        boundary_boost = 1.8  # Was 1.2
+                    
+                    logger.debug(f"  DeathOver: AGGRESSIVE BOUNDARY ({outcome}) on {pitch} by factor {boundary_boost}")
                     weight *= boundary_boost
 
                 if outcome == "Wicket":
-                    wicket_boost = 1.15 if innings == 1 else 1.30
-                    logger.debug(f"  DeathOver: Boosting wicket on {pitch} by factor {wicket_boost}")
+                    # Increased wicket chance for frantic finishes
+                    wicket_boost = 1.6  # Was 1.3
+                    logger.debug(f"  DeathOver: AGGRESSIVE WICKET on {pitch} by factor {wicket_boost}")
                     weight *= wicket_boost
 
             # 4) Second innings special boosts (last 4 overs)
