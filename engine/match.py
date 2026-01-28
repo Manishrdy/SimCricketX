@@ -2589,18 +2589,6 @@ class Match:
                      self.current_partnership_contributions['batsman1']['name'] = self.current_striker['name']
                      self.current_partnership_contributions['batsman2']['name'] = self.current_non_striker['name']
 
-            # ===== 🌧️ RAIN CHECK =====
-            logger.debug(f"Checking for rain...")
-            if self._check_for_rain():
-                logger.info(f"RAIN DETECTED! Handling rain event...")
-                rain_result = self._handle_rain_event()
-                logger.debug(f"RAIN RESULT: {rain_result}")
-                logger.debug(f"RAIN COMMENTARY: {rain_result.get('commentary', 'NO COMMENTARY FOUND')}")
-                return rain_result
-            # ===== END RAIN CHECK =====
-            
-
-
             self.current_bowler = self.pick_bowler()
             self.commentary.append(
                 f"<strong>The New bowler is</strong> {self.current_bowler['name']}<br>"
@@ -2682,15 +2670,6 @@ class Match:
         
         # 🤝 PARTNERSHIP TRACKING UPDATE
         self._update_partnership_tracking(outcome)
-
-        # ENHANCED DEBUG - Show ALL outcome details
-        logger.debug(f"Ball {self.current_over}.{self.current_ball + 1} FULL OUTCOME:")
-        logger.debug(f"   type: {outcome.get('type')}")
-        logger.debug(f"   runs: {outcome.get('runs')}")
-        logger.debug(f"   batter_out: {outcome.get('batter_out')}")
-        logger.debug(f"   wicket_type: {outcome.get('wicket_type')}")
-        logger.debug(f"   description: '{outcome.get('description')}'")
-        logger.debug(f"   is_extra: {outcome.get('is_extra')}")
 
         # Debug wicket outcomes to catch future issues
         if outcome.get("batter_out", False):
