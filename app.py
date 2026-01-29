@@ -698,15 +698,25 @@ def create_app():
                 })
 
         # Leaderboards
+        # Use StatsService for bowling figures
+        stats_service = StatsService(app.logger)
+        bowling_figures = stats_service.get_bowling_figures_leaderboard(
+            user_id, 
+            tournament_id, 
+            limit=5
+        )
+        
         leaderboards = {
             "top_run_scorers": sorted(batting_stats, key=lambda x: x["Runs"], reverse=True)[:5],
             "top_wicket_takers": sorted(bowling_stats, key=lambda x: x["Wickets"], reverse=True)[:5],
             "most_catches": sorted(fielding_stats, key=lambda x: x["Catches"], reverse=True)[:5],
             "best_strikers": sorted([p for p in batting_stats if p["Balls"] > 20], key=lambda x: x["Strike Rate"], reverse=True)[:5],
             "best_economy": sorted([p for p in bowling_stats if p["Overs"] > 5], key=lambda x: x["Economy"])[:5],
+            "best_bowling_figures": bowling_figures[:5],  # NEW: Best bowling figures
         }
 
         return batting_stats, bowling_stats, fielding_stats, leaderboards
+
 
     def _render_statistics_page(user_id):
         try:
@@ -2652,6 +2662,138 @@ def create_app():
             app.logger.error(f"Error exporting statistics: {e}", exc_info=True)
             flash("Error exporting statistics", "danger")
             return redirect(url_for('statistics'))
+
+    # ============================================================================
+    # NEW FEATURE ROUTES: Stats Enhancements
+    # ============================================================================
+    
+    @app.route('/api/bowling-figures')
+    @login_required
+    def api_bowling_figures():
+        """
+        API endpoint for best bowling figures leaderboard.
+        Supports filtering by tournament and limiting results.
+        """
+        try:
+            tournament_id = request.args.get('tournament_id', type=int)
+            limit = request.args.get('limit', 10, type=int)
+            
+            # Validate limit
+            if limit < 1 or limit > 100:
+                return jsonify({'error': 'Limit must be between 1 and 100'}), 400
+            
+            stats_service = StatsService(app.logger)
+            figures = stats_service.get_bowling_figures_leaderboard(
+                current_user.id,
+                tournament_id,
+                limit
+            )
+            
+            return jsonify({
+                'success': True,
+                'data': figures,
+                'count': len(figures)
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error fetching bowling figures: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/compare-players')
+    @login_required
+    def api_compare_players():
+        """
+        API endpoint for player comparison.
+        Accepts multiple player IDs and optional tournament filter.
+        """
+        try:
+            # Get player IDs from query params
+            player_ids = request.args.getlist('player_ids', type=int)
+            tournament_id = request.args.get('tournament_id', type=int)
+            
+            if not player_ids or len(player_ids) < 2:
+                return jsonify({'error': 'Select at least 2 players to compare'}), 400
+            
+            if len(player_ids) > 6:
+                return jsonify({'error': 'Maximum 6 players can be compared at once'}), 400
+            
+            stats_service = StatsService(app.logger)
+            comparison = stats_service.compare_players(
+                current_user.id,
+                player_ids,
+                tournament_id
+            )
+            
+            if 'error' in comparison:
+                return jsonify(comparison), 400
+            
+            return jsonify({
+                'success': True,
+                'data': comparison
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error comparing players: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/player/<int:player_id>/partnerships')
+    @login_required
+    def api_player_partnerships(player_id):
+        """
+        API endpoint for player partnership statistics.
+        Returns comprehensive partnership data for a specific player.
+        """
+        try:
+            tournament_id = request.args.get('tournament_id', type=int)
+            
+            stats_service = StatsService(app.logger)
+            partnership_stats = stats_service.get_player_partnership_stats(
+                player_id,
+                current_user.id,
+                tournament_id
+            )
+            
+            if 'error' in partnership_stats:
+                return jsonify(partnership_stats), 400
+            
+            return jsonify({
+                'success': True,
+                'data': partnership_stats
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error fetching partnership stats: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/tournament/<int:tournament_id>/partnerships')
+    @login_required
+    def api_tournament_partnerships(tournament_id):
+        """
+        API endpoint for tournament partnership leaderboard.
+        Returns top partnerships in a tournament.
+        """
+        try:
+            limit = request.args.get('limit', 10, type=int)
+            
+            if limit < 1 or limit > 50:
+                return jsonify({'error': 'Limit must be between 1 and 50'}), 400
+            
+            stats_service = StatsService(app.logger)
+            partnerships = stats_service.get_tournament_partnership_leaderboard(
+                current_user.id,
+                tournament_id,
+                limit
+            )
+            
+            return jsonify({
+                'success': True,
+                'data': partnerships,
+                'count': len(partnerships)
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error fetching tournament partnerships: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
 
 
     return app
