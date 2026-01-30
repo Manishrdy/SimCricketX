@@ -4,9 +4,12 @@ import yaml
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 def load_config():
-    config_path = os.path.join(PROJECT_ROOT, "config", "config.yaml")
+    config_path = os.getenv("SIMCRICKETX_CONFIG_PATH") or os.path.join(PROJECT_ROOT, "config", "config.yaml")
+    if not os.path.exists(config_path):
+        return {}
     with open(config_path, "r") as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+        return data or {}
 
 def safe_print(*args, **kwargs):
     """
