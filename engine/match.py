@@ -117,6 +117,46 @@ class Match:
             'batsman1': {'name': '', 'runs': 0, 'balls': 0},
             'batsman2': {'name': '', 'runs': 0, 'balls': 0}
         }
+
+    def _get_team_name(self, team_list):
+        if team_list is self.home_xi:
+            return self.data["team_home"].split("_")[0]
+        return self.data["team_away"].split("_")[0]
+
+    def _format_scorecard_block(self, scorecard, title):
+        if not scorecard:
+            return ""
+        total = scorecard.get("total_score", 0)
+        wkts = scorecard.get("wickets", 0)
+        overs = scorecard.get("overs", "0.0")
+        batting_rows = "".join(
+            f"<tr><td>{p.get('name','')}</td><td>{p.get('runs',0)}</td><td>{p.get('balls',0)}</td><td>{p.get('fours',0)}</td><td>{p.get('sixes',0)}</td></tr>"
+            for p in scorecard.get("players", [])
+        )
+        bowling_rows = "".join(
+            f"<tr><td>{b.get('name','')}</td><td>{b.get('overs',0)}</td><td>{b.get('maidens',0)}</td><td>{b.get('runs',0)}</td><td>{b.get('wickets',0)}</td></tr>"
+            for b in scorecard.get("bowlers", [])
+        )
+        return (
+            f"<strong>{title}</strong><br>"
+            f"Total: {total}/{wkts} ({overs} ov)<br>"
+            f"<div style='margin-top:6px;font-weight:600;'>Batting</div>"
+            f"<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>"
+            f"<thead><tr><th style='text-align:left;border-bottom:1px solid #444;'>Batter</th>"
+            f"<th style='text-align:right;border-bottom:1px solid #444;'>R</th>"
+            f"<th style='text-align:right;border-bottom:1px solid #444;'>B</th>"
+            f"<th style='text-align:right;border-bottom:1px solid #444;'>4s</th>"
+            f"<th style='text-align:right;border-bottom:1px solid #444;'>6s</th></tr></thead>"
+            f"<tbody>{batting_rows}</tbody></table>"
+            f"<div style='margin-top:8px;font-weight:600;'>Bowling</div>"
+            f"<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>"
+            f"<thead><tr><th style='text-align:left;border-bottom:1px solid #444;'>Bowler</th>"
+            f"<th style='text-align:right;border-bottom:1px solid #444;'>O</th>"
+            f"<th style='text-align:right;border-bottom:1px solid #444;'>M</th>"
+            f"<th style='text-align:right;border-bottom:1px solid #444;'>R</th>"
+            f"<th style='text-align:right;border-bottom:1px solid #444;'>W</th></tr></thead>"
+            f"<tbody>{bowling_rows}</tbody></table>"
+        )
         
         self.recent_wickets_count = 0  # Track wickets in last few balls
         self.recent_wickets_tracker = []  # Track when wickets fell
@@ -2434,6 +2474,7 @@ class Match:
                 scorecard_data["target_info"] = f"{chasing_team_code} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
                 
                 self._save_first_innings_stats()
+                self.first_innings_scorecard = scorecard_data
 
                 self.innings = 2
                 
@@ -2563,6 +2604,11 @@ class Match:
                 final_commentary += f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
                 final_commentary += f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
 
+                first_block = self._format_scorecard_block(getattr(self, 'first_innings_scorecard', None), '1st Innings Scorecard')
+                second_block = self._format_scorecard_block(scorecard_data, '2nd Innings Scorecard')
+                if first_block and second_block:
+                    final_commentary += f"<br><br><strong>Scorecards:</strong><br>{first_block}<br><br>{second_block}"
+
                 self.innings = 3
                 scorecard_data["target_info"] = self.result
 
@@ -2593,12 +2639,9 @@ class Match:
                 f"<strong>The New bowler is</strong> {self.current_bowler['name']}<br>"
             )
             if self.current_over == 0:
-                self.commentary.append(
-                    f"🧢 <strong>Striker:</strong> {self.current_striker['name']}"
-                )
-                self.commentary.append(
-                    f"🎯 <strong>Non-striker:</strong> {self.current_non_striker['name']}<br>"
-                )
+                bowling_team_name = self._get_team_name(self.bowling_team)
+                self.commentary.append(f"{self.current_striker['name']} is on strike")
+                self.commentary.append(f"{self.current_bowler['name']} will open the attack for {bowling_team_name}<br>")
 
         # Calculate pressure and effects
         match_state = self._calculate_current_match_state()
@@ -2778,6 +2821,7 @@ class Match:
                     
                     # Save first innings stats
                     self._save_first_innings_stats()
+                    self.first_innings_scorecard = scorecard_data
 
                     # Reset for 2nd innings (same as time-based transition)
                     self.innings = 2
@@ -2874,6 +2918,9 @@ class Match:
                     )
 
                     all_out_commentary = "<br>".join(enhanced_commentary_parts)
+                    first_block = self._format_scorecard_block(getattr(self, 'first_innings_scorecard', None), '1st Innings Scorecard')
+                    second_block = self._format_scorecard_block(scorecard_data, '2nd Innings Scorecard')
+                    scorecards_block = f"<br><br><strong>Scorecards:</strong><br>{first_block}<br><br>{second_block}" if first_block and second_block else ""
                     return {
                         "Test": "AllOut_SecondInnings", 
                         "match_over": True,
@@ -2881,7 +2928,7 @@ class Match:
                         "final_score": self.score,
                         "wickets": self.wickets,
                         # "result": f"All out for {self.score}",
-                        "commentary": f"{all_out_commentary}<br>Match Over! All out for {self.score}",
+                        "commentary": f"{all_out_commentary}<br>Match Over! All out for {self.score}{scorecards_block}",
                         "result": f"{self.first_batting_team_name} won by {(self.target - 1) - self.score} runs!!"
                     }
 
@@ -2932,7 +2979,7 @@ class Match:
 
             # 5) Append it before “New batsman…”
             print("dismissal_line", dismissal_line)
-            commentary_line += "<br><br>" + dismissal_line + "<br>"
+            commentary_line += "<br>" + dismissal_line + "<br>"
 
             
             self.current_striker = self.batting_team[self.batter_idx[0]]
@@ -2941,7 +2988,7 @@ class Match:
                     "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0,
                     "wicket_type": "", "bowler_out": "", "fielder_out": ""
                 }
-            commentary_line += f"<br><strong>New batsman:</strong> {self.current_striker['name']}<br><br>"
+            commentary_line += f"<br><strong>New batsman:</strong> {self.current_striker['name']}<br>"
             self.commentary.append(commentary_line)
 
         else:
@@ -3040,6 +3087,11 @@ class Match:
                 final_commentary += f"{self.current_striker['name']}\t\t{striker_stats['runs']}({striker_stats['balls']}b) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
                 final_commentary += f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
                 final_commentary += f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
+
+                first_block = self._format_scorecard_block(getattr(self, 'first_innings_scorecard', None), '1st Innings Scorecard')
+                second_block = self._format_scorecard_block(scorecard_data, '2nd Innings Scorecard')
+                if first_block and second_block:
+                    final_commentary += f"<br><br><strong>Scorecards:</strong><br>{first_block}<br><br>{second_block}"
 
                 self.innings = 3
                 scorecard_data["target_info"] = self.result

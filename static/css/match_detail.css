@@ -222,6 +222,7 @@
     overflow-y: auto;
     padding: 1rem;
     min-height: 0;
+    height: 100%;
     /* Critical for flex overflow */
 }
 
@@ -239,7 +240,7 @@
 .overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.85);
+    background: var(--overlay-bg);
     z-index: 2000;
     display: none;
     justify-content: center;

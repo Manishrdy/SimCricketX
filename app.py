@@ -19,6 +19,7 @@ if sys.platform == "win32":
 
 # Now import everything else
 import json
+import re
 import logging
 import yaml
 import uuid
@@ -411,6 +412,10 @@ def create_app():
                 return
             
             tournament_id = int(tournament_id)
+            try:
+                fixture_id = int(fixture_id)
+            except Exception:
+                raise ValueError(f"Invalid fixture_id '{fixture_id}' for match {match_id}")
             logger.info(f"[Tournament] Starting completion handler for match {match_id} in tournament {tournament_id}")
             
             # Step 2: Begin explicit transaction (not nested)
@@ -421,6 +426,13 @@ def create_app():
                 if existing_match:
                     logger.info(f"[Tournament] Existing match {match_id} found. Reversing previous standings.")
                     tournament_engine.reverse_standings(existing_match, commit=False)
+                    # Clean up dependent rows to avoid FK nulling issues (sqlite NOT NULL)
+                    try:
+                        db.session.query(MatchPartnership).filter_by(match_id=match_id).delete(synchronize_session=False)
+                        db.session.query(MatchScorecard).filter_by(match_id=match_id).delete(synchronize_session=False)
+                    except Exception as cleanup_err:
+                        logger.error(f"[Tournament] Failed to clean dependent rows for match {match_id}: {cleanup_err}", exc_info=True)
+                        raise
                     db.session.delete(existing_match)
                     db.session.flush()
                     logger.info(f"[Tournament] Previous match data cleared for {match_id}")
@@ -504,14 +516,28 @@ def create_app():
                 )
                 
                 # Step 7: Resolve winner team ID
-                winner_name = getattr(match, 'winner', None)
+                def _extract_winner_from_result(result_text):
+                    if not result_text:
+                        return None
+                    lower = result_text.lower()
+                    if "match tied" in lower or "no result" in lower or "abandoned" in lower:
+                        return None
+                    match_obj = re.match(r"\s*([A-Za-z0-9 _-]+?)\s+won\b", result_text, re.IGNORECASE)
+                    if match_obj:
+                        return match_obj.group(1).strip()
+                    return None
+
+                winner_name = getattr(match, 'winner', None) or outcome.get("winner")
+                if not winner_name:
+                    winner_name = _extract_winner_from_result(final_result)
+
                 if winner_name:
                     winner_name_lower = winner_name.lower().strip()
                     home_name = (fixture.home_team.name or '').lower().strip()
                     home_code = (fixture.home_team.short_code or '').lower().strip()
                     away_name = (fixture.away_team.name or '').lower().strip()
                     away_code = (fixture.away_team.short_code or '').lower().strip()
-                    
+
                     if winner_name_lower in (home_name, home_code):
                         db_match.winner_team_id = fixture.home_team_id
                         logger.info(f"[Tournament] Winner: {fixture.home_team.name} (Home)")
@@ -1669,11 +1695,9 @@ def create_app():
                 batting_team = match_data["playing_xi"]["home"]
                 bowling_team = match_data["playing_xi"]["away"]
 
-        # Build complete toss commentary with correct batsmen
+        # Build complete toss commentary
         full_commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
-                        f"{toss_winner} won the toss and choose to {toss_decision} first.<br>" \
-                        f"<br>? <strong>Striker:</strong> {batting_team[0]['name']}<br>" \
-                        f"? <strong>Non-striker:</strong> {batting_team[1]['name']}"
+                        f"{toss_winner} won the toss and choose to {toss_decision} first."
         
         return jsonify({
             "toss_commentary": full_commentary,
@@ -2480,7 +2504,16 @@ def create_app():
             db_match = db.session.get(DBMatch, match_id)
             if db_match:
                 app.logger.info(f"Reversing stats for match {match_id}")
-                tournament_engine.reverse_standings(db_match, commit=False)
+                reversed_ok = tournament_engine.reverse_standings(db_match, commit=False)
+                if not reversed_ok:
+                    # Ensure fixture state is reset even if reverse could not locate it
+                    fixture.status = 'Scheduled'
+                    fixture.winner_team_id = None
+                    fixture.match_id = None
+                    fixture.standings_applied = False
+                # Clean up dependent rows to avoid FK nulling errors
+                db.session.query(MatchPartnership).filter_by(match_id=match_id).delete(synchronize_session=False)
+                db.session.query(MatchScorecard).filter_by(match_id=match_id).delete(synchronize_session=False)
                 db.session.delete(db_match)
             else:
                  # Fallback: if DBMatch missing but fixture has ID, manually reset fixture
@@ -2560,11 +2593,28 @@ def create_app():
                              '30s', '50s', '100s']
             
             bowling_headers = ['Team', 'Player', 'Matches', 'Innings', 'Overs', 'Runs', 'Wickets', 
-                             'Average', 'Economy', 'Dots', 'Bowled', 'LBW', 'Byes', 'Leg Byes', 
+                             'Best', 'Average', 'Economy', 'Dots', 'Bowled', 'LBW', 'Byes', 'Leg Byes', 
                              'Wides', 'No Balls']
             
             fielding_headers = ['Player', 'Team', 'Matches', 'Catches', 'Run Outs']
             
+            # Add best bowling figures leaderboard (top 5 sorted by wickets)
+            if stats_data is not None:
+                figures_tournament = tournament_id if view_type == 'tournament' else None
+                best_figures = stats_service.get_bowling_figures_leaderboard(
+                    current_user.id,
+                    figures_tournament,
+                    limit=5
+                )
+                stats_data.setdefault('leaderboards', {})
+                stats_data['leaderboards']['best_bowling_figures'] = best_figures
+
+            # Insights (Impact, Form, Conditions)
+            insights = stats_service.get_insights(
+                current_user.id,
+                tournament_id if view_type == 'tournament' else None
+            ) if stats_data else {}
+
             return render_template(
                 'statistics.html',
                 view_type=view_type,
@@ -2575,6 +2625,7 @@ def create_app():
                 bowling_stats=stats_data['bowling'] if stats_data else [],
                 fielding_stats=stats_data['fielding'] if stats_data else [],
                 leaderboards=stats_data['leaderboards'] if stats_data else {},
+                insights=insights,
                 batting_headers=batting_headers,
                 bowling_headers=bowling_headers,
                 fielding_headers=fielding_headers,
@@ -2806,10 +2857,23 @@ def create_app():
             
             if 'error' in comparison:
                 return jsonify(comparison), 400
+
+            players = comparison.get('players', [])
+            normalized = []
+            for p in players:
+                normalized.append({
+                    'id': p.get('player_id'),
+                    'name': p.get('player_name') or p.get('name'),
+                    'team': p.get('team_name') or p.get('team'),
+                    'matches': p.get('matches', 0),
+                    'batting': p.get('batting', {}),
+                    'bowling': p.get('bowling', {}),
+                    'fielding': p.get('fielding', {})
+                })
             
             return jsonify({
                 'success': True,
-                'data': comparison
+                'data': normalized
             })
             
         except Exception as e:
@@ -2893,7 +2957,6 @@ def create_app():
                 MatchPartnership,
                 DBPlayer.name.label('batsman1_name'),
                 DBPlayer.name.label('batsman2_name'),
-                DBMatch.match_number,
                 Tournament.name.label('tournament_name')
             ).join(
                 DBMatch, MatchPartnership.match_id == DBMatch.id
@@ -2906,10 +2969,12 @@ def create_app():
             ).order_by(
                 MatchPartnership.runs.desc()
             ).limit(limit).all()
+
+            app.logger.info(f"[Partnerships] Found {len(partnerships)} overall partnership rows (limit={limit}) for user {current_user.id}")
             
             # Get batsman2 names in a second query (since we can't join same table twice easily)
             result = []
-            for p, b1_name, _, match_num, tourn_name in partnerships:
+            for p, b1_name, _, tourn_name in partnerships:
                 b2_name = DBPlayer.query.get(p.batsman2_id).name if p.batsman2_id else "Unknown"
                 result.append({
                     'batsman1': b1_name,
@@ -2920,7 +2985,7 @@ def create_app():
                     'batsman1_contribution': p.batsman1_contribution,
                     'batsman2_contribution': p.batsman2_contribution,
                     'tournament': tourn_name,
-                    'match_number': match_num
+                    'match_id': p.match_id
                 })
             
             return jsonify({

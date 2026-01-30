@@ -14,11 +14,15 @@
     <div class="info-card">
         <div class="match-meta-grid">
             <div class="meta-item"><i class="fa fa-fingerprint"></i> ID: {{ match.match_id }}</div>
-            <div class="meta-item"><i class="fa fa-calendar-alt"></i> {{ match.timestamp }}</div>
-            <div class="meta-item"><i class="fa fa-stadium"></i> {{ match.stadium }}</div>
+            <div class="meta-item"><i class="fa fa-calendar-alt"></i>
+                {% if match.timestamp and match.timestamp|length >= 8 %}
+                {{ match.timestamp[4:6] }}-{{ match.timestamp[6:8] }}-{{ match.timestamp[0:4] }}
+                {% else %}
+                {{ match.timestamp }}
+                {% endif %}
+            </div>
+            <div class="meta-item">🏟️ {{ match.stadium }}</div>
             <div class="meta-item"><i class="fa fa-paint-roller"></i> {{ match.pitch }}</div>
-            <div class="meta-item"><i class="fa fa-cloud-rain"></i> Rain: {{ ((match.rain_probability or 0) * 100)|int
-                }}%</div>
         </div>
 
         <div class="toss-section">
@@ -113,6 +117,7 @@
                 flex-direction: column;
                 flex: 1;
                 min-height: 0;
+                height: 100%;
                 margin-top: 1.5rem;
                 font-family: 'JetBrains Mono', 'Fira Code', monospace;
             }
@@ -187,6 +192,7 @@
                 color: #d4d4d4;
                 font-size: 0.9rem;
                 line-height: 1.6;
+                height: 100%;
             }
 
             /* Syntax Highlighting Vibe */
