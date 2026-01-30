@@ -9,7 +9,7 @@
     </script>
 
     <meta charset="UTF-8">
-    <title>Manage Teams – SimCricketX</title>
+    <title>Manage Teams &ndash; SimCricketX</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <!-- Modern CSS Reset -->
@@ -20,86 +20,79 @@
 
     <!-- Google Fonts -->
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
         rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/shared.css') }}">
 
     <style>
         :root {
-            /* Premium Font Stack */
-            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --font-sans: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+            --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+                "Courier New", monospace;
 
-            /* Light Theme - Clean, Airy, Premium */
-            --bg-body: #f8fafc;
-            --bg-surface: #ffffff;
-            --bg-glass: rgba(255, 255, 255, 0.8);
+            --bg-body: #f6f2ea;
+            --bg-surface: #fff9f2;
+            --bg-raised: #ffffff;
+            --bg-glass: rgba(255, 249, 242, 0.7);
 
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-            --text-on-accent: #ffffff;
+            --text-main: #1f2933;
+            --text-muted: #667085;
+            --text-on-accent: #0b1412;
 
-            --border-light: #e2e8f0;
-            --border-focused: #6366f1;
+            --border-light: #e7ded2;
+            --border-focused: #0f766e;
 
-            /* Brand Colors - Indigo/Violet Gradient */
-            --brand-primary: #4f46e5;
-            --brand-secondary: #818cf8;
-            --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
+            --brand-primary: #0f766e;
+            --brand-secondary: #f59e0b;
+            --brand-gradient: linear-gradient(135deg, #0f766e 0%, #f0b24c 100%);
 
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
+            --success: #16a34a;
+            --warning: #d97706;
+            --danger: #dc2626;
 
-            /* Shadows & Elevation */
-            --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
-            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            --shadow-glow: 0 0 20px rgba(79, 70, 229, 0.3);
+            --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+            --shadow-sm: 0 10px 20px -12px rgba(15, 23, 42, 0.4);
+            --shadow-md: 0 14px 28px -18px rgba(15, 23, 42, 0.4);
+            --shadow-lg: 0 30px 50px -30px rgba(15, 23, 42, 0.5);
+            --shadow-glow: 0 0 26px rgba(15, 118, 110, 0.25);
 
-            --radius-lg: 16px;
-            --radius-md: 10px;
-            --radius-sm: 6px;
+            --radius-lg: 18px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
             --radius-full: 9999px;
 
             --ease-elastic: cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         [data-theme="dark"] {
-            /* Dark Theme - VS Code One Dark Pro */
-            --bg-body: #282c34;
-            --bg-surface: #21252b;
-            --bg-glass: rgba(33, 37, 43, 0.85);
+            --bg-body: #0d1416;
+            --bg-surface: #111b1e;
+            --bg-raised: #162326;
+            --bg-glass: rgba(17, 27, 30, 0.86);
 
-            --text-main: #abb2bf;
-            --text-muted: #5c6370;
+            --text-main: #e6edf0;
+            --text-muted: #9aa5b1;
+            --text-on-accent: #081211;
 
-            --border-light: #3e4451;
-            --border-focused: #61afef;
+            --border-light: #213036;
+            --border-focused: #3fb6a8;
 
-            --brand-primary: #61afef;
-            --brand-secondary: #c678dd;
-            --brand-gradient: linear-gradient(135deg, #61afef 0%, #c678dd 100%);
+            --brand-primary: #3fb6a8;
+            --brand-secondary: #f1b84b;
+            --brand-gradient: linear-gradient(135deg, #3fb6a8 0%, #f1b84b 100%);
 
-            --success: #98c379;
-            --warning: #e5c07b;
-            --danger: #e06c75;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #f87171;
 
-            --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
-            --shadow-glow: 0 0 20px rgba(97, 175, 239, 0.2);
-
-            /* One Dark Pro Extended Palette */
-            --one-dark-red: #e06c75;
-            --one-dark-green: #98c379;
-            --one-dark-yellow: #e5c07b;
-            --one-dark-blue: #61afef;
-            --one-dark-purple: #c678dd;
-            --one-dark-cyan: #56b6c2;
-            --one-dark-orange: #d19a66;
+            --shadow-xs: 0 2px 6px rgba(0, 0, 0, 0.35);
+            --shadow-sm: 0 12px 22px rgba(0, 0, 0, 0.45);
+            --shadow-md: 0 18px 30px rgba(0, 0, 0, 0.55);
+            --shadow-lg: 0 32px 50px rgba(0, 0, 0, 0.6);
+            --shadow-glow: 0 0 26px rgba(63, 182, 168, 0.2);
         }
 
-        /* Global Reset & Typography */
         * {
             box-sizing: border-box;
             outline: none;
@@ -112,8 +105,20 @@
             margin: 0;
             padding: 0;
             line-height: 1.6;
-            transition: background-color 0.3s ease;
+            transition: background-color 0.3s ease, color 0.3s ease;
             overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: -20vmax;
+            background: radial-gradient(circle at 10% 20%, rgba(15, 118, 110, 0.18), transparent 45%),
+                radial-gradient(circle at 90% 10%, rgba(245, 158, 11, 0.15), transparent 40%),
+                radial-gradient(circle at 20% 80%, rgba(15, 118, 110, 0.12), transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(245, 158, 11, 0.12), transparent 45%);
+            opacity: 0.7;
+            z-index: -1;
         }
 
         h1,
@@ -122,22 +127,23 @@
         h4 {
             margin: 0;
             font-weight: 700;
-            letter-spacing: -0.025em;
+            letter-spacing: -0.03em;
         }
 
         p {
             margin: 0;
         }
 
-        /* Layout Container */
+        a {
+            color: inherit;
+        }
+
         .main-content {
             max-width: 1200px;
             margin: 0 auto;
             padding: 120px 2rem 100px;
-            /* Top padding for fixed header */
         }
 
-        /* ─── Ultra-Premium Navbar ─── */
         .nav-header {
             position: fixed;
             top: 0;
@@ -162,7 +168,22 @@
             gap: 1rem;
             font-weight: 700;
             color: var(--text-main);
-            font-size: 1.25rem;
+            font-size: 1.2rem;
+        }
+
+        .brand-mark {
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+
+        .brand-mark span {
+            color: var(--brand-primary);
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
         }
 
         .home-btn {
@@ -180,26 +201,29 @@
         }
 
         .home-btn:hover {
-            background: var(--bg-surface);
+            background: var(--bg-raised);
             color: var(--brand-primary);
             border-color: var(--brand-primary);
-            transform: scale(1.05);
+            transform: translateY(-1px) scale(1.05);
             box-shadow: var(--shadow-sm);
         }
 
         .theme-toggle {
             background: transparent;
-            border: none;
-            font-size: 1.25rem;
+            border: 1px solid transparent;
+            font-size: 1.1rem;
             cursor: pointer;
             padding: 8px;
             color: var(--text-muted);
-            transition: transform 0.3s ease, color 0.3s ease;
+            transition: transform 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+            border-radius: var(--radius-full);
         }
 
         .theme-toggle:hover {
             color: var(--text-main);
-            transform: rotate(15deg) scale(1.1);
+            transform: rotate(12deg) scale(1.05);
+            border-color: var(--border-light);
+            background: var(--bg-raised);
         }
 
         .create-btn {
@@ -207,22 +231,22 @@
             align-items: center;
             gap: 0.5rem;
             background: var(--brand-gradient);
-            color: white;
-            padding: 0.6rem 1.25rem;
+            color: var(--text-on-accent);
+            padding: 0.6rem 1.4rem;
             border-radius: var(--radius-full);
             font-weight: 600;
             text-decoration: none;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             box-shadow: var(--shadow-glow);
             transition: all 0.2s var(--ease-elastic);
+            border: none;
         }
 
         .create-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px -4px rgba(79, 70, 229, 0.5);
+            box-shadow: 0 10px 24px -6px rgba(15, 118, 110, 0.35);
         }
 
-        /* ─── Page Header & Typography ─── */
         .page-header {
             margin-bottom: 3rem;
             animation: fadeUp 0.6s ease-out;
@@ -232,7 +256,7 @@
         }
 
         .dynamic-title {
-            font-size: 3rem;
+            font-size: clamp(2.4rem, 4vw, 3.4rem);
             line-height: 1.1;
             font-weight: 800;
             background: var(--brand-gradient);
@@ -246,9 +270,9 @@
             color: var(--text-muted);
             font-size: 1.1rem;
             margin-top: 0.5rem;
+            max-width: 560px;
         }
 
-        /* ─── Stats Overview ─── */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -260,23 +284,32 @@
             background: var(--bg-surface);
             border: 1px solid var(--border-light);
             border-radius: var(--radius-lg);
-            padding: 1.5rem;
+            padding: 1.6rem;
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.6rem;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
         }
 
+        .stat-card::after {
+            content: "";
+            position: absolute;
+            inset: auto 0 0 0;
+            height: 4px;
+            background: var(--brand-gradient);
+            opacity: 0.4;
+        }
+
         .stat-card:hover {
             transform: translateY(-4px);
             box-shadow: var(--shadow-lg);
-            border-color: var(--brand-secondary);
+            border-color: rgba(15, 118, 110, 0.4);
         }
 
         .stat-value {
-            font-size: 2.5rem;
+            font-size: 2.4rem;
             font-weight: 800;
             color: var(--text-main);
             line-height: 1;
@@ -286,14 +319,14 @@
             font-size: 0.85rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.08em;
             color: var(--text-muted);
         }
 
         .stat-icon {
             position: absolute;
-            right: -10px;
-            bottom: -10px;
+            right: -12px;
+            bottom: -12px;
             font-size: 5rem;
             color: var(--border-light);
             opacity: 0.5;
@@ -301,7 +334,6 @@
             z-index: 0;
         }
 
-        /* ─── Teams Grid ─── */
         .teams-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -317,17 +349,33 @@
             position: relative;
             display: flex;
             flex-direction: column;
+            box-shadow: var(--shadow-xs);
+            animation: floatIn 0.5s ease-out both;
+            animation-delay: calc(var(--i, 0) * 70ms);
+        }
+
+        .glass-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, rgba(15, 118, 110, 0.08), transparent 45%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
         .glass-card:hover {
             transform: translateY(-8px);
             box-shadow: var(--shadow-lg);
-            border-color: var(--brand-primary);
+            border-color: rgba(15, 118, 110, 0.5);
+        }
+
+        .glass-card:hover::before {
+            opacity: 1;
         }
 
         .card-header {
             padding: 1.5rem;
-            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), transparent);
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.06), transparent);
             border-bottom: 1px solid var(--border-light);
             display: flex;
             justify-content: space-between;
@@ -353,6 +401,17 @@
             color: var(--text-main);
         }
 
+        .team-code {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            opacity: 0.7;
+            padding: 0.25rem 0.6rem;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-full);
+            background: var(--bg-raised);
+            font-size: 0.85rem;
+        }
+
         .card-body {
             padding: 1.5rem;
             flex-grow: 1;
@@ -375,13 +434,17 @@
             text-transform: uppercase;
             font-weight: 600;
             color: var(--text-muted);
-            letter-spacing: 0.05em;
+            letter-spacing: 0.06em;
         }
 
         .info-value {
-            font-size: 0.95rem;
+            font-size: 0.96rem;
             font-weight: 600;
             color: var(--text-main);
+        }
+
+        .info-accent {
+            color: var(--brand-primary);
         }
 
         .card-footer {
@@ -391,20 +454,36 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 1rem;
+        }
+
+        .card-meta {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            align-items: center;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 0.5rem;
         }
 
         .action-btn {
-            width: 36px;
-            height: 36px;
+            width: 38px;
+            height: 38px;
             border-radius: var(--radius-full);
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             border: 1px solid var(--border-light);
-            background: var(--bg-surface);
+            background: var(--bg-raised);
             color: var(--text-muted);
             cursor: pointer;
             transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
         }
 
         .action-btn.edit:hover {
@@ -416,10 +495,9 @@
         .action-btn.delete:hover {
             color: var(--danger);
             border-color: var(--danger);
-            background: rgba(239, 68, 68, 0.1);
+            background: rgba(220, 38, 38, 0.12);
         }
 
-        /* Empty State */
         .empty-state {
             grid-column: 1 / -1;
             text-align: center;
@@ -436,14 +514,13 @@
             margin-bottom: 1.5rem;
         }
 
-        /* Modal */
         .modal {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(6, 10, 11, 0.66);
             backdrop-filter: blur(8px);
             z-index: 2000;
             display: flex;
@@ -460,11 +537,11 @@
         }
 
         .modal-content {
-            background: var(--bg-surface);
+            background: var(--bg-raised);
             border: 1px solid var(--border-light);
             padding: 2.5rem;
             border-radius: var(--radius-lg);
-            max-width: 400px;
+            max-width: 420px;
             width: 90%;
             text-align: center;
             box-shadow: var(--shadow-lg);
@@ -476,15 +553,72 @@
             transform: scale(1);
         }
 
+        .modal-icon {
+            font-size: 3rem;
+            color: var(--danger);
+            margin-bottom: 1rem;
+        }
+
+        .modal-title {
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-text {
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .btn {
+            border-radius: var(--radius-full);
+            padding: 0.55rem 1.6rem;
+            border: 1px solid transparent;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: var(--font-sans);
+        }
+
+        .btn-ghost {
+            background: var(--bg-raised);
+            color: var(--text-main);
+            border-color: var(--border-light);
+        }
+
+        .btn-ghost:hover {
+            border-color: var(--brand-primary);
+            color: var(--brand-primary);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+            box-shadow: none;
+        }
+
+        .btn-danger:hover {
+            filter: brightness(0.95);
+        }
+
+        .desktop-only {
+            display: inline;
+        }
+
+        :focus-visible {
+            outline: 2px solid var(--border-focused);
+            outline-offset: 2px;
+        }
+
         @media (max-width: 768px) {
             .page-header {
                 flex-direction: column;
                 align-items: start;
                 gap: 1rem;
-            }
-
-            .dynamic-title {
-                font-size: 2.5rem;
             }
 
             .nav-header {
@@ -493,6 +627,19 @@
 
             .main-content {
                 padding: 100px 1rem 4rem;
+            }
+
+            .desktop-only {
+                display: none;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .card-footer {
+                flex-direction: column;
+                align-items: flex-start;
             }
         }
 
@@ -507,33 +654,42 @@
                 transform: translateY(0);
             }
         }
+
+        @keyframes floatIn {
+            from {
+                opacity: 0;
+                transform: translateY(18px) scale(0.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
     </style>
 </head>
 
 <body>
-    <!-- Navigation Header -->
     <header class="nav-header">
         <div class="nav-brand">
             <a href="{{ url_for('home') }}" class="home-btn" title="Home">
                 <i class="fa-solid fa-house"></i>
             </a>
-            <span>SimCricket<span style="color:var(--brand-primary)">X</span></span>
+            <span class="brand-mark">SimCricket<span>X</span></span>
         </div>
 
-        <div style="display:flex; gap:1rem; align-items:center;">
+        <div class="nav-actions">
             <a href="/team/create" class="create-btn">
                 <i class="fa-solid fa-plus"></i>
                 <span class="desktop-only">New Team</span>
             </a>
-            <button class="theme-toggle" id="theme-toggle">
+            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
                 <i class="fa-solid fa-moon"></i>
             </button>
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="main-content">
-        <!-- Page Header -->
         <div class="page-header">
             <div>
                 <h1 class="dynamic-title">Manage Teams</h1>
@@ -541,7 +697,6 @@
             </div>
         </div>
 
-        <!-- Stats Overview -->
         <div class="stats-grid">
             <div class="stat-card">
                 <i class="fa-solid fa-layer-group stat-icon"></i>
@@ -566,24 +721,23 @@
             </div>
         </div>
 
-        <!-- Teams Grid -->
-        <div class="teams-grid">
+        <div class="teams-grid teams-section">
             {% if teams %}
             {% for t in teams %}
             <div class="glass-card" data-code="{{ t.short_code }}">
                 <div class="card-header">
                     <div class="team-badge">
                         <div class="team-color-dot" data-bg="{{ t.team_color }}"></div>
-                        <div class="team-name">{{t.team_name}}</div>
+                        <div class="team-name">{{ t.team_name }}</div>
                     </div>
-                    <div style="font-family:var(--font-mono); font-weight:700; opacity:0.5;">{{ t.short_code }}</div>
+                    <div class="team-code">{{ t.short_code }}</div>
                 </div>
 
                 <div class="card-body">
                     <div class="info-grid">
                         <div class="info-item">
                             <span class="info-label">Captain</span>
-                            <span class="info-value" style="color:var(--brand-primary);">{{ t.captain }}</span>
+                            <span class="info-value info-accent">{{ t.captain }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Home Ground</span>
@@ -601,10 +755,11 @@
                 </div>
 
                 <div class="card-footer">
-                    <div style="display:flex; gap:0.5rem; font-size:0.8rem; color:var(--text-muted);">
-                        <i class="fa-solid fa-clock"></i> Updated just now
+                    <div class="card-meta">
+                        <i class="fa-solid fa-clock"></i>
+                        <span>Updated just now</span>
                     </div>
-                    <div style="display:flex; gap:0.5rem;">
+                    <div class="card-actions">
                         <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
@@ -628,24 +783,22 @@
         </div>
     </main>
 
-    <!-- Delete Confirmation Modal -->
     <div class="modal" id="confirmModal">
         <div class="modal-content">
-            <div style="font-size:3rem; color:var(--danger); margin-bottom:1rem;">
+            <div class="modal-icon">
                 <i class="fa-solid fa-circle-exclamation"></i>
             </div>
-            <h2 style="margin-bottom:0.5rem;">Delete Team?</h2>
-            <p style="color:var(--text-muted); margin-bottom:2rem;">
+            <h2 class="modal-title">Delete Team?</h2>
+            <p class="modal-text">
                 This will permanently delete the team and all its players. This action cannot be undone.
             </p>
             <form method="POST" action="/team/delete">
                 <input type="hidden" name="short_code" id="delete-code">
-                <div style="display:flex; gap:1rem; justify-content:center;">
-                    <button type="button" class="action-btn" style="width:auto; padding:0 1.5rem; border-radius:8px;"
-                        onclick="closeModal()">
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal()">
                         Cancel
                     </button>
-                    <button type="submit" class="create-btn" style="background:var(--danger); box-shadow:none;">
+                    <button type="submit" class="btn btn-danger">
                         Delete Forever
                     </button>
                 </div>
@@ -654,7 +807,6 @@
     </div>
 
     <script>
-        // Theme Toggle
         const toggle = document.getElementById('theme-toggle');
         const docRoot = document.documentElement;
         const icon = toggle.querySelector('i');
@@ -667,25 +819,21 @@
             const next = docRoot.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
             docRoot.setAttribute('data-theme', next);
             localStorage.theme = next;
-            toggle.textContent = next === 'dark' ? '☀️' : '🌙';
+            updateIcon(next);
         };
 
-        // CLEANUP: If we landed on the Manage page, team creation was likely successful.
-        // Clear the draft to prevent old data from reappearing next time.
+        function updateIcon(theme) {
+            icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        }
+
         if (localStorage.getItem('team_create_draft')) {
             localStorage.removeItem('team_create_draft');
         }
 
-        toggle.textContent = docRoot.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
-
-        // Team Management Functions
         function editTeam(code) {
-            // Add loading state
             const card = document.querySelector(`[data-code="${code}"]`);
             card.style.opacity = '0.7';
             card.style.pointerEvents = 'none';
-
-            // Navigate to edit page
             window.location.href = `/team/${code}/edit`;
         }
 
@@ -693,38 +841,34 @@
             document.getElementById('delete-code').value = code;
             const modal = document.getElementById('confirmModal');
             modal.classList.add('active');
-
-            // Prevent body scroll
             document.body.style.overflow = 'hidden';
         }
 
         function closeModal() {
             const modal = document.getElementById('confirmModal');
             modal.classList.remove('active');
-
-            // Restore body scroll
             document.body.style.overflow = '';
         }
 
-        // Close modal on escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closeModal();
             }
         });
 
-        // Close modal on backdrop click
         document.getElementById('confirmModal').addEventListener('click', (e) => {
             if (e.target === e.currentTarget) {
                 closeModal();
             }
         });
 
-        // Auto-dismiss flash messages
         window.addEventListener('DOMContentLoaded', () => {
-            // Apply team colors from data attributes to avoid inline style linter errors
             document.querySelectorAll('.team-color-swatch, .team-color-dot').forEach(swatch => {
                 swatch.style.background = swatch.getAttribute('data-bg');
+            });
+
+            document.querySelectorAll('.glass-card').forEach((card, index) => {
+                card.style.setProperty('--i', index);
             });
 
             setTimeout(() => {
@@ -735,17 +879,14 @@
             }, 4000);
         });
 
-        // Add click to edit functionality on cards (excluding action buttons)
         document.querySelectorAll('.glass-card[data-code]').forEach(card => {
             card.addEventListener('click', (e) => {
-                // Don't trigger if clicking on action buttons
                 if (e.target.closest('.action-btn')) return;
                 const code = card.getAttribute('data-code');
                 editTeam(code);
             });
         });
 
-        // Enhanced hover effects with cursor indication
         document.querySelectorAll('.glass-card[data-code]').forEach(card => {
             card.addEventListener('mouseenter', () => {
                 card.style.cursor = 'pointer';
@@ -756,10 +897,9 @@
             });
         });
 
-        // Add ripple effect to action buttons
         document.querySelectorAll('.action-btn').forEach(btn => {
             btn.addEventListener('click', function (e) {
-                e.stopPropagation(); // Prevent card click
+                e.stopPropagation();
 
                 const rect = this.getBoundingClientRect();
                 const x = e.clientX - rect.left;
@@ -781,7 +921,6 @@
                     margin-top: -6px;
                 `;
 
-                this.style.position = 'relative';
                 this.appendChild(ripple);
 
                 setTimeout(() => {
@@ -790,7 +929,6 @@
             });
         });
 
-        // Add CSS for ripple animation
         const style = document.createElement('style');
         style.textContent = `
             @keyframes ripple {
@@ -802,14 +940,12 @@
         `;
         document.head.appendChild(style);
 
-        // Smooth scroll to teams section if URL has hash
         if (window.location.hash === '#teams') {
             document.querySelector('.teams-section').scrollIntoView({
                 behavior: 'smooth'
             });
         }
 
-        // Add loading states to navigation
         document.querySelectorAll('a[href]').forEach(link => {
             link.addEventListener('click', function () {
                 if (this.href && !this.href.includes('#')) {
@@ -819,9 +955,6 @@
             });
         });
     </script>
-
-
-
 </body>
 
 </html>

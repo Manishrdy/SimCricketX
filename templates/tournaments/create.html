@@ -4,7 +4,7 @@
 <div class="create-tournament-container">
 
     <div class="form-header">
-        <a href="{{ url_for('tournaments') }}" class="back-link">
+        <a href="{{ url_for('tournaments') }}" class="back-link" onclick="location.href=this.href; return false;">
             <i class="fas fa-arrow-left"></i> Back to Tournaments
         </a>
         <div class="header-content">
@@ -18,7 +18,8 @@
         </div>
     </div>
 
-    <form action="{{ url_for('create_tournament_route') }}" method="POST" id="tournamentForm" onsubmit="return validateForm()">
+    <form action="{{ url_for('create_tournament_route') }}" method="POST" id="tournamentForm"
+        onsubmit="return validateForm()">
 
         <!-- Tournament Name -->
         <div class="form-section">
@@ -29,7 +30,7 @@
             <div class="form-group">
                 <label for="tournament-name">Tournament Name</label>
                 <input type="text" id="tournament-name" name="name" class="form-input"
-                       placeholder="e.g. IPL 2026, World Cup, Ashes Series..." required>
+                    placeholder="e.g. IPL 2026, World Cup, Ashes Series..." required>
                 <span class="input-hint">Give your tournament a memorable name</span>
             </div>
         </div>
@@ -41,7 +42,8 @@
                 <h2>Select Teams</h2>
                 <span class="team-counter" id="teamCounter">0 selected</span>
             </div>
-            <p class="section-desc">Select teams to participate. Available modes will update based on your selection.</p>
+            <p class="section-desc">Select teams to participate. Available modes will update based on your selection.
+            </p>
 
             {% if teams %}
             <div class="teams-selection-grid">
@@ -49,7 +51,7 @@
                 <label class="team-select-card">
                     <input type="checkbox" name="team_ids" value="{{ team.id }}" onchange="updateTeamSelection()">
                     <div class="card-inner">
-                        <div class="team-avatar" style="background: {{ team.team_color }};">
+                        <div class="team-avatar" data-team-color="{{ team.team_color }}">
                             {{ team.short_code }}
                         </div>
                         <div class="team-info">
@@ -102,7 +104,8 @@
                         <button type="button" class="series-btn" onclick="adjustSeriesMatches(-1)">
                             <i class="fas fa-minus"></i>
                         </button>
-                        <input type="number" id="series-matches" name="series_matches" value="3" min="1" max="7" class="series-input" readonly>
+                        <input type="number" id="series-matches" name="series_matches" value="3" min="1" max="7"
+                            class="series-input" readonly>
                         <button type="button" class="series-btn" onclick="adjustSeriesMatches(1)">
                             <i class="fas fa-plus"></i>
                         </button>
@@ -113,7 +116,7 @@
         </div>
 
         <div class="form-actions">
-            <a href="{{ url_for('tournaments') }}" class="cancel-btn">
+            <a href="{{ url_for('tournaments') }}" class="cancel-btn" onclick="location.href=this.href; return false;">
                 <i class="fas fa-times"></i> Cancel
             </a>
             <button type="submit" class="submit-btn" id="submitBtn" disabled>
@@ -393,8 +396,14 @@
     }
 
     // Initialize on page load
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         updateTeamSelection();
+
+        // Apply team colors from data attributes (to avoid linting errors)
+        document.querySelectorAll('.team-avatar').forEach(function (el) {
+            var color = el.getAttribute('data-team-color');
+            if (color) el.style.background = color;
+        });
     });
 </script>
 
@@ -659,12 +668,12 @@
         flex-shrink: 0;
     }
 
-    .team-select-card input:checked + .card-inner {
+    .team-select-card input:checked+.card-inner {
         border-color: var(--accent);
         background: var(--accent-light);
     }
 
-    .team-select-card input:checked + .card-inner .checkbox-indicator {
+    .team-select-card input:checked+.card-inner .checkbox-indicator {
         background: var(--accent);
         border-color: var(--accent);
         color: #fff;

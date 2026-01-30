@@ -1257,6 +1257,103 @@
     </section>
     {% endif %}
 
+    <!-- Best Bowling Figures Section -->
+    <section class="leaderboard-section" id="bowling-figures-section">
+        <div class="section-header">
+            <h2 class="section-title">
+                <i class="fas fa-bowling-ball"></i>
+                Best Bowling Figures
+            </h2>
+        </div>
+        <div id="bowling-figures-container" class="loading">
+            <div style="text-align: center; padding: 3rem;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent);"></i>
+                <p style="margin-top: 1rem; color: var(--fg-secondary);">Loading bowling figures...</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Best Partnerships Section -->
+    <section class="leaderboard-section" id="partnerships-section">
+        <div class="section-header">
+            <h2 class="section-title">
+                <i class="fas fa-user-friends"></i>
+                Best Partnerships
+            </h2>
+        </div>
+        <div id="partnerships-container" class="loading">
+            <div style="text-align: center; padding: 3rem;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent);"></i>
+                <p style="margin-top: 1rem; color: var(--fg-secondary);">Loading partnerships...</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Player Comparison Tool Section -->
+    <section class="leaderboard-section" id="player-comparison-section">
+        <div class="section-header">
+            <h2 class="section-title">
+                <i class="fas fa-balance-scale"></i>
+                Player Comparison Tool
+            </h2>
+        </div>
+
+        <div class="detailed-stats" style="margin-bottom: 0;">
+            <!-- Role Filter -->
+            <div style="margin-bottom: 2rem;">
+                <label
+                    style="font-size: 0.9rem; font-weight: 600; color: var(--fg); margin-bottom: 0.75rem; display: block;">
+                    <i class="fas fa-filter"></i> Compare By Role
+                </label>
+                <div class="view-toggle">
+                    <button class="view-btn active" onclick="selectComparisonRole('batsman')">
+                        <i class="fas fa-cricket-bat"></i>
+                        <span>Batsmen</span>
+                    </button>
+                    <button class="view-btn" onclick="selectComparisonRole('bowler')">
+                        <i class="fas fa-bowling-ball"></i>
+                        <span>Bowlers</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Player Selection -->
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                <div>
+                    <label for="player1-select"
+                        style="font-size: 0.85rem; font-weight: 500; color: var(--fg-secondary); display: block; margin-bottom: 0.625rem;">
+                        <i class="fas fa-user"></i> Player 1
+                    </label>
+                    <select id="player1-select" class="tournament-select" style="max-width: 100%;">
+                        <option value="">Select Player 1...</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="player2-select"
+                        style="font-size: 0.85rem; font-weight: 500; color: var(--fg-secondary); display: block; margin-bottom: 0.625rem;">
+                        <i class="fas fa-user"></i> Player 2
+                    </label>
+                    <select id="player2-select" class="tournament-select" style="max-width: 100%;">
+                        <option value="">Select Player 2...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Compare Button -->
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <button onclick="comparePlayers()" id="compare-btn" class="btn-primary" disabled>
+                    <i class="fas fa-balance-scale"></i>
+                    <span>Compare Players</span>
+                </button>
+            </div>
+
+            <!-- Comparison Results -->
+            <div id="comparison-results" style="display: none;"></div>
+        </div>
+    </section>
+
+
     <!-- Detailed Statistics -->
     <section class="detailed-stats">
         <div class="section-header">
@@ -1513,6 +1610,259 @@
                 item.style.transform = 'translateX(0)';
             }, 100 + (index * 50));
         });
+
+        // Load bowling figures and partnerships
+        loadBowlingFigures();
+        loadPartnerships();
+        loadPlayersForComparison('batsman');
     });
+
+    // Global variables for player comparison
+    let currentComparisonRole = 'batsman';
+    let allPlayers = [];
+
+    // Load bowling figures
+    function loadBowlingFigures() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const view = urlParams.get('view') || 'overall';
+        const tournamentId = urlParams.get('tournament_id') || '';
+
+        let url = '/api/bowling-figures?limit=10';
+        if (view === 'tournament' && tournamentId) {
+            url += '&tournament_id=' + tournamentId;
+        }
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                const container = document.getElementById('bowling-figures-container');
+                if (data.success && data.data && data.data.length > 0) {
+                    let html = '<div class="table-wrapper"><table class="stats-table">';
+                    html += '<thead><tr><th>Rank</th><th>Player</th><th>Figures</th><th>Opponent</th><th>Match Date</th></tr></thead><tbody>';
+
+                    data.data.forEach((fig, index) => {
+                        html += '<tr>';
+                        html += '<td><span class="rank-badge">' + (index + 1) + '</span></td>';
+                        html += '<td class="player-name">' + fig.player + '</td>';
+                        html += '<td class="stat-value">' + fig.figures + '</td>';
+                        html += '<td>' + fig.opponent + '</td>';
+                        html += '<td>' + (fig.match_date || 'N/A') + '</td>';
+                        html += '</tr>';
+                    });
+
+                    html += '</tbody></table></div>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="no-data-message"><i class="fas fa-bowling-ball"></i><p>No bowling figures available yet</p></div>';
+                }
+            })
+            .catch(err => {
+                console.error('Error loading bowling figures:', err);
+                document.getElementById('bowling-figures-container').innerHTML = '<div class="no-data-message"><i class="fas fa-exclamation-circle"></i><p>Error loading data</p></div>';
+            });
+    }
+
+    // Load partnerships
+    function loadPartnerships() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const view = urlParams.get('view') || 'overall';
+        const tournamentId = urlParams.get('tournament_id') || '';
+
+        let url = view === 'tournament' && tournamentId
+            ? '/api/tournament/' + tournamentId + '/partnerships?limit=10'
+            : '/api/partnerships?limit=10';
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                const container = document.getElementById('partnerships-container');
+                if (data.success && data.data && data.data.length > 0) {
+                    let html = '<div class="table-wrapper"><table class="stats-table">';
+                    html += '<thead><tr><th>Rank</th><th>Partnership</th><th>Runs</th><th>Balls</th><th>Wicket</th>';
+                    if (view === 'overall') html += '<th>Tournament</th>';
+                    html += '</tr></thead><tbody>';
+
+                    data.data.forEach((p, index) => {
+                        html += '<tr>';
+                        html += '<td><span class="rank-badge">' + (index + 1) + '</span></td>';
+                        html += '<td class="player-name">' + p.batsman1.split(' ').pop() + ' & ' + p.batsman2.split(' ').pop() + '</td>';
+                        html += '<td class="stat-value">' + p.runs + '</td>';
+                        html += '<td>' + p.balls + '</td>';
+                        html += '<td>' + p.wicket + 'th</td>';
+                        if (view === 'overall') html += '<td>' + (p.tournament || 'N/A') + '</td>';
+                        html += '</tr>';
+                    });
+
+                    html += '</tbody></table></div>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="no-data-message"><i class="fas fa-user-friends"></i><p>No partnerships available yet</p></div>';
+                }
+            })
+            .catch(err => {
+                console.error('Error loading partnerships:', err);
+                document.getElementById('partnerships-container').innerHTML = '<div class="no-data-message"><i class="fas fa-exclamation-circle"></i><p>Error loading data</p></div>';
+            });
+    }
+
+    // Load players for comparison based on role
+    function loadPlayersForComparison(role) {
+        fetch('/api/compare-players?player_ids=')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.available_players) {
+                    allPlayers = data.available_players;
+                    filterPlayersByRole(role);
+                }
+            })
+            .catch(err => console.error('Error loading players:', err));
+    }
+
+    // Filter players by role
+    function filterPlayersByRole(role) {
+        const player1Select = document.getElementById('player1-select');
+        const player2Select = document.getElementById('player2-select');
+
+        // Filter players based on role
+        const filteredPlayers = allPlayers.filter(p => {
+            const playerRole = (p.role || '').toLowerCase();
+            if (role === 'batsman') {
+                return playerRole.includes('batsman') || playerRole.includes('all-rounder') || playerRole.includes('wicket-keeper');
+            } else {
+                return playerRole.includes('bowler') || playerRole.includes('all-rounder');
+            }
+        });
+
+        // Update dropdowns
+        player1Select.innerHTML = '<option value="">Select Player 1...</option>';
+        player2Select.innerHTML = '<option value="">Select Player 2...</option>';
+
+        filteredPlayers.forEach(p => {
+            player1Select.innerHTML += '<option value="' + p.id + '">' + p.name + ' (' + (p.team || 'Unknown') + ')</option>';
+            player2Select.innerHTML += '<option value="' + p.id + '">' + p.name + ' (' + (p.team || 'Unknown') + ')</option>';
+        });
+
+        // Reset selections
+        updateCompareButton();
+    }
+
+    // Select comparison role
+    function selectComparisonRole(role) {
+        currentComparisonRole = role;
+
+        // Update button states
+        document.querySelectorAll('#player-comparison-section .view-btn').forEach(btn => {
+            if (btn.textContent.toLowerCase().includes(role)) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // Filter players
+        filterPlayersByRole(role);
+
+        // Hide results
+        document.getElementById('comparison-results').style.display = 'none';
+    }
+
+    // Update comparebutton state
+    function updateCompareButton() {
+        const player1 = document.getElementById('player1-select').value;
+        const player2 = document.getElementById('player2-select').value;
+        const btn = document.getElementById('compare-btn');
+
+        btn.disabled = !player1 || !player2 || player1 === player2;
+    }
+
+    // Event listeners for player selection
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('player1-select').addEventListener('change', updateCompareButton);
+        document.getElementById('player2-select').addEventListener('change', updateCompareButton);
+    });
+
+    // Compare players
+    function comparePlayers() {
+        const player1Id = document.getElementById('player1-select').value;
+        const player2Id = document.getElementById('player2-select').value;
+
+        if (!player1Id || !player2Id) return;
+
+        const resultsDiv = document.getElementById('comparison-results');
+        resultsDiv.innerHTML = '<div style="text-align: center; padding: 2rem;"><i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent);"></i><p style="margin-top: 1rem;">Comparing players...</p></div>';
+        resultsDiv.style.display = 'block';
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const view = urlParams.get('view') || 'overall';
+        const tournamentId = urlParams.get('tournament_id') || '';
+
+        let url = '/api/compare-players?player_ids=' + player1Id + ',' + player2Id;
+        if (view === 'tournament' && tournamentId) {
+            url += '&tournament_id=' + tournamentId;
+        }
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.data && data.data.length >= 2) {
+                    displayComparisonResults(data.data);
+                } else {
+                    resultsDiv.innerHTML = '<div class="no-data-message"><i class="fas fa-exclamation-triangle"></i><p>Could not compare players</p></div>';
+                }
+            })
+            .catch(err => {
+                console.error('Error comparing players:', err);
+                resultsDiv.innerHTML = '<div class="no-data-message"><i class="fas fa-exclamation-circle"></i><p>Error loading comparison</p></div>';
+            });
+    }
+
+    // Display comparison results
+    function displayComparisonResults(players) {
+        const p1 = players[0];
+        const p2 = players[1];
+        const resultsDiv = document.getElementById('comparison-results');
+
+        let html = '';
+
+        // Batting comparison
+        if (p1.batting || p2.batting) {
+            html += '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-size: 1.2rem; color: var(--fg);"><i class="fas fa-cricket-bat"></i> Batting Comparison</h3>';
+            html += '<div class="table-wrapper"><table class="stats-table">';
+            html += '<thead><tr><th>Stat</th><th>' + p1.name + '</th><th>' + p2.name + '</th></tr></thead><tbody>';
+
+            const battingStats = ['matches', 'innings', 'runs', 'average', 'strike_rate', 'fifties', 'hundreds'];
+            battingStats.forEach(stat => {
+                const v1 = (p1.batting && p1.batting[stat]) || 0;
+                const v2 = (p2.batting && p2.batting[stat]) || 0;
+                html += '<tr><td>' + stat.replace('_', ' ').toUpperCase() + '</td>';
+                html += '<td class="' + (v1 > v2 ? 'stat-value' : '') + '">' + v1 + '</td>';
+                html += '<td class="' + (v2 > v1 ? 'stat-value' : '') + '">' + v2 + '</td></tr>';
+            });
+
+            html += '</tbody></table></div>';
+        }
+
+        // Bowling comparison
+        if (p1.bowling || p2.bowling) {
+            html += '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-size: 1.2rem; color: var(--fg);"><i class="fas fa-bowling-ball"></i> Bowling Comparison</h3>';
+            html += '<div class="table-wrapper"><table class="stats-table">';
+            html += '<thead><tr><th>Stat</th><th>' + p1.name + '</th><th>' + p2.name + '</th></tr></thead><tbody>';
+
+            const bowlingStats = ['matches', 'innings', 'wickets', 'average', 'economy', 'four_wickets', 'five_wickets'];
+            bowlingStats.forEach(stat => {
+                const v1 = (p1.bowling && p1.bowling[stat]) || 0;
+                const v2 = (p2.bowling && p2.bowling[stat]) || 0;
+                const better = stat === 'average' || stat === 'economy' ? (v1 > 0 && (v2 === 0 || v1 < v2)) : v1 > v2;
+                html += '<tr><td>' + stat.replace('_', ' ').toUpperCase() + '</td>';
+                html += '<td class="' + (better ? 'stat-value' : '') + '">' + (v1 || '-') + '</td>';
+                html += '<td class="' + (!better && v2 > 0 ? 'stat-value' : '') + '">' + (v2 || '-') + '</td></tr>';
+            });
+
+            html += '</tbody></table></div>';
+        }
+
+        resultsDiv.innerHTML = html;
+    }
+
 </script>
 {% endblock %}
