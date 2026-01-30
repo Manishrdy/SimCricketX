@@ -7,14 +7,177 @@ GITHUB_REPO="SimCricketX"
 MAIN_BRANCH="main"  # Change to "master" if your default branch is master
 # ===================================
 
+# ========== DEFAULT SETTINGS ==========
+# These can be overridden in .simcricketx.conf
+AUTO_UPDATE_CHECK="${AUTO_UPDATE_CHECK:-true}"
+UPDATE_CHECK_INTERVAL="${UPDATE_CHECK_INTERVAL:-86400}"  # 24 hours in seconds
+PRESERVE_BACKUPS_DAYS="${PRESERVE_BACKUPS_DAYS:-30}"
+DEFAULT_PORT="${DEFAULT_PORT:-7860}"
+CHECK_PORT_BEFORE_START="${CHECK_PORT_BEFORE_START:-true}"
+ENABLE_UPDATE_LOGGING="${ENABLE_UPDATE_LOGGING:-true}"
+LOG_FILE="simcricketx_updates.log"
+# ======================================
+
+# ============================================
+# LOGGING FUNCTION
+# ============================================
+log_message() {
+    if [[ "$ENABLE_UPDATE_LOGGING" == "true" ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+    fi
+}
+
+# ============================================
+# PRE-FLIGHT DEPENDENCY CHECK
+# ============================================
+check_dependencies() {
+    echo "Checking system dependencies..."
+    local missing=()
+    
+    for cmd in curl unzip python3; do
+        if ! command -v $cmd &> /dev/null; then
+            # Try python as fallback for python3
+            if [[ "$cmd" == "python3" ]] && command -v python &> /dev/null; then
+                continue
+            fi
+            missing+=($cmd)
+        fi
+    done
+    
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "✗ Missing dependencies: ${missing[*]}"
+        echo ""
+        echo "Install with:"
+        echo "  macOS:  brew install ${missing[*]}"
+        echo "  Linux:  sudo apt install ${missing[*]}"
+        echo ""
+        log_message "ERROR: Missing dependencies: ${missing[*]}"
+        return 1
+    fi
+    
+    echo "✓ All dependencies available"
+    log_message "All dependencies check passed"
+    return 0
+}
+
+# ============================================
+# ROLLBACK FUNCTION
+# ============================================
+rollback_update() {
+    echo ""
+    echo "============================================"
+    echo "   🔄 ROLLBACK MODE"
+    echo "============================================"
+    
+    if [[ -z "$1" ]]; then
+        echo "Available backups:"
+        local backups=(backup_*)
+        if [[ -d "${backups[0]}" ]]; then
+            for backup in backup_*; do
+                if [[ -d "$backup" ]]; then
+                    local backup_date=${backup#backup_}
+                    echo "  - $backup (${backup_date:0:8} ${backup_date:9:2}:${backup_date:11:2}:${backup_date:13:2})"
+                fi
+            done
+        else
+            echo "  No backups found"
+        fi
+        echo ""
+        echo "Usage: $0 --rollback <backup_directory>"
+        echo "Example: $0 --rollback backup_20260129_180000"
+        return
+    fi
+    
+    local backup_dir="$1"
+    if [[ ! -d "$backup_dir" ]]; then
+        echo "✗ Error: Backup directory not found: $backup_dir"
+        log_message "ERROR: Rollback failed - backup not found: $backup_dir"
+        return 1
+    fi
+    
+    echo "Rolling back from: $backup_dir"
+    log_message "Starting rollback from: $backup_dir"
+    
+    # Copy files back
+    cp -rf "$backup_dir"/* . 2>/dev/null
+    
+    # If user data was backed up separately, restore it too
+    if [[ -d "$backup_dir/user_data_preserve" ]]; then
+        echo "Restoring user data from backup..."
+        if [[ -d "$backup_dir/user_data_preserve/data" ]]; then
+            rm -rf "data" 2>/dev/null
+            cp -r "$backup_dir/user_data_preserve/data" "." 2>/dev/null
+        fi
+        if [[ -d "$backup_dir/user_data_preserve/logs" ]]; then
+            rm -rf "logs" 2>/dev/null
+            cp -r "$backup_dir/user_data_preserve/logs" "." 2>/dev/null
+        fi
+    fi
+    
+    echo "✓ Rollback completed!"
+    log_message "Rollback completed successfully from: $backup_dir"
+    echo ""
+}
+
+# ============================================
+# CLEANUP OLD BACKUPS
+# ============================================
+cleanup_old_backups() {
+    echo "Cleaning up old backups (older than $PRESERVE_BACKUPS_DAYS days)..."
+    log_message "Starting cleanup of backups older than $PRESERVE_BACKUPS_DAYS days"
+    
+    local cleaned=0
+    for backup in backup_*; do
+        if [[ -d "$backup" ]]; then
+            # Check if backup is older than specified days
+            if [[ $(find "$backup" -maxdepth 0 -mtime +$PRESERVE_BACKUPS_DAYS 2>/dev/null) ]]; then
+                echo "  Removing old backup: $backup"
+                rm -rf "$backup" 2>/dev/null
+                log_message "Removed old backup: $backup"
+                ((cleaned++))
+            fi
+        fi
+    done
+    
+    if [[ $cleaned -gt 0 ]]; then
+        echo "  ✓ Cleaned up $cleaned old backup(s)"
+    else
+        echo "  No old backups to clean up"
+    fi
+}
+
 # ============================================
 # AUTO-UPDATE FUNCTION WITH USER DATA PROTECTION
 # ============================================
 check_and_update() {
+    # Check if update checking is disabled
+    if [[ "$AUTO_UPDATE_CHECK" != "true" ]]; then
+        echo "Auto-update check is disabled in config."
+        log_message "Update check skipped - disabled in config"
+        return
+    fi
+    
+    # Check throttling - only check once per interval
+    local last_check_file=".last_update_check"
+    local current_time=$(date +%s)
+    
+    if [[ -f "$last_check_file" ]]; then
+        local last_check=$(cat "$last_check_file" 2>/dev/null || echo "0")
+        local time_diff=$((current_time - last_check))
+        
+        if [[ $time_diff -lt $UPDATE_CHECK_INTERVAL ]]; then
+            local hours_left=$(( (UPDATE_CHECK_INTERVAL - time_diff) / 3600 ))
+            echo "Update check performed recently (next check in ~${hours_left}h), skipping..."
+            log_message "Update check skipped - last check was $time_diff seconds ago"
+            return
+        fi
+    fi
+    
     echo
     echo "============================================"
     echo "Checking for updates..."
     echo "============================================"
+    log_message "Starting update check"
 
     # Check if curl is available
     if ! command -v curl &> /dev/null; then
@@ -22,6 +185,7 @@ check_and_update() {
         echo "(Install curl with: brew install curl)"
         echo
         sleep 2
+        log_message "Update check failed - curl not available"
         return
     fi
 
@@ -31,6 +195,7 @@ check_and_update() {
         echo "(Install unzip with: brew install unzip)"
         echo
         sleep 2
+        log_message "Update check failed - unzip not available"
         return
     fi
 
@@ -55,6 +220,7 @@ check_and_update() {
             echo "Could not determine latest version."
             echo
             sleep 2
+            log_message "Update check failed - could not read version file"
             return
         fi
     else
@@ -62,6 +228,7 @@ check_and_update() {
         echo "(Check your internet connection or repository settings)"
         echo
         sleep 2
+        log_message "Update check failed - network error"
         return
     fi
 
@@ -69,16 +236,22 @@ check_and_update() {
         echo "Could not determine latest version."
         echo
         sleep 2
+        log_message "Update check failed - empty version"
         return
     fi
 
     echo "Latest version: $LATEST_VERSION"
+    
+    # Save the check timestamp
+    echo "$current_time" > "$last_check_file"
+    log_message "Current: $CURRENT_VERSION, Latest: $LATEST_VERSION"
 
     # Compare versions
     if [[ "$CURRENT_VERSION" == "$LATEST_VERSION" ]]; then
         echo "✓ You have the latest version!"
         echo
         sleep 2
+        log_message "Already on latest version"
     else
         echo
         echo "============================================"
@@ -96,27 +269,31 @@ check_and_update() {
         echo "[4] Exit to update manually"
         echo
         
+        log_message "Update available - prompting user"
         read -p "Enter your choice (1-4) [default: 2]: " choice
         
         if [[ -z "$choice" ]]; then
             choice="2"
         fi
         
+        log_message "User choice: $choice"
         case $choice in
             2)
                 echo
                 echo "============================================"
                 echo "   🔄 AUTO-UPDATING..."
                 echo "============================================"
+                log_message "Starting auto-update"
                 
                 # Create backup directory with timestamp
                 BACKUP_DIR="backup_$(date +%Y%m%d_%H%M%S)"
                 echo "Creating backup in: $BACKUP_DIR"
                 mkdir -p "$BACKUP_DIR"
+                log_message "Created backup directory: $BACKUP_DIR"
                 
                 # Backup important files (excluding user data)
                 echo "Backing up current files..."
-                for file in *.py *.txt *.html templates/ static/ config/ engine/ utils/; do
+                for file in *.py *.txt *.html *.sh *.bat templates/ static/ config/ engine/ utils/; do
                     if [[ -e "$file" ]]; then
                         cp -r "$file" "$BACKUP_DIR/" 2>/dev/null
                         echo "  ✓ Backed up: $file"
@@ -168,15 +345,32 @@ check_and_update() {
                 TEMP_ZIP="/tmp/simcricketx_latest.zip"
                 echo
                 echo "Downloading latest version..."
+                log_message "Downloading from GitHub"
                 if curl -L -o "$TEMP_ZIP" "https://github.com/$GITHUB_USER/$GITHUB_REPO/archive/refs/heads/$MAIN_BRANCH.zip"; then
                     echo "✓ Download completed!"
+                    log_message "Download completed"
                 else
                     echo "✗ Download failed!"
                     echo "Restore from backup if needed: cp -r $BACKUP_DIR/* ."
                     echo
+                    log_message "ERROR: Download failed"
                     read -p "Press Enter to continue..."
                     return
                 fi
+                
+                # Verify download integrity
+                echo "Verifying download integrity..."
+                if ! unzip -t "$TEMP_ZIP" &> /dev/null; then
+                    echo "✗ Downloaded file is corrupted!"
+                    rm -f "$TEMP_ZIP" 2>/dev/null
+                    echo "Restore from backup if needed: cp -r $BACKUP_DIR/* ."
+                    echo
+                    log_message "ERROR: Downloaded file is corrupted"
+                    read -p "Press Enter to continue..."
+                    return
+                fi
+                echo "✓ Download verified!"
+                log_message "Download integrity verified"
                 
                 # Extract to temporary directory
                 TEMP_EXTRACT="/tmp/simcricketx_extract"
@@ -186,11 +380,13 @@ check_and_update() {
                 echo "Extracting files..."
                 if unzip -q "$TEMP_ZIP" -d "$TEMP_EXTRACT"; then
                     echo "✓ Extraction completed!"
+                    log_message "Extraction completed"
                 else
                     echo "✗ Extraction failed!"
                     rm -f "$TEMP_ZIP" 2>/dev/null
                     echo "Restore from backup if needed: cp -r $BACKUP_DIR/* ."
                     echo
+                    log_message "ERROR: Extraction failed"
                     read -p "Press Enter to continue..."
                     return
                 fi
@@ -207,6 +403,7 @@ check_and_update() {
                         rm -f "$TEMP_ZIP" 2>/dev/null
                         rm -rf "$TEMP_EXTRACT" 2>/dev/null
                         echo
+                        log_message "ERROR: Could not find extracted folder"
                         read -p "Press Enter to continue..."
                         return
                     fi
@@ -222,6 +419,7 @@ check_and_update() {
                     fi
                 done
                 cd "$OLDPWD"
+                log_message "New files installed"
                 
                 # Restore preserved user data (CRITICAL - overwrite any updated versions)
                 echo "Restoring preserved user data..."
@@ -264,10 +462,14 @@ check_and_update() {
                         echo "  🔒 Restored: auth_debug.log"
                     fi
                 fi
+                log_message "User data restored"
                 
                 # Cleanup
                 rm -f "$TEMP_ZIP" 2>/dev/null
                 rm -rf "$TEMP_EXTRACT" 2>/dev/null
+                
+                # Cleanup old backups
+                cleanup_old_backups
                 
                 echo
                 echo "============================================"
@@ -286,7 +488,9 @@ check_and_update() {
                 echo
                 echo "If anything goes wrong, restore with:"
                 echo "  cp -r $BACKUP_DIR/* ."
+                echo "  Or use: $0 --rollback $BACKUP_DIR"
                 echo
+                log_message "Update completed successfully to version: $LATEST_VERSION"
                 sleep 3
                 ;;
             3)
@@ -301,6 +505,7 @@ check_and_update() {
                 echo
                 echo "Please download the latest version from GitHub."
                 echo
+                log_message "User chose to open GitHub manually"
                 read -p "Press Enter to continue..."
                 ;;
             4)
@@ -310,12 +515,14 @@ check_and_update() {
                 echo
                 echo "After updating, run this script again."
                 echo
+                log_message "User chose to exit and update manually"
                 read -p "Press Enter to exit..."
                 exit 0
                 ;;
             1|*)
                 echo "Continuing with current version..."
                 echo
+                log_message "User chose to continue with current version"
                 sleep 2
                 ;;
         esac
@@ -330,15 +537,18 @@ force_update() {
     echo "============================================"
     echo "   🔄 FORCE UPDATE MODE"
     echo "============================================"
+    log_message "Force update initiated"
     
     # Check requirements
     if ! command -v curl &> /dev/null; then
         echo "ERROR: curl not available. Install with: brew install curl"
+        log_message "ERROR: Force update failed - curl not available"
         exit 1
     fi
     
     if ! command -v unzip &> /dev/null; then
         echo "ERROR: unzip not available. Install with: brew install unzip"
+        log_message "ERROR: Force update failed - unzip not available"
         exit 1
     fi
     
@@ -348,8 +558,9 @@ force_update() {
     BACKUP_DIR="backup_$(date +%Y%m%d_%H%M%S)"
     echo "Creating backup in: $BACKUP_DIR"
     mkdir -p "$BACKUP_DIR"
+    log_message "Created backup: $BACKUP_DIR"
     
-    for file in *.py *.txt *.html templates/ static/ config/ engine/ utils/; do
+    for file in *.py *.txt *.html *.sh *.bat templates/ static/ config/ engine/ utils/; do
         if [[ -e "$file" ]]; then
             cp -r "$file" "$BACKUP_DIR/" 2>/dev/null
         fi
@@ -372,6 +583,15 @@ force_update() {
     TEMP_ZIP="/tmp/simcricketx_latest.zip"
     echo "Downloading..."
     curl -L -o "$TEMP_ZIP" "https://github.com/$GITHUB_USER/$GITHUB_REPO/archive/refs/heads/$MAIN_BRANCH.zip"
+    
+    # Verify download
+    echo "Verifying download..."
+    if ! unzip -t "$TEMP_ZIP" &> /dev/null; then
+        echo "✗ Downloaded file is corrupted!"
+        rm -f "$TEMP_ZIP" 2>/dev/null
+        log_message "ERROR: Force update - corrupted download"
+        exit 1
+    fi
     
     TEMP_EXTRACT="/tmp/simcricketx_extract"
     rm -rf "$TEMP_EXTRACT" 2>/dev/null
@@ -405,6 +625,9 @@ force_update() {
     rm -f "$TEMP_ZIP" 2>/dev/null
     rm -rf "$TEMP_EXTRACT" 2>/dev/null
     
+    # Cleanup old backups
+    cleanup_old_backups
+    
     echo "✅ Force update completed!"
     echo "Backup saved in: $BACKUP_DIR"
     echo
@@ -416,24 +639,89 @@ force_update() {
     echo "  ✅ user_auth.log"
     echo "  ✅ auth_debug.log"
     echo
+    log_message "Force update completed successfully"
+}
+
+# ============================================
+# CHECK PORT AVAILABILITY
+# ============================================
+check_port_availability() {
+    if [[ "$CHECK_PORT_BEFORE_START" != "true" ]]; then
+        return 0
+    fi
+    
+    echo "Checking if port $DEFAULT_PORT is available..."
+    
+    # Check using lsof if available
+    if command -v lsof &> /dev/null; then
+        if lsof -i:$DEFAULT_PORT &> /dev/null; then
+            echo "⚠️  WARNING: Port $DEFAULT_PORT is already in use!"
+            echo "The application may fail to start."
+            echo
+            log_message "WARNING: Port $DEFAULT_PORT is already in use"
+            read -p "Continue anyway? (y/n): " continue
+            if [[ "$continue" != "y" && "$continue" != "Y" ]]; then
+                echo "Exiting..."
+                log_message "User chose to exit due to port conflict"
+                exit 1
+            fi
+        else
+            echo "✓ Port $DEFAULT_PORT is available"
+        fi
+    # Fallback to netstat
+    elif command -v netstat &> /dev/null; then
+        if netstat -an | grep -w "$DEFAULT_PORT" | grep LISTEN &> /dev/null; then
+            echo "⚠️  WARNING: Port $DEFAULT_PORT appears to be in use!"
+            echo "The application may fail to start."
+            echo
+            log_message "WARNING: Port $DEFAULT_PORT appears to be in use"
+            read -p "Continue anyway? (y/n): " continue
+            if [[ "$continue" != "y" && "$continue" != "Y" ]]; then
+                echo "Exiting..."
+                log_message "User chose to exit due to port conflict"
+                exit 1
+            fi
+        else
+            echo "✓ Port $DEFAULT_PORT appears available"
+        fi
+    else
+        echo "Cannot check port availability (lsof/netstat not found)"
+    fi
 }
 
 # ============================================
 # MAIN SCRIPT LOGIC
 # ============================================
 
+# Load config file if it exists
+CONFIG_FILE=".simcricketx.conf"
+if [[ -f "$CONFIG_FILE" ]]; then
+    echo "Loading configuration from $CONFIG_FILE..."
+    source "$CONFIG_FILE"
+    log_message "Loaded configuration from $CONFIG_FILE"
+fi
+
 # Handle command line arguments
 if [[ "$1" == "--update" ]]; then
     force_update
     exit 0
+elif [[ "$1" == "--rollback" ]]; then
+    rollback_update "$2"
+    exit 0
 elif [[ "$1" == "--help" ]]; then
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  --update        Force update to latest version"
-    echo "  --skip-update   Skip update check"
-    echo "  --help          Show this help"
+    echo "  --update              Force update to latest version"
+    echo "  --rollback [backup]   Rollback to a previous backup"
+    echo "  --skip-update         Skip update check"
+    echo "  --help                Show this help"
+    echo ""
+    echo "Configuration:"
+    echo "  Create a .simcricketx.conf file to customize behavior"
     exit 0
 fi
+
+log_message "========== Starting SimCricketX =========="
 
 echo "============================================"
 echo "Starting SimCricketX Flask App..."
@@ -443,6 +731,13 @@ echo
 # Change to script directory
 cd "$(dirname "$0")"
 echo "Current directory: $(pwd)"
+echo
+
+# Check dependencies first
+if ! check_dependencies; then
+    read -p "Press Enter to exit..."
+    exit 1
+fi
 echo
 
 # Check for updates (unless skipped)
@@ -471,6 +766,7 @@ if ! command -v python3 &> /dev/null; then
         echo "2. Make sure Python is in your PATH"
         echo "3. Try running 'python3' instead of 'python'"
         echo
+        log_message "ERROR: Python not found"
         read -p "Press Enter to exit..."
         exit 1
     else
@@ -484,6 +780,7 @@ echo "Python found successfully! Using: $PYTHON_CMD"
 $PYTHON_CMD --version
 echo
 
+
 # Check for required files
 echo "Checking for requirements.txt..."
 if [[ ! -f "requirements.txt" ]]; then
@@ -496,6 +793,7 @@ if [[ ! -f "requirements.txt" ]]; then
     echo "Make sure this script is in the same folder as requirements.txt"
     echo "Or run with --update to download latest files"
     echo
+    log_message "ERROR: requirements.txt not found"
     read -p "Press Enter to exit..."
     exit 1
 fi
@@ -508,6 +806,7 @@ if [[ ! -f "app.py" ]]; then
     echo "Make sure this script is in the same folder as app.py"
     echo "Or run with --update to download latest files"
     echo
+    log_message "ERROR: app.py not found"
     read -p "Press Enter to exit..."
     exit 1
 fi
@@ -516,6 +815,7 @@ echo "app.py found!"
 echo
 echo "All checks passed! Continuing with setup..."
 echo
+
 
 # Create virtual environment
 if [[ ! -d "venv" ]]; then
@@ -529,10 +829,12 @@ if [[ ! -d "venv" ]]; then
         echo "- Missing venv module (try: pip install virtualenv)"
         echo "- Corrupted Python installation"
         echo
+        log_message "ERROR: Failed to create virtual environment"
         read -p "Press Enter to exit..."
         exit 1
     fi
     echo "Virtual environment created!"
+    log_message "Virtual environment created"
 else
     echo "Virtual environment already exists."
 fi
@@ -545,6 +847,7 @@ if [[ $? -ne 0 ]]; then
     echo "ERROR: Failed to activate virtual environment."
     echo "Try deleting the 'venv' folder and running again."
     echo
+    log_message "ERROR: Failed to activate virtual environment"
     read -p "Press Enter to exit..."
     exit 1
 fi
@@ -552,31 +855,70 @@ fi
 echo "Virtual environment activated!"
 echo
 
+
 echo "Upgrading pip..."
 python -m pip install --upgrade pip
 echo
 
-echo "Installing dependencies..."
-pip install --no-cache-dir -r requirements.txt
-if [[ $? -ne 0 ]]; then
-    echo
-    echo "ERROR: Failed to install dependencies."
-    echo "Check your internet connection and requirements.txt content."
-    echo
-    read -p "Press Enter to exit..."
-    exit 1
+# Check if requirements have changed
+REQUIREMENTS_HASH_FILE="venv/.requirements_hash"
+SKIP_INSTALL=false
+
+if command -v md5sum &> /dev/null; then
+    CURRENT_HASH=$(md5sum requirements.txt | cut -d' ' -f1)
+elif command -v md5 &> /dev/null; then
+    CURRENT_HASH=$(md5 -q requirements.txt)
+else
+    CURRENT_HASH=""
 fi
+
+if [[ -n "$CURRENT_HASH" ]] && [[ -f "$REQUIREMENTS_HASH_FILE" ]]; then
+    LAST_HASH=$(cat "$REQUIREMENTS_HASH_FILE" 2>/dev/null)
+    if [[ "$CURRENT_HASH" == "$LAST_HASH" ]]; then
+        echo "Dependencies unchanged since last install, skipping..."
+        echo "(Delete venv/.requirements_hash to force reinstall)"
+        SKIP_INSTALL=true
+        log_message "Skipped dependency installation - requirements unchanged"
+    fi
+fi
+
+if [[ "$SKIP_INSTALL" != "true" ]]; then
+    echo "Installing dependencies..."
+    pip install --no-cache-dir -r requirements.txt
+    if [[ $? -ne 0 ]]; then
+        echo
+        echo "ERROR: Failed to install dependencies."
+        echo "Check your internet connection and requirements.txt content."
+        echo
+        log_message "ERROR: Failed to install dependencies"
+        read -p "Press Enter to exit..."
+        exit 1
+    fi
+    
+    # Save the hash for next time
+    if [[ -n "$CURRENT_HASH" ]]; then
+        echo "$CURRENT_HASH" > "$REQUIREMENTS_HASH_FILE"
+        log_message "Dependencies installed and hash saved"
+    fi
+fi
+
+echo
+
+# Check port availability
+check_port_availability
 
 echo
 echo "======================================================="
 echo "  Starting Flask Application..."
-echo "  Access it at: http://127.0.0.1:7860"
+echo "  Access it at: http://127.0.0.1:$DEFAULT_PORT"
 echo "  Press CTRL+C to stop the server"
 echo "======================================================="
 echo
 
+log_message "Starting Flask application on port $DEFAULT_PORT"
 python app.py
 
 echo
 echo "Application stopped."
+log_message "Application stopped"
 read -p "Press Enter to exit..."

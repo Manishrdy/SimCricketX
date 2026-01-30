@@ -40,3 +40,12 @@ venv/
 .idea/
 .vscode/
 
+# =============================================================================
+# --- SimCricketX Release Files ---
+# Ignore configuration, local logs, and update backups
+# =============================================================================
+.simcricketx.conf
+simcricketx_updates.log
+.last_update_check
+backup_*/
+

@@ -66,8 +66,9 @@ except ImportError:
 
 from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, Tournament, TournamentTeam, TournamentFixture
-from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache # Distinct from engine.match.Match
+from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership # Distinct from engine.match.Match
 from engine.tournament_engine import TournamentEngine
+from sqlalchemy import func  # For aggregate functions
 
 
 
@@ -2664,6 +2665,27 @@ def create_app():
             return redirect(url_for('statistics'))
 
     # ============================================================================
+    # PLAYER COMPARISON PAGE
+    # ============================================================================
+    
+    @app.route('/compare-players')
+    @login_required
+    def compare_players_page():
+        """Render player comparison page"""
+        try:
+            # Get all teams and tournaments for the user
+            teams = Team.query.filter_by(user_id=current_user.id).all()
+            tournaments = Tournament.query.filter_by(user_id=current_user.id).all()
+            
+            return render_template('compare_players.html', 
+                                 teams=teams, 
+                                 tournaments=tournaments)
+        except Exception as e:
+            app.logger.error(f"Error loading comparison page: {e}", exc_info=True)
+            flash("Error loading comparison page", "danger")
+            return redirect(url_for('index'))
+
+    # ============================================================================
     # NEW FEATURE ROUTES: Stats Enhancements
     # ============================================================================
     
@@ -2705,13 +2727,86 @@ def create_app():
         """
         API endpoint for player comparison.
         Accepts multiple player IDs and optional tournament filter.
+        If player_ids is empty or not provided, returns all available players with inferred roles.
         """
         try:
             # Get player IDs from query params
-            player_ids = request.args.getlist('player_ids', type=int)
+            player_ids_str = request.args.get('player_ids', '')
+            player_ids = [int(x.strip()) for x in player_ids_str.split(',') if x.strip().isdigit()]
             tournament_id = request.args.get('tournament_id', type=int)
             
-            if not player_ids or len(player_ids) < 2:
+            # If no player IDs provided, return all available players with inferred roles
+            if not player_ids:
+                stats_service = StatsService(app.logger)
+                
+                # Get all players for current user who have played in any match
+                players_with_stats = db.session.query(
+                    DBPlayer.id,
+                    DBPlayer.name,
+                    DBTeam.name.label('team_name')
+                ).join(
+                    MatchScorecard, DBPlayer.id == MatchScorecard.player_id
+                ).join(
+                    DBMatch, MatchScorecard.match_id == DBMatch.id
+                ).join(
+                    DBTeam, DBPlayer.team_id == DBTeam.id
+                ).filter(
+                    DBMatch.user_id == current_user.id
+                ).distinct().all()
+                
+                # Infer roles based on stats
+                available_players = []
+                for player_id, player_name, team_name in players_with_stats:
+                    # Get batting stats count
+                    batting_count = db.session.query(
+                        func.count(MatchScorecard.id)
+                    ).join(
+                        DBMatch, MatchScorecard.match_id == DBMatch.id
+                    ).filter(
+                        MatchScorecard.player_id == player_id,
+                        MatchScorecard.record_type == 'batting',
+                        DBMatch.user_id == current_user.id
+                    ).scalar() or 0
+                    
+                    # Get bowling stats count
+                    bowling_count = db.session.query(
+                        func.count(MatchScorecard.id)
+                    ).join(
+                        DBMatch, MatchScorecard.match_id == DBMatch.id
+                    ).filter(
+                        MatchScorecard.player_id == player_id,
+                        MatchScorecard.record_type == 'bowling',
+                        DBMatch.user_id == current_user.id
+                    ).scalar() or 0
+                    
+                   # Infer role based on stats
+                    has_batting = batting_count > 0
+                    has_bowling = bowling_count > 0
+                    
+                    if has_batting and has_bowling:
+                        role = 'All-Rounder'
+                    elif has_bowling:
+                        role = 'Bowler'
+                    elif has_batting:
+                        role = 'Batsman'
+                    else:
+                        role = 'Unknown'
+                    
+                    available_players.append({
+                        'id': player_id,
+                        'name': player_name,
+                        'team': team_name,
+                        'role': role
+                    })
+                
+                return jsonify({
+                    'success': True,
+                    'available_players': available_players,
+                    'count': len(available_players)
+                })
+            
+            # If player IDs provided, perform comparison
+            if len(player_ids) < 2:
                 return jsonify({'error': 'Select at least 2 players to compare'}), 400
             
             if len(player_ids) > 6:
@@ -2794,6 +2889,65 @@ def create_app():
         except Exception as e:
             app.logger.error(f"Error fetching tournament partnerships: {e}", exc_info=True)
             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/partnerships')
+    @login_required
+    def api_overall_partnerships():
+        """
+        API endpoint for overall partnership leaderboard.
+        Returns top partnerships across all tournaments.
+        """
+        try:
+            limit = request.args.get('limit', 10, type=int)
+            
+            if limit < 1 or limit > 50:
+                return jsonify({'error': 'Limit must be between 1 and 50'}), 400
+            
+            # Get all partnerships for current user, ordered by runs
+            partnerships = db.session.query(
+                MatchPartnership,
+                DBPlayer.name.label('batsman1_name'),
+                DBPlayer.name.label('batsman2_name'),
+                DBMatch.match_number,
+                Tournament.name.label('tournament_name')
+            ).join(
+                DBMatch, MatchPartnership.match_id == DBMatch.id
+            ).join(
+                DBPlayer, MatchPartnership.batsman1_id == DBPlayer.id
+            ).join(
+                Tournament, DBMatch.tournament_id == Tournament.id
+            ).filter(
+                DBMatch.user_id == current_user.id
+            ).order_by(
+                MatchPartnership.runs.desc()
+            ).limit(limit).all()
+            
+            # Get batsman2 names in a second query (since we can't join same table twice easily)
+            result = []
+            for p, b1_name, _, match_num, tourn_name in partnerships:
+                b2_name = DBPlayer.query.get(p.batsman2_id).name if p.batsman2_id else "Unknown"
+                result.append({
+                    'batsman1': b1_name,
+                    'batsman2': b2_name,
+                    'runs': p.runs,
+                    'balls': p.balls,
+                    'wicket': p.wicket_number,
+                    'batsman1_contribution': p.batsman1_contribution,
+                    'batsman2_contribution': p.batsman2_contribution,
+                    'tournament': tourn_name,
+                    'match_number': match_num
+                })
+            
+            return jsonify({
+                'success': True,
+                'data': result,
+                'count': len(result)
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error fetching overall partnerships: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+
 
 
     return app

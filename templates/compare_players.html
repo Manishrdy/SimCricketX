@@ -1,0 +1,545 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="compare-players-page">
+    <div class="page-header">
+        <div class="header-content">
+            <h1 class="page-title">
+                <i class="fas fa-balance-scale"></i> Player Comparison
+            </h1>
+            <p class="page-subtitle">Compare players side-by-side across all statistics</p>
+        </div>
+        <a href="{{ url_for('index') }}" class="back-btn">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+    </div>
+
+    <!-- Player Selection Section -->
+    <div class="selection-card">
+        <div class="selection-header">
+            <h3><i class="fas fa-users"></i> Select Players to Compare</h3>
+            <p>Choose 2-6 players from your teams</p>
+        </div>
+
+        <div class="selection-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="player-select">Select Players</label>
+                    <select id="player-select" multiple class="player-multiselect">
+                        {% for team in teams %}
+                        <optgroup label="{{ team.name }}">
+                            {% for player in team.players %}
+                            <option value="{{ player.id }}">{{ player.name }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endfor %}
+                    </select>
+                    <small class="form-hint">Hold Ctrl/Cmd to select multiple players</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="tournament-filter">Tournament (Optional)</label>
+                    <select id="tournament-filter" class="form-select">
+                        <option value="">All Tournaments</option>
+                        {% for tournament in tournaments %}
+                        <option value="{{ tournament.id }}">{{ tournament.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <button id="compare-btn" class="primary-btn" onclick="compareSelected()">
+                <i class="fas fa-chart-bar"></i> Compare Players
+            </button>
+        </div>
+    </div>
+
+    <!-- Comparison Results -->
+    <div id="comparison-results" class="comparison-results" style="display: none;">
+        <div class="results-header">
+            <h2>Comparison Results</h2>
+            <button class="secondary-btn" onclick="resetComparison()">
+                <i class="fas fa-redo"></i> New Comparison
+            </button>
+        </div>
+
+        <!-- Batting Comparison -->
+        <div class="comparison-section">
+            <div class="section-title">
+                <i class="fas fa-cricket-bat"></i> Batting Statistics
+            </div>
+            <div class="table-responsive">
+                <table id="batting-table" class="comparison-table">
+                    <!-- Populated dynamically -->
+                </table>
+            </div>
+        </div>
+
+        <!-- Bowling Comparison -->
+        <div class="comparison-section">
+            <div class="section-title">
+                <i class="fas fa-bowling-ball"></i> Bowling Statistics
+            </div>
+            <div class="table-responsive">
+                <table id="bowling-table" class="comparison-table">
+                    <!-- Populated dynamically -->
+                </table>
+            </div>
+        </div>
+
+        <!-- Fielding Comparison -->
+        <div class="comparison-section">
+            <div class="section-title">
+                <i class="fas fa-hand-paper"></i> Fielding Statistics
+            </div>
+            <div class="table-responsive">
+                <table id="fielding-table" class="comparison-table">
+                    <!-- Populated dynamically -->
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading-state" class="loading-state" style="display: none;">
+        <div class="spinner"></div>
+        <p>Loading comparison data...</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="error-state" class="error-state" style="display: none;">
+        <i class="fas fa-exclamation-triangle"></i>
+        <p id="error-message"></p>
+    </div>
+</div>
+
+<script>
+    function compareSelected() {
+        const select = document.getElementById('player-select');
+        const tournamentFilter = document.getElementById('tournament-filter');
+        const selectedPlayers = Array.from(select.selectedOptions).map(opt => opt.value);
+
+        // Validation
+        if (selectedPlayers.length < 2) {
+            alert('Please select at least 2 players to compare');
+            return;
+        }
+
+        if (selectedPlayers.length > 6) {
+            alert('You can compare a maximum of 6 players');
+            return;
+        }
+
+        // Build query string
+        const params = new URLSearchParams();
+        selectedPlayers.forEach(id => params.append('player_ids', id));
+        if (tournamentFilter.value) {
+            params.append('tournament_id', tournamentFilter.value);
+        }
+
+        // Show loading
+        document.getElementById('loading-state').style.display = 'flex';
+        document.getElementById('comparison-results').style.display = 'none';
+        document.getElementById('error-state').style.display = 'none';
+
+        // Fetch comparison data
+        fetch(`/api/compare-players?${params}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('loading-state').style.display = 'none';
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                if (data.success) {
+                    displayComparison(data.data);
+                }
+            })
+            .catch(err => {
+                document.getElementById('loading-state').style.display = 'none';
+                showError('Error loading comparison: ' + err.message);
+            });
+    }
+
+    function displayComparison(data) {
+        document.getElementById('comparison-results').style.display = 'block';
+
+        // Batting comparison
+        if (data.batting_comparison && data.batting_comparison.length > 0) {
+            const battingTable = document.getElementById('batting-table');
+            battingTable.innerHTML = `
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Innings</th>
+                    <th>Runs</th>
+                    <th>Average</th>
+                    <th>Strike Rate</th>
+                    <th>High Score</th>
+                    <th>50s</th>
+                    <th>100s</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${data.batting_comparison.map(p => `
+                    <tr>
+                        <td class="player-name">${p.player}</td>
+                        <td>${p.innings}</td>
+                        <td class="highlight">${p.runs}</td>
+                        <td>${p.average}</td>
+                        <td>${p.strike_rate}</td>
+                        <td>${p.high_score}</td>
+                        <td>${p.fifties}</td>
+                        <td>${p.hundreds}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        `;
+        }
+
+        // Bowling comparison
+        if (data.bowling_comparison && data.bowling_comparison.length > 0) {
+            const bowlingTable = document.getElementById('bowling-table');
+            bowlingTable.innerHTML = `
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Innings</th>
+                    <th>Wickets</th>
+                    <th>Average</th>
+                    <th>Economy</th>
+                    <th>Strike Rate</th>
+                    <th>Best Figures</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${data.bowling_comparison.map(p => `
+                    <tr>
+                        <td class="player-name">${p.player}</td>
+                        <td>${p.innings}</td>
+                        <td class="highlight">${p.wickets}</td>
+                        <td>${p.average}</td>
+                        <td>${p.economy}</td>
+                        <td>${p.strike_rate}</td>
+                        <td>${p.best_figures}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        `;
+        } else {
+            document.getElementById('bowling-table').innerHTML = '<p class="no-data">No bowling data available</p>';
+        }
+
+        // Fielding comparison
+        if (data.fielding_comparison && data.fielding_comparison.length > 0) {
+            const fieldingTable = document.getElementById('fielding-table');
+            fieldingTable.innerHTML = `
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Catches</th>
+                    <th>Run Outs</th>
+                    <th>Total Dismissals</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${data.fielding_comparison.map(p => `
+                    <tr>
+                        <td class="player-name">${p.player}</td>
+                        <td>${p.catches}</td>
+                        <td>${p.run_outs}</td>
+                        <td class="highlight">${p.total_dismissals}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        `;
+        }
+    }
+
+    function showError(message) {
+        document.getElementById('error-state').style.display = 'flex';
+        document.getElementById('error-message').textContent = message;
+    }
+
+    function resetComparison() {
+        document.getElementById('comparison-results').style.display = 'none';
+        document.getElementById('player-select').selectedIndex = -1;
+        document.getElementById('tournament-filter').selectedIndex = 0;
+    }
+</script>
+
+<style>
+    .compare-players-page {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+        color: #abb2bf;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 2px solid #3e4451;
+    }
+
+    .page-title {
+        font-size: 2rem;
+        margin: 0 0 0.5rem 0;
+        color: #61afef;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .page-subtitle {
+        margin: 0;
+        color: #5c6370;
+        font-size: 1rem;
+    }
+
+    .back-btn {
+        padding: 0.75rem 1.5rem;
+        background: #3e4451;
+        border: none;
+        border-radius: 8px;
+        color: #abb2bf;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .back-btn:hover {
+        background: #4e5461;
+    }
+
+    .selection-card {
+        background: #2c323c;
+        border-radius: 12px;
+        padding: 2rem;
+        border: 1px solid #3e4451;
+        margin-bottom: 2rem;
+    }
+
+    .selection-header h3 {
+        margin: 0 0 0.5rem 0;
+        color: #61afef;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .selection-header p {
+        margin: 0;
+        color: #5c6370;
+    }
+
+    .selection-form {
+        margin-top: 1.5rem;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group label {
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #abb2bf;
+    }
+
+    .player-multiselect,
+    .form-select {
+        padding: 0.75rem;
+        background: #1e2127;
+        border: 1px solid #3e4451;
+        border-radius: 8px;
+        color: #abb2bf;
+        font-size: 0.95rem;
+    }
+
+    .player-multiselect {
+        min-height: 200px;
+    }
+
+    .form-hint {
+        margin-top: 0.5rem;
+        color: #5c6370;
+        font-size: 0.85rem;
+    }
+
+    .primary-btn {
+        padding: 1rem 2rem;
+        background: linear-gradient(135deg, #61afef, #56b6c2);
+        border: none;
+        border-radius: 8px;
+        color: #282c34;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .primary-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(97, 175, 239, 0.3);
+    }
+
+    .secondary-btn {
+        padding: 0.75rem 1.5rem;
+        background: #3e4451;
+        border: 1px solid #5c6370;
+        border-radius: 8px;
+        color: #abb2bf;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .secondary-btn:hover {
+        background: #4e5461;
+    }
+
+    .comparison-results {
+        margin-top: 2rem;
+    }
+
+    .results-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .results-header h2 {
+        margin: 0;
+        color: #98c379;
+    }
+
+    .comparison-section {
+        background: #2c323c;
+        border-radius: 12px;
+        padding: 1.5rem;
+        border: 1px solid #3e4451;
+        margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #61afef;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .comparison-table thead {
+        background: #1e2127;
+    }
+
+    .comparison-table th {
+        padding: 1rem;
+        text-align: left;
+        color: #5c6370;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid #3e4451;
+    }
+
+    .comparison-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #3e4451;
+    }
+
+    .comparison-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .player-name {
+        font-weight: 600;
+        color: #abb2bf;
+    }
+
+    .highlight {
+        color: #98c379;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+
+    .loading-state,
+    .error-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        background: #2c323c;
+        border-radius: 12px;
+        border: 1px solid #3e4451;
+        margin-top: 2rem;
+    }
+
+    .spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid #3e4451;
+        border-top: 4px solid #61afef;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .error-state i {
+        font-size: 3rem;
+        color: #e06c75;
+        margin-bottom: 1rem;
+    }
+
+    .no-data {
+        text-align: center;
+        padding: 2rem;
+        color: #5c6370;
+        font-style: italic;
+    }
+</style>
+{% endblock %}
