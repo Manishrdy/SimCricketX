@@ -90,7 +90,6 @@ class Match:
         self.first_innings_batting_stats = {}   # First batting team's batting stats
         self.first_innings_bowling_stats = {}   # First bowling team's bowling stats  
         self.second_innings_batting_stats = {}  # Second batting team's batting stats
-        self.second_innings_batting_stats = {}  # Second batting team's batting stats
         self.second_innings_bowling_stats = {}  # Second bowling team's bowling stats
         
         # Partnership storage
