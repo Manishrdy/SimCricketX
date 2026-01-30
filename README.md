@@ -84,7 +84,9 @@ During installation, make sure to **check the box**: `Add Python to PATH`.
 ### 3️⃣ Run the App
 
 - Navigate to the extracted folder.
-- Double-click on `run.bat` file to launch the app.
+- Navigate to the extracted folder.
+- **Windows**: Double-click on `run.bat`
+- **Linux/Mac**: Run `./run.sh` in terminal (you may need to run `chmod +x run.sh` first)
 
 ---
 
@@ -94,6 +96,69 @@ Open your browser and visit:
 - `http://127.0.0.1:7860`  
   _or_  
 - `http://192.168.254.131:7860` (for LAN access)
+
+---
+
+## 👨‍💻 Manual Developer Setup
+
+If you prefer to set up the environment manually instead of using the scripts:
+
+### 1. Create Virtual Environment
+```bash
+# Windows
+python -m venv venv
+venv\Scripts\activate
+
+# Linux/Mac
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 2. Install Dependencies
+```bash
+# Upgrade pip first
+python -m pip install --upgrade pip
+
+# Install required packages
+pip install -r requirements.txt
+```
+
+### 3. Run Application
+```bash
+python app.py
+```
+*Access at http://127.0.0.1:7860*
+
+---
+
+## 🔄 Auto-Update & Backup
+
+SimCricketX includes an intelligent maintenance system:
+
+- **Automatic Updates**: Checks for new versions daily (can be disabled)
+- **Smart Backups**: Automatically backs up your data before every update
+- **Rollback Capability**: Easily restore previous versions if needed
+- **Safety First**: Your critical data (saves, auth, logs) is preserved during updates
+
+**Commands:**
+```bash
+# Force an update check
+./run.sh --update      # or run.bat --update
+
+# Rollback to previous version
+./run.sh --rollback    # or run.bat --rollback
+```
+
+## ⚙️ Configuration
+
+You can customize the application behavior by creating a `.simcricketx.conf` file in the root directory:
+
+```bash
+# Example .simcricketx.conf
+AUTO_UPDATE_CHECK=true        # Enable/disable auto updates
+UPDATE_CHECK_INTERVAL=86400   # Check frequency in seconds
+DEFAULT_PORT=7860             # Custom port number
+```
 
 ---
 

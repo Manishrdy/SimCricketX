@@ -1,0 +1,14 @@
+# SimCricketX Configuration File
+# Place this file as .simcricketx.conf in the same directory as run.bat/run.sh
+
+# Auto-update settings
+set AUTO_UPDATE_CHECK=true
+set UPDATE_CHECK_INTERVAL=86400
+set PRESERVE_BACKUPS_DAYS=30
+
+# Port settings
+set DEFAULT_PORT=7860
+set CHECK_PORT_BEFORE_START=true
+
+# Logging
+set ENABLE_UPDATE_LOGGING=true
