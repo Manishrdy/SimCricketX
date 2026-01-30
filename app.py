@@ -80,8 +80,6 @@ PROD_MAX_AGE = 7 * 24 * 3600
 
 # Make sure PROJECT_ROOT is defined near the top of app.py:
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
-CREDENTIALS_FILE = 'auth/credentials.json'
-
 VISIT_FILE = os.path.join(PROJECT_ROOT, "data", "visit_counter.txt")
 MATCHES_FILE = os.path.join(PROJECT_ROOT, "data", "matches_simulated.txt")
 
@@ -254,6 +252,10 @@ def create_app():
     except Exception as e:
         print(f"[WARN] Could not read secret_key from config.yaml: {e}")
 
+    if secret and secret.strip().lower() in {"change_me", "replace_me", "default", "your_secret_here"}:
+        print("[WARN] secret_key is a placeholder; ignoring config value")
+        secret = None
+
     if not secret:
         secret = os.getenv("FLASK_SECRET_KEY", None)
         if not secret:
@@ -261,8 +263,8 @@ def create_app():
             print("[WARN] Using random Flask SECRET_KEY--sessions won't persist across restarts")
 
     app.config["SECRET_KEY"] = secret
-    app.config["SECRET_KEY"] = secret
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
 
     # --- Database setup ---
     basedir = os.path.abspath(os.path.dirname(__file__))
@@ -336,6 +338,34 @@ def create_app():
         return '.' in filename and \
                filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
     # --- END NEW ---
+
+    def _is_valid_match_id(match_id: str) -> bool:
+        try:
+            return str(uuid.UUID(match_id)).lower() == match_id.lower()
+        except Exception:
+            return False
+
+    def _load_match_file_for_user(match_id):
+        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+        if not os.path.isdir(match_dir):
+            return None, None, (jsonify({"error": "Match not found"}), 404)
+
+        for fn in os.listdir(match_dir):
+            if not fn.endswith(".json"):
+                continue
+            path = os.path.join(match_dir, fn)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("match_id") == match_id:
+                    if data.get("created_by") != current_user.id:
+                        return None, None, (jsonify({"error": "Unauthorized"}), 403)
+                    return data, path, None
+            except Exception as e:
+                app.logger.error(f"[MatchAuth] error loading {fn}: {e}", exc_info=True)
+                continue
+
+        return None, None, (jsonify({"error": "Match not found"}), 404)
 
     @login_manager.user_loader
     def load_user(email):
@@ -1566,47 +1596,30 @@ def create_app():
     @app.route("/match/<match_id>/set-toss", methods=["POST"])
     @login_required
     def set_toss(match_id):
-        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
-        data = request.get_json()
+        match_data, match_path, err = _load_match_file_for_user(match_id)
+        if err:
+            return err
+
+        data = request.get_json() or {}
         toss_winner = data.get("winner")
         decision = data.get("decision")
+        if not toss_winner or not decision:
+            return jsonify({"error": "winner and decision are required"}), 400
 
-        # Locate match file by match_id
-        for fn in os.listdir(match_dir):
-            path = os.path.join(match_dir, fn)
-            with open(path, "r") as f:
-                match_data = json.load(f)
-            if match_data.get("match_id") == match_id:
-                match_data["toss_winner"] = toss_winner
-                match_data["toss_decision"] = decision
-                # Save updated file
-                with open(path, "w") as f:
-                    json.dump(match_data, f, indent=2)
-                app.logger.info(f"[MatchToss] {toss_winner} chose to {decision} (Match: {match_id})")
-                return jsonify({"status":"success"}), 200
+        match_data["toss_winner"] = toss_winner
+        match_data["toss_decision"] = decision
 
-        return jsonify({"error":"Match not found"}), 404
+        with open(match_path, "w") as f:
+            json.dump(match_data, f, indent=2)
+        app.logger.info(f"[MatchToss] {toss_winner} chose to {decision} (Match: {match_id})")
+        return jsonify({"status": "success"}), 200
     
-    @app.route("/match/<match_id>/spin-toss")
+    @app.route("/match/<match_id>/spin-toss", methods=["POST"])
     @login_required
     def spin_toss(match_id):
-        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
-        match_data = None
-        match_path = None
-
-        for fn in os.listdir(match_dir):
-            if not fn.endswith(".json"):
-                continue
-            path = os.path.join(match_dir, fn)
-            with open(path) as f:
-                try:
-                    data = json.load(f)
-                    if data.get("match_id") == match_id:
-                        match_data = data
-                        match_path = path
-                        break
-                except Exception as e:
-                    app.logger.error(f"Error reading match file {fn}: {e}")
+        match_data, match_path, err = _load_match_file_for_user(match_id)
+        if err:
+            return err
 
         if not match_data:
             return jsonify({"error": "Match not found"}), 404
@@ -1782,11 +1795,16 @@ def create_app():
         """
         try:
             if match_id not in MATCH_INSTANCES:
+                _match_data, _match_path, err = _load_match_file_for_user(match_id)
+                if err:
+                    return err
                 app.logger.info(f"[FinalLineups] Match instance {match_id} not yet in memory. No action needed.")
                 return jsonify({"success": True, "message": "Lineups will be loaded from updated file."}), 200
 
             match_instance = MATCH_INSTANCES[match_id]
-            lineup_data = request.get_json()
+            if match_instance.data.get("created_by") != current_user.id:
+                return jsonify({"error": "Unauthorized"}), 403
+            lineup_data = request.get_json() or {}
             home_final_xi = lineup_data.get("home_final_xi")
             away_final_xi = lineup_data.get("away_final_xi")
 
@@ -1864,26 +1882,13 @@ def create_app():
             app.logger.error(f"Error updating final lineups: {e}", exc_info=True)
             return jsonify({"error": str(e)}), 500
         
-    @app.route("/match/<match_id>/next-ball")
+    @app.route("/match/<match_id>/next-ball", methods=["POST"])
     @login_required
     def next_ball(match_id):
         if match_id not in MATCH_INSTANCES:
-            match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
-            match_data = None
-            for fn in os.listdir(match_dir):
-                path = os.path.join(match_dir, fn)
-                try:
-                    # Add encoding="utf-8" to correctly read files with special characters
-                    with open(path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    if data.get("match_id") == match_id:
-                        match_data = data
-                        break
-                except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                    app.logger.error(f"Error reading or decoding {fn}: {e}")
-                    continue # Skip corrupted or invalid files
-            if not match_data:
-                return jsonify({"error": "Match not found"}), 404
+            match_data, _match_path, err = _load_match_file_for_user(match_id)
+            if err:
+                return err
             
             # Reset impact player flags for fresh simulation
             if "impact_players_swapped" in match_data:
@@ -1894,6 +1899,8 @@ def create_app():
             MATCH_INSTANCES[match_id] = Match(match_data)
 
         match = MATCH_INSTANCES[match_id]
+        if match.data.get("created_by") != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
         outcome = match.next_ball()
 
         # Explicitly send final score and wickets clearly
@@ -1927,21 +1934,25 @@ def create_app():
         if match_id not in MATCH_INSTANCES:
             return jsonify({"error": "Match not found"}), 404
         
+        match = MATCH_INSTANCES[match_id]
+        if match.data.get("created_by") != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
         data = request.get_json()
         first_batting_team = data.get("first_batting_team")
         
-        match = MATCH_INSTANCES[match_id]
         result = match.start_super_over(first_batting_team)
         
         return jsonify(result)
 
-    @app.route("/match/<match_id>/next-super-over-ball")
+    @app.route("/match/<match_id>/next-super-over-ball", methods=["POST"])
     @login_required
     def next_super_over_ball(match_id):
         if match_id not in MATCH_INSTANCES:
             return jsonify({"error": "Match not found"}), 404
         
         match = MATCH_INSTANCES[match_id]
+        if match.data.get("created_by") != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
         try:
             result = match.next_super_over_ball()
             return jsonify(result)
@@ -1971,6 +1982,8 @@ def create_app():
             # Store commentary for the match instance
             if match_id in MATCH_INSTANCES:
                 match_instance = MATCH_INSTANCES[match_id]
+                if match_instance.data.get("created_by") != current_user.id:
+                    return jsonify({"error": "Unauthorized"}), 403
                 
                 # Convert HTML to clean text list for archiving
                 frontend_commentary = html_to_commentary_list(commentary_html)
@@ -2194,6 +2207,9 @@ def create_app():
         if current_user.id != username:
             app.logger.warning(f"Unauthorized download attempt by '{current_user.id}' for '{username}/{filename}'")
             return jsonify({"error": "Unauthorized"}), 403
+        if f"_{current_user.id}_" not in filename:
+            app.logger.warning(f"Unauthorized download attempt by '{current_user.id}' for filename '{filename}'")
+            return jsonify({"error": "Unauthorized"}), 403
 
         # 2) Prevent directory-traversal (reject anything with a slash)
         if "/" in filename or "\\" in filename:
@@ -2277,56 +2293,19 @@ def create_app():
             return jsonify({'error': 'Internal server error'}), 500
         
 
-    @app.route('/download-credentials')
-    def download_credentials():
-        try:
-            return send_file('auth/credentials.json', as_attachment=True)
-        except Exception as e:
-            return str(e), 500
-
-    @app.route('/credentials', methods=['GET', 'DELETE'])
-    def handle_credentials():
-        if not os.path.exists(CREDENTIALS_FILE):
-            return jsonify({"error": "Credentials file not found"}), 404
-
-        # Load the credentials
-        try:
-            with open(CREDENTIALS_FILE, 'r') as f:
-                credentials = json.load(f)
-        except Exception as e:
-            return jsonify({"error": f"Failed to load file: {str(e)}"}), 500
-
-        if request.method == 'GET':
-            # Return entire credentials file
-            return jsonify(credentials), 200
-
-        elif request.method == 'DELETE':
-            email = request.args.get('email') or request.json.get('email')
-            if not email:
-                return jsonify({"error": "Email is required for deletion"}), 400
-
-            if email not in credentials:
-                return jsonify({"message": f"No user found with email {email}"}), 404
-
-            deleted = credentials.pop(email)
-
-            try:
-                with open(CREDENTIALS_FILE, 'w') as f:
-                    json.dump(credentials, f, indent=2)
-            except Exception as e:
-                return jsonify({"error": f"Failed to write file: {str(e)}"}), 500
-
-            return jsonify({
-                "message": f"User {email} deleted successfully",
-                "deleted_record": deleted
-            }), 200
-
     @app.route('/match/<match_id>/save-scorecard-images', methods=['POST'])
+    @login_required
     def save_scorecard_images(match_id):
         try:
             import os
             from pathlib import Path
-            
+            if not _is_valid_match_id(match_id):
+                return jsonify({"error": "Invalid match id"}), 400
+
+            _match_data, _match_path, err = _load_match_file_for_user(match_id)
+            if err:
+                return err
+
             # Create temp directory for images
             temp_dir = Path("data") / "temp_scorecard_images"
             temp_dir.mkdir(parents=True, exist_ok=True)
@@ -2337,7 +2316,10 @@ def create_app():
             if 'first_innings_image' in request.files:
                 first_img = request.files['first_innings_image']
                 if first_img.filename:
-                    first_path = temp_dir / f"{match_id}_first_innings_scorecard.png"
+                    safe_match_id = secure_filename(match_id)
+                    if safe_match_id != match_id:
+                        return jsonify({"error": "Invalid match id"}), 400
+                    first_path = temp_dir / f"{safe_match_id}_first_innings_scorecard.png"
                     first_img.save(first_path)
                     saved_files.append(str(first_path))
             
@@ -2345,7 +2327,10 @@ def create_app():
             if 'second_innings_image' in request.files:
                 second_img = request.files['second_innings_image']
                 if second_img.filename:
-                    second_path = temp_dir / f"{match_id}_second_innings_scorecard.png"
+                    safe_match_id = secure_filename(match_id)
+                    if safe_match_id != match_id:
+                        return jsonify({"error": "Invalid match id"}), 400
+                    second_path = temp_dir / f"{safe_match_id}_second_innings_scorecard.png"
                     second_img.save(second_path)
                     saved_files.append(str(second_path))
             

@@ -477,7 +477,7 @@ function appendLog(message, type = 'normal') {
 function spinTossAndStartMatch() {
     const resultEl = document.getElementById('toss-result');
 
-    fetch(`${window.location.pathname}/spin-toss`)
+    fetch(`${window.location.pathname}/spin-toss`, { method: 'POST' })
         .then(r => r.json())
         .then(d => {
             resultEl.textContent = `${d.toss_winner} chose to ${d.toss_decision}`;
@@ -495,7 +495,7 @@ function startMatch() {
     const scoreElem = document.getElementById('score');
     const overInfoElem = document.getElementById('over-info');
 
-    fetch(window.location.pathname + "/next-ball")
+    fetch(window.location.pathname + "/next-ball", { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.error) {
@@ -755,18 +755,7 @@ async function saveMatchArchive() {
         });
         console.log("✅ Commentary saved");
 
-        // 2. Save complete page
-        await fetch(`${window.location.pathname}/save-complete-webpage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                html_content: document.documentElement.outerHTML,
-                match_id: matchData.match_id
-            })
-        });
-        console.log("✅ Webpage saved");
-
-        // 3. Trigger ZIP download
+        // 2. Trigger ZIP download
         console.log("📥 Triggering ZIP download...");
         const downloadResponse = await fetch(`${window.location.pathname}/download-archive`, {
             method: 'POST',
@@ -846,7 +835,7 @@ function startSuperOverSimulation() {
     const scoreElem = document.getElementById('score');
     const overElem = document.getElementById('over-info');
 
-    fetch(`${window.location.pathname}/next-super-over-ball`)
+    fetch(`${window.location.pathname}/next-super-over-ball`, { method: 'POST' })
         .then(r => r.json())
         .then(data => {
             if (data.error) {
