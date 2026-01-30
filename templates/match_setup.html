@@ -772,6 +772,7 @@
                 }
             }
         }
+
     });
 
 
@@ -805,7 +806,7 @@
             if (currentStep === 1) {
                 nextBtn.disabled = selectedTeamIndices.length !== 2;
             } else if (currentStep === 2) {
-                nextBtn.disabled = false; // Step 2 is always valid
+                nextBtn.disabled = false;
             }
         }
     }
@@ -1011,6 +1012,9 @@
     }
 
     function validateSquads() {
+        if (currentStep !== 3) {
+            return;
+        }
         const sides = ['home', 'away'];
         let valid = true;
 

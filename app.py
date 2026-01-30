@@ -23,7 +23,7 @@ import re
 import logging
 import yaml
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash
@@ -70,6 +70,7 @@ from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, 
 from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership # Distinct from engine.match.Match
 from engine.tournament_engine import TournamentEngine
 from sqlalchemy import func  # For aggregate functions
+
 
 
 
@@ -260,12 +261,28 @@ def create_app():
     if not secret:
         secret = os.getenv("FLASK_SECRET_KEY", None)
         if not secret:
-            secret = os.urandom(24).hex()
-            print("[WARN] Using random Flask SECRET_KEY--sessions won't persist across restarts")
+            secret_file = os.path.join(PROJECT_ROOT, "data", "secret_key.txt")
+            try:
+                if os.path.exists(secret_file):
+                    with open(secret_file, "r", encoding="utf-8") as f:
+                        secret = f.read().strip()
+                if not secret:
+                    os.makedirs(os.path.dirname(secret_file), exist_ok=True)
+                    secret = os.urandom(24).hex()
+                    with open(secret_file, "w", encoding="utf-8") as f:
+                        f.write(secret)
+                    print(f"[WARN] Generated persistent SECRET_KEY at {secret_file}")
+            except Exception as e:
+                print(f"[WARN] Failed to load/write persistent SECRET_KEY: {e}")
+                secret = os.urandom(24).hex()
+                print("[WARN] Using random Flask SECRET_KEY--sessions won't persist across restarts")
 
     app.config["SECRET_KEY"] = secret
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+    app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)
+    app.config["REMEMBER_COOKIE_REFRESH_EACH_REQUEST"] = True
 
     # --- Database setup ---
     basedir = os.path.abspath(os.path.dirname(__file__))
@@ -876,7 +893,8 @@ def create_app():
                 # In app.py imports: from database.models import User as DBUser
                 user = db.session.get(DBUser, email)
                 if user:
-                    login_user(user)
+                    login_user(user, remember=True, duration=app.config.get("REMEMBER_COOKIE_DURATION"))
+                    session.permanent = True
                 app.logger.info(f"Successful login for {email}")
                 return redirect(url_for("home"))
             else:
@@ -1449,7 +1467,7 @@ def create_app():
                 "created_by": user,
                 "tournament_id": req_tournament_id,
                 "fixture_id": req_fixture_id,
-                "timestamp": ts
+                "timestamp": ts,
             })
 
             with open(path, "w") as f:
@@ -1650,11 +1668,10 @@ def create_app():
         if not match_data:
             return jsonify({"error": "Match not found"}), 404
 
-        toss_choice = match_data["toss"]
-        toss_result = random.choice(["Heads", "Tails"])
-
         team_home = match_data["team_home"].split('_')[0]
         team_away = match_data["team_away"].split('_')[0]
+        toss_choice = match_data["toss"]
+        toss_result = random.choice(["Heads", "Tails"])
         home_captain = match_data["playing_xi"]["home"][0]["name"]
         away_captain = match_data["playing_xi"]["away"][0]["name"]
 
@@ -2447,7 +2464,10 @@ def create_app():
                 return redirect(url_for("create_tournament_route"))
 
         # GET - Show form with available modes
-        teams = DBTeam.query.filter_by(user_id=current_user.id).all()
+        teams = DBTeam.query.filter_by(user_id=current_user.id).filter(
+            ~DBTeam.name.in_(["BYE", "TBD"]),
+            ~DBTeam.short_code.in_(["BYE", "TBD"])
+        ).all()
         num_teams = len(teams)
 
         # Get available modes based on team count
