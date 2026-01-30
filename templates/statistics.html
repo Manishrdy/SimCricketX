@@ -197,7 +197,7 @@
     }
 
     .stats-hero-title {
-        font-size: 3.5rem;
+        font-size: 2.4rem;
         font-weight: 800;
         margin-bottom: 1rem;
         background: linear-gradient(135deg, #1a1a2e 0%, #4a4a6a 50%, #1a1a2e 100%);
@@ -209,6 +209,18 @@
         position: relative;
         z-index: 2;
         letter-spacing: -0.02em;
+    }
+
+    @media (max-width: 900px) {
+        .stats-hero-title {
+            font-size: 2rem;
+        }
+    }
+
+    @media (max-width: 600px) {
+        .stats-hero-title {
+            font-size: 1.8rem;
+        }
     }
 
     [data-theme="dark"] .stats-hero-title {
@@ -227,6 +239,209 @@
         z-index: 2;
         font-weight: 400;
         line-height: 1.7;
+    }
+
+    /* === Insights Widgets === */
+    .insights-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .insight-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--card-border);
+        border-radius: 20px;
+        padding: 1.5rem;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+    }
+
+    .insight-card::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.08), transparent 45%);
+        opacity: 0.6;
+        pointer-events: none;
+    }
+
+    .insight-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.25rem;
+        font-weight: 700;
+        font-size: 1rem;
+    }
+
+    .insight-subtitle {
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    .insight-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+        position: relative;
+        z-index: 1;
+    }
+
+    .insight-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .insight-player {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .insight-player .player-name {
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: var(--fg);
+    }
+
+    .insight-player .player-team {
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+    }
+
+    .impact-dots {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .impact-dots span {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: rgba(99, 102, 241, 0.2);
+        box-shadow: 0 0 10px rgba(99, 102, 241, 0.1);
+    }
+
+    .impact-dots span.is-hot {
+        background: linear-gradient(135deg, #6366f1, #ec4899);
+        box-shadow: 0 0 12px rgba(236, 72, 153, 0.35);
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--fg-secondary);
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .form-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .sparkline {
+        width: 110px;
+        height: 36px;
+    }
+
+    .sparkline path {
+        fill: none;
+        stroke: url(#sparkGradient);
+        stroke-width: 2.5;
+    }
+
+    .sparkline circle {
+        fill: #ec4899;
+    }
+
+    .conditions-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .conditions-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--fg-secondary);
+        letter-spacing: 0.08em;
+        margin-bottom: 0.6rem;
+    }
+
+    .condition-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .condition-meta {
+        font-size: 0.75rem;
+        color: var(--fg-secondary);
+    }
+
+    .venue-ring {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: conic-gradient(#6366f1 0deg, rgba(99, 102, 241, 0.15) 0deg);
+        display: grid;
+        place-items: center;
+        font-size: 0.6rem;
+        color: var(--fg);
+        border: 1px solid rgba(99, 102, 241, 0.25);
+    }
+
+    .venue-ring span {
+        font-weight: 600;
+    }
+
+    .pitch-bar {
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.2);
+        overflow: hidden;
+        position: relative;
+    }
+
+    .pitch-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #10b981, #22d3ee);
+        position: relative;
+    }
+
+    .pitch-bar-fill::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: repeating-linear-gradient(135deg,
+                rgba(255, 255, 255, 0.2),
+                rgba(255, 255, 255, 0.2) 6px,
+                transparent 6px,
+                transparent 12px);
+        opacity: 0.5;
     }
 
     /* Dashboard Control Panel - Glassmorphism */
@@ -571,6 +786,7 @@
         opacity: 1;
     }
 
+
     /* Rank Badges */
     .leaderboard-item:first-child .rank-badge {
         background: linear-gradient(135deg, #fbbf24, #f59e0b);
@@ -646,6 +862,41 @@
         color: transparent;
         padding-left: 1rem;
         flex-shrink: 0;
+    }
+
+    .compare-table td {
+        vertical-align: middle;
+    }
+
+    .compare-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .compare-value {
+        font-weight: 600;
+    }
+
+    .compare-bar {
+        position: relative;
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, 0.12);
+        overflow: hidden;
+    }
+
+    .compare-bar-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    }
+
+    .compare-bar-fill.is-secondary {
+        background: linear-gradient(90deg, #f59e0b, #f97316);
     }
 
     /* ===== DETAILED STATS SECTION ===== */
@@ -1142,7 +1393,7 @@
     {% else %}
 
     <!-- Leaderboards -->
-    {% if leaderboards and (leaderboards.most_runs or leaderboards.most_wickets or leaderboards.highest_sr or
+    {% if leaderboards and (leaderboards.most_runs or leaderboards.most_wickets or leaderboards.best_bowling_figures or leaderboards.highest_sr or
     leaderboards.best_average) %}
     <section class="leaderboard-section">
         <div class="section-header">
@@ -1204,6 +1455,31 @@
             </div>
             {% endif %}
 
+            {% if leaderboards.best_bowling_figures %}
+            <div class="leaderboard-card">
+                <div class="leaderboard-header">
+                    <div class="leaderboard-icon-wrapper">
+                        <i class="fa-solid fa-fire"></i>
+                    </div>
+                    <h3 class="leaderboard-title">Best Bowling Figures</h3>
+                </div>
+                <ul class="leaderboard-list">
+                    {% for fig in leaderboards.best_bowling_figures %}
+                    <li class="leaderboard-item">
+                        <div class="player-info">
+                            <span class="rank-badge">{{ loop.index }}</span>
+                            <div class="player-details">
+                                <span class="player-name">{{ fig.player }}</span>
+                                <span class="player-team">{{ fig.team }} · vs {{ fig.opponent }} · {{ fig.match_date }}</span>
+                            </div>
+                        </div>
+                        <span class="stat-value">{{ fig.figures }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
             {% if leaderboards.highest_sr %}
             <div class="leaderboard-card">
                 <div class="leaderboard-header">
@@ -1257,21 +1533,127 @@
     </section>
     {% endif %}
 
-    <!-- Best Bowling Figures Section -->
-    <section class="leaderboard-section" id="bowling-figures-section">
+    {% if insights and (insights.impact or insights.form.batting or insights.form.bowling or insights.conditions.venues or insights.conditions.pitches) %}
+    <section class="leaderboard-section" id="insights-section">
         <div class="section-header">
             <h2 class="section-title">
-                <i class="fas fa-bowling-ball"></i>
-                Best Bowling Figures
+                <i class="fas fa-chart-line"></i>
+                Advanced Insights
             </h2>
+            <span class="section-subtitle">Form pulse, impact index, and conditions lens</span>
         </div>
-        <div id="bowling-figures-container" class="loading">
-            <div style="text-align: center; padding: 3rem;">
-                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent);"></i>
-                <p style="margin-top: 1rem; color: var(--fg-secondary);">Loading bowling figures...</p>
+
+        <div class="insights-grid">
+            <div class="insight-card">
+                <div class="insight-header">
+                    <span>Impact Index</span>
+                    <span class="insight-subtitle">Runs + Wkts + Fielding</span>
+                </div>
+                {% if insights.impact %}
+                <div class="insight-list">
+                    {% for p in insights.impact %}
+                    <div class="insight-item">
+                        <div class="insight-player">
+                            <span class="player-name">{{ p.player }}</span>
+                            <span class="player-team">{{ p.team }}</span>
+                        </div>
+                        <div class="impact-dots" data-impact="{{ p.impact }}"></div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="no-data-message"><i class="fas fa-chart-pie"></i><p>No impact data yet</p></div>
+                {% endif %}
+            </div>
+
+            <div class="insight-card">
+                <div class="insight-header">
+                    <span>Form Pulse</span>
+                    <span class="insight-subtitle">Last 5 innings</span>
+                </div>
+                {% if insights.form.batting or insights.form.bowling %}
+                <div class="form-group">
+                    <div class="form-title"><i class="fas fa-cricket-bat"></i> Batting Form</div>
+                    {% if insights.form.batting %}
+                        {% for p in insights.form.batting %}
+                        <div class="form-row">
+                            <div class="insight-player">
+                                <span class="player-name">{{ p.player }}</span>
+                                <span class="player-team">{{ p.team }}</span>
+                            </div>
+                            <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 110 36" preserveAspectRatio="none"></svg>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="no-data-message"><p>No batting form yet</p></div>
+                    {% endif %}
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <div class="form-title"><i class="fas fa-bowling-ball"></i> Bowling Form</div>
+                    {% if insights.form.bowling %}
+                        {% for p in insights.form.bowling %}
+                        <div class="form-row">
+                            <div class="insight-player">
+                                <span class="player-name">{{ p.player }}</span>
+                                <span class="player-team">{{ p.team }}</span>
+                            </div>
+                            <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 110 36" preserveAspectRatio="none"></svg>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="no-data-message"><p>No bowling form yet</p></div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="no-data-message"><i class="fas fa-chart-line"></i><p>No form data yet</p></div>
+                {% endif %}
+            </div>
+
+            <div class="insight-card">
+                <div class="insight-header">
+                    <span>Conditions Lens</span>
+                    <span class="insight-subtitle">Venue and pitch snapshots</span>
+                </div>
+                <div class="conditions-grid">
+                    <div>
+                        <div class="conditions-title">Venues (Avg Runs)</div>
+                        {% if insights.conditions.venues %}
+                            {% for v in insights.conditions.venues %}
+                            <div class="condition-row">
+                                <div>
+                                    <div class="player-name">{{ v.label }}</div>
+                                    <div class="condition-meta">{{ v.matches }} matches</div>
+                                </div>
+                                <div class="venue-ring" data-value="{{ v.avg_runs }}"><span>{{ v.avg_runs }}</span></div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="no-data-message"><p>No venue data yet</p></div>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <div class="conditions-title">Pitches (Avg Runs)</div>
+                        {% if insights.conditions.pitches %}
+                            {% for p in insights.conditions.pitches %}
+                            <div style="margin-bottom: 0.75rem;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:0.4rem;">
+                                    <span class="player-name">{{ p.label }}</span>
+                                    <span class="condition-meta">{{ p.avg_runs }} runs</span>
+                                </div>
+                                <div class="pitch-bar">
+                                    <div class="pitch-bar-fill" data-value="{{ p.avg_runs }}"></div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="no-data-message"><p>No pitch data yet</p></div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
     </section>
+    {% endif %}
 
     <!-- Best Partnerships Section -->
     <section class="leaderboard-section" id="partnerships-section">
@@ -1394,7 +1776,7 @@
                 </button>
             </div>
             <div class="table-wrapper">
-                <table class="stats-table">
+                <table class="stats-table" id="batting-table">
                     <thead>
                         <tr>
                             {% for header in batting_headers %}
@@ -1450,7 +1832,7 @@
                 </button>
             </div>
             <div class="table-wrapper">
-                <table class="stats-table">
+                <table class="stats-table" id="bowling-table">
                     <thead>
                         <tr>
                             {% for header in bowling_headers %}
@@ -1468,6 +1850,7 @@
                             <td>{{ row.overs }}</td>
                             <td>{{ row.runs }}</td>
                             <td>{{ row.wickets }}</td>
+                            <td>{{ row.best }}</td>
                             <td>{{ row.average }}</td>
                             <td>{{ row.economy }}</td>
                             <td>{{ row.dots }}</td>
@@ -1611,56 +1994,15 @@
             }, 100 + (index * 50));
         });
 
-        // Load bowling figures and partnerships
-        loadBowlingFigures();
+        // Load partnerships
         loadPartnerships();
         loadPlayersForComparison('batsman');
+        renderInsightsVisuals();
     });
 
     // Global variables for player comparison
     let currentComparisonRole = 'batsman';
     let allPlayers = [];
-
-    // Load bowling figures
-    function loadBowlingFigures() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const view = urlParams.get('view') || 'overall';
-        const tournamentId = urlParams.get('tournament_id') || '';
-
-        let url = '/api/bowling-figures?limit=10';
-        if (view === 'tournament' && tournamentId) {
-            url += '&tournament_id=' + tournamentId;
-        }
-
-        fetch(url)
-            .then(res => res.json())
-            .then(data => {
-                const container = document.getElementById('bowling-figures-container');
-                if (data.success && data.data && data.data.length > 0) {
-                    let html = '<div class="table-wrapper"><table class="stats-table">';
-                    html += '<thead><tr><th>Rank</th><th>Player</th><th>Figures</th><th>Opponent</th><th>Match Date</th></tr></thead><tbody>';
-
-                    data.data.forEach((fig, index) => {
-                        html += '<tr>';
-                        html += '<td><span class="rank-badge">' + (index + 1) + '</span></td>';
-                        html += '<td class="player-name">' + fig.player + '</td>';
-                        html += '<td class="stat-value">' + fig.figures + '</td>';
-                        html += '<td>' + fig.opponent + '</td>';
-                        html += '<td>' + (fig.match_date || 'N/A') + '</td>';
-                        html += '</tr>';
-                    });
-
-                    html += '</tbody></table></div>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-data-message"><i class="fas fa-bowling-ball"></i><p>No bowling figures available yet</p></div>';
-                }
-            })
-            .catch(err => {
-                console.error('Error loading bowling figures:', err);
-                document.getElementById('bowling-figures-container').innerHTML = '<div class="no-data-message"><i class="fas fa-exclamation-circle"></i><p>Error loading data</p></div>';
-            });
-    }
 
     // Load partnerships
     function loadPartnerships() {
@@ -1775,6 +2117,7 @@
         btn.disabled = !player1 || !player2 || player1 === player2;
     }
 
+
     // Event listeners for player selection
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('player1-select').addEventListener('change', updateCompareButton);
@@ -1827,16 +2170,23 @@
         // Batting comparison
         if (p1.batting || p2.batting) {
             html += '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-size: 1.2rem; color: var(--fg);"><i class="fas fa-cricket-bat"></i> Batting Comparison</h3>';
-            html += '<div class="table-wrapper"><table class="stats-table">';
+            html += '<div class="table-wrapper"><table class="stats-table compare-table">';
             html += '<thead><tr><th>Stat</th><th>' + p1.name + '</th><th>' + p2.name + '</th></tr></thead><tbody>';
 
             const battingStats = ['matches', 'innings', 'runs', 'average', 'strike_rate', 'fifties', 'hundreds'];
             battingStats.forEach(stat => {
                 const v1 = (p1.batting && p1.batting[stat]) || 0;
                 const v2 = (p2.batting && p2.batting[stat]) || 0;
+                const maxVal = Math.max(v1, v2, 1);
                 html += '<tr><td>' + stat.replace('_', ' ').toUpperCase() + '</td>';
-                html += '<td class="' + (v1 > v2 ? 'stat-value' : '') + '">' + v1 + '</td>';
-                html += '<td class="' + (v2 > v1 ? 'stat-value' : '') + '">' + v2 + '</td></tr>';
+                html += '<td><div class="compare-cell">';
+                html += '<div class="compare-value ' + (v1 > v2 ? 'stat-value' : '') + '">' + v1 + '</div>';
+                html += '<div class="compare-bar"><div class="compare-bar-fill" style="width:' + (v1 / maxVal * 100) + '%"></div></div>';
+                html += '</div></td>';
+                html += '<td><div class="compare-cell">';
+                html += '<div class="compare-value ' + (v2 > v1 ? 'stat-value' : '') + '">' + v2 + '</div>';
+                html += '<div class="compare-bar"><div class="compare-bar-fill is-secondary" style="width:' + (v2 / maxVal * 100) + '%"></div></div>';
+                html += '</div></td></tr>';
             });
 
             html += '</tbody></table></div>';
@@ -1845,23 +2195,112 @@
         // Bowling comparison
         if (p1.bowling || p2.bowling) {
             html += '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-size: 1.2rem; color: var(--fg);"><i class="fas fa-bowling-ball"></i> Bowling Comparison</h3>';
-            html += '<div class="table-wrapper"><table class="stats-table">';
+            html += '<div class="table-wrapper"><table class="stats-table compare-table">';
             html += '<thead><tr><th>Stat</th><th>' + p1.name + '</th><th>' + p2.name + '</th></tr></thead><tbody>';
 
             const bowlingStats = ['matches', 'innings', 'wickets', 'average', 'economy', 'four_wickets', 'five_wickets'];
             bowlingStats.forEach(stat => {
                 const v1 = (p1.bowling && p1.bowling[stat]) || 0;
                 const v2 = (p2.bowling && p2.bowling[stat]) || 0;
+                const maxVal = Math.max(v1, v2, 1);
                 const better = stat === 'average' || stat === 'economy' ? (v1 > 0 && (v2 === 0 || v1 < v2)) : v1 > v2;
                 html += '<tr><td>' + stat.replace('_', ' ').toUpperCase() + '</td>';
-                html += '<td class="' + (better ? 'stat-value' : '') + '">' + (v1 || '-') + '</td>';
-                html += '<td class="' + (!better && v2 > 0 ? 'stat-value' : '') + '">' + (v2 || '-') + '</td></tr>';
+                html += '<td><div class="compare-cell">';
+                html += '<div class="compare-value ' + (better ? 'stat-value' : '') + '">' + (v1 || '-') + '</div>';
+                html += '<div class="compare-bar"><div class="compare-bar-fill" style="width:' + (v1 / maxVal * 100) + '%"></div></div>';
+                html += '</div></td>';
+                html += '<td><div class="compare-cell">';
+                html += '<div class="compare-value ' + (!better && v2 > 0 ? 'stat-value' : '') + '">' + (v2 || '-') + '</div>';
+                html += '<div class="compare-bar"><div class="compare-bar-fill is-secondary" style="width:' + (v2 / maxVal * 100) + '%"></div></div>';
+                html += '</div></td></tr>';
             });
 
             html += '</tbody></table></div>';
         }
 
         resultsDiv.innerHTML = html;
+    }
+
+    function renderInsightsVisuals() {
+        renderImpactDots();
+        renderSparklines();
+        renderVenueRings();
+        renderPitchBars();
+    }
+
+    function renderImpactDots() {
+        const dots = Array.from(document.querySelectorAll('.impact-dots'));
+        if (!dots.length) return;
+        const impacts = dots.map(el => parseFloat(el.dataset.impact || '0'));
+        const maxImpact = Math.max(...impacts, 1);
+        dots.forEach(el => {
+            const impact = parseFloat(el.dataset.impact || '0');
+            const filled = Math.max(1, Math.round((impact / maxImpact) * 8));
+            el.innerHTML = '';
+            for (let i = 0; i < 8; i++) {
+                const dot = document.createElement('span');
+                if (i < filled) dot.classList.add('is-hot');
+                el.appendChild(dot);
+            }
+        });
+    }
+
+    function renderSparklines() {
+        const svgs = document.querySelectorAll('.sparkline');
+        svgs.forEach((svg, index) => {
+            const data = (svg.dataset.series || '')
+                .split(',')
+                .map(v => parseFloat(v.trim()))
+                .filter(v => !Number.isNaN(v));
+            if (!data.length) return;
+            const w = 110;
+            const h = 36;
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const range = max - min || 1;
+            const step = w / (data.length - 1 || 1);
+            const points = data.map((v, i) => {
+                const x = i * step;
+                const y = h - ((v - min) / range) * (h - 6) - 3;
+                return { x, y };
+            });
+            const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+            const gradId = `sparkGradient-${index}`;
+            svg.innerHTML = `
+                <defs>
+                    <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#6366f1"/>
+                        <stop offset="100%" stop-color="#ec4899"/>
+                    </linearGradient>
+                </defs>
+                <path d="${path}" stroke="url(#${gradId})" fill="none" stroke-width="2.5"/>
+                <circle cx="${points[points.length - 1].x}" cy="${points[points.length - 1].y}" r="2.5"/>
+            `;
+        });
+    }
+
+    function renderVenueRings() {
+        const rings = Array.from(document.querySelectorAll('.venue-ring'));
+        if (!rings.length) return;
+        const values = rings.map(el => parseFloat(el.dataset.value || '0'));
+        const maxVal = Math.max(...values, 1);
+        rings.forEach(el => {
+            const value = parseFloat(el.dataset.value || '0');
+            const pct = Math.min(100, Math.round((value / maxVal) * 100));
+            el.style.background = `conic-gradient(#6366f1 0deg, #ec4899 ${pct * 3.6}deg, rgba(99, 102, 241, 0.15) ${pct * 3.6}deg)`;
+        });
+    }
+
+    function renderPitchBars() {
+        const bars = Array.from(document.querySelectorAll('.pitch-bar-fill'));
+        if (!bars.length) return;
+        const values = bars.map(el => parseFloat(el.dataset.value || '0'));
+        const maxVal = Math.max(...values, 1);
+        bars.forEach(el => {
+            const value = parseFloat(el.dataset.value || '0');
+            const pct = Math.max(8, Math.round((value / maxVal) * 100));
+            el.style.width = `${pct}%`;
+        });
     }
 
 </script>

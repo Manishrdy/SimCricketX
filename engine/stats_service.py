@@ -5,6 +5,7 @@ Handles all statistics calculations and queries for the SimCricketX application.
 """
 
 from sqlalchemy import func
+from datetime import datetime
 from database.models import Match, MatchScorecard, Tournament, Player, Team
 from database import db
 from collections import defaultdict
@@ -88,6 +89,159 @@ class StatsService:
             return self._empty_stats()
         
         return self._calculate_stats_from_records(records)
+
+    def get_insights(self, user_id, tournament_id=None):
+        """
+        Build advanced insights for the Statistics Hub.
+
+        Returns:
+            dict: {
+                "impact": [ {player, team, impact, runs, wickets, catches, run_outs} ],
+                "form": { "batting": [ {player, team, series} ], "bowling": [ ... ] },
+                "conditions": { "venues": [ {label, avg_runs, avg_wkts, matches} ],
+                                "pitches": [ {label, avg_runs, avg_wkts, matches} ] }
+            }
+        """
+        insights = {
+            "impact": [],
+            "form": {"batting": [], "bowling": []},
+            "conditions": {"venues": [], "pitches": []}
+        }
+
+        # Match-level conditions (venue, pitch)
+        match_query = Match.query.filter(Match.user_id == user_id)
+        if tournament_id:
+            match_query = match_query.filter(Match.tournament_id == tournament_id)
+
+        venue_agg = {}
+        pitch_agg = {}
+
+        for match in match_query.all():
+            if match.home_team_score is None or match.away_team_score is None:
+                continue
+            total_runs = (match.home_team_score or 0) + (match.away_team_score or 0)
+            total_wkts = (match.home_team_wickets or 0) + (match.away_team_wickets or 0)
+
+            venue_key = (match.venue or "Unknown Venue").strip()
+            venue_stats = venue_agg.setdefault(venue_key, {"runs": 0, "wkts": 0, "matches": 0})
+            venue_stats["runs"] += total_runs
+            venue_stats["wkts"] += total_wkts
+            venue_stats["matches"] += 1
+
+            pitch_key = (match.pitch_type or "Unknown Pitch").strip()
+            pitch_stats = pitch_agg.setdefault(pitch_key, {"runs": 0, "wkts": 0, "matches": 0})
+            pitch_stats["runs"] += total_runs
+            pitch_stats["wkts"] += total_wkts
+            pitch_stats["matches"] += 1
+
+        def _top_conditions(agg_map, limit=4):
+            items = []
+            for label, data in agg_map.items():
+                matches = data["matches"] or 1
+                items.append({
+                    "label": label,
+                    "avg_runs": round(data["runs"] / matches, 1),
+                    "avg_wkts": round(data["wkts"] / matches, 1),
+                    "matches": data["matches"]
+                })
+            items.sort(key=lambda x: (x["avg_runs"], x["matches"]), reverse=True)
+            return items[:limit]
+
+        insights["conditions"]["venues"] = _top_conditions(venue_agg, limit=4)
+        insights["conditions"]["pitches"] = _top_conditions(pitch_agg, limit=4)
+
+        # Player-level data for impact + form
+        record_query = (
+            db.session.query(MatchScorecard, Match, Player, Team)
+            .join(Match, MatchScorecard.match_id == Match.id)
+            .join(Player, MatchScorecard.player_id == Player.id)
+            .join(Team, Player.team_id == Team.id)
+            .filter(Team.user_id == user_id)
+        )
+        if tournament_id:
+            record_query = record_query.filter(Match.tournament_id == tournament_id)
+
+        impact = {}
+        batting_forms = {}
+        bowling_forms = {}
+
+        for card, match, player, team in record_query.all():
+            pid = player.id
+            match_date = match.date or datetime.min
+            entry = impact.setdefault(pid, {
+                "player": player.name,
+                "team": team.name,
+                "runs": 0,
+                "wickets": 0,
+                "catches": 0,
+                "run_outs": 0
+            })
+
+            entry["catches"] += card.catches or 0
+            entry["run_outs"] += card.run_outs or 0
+
+            if card.record_type == "batting":
+                faced = (card.balls or 0) > 0 or (card.runs or 0) > 0 or bool(card.is_out)
+                if faced:
+                    entry["runs"] += card.runs or 0
+                    batting_forms.setdefault(pid, {
+                        "player": player.name,
+                        "team": team.name,
+                        "series": []
+                    })["series"].append((match_date, card.runs or 0))
+
+            if card.record_type == "bowling":
+                balls = card.balls_bowled or 0
+                if balls > 0 or (card.overs or 0) > 0:
+                    entry["wickets"] += card.wickets or 0
+                    bowling_forms.setdefault(pid, {
+                        "player": player.name,
+                        "team": team.name,
+                        "series": []
+                    })["series"].append((match_date, card.wickets or 0))
+
+        # Impact Index
+        impact_list = []
+        for data in impact.values():
+            impact_score = (
+                (data["runs"] or 0)
+                + (data["wickets"] or 0) * 20
+                + (data["catches"] or 0) * 8
+                + (data["run_outs"] or 0) * 10
+            )
+            impact_list.append({
+                "player": data["player"],
+                "team": data["team"],
+                "impact": impact_score,
+                "runs": data["runs"],
+                "wickets": data["wickets"],
+                "catches": data["catches"],
+                "run_outs": data["run_outs"]
+            })
+        impact_list.sort(key=lambda x: x["impact"], reverse=True)
+        insights["impact"] = impact_list[:5]
+
+        def _top_form(form_map, key, limit=3):
+            items = []
+            for pid, data in form_map.items():
+                if not data["series"]:
+                    continue
+                total = sum(v for _, v in data["series"])
+                series_sorted = sorted(data["series"], key=lambda x: x[0], reverse=True)[:5]
+                series_sorted.reverse()
+                items.append({
+                    "player": data["player"],
+                    "team": data["team"],
+                    "series": [v for _, v in series_sorted],
+                    "total": total
+                })
+            items.sort(key=lambda x: x["total"], reverse=True)
+            return items[:limit]
+
+        insights["form"]["batting"] = _top_form(batting_forms, "runs", limit=3)
+        insights["form"]["bowling"] = _top_form(bowling_forms, "wickets", limit=3)
+
+        return insights
     
     def _empty_stats(self):
         """Return empty statistics structure"""
@@ -137,6 +291,7 @@ class StatsService:
             'bowl_noballs': 0,
             'bowl_wickets_bowled': 0,
             'bowl_wickets_lbw': 0,
+            'bowl_best': (0, 9999),  # (wickets, runs)
             'catches': 0,
             'run_outs': 0,
             'matches': set()  # Track unique match IDs
@@ -190,6 +345,9 @@ class StatsService:
                 player_data[pid]['bowl_noballs'] += card.noballs or 0
                 player_data[pid]['bowl_wickets_bowled'] += card.wickets_bowled or 0
                 player_data[pid]['bowl_wickets_lbw'] += card.wickets_lbw or 0
+                best_w, best_r = player_data[pid]['bowl_best']
+                if (card.wickets or 0) > best_w or ((card.wickets or 0) == best_w and (card.runs_conceded or 0) < best_r):
+                    player_data[pid]['bowl_best'] = (card.wickets or 0, card.runs_conceded or 0)
             
             # Fielding stats (recorded in all record types)
             player_data[pid]['catches'] += card.catches or 0
@@ -293,6 +451,7 @@ class StatsService:
                 'overs': round(overs, 1),
                 'runs': runs,
                 'wickets': wickets,
+                'best': f"{data['bowl_best'][0]}/{data['bowl_best'][1]}" if data['bowl_best'][0] > 0 else '-',
                 'average': round(average, 2),
                 'economy': round(economy, 2),
                 'dots': data['bowl_dots'],
@@ -415,7 +574,7 @@ class StatsService:
                          'twos', 'threes', 'fours', 'sixes', 'thirties', 'fifties', 'hundreds']
         elif stat_type == 'bowling':
             fieldnames = ['team', 'player', 'matches', 'innings', 'overs', 'runs', 
-                         'wickets', 'average', 'economy', 'dots', 'bowled', 'lbw', 
+                         'wickets', 'best', 'average', 'economy', 'dots', 'bowled', 'lbw', 
                          'byes', 'leg_byes', 'wides', 'no_balls']
         else:  # fielding
             fieldnames = ['player', 'team', 'matches', 'catches', 'run_outs']
@@ -454,11 +613,11 @@ class StatsService:
             ]
         elif stat_type == 'bowling':
             headers = ['Team', 'Player', 'Mat', 'Inn', 'Overs', 'Runs', 'Wkts', 
-                      'Avg', 'Econ', 'Dots', 'Bwld', 'LBW', 'Byes', 'LB', 'Wd', 'NB']
+                      'Best', 'Avg', 'Econ', 'Dots', 'Bwld', 'LBW', 'Byes', 'LB', 'Wd', 'NB']
             rows = [
                 [
                     d['team'], d['player'], d['matches'], d['innings'], d['overs'],
-                    d['runs'], d['wickets'], d['average'], d['economy'], d['dots'],
+                    d['runs'], d['wickets'], d['best'], d['average'], d['economy'], d['dots'],
                     d['bowled'], d['lbw'], d['byes'], d['leg_byes'], d['wides'], d['no_balls']
                 ]
                 for d in data
