@@ -1065,7 +1065,8 @@ class TournamentEngine:
         # Find and update the Fixture Record
         fixture = TournamentFixture.query.filter_by(match_id=match.id).first()
         if not fixture:
-            logger.warning(f"[Standings] No fixture found for match {match.id}")
+            logger.error(f"[Standings] No fixture found for match {match.id}; aborting standings update")
+            return False
         else:
             logger.info(
                 f"[Standings] Found fixture {fixture.id} for match {match.id}, "
@@ -1316,8 +1317,15 @@ class TournamentEngine:
         tournament = db.session.get(Tournament, match.tournament_id)
         if tournament and tournament.status == 'Completed':
             tournament.status = 'Active'
-        if tournament and fixture and fixture.stage != self.STAGE_LEAGUE:
-            tournament.current_stage = fixture.stage
+        if tournament and fixture:
+            if fixture.stage != self.STAGE_LEAGUE:
+                tournament.current_stage = fixture.stage
+            elif tournament.mode in [self.MODE_ROUND_ROBIN_KNOCKOUT,
+                                     self.MODE_DOUBLE_ROUND_ROBIN_KNOCKOUT,
+                                     self.MODE_IPL_STYLE]:
+                if tournament.current_stage != self.STAGE_LEAGUE:
+                    self._reset_post_league_fixtures(match.tournament_id)
+                    tournament.current_stage = self.STAGE_LEAGUE
 
         if commit:
             db.session.commit()
@@ -1340,6 +1348,27 @@ class TournamentEngine:
         ).all()
 
         for fixture in downstream:
+            fixture.home_team_id = tbd_id
+            fixture.away_team_id = tbd_id
+            fixture.winner_team_id = None
+            fixture.match_id = None
+            fixture.status = 'Locked'
+            fixture.standings_applied = False
+
+    def _reset_post_league_fixtures(self, tournament_id: int):
+        """
+        Reset playoff fixtures after a league-stage resimulation.
+
+        This clears qualified teams, winners, match links, and locks fixtures
+        so playoffs are re-seeded after the league finishes again.
+        """
+        tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
+        fixtures = TournamentFixture.query.filter(
+            TournamentFixture.tournament_id == tournament_id,
+            TournamentFixture.stage != self.STAGE_LEAGUE
+        ).all()
+
+        for fixture in fixtures:
             fixture.home_team_id = tbd_id
             fixture.away_team_id = tbd_id
             fixture.winner_team_id = None

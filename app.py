@@ -533,32 +533,49 @@ def create_app():
                 )
                 
                 # Step 7: Resolve winner team ID
-                def _extract_winner_from_result(result_text):
+                def _extract_winner_from_text(result_text):
                     if not result_text:
                         return None
                     lower = result_text.lower()
                     if "match tied" in lower or "no result" in lower or "abandoned" in lower:
                         return None
-                    match_obj = re.match(r"\s*([A-Za-z0-9 _-]+?)\s+won\b", result_text, re.IGNORECASE)
+                    match_obj = re.search(r"\b([A-Za-z0-9 _-]+?)\s+won\b", result_text, re.IGNORECASE)
                     if match_obj:
                         return match_obj.group(1).strip()
                     return None
 
+                def _team_hit(candidate, team_name, team_code):
+                    if not candidate:
+                        return False
+                    if team_name and team_name == candidate:
+                        return True
+                    if team_code and team_code == candidate:
+                        return True
+                    if team_name and re.search(rf"\\b{re.escape(team_name)}\\b", candidate):
+                        return True
+                    if team_code and re.search(rf"\\b{re.escape(team_code)}\\b", candidate):
+                        return True
+                    return False
+
                 winner_name = getattr(match, 'winner', None) or outcome.get("winner")
                 if not winner_name:
-                    winner_name = _extract_winner_from_result(final_result)
+                    winner_name = _extract_winner_from_text(final_result)
 
                 if winner_name:
-                    winner_name_lower = winner_name.lower().strip()
+                    normalized = _extract_winner_from_text(winner_name) or winner_name
+                    winner_name_lower = normalized.lower().strip()
                     home_name = (fixture.home_team.name or '').lower().strip()
                     home_code = (fixture.home_team.short_code or '').lower().strip()
                     away_name = (fixture.away_team.name or '').lower().strip()
                     away_code = (fixture.away_team.short_code or '').lower().strip()
 
-                    if winner_name_lower in (home_name, home_code):
+                    home_hit = _team_hit(winner_name_lower, home_name, home_code)
+                    away_hit = _team_hit(winner_name_lower, away_name, away_code)
+
+                    if home_hit and not away_hit:
                         db_match.winner_team_id = fixture.home_team_id
                         logger.info(f"[Tournament] Winner: {fixture.home_team.name} (Home)")
-                    elif winner_name_lower in (away_name, away_code):
+                    elif away_hit and not home_hit:
                         db_match.winner_team_id = fixture.away_team_id
                         logger.info(f"[Tournament] Winner: {fixture.away_team.name} (Away)")
                     else:
