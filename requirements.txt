@@ -16,3 +16,4 @@ tabulate
 flask-sqlalchemy
 sqlalchemy
 requests
+python-dotenv
