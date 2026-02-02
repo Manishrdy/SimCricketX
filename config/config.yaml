@@ -5,6 +5,5 @@ google_sheets:
 app:
   secret_key: CHANGE_ME
 
-database:
-  # uri: sqlite:///custom.db  # Example override
+
 
