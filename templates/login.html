@@ -626,6 +626,7 @@
 
             <!-- Login Form -->
             <form class="login-form" method="POST" action="/login" id="loginForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
                     <label for="email" class="form-label">Email Address</label>
                     <div style="position: relative;">

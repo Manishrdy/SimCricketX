@@ -591,19 +591,22 @@
         </div>
     </div>
 
-    <div class="dashboard-card" onclick="location.href='/logout'">
-        <div class="card-content">
-            <div class="card-icon-wrapper">
-                <i class="fa-solid fa-right-from-bracket"></i>
+    <form method="POST" action="{{ url_for('logout') }}" id="logoutForm" style="display:contents;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="dashboard-card" onclick="document.getElementById('logoutForm').submit();" style="cursor:pointer;">
+            <div class="card-content">
+                <div class="card-icon-wrapper">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </div>
+                <h2 class="card-title">Sign Out</h2>
+                <p class="card-description">End your session securely. Your championship journey continues when you return.
+                </p>
             </div>
-            <h2 class="card-title">Sign Out</h2>
-            <p class="card-description">End your session securely. Your championship journey continues when you return.
-            </p>
+            <div class="card-action">
+                Logout <i class="fa-solid fa-arrow-right"></i>
+            </div>
         </div>
-        <div class="card-action">
-            Logout <i class="fa-solid fa-arrow-right"></i>
-        </div>
-    </div>
+    </form>
 </div>
 
 <script>
