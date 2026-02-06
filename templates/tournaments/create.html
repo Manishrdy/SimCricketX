@@ -20,6 +20,7 @@
 
     <form action="{{ url_for('create_tournament_route') }}" method="POST" id="tournamentForm"
         onsubmit="return validateForm()">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
         <!-- Tournament Name -->
         <div class="form-section">

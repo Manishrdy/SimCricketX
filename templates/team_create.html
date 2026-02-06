@@ -715,6 +715,7 @@
     <!-- Main Team Form -->
     <form id="team-form" method="POST"
       action="{{ url_for('edit_team', short_code=team.short_code) if edit else url_for('create_team') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <!-- Team Details Section -->
       <div class="glass-card">

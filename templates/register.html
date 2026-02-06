@@ -617,6 +617,7 @@
 
       <!-- Custom Form Structure -->
       <form class="register-form" method="POST" action="/register" id="registerForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
           <label for="email" class="form-label">Email Address</label>
           <div style="position: relative;">
@@ -631,7 +632,8 @@
           <div style="position: relative;">
             <i class="fa-solid fa-lock input-icon"></i>
             <input type="password" id="password" name="password" class="form-input"
-              placeholder="Create a strong password" required>
+              placeholder="Create a strong password" required minlength="8"
+              title="At least 8 characters with uppercase, lowercase, and a digit">
           </div>
         </div>
 

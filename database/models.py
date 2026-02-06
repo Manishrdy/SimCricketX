@@ -20,9 +20,10 @@ class User(UserMixin, db.Model):
     display_name = db.Column(db.String(100))
 
     
-    # Relationships
-    teams = relationship('Team', backref='owner', lazy=True)
-    matches = relationship('Match', backref='user', lazy=True)
+    # Relationships — cascade so deleting a User removes all owned data
+    teams = relationship('Team', backref='owner', lazy=True, cascade="all, delete-orphan")
+    matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
+    tournaments = relationship('Tournament', backref='owner', lazy=True, cascade="all, delete-orphan")
 
 class Team(db.Model):
     """Cricket Team"""
@@ -88,7 +89,7 @@ class Player(db.Model):
     best_bowling_runs = db.Column(db.Integer, default=0)
     
     # Relationships
-    scorecard_entries = relationship('MatchScorecard', backref='player_ref')
+    scorecard_entries = relationship('MatchScorecard', backref='player_ref', passive_deletes=True)
 
 class Match(db.Model):
     """Match Archive Record"""
@@ -221,6 +222,7 @@ class Tournament(db.Model):
     # Relationships
     participating_teams = relationship('TournamentTeam', backref='tournament', cascade="all, delete-orphan")
     fixtures = relationship('TournamentFixture', backref='tournament', cascade="all, delete-orphan")
+    player_stats_cache = relationship('TournamentPlayerStatsCache', backref='tournament', cascade="all, delete-orphan")
 
 class MatchPartnership(db.Model):
     """Batting partnership records for each innings"""
@@ -248,7 +250,7 @@ class MatchPartnership(db.Model):
     # Relationships
     batsman1 = relationship('Player', foreign_keys=[batsman1_id])
     batsman2 = relationship('Player', foreign_keys=[batsman2_id])
-    match = relationship('Match', backref='partnerships')
+    match = relationship('Match', backref=db.backref('partnerships', cascade="all, delete-orphan"))
     
     # Indexes for efficient queries
     __table_args__ = (

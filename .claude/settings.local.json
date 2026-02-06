@@ -5,7 +5,10 @@
       "Bash(grep:*)",
       "Bash(git log:*)",
       "Bash(python migrate_tournament_modes.py:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(pip install:*)",
+      "Bash(python -c:*)",
+      "Bash(python -m pytest:*)"
     ]
   }
 }
