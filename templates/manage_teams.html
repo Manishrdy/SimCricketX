@@ -793,6 +793,7 @@
                 This will permanently delete the team and all its players. This action cannot be undone.
             </p>
             <form method="POST" action="/team/delete">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="short_code" id="delete-code">
                 <div class="modal-actions">
                     <button type="button" class="btn btn-ghost" onclick="closeModal()">

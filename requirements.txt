@@ -16,3 +16,5 @@ tabulate
 flask-sqlalchemy
 sqlalchemy
 requests
+flask-wtf
+flask-limiter

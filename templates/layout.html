@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}SimCricketX{% endblock %}</title>
 
     <!-- Fonts & Icons -->
@@ -638,8 +639,12 @@
             {% block navbar_items %}
             {% if current_user.is_authenticated %}
             <a href="{{ url_for('home') }}" class="theme-toggle" title="Home"><i class="fas fa-home"></i></a>
-            <a href="{{ url_for('logout') }}" class="theme-toggle" title="Logout"><i
-                    class="fas fa-sign-out-alt"></i></a>
+            <form method="POST" action="{{ url_for('logout') }}" style="display:inline;margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="theme-toggle" title="Logout" style="border:none;cursor:pointer;">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </form>
             {% endif %}
             {% endblock %}
             <button id="theme-btn" class="theme-toggle" title="Toggle Theme">
@@ -681,6 +686,33 @@
                 const next = current === 'dark' ? 'light' : 'dark';
                 applyTheme(next);
             });
+        })();
+    </script>
+
+    <script>
+        // Auto-inject CSRF token into all fetch() POST/PUT/DELETE requests
+        (function() {
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            if (!csrfMeta) return;
+            const csrfToken = csrfMeta.getAttribute('content');
+            const originalFetch = window.fetch;
+            window.fetch = function(url, options) {
+                options = options || {};
+                const method = (options.method || 'GET').toUpperCase();
+                if (method !== 'GET' && method !== 'HEAD') {
+                    options.headers = options.headers || {};
+                    if (options.headers instanceof Headers) {
+                        if (!options.headers.has('X-CSRFToken')) {
+                            options.headers.set('X-CSRFToken', csrfToken);
+                        }
+                    } else {
+                        if (!options.headers['X-CSRFToken']) {
+                            options.headers['X-CSRFToken'] = csrfToken;
+                        }
+                    }
+                }
+                return originalFetch.call(this, url, options);
+            };
         })();
     </script>
 

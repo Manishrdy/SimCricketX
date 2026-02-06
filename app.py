@@ -37,6 +37,9 @@ from flask_login import (
     logout_user,
     current_user
 )
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from auth.user_auth import (
     register_user,
     verify_user,
@@ -283,6 +286,17 @@ def create_app():
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)
     app.config["REMEMBER_COOKIE_REFRESH_EACH_REQUEST"] = True
+
+    # --- CSRF Protection ---
+    csrf = CSRFProtect(app)
+
+    # --- Rate Limiting ---
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=[],
+        storage_uri="memory://",
+    )
 
     # --- Database setup ---
     basedir = os.path.abspath(os.path.dirname(__file__))
@@ -861,6 +875,7 @@ def create_app():
         return render_template("home.html", user=current_user, total_visits=get_visit_counter(), matches_simulated=get_matches_simulated())
 
     @app.route("/register", methods=["GET", "POST"])
+    @limiter.limit("5 per minute", methods=["POST"])
     def register():
         """
         Simplified registration route
@@ -877,11 +892,23 @@ def create_app():
             
             if not password:
                 return render_template("register.html", error="Password required")
-            
+
+            if len(password) < 8:
+                return render_template("register.html", error="Password must be at least 8 characters")
+
+            if not re.search(r'[A-Z]', password):
+                return render_template("register.html", error="Password must contain at least one uppercase letter")
+
+            if not re.search(r'[a-z]', password):
+                return render_template("register.html", error="Password must contain at least one lowercase letter")
+
+            if not re.search(r'[0-9]', password):
+                return render_template("register.html", error="Password must contain at least one digit")
+
             if register_user(email, password):
                 return redirect(url_for("login"))
             else:
-                return render_template("register.html", error="User already exists")
+                return render_template("register.html", error="Registration failed. Please try a different email.")
             
         except Exception as e:
             app.logger.error(f"Registration error: {e}")
@@ -889,6 +916,7 @@ def create_app():
 
 
     @app.route("/login", methods=["GET", "POST"])
+    @limiter.limit("10 per minute", methods=["POST"])
     def login():
         """
         Simplified login route
@@ -924,15 +952,21 @@ def create_app():
     @app.route("/delete_account", methods=["POST"])
     @login_required
     def delete_account():
+        confirmation = request.form.get("confirm_delete", "")
+        if confirmation != "DELETE":
+            flash("Account deletion requires typing DELETE to confirm.", "danger")
+            return redirect(url_for("home"))
+
         email = current_user.id
         app.logger.info(f"Account deletion requested for {email}")
         if delete_user(email):
             logout_user()
             return redirect(url_for("register"))
         else:
-            return redirect(url_for("home")) # Failed to delete
+            flash("Failed to delete account. Please try again.", "danger")
+            return redirect(url_for("home"))
 
-    @app.route("/logout")
+    @app.route("/logout", methods=["POST"])
     @login_required
     def logout():
         session.pop("visit_counted", None)

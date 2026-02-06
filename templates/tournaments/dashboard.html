@@ -36,6 +36,7 @@
                 {% if tournament.status == 'Active' or tournament.status == 'open' %}
                 <form action="{{ url_for('delete_tournament', tournament_id=tournament.id) }}" method="POST"
                     onsubmit="return confirm('Are you sure you want to delete this tournament?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="delete-btn">
                         <i class="fas fa-trash"></i> Delete
                     </button>
@@ -212,6 +213,7 @@
                             <form action="{{ url_for('resimulate_fixture', fixture_id=fixture.id) }}" method="POST"
                                 class="inline-form"
                                 onsubmit="return confirm('Re-simulating will delete the current match result and stats. Continue?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="action-btn resimulate-btn">
                                     <i class="fas fa-redo"></i> Re-simulate
                                 </button>

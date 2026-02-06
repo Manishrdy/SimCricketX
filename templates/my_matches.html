@@ -859,8 +859,12 @@
 
         <div class="nav-controls">
             <a href="{{ url_for('home') }}" class="theme-toggle" title="Home"><i class="fas fa-home"></i></a>
-            <a href="{{ url_for('logout') }}" class="theme-toggle" title="Logout"><i
-                    class="fas fa-sign-out-alt"></i></a>
+            <form method="POST" action="{{ url_for('logout') }}" style="display:inline;margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="theme-toggle" title="Logout" style="border:none;cursor:pointer;">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </form>
             <button class="theme-toggle" id="theme-toggle" title="Toggle Theme">🌙</button>
         </div>
     </header>
