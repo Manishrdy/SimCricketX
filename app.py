@@ -1026,6 +1026,11 @@ def create_app():
                 if not (name and short_code and home_ground and pitch):
                     return render_template("team_create.html", error="All team fields are required.")
 
+                # Check for duplicate short_code for this user
+                existing = DBTeam.query.filter_by(user_id=current_user.id, short_code=short_code).first()
+                if existing:
+                    return render_template("team_create.html", error=f"You already have a team with short code '{short_code}'. Please use a different code.")
+
                 # 2. Collect player fields from form data
                 player_names = request.form.getlist("player_name")
                 roles = request.form.getlist("player_role")
@@ -1043,12 +1048,20 @@ def create_app():
                         b_type = bowl_types[i] if i < len(bowl_types) else ""
                         b_hand = bowl_hands[i] if i < len(bowl_hands) else ""
                         
+                        bat_r = int(bat_ratings[i])
+                        bowl_r = int(bowl_ratings[i])
+                        field_r = int(field_ratings[i])
+
+                        # Validate rating bounds
+                        if not (0 <= bat_r <= 100 and 0 <= bowl_r <= 100 and 0 <= field_r <= 100):
+                            return render_template("team_create.html", error=f"Player {i+1}: All ratings must be between 0 and 100.")
+
                         player = Player(
                             name=player_names[i],
                             role=roles[i],
-                            batting_rating=int(bat_ratings[i]),
-                            bowling_rating=int(bowl_ratings[i]),
-                            fielding_rating=int(field_ratings[i]),
+                            batting_rating=bat_r,
+                            bowling_rating=bowl_r,
+                            fielding_rating=field_r,
                             batting_hand=bat_hands[i],
                             bowling_type=b_type if b_type else "",
                             bowling_hand=b_hand if b_hand else ""
@@ -1144,8 +1157,8 @@ def create_app():
                     return render_template("team_create.html", error="Database error saving team.")
 
             except Exception as e:
-                app.logger.error(f"Unexpected error saving team '{name}': {e}", exc_info=True)
-                return render_template("team_create.html", error=f"Unexpected error saving team: {e}")
+                app.logger.error(f"Unexpected error saving team: {e}", exc_info=True)
+                return render_template("team_create.html", error="An unexpected error occurred. Please try again.")
 
         # GET: Show form
         return render_template("team_create.html")
@@ -1194,25 +1207,30 @@ def create_app():
     def delete_team():
         short_code = request.form.get("short_code")
         if not short_code:
+            flash("No team specified for deletion.", "danger")
             return redirect(url_for("manage_teams"))
 
         try:
             # Find team by short_code and owner
             team = DBTeam.query.filter_by(short_code=short_code, user_id=current_user.id).first()
-            
+
             if not team:
                 app.logger.warning(f"Delete failed: Team '{short_code}' not found or unauthorized for {current_user.id}")
+                flash("Team not found or you don't have permission to delete it.", "danger")
                 return redirect(url_for("manage_teams"))
-            
+
+            team_name = team.name
             # Delete from DB (cascade handles players)
             db.session.delete(team)
             db.session.commit()
-            
+
             app.logger.info(f"Team '{short_code}' (ID: {team.id}) deleted by {current_user.id}")
-            
+            flash(f"Team '{team_name}' has been deleted.", "success")
+
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Error deleting team from DB: {e}", exc_info=True)
+            flash("An error occurred while deleting the team. Please try again.", "danger")
 
         return redirect(url_for("manage_teams"))
 
@@ -1239,18 +1257,17 @@ def create_app():
                     team.home_ground = request.form["home_ground"].strip()
                     team.pitch_preference = request.form["pitch_preference"]
                     team.team_color = request.form["team_color"]
-                    
-                    # Update Short Code
-                    team.short_code = new_short_code
-                    
+
+                    # Check for duplicate short_code if changed
+                    if new_short_code != team.short_code:
+                        conflict = DBTeam.query.filter_by(user_id=user_id, short_code=new_short_code).first()
+                        if conflict:
+                            return render_template("team_create.html", team={"team_name": team.name, "short_code": new_short_code, "home_ground": team.home_ground, "pitch_preference": team.pitch_preference, "team_color": team.team_color}, edit=True, error=f"You already have a team with short code '{new_short_code}'.")
+
                     # Check Action (Draft handling)
                     action = request.form.get("action", "publish")
                     is_draft = (action == "save_draft")
-                    team.is_draft = is_draft
 
-                    # Update Players: Delete all and re-add
-                    DBPlayer.query.filter_by(team_id=team.id).delete()
-                    
                     # Gather players from form
                     names = request.form.getlist("player_name")
                     roles = request.form.getlist("player_role")
@@ -1260,7 +1277,7 @@ def create_app():
                     bhands= request.form.getlist("batting_hand")
                     btypes= request.form.getlist("bowling_type")
                     bhand2s = request.form.getlist("bowling_hand")
-                    
+
                     captain_name = request.form.get("captain")
                     wk_name = request.form.get("wicketkeeper")
 
@@ -1286,31 +1303,38 @@ def create_app():
                             "bowling_type": btypes[i] or "",
                             "bowling_hand": bhand2s[i] or ""
                         })
-                    
-                    # --- Validation for Edit ---
+
+                    # --- Validate BEFORE modifying DB ---
                     if not is_draft:
                         if len(names) < 12 or len(names) > 25:
-                            db.session.rollback()
                             return render_template("team_create.html", team=team_form_data, edit=True, error="Active teams must have 12-25 players.")
-                        
-                        # Validate Roles
+
                         wk_count = roles.count("Wicketkeeper")
                         bowl_count = sum(1 for r in roles if r in ["Bowler", "All-rounder"])
-                        
+
                         if wk_count < 1:
-                            db.session.rollback()
                             return render_template("team_create.html", team=team_form_data, edit=True, error="Active teams need at least one Wicketkeeper.")
                         if bowl_count < 6:
-                            db.session.rollback()
                             return render_template("team_create.html", team=team_form_data, edit=True, error="Active teams need at least six Bowler/All-rounder roles.")
-                        
+
                         if not captain_name or not wk_name:
-                             db.session.rollback()
-                             return render_template("team_create.html", team=team_form_data, edit=True, error="Active teams require a Captain and Wicketkeeper.")
+                            return render_template("team_create.html", team=team_form_data, edit=True, error="Active teams require a Captain and Wicketkeeper.")
                     else:
                         if len(names) < 1:
-                             db.session.rollback()
-                             return render_template("team_create.html", team=team_form_data, edit=True, error="Drafts must have at least 1 player.")
+                            return render_template("team_create.html", team=team_form_data, edit=True, error="Drafts must have at least 1 player.")
+
+                    # Validate rating bounds before any DB mutation
+                    for i in range(len(names)):
+                        bat_r = int(bats[i])
+                        bowl_r = int(bowls[i])
+                        field_r = int(fields[i])
+                        if not (0 <= bat_r <= 100 and 0 <= bowl_r <= 100 and 0 <= field_r <= 100):
+                            return render_template("team_create.html", team=team_form_data, edit=True, error=f"Player {i+1}: All ratings must be between 0 and 100.")
+
+                    # --- All validation passed, now mutate DB ---
+                    team.is_draft = is_draft
+                    team.short_code = new_short_code
+                    DBPlayer.query.filter_by(team_id=team.id).delete()
 
                     for i in range(len(names)):
                         p_name = names[i]
@@ -1338,8 +1362,8 @@ def create_app():
                 except Exception as e:
                     db.session.rollback()
                     app.logger.error(f"Error updating team: {e}", exc_info=True)
-                    # Fallthrough to re-render form with error? For now redirect.
-                    return redirect(url_for("manage_teams"))
+                    flash("An error occurred while updating the team. Please try again.", "danger")
+                    return redirect(url_for("edit_team", short_code=short_code))
 
             # GET: Render form with team data
             # Convert DB object to dictionary expected by template
@@ -1376,10 +1400,6 @@ def create_app():
         except Exception as e:
             app.logger.error(f"Error in edit_team: {e}", exc_info=True)
             return redirect(url_for("manage_teams"))
-            return redirect(url_for("manage_teams"))
-
-        # GET: render the same form, passing raw JSON and an edit flag
-        return render_template("team_create.html", team=raw, edit=True)
     
     
     @app.route("/match/setup", methods=["GET", "POST"])
@@ -1669,23 +1689,6 @@ def create_app():
             innings_list=innings_list,
         )
     
-    @app.route("/teams/<short_code>/delete", methods=["DELETE"])
-    @login_required
-    def delete_team_rest(short_code):
-        teams_dir = os.path.join(PROJECT_ROOT, "data", "teams")
-        filename = f"{short_code}_{current_user.id}.json"
-        team_path = os.path.join(teams_dir, filename)
-
-        if not os.path.exists(team_path):
-            return jsonify({"error": "Team not found"}), 404
-
-        try:
-            os.remove(team_path)
-            app.logger.info(f"Team '{short_code}' deleted by {current_user.id}")
-            return jsonify({"success": True})
-        except Exception as e:
-            app.logger.error(f"Error deleting team file: {e}", exc_info=True)
-            return jsonify({"error": "Internal server error"}), 500
 
 
     @app.route("/match/<match_id>/set-toss", methods=["POST"])

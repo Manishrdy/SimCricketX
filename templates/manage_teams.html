@@ -697,6 +697,20 @@
             </div>
         </div>
 
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div style="margin-bottom: 1rem;">
+            {% for category, message in messages %}
+            <div class="flash" style="padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; font-size: 0.9rem;
+                {% if category == 'success' %}background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);
+                {% else %}background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
         <div class="stats-grid">
             <div class="stat-card">
                 <i class="fa-solid fa-layer-group stat-icon"></i>
