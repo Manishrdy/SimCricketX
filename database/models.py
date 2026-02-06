@@ -38,7 +38,12 @@ class Team(db.Model):
     team_color = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_draft = db.Column(db.Boolean, default=False)
-    
+
+    # Unique constraint: one short_code per user
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'short_code', name='uq_team_user_short_code'),
+    )
+
     # Relationships
     players = relationship('Player', backref='team', cascade="all, delete-orphan")
     
