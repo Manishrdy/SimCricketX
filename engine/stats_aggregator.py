@@ -4,6 +4,11 @@ import logging
 from datetime import datetime
 
 class StatsAggregator:
+    REQUIRED_BATTING_COLS = {'Player Name', 'Team Name', 'Runs', 'Balls', 'Status',
+                             '1s', '2s', '3s', 'Fours', 'Sixes', 'Dots'}
+    REQUIRED_BOWLING_COLS = {'Bowler Name', 'Team Name', 'Overs', 'Maidens', 'Runs',
+                             'Wickets', 'Wides', 'No Balls', 'Byes', 'Leg Byes'}
+
     def __init__(self, uploaded_files, user_id):
         self.uploaded_files = uploaded_files
         self.user_id = user_id
@@ -13,16 +18,22 @@ class StatsAggregator:
         self.batting_files = [f for f in uploaded_files if 'batting' in os.path.basename(f).lower()]
         self.bowling_files = [f for f in uploaded_files if 'bowling' in os.path.basename(f).lower()]
 
-        self.batting_df = self._merge_csv_files(self.batting_files)
-        self.bowling_df = self._merge_csv_files(self.bowling_files)
+        self.batting_df = self._merge_csv_files(self.batting_files, self.REQUIRED_BATTING_COLS)
+        self.bowling_df = self._merge_csv_files(self.bowling_files, self.REQUIRED_BOWLING_COLS)
 
-    def _merge_csv_files(self, file_paths):
+    def _merge_csv_files(self, file_paths, required_columns=None):
         if not file_paths:
             return pd.DataFrame()
         df_list = []
         for file_path in file_paths:
             try:
                 df = pd.read_csv(file_path)
+                # Validate required columns
+                if required_columns:
+                    missing = required_columns - set(df.columns)
+                    if missing:
+                        logging.error(f"Skipping {file_path}: missing required columns: {missing}")
+                        continue
                 df['match_id'] = os.path.basename(file_path).split('_')[0]
                 df_list.append(df)
             except Exception as e:
@@ -46,9 +57,9 @@ class StatsAggregator:
         innings = self.batting_df.dropna(subset=['Status']).groupby(['Player Name', 'Team Name']).size().reset_index(name='Innings')
         not_outs = self.batting_df[self.batting_df['Status'] == 'not out'].groupby(['Player Name', 'Team Name']).size().reset_index(name='NOs')
         hs = self.batting_df.groupby(['Player Name', 'Team Name'])['Runs'].max().reset_index(name='HS')
-        fifties = self.batting_df[self.batting_df['Runs'] >= 50].groupby(['Player Name', 'Team Name']).size().reset_index(name='50s')
+        fifties = self.batting_df[(self.batting_df['Runs'] >= 50) & (self.batting_df['Runs'] < 100)].groupby(['Player Name', 'Team Name']).size().reset_index(name='50s')  # A10: exclude hundreds
         hundreds = self.batting_df[self.batting_df['Runs'] >= 100].groupby(['Player Name', 'Team Name']).size().reset_index(name='100s')
-        ducks = self.batting_df[(self.batting_df['Runs'] == 0) & self.batting_df['Status'].notna()].groupby(['Player Name', 'Team Name']).size().reset_index(name='Ducks')
+        ducks = self.batting_df[(self.batting_df['Runs'] == 0) & self.batting_df['Status'].notna() & (self.batting_df['Status'] != 'not out')].groupby(['Player Name', 'Team Name']).size().reset_index(name='Ducks')  # A11: exclude not-outs
 
         for df in [innings, not_outs, hs, fifties, hundreds, ducks]:
             player_stats = pd.merge(player_stats, df, on=['Player Name', 'Team Name'], how='left')
@@ -105,10 +116,14 @@ class StatsAggregator:
         if not self.batting_df.empty:
             wicket_df = self.batting_df[self.batting_df['Bowler Out'].notna() & (self.batting_df['Status'].isin(['Caught', 'Bowled', 'LBW']))]
             if not wicket_df.empty:
-                wicket_types = pd.crosstab(wicket_df['Bowler Out'], wicket_df['Status']).reset_index()
-                wicket_types.rename(columns={'Bowler Out': 'Bowler Name', 'Caught': 'D_Caught', 'Bowled': 'D_Bowled', 'LBW': 'D_LBW'}, inplace=True)
-                # THIS IS THE CRITICAL FIX: Merge only on 'Bowler Name'
-                bowling_stats = pd.merge(bowling_stats, wicket_types, on='Bowler Name', how='left')
+                # Group by both bowler name and team to avoid cross-team merges
+                wicket_types = wicket_df.groupby(['Bowler Out', 'Team Name', 'Status']).size().unstack(fill_value=0).reset_index()
+                wicket_types.rename(columns={'Bowler Out': 'Bowler Name'}, inplace=True)
+                # Rename status columns to prefixed names
+                for col in ['Caught', 'Bowled', 'LBW']:
+                    if col in wicket_types.columns:
+                        wicket_types.rename(columns={col: f'D_{col}'}, inplace=True)
+                bowling_stats = pd.merge(bowling_stats, wicket_types, on=['Bowler Name', 'Team Name'], how='left')
 
         bowling_stats.fillna(0, inplace=True)
         bowling_stats.rename(columns={'Bowler Name':'Player','Team Name':'Team','No Balls':'no balls','Maidens':'maidens'}, inplace=True)

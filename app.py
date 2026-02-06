@@ -60,7 +60,7 @@ import glob
 import pandas as pd 
 from tabulate import tabulate
 from flask import Response
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, aliased
 
 # Add this import for system monitoring
 try:
@@ -1669,7 +1669,17 @@ def create_app():
             entry = innings_data[innings_number]
             entry["batting"].sort(key=lambda item: item["position"])
             entry["bowling"].sort(key=lambda item: item["position"])
-            entry["score"] = sum(item["runs"] for item in entry["batting"])
+            # A12: Compute extras breakdown from bowling stats
+            total_wides = sum(item.get("wides", 0) for item in entry["bowling"])
+            total_noballs = sum(item.get("noballs", 0) for item in entry["bowling"])
+            batting_runs = sum(item["runs"] for item in entry["batting"])
+            total_extras = total_wides + total_noballs  # byes/legbyes not tracked in DB
+            entry["extras"] = {
+                "wides": total_wides,
+                "noballs": total_noballs,
+                "total": total_extras
+            }
+            entry["score"] = batting_runs + total_extras
             entry["wickets"] = sum(1 for item in entry["batting"] if item["is_out"])
             entry["batting_team_name"] = teams.get(entry["batting_team_id"]).name if entry["batting_team_id"] in teams else "Unknown"
             entry["bowling_team_name"] = teams.get(entry["bowling_team_id"]).name if entry["bowling_team_id"] in teams else "Unknown"
@@ -1975,7 +1985,7 @@ def create_app():
 
         except Exception as e:
             app.logger.error(f"Error updating final lineups: {e}", exc_info=True)
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": "An internal error occurred"}), 500
         
     @app.route("/match/<match_id>/next-ball", methods=["POST"])
     @login_required
@@ -2052,8 +2062,8 @@ def create_app():
             result = match.next_super_over_ball()
             return jsonify(result)
         except Exception as e:
-            print(f"Error in super over: {e}")  # Debug print
-            return jsonify({"error": str(e)}), 500
+            app.logger.error(f"Error in super over: {e}", exc_info=True)
+            return jsonify({"error": "An internal error occurred"}), 500
     
     # Add this endpoint to your app.py
 
@@ -2124,6 +2134,7 @@ def create_app():
 
     @app.route("/match/<match_id>/download-archive", methods=["POST"])
     @login_required
+    @limiter.limit("10 per minute")
     def download_archive(match_id):
         """
         PRODUCTION VERSION with HTML Integration
@@ -2203,7 +2214,7 @@ def create_app():
                     return jsonify({"error": "Failed to create archive"}), 500
             except ValueError as ve:
                 app.logger.error(f"[DownloadArchive] Validation error during archiving: {ve}", exc_info=True)
-                return jsonify({"error": f"Validation error: {ve}"}), 400
+                return jsonify({"error": "Invalid archive data provided"}), 400
             except Exception as arch_err:
                 app.logger.error(f"[DownloadArchive] Failed to create archive for match '{match_id}': {arch_err}", exc_info=True)
                 return jsonify({"error": "Failed to create archive"}), 500
@@ -2390,9 +2401,12 @@ def create_app():
 
     @app.route('/match/<match_id>/save-scorecard-images', methods=['POST'])
     @login_required
+    @limiter.limit("10 per minute")
     def save_scorecard_images(match_id):
+        MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
+        ALLOWED_CONTENT_TYPES = {'image/png', 'image/jpeg', 'image/webp'}
+
         try:
-            import os
             from pathlib import Path
             if not _is_valid_match_id(match_id):
                 return jsonify({"error": "Invalid match id"}), 400
@@ -2401,42 +2415,44 @@ def create_app():
             if err:
                 return err
 
-            # Create temp directory for images
-            temp_dir = Path("data") / "temp_scorecard_images"
+            # Use absolute path with user isolation
+            temp_dir = Path(PROJECT_ROOT) / "data" / "temp_scorecard_images" / secure_filename(current_user.id)
             temp_dir.mkdir(parents=True, exist_ok=True)
-            
+
             saved_files = []
-            
-            # Save first innings image if provided
-            if 'first_innings_image' in request.files:
-                first_img = request.files['first_innings_image']
-                if first_img.filename:
-                    safe_match_id = secure_filename(match_id)
-                    if safe_match_id != match_id:
-                        return jsonify({"error": "Invalid match id"}), 400
-                    first_path = temp_dir / f"{safe_match_id}_first_innings_scorecard.png"
-                    first_img.save(first_path)
-                    saved_files.append(str(first_path))
-            
-            # Save second innings image if provided  
-            if 'second_innings_image' in request.files:
-                second_img = request.files['second_innings_image']
-                if second_img.filename:
-                    safe_match_id = secure_filename(match_id)
-                    if safe_match_id != match_id:
-                        return jsonify({"error": "Invalid match id"}), 400
-                    second_path = temp_dir / f"{safe_match_id}_second_innings_scorecard.png"
-                    second_img.save(second_path)
-                    saved_files.append(str(second_path))
-            
+
+            for field_name, label in [('first_innings_image', 'first'), ('second_innings_image', 'second')]:
+                if field_name in request.files:
+                    img = request.files[field_name]
+                    if img.filename:
+                        # Validate content type
+                        if img.content_type not in ALLOWED_CONTENT_TYPES:
+                            return jsonify({"error": f"Invalid file type for {label} innings image. Allowed: PNG, JPEG, WebP"}), 400
+
+                        # Validate file size
+                        img.seek(0, 2)  # Seek to end
+                        size = img.tell()
+                        img.seek(0)     # Reset to start
+                        if size > MAX_IMAGE_SIZE:
+                            return jsonify({"error": f"The {label} innings image exceeds the 5 MB size limit"}), 400
+
+                        safe_match_id = secure_filename(match_id)
+                        if safe_match_id != match_id:
+                            return jsonify({"error": "Invalid match id"}), 400
+
+                        ext = 'png' if img.content_type == 'image/png' else ('jpg' if img.content_type == 'image/jpeg' else 'webp')
+                        img_path = temp_dir / f"{safe_match_id}_{label}_innings_scorecard.{ext}"
+                        img.save(img_path)
+                        saved_files.append(str(img_path))
+
             return jsonify({
                 "success": True,
                 "saved_files": saved_files
             })
-            
+
         except Exception as e:
-            print(f"Error saving scorecard images: {e}")
-            return jsonify({"error": str(e)}), 500
+            app.logger.error(f"Error saving scorecard images: {e}", exc_info=True)
+            return jsonify({"error": "An error occurred while saving images"}), 500
 
     # --- TOURNAMENT ROUTES ---
 
@@ -2801,6 +2817,7 @@ def create_app():
     
     @app.route('/api/bowling-figures')
     @login_required
+    @limiter.limit("30 per minute")
     def api_bowling_figures():
         """
         API endpoint for best bowling figures leaderboard.
@@ -2829,10 +2846,11 @@ def create_app():
             
         except Exception as e:
             app.logger.error(f"Error fetching bowling figures: {e}", exc_info=True)
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': 'An internal error occurred'}), 500
     
     @app.route('/api/compare-players')
     @login_required
+    @limiter.limit("30 per minute")
     def api_compare_players():
         """
         API endpoint for player comparison.
@@ -2848,12 +2866,18 @@ def create_app():
             # If no player IDs provided, return all available players with inferred roles
             if not player_ids:
                 stats_service = StatsService(app.logger)
-                
-                # Get all players for current user who have played in any match
+
+                # Single query: get all players with batting/bowling counts
                 players_with_stats = db.session.query(
                     DBPlayer.id,
                     DBPlayer.name,
-                    DBTeam.name.label('team_name')
+                    DBTeam.name.label('team_name'),
+                    func.sum(
+                        db.case((MatchScorecard.record_type == 'batting', 1), else_=0)
+                    ).label('batting_count'),
+                    func.sum(
+                        db.case((MatchScorecard.record_type == 'bowling', 1), else_=0)
+                    ).label('bowling_count')
                 ).join(
                     MatchScorecard, DBPlayer.id == MatchScorecard.player_id
                 ).join(
@@ -2862,37 +2886,15 @@ def create_app():
                     DBTeam, DBPlayer.team_id == DBTeam.id
                 ).filter(
                     DBMatch.user_id == current_user.id
-                ).distinct().all()
-                
-                # Infer roles based on stats
+                ).group_by(
+                    DBPlayer.id, DBPlayer.name, DBTeam.name
+                ).all()
+
                 available_players = []
-                for player_id, player_name, team_name in players_with_stats:
-                    # Get batting stats count
-                    batting_count = db.session.query(
-                        func.count(MatchScorecard.id)
-                    ).join(
-                        DBMatch, MatchScorecard.match_id == DBMatch.id
-                    ).filter(
-                        MatchScorecard.player_id == player_id,
-                        MatchScorecard.record_type == 'batting',
-                        DBMatch.user_id == current_user.id
-                    ).scalar() or 0
-                    
-                    # Get bowling stats count
-                    bowling_count = db.session.query(
-                        func.count(MatchScorecard.id)
-                    ).join(
-                        DBMatch, MatchScorecard.match_id == DBMatch.id
-                    ).filter(
-                        MatchScorecard.player_id == player_id,
-                        MatchScorecard.record_type == 'bowling',
-                        DBMatch.user_id == current_user.id
-                    ).scalar() or 0
-                    
-                   # Infer role based on stats
-                    has_batting = batting_count > 0
-                    has_bowling = bowling_count > 0
-                    
+                for player_id, player_name, team_name, batting_count, bowling_count in players_with_stats:
+                    has_batting = (batting_count or 0) > 0
+                    has_bowling = (bowling_count or 0) > 0
+
                     if has_batting and has_bowling:
                         role = 'All-Rounder'
                     elif has_bowling:
@@ -2901,7 +2903,7 @@ def create_app():
                         role = 'Batsman'
                     else:
                         role = 'Unknown'
-                    
+
                     available_players.append({
                         'id': player_id,
                         'name': player_name,
@@ -2952,10 +2954,11 @@ def create_app():
             
         except Exception as e:
             app.logger.error(f"Error comparing players: {e}", exc_info=True)
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': 'An internal error occurred'}), 500
     
     @app.route('/api/player/<int:player_id>/partnerships')
     @login_required
+    @limiter.limit("30 per minute")
     def api_player_partnerships(player_id):
         """
         API endpoint for player partnership statistics.
@@ -2981,10 +2984,11 @@ def create_app():
             
         except Exception as e:
             app.logger.error(f"Error fetching partnership stats: {e}", exc_info=True)
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': 'An internal error occurred'}), 500
     
     @app.route('/api/tournament/<int:tournament_id>/partnerships')
     @login_required
+    @limiter.limit("30 per minute")
     def api_tournament_partnerships(tournament_id):
         """
         API endpoint for tournament partnership leaderboard.
@@ -3011,10 +3015,11 @@ def create_app():
             
         except Exception as e:
             app.logger.error(f"Error fetching tournament partnerships: {e}", exc_info=True)
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': 'An internal error occurred'}), 500
 
     @app.route('/api/partnerships')
     @login_required
+    @limiter.limit("30 per minute")
     def api_overall_partnerships():
         """
         API endpoint for overall partnership leaderboard.
@@ -3026,16 +3031,21 @@ def create_app():
             if limit < 1 or limit > 50:
                 return jsonify({'error': 'Limit must be between 1 and 50'}), 400
             
-            # Get all partnerships for current user, ordered by runs
+            # Use aliased joins to get both batsman names in a single query
+            Batsman1 = aliased(DBPlayer, name='batsman1')
+            Batsman2 = aliased(DBPlayer, name='batsman2')
+
             partnerships = db.session.query(
                 MatchPartnership,
-                DBPlayer.name.label('batsman1_name'),
-                DBPlayer.name.label('batsman2_name'),
+                Batsman1.name.label('batsman1_name'),
+                Batsman2.name.label('batsman2_name'),
                 Tournament.name.label('tournament_name')
             ).join(
                 DBMatch, MatchPartnership.match_id == DBMatch.id
             ).join(
-                DBPlayer, MatchPartnership.batsman1_id == DBPlayer.id
+                Batsman1, MatchPartnership.batsman1_id == Batsman1.id
+            ).join(
+                Batsman2, MatchPartnership.batsman2_id == Batsman2.id
             ).join(
                 Tournament, DBMatch.tournament_id == Tournament.id
             ).filter(
@@ -3045,11 +3055,9 @@ def create_app():
             ).limit(limit).all()
 
             app.logger.info(f"[Partnerships] Found {len(partnerships)} overall partnership rows (limit={limit}) for user {current_user.id}")
-            
-            # Get batsman2 names in a second query (since we can't join same table twice easily)
+
             result = []
-            for p, b1_name, _, tourn_name in partnerships:
-                b2_name = DBPlayer.query.get(p.batsman2_id).name if p.batsman2_id else "Unknown"
+            for p, b1_name, b2_name, tourn_name in partnerships:
                 result.append({
                     'batsman1': b1_name,
                     'batsman2': b2_name,
@@ -3070,7 +3078,7 @@ def create_app():
             
         except Exception as e:
             app.logger.error(f"Error fetching overall partnerships: {e}", exc_info=True)
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': 'An internal error occurred'}), 500
 
 
 

@@ -551,6 +551,29 @@ def compute_weighted_prob(
     return max(raw_weight, 0.0)
 
 # -----------------------------------------------------------------------------
+# 4b) Wicket type selection based on bowling style
+# -----------------------------------------------------------------------------
+def _get_wicket_type_by_bowling(bowling_type: str):
+    """Return (types, weights) for wicket dismissal based on bowling style.
+
+    Includes Stumped as a dismissal mode. Spinners produce far more stumpings
+    than pace bowlers, matching real T20 cricket patterns.
+    """
+    if bowling_type in ("Fast", "Fast-medium", "Medium-fast"):
+        # Pace bowlers: more bowled/LBW, very few stumpings
+        types   = ["Caught", "Bowled", "LBW", "Run Out", "Stumped"]
+        weights = [0.40,     0.28,     0.20,   0.08,      0.04]
+    elif bowling_type in ("Off spin", "Leg spin", "Finger spin", "Wrist spin"):
+        # Spinners: high stumping rate, more caught (bat-pad)
+        types   = ["Caught", "Stumped", "Bowled", "LBW", "Run Out"]
+        weights = [0.30,     0.25,      0.18,    0.15,   0.12]
+    else:
+        # Medium pace / default: balanced distribution
+        types   = ["Caught", "Bowled", "LBW", "Run Out", "Stumped"]
+        weights = [0.35,     0.25,     0.20,   0.10,      0.10]
+    return types, weights
+
+# -----------------------------------------------------------------------------
 # 5) Main outcome selection function: calculate_outcome
 # -----------------------------------------------------------------------------
 def calculate_outcome(
@@ -782,12 +805,15 @@ def calculate_outcome(
         result["runs"] = 0
         result["batter_out"] = True
 
-        # Decide wicket type with 40/30/20/10 weighting
-        types = ["Caught", "Bowled", "LBW", "Run Out"]
-        weights_pct = [0.4, 0.3, 0.2, 0.1]
+        # Decide wicket type based on bowling style (A7: varies by bowling type, A6: includes Stumped)
+        types, weights_pct = _get_wicket_type_by_bowling(bowling_type)
         wicket_choice = random.choices(types, weights=weights_pct)[0]
 
         result["wicket_type"] = wicket_choice
+
+        # A1: Run Out happens after completing 1 run (out attempting the 2nd)
+        if wicket_choice == "Run Out":
+            result["runs"] = 1
 
         # Use guaranteed wicket commentary templates
         wicket_descriptions = [
@@ -822,14 +848,25 @@ def calculate_outcome(
     elif chosen == "Extras":
         result["type"] = "extra"
         result["is_extra"] = True
-        result["runs"] = 1  # one run per extra
 
-        extra_types = ["Wide", "No Ball", "Leg Bye", "Byes"]
-        extra_choice = random.choice(extra_types)
+        # A4: Weighted extra type selection (realistic T20 distribution)
+        extra_types   = ["Wide", "No Ball", "Leg Bye", "Byes"]
+        extra_weights = [0.40,   0.25,      0.20,      0.15]
+        extra_choice  = random.choices(extra_types, weights=extra_weights)[0]
+
+        # A4: Variable runs per extra type
+        if extra_choice == "Wide":
+            result["runs"] = 1
+        elif extra_choice == "No Ball":
+            result["runs"] = random.choices([1, 2, 5], weights=[0.70, 0.20, 0.10])[0]
+        elif extra_choice == "Leg Bye":
+            result["runs"] = random.choices([1, 2], weights=[0.80, 0.20])[0]
+        elif extra_choice == "Byes":
+            result["runs"] = random.choices([1, 2, 4], weights=[0.85, 0.10, 0.05])[0]
+
+        result["extra_type"] = extra_choice
         template = random.choice(commentary_templates["Extras"])
         result["description"] = f"{template} ({extra_choice})"
-
-        # print(f"[calculate_outcome] EXTRA! Type: {extra_choice}, Description: {result['description']}")
 
     else:
         # It must be one of Dot, Single, Double, Three, Four, Six
