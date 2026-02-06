@@ -128,7 +128,7 @@ class TournamentEngine:
             modes.append((self.MODE_DOUBLE_ROUND_ROBIN_KNOCKOUT, 'Double League + Semis + Final',
                           f'Double round robin then top 4 play knockouts ({rr_matches * 2 + 3} matches)'))
             modes.append((self.MODE_IPL_STYLE, 'IPL Style Playoffs',
-                          f'Round robin + IPL-style playoffs (Q1, Eliminator, Q2, Final) ({rr_matches + 4} matches)'))
+                          f'Double round robin + IPL-style playoffs (Q1, Eliminator, Q2, Final) ({rr_matches * 2 + 4} matches)'))
 
         return modes
 
@@ -253,7 +253,7 @@ class TournamentEngine:
             self._generate_semifinal_final_placeholders(tournament.id)
 
         elif mode == self.MODE_IPL_STYLE:
-            self._generate_round_robin(tournament.id, team_ids, double=False)
+            self._generate_round_robin(tournament.id, team_ids, double=True)  # A8: IPL uses double round-robin
             self._generate_ipl_playoff_placeholders(tournament.id)
 
         elif mode == self.MODE_CUSTOM_SERIES:

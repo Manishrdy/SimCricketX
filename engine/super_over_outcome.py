@@ -13,7 +13,8 @@ get_pitch_wicket_multiplier instead.
 import random
 from engine.ball_outcome import (
     get_pitch_run_multiplier,
-    get_pitch_wicket_multiplier
+    get_pitch_wicket_multiplier,
+    _get_wicket_type_by_bowling
 )
 
 # -----------------------------------------------------------------------------
@@ -199,19 +200,36 @@ def calculate_super_over_outcome(
         result["runs"] = 0
         result["batter_out"] = True
 
-        # Decide wicket type with 50/30/15/5 weighting
-        wicket_types = ["Caught", "Bowled", "LBW", "Run Out"]
-        weights_pct = [0.5, 0.3, 0.15, 0.05]
+        # A7+A6: Wicket type based on bowling style (includes Stumped)
+        wicket_types, weights_pct = _get_wicket_type_by_bowling(bowling_type)
         chosen_wicket = random.choices(wicket_types, weights=weights_pct, k=1)[0]
         result["wicket_type"] = chosen_wicket
         result["description"] = random.choice(commentary_templates["Wicket"])
 
+        # A1: Run Out happens after completing 1 run
+        if chosen_wicket == "Run Out":
+            result["runs"] = 1
+
     elif chosen == "Extras":
         result["type"] = "extra"
         result["is_extra"] = True
-        result["runs"] = 1  # Always 1 run for an extra
-        extra_types = ["Wide", "No Ball", "Leg Bye", "Byes"]
-        extra_choice = random.choice(extra_types)
+
+        # A4: Weighted extra type selection
+        extra_types   = ["Wide", "No Ball", "Leg Bye", "Byes"]
+        extra_weights = [0.40,   0.25,      0.20,      0.15]
+        extra_choice  = random.choices(extra_types, weights=extra_weights)[0]
+
+        # A4: Variable runs per extra type
+        if extra_choice == "Wide":
+            result["runs"] = 1
+        elif extra_choice == "No Ball":
+            result["runs"] = random.choices([1, 2, 5], weights=[0.70, 0.20, 0.10])[0]
+        elif extra_choice == "Leg Bye":
+            result["runs"] = random.choices([1, 2], weights=[0.80, 0.20])[0]
+        elif extra_choice == "Byes":
+            result["runs"] = random.choices([1, 2, 4], weights=[0.85, 0.10, 0.05])[0]
+
+        result["extra_type"] = extra_choice
         result["description"] = f"{random.choice(commentary_templates['Extras'])} ({extra_choice})"
 
     else:

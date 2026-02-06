@@ -314,6 +314,14 @@ Match Scorecard - SimCricketX
                     {% endfor %}
                 </tbody>
             </table>
+
+            <!-- A12: Extras summary row -->
+            {% if innings.extras %}
+            <div style="padding: 8px 12px; font-size: 0.9rem; color: var(--fg-secondary); border-top: 1px solid var(--border-subtle);">
+                <strong>Extras:</strong> {{ innings.extras.total }}
+                (w {{ innings.extras.wides }}, nb {{ innings.extras.noballs }})
+            </div>
+            {% endif %}
         </div>
 
         <div class="stats-section">
