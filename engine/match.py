@@ -72,6 +72,7 @@ class Match:
         # Initialize comprehensive stats
         self.batsman_stats = {p["name"]: {"runs":0,"balls":0,"fours":0,"sixes":0,"ones":0,"twos":0,"threes":0,"dots":0,"wicket_type":"","bowler_out":"","fielder_out":""} for p in self.batting_team}
         self.current_over_runs = 0
+        self.current_over_outcomes = []
         self.bowler_stats = {p["name"]: {"runs":0,"fours":0,"sixes":0,"wickets":0,"overs":0,"maidens":0,"balls_bowled":0,"wides":0,"noballs":0,"byes":0,"legbyes":0} for p in self.bowling_team if p["will_bowl"]}
 
         self.current_striker = self.batting_team[0]
@@ -108,6 +109,7 @@ class Match:
         self.first_bowling_team_name = ""  # e.g., "DC"
         
         self.result = ""  # Store final match result
+        self.pending_pre_ball_commentary = []
 
         # Add super over tracking variables
         self.super_over_round = 0  # Track which super over we're on
@@ -129,6 +131,44 @@ class Match:
         if team_list is self.home_xi:
             return self.data["team_home"].split("_")[0]
         return self.data["team_away"].split("_")[0]
+
+    def _ball_outcome_token(self, outcome, wicket, runs, extra):
+        if wicket:
+            return "W"
+        if extra:
+            extra_type = outcome.get("extra_type", "")
+            if extra_type == "Wide":
+                return "Wd"
+            if extra_type == "No Ball":
+                return f"Nb+{runs}" if runs else "Nb"
+            if extra_type == "Byes":
+                return f"B{runs}"
+            if extra_type == "Leg Bye":
+                return f"Lb{runs}"
+        return "•" if runs == 0 else str(runs)
+
+    def _format_over_summary(self, over_label):
+        striker_stats = self.batsman_stats[self.current_striker["name"]]
+        non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
+        outcomes = " ".join(self.current_over_outcomes) if self.current_over_outcomes else "-"
+
+        bowler_name = self.current_bowler["name"] if self.current_bowler else "-"
+        bowler_stats = self.bowler_stats.get(bowler_name, {"overs": 0, "balls_bowled": 0, "maidens": 0, "runs": 0, "wickets": 0})
+        over_progress = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
+
+        return (
+            f"<strong>{over_label} - {outcomes} ({self.current_over_runs})</strong><br><br>"
+            f"{self.current_striker['name']} {striker_stats['runs']}({striker_stats['balls']}) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
+            f"{self.current_non_striker['name']} {non_striker_stats['runs']}({non_striker_stats['balls']}) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
+            f"{bowler_name} {over_progress:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}"
+        )
+
+    def _format_innings_complete_summary(self, title="End of innings"):
+        summary = self._format_over_summary(title)
+        if self.innings == 2 and self.target:
+            runs_needed = max(0, self.target - self.score)
+            summary += f"<br>Chase status: {runs_needed} needed from 0 balls."
+        return summary
 
     def _format_scorecard_block(self, scorecard, title):
         if not scorecard:
@@ -1154,8 +1194,11 @@ class Match:
         """Reset all innings-specific state for clean 2nd innings"""
         self.bowling_pattern = self._detect_bowling_pattern()
         self.over_bowler_log = {}
+        self.pending_pre_ball_commentary = []
         self.current_over_maiden_invalid = False
         self.free_hit_active = False
+        self.current_over_runs = 0
+        self.current_over_outcomes = []
         # Restore any modified bowler ratings
         self._restore_bowler_ratings()
         
@@ -2519,6 +2562,8 @@ class Match:
                 # Capture first innings wickets before reset
                 first_innings_wickets = self.wickets
 
+                innings_complete_summary = self._format_innings_complete_summary("End of innings")
+
                 # Reset all innings-specific state
                 self.score = 0
                 self.wickets = 0
@@ -2546,7 +2591,11 @@ class Match:
                     "wickets": 0,
                     "over": 0,
                     "ball": 0,
-                    "commentary": f"End of 1st Innings: {self.first_innings_score}/{10 if first_innings_wickets >= 10 else first_innings_wickets}. Target: {self.target}",
+                    "commentary": (
+                        f"{innings_complete_summary}<br>"
+                        f"<strong>End of 1st Innings:</strong> {self.first_innings_score}/{10 if first_innings_wickets >= 10 else first_innings_wickets}. "
+                        f"Target: {self.target}"
+                    ),
                     "striker": self.current_striker["name"],
                     "non_striker": self.current_non_striker["name"],
                     "bowler": ""
@@ -2613,11 +2662,12 @@ class Match:
                     if extras_parts:
                         extras_str = f" ({', '.join(extras_parts)})"
                 
-                final_commentary = f"<br><strong>Match Over!</strong> {self.result}<br><br>"
-                final_commentary += f"<strong>Final Stats:</strong><br>"
-                final_commentary += f"{self.current_striker['name']}\t\t{striker_stats['runs']}({striker_stats['balls']}b) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
-                final_commentary += f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
-                final_commentary += f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
+                final_commentary = f"{self._format_innings_complete_summary()}<br><br>"
+                final_commentary += f"<strong>Match Over!</strong> {self.result}<br>"
+                final_commentary += f"<strong>Final Snapshot:</strong><br>"
+                final_commentary += f"{self.current_striker['name']} {striker_stats['runs']}({striker_stats['balls']}) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
+                final_commentary += f"{self.current_non_striker['name']} {non_striker_stats['runs']}({non_striker_stats['balls']}) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
+                final_commentary += f"{self.current_bowler['name']} {overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
 
                 first_block = self._format_scorecard_block(getattr(self, 'first_innings_scorecard', None), '1st Innings Scorecard')
                 second_block = self._format_scorecard_block(scorecard_data, '2nd Innings Scorecard')
@@ -2650,13 +2700,19 @@ class Match:
                      self.current_partnership_contributions['batsman2']['name'] = self.current_non_striker['name']
 
             self.current_bowler = self.pick_bowler()
-            self.commentary.append(
-                f"<strong>The New bowler is</strong> {self.current_bowler['name']}<br>"
-            )
             if self.current_over == 0:
+                batting_team_name = self._get_team_name(self.batting_team)
                 bowling_team_name = self._get_team_name(self.bowling_team)
-                self.commentary.append(f"{self.current_striker['name']} is on strike")
-                self.commentary.append(f"{self.current_bowler['name']} will open the attack for {bowling_team_name}<br>")
+                opener_1 = self.current_non_striker['name']
+                opener_2 = self.current_striker['name']
+                self.pending_pre_ball_commentary.extend([
+                    f"<strong>INNINGS {self.innings}</strong>",
+                    f"{opener_1} and {opener_2} will open the attack for {batting_team_name}. {opener_2} is on strike.",
+                    f"{self.current_bowler['name']} will bowl the opening over for {bowling_team_name}.",
+                    ""
+                ])
+            else:
+                self.pending_pre_ball_commentary.append(f"{self.current_bowler['name']} is into the attack.<br>")
 
         # Calculate pressure and effects
         match_state = self._calculate_current_match_state()
@@ -2916,6 +2972,7 @@ class Match:
                             self.batting_team, self.bowling_team = self.home_xi, self.away_xi
                         else:
                             self.batting_team, self.bowling_team = self.away_xi, self.home_xi
+                    innings_complete_summary = self._format_innings_complete_summary("End of innings")
                     self.score = 0
                     self.wickets = 0
                     self.current_over = 0
@@ -2938,7 +2995,11 @@ class Match:
                         "wickets": 0,
                         "over": 0,
                         "ball": 0,
-                        "commentary": f"{all_out_commentary}!<br>End of 1st Innings: {self.first_innings_score}/10. Target: {self.target}",
+                    "commentary": (
+                        f"{all_out_commentary}<br>"
+                        f"{innings_complete_summary}<br>"
+                        f"<strong>End of 1st Innings:</strong> {self.first_innings_score}/10. Target: {self.target}"
+                    ),
                         "striker": self.current_striker["name"],
                         "non_striker": self.current_non_striker["name"],
                         "bowler": ""
@@ -3080,7 +3141,7 @@ class Match:
                         "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0,
                         "wicket_type": "", "bowler_out": "", "fielder_out": ""
                     }
-            commentary_line += f"<br><strong>New batsman:</strong> {self.current_striker['name']}<br>"
+            commentary_line += f"<br>{self.current_striker['name']} walks in next."
             self.commentary.append(commentary_line)
 
         else:
@@ -3187,11 +3248,12 @@ class Match:
                     if extras_parts:
                         extras_str = f" ({', '.join(extras_parts)})"
 
-                final_commentary = f"{commentary_line}<br><strong>Match Over!</strong> {self.result}<br><br>"
-                final_commentary += f"<strong>Final Stats:</strong><br>"
-                final_commentary += f"{self.current_striker['name']}\t\t{striker_stats['runs']}({striker_stats['balls']}b) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
-                final_commentary += f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
-                final_commentary += f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
+                final_commentary = f"{commentary_line}<br>{self._format_innings_complete_summary()}<br><br>"
+                final_commentary += f"<strong>Match Over!</strong> {self.result}<br>"
+                final_commentary += f"<strong>Final Snapshot:</strong><br>"
+                final_commentary += f"{self.current_striker['name']} {striker_stats['runs']}({striker_stats['balls']}) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
+                final_commentary += f"{self.current_non_striker['name']} {non_striker_stats['runs']}({non_striker_stats['balls']}) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
+                final_commentary += f"{self.current_bowler['name']} {overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
 
                 first_block = self._format_scorecard_block(getattr(self, 'first_innings_scorecard', None), '1st Innings Scorecard')
                 second_block = self._format_scorecard_block(scorecard_data, '2nd Innings Scorecard')
@@ -3256,7 +3318,13 @@ class Match:
             # Legal delivery (not extra): reset free hit
             self.free_hit_active = False
 
-        all_commentary = [commentary_line]
+        self.current_over_outcomes.append(self._ball_outcome_token(outcome, wicket, runs, extra))
+
+        all_commentary = []
+        if self.pending_pre_ball_commentary:
+            all_commentary.extend(self.pending_pre_ball_commentary)
+            self.pending_pre_ball_commentary = []
+        all_commentary.append(commentary_line)
         over_complete = self.current_ball == 6
 
         if over_complete:
@@ -3266,40 +3334,18 @@ class Match:
             # D4: Increment bowler_history at over completion, not at selection
             self.bowler_history[self.current_bowler["name"]] = self.bowler_history.get(self.current_bowler["name"], 0) + 1
             
-            striker_stats = self.batsman_stats[self.current_striker["name"]]
-            non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
-            bowler_stats = self.bowler_stats[self.current_bowler["name"]]
-            
-            balls_played = (self.current_over + 1) * 6
-            current_rr = (self.score * 6) / balls_played if balls_played > 0 else 0
-            
-            all_commentary.append(f"<br><strong>End of over {self.current_over + 1}</strong> (Score: {self.score}/{self.wickets}, RR: {current_rr:.2f})<br>")
-            
+            all_commentary.append(self._format_over_summary(f"End of over {self.current_over + 1}"))
 
             if self.innings == 2:
                 balls_remaining = (self.overs - self.current_over - 1) * 6
                 if balls_remaining > 0:
                     required_rr = ((self.target - self.score) * 6) / balls_remaining
                     all_commentary.append(f"Required: {self.target - self.score} runs from {balls_remaining} balls (RRR: {required_rr:.2f})")
-            
-            extras_str = ""
-            if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
-                extras_parts = []
-                if bowler_stats["wides"] > 0:
-                    extras_parts.append(f"{bowler_stats['wides']}w")
-                if bowler_stats["noballs"] > 0:
-                    extras_parts.append(f"{bowler_stats['noballs']}nb")
-                if extras_parts:
-                    extras_str = f" ({', '.join(extras_parts)})"
-            
-            all_commentary.append(f"{self.current_striker['name']}\t\t{striker_stats['runs']}({striker_stats['balls']}b) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]")
-            all_commentary.append(f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]")
-            all_commentary.append(f"{self.current_bowler['name']}\t\t{bowler_stats['overs']:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}")
-            all_commentary.append(f"<br>")
 
             self.current_ball = 0
             self.current_over += 1
             self.current_over_runs = 0
+            self.current_over_outcomes = []
             self.current_over_maiden_invalid = False  # A2: reset for new over
             self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
             self.batter_idx.reverse()
@@ -3344,17 +3390,17 @@ class Match:
                     
                     if status_raw != "not out":
                         if status_raw == "Caught":
-                            status = f"c {stats.get('fielder_out', '?')} b {stats.get('bowler_out', '?')}"
+                            status = f"c. {stats.get('fielder_out', '?')} b. {stats.get('bowler_out', '?')}"
                         elif status_raw == "Bowled":
-                            status = f"b {stats.get('bowler_out', '?')}"
+                            status = f"b. {stats.get('bowler_out', '?')}"
                         elif status_raw == "LBW":
-                            status = f"lbw b {stats.get('bowler_out', '?')}"
+                            status = f"lbw b. {stats.get('bowler_out', '?')}"
                         elif status_raw == "Run Out":
                             status = f"run out ({stats.get('fielder_out', '?')})"
                         elif status_raw == "Stumped":
-                            status = f"st {stats.get('fielder_out', '?')} b {stats.get('bowler_out', '?')}"
+                            status = f"st. {stats.get('fielder_out', '?')} b. {stats.get('bowler_out', '?')}"
                         elif status_raw == "Hit Wicket":
-                             status = f"hit wicket b {stats.get('bowler_out', '?')}"
+                             status = f"hit wicket b. {stats.get('bowler_out', '?')}"
                     
                     players.append({
                         "name": player_name,
