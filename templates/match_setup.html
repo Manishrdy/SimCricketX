@@ -637,12 +637,12 @@
     <div class="wizard-step" id="step-3">
         <h2 style="text-align:center; margin-bottom: 0.5rem;">Finalize Playing XIs</h2>
         <p style="text-align:center; color:var(--fg-secondary); margin-bottom:1.5rem;">
-            Drag players to organize the lineup. Ensure 5 bowlers + 1 Keeper per side.
+            Drag players to organize the lineup, or press Enter to cycle between zones. Ensure 5 bowlers + 1 Keeper per side.
         </p>
 
-        <div class="squad-layout">
+        <div class="squad-layout" role="region" aria-label="Squad selection">
             <!-- HOME TEAM -->
-            <div class="team-pane" id="home-pane">
+            <div class="team-pane" id="home-pane" role="group" aria-label="Home team squad">
                 <div class="team-pane-header" id="home-name">Home Team</div>
                 <div class="drop-zones">
                     <div>
@@ -650,24 +650,24 @@
                             <span>Playing XI</span>
                             <span id="home-xi-count">0/11</span>
                         </div>
-                        <div class="drop-zone" id="home-selected"></div>
+                        <div class="drop-zone" id="home-selected" role="listbox" aria-label="Home Playing XI"></div>
                     </div>
                     <div>
                         <div class="zone-header">
                             <span>Bench</span>
                             <span id="home-sub-count">0/5</span>
                         </div>
-                        <div class="drop-zone" id="home-substitutes"></div>
+                        <div class="drop-zone" id="home-substitutes" role="listbox" aria-label="Home Bench"></div>
                     </div>
                     <div>
                         <div class="zone-header">Reserve</div>
-                        <div class="drop-zone" id="home-available" style="opacity:0.6;"></div>
+                        <div class="drop-zone" id="home-available" role="listbox" aria-label="Home Reserve" style="opacity:0.6;"></div>
                     </div>
                 </div>
             </div>
 
             <!-- AWAY TEAM -->
-            <div class="team-pane" id="away-pane">
+            <div class="team-pane" id="away-pane" role="group" aria-label="Away team squad">
                 <div class="team-pane-header" id="away-name">Away Team</div>
                 <div class="drop-zones">
                     <div>
@@ -675,22 +675,23 @@
                             <span>Playing XI</span>
                             <span id="away-xi-count">0/11</span>
                         </div>
-                        <div class="drop-zone" id="away-selected"></div>
+                        <div class="drop-zone" id="away-selected" role="listbox" aria-label="Away Playing XI"></div>
                     </div>
                     <div>
                         <div class="zone-header">
                             <span>Bench</span>
                             <span id="away-sub-count">0/5</span>
                         </div>
-                        <div class="drop-zone" id="away-substitutes"></div>
+                        <div class="drop-zone" id="away-substitutes" role="listbox" aria-label="Away Bench"></div>
                     </div>
                     <div>
                         <div class="zone-header">Reserve</div>
-                        <div class="drop-zone" id="away-available" style="opacity:0.6;"></div>
+                        <div class="drop-zone" id="away-available" role="listbox" aria-label="Away Reserve" style="opacity:0.6;"></div>
                     </div>
                 </div>
             </div>
         </div>
+        <div aria-live="polite" id="squad-announce" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);"></div>
     </div>
 
     <!-- CONTROLS -->
@@ -711,12 +712,23 @@
         {{ teams | tojson | safe}}
 </script>
 
+<!-- C2: Move Jinja values into safe JSON block instead of inline JS interpolation -->
+<script id="setup-config" type="application/json">
+    {
+        "tournamentId": {{ tournament_id | tojson | safe }},
+        "fixtureId": {{ fixture_id | tojson | safe }},
+        "preselectHome": {{ preselect_home | tojson | safe }},
+        "preselectAway": {{ preselect_away | tojson | safe }}
+    }
+</script>
+
 <script>
     let TEAMS = [];
     let currentStep = 1;
     let selectedTeamIndices = [];
-    const tournamentId = JSON.parse('{{ tournament_id | tojson | safe }}');
-    const fixtureId = JSON.parse('{{ fixture_id | tojson | safe }}');
+    const _setupConfig = JSON.parse(document.getElementById('setup-config').textContent);
+    const tournamentId = _setupConfig.tournamentId;
+    const fixtureId = _setupConfig.fixtureId;
     try {
         TEAMS = JSON.parse(document.getElementById('teams-data').textContent);
     } catch (e) {
@@ -741,8 +753,8 @@
         });
 
         // AUTO-SELECT TEAMS FOR TOURNAMENT FIXTURES
-        const preselectHome = JSON.parse('{{ preselect_home | tojson | safe }}');
-        const preselectAway = JSON.parse('{{ preselect_away | tojson | safe }}');
+        const preselectHome = _setupConfig.preselectHome;
+        const preselectAway = _setupConfig.preselectAway;
 
         if (preselectHome !== null && preselectAway !== null) {
             // Find team indices by matching team IDs
@@ -939,8 +951,12 @@
         const div = document.createElement('div');
         div.className = 'player-pill';
         div.draggable = true;
+        div.tabIndex = 0;
+        div.setAttribute('role', 'option');
+        div.setAttribute('aria-label', `${player.name}, ${player.role}. Press Enter to move between zones.`);
         div.dataset.name = player.name;
         div.dataset.role = player.role;
+        div.dataset.side = side;
 
         const iconMap = { 'Batsman': '🏏', 'Bowler': '🎳', 'Wicketkeeper': '🧤', 'All-rounder': '🏏' };
 
@@ -948,7 +964,7 @@
         const isBowler = ['Bowler', 'All-rounder'].includes(player.role);
         const bowlCheck = isBowler ?
             `<label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-size:0.75rem;">
-        <input type="checkbox" class="bowl-check" checked> Bowl
+        <input type="checkbox" class="bowl-check" checked aria-label="Include ${player.name} as bowler"> Bowl
     </label>` : '';
 
         div.innerHTML = `
@@ -967,7 +983,39 @@
             validateSquads();
         };
 
+        // Keyboard accessibility: Enter/Space cycles pill between zones
+        div.onkeydown = e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                cyclePlayerZone(div, side);
+            }
+        };
+
         return div;
+    }
+
+    function cyclePlayerZone(pill, side) {
+        const zones = ['selected', 'substitutes', 'available'];
+        const zoneLabels = ['Playing XI', 'Bench', 'Reserve'];
+        const currentZone = pill.parentElement;
+        const currentId = currentZone ? currentZone.id : '';
+
+        let currentIdx = zones.findIndex(z => currentId === `${side}-${z}`);
+        if (currentIdx === -1) return;
+
+        const nextIdx = (currentIdx + 1) % zones.length;
+        const targetZone = document.getElementById(`${side}-${zones[nextIdx]}`);
+        targetZone.appendChild(pill);
+        pill.focus();
+
+        updateCounts(side);
+        validateSquads();
+
+        // Announce move to screen readers
+        const announce = document.getElementById('squad-announce');
+        if (announce) {
+            announce.textContent = `${pill.dataset.name} moved to ${zoneLabels[nextIdx]}`;
+        }
     }
 
     function handleDrop(e, zone, side) {
@@ -1017,28 +1065,40 @@
         }
         const sides = ['home', 'away'];
         let valid = true;
+        const issues = [];
 
         sides.forEach(side => {
+            const label = side === 'home' ? 'Home' : 'Away';
             const xi = document.getElementById(`${side}-selected`);
-            const sub = document.getElementById(`${side}-substitutes`);
 
             const xiCount = xi.children.length;
-            const subCount = sub.children.length;
 
-            // Logic rules
-            if (xiCount !== 11) valid = false;
-            // if (subCount < 1) valid = false; // Soft rule
+            if (xiCount !== 11) {
+                valid = false;
+                issues.push(`${label}: Need exactly 11 in Playing XI (have ${xiCount})`);
+            }
 
-            // Check roles
             const pills = Array.from(xi.querySelectorAll('.player-pill'));
             const wk = pills.some(p => p.dataset.role === 'Wicketkeeper');
             const bowlers = pills.filter(p => p.querySelector('.bowl-check')?.checked).length;
 
-            // We can show warnings via Toast if needed, but for now just lock button
-            if (!wk || bowlers < 5) valid = false;
+            if (!wk) {
+                valid = false;
+                issues.push(`${label}: No Wicketkeeper in Playing XI`);
+            }
+            if (bowlers < 5) {
+                valid = false;
+                issues.push(`${label}: Need at least 5 bowlers (have ${bowlers})`);
+            }
         });
 
-        document.getElementById('next-btn').disabled = !valid;
+        const btn = document.getElementById('next-btn');
+        btn.disabled = !valid;
+        if (!valid && issues.length > 0) {
+            btn.title = issues.join('\n');
+        } else {
+            btn.title = '';
+        }
     }
 
     // --- SIMULATE ---

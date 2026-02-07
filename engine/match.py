@@ -79,11 +79,14 @@ class Match:
         # Add bowling pattern detection
         self.bowling_pattern = self._detect_bowling_pattern()
 
-        # ✅ ADD THIS - Initialize over tracking for fatigue management
         self.over_bowler_log = {}
         self.prev_delivery_was_extra = False
         self.current_over_maiden_invalid = False  # A2: only bat-runs, wides, no-balls invalidate maidens
         self.free_hit_active = False  # A5: free hit after no-ball
+        
+        # Bug Fix B1: Initialize wicket tracking variables (moved from after return in _format_scorecard_block)
+        self.recent_wickets_count = 0  # Track wickets in last few balls
+        self.recent_wickets_tracker = []  # Track when wickets fell
 
 
         # ===== NEW ARCHIVING VARIABLES =====
@@ -160,9 +163,6 @@ class Match:
             f"<th style='text-align:right;border-bottom:1px solid #444;'>W</th></tr></thead>"
             f"<tbody>{bowling_rows}</tbody></table>"
         )
-        
-        self.recent_wickets_count = 0  # Track wickets in last few balls
-        self.recent_wickets_tracker = []  # Track when wickets fell
 
 
     def _calculate_current_match_state(self):
@@ -792,12 +792,9 @@ class Match:
             # Use emergency fallback
             return self._emergency_single_bowler_selection()
         
-        # ================ UPDATE TRACKING ================
-        old_count = self.bowler_history.get(selected_bowler["name"], 0)
-        new_count = old_count + 1
-        self.bowler_history[selected_bowler["name"]] = new_count
-        print(f"📝 Updated {selected_bowler['name']} quota: {old_count}/4 → {new_count}/4")
-        
+        # D4: bowler_history increment moved to over completion
+        print(f"📝 {selected_bowler['name']} current quota: {self.bowler_history.get(selected_bowler['name'], 0)}/4")
+
         # Initialize bowler stats if needed
         if selected_bowler["name"] not in self.bowler_stats:
             self.bowler_stats[selected_bowler["name"]] = {
@@ -962,8 +959,8 @@ class Match:
         violation_msg = f"⚠️ CONSTRAINT VIOLATION - {violation_type}: {reason} (Over {self.current_over + 1})"
         print(f"  📝 {violation_msg}")
         
-        # Add to commentary for visibility
-        self.commentary.append(f"<strong>{violation_msg}</strong>")
+        # Fix D9: Don't add debug messages to user-facing commentary
+        # self.commentary.append(f"<strong>{violation_msg}</strong>")  # Removed
         
         # Track violations for post-match analysis
         if not hasattr(self, 'constraint_violations'):
@@ -1063,18 +1060,15 @@ class Match:
         return all_bowlers[0]
 
     def _update_bowler_tracking(self, selected_bowler):
-        """Update all tracking systems"""
+        """Update all tracking systems (D4: quota incremented at over completion, not here)"""
         print(f"  📝 TRACKING UPDATE:")
-        
+
         # Update over history
         self._log_bowler_for_over(selected_bowler)
-        
-        # Update quota tracking
-        old_count = self.bowler_history.get(selected_bowler["name"], 0)
-        new_count = old_count + 1
-        self.bowler_history[selected_bowler["name"]] = new_count
-        
-        print(f"    {selected_bowler['name']} quota: {old_count}/4 → {new_count}/4")
+
+        # D4: bowler_history is now incremented at over completion, not at selection
+        # This prevents over-counting when an innings ends mid-over
+        print(f"    {selected_bowler['name']} current quota: {self.bowler_history.get(selected_bowler['name'], 0)}/4")
         
         # Initialize/update bowler stats
         if selected_bowler["name"] not in self.bowler_stats:
@@ -2215,10 +2209,10 @@ class Match:
 
                 # 3. Temporarily boost each bowler’s bowling_rating by 10% (capped at 100)
                 for bowler in constraint_eligible:
-                    if bowler.get("_orig_boiling_rating") is None:
-                        bowler["_orig_boiling_rating"] = bowler["bowling_rating"]
+                    if bowler.get("_orig_bowling_rating") is None:  # Fix D6: Correct typo
+                        bowler["_orig_bowling_rating"] = bowler["bowling_rating"]
                     bowler["bowling_rating"] = int(
-                        min(bowler["_orig_boiling_rating"] * 1.1, 100)
+                        min(bowler["_orig_bowling_rating"] * 1.1, 100)
                     )
         # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
@@ -2309,9 +2303,9 @@ class Match:
         # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
         # If we had boosted any Spinner/Medium-fast/Medium earlier, revert their rating now
         for bowler in self.bowling_team:
-            if bowler.get("_orig_boiling_rating") is not None:
-                bowler["bowling_rating"] = bowler["_orig_boiling_rating"]
-                del bowler["_orig_boiling_rating"]
+            if bowler.get("_orig_bowling_rating") is not None:  # Fix D6: Correct typo
+                bowler["bowling_rating"] = bowler["_orig_bowling_rating"]
+                del bowler["_orig_bowling_rating"]
         # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
         # Add this right before "return selected_bowler" in pick_bowler()
@@ -2322,10 +2316,6 @@ class Match:
 
         return selected_bowler
 
-
-    def rotate_strike(self):
-        self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
-        self.batter_idx.reverse()
 
     def _generate_risk_commentary(self, risk_effects):
         """Generate commentary for risk-based cricket"""
@@ -2899,18 +2889,26 @@ class Match:
                     self._save_first_innings_stats()
                     self.first_innings_scorecard = scorecard_data
 
-                    # Reset for 2nd innings (same as time-based transition)
+                    # Reset for 2nd innings
                     self.innings = 2
-                    # ✅ CRITICAL: Update lineups if impact player swaps occurred
+                    # Update lineups if impact player swaps occurred
                     if hasattr(self, 'data') and self.data.get('impact_players_swapped'):
-                        print(f"🔄 Applying impact player changes for second innings...")
-                        # Use the updated playing XI from match data
                         self.home_xi = self.data["playing_xi"]["home"]
                         self.away_xi = self.data["playing_xi"]["away"]
-                        print(f"   Updated Home XI: {[p['name'] for p in self.home_xi]}")
-                        print(f"   Updated Away XI: {[p['name'] for p in self.away_xi]}")
 
-                    self.batting_team, self.bowling_team = self.bowling_team, self.batting_team
+                    # D5: Re-derive teams from toss logic (same as overs-exhausted path)
+                    # Simple swap breaks when impact player changes update home_xi/away_xi
+                    team_home_code = self.match_data["team_home"].split("_")[0]
+                    if self.toss_winner == team_home_code:
+                        if self.toss_decision == "Bat":
+                            self.batting_team, self.bowling_team = self.away_xi, self.home_xi
+                        else:
+                            self.batting_team, self.bowling_team = self.home_xi, self.away_xi
+                    else:
+                        if self.toss_decision == "Bat":
+                            self.batting_team, self.bowling_team = self.home_xi, self.away_xi
+                        else:
+                            self.batting_team, self.bowling_team = self.away_xi, self.home_xi
                     self.score = 0
                     self.wickets = 0
                     self.current_over = 0
@@ -3258,6 +3256,8 @@ class Match:
             if not self.current_over_maiden_invalid:
                 self.bowler_stats[self.current_bowler["name"]]["maidens"] += 1
             self.bowler_stats[self.current_bowler["name"]]["overs"] += 1
+            # D4: Increment bowler_history at over completion, not at selection
+            self.bowler_history[self.current_bowler["name"]] = self.bowler_history.get(self.current_bowler["name"], 0) + 1
             
             striker_stats = self.batsman_stats[self.current_striker["name"]]
             non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
@@ -3723,6 +3723,10 @@ class Match:
 
                 # ✅ Update original scorecard with super over result
                 self.original_scorecard["target_info"] = result
+                
+                # Save stats and create archive (Bug Fix B6)
+                self._save_second_innings_stats()
+                self._create_match_archive()
                 
                 return {
                     "super_over_complete": True,
