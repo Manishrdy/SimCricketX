@@ -150,17 +150,19 @@ class Match:
     def _format_over_summary(self, over_label):
         striker_stats = self.batsman_stats[self.current_striker["name"]]
         non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
+        bowler_stats = self.bowler_stats[self.current_bowler["name"]]
+        team_name = self._get_team_name(self.batting_team)
+        balls_played = self.current_over * 6 + self.current_ball
+        current_rr = (self.score * 6) / balls_played if balls_played > 0 else 0
+        over_progress = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
         outcomes = " ".join(self.current_over_outcomes) if self.current_over_outcomes else "-"
 
-        bowler_name = self.current_bowler["name"] if self.current_bowler else "-"
-        bowler_stats = self.bowler_stats.get(bowler_name, {"overs": 0, "balls_bowled": 0, "maidens": 0, "runs": 0, "wickets": 0})
-        over_progress = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
-
         return (
-            f"<strong>{over_label} - {outcomes} ({self.current_over_runs})</strong><br><br>"
+            f"<strong>{over_label} - {outcomes} ({self.current_over_runs})</strong><br>"
+            f"Batting Team Score: {team_name} {self.score}/{self.wickets}, RR: {current_rr:.2f}<br><br>"
             f"{self.current_striker['name']} {striker_stats['runs']}({striker_stats['balls']}) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
             f"{self.current_non_striker['name']} {non_striker_stats['runs']}({non_striker_stats['balls']}) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
-            f"{bowler_name} {over_progress:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}"
+            f"{self.current_bowler['name']} {over_progress:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}"
         )
 
     def _format_innings_complete_summary(self, title="End of innings"):
@@ -2592,7 +2594,7 @@ class Match:
                     "over": 0,
                     "ball": 0,
                     "commentary": (
-                        f"{innings_complete_summary}<br>"
+                        f"{self._format_innings_complete_summary('End of innings')}<br>"
                         f"<strong>End of 1st Innings:</strong> {self.first_innings_score}/{10 if first_innings_wickets >= 10 else first_innings_wickets}. "
                         f"Target: {self.target}"
                     ),
@@ -2708,11 +2710,10 @@ class Match:
                 self.pending_pre_ball_commentary.extend([
                     f"<strong>INNINGS {self.innings}</strong>",
                     f"{opener_1} and {opener_2} will open the attack for {batting_team_name}. {opener_2} is on strike.",
-                    f"{self.current_bowler['name']} will bowl the opening over for {bowling_team_name}.",
-                    ""
+                    f"{self.current_bowler['name']} will bowl the opening over for {bowling_team_name}."
                 ])
             else:
-                self.pending_pre_ball_commentary.append(f"{self.current_bowler['name']} is into the attack.<br>")
+                self.pending_pre_ball_commentary.append(f"{self.current_bowler['name']} is into the attack.")
 
         # Calculate pressure and effects
         match_state = self._calculate_current_match_state()
@@ -2997,7 +2998,7 @@ class Match:
                         "ball": 0,
                     "commentary": (
                         f"{all_out_commentary}<br>"
-                        f"{innings_complete_summary}<br>"
+                        f"{self._format_innings_complete_summary('End of innings')}<br>"
                         f"<strong>End of 1st Innings:</strong> {self.first_innings_score}/10. Target: {self.target}"
                     ),
                         "striker": self.current_striker["name"],
@@ -3341,6 +3342,7 @@ class Match:
                 if balls_remaining > 0:
                     required_rr = ((self.target - self.score) * 6) / balls_remaining
                     all_commentary.append(f"Required: {self.target - self.score} runs from {balls_remaining} balls (RRR: {required_rr:.2f})")
+            all_commentary.append("<br>")
 
             self.current_ball = 0
             self.current_over += 1
