@@ -620,6 +620,241 @@
                 padding: 1rem;
             }
         }
+
+        /* Backup Modal — uses design tokens from theme_manage.css */
+        .backup-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--overlay-bg);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            padding: 1rem;
+        }
+
+        .backup-modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .backup-modal-content {
+            background: var(--bg-raised);
+            border: 1px solid var(--border-light);
+            padding: 2.5rem;
+            border-radius: var(--radius-lg);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.95);
+            transition: transform 0.3s var(--ease-elastic);
+        }
+
+        .backup-modal.active .backup-modal-content {
+            transform: scale(1);
+        }
+
+        .backup-modal-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: var(--brand-gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: inline-block;
+        }
+
+        .backup-modal-title {
+            font-family: var(--font-sans);
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 0.35rem;
+        }
+
+        .backup-modal-desc {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            margin-bottom: 1.75rem;
+            line-height: 1.5;
+        }
+
+        .backup-input-group {
+            text-align: left;
+            margin-bottom: 1.5rem;
+        }
+
+        .backup-input-label {
+            display: block;
+            font-family: var(--font-sans);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.5rem;
+        }
+
+        .backup-input-wrap {
+            position: relative;
+        }
+
+        .backup-input-wrap .input-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            pointer-events: none;
+            transition: color 0.2s ease;
+        }
+
+        .backup-input-wrap:focus-within .input-icon {
+            color: var(--brand-primary);
+        }
+
+        .backup-input {
+            width: 100%;
+            padding: 0.875rem 3rem 0.875rem 2.6rem;
+            font-family: var(--font-mono);
+            font-size: 0.88rem;
+            background: var(--bg-surface);
+            color: var(--text-main);
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-md);
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .backup-input::placeholder {
+            color: var(--text-muted);
+            opacity: 0.6;
+        }
+
+        .backup-input:focus {
+            border-color: var(--border-focused);
+            box-shadow: 0 0 0 3px var(--accent-light), var(--shadow-xs);
+        }
+
+        .backup-input.has-error {
+            border-color: var(--danger);
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        }
+
+        .backup-input.has-error:focus {
+            border-color: var(--danger);
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+        }
+
+        .backup-vis-toggle {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            font-size: 0.88rem;
+            padding: 0.35rem 0.55rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .backup-vis-toggle:hover {
+            color: var(--brand-primary);
+            background: var(--accent-light);
+            border-color: var(--border-light);
+        }
+
+        .backup-feedback {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-top: 0.6rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            line-height: 1.4;
+            min-height: 1.4em;
+            opacity: 0;
+            transform: translateY(-4px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .backup-feedback.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .backup-feedback.error { color: var(--danger); }
+        .backup-feedback.success { color: var(--success); }
+
+        .backup-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .backup-btn {
+            flex: 1;
+            border-radius: var(--radius-full);
+            padding: 0.7rem 1.5rem;
+            border: 1px solid transparent;
+            font-family: var(--font-sans);
+            font-weight: 600;
+            font-size: 0.88rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.45rem;
+            transition: all 0.2s ease;
+        }
+
+        .backup-btn-ghost {
+            background: var(--bg-raised);
+            color: var(--text-main);
+            border-color: var(--border-light);
+        }
+
+        .backup-btn-ghost:hover {
+            border-color: var(--brand-primary);
+            color: var(--brand-primary);
+        }
+
+        .backup-btn-primary {
+            background: var(--brand-gradient);
+            color: var(--text-on-accent);
+            box-shadow: var(--shadow-xs);
+        }
+
+        .backup-btn-primary:hover:not(:disabled) {
+            box-shadow: var(--shadow-sm), var(--shadow-glow);
+            transform: translateY(-1px);
+        }
+
+        .backup-btn-primary:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .backup-btn-primary .fa-spinner {
+            animation: backup-spin 0.7s linear infinite;
+        }
+
+        @keyframes backup-spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
 
@@ -639,6 +874,12 @@
             {% block navbar_items %}
             {% if current_user.is_authenticated %}
             <a href="{{ url_for('home') }}" class="theme-toggle" title="Home"><i class="fas fa-home"></i></a>
+            {% if current_user.id == 'admin' or current_user.id == 'admin@projectx.com' %}
+            <button onclick="downloadDatabase()" class="theme-toggle" title="Download Database Backup"
+                style="background: var(--accent-light); color: var(--accent); border-color: var(--accent);">
+                <i class="fas fa-database"></i>
+            </button>
+            {% endif %}
             <form method="POST" action="{{ url_for('logout') }}" style="display:inline;margin:0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="theme-toggle" title="Logout" style="border:none;cursor:pointer;">
@@ -659,8 +900,173 @@
         {% block content %}{% endblock %}
     </main>
 
+    {% if current_user.is_authenticated and (current_user.id == 'admin' or current_user.id == 'admin@projectx.com') %}
+    <!-- Backup Modal -->
+    <div class="backup-modal" id="backupModal">
+        <div class="backup-modal-content">
+            <div class="backup-modal-icon">
+                <i class="fa-solid fa-database"></i>
+            </div>
+            <h2 class="backup-modal-title">Database Backup</h2>
+            <p class="backup-modal-desc">
+                Authenticate with your backup token to download the database.
+            </p>
+            <div class="backup-input-group">
+                <label for="backup-input" class="backup-input-label">Backup Token</label>
+                <div class="backup-input-wrap">
+                    <i class="fa-solid fa-key input-icon"></i>
+                    <input type="password" id="backup-input" class="backup-input"
+                        placeholder="Paste your token" autocomplete="off" spellcheck="false">
+                    <button type="button" id="backup-toggle-vis" class="backup-vis-toggle" title="Show token">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+                <div id="backup-feedback" class="backup-feedback">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span></span>
+                </div>
+            </div>
+            <div class="backup-actions">
+                <button type="button" id="backup-cancel" class="backup-btn backup-btn-ghost">Cancel</button>
+                <button type="button" id="backup-go" class="backup-btn backup-btn-primary">
+                    <i class="fa-solid fa-download"></i> Download
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+
+    <script>
+        // Admin Database Backup
+        function downloadDatabase() {
+            const modal = document.getElementById('backupModal');
+            if (!modal) return;
+            const input = document.getElementById('backup-input');
+            const fb = document.getElementById('backup-feedback');
+            const goBtn = document.getElementById('backup-go');
+
+            input.value = '';
+            input.type = 'password';
+            input.classList.remove('has-error');
+            fb.classList.remove('visible', 'error', 'success');
+            goBtn.disabled = false;
+            goBtn.innerHTML = '<i class="fa-solid fa-download"></i> Download';
+
+            const visBtn = document.getElementById('backup-toggle-vis');
+            visBtn.querySelector('i').className = 'fa-solid fa-eye';
+            visBtn.title = 'Show token';
+
+            modal.classList.add('active');
+            setTimeout(() => input.focus(), 80);
+        }
+
+        (function () {
+            const modal = document.getElementById('backupModal');
+            if (!modal) return;
+
+            const input = document.getElementById('backup-input');
+            const fb = document.getElementById('backup-feedback');
+            const fbIcon = fb.querySelector('i');
+            const fbText = fb.querySelector('span');
+            const toggleBtn = document.getElementById('backup-toggle-vis');
+            const cancelBtn = document.getElementById('backup-cancel');
+            const goBtn = document.getElementById('backup-go');
+
+            function showFeedback(text, type) {
+                fb.className = 'backup-feedback visible ' + type;
+                fbIcon.className = type === 'error'
+                    ? 'fa-solid fa-circle-exclamation'
+                    : 'fa-solid fa-circle-check';
+                fbText.textContent = text;
+                if (type === 'error') input.classList.add('has-error');
+            }
+
+            function clearFeedback() {
+                fb.classList.remove('visible', 'error', 'success');
+                input.classList.remove('has-error');
+            }
+
+            function closeModal() {
+                modal.classList.remove('active');
+            }
+
+            async function doDownload() {
+                const token = input.value.trim();
+                if (!token) {
+                    showFeedback('Please enter your backup token.', 'error');
+                    input.focus();
+                    return;
+                }
+                clearFeedback();
+
+                goBtn.disabled = true;
+                goBtn.innerHTML = '<i class="fa-solid fa-spinner"></i> Verifying\u2026';
+
+                try {
+                    const resp = await fetch(
+                        `/admin/backup-database?token=${encodeURIComponent(token)}`
+                    );
+
+                    if (!resp.ok) {
+                        const data = await resp.json().catch(() => null);
+                        const errMsg = data?.error || (resp.status === 403
+                            ? 'Invalid token. Please check and try again.'
+                            : resp.status === 503
+                                ? 'Backup is not configured on the server.'
+                                : 'Download failed. Please try again.');
+                        showFeedback(errMsg, 'error');
+                        goBtn.disabled = false;
+                        goBtn.innerHTML = '<i class="fa-solid fa-download"></i> Download';
+                        input.focus();
+                        input.select();
+                        return;
+                    }
+
+                    showFeedback('Verified! Starting download\u2026', 'success');
+                    const blob = await resp.blob();
+                    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `cricket_sim_backup_${ts}.db`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    setTimeout(closeModal, 900);
+
+                } catch {
+                    showFeedback('Network error. Is the server running?', 'error');
+                    goBtn.disabled = false;
+                    goBtn.innerHTML = '<i class="fa-solid fa-download"></i> Download';
+                }
+            }
+
+            toggleBtn.addEventListener('click', () => {
+                const hidden = input.type === 'password';
+                input.type = hidden ? 'text' : 'password';
+                toggleBtn.querySelector('i').className = hidden ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+                toggleBtn.title = hidden ? 'Hide token' : 'Show token';
+            });
+
+            cancelBtn.addEventListener('click', closeModal);
+            goBtn.addEventListener('click', doDownload);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') doDownload();
+            });
+            input.addEventListener('input', clearFeedback);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
+            });
+        })();
+    </script>
 
     <script>
         // Theme Logic
@@ -691,12 +1097,12 @@
 
     <script>
         // Auto-inject CSRF token into all fetch() POST/PUT/DELETE requests
-        (function() {
+        (function () {
             const csrfMeta = document.querySelector('meta[name="csrf-token"]');
             if (!csrfMeta) return;
             const csrfToken = csrfMeta.getAttribute('content');
             const originalFetch = window.fetch;
-            window.fetch = function(url, options) {
+            window.fetch = function (url, options) {
                 options = options || {};
                 const method = (options.method || 'GET').toUpperCase();
                 if (method !== 'GET' && method !== 'HEAD') {

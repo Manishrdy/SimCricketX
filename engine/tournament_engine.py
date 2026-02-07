@@ -1,5 +1,8 @@
 from database import db
-from database.models import Tournament, TournamentTeam, TournamentFixture, Match, Team
+from database.models import (
+    Tournament, TournamentTeam, TournamentFixture, Match, Team,
+    MatchScorecard, MatchPartnership,
+)
 from datetime import datetime
 import itertools
 import logging
@@ -666,8 +669,15 @@ class TournamentEngine:
 
         # League complete - get standings
         standings = self.get_standings(tournament.id)
-        if len(standings) < tournament.playoff_teams:
-            logger.warning(f"Not enough teams in standings for playoffs: {len(standings)}")
+        # Need at least 4 teams for playoff seeding (1v4, 2v3).
+        # If the configured playoff_teams exceeds the actual standings
+        # count, clamp down so the tournament can still progress.
+        required = min(tournament.playoff_teams, 4)
+        if len(standings) < required:
+            logger.warning(
+                f"Not enough teams in standings for playoffs: "
+                f"{len(standings)} available, {required} required"
+            )
             return False
 
         # Populate knockout fixtures based on mode
@@ -678,7 +688,7 @@ class TournamentEngine:
             self._populate_semifinal_playoffs(tournament, standings)
             tournament.current_stage = self.STAGE_SEMIFINAL_1
 
-        db.session.commit()
+        db.session.flush()
         logger.info(f"Tournament {tournament.id} progressed to {tournament.current_stage}")
         return True
 
@@ -775,7 +785,7 @@ class TournamentEngine:
                 q2.away_team_id = elim_winner
                 q2.status = 'Scheduled'
                 tournament.current_stage = self.STAGE_QUALIFIER_2
-                db.session.commit()
+                db.session.flush()
                 logger.info(f"Tournament {tournament.id} Q2 populated")
                 return True
 
@@ -814,7 +824,7 @@ class TournamentEngine:
                 final.away_team_id = q2.winner_team_id
                 final.status = 'Scheduled'
                 tournament.current_stage = self.STAGE_FINAL
-                db.session.commit()
+                db.session.flush()
                 logger.info(f"Tournament {tournament.id} Final populated")
                 return True
 
@@ -852,7 +862,7 @@ class TournamentEngine:
                 final.away_team_id = sf2.winner_team_id
                 final.status = 'Scheduled'
                 tournament.current_stage = self.STAGE_FINAL
-                db.session.commit()
+                db.session.flush()
                 logger.info(f"Tournament {tournament.id} Final populated from SFs")
                 return True
 
@@ -960,7 +970,7 @@ class TournamentEngine:
         
         if next_round_fixture:
             tournament.current_stage = next_round_fixture.stage
-            db.session.commit()
+            db.session.flush()
             logger.info(f"Tournament {tournament.id} progressed to {tournament.current_stage}")
             return True
             
@@ -968,45 +978,96 @@ class TournamentEngine:
 
     def _advance_bye_winners(self, tournament_id: int):
         """
-        Automatically advance winners of bye matches in initial knockout round.
+        Automatically advance winners of bye/phantom matches through the
+        knockout bracket.  Processes round-by-round so cascading byes
+        (e.g. two adjacent phantoms feeding the same next-round slot)
+        are resolved iteratively rather than deadlocking.
         """
-        # Find all completed matches in Round 1 (byes)
-        byes = TournamentFixture.query.filter_by(
-            tournament_id=tournament_id,
-            status='Completed',
-            round_number=1
-        ).all()
-        
-        if not byes:
-            return
-            
         tournament = db.session.get(Tournament, tournament_id)
         if not tournament:
             return
-            
+
         num_teams = len(tournament.participating_teams)
         next_power = self._next_power_of_two(num_teams)
-        next_round_start = next_power // 2
-        
-        for m in byes:
-            # bracket_position X advances to next_round_start + (X // 2)
-            next_bp = next_round_start + (m.bracket_position // 2)
-            next_fixture = TournamentFixture.query.filter_by(
-                tournament_id=tournament_id,
-                bracket_position=next_bp
-            ).first()
-            
-            if next_fixture:
-                if m.bracket_position % 2 == 0:
-                    next_fixture.home_team_id = m.winner_team_id
+
+        # Build round structure: [(start_bracket_pos, match_count), ...]
+        rounds = []
+        round_start = 0
+        matches_in_round = next_power // 2
+        while matches_in_round >= 1:
+            rounds.append((round_start, matches_in_round))
+            round_start += matches_in_round
+            matches_in_round //= 2
+
+        # Process each round except the last (final is resolved, not advanced)
+        for r_idx in range(len(rounds) - 1):
+            r_start, r_count = rounds[r_idx]
+            nr_start, _ = rounds[r_idx + 1]
+
+            # Step 1: Copy winners from completed fixtures into the next round
+            for i in range(r_count):
+                bp = r_start + i
+                fixture = TournamentFixture.query.filter_by(
+                    tournament_id=tournament_id,
+                    bracket_position=bp,
+                    status='Completed'
+                ).first()
+
+                if not fixture:
+                    continue
+
+                next_bp = nr_start + (i // 2)
+                next_fixture = TournamentFixture.query.filter_by(
+                    tournament_id=tournament_id,
+                    bracket_position=next_bp
+                ).first()
+
+                if not next_fixture or next_fixture.status not in ('Locked',):
+                    continue
+
+                if i % 2 == 0:
+                    next_fixture.home_team_id = fixture.winner_team_id
                 else:
-                    next_fixture.away_team_id = m.winner_team_id
-                
-                # If both teams are now known (or one is an advanced bye), unlock it
-                if next_fixture.home_team_id and next_fixture.away_team_id:
-                    next_fixture.status = 'Scheduled'
-        
-        db.session.commit()
+                    next_fixture.away_team_id = fixture.winner_team_id
+
+            # Step 2: Auto-resolve next-round fixtures that are byes or phantoms
+            nr_start, nr_count = rounds[r_idx + 1]
+            for i in range(nr_count):
+                bp = nr_start + i
+                nf = TournamentFixture.query.filter_by(
+                    tournament_id=tournament_id,
+                    bracket_position=bp,
+                    status='Locked'
+                ).first()
+
+                if not nf:
+                    continue
+
+                h, a = nf.home_team_id, nf.away_team_id
+
+                if h is not None and a is not None:
+                    # Both slots filled — check if they are real teams
+                    home_team = db.session.get(Team, h)
+                    away_team = db.session.get(Team, a)
+                    if (home_team and not home_team.is_placeholder and
+                            away_team and not away_team.is_placeholder):
+                        nf.status = 'Scheduled'
+                elif h is None and a is None:
+                    # Both phantom — auto-complete with no winner
+                    nf.status = 'Completed'
+                    nf.winner_team_id = None
+                    nf.stage_description = "Phantom Match"
+                else:
+                    # One real team, one None — bye, auto-advance the real team
+                    real_id = h if h is not None else a
+                    if real_id:
+                        team = db.session.get(Team, real_id)
+                        if team and not team.is_placeholder:
+                            nf.status = 'Completed'
+                            nf.winner_team_id = real_id
+                            nf.stage_description = "Bye - Advances to next round"
+
+        db.session.flush()
 
     def get_standings(self, tournament_id: int) -> list:
         """
@@ -1179,27 +1240,52 @@ class TournamentEngine:
         return True
 
     def _is_no_result(self, match) -> bool:
-        """Determine if a match is a No Result."""
+        """Determine if a match is a No Result (as opposed to a Tie)."""
         if match.winner_team_id:
             return False
 
         result_desc = (match.result_description or '').lower()
-        if 'abandoned' in result_desc or 'no result' in result_desc:
+        no_result_keywords = (
+            'abandoned', 'no result', 'washed out', 'called off',
+            'no play', 'n/r',
+        )
+        if any(kw in result_desc for kw in no_result_keywords):
             return True
 
-        home_overs = match.home_team_overs or 0
-        away_overs = match.away_team_overs or 0
-        if home_overs == 0 and away_overs == 0:
+        # Check whether any cricket was actually played.
+        # overs can be a string like '0.0' or numeric 0; normalise via overs_to_balls
+        home_balls = self.overs_to_balls(match.home_team_overs)
+        away_balls = self.overs_to_balls(match.away_team_overs)
+        if home_balls == 0 and away_balls == 0:
             return True
 
         return False
+
+    @staticmethod
+    def _get_nrr_overs(actual_overs, wickets, match):
+        """
+        Get overs for NRR calculation.
+
+        Per ICC rules, when a team is bowled all out the full quota of
+        overs is used for NRR instead of the actual overs faced.
+        """
+        if wickets is not None and wickets >= 10:
+            max_overs = getattr(match, 'overs_per_side', 20) or 20
+            return f"{max_overs}.0"
+        return actual_overs or '0.0'
 
     def _update_nrr_components(self, home_stats, away_stats, match):
         """Update Net Run Rate components for both teams."""
         home_score = match.home_team_score or 0
         away_score = match.away_team_score or 0
-        home_overs = match.home_team_overs or '0.0'
-        away_overs = match.away_team_overs or '0.0'
+
+        # ICC NRR rule: use max overs when a team is all out
+        home_overs = self._get_nrr_overs(
+            match.home_team_overs, match.home_team_wickets, match
+        )
+        away_overs = self._get_nrr_overs(
+            match.away_team_overs, match.away_team_wickets, match
+        )
 
         # Home Batting / Away Bowling
         home_stats.runs_scored += home_score
@@ -1340,12 +1426,40 @@ class TournamentEngine:
         logger.info(f"Reversed standings for match {match.id}")
         return True
 
+    def _cleanup_fixture_match_data(self, fixture):
+        """
+        Delete the DBMatch, scorecards, partnerships, and reverse player
+        career stats for a fixture that is being reset.
+
+        Must be called BEFORE the fixture's match_id is cleared.
+        """
+        if not fixture.match_id:
+            return
+
+        match_id = fixture.match_id
+        db_match = db.session.get(Match, match_id)
+        if not db_match:
+            return
+
+        # Lazy import to avoid circular dependency
+        from match_archiver import reverse_player_aggregates
+
+        scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
+        if scorecards:
+            reverse_player_aggregates(scorecards, logger=logger)
+
+        MatchPartnership.query.filter_by(match_id=match_id).delete(synchronize_session=False)
+        MatchScorecard.query.filter_by(match_id=match_id).delete(synchronize_session=False)
+        db.session.delete(db_match)
+        logger.info(f"Cleaned up match data for fixture {fixture.id} (match {match_id})")
+
     def _reset_knockout_bracket(self, tournament_id: int, from_bracket_position: int):
         """
         Reset downstream knockout fixtures when a completed fixture is re-simulated.
 
         Only resets fixtures that are actual descendants in the bracket tree,
         not unrelated branches at higher bracket positions.
+        Also cleans up any associated match/scorecard/career data.
         """
         tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
         descendant_positions = self._get_downstream_positions(tournament_id, from_bracket_position)
@@ -1359,6 +1473,7 @@ class TournamentEngine:
         ).all()
 
         for fixture in downstream:
+            self._cleanup_fixture_match_data(fixture)
             fixture.home_team_id = tbd_id
             fixture.away_team_id = tbd_id
             fixture.winner_team_id = None
@@ -1432,6 +1547,7 @@ class TournamentEngine:
 
         This clears qualified teams, winners, match links, and locks fixtures
         so playoffs are re-seeded after the league finishes again.
+        Also cleans up any associated match/scorecard/career data.
         """
         tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
         fixtures = TournamentFixture.query.filter(
@@ -1440,6 +1556,7 @@ class TournamentEngine:
         ).all()
 
         for fixture in fixtures:
+            self._cleanup_fixture_match_data(fixture)
             fixture.home_team_id = tbd_id
             fixture.away_team_id = tbd_id
             fixture.winner_team_id = None
@@ -1450,19 +1567,23 @@ class TournamentEngine:
     def _get_placeholder_team_id(self, tournament_id: int, label: str) -> int:
         """
         Ensure a per-user placeholder team (BYE/TBD) exists and return its ID.
+        Filters on ``is_placeholder=True`` so a real team that happens to be
+        named "BYE" or "TBD" is never mistakenly reused.
         """
         tournament = db.session.get(Tournament, tournament_id)
         if not tournament:
             raise ValueError(f"Tournament {tournament_id} not found.")
 
-        placeholder = Team.query.filter_by(user_id=tournament.user_id, name=label).first()
+        placeholder = Team.query.filter_by(
+            user_id=tournament.user_id, name=label, is_placeholder=True
+        ).first()
         if placeholder:
             return placeholder.id
 
         placeholder = Team(
             user_id=tournament.user_id,
             name=label,
-            short_code=label,
+            short_code=f"__{label}__",
             is_placeholder=True
         )
         db.session.add(placeholder)
@@ -1473,8 +1594,14 @@ class TournamentEngine:
         """Reverse the NRR component updates from a match."""
         home_score = match.home_team_score or 0
         away_score = match.away_team_score or 0
-        home_overs = match.home_team_overs or '0.0'
-        away_overs = match.away_team_overs or '0.0'
+
+        # Must use the same adjusted overs that were used when adding
+        home_overs = self._get_nrr_overs(
+            match.home_team_overs, match.home_team_wickets, match
+        )
+        away_overs = self._get_nrr_overs(
+            match.away_team_overs, match.away_team_wickets, match
+        )
 
         home_stats.runs_scored = max(0, (home_stats.runs_scored or 0) - home_score)
         home_stats.overs_faced = self._subtract_overs(home_stats.overs_faced, home_overs)
