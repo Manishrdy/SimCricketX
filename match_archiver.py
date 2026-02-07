@@ -44,6 +44,94 @@ class MatchArchiverError(Exception):
     pass
 
 
+def reverse_player_aggregates(scorecards, logger=None):
+    """
+    Reverse player aggregate (career) stats from old scorecards.
+
+    This must be called BEFORE the scorecards are deleted from the DB,
+    otherwise the old stats are lost and career totals become inflated
+    on every re-simulation.
+
+    Args:
+        scorecards: List of MatchScorecard objects to reverse
+        logger: Optional logger instance
+    """
+    if not scorecards:
+        return
+
+    updated_players = set()
+
+    for card in scorecards:
+        player = DBPlayer.query.get(card.player_id)
+        if not player:
+            continue
+
+        # Decrement matches_played only once per player
+        if card.player_id not in updated_players:
+            player.matches_played = max(0, player.matches_played - 1)
+            updated_players.add(card.player_id)
+
+        # Reverse batting stats
+        if card.record_type == "batting":
+            player.total_runs = max(0, player.total_runs - (card.runs or 0))
+            player.total_balls_faced = max(0, player.total_balls_faced - (card.balls or 0))
+            player.total_fours = max(0, player.total_fours - (card.fours or 0))
+            player.total_sixes = max(0, player.total_sixes - (card.sixes or 0))
+
+            if card.runs and card.runs >= 50 and card.runs < 100:
+                player.total_fifties = max(0, player.total_fifties - 1)
+            elif card.runs and card.runs >= 100:
+                player.total_centuries = max(0, player.total_centuries - 1)
+
+            if not card.is_out and card.balls and card.balls > 0:
+                player.not_outs = max(0, player.not_outs - 1)
+
+        # Reverse bowling stats
+        if card.record_type == "bowling":
+            player.total_wickets = max(0, player.total_wickets - (card.wickets or 0))
+            player.total_balls_bowled = max(0, player.total_balls_bowled - (card.balls_bowled or 0))
+            player.total_runs_conceded = max(0, player.total_runs_conceded - (card.runs_conceded or 0))
+            player.total_maidens = max(0, player.total_maidens - (card.maidens or 0))
+
+            if card.wickets and card.wickets >= 5:
+                player.five_wicket_hauls = max(0, player.five_wicket_hauls - 1)
+
+    # Recalculate high water mark stats from remaining scorecards.
+    # These cannot be simply decremented — we must scan what's left.
+    match_id = scorecards[0].match_id if scorecards else None
+    if match_id:
+        for player_id in updated_players:
+            player = DBPlayer.query.get(player_id)
+            if not player:
+                continue
+
+            remaining_batting = MatchScorecard.query.filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "batting",
+                MatchScorecard.match_id != match_id,
+            ).all()
+            if remaining_batting:
+                player.highest_score = max(c.runs or 0 for c in remaining_batting)
+            else:
+                player.highest_score = 0
+
+            remaining_bowling = MatchScorecard.query.filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "bowling",
+                MatchScorecard.match_id != match_id,
+            ).all()
+            if remaining_bowling:
+                best = max(remaining_bowling, key=lambda c: (c.wickets or 0, -(c.runs_conceded or 0)))
+                player.best_bowling_wickets = best.wickets or 0
+                player.best_bowling_runs = best.runs_conceded or 0
+            else:
+                player.best_bowling_wickets = 0
+                player.best_bowling_runs = 0
+
+    if logger:
+        logger.info(f"Reversed aggregate stats for {len(updated_players)} players")
+
+
 class MatchArchiver:
     """
     Production-level cricket match archiver with comprehensive error handling,
@@ -547,27 +635,16 @@ class MatchArchiver:
                 db_match.home_team_overs = calc_overs(self.match.second_innings_batting_stats)
                 home_batting_stats = self.match.second_innings_batting_stats
 
-            db.session.flush() 
-            
-            # 3. Update Tournament Fixture & Standings
-            # Ensure tournament_id is set
+            db.session.flush()
+
+            # 3. Ensure tournament_id is set (standings update is handled
+            #    by the tournament completion handler in app.py to avoid
+            #    double-application)
             if self.match_data.get('tournament_id'):
                 tournament_id = self.match_data.get('tournament_id')
                 tournament = db.session.get(Tournament, tournament_id)
                 if tournament and tournament.user_id == db_match.user_id:
                     db_match.tournament_id = tournament_id
-                    from engine.tournament_engine import TournamentEngine
-                    engine = TournamentEngine()
-                    try:
-                        engine.update_standings(db_match)
-                        self.logger.info(f"Updated tournament standings for match {self.match_id}")
-                    except Exception as te:
-                        self.logger.error(f"Failed to update tournament standings: {te}")
-                else:
-                    self.logger.warning(
-                        "Skipped tournament standings update for match %s due to ownership mismatch",
-                        self.match_id
-                    )
 
             # 4. Save Scorecards
             def save_stats(stats_dict, team_id, innings_number, record_type, batting_stats=None):
@@ -754,59 +831,8 @@ class MatchArchiver:
              db.session.add(mp)
 
     def _reverse_player_aggregates(self, scorecards: List[MatchScorecard]) -> None:
-        """
-        Reverse player aggregate stats from old scorecards before re-simulation.
-        
-        Bug Fix B4: When re-simulating, we must reverse the old stats before they're deleted,
-        otherwise the new stats will be added on top of the old stats, causing inflation.
-        
-        Args:
-            scorecards: List of MatchScorecard objects to reverse
-        """
-        if not scorecards:
-            return
-        
-        updated_players = set()
-        
-        for card in scorecards:
-            player = DBPlayer.query.get(card.player_id)
-            if not player:
-                continue
-            
-            # Decrement matches_played only once per player
-            if card.player_id not in updated_players:
-                player.matches_played = max(0, player.matches_played - 1)
-                updated_players.add(card.player_id)
-            
-            # Reverse batting stats
-            if card.record_type == "batting":
-                player.total_runs = max(0, player.total_runs - (card.runs or 0))
-                player.total_balls_faced = max(0, player.total_balls_faced - (card.balls or 0))
-                player.total_fours = max(0, player.total_fours - (card.fours or 0))
-                player.total_sixes = max(0, player.total_sixes - (card.sixes or 0))
-                
-                # Reverse fifties/centuries
-                if card.runs and card.runs >= 50 and card.runs < 100:
-                    player.total_fifties = max(0, player.total_fifties - 1)
-                elif card.runs and card.runs >= 100:
-                    player.total_centuries = max(0, player.total_centuries - 1)
-                
-                # Reverse not outs
-                if not card.is_out and card.balls and card.balls > 0:
-                    player.not_outs = max(0, player.not_outs - 1)
-            
-            # Reverse bowling stats
-            if card.record_type == "bowling":
-                player.total_wickets = max(0, player.total_wickets - (card.wickets or 0))
-                player.total_balls_bowled = max(0, player.total_balls_bowled - (card.balls_bowled or 0))
-                player.total_runs_conceded = max(0, player.total_runs_conceded - (card.runs_conceded or 0))
-                player.total_maidens = max(0, player.total_maidens - (card.maidens or 0))
-                
-                # Reverse five wicket hauls
-                if card.wickets and card.wickets >= 5:
-                    player.five_wicket_hauls = max(0, player.five_wicket_hauls - 1)
-        
-        self.logger.info(f"Reversed aggregate stats for {len(updated_players)} players during re-simulation")
+        """Delegate to module-level function (kept for backwards compatibility)."""
+        reverse_player_aggregates(scorecards, logger=self.logger)
 
     def _copy_json_file(self, original_path: str) -> None:
         """Copy original JSON file to archive with validation"""

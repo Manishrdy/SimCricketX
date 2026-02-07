@@ -726,6 +726,7 @@
     let TEAMS = [];
     let currentStep = 1;
     let selectedTeamIndices = [];
+    const LINEUP_STORAGE_VERSION = 1;
     const _setupConfig = JSON.parse(document.getElementById('setup-config').textContent);
     const tournamentId = _setupConfig.tournamentId;
     const fixtureId = _setupConfig.fixtureId;
@@ -910,15 +911,52 @@
         subContainer.innerHTML = '';
         resContainer.innerHTML = '';
 
-        team.players.forEach((p, idx) => {
-            // Logic: First 11 to XI, next 5 to Bench, rest to Reserve
-            let parent = resContainer;
-            if (idx < 11) parent = xiContainer;
-            else if (idx < 16) parent = subContainer;
+        const savedLineup = loadSavedLineup(team);
+        if (savedLineup) {
+            const validation = validateSavedLineup(savedLineup, team);
+            if (validation.valid) {
+                const savedXiNames = savedLineup.xi.map(p => p.name);
+                const savedSubsNames = (savedLineup.subs || []).map(p => p.name);
+                const assigned = new Set([...savedXiNames, ...savedSubsNames]);
 
-            const el = createPlayerPill(p, side);
-            parent.appendChild(el);
-        });
+                savedLineup.xi.forEach(savedPlayer => {
+                    const fullPlayer = team.players.find(p => p.name === savedPlayer.name);
+                    if (!fullPlayer) return;
+                    const el = createPlayerPill(fullPlayer, side, savedPlayer.will_bowl);
+                    xiContainer.appendChild(el);
+                });
+
+                (savedLineup.subs || []).forEach(savedPlayer => {
+                    const fullPlayer = team.players.find(p => p.name === savedPlayer.name);
+                    if (!fullPlayer) return;
+                    const el = createPlayerPill(fullPlayer, side, savedPlayer.will_bowl);
+                    subContainer.appendChild(el);
+                });
+
+                team.players
+                    .filter(p => !assigned.has(p.name))
+                    .forEach(p => {
+                        const el = createPlayerPill(p, side);
+                        resContainer.appendChild(el);
+                    });
+
+                Toast.show(`Loaded previous lineup for ${team.team_name}.`, "success");
+            } else {
+                // Saved lineup exists but no longer matches the current squad; require manual selection.
+                team.players.forEach(p => {
+                    const el = createPlayerPill(p, side);
+                    resContainer.appendChild(el);
+                });
+                Toast.show(`Previous lineup for ${team.team_name} is invalid (${validation.reason}). Select lineup manually.`, "warning");
+            }
+        } else {
+            // No previous lineup available; require manual selection.
+            team.players.forEach(p => {
+                const el = createPlayerPill(p, side);
+                resContainer.appendChild(el);
+            });
+            Toast.show(`No previous lineup for ${team.team_name}. Select lineup manually.`, "info");
+        }
 
         // Update counts
         updateCounts(side);
@@ -947,7 +985,7 @@
         });
     }
 
-    function createPlayerPill(player, side) {
+    function createPlayerPill(player, side, willBowl = null) {
         const div = document.createElement('div');
         div.className = 'player-pill';
         div.draggable = true;
@@ -964,7 +1002,7 @@
         const isBowler = ['Bowler', 'All-rounder'].includes(player.role);
         const bowlCheck = isBowler ?
             `<label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-size:0.75rem;">
-        <input type="checkbox" class="bowl-check" checked aria-label="Include ${player.name} as bowler"> Bowl
+        <input type="checkbox" class="bowl-check" ${willBowl === false ? '' : 'checked'} aria-label="Include ${player.name} as bowler"> Bowl
     </label>` : '';
 
         div.innerHTML = `
@@ -992,6 +1030,64 @@
         };
 
         return div;
+    }
+
+    function getLineupStorageKey(team) {
+        const userKey = team.created_by_email || 'anon';
+        return `simcx:last_xi:${userKey}:${team.id}`;
+    }
+
+    function loadSavedLineup(team) {
+        try {
+            const raw = localStorage.getItem(getLineupStorageKey(team));
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || parsed.schema_version !== LINEUP_STORAGE_VERSION) return null;
+            return parsed;
+        } catch (err) {
+            console.error("Failed to load saved lineup", err);
+            return null;
+        }
+    }
+
+    function saveLineup(team, xiPlayers, subPlayers) {
+        try {
+            const payload = {
+                schema_version: LINEUP_STORAGE_VERSION,
+                saved_at: new Date().toISOString(),
+                xi: xiPlayers.map(p => ({ name: p.name, will_bowl: !!p.will_bowl })),
+                subs: subPlayers.map(p => ({ name: p.name, will_bowl: !!p.will_bowl }))
+            };
+            localStorage.setItem(getLineupStorageKey(team), JSON.stringify(payload));
+        } catch (err) {
+            console.error("Failed to save lineup", err);
+        }
+    }
+
+    function validateSavedLineup(saved, team) {
+        const squadNames = new Set(team.players.map(p => p.name));
+        const playerByName = new Map(team.players.map(p => [p.name, p]));
+        const xi = Array.isArray(saved.xi) ? saved.xi : [];
+        const subs = Array.isArray(saved.subs) ? saved.subs : [];
+
+        if (xi.length !== 11) return { valid: false, reason: 'XI must contain 11 players' };
+
+        const allNames = [...xi.map(p => p.name), ...subs.map(p => p.name)];
+        const uniqueCount = new Set(allNames).size;
+        if (uniqueCount !== allNames.length) return { valid: false, reason: 'Duplicate players in saved lineup' };
+
+        if (!allNames.every(name => squadNames.has(name))) {
+            return { valid: false, reason: 'Saved players not found in current squad' };
+        }
+
+        const xiTeamPlayers = xi.map(p => playerByName.get(p.name)).filter(Boolean);
+        const hasKeeper = xiTeamPlayers.some(p => p.role === 'Wicketkeeper');
+        if (!hasKeeper) return { valid: false, reason: 'No wicketkeeper in saved XI' };
+
+        const bowlers = xi.reduce((count, p) => count + (p.will_bowl ? 1 : 0), 0);
+        if (bowlers < 5) return { valid: false, reason: 'Need at least 5 selected bowlers' };
+
+        return { valid: true };
     }
 
     function cyclePlayerZone(pill, side) {
@@ -1144,6 +1240,10 @@
             });
 
             if (res.ok) {
+                // Save current selections to browser storage for next match defaults.
+                saveLineup(h, payload.playing_xi.home, payload.substitutes.home);
+                saveLineup(a, payload.playing_xi.away, payload.substitutes.away);
+
                 const data = await res.json();
                 window.location.href = `/match/${data.match_id}`;
             } else {

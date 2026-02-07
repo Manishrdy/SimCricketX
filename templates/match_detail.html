@@ -76,6 +76,9 @@
             <button class="pace-btn" data-pace="1000">1x</button>
             <button class="pace-btn" data-pace="300">3x</button>
             <button class="pace-btn" data-pace="50">MAX</button>
+            <button class="pace-btn" id="save-dashboard-btn" title="Save Match Center image">
+                <i class="fa fa-download"></i> Save Center
+            </button>
 
             <div class="view-toggle-wrapper">
                 <span class="toggle-label" id="label-commentary">Commentary</span>
@@ -108,11 +111,15 @@
         <!-- Match Center Dashboard (toggle view) — viewport-locked, no scroll -->
         <div class="dashboard-container" id="dashboard-container" style="display:none;">
             <!-- Row 1: Wagon Wheel | Players + Win Prob -->
-            <div class="dash-panel ground-panel">
+            <div class="dash-panel ground-panel" id="wagon-panel">
+                <div class="panel-badge-row">
+                    <span class="innings-badge" id="wagon-view-label">Innings 2</span>
+                    <button class="innings-flip-btn" id="wagon-flip-btn" title="Flip wagon innings view">Flip</button>
+                </div>
                 <div class="panel-header">Wagon Wheel</div>
                 <svg id="wagon-wheel-svg" viewBox="0 0 300 300"></svg>
             </div>
-            <div class="dash-panel players-panel">
+            <div class="dash-panel players-panel" id="players-panel">
                 <div class="panel-header">At the Crease</div>
                 <div id="striker-card" class="player-card striker"></div>
                 <div id="non-striker-card" class="player-card"></div>
@@ -130,11 +137,17 @@
             </div>
 
             <!-- Row 3: Manhattan | Worm -->
-            <div class="dash-panel chart-panel">
+            <div class="dash-panel chart-panel" id="manhattan-panel">
+                <div class="panel-badge-row">
+                    <span class="innings-badge">White ball = wicket</span>
+                </div>
                 <div class="panel-header">Manhattan</div>
                 <canvas id="manhattan-chart"></canvas>
             </div>
-            <div class="dash-panel chart-panel">
+            <div class="dash-panel chart-panel" id="worm-panel">
+                <div class="panel-badge-row">
+                    <span class="innings-badge">White ball = wicket</span>
+                </div>
                 <div class="panel-header">Run Chase</div>
                 <canvas id="worm-chart"></canvas>
             </div>
@@ -160,10 +173,11 @@
                 box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
                 display: flex;
                 flex-direction: column;
-                flex: 1;
+                flex: 1 1 auto;
                 min-height: 0;
                 height: 100%;
-                margin-top: 1.5rem;
+                max-height: 100%;
+                margin-top: 0;
                 font-family: 'JetBrains Mono', 'Fira Code', monospace;
             }
 
@@ -231,13 +245,15 @@
             }
 
             .commentary-box {
-                flex-grow: 1;
+                flex: 1 1 auto;
                 padding: 1rem;
                 overflow-y: auto;
                 color: #d4d4d4;
                 font-size: 0.9rem;
                 line-height: 1.6;
+                min-height: 0;
                 height: 100%;
+                max-height: 100%;
             }
 
             /* Syntax Highlighting Vibe */
