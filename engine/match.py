@@ -2806,6 +2806,15 @@ class Match:
         ball_number = f"{self.current_over}.{self.current_ball + 1}"
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
 
+        # Dashboard: save pre-processing context for ball_data
+        _bd_striker = self.current_striker["name"]
+        _bd_non_striker = self.current_non_striker["name"]
+        _bd_bowler = self.current_bowler["name"] if self.current_bowler else ""
+        _bd_over = self.current_over
+        _bd_ball = self.current_ball
+        _bd_score_before = self.score
+        _bd_was_free_hit = self.free_hit_active
+
         # 🔧 NOW ADD WICKET TRACKING HERE (after wicket is defined)
         if wicket:
             # Update recent wickets tracking
@@ -3288,7 +3297,27 @@ class Match:
                     "final_score": self.score,
                     "wickets": self.wickets,
                     "result": self.result,
-                    "commentary": final_commentary
+                    "commentary": final_commentary,
+                    "ball_data": {
+                        "runs": self.score - _bd_score_before,
+                        "batter_out": wicket,
+                        "is_extra": extra,
+                        "extra_type": outcome.get("extra_type") if extra else None,
+                        "wicket_type": outcome.get("wicket_type") if wicket else None,
+                        "description": outcome.get("description", ""),
+                        "free_hit": _bd_was_free_hit,
+                        "over": _bd_over,
+                        "ball": _bd_ball,
+                        "striker": _bd_striker,
+                        "non_striker": _bd_non_striker,
+                        "bowler": _bd_bowler,
+                        "innings": self.innings,
+                        "score": self.score,
+                        "wickets": self.wickets,
+                        "target": getattr(self, 'target', None),
+                        "partnership_runs": self.current_partnership_runs,
+                        "partnership_balls": self.current_partnership_balls,
+                    }
                 }
 
         if not extra and not wicket:
@@ -3376,7 +3405,27 @@ class Match:
             "commentary": "<br>".join(all_commentary),
             "striker": self.current_striker["name"],
             "non_striker": self.current_non_striker["name"],
-            "bowler": self.current_bowler["name"] if self.current_bowler else ""
+            "bowler": self.current_bowler["name"] if self.current_bowler else "",
+            "ball_data": {
+                "runs": self.score - _bd_score_before,
+                "batter_out": wicket,
+                "is_extra": extra,
+                "extra_type": outcome.get("extra_type") if extra else None,
+                "wicket_type": outcome.get("wicket_type") if wicket else None,
+                "description": outcome.get("description", ""),
+                "free_hit": _bd_was_free_hit,
+                "over": _bd_over,
+                "ball": _bd_ball,
+                "striker": _bd_striker,
+                "non_striker": _bd_non_striker,
+                "bowler": _bd_bowler,
+                "innings": self.innings,
+                "score": self.score,
+                "wickets": self.wickets,
+                "target": getattr(self, 'target', None),
+                "partnership_runs": self.current_partnership_runs,
+                "partnership_balls": self.current_partnership_balls,
+            }
         }
 
     def _generate_detailed_scorecard(self):

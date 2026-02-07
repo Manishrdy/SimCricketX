@@ -26,6 +26,13 @@ let archiveSaved = false; // F7: guard against double archive saves
 // Global variable to store first innings scorecard image
 let firstInningsImageBlob = null;
 
+// Dashboard data stores
+let ballHistory = [];          // Array of ball_data objects for current innings
+let overRuns = [];             // Runs per completed over [8, 12, 5, ...]
+let currentOverBalls = [];     // Balls in the current over (for timeline)
+let innings1Data = null;       // Saved {ballHistory, overRuns} from 1st innings for worm overlay
+let dashboardActive = false;   // Which view is showing
+
 // C1: HTML escaping utility to prevent XSS via innerHTML
 function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -38,6 +45,20 @@ function escapeHtml(str) {
 }
 
 
+// Dashboard: track over completions for Manhattan chart
+function updateCurrentOverBalls(bd) {
+    currentOverBalls.push(bd);
+    if (ballHistory.length >= 2) {
+        const prev = ballHistory[ballHistory.length - 2];
+        if (bd.over > prev.over) {
+            // Previous over completed — sum its runs
+            const prevOverBalls = ballHistory.filter(b => b.over === prev.over);
+            overRuns[prev.over] = prevOverBalls.reduce((sum, b) => sum + b.runs, 0);
+            currentOverBalls = [bd];
+        }
+    }
+}
+
 // --- Initialization ---
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -49,6 +70,22 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.classList.add('active');
         };
     });
+
+    // View toggle (Commentary / Match Center)
+    const viewToggle = document.getElementById('view-toggle');
+    if (viewToggle) {
+        viewToggle.addEventListener('change', () => {
+            dashboardActive = viewToggle.checked;
+            document.querySelector('.code-window').style.display = dashboardActive ? 'none' : 'flex';
+            document.getElementById('dashboard-container').style.display = dashboardActive ? 'grid' : 'none';
+            // Update toggle label styling
+            document.getElementById('label-commentary').classList.toggle('active-label', !dashboardActive);
+            document.getElementById('label-matchcenter').classList.toggle('active-label', dashboardActive);
+            if (dashboardActive && typeof refreshDashboard === 'function') {
+                refreshDashboard(ballHistory, overRuns, innings1Data);
+            }
+        });
+    }
 
     // Spin Toss Button
     const spinBtn = document.getElementById('spin-toss');
@@ -483,13 +520,6 @@ function appendLog(message, type = 'normal') {
     `;
 
     logContainer.appendChild(div);
-
-    // Auto-scroll logic
-    requestAnimationFrame(() => {
-        div.scrollIntoView({ behavior: "smooth", block: "end" });
-        // Backup: force ScrollTop as well for some browsers
-        logContainer.scrollTop = logContainer.scrollHeight;
-    });
 }
 
 function spinTossAndStartMatch() {
@@ -542,8 +572,26 @@ function startMatch() {
                 overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
             }
 
+            // Dashboard: process ball_data for every ball (runs in background regardless of view)
+            if (data.ball_data) {
+                ballHistory.push(data.ball_data);
+                updateCurrentOverBalls(data.ball_data);
+                if (typeof updateDashboard === 'function') {
+                    updateDashboard(data.ball_data, ballHistory, overRuns);
+                }
+            }
+
             // End of First Innings
             if (data.innings_end && data.innings_number === 1) {
+                // Dashboard: save 1st innings data and reset for 2nd
+                innings1Data = { ballHistory: [...ballHistory], overRuns: [...overRuns] };
+                ballHistory = [];
+                overRuns = [];
+                currentOverBalls = [];
+                if (typeof resetDashboardForNewInnings === 'function') {
+                    resetDashboardForNewInnings();
+                }
+
                 if (data.commentary) appendLog(data.commentary, 'comment');
 
                 if (data.scorecard_data) {
@@ -624,7 +672,6 @@ function startMatch() {
                                     </span>
                                 `;
                                 logContainer.appendChild(div);
-                                logContainer.scrollTop = logContainer.scrollHeight;
                             }, 500);
                         };
                     }, 1500);
@@ -863,7 +910,6 @@ function startSuperOver(firstBattingTeam) {
                 </button>
             </div>
         `);
-            commentaryLog.scrollTop = commentaryLog.scrollHeight;
         });
 }
 window.startSuperOver = startSuperOver; // Expose
@@ -883,7 +929,6 @@ function startSuperOverSimulation() {
             }
 
             commentaryLog.insertAdjacentHTML('beforeend', `<p>${escapeHtml(data.commentary)}</p>`);
-            commentaryLog.scrollTop = commentaryLog.scrollHeight;
 
             scoreElem.textContent = `Super Over: ${data.score}/${data.wickets}`;
             overElem.textContent = `Ball: ${data.ball}/6`;
