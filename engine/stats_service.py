@@ -806,6 +806,7 @@ class StatsService:
                 db.session.query(MatchScorecard, Match)
                 .join(Match, MatchScorecard.match_id == Match.id)
                 .filter(MatchScorecard.player_id == player_id)
+                .filter(Match.user_id == user_id)  # Ensure we only get current user's matches
             )
             
             if tournament_id:

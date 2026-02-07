@@ -1398,7 +1398,8 @@
     {% else %}
 
     <!-- Leaderboards -->
-    {% if leaderboards and (leaderboards.most_runs or leaderboards.most_wickets or leaderboards.best_bowling_figures or leaderboards.highest_sr or
+    {% if leaderboards and (leaderboards.most_runs or leaderboards.most_wickets or leaderboards.best_bowling_figures or
+    leaderboards.highest_sr or
     leaderboards.best_average) %}
     <section class="leaderboard-section">
         <div class="section-header">
@@ -1475,7 +1476,8 @@
                             <span class="rank-badge">{{ loop.index }}</span>
                             <div class="player-details">
                                 <span class="player-name">{{ fig.player }}</span>
-                                <span class="player-team">{{ fig.team }} · vs {{ fig.opponent }} · {{ fig.match_date }}</span>
+                                <span class="player-team">{{ fig.team }} · vs {{ fig.opponent }} · {{ fig.match_date
+                                    }}</span>
                             </div>
                         </div>
                         <span class="stat-value">{{ fig.figures }}</span>
@@ -1492,6 +1494,9 @@
                         <i class="fa-solid fa-bolt"></i>
                     </div>
                     <h3 class="leaderboard-title">Highest Strike Rates</h3>
+                    <span class="leaderboard-subtitle"
+                        style="font-size: 0.75rem; color: var(--fg-secondary); margin-top: 0.25rem;">Min 50 balls
+                        faced</span>
                 </div>
                 <ul class="leaderboard-list">
                     {% for p in leaderboards.highest_sr %}
@@ -1538,7 +1543,8 @@
     </section>
     {% endif %}
 
-    {% if insights and (insights.impact or insights.form.batting or insights.form.bowling or insights.conditions.venues or insights.conditions.pitches) %}
+    {% if insights and (insights.impact or insights.form.batting or insights.form.bowling or insights.conditions.venues
+    or insights.conditions.pitches) %}
     <section class="leaderboard-section" id="insights-section">
         <div class="section-header">
             <h2 class="section-title">
@@ -1567,7 +1573,9 @@
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="no-data-message"><i class="fas fa-chart-pie"></i><p>No impact data yet</p></div>
+                <div class="no-data-message"><i class="fas fa-chart-pie"></i>
+                    <p>No impact data yet</p>
+                </div>
                 {% endif %}
             </div>
 
@@ -1580,37 +1588,45 @@
                 <div class="form-group">
                     <div class="form-title"><i class="fas fa-cricket-bat"></i> Batting Form</div>
                     {% if insights.form.batting %}
-                        {% for p in insights.form.batting %}
-                        <div class="form-row">
-                            <div class="insight-player">
-                                <span class="player-name">{{ p.player }}</span>
-                                <span class="player-team">{{ p.team }}</span>
-                            </div>
-                            <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 110 36" preserveAspectRatio="none"></svg>
+                    {% for p in insights.form.batting %}
+                    <div class="form-row">
+                        <div class="insight-player">
+                            <span class="player-name">{{ p.player }}</span>
+                            <span class="player-team">{{ p.team }}</span>
                         </div>
-                        {% endfor %}
+                        <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 110 36"
+                            preserveAspectRatio="none"></svg>
+                    </div>
+                    {% endfor %}
                     {% else %}
-                        <div class="no-data-message"><p>No batting form yet</p></div>
+                    <div class="no-data-message">
+                        <p>No batting form yet</p>
+                    </div>
                     {% endif %}
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                     <div class="form-title"><i class="fas fa-bowling-ball"></i> Bowling Form</div>
                     {% if insights.form.bowling %}
-                        {% for p in insights.form.bowling %}
-                        <div class="form-row">
-                            <div class="insight-player">
-                                <span class="player-name">{{ p.player }}</span>
-                                <span class="player-team">{{ p.team }}</span>
-                            </div>
-                            <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 110 36" preserveAspectRatio="none"></svg>
+                    {% for p in insights.form.bowling %}
+                    <div class="form-row">
+                        <div class="insight-player">
+                            <span class="player-name">{{ p.player }}</span>
+                            <span class="player-team">{{ p.team }}</span>
                         </div>
-                        {% endfor %}
+                        <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 110 36"
+                            preserveAspectRatio="none"></svg>
+                    </div>
+                    {% endfor %}
                     {% else %}
-                        <div class="no-data-message"><p>No bowling form yet</p></div>
+                    <div class="no-data-message">
+                        <p>No bowling form yet</p>
+                    </div>
                     {% endif %}
                 </div>
                 {% else %}
-                <div class="no-data-message"><i class="fas fa-chart-line"></i><p>No form data yet</p></div>
+                <div class="no-data-message"><i class="fas fa-chart-line"></i>
+                    <p>No form data yet</p>
+                </div>
                 {% endif %}
             </div>
 
@@ -1623,35 +1639,39 @@
                     <div>
                         <div class="conditions-title">Venues (Avg Runs)</div>
                         {% if insights.conditions.venues %}
-                            {% for v in insights.conditions.venues %}
-                            <div class="condition-row">
-                                <div>
-                                    <div class="player-name">{{ v.label }}</div>
-                                    <div class="condition-meta">{{ v.matches }} matches</div>
-                                </div>
-                                <div class="venue-ring" data-value="{{ v.avg_runs }}"><span>{{ v.avg_runs }}</span></div>
+                        {% for v in insights.conditions.venues %}
+                        <div class="condition-row">
+                            <div>
+                                <div class="player-name">{{ v.label }}</div>
+                                <div class="condition-meta">{{ v.matches }} matches</div>
                             </div>
-                            {% endfor %}
+                            <div class="venue-ring" data-value="{{ v.avg_runs }}"><span>{{ v.avg_runs }}</span></div>
+                        </div>
+                        {% endfor %}
                         {% else %}
-                            <div class="no-data-message"><p>No venue data yet</p></div>
+                        <div class="no-data-message">
+                            <p>No venue data yet</p>
+                        </div>
                         {% endif %}
                     </div>
                     <div>
                         <div class="conditions-title">Pitches (Avg Runs)</div>
                         {% if insights.conditions.pitches %}
-                            {% for p in insights.conditions.pitches %}
-                            <div style="margin-bottom: 0.75rem;">
-                                <div style="display:flex; justify-content:space-between; margin-bottom:0.4rem;">
-                                    <span class="player-name">{{ p.label }}</span>
-                                    <span class="condition-meta">{{ p.avg_runs }} runs</span>
-                                </div>
-                                <div class="pitch-bar">
-                                    <div class="pitch-bar-fill" data-value="{{ p.avg_runs }}"></div>
-                                </div>
+                        {% for p in insights.conditions.pitches %}
+                        <div style="margin-bottom: 0.75rem;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:0.4rem;">
+                                <span class="player-name">{{ p.label }}</span>
+                                <span class="condition-meta">{{ p.avg_runs }} runs</span>
                             </div>
-                            {% endfor %}
+                            <div class="pitch-bar">
+                                <div class="pitch-bar-fill" data-value="{{ p.avg_runs }}"></div>
+                            </div>
+                        </div>
+                        {% endfor %}
                         {% else %}
-                            <div class="no-data-message"><p>No pitch data yet</p></div>
+                        <div class="no-data-message">
+                            <p>No pitch data yet</p>
+                        </div>
                         {% endif %}
                     </div>
                 </div>

@@ -212,6 +212,19 @@ def load_match_metadata(match_id):
     Return the parsed dict if found, else None.
     """
     matches_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+
+    # D1: O(1) direct lookup first
+    direct_path = os.path.join(matches_dir, f"match_{match_id}.json")
+    if os.path.isfile(direct_path):
+        try:
+            with open(direct_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    # Fallback: O(N) scan for legacy files
+    if not os.path.isdir(matches_dir):
+        return None
     for fn in os.listdir(matches_dir):
         if not fn.lower().endswith(".json"):
             continue
@@ -232,26 +245,46 @@ def load_app_config():
         return yaml.safe_load(f)
 
 def cleanup_old_match_instances(app):
-    """Clean up old match instances from memory to prevent memory leaks"""
+    """Clean up old match instances from memory and orphaned JSON files"""
     try:
         current_time = time.time()
-        cutoff_time = current_time - (7 * 24 * 3600)  # 24 hours ago
-        
-        with MATCH_INSTANCES_LOCK:  # Bug Fix B2: Thread-safe cleanup
+        cutoff_time = current_time - (7 * 24 * 3600)  # 7 days ago
+
+        # Phase 1: Clean up old in-memory match instances
+        with MATCH_INSTANCES_LOCK:
             instances_to_remove = []
             for match_id, instance in MATCH_INSTANCES.items():
-                # Check if instance has a timestamp or creation time
                 instance_time = getattr(instance, 'created_at', current_time)
                 if instance_time < cutoff_time:
                     instances_to_remove.append(match_id)
-            
+
             for match_id in instances_to_remove:
                 del MATCH_INSTANCES[match_id]
                 app.logger.info(f"[Cleanup] Removed old match instance: {match_id}")
-        
+
         if instances_to_remove:
             app.logger.info(f"[Cleanup] Cleaned up {len(instances_to_remove)} old match instances")
-            
+
+        # Phase 2: Clean up orphaned JSON files older than 24 hours
+        # These are temp files from matches that were never archived or failed to clean up
+        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+        json_cutoff = current_time - (24 * 3600)  # 24 hours
+        if os.path.isdir(match_dir):
+            removed_files = 0
+            for fn in os.listdir(match_dir):
+                if not fn.endswith(".json") or fn.startswith("_temp_"):
+                    continue
+                path = os.path.join(match_dir, fn)
+                try:
+                    if os.path.getmtime(path) < json_cutoff:
+                        os.remove(path)
+                        removed_files += 1
+                        app.logger.info(f"[Cleanup] Removed orphaned JSON: {fn}")
+                except Exception as e:
+                    app.logger.warning(f"[Cleanup] Failed to remove {fn}: {e}")
+            if removed_files:
+                app.logger.info(f"[Cleanup] Cleaned up {removed_files} orphaned JSON files")
+
     except Exception as e:
         app.logger.error(f"[Cleanup] Error cleaning up match instances: {e}", exc_info=True)
 
@@ -1564,6 +1597,7 @@ def create_app():
                         "batting_hand": p.batting_hand,
                         "bowling_type": p.bowling_type,
                         "bowling_hand": p.bowling_hand,
+                        "is_captain": p.is_captain,  # Captain flag for toss logic
                         "will_bowl": False # Default
                     })
                 return d
@@ -1632,24 +1666,13 @@ def create_app():
     @app.route("/match/<match_id>")
     @login_required
     def match_detail(match_id):
-        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
-        match_data = None
-
-        # Search for the JSON whose match_id field matches
-        for fn in os.listdir(match_dir):
-            if not fn.endswith(".json"):
-                continue
-            path = os.path.join(match_dir, fn)
-            try:
-                with open(path, "r") as f:
-                    data = json.load(f)
-                if data.get("match_id") == match_id and data.get("created_by") == current_user.id:
-                    match_data = data
-                    break
-            except Exception as e:
-                app.logger.error(f"[MatchDetail] error loading {fn}: {e}", exc_info=True)
+        match_data, _path, _err = _load_match_file_for_user(match_id)
 
         if not match_data:
+            # JSON cleaned up after archiving — check DB for completed match
+            db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
+            if db_match:
+                return redirect(url_for("view_scoreboard", match_id=match_id))
             return redirect(url_for("home"))
 
         # increment_matches_simulated()  <-- REMOVED: Caused premature counting on page load/reload
@@ -1814,8 +1837,26 @@ def create_app():
             team_away = match_data["team_away"].split('_')[0]
             toss_choice = match_data["toss"]
             toss_result = random.choice(["Heads", "Tails"])
-            home_captain = match_data["playing_xi"]["home"][0]["name"]
-            away_captain = match_data["playing_xi"]["away"][0]["name"]
+            
+            # Get captain names with fallback logic
+            def get_captain_name(team_players, team_short_code):
+                """Find captain in playing XI, fallback to first player or team code"""
+                # Try to find player with is_captain flag
+                captain = next((p for p in team_players if p.get("is_captain")), None)
+                if captain:
+                    return captain["name"]
+                
+                # Fallback 1: First player in XI (for old data without is_captain)
+                if team_players:
+                    app.logger.warning(f"[Toss] No captain found for {team_short_code}, using first player")
+                    return team_players[0]["name"]
+                
+                # Fallback 2: Team short code (shouldn't happen)
+                app.logger.error(f"[Toss] No players in XI for {team_short_code}!")
+                return team_short_code
+            
+            home_captain = get_captain_name(match_data["playing_xi"]["home"], team_home)
+            away_captain = get_captain_name(match_data["playing_xi"]["away"], team_away)
 
             toss_winner = team_away if toss_choice == toss_result else team_home
             toss_decision = random.choice(["Bat", "Bowl"])
@@ -2020,19 +2061,14 @@ def create_app():
     def next_ball(match_id):
         with MATCH_INSTANCES_LOCK:  # Bug Fix B2: Thread-safe match creation
             if match_id not in MATCH_INSTANCES:
-                # Check if match exists in DB
-                db_match = DBMatch.query.get(match_id)
-                if not db_match:
-                    return jsonify({"error": "Match not found"}), 404
-                
-                # Load match data from JSON
-                match_data = json.loads(db_match.match_json_path) if isinstance(db_match.match_json_path, str) else db_match.match_json_path
-                
-                # Create new Match instance
-                # Use default_config for rain probability if not in match_data
-                if 'rain_probability' not in match_data:
-                    match_data['rain_probability'] = db_match.rain_probability or load_config().get('rain_probability', 0.0)
-                MATCH_INSTANCES[match_id] = Match(match_data)
+                # Try loading match data from JSON file first (for active/new matches)
+                match_data, _path, err = _load_match_file_for_user(match_id)
+                if match_data:
+                    if 'rain_probability' not in match_data:
+                        match_data['rain_probability'] = load_config().get('rain_probability', 0.0)
+                    MATCH_INSTANCES[match_id] = Match(match_data)
+                else:
+                    return err if err else (jsonify({"error": "Match not found"}), 404)
             
             match = MATCH_INSTANCES[match_id]
         if match.data.get("created_by") != current_user.id:
@@ -2191,8 +2227,15 @@ def create_app():
             # ??? B) Load match metadata ?????????????????????????????????????????
             match_meta = load_match_metadata(match_id)
             if not match_meta:
-                app.logger.error(f"[DownloadArchive] Match metadata not found for match_id='{match_id}'")
-                return jsonify({"error": "Match not found"}), 404
+                # JSON cleaned up after archiving — try in-memory instance
+                with MATCH_INSTANCES_LOCK:
+                    inst = MATCH_INSTANCES.get(match_id)
+                if inst and inst.data.get("created_by") == current_user.id:
+                    match_meta = inst.data
+                    app.logger.info(f"[DownloadArchive] Using in-memory match data for '{match_id}'")
+                else:
+                    app.logger.error(f"[DownloadArchive] Match metadata not found for match_id='{match_id}'")
+                    return jsonify({"error": "Match not found"}), 404
 
             # Verify ownership
             created_by = match_meta.get("created_by")
@@ -2210,11 +2253,18 @@ def create_app():
             # ??? D) Locate original JSON file on disk ???????????????????????????
             from match_archiver import find_original_json_file
             original_json_path = find_original_json_file(match_id)
+            _temp_json_created = False
             if not original_json_path:
-                app.logger.error(f"[DownloadArchive] Original JSON file not found for match_id='{match_id}'")
-                return jsonify({"error": "Original match file not found"}), 404
+                # JSON cleaned up after archiving — write match_meta to temp file
+                app.logger.info(f"[DownloadArchive] Original JSON cleaned up; writing temp file from match_meta")
+                temp_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+                os.makedirs(temp_dir, exist_ok=True)
+                original_json_path = os.path.join(temp_dir, f"_temp_{match_id}.json")
+                with open(original_json_path, "w", encoding="utf-8") as f:
+                    json.dump(match_meta, f, indent=2)
+                _temp_json_created = True
 
-            app.logger.debug(f"[DownloadArchive] Found original JSON at '{original_json_path}'")
+            app.logger.debug(f"[DownloadArchive] Using JSON at '{original_json_path}'")
 
             # ??? E) Extract commentary log ???????????????????????????????????????
             if getattr(match_instance, "frontend_commentary_captured", None):
@@ -2249,6 +2299,13 @@ def create_app():
             except Exception as arch_err:
                 app.logger.error(f"[DownloadArchive] Failed to create archive for match '{match_id}': {arch_err}", exc_info=True)
                 return jsonify({"error": "Failed to create archive"}), 500
+            finally:
+                # Clean up temp JSON if we created one
+                if _temp_json_created and os.path.isfile(original_json_path):
+                    try:
+                        os.remove(original_json_path)
+                    except Exception:
+                        pass
 
             # ??? G) Compute and confirm ZIP path on disk ?????????????????????????
             zip_path = os.path.join(PROJECT_ROOT, "data", zip_name)
@@ -2444,7 +2501,16 @@ def create_app():
 
             _match_data, _match_path, err = _load_match_file_for_user(match_id)
             if err:
-                return err
+                # JSON may be cleaned up after archiving — check in-memory or DB
+                authorized = False
+                with MATCH_INSTANCES_LOCK:
+                    if match_id in MATCH_INSTANCES:
+                        authorized = MATCH_INSTANCES[match_id].data.get("created_by") == current_user.id
+                if not authorized:
+                    db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
+                    authorized = db_match is not None
+                if not authorized:
+                    return err
 
             # Use absolute path with user isolation
             temp_dir = Path(PROJECT_ROOT) / "data" / "temp_scorecard_images" / secure_filename(current_user.id)
