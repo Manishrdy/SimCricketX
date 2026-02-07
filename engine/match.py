@@ -148,29 +148,43 @@ class Match:
         return "•" if runs == 0 else str(runs)
 
     def _format_over_summary(self, over_label):
-        striker_stats = self.batsman_stats[self.current_striker["name"]]
-        non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
-        bowler_stats = self.bowler_stats[self.current_bowler["name"]]
+        striker_stats = self.batsman_stats.get(self.current_striker["name"], {})
+        non_striker_stats = self.batsman_stats.get(self.current_non_striker["name"], {})
+        
+        # Safe access to bowler stats - bowler might not exist during innings transition
+        if self.current_bowler and self.current_bowler["name"] in self.bowler_stats:
+            bowler_stats = self.bowler_stats[self.current_bowler["name"]]
+        else:
+            # Use default empty stats if bowler not found
+            bowler_stats = {"runs":0,"fours":0,"sixes":0,"wickets":0,"overs":0,"maidens":0,"balls_bowled":0,"wides":0,"noballs":0,"byes":0,"legbyes":0}
+        
         team_name = self._get_team_name(self.batting_team)
         balls_played = self.current_over * 6 + self.current_ball
         current_rr = (self.score * 6) / balls_played if balls_played > 0 else 0
-        over_progress = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
+        over_progress = bowler_stats.get("overs", 0) + (bowler_stats.get("balls_bowled", 0) % 6) / 10
         outcomes = " ".join(self.current_over_outcomes) if self.current_over_outcomes else "-"
+        
+        bowler_name = self.current_bowler["name"] if self.current_bowler else "Unknown"
 
         return (
             f"<strong>{over_label} - {outcomes} ({self.current_over_runs})</strong><br>"
-            f"Batting Team Score: {team_name} {self.score}/{self.wickets}, RR: {current_rr:.2f}<br><br>"
-            f"{self.current_striker['name']} {striker_stats['runs']}({striker_stats['balls']}) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
-            f"{self.current_non_striker['name']} {non_striker_stats['runs']}({non_striker_stats['balls']}) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
-            f"{self.current_bowler['name']} {over_progress:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}"
+            f"{team_name} {self.score}/{self.wickets}, RR: {current_rr:.2f}<br><br>"
+            f"{self.current_striker['name']} {striker_stats.get('runs', 0)}({striker_stats.get('balls', 0)}) [{striker_stats.get('fours', 0)}x4, {striker_stats.get('sixes', 0)}x6]<br>"
+            f"{self.current_non_striker['name']} {non_striker_stats.get('runs', 0)}({non_striker_stats.get('balls', 0)}) [{non_striker_stats.get('fours', 0)}x4, {non_striker_stats.get('sixes', 0)}x6]<br>"
+            f"{bowler_name} {over_progress:.1f}-{bowler_stats.get('maidens', 0)}-{bowler_stats.get('runs', 0)}-{bowler_stats.get('wickets', 0)}"
         )
 
     def _format_innings_complete_summary(self, title="End of innings"):
-        summary = self._format_over_summary(title)
-        if self.innings == 2 and self.target:
-            runs_needed = max(0, self.target - self.score)
-            summary += f"<br>Chase status: {runs_needed} needed from 0 balls."
-        return summary
+        """Format a simple innings completion message"""
+        if self.innings == 1:
+            # End of first innings - show what second batting team needs
+            second_batting_team_name = self._get_team_name(self.bowling_team)  # Bowling team becomes batting team
+            runs_needed = self.target
+            overs = self.overs
+            return f"<strong>{title}</strong><br>{second_batting_team_name} need {runs_needed} runs from {overs} overs"
+        else:
+            # End of second innings - just show title
+            return f"<strong>{title}</strong>"
 
     def _format_scorecard_block(self, scorecard, title):
         if not scorecard:
