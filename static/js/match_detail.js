@@ -18,10 +18,24 @@ let impactPlayerState = {
 let matchOver = false;
 let currentInningsNumber = null;
 let delay = 300; // default 1x pace
+let logLineCount = 1; // Track line numbers for commentary display
 let isFinalScoreboard = false;
+let simTimerId = null; // F4: track simulation timer to prevent overlapping loops
+let archiveSaved = false; // F7: guard against double archive saves
 
 // Global variable to store first innings scorecard image
 let firstInningsImageBlob = null;
+
+// C1: HTML escaping utility to prevent XSS via innerHTML
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 
 // --- Initialization ---
@@ -29,7 +43,11 @@ let firstInningsImageBlob = null;
 document.addEventListener('DOMContentLoaded', () => {
     // Pace buttons
     document.querySelectorAll('.pace-btn').forEach(btn => {
-        btn.onclick = () => delay = parseInt(btn.dataset.pace);
+        btn.onclick = () => {
+            delay = parseInt(btn.dataset.pace);
+            document.querySelectorAll('.pace-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        };
     });
 
     // Spin Toss Button
@@ -152,8 +170,8 @@ function createPlayerCard(player, team, type, index) {
     card.innerHTML = `
         <div class="player-info">
             <div>
-                <div class="player-name">${player.name}</div>
-                <div class="player-role">${player.role}</div>
+                <div class="player-name">${escapeHtml(player.name)}</div>
+                <div class="player-role">${escapeHtml(player.role)}</div>
             </div>
             ${impactPlayerState.reorderingEnabled && type === 'xi' ?
             '<div style="font-size: 0.8rem; color: #666;">↕️ Drag to reorder</div>' : ''}
@@ -395,7 +413,7 @@ async function handleConfirmSwaps() {
             // No swaps, verify if we proceed
             matchData.impact_players_swapped = true;
             document.getElementById('impact-modal').style.display = 'none';
-            setTimeout(startMatch, delay);
+            scheduleNextBall(delay);
         }
     } catch (err) {
         console.error('Error saving swaps:', err);
@@ -432,7 +450,7 @@ function enableReorderingMode() {
 
             if (res.ok) {
                 document.getElementById('impact-modal').style.display = 'none';
-                setTimeout(startMatch, delay);
+                scheduleNextBall(delay);
             } else {
                 alert('Failed to save final lineups.');
             }
@@ -476,6 +494,11 @@ function appendLog(message, type = 'normal') {
 
 function spinTossAndStartMatch() {
     const resultEl = document.getElementById('toss-result');
+    const spinBtn = document.getElementById('spin-toss');
+    if (spinBtn) {
+        spinBtn.disabled = true;
+        spinBtn.textContent = 'Toss in progress...';
+    }
 
     fetch(`${window.location.pathname}/spin-toss`, { method: 'POST' })
         .then(r => r.json())
@@ -486,10 +509,20 @@ function spinTossAndStartMatch() {
         })
         .catch(err => {
             appendLog(`[ERROR] Toss failed: ${err}`, 'error');
+            if (spinBtn) {
+                spinBtn.disabled = false;
+                spinBtn.textContent = 'Spin Toss';
+            }
         });
 }
 
+function scheduleNextBall(delayMs) {
+    if (simTimerId) clearTimeout(simTimerId);
+    simTimerId = setTimeout(startMatch, delayMs);
+}
+
 function startMatch() {
+    simTimerId = null;
     if (matchOver) return;
 
     const scoreElem = document.getElementById('score');
@@ -529,7 +562,7 @@ function startMatch() {
 
                         // Just close and continue if already swapped or some other state
                         document.getElementById('scorecard-overlay').style.display = 'none';
-                        setTimeout(startMatch, delay);
+                        scheduleNextBall(delay);
                     };
                     return; // Pause simulation
                 }
@@ -540,19 +573,24 @@ function startMatch() {
                 if (data.scorecard_data) {
                     isFinalScoreboard = true;
                     showScorecard(data.scorecard_data, data);
-                    // Only Archive if it's the first time we see this
-                    if (!matchOver) saveMatchArchive();
+                }
+                if (!archiveSaved) {
+                    archiveSaved = true;
+                    saveMatchArchive();
                 }
                 appendLog(data.commentary || "Match Concluded.", 'comment');
                 matchOver = true;
                 return;
             }
 
-            // End of Match (2nd Innings) - Keeping for legacy safety but above check should catch it
+            // End of Match (2nd Innings) - legacy fallback
             if (data.innings_end && data.innings_number === 2) {
                 if (data.scorecard_data) {
                     isFinalScoreboard = true;
                     showScorecard(data.scorecard_data, data);
+                }
+                if (!archiveSaved) {
+                    archiveSaved = true;
                     saveMatchArchive();
                 }
                 appendLog(data.commentary || "Match Concluded.", 'comment');
@@ -581,8 +619,8 @@ function startMatch() {
                                 div.innerHTML = `
                                     <span class="line-number">${logLineCount++}</span>
                                     <span class="token-keyword">
-                                        <button onclick="startSuperOver('home')" class="impact-btn primary" style="font-size:0.7rem; padding:2px 8px;">Option 1: ${data.home_team}</button>
-                                        <button onclick="startSuperOver('away')" class="impact-btn primary" style="font-size:0.7rem; padding:2px 8px;">Option 2: ${data.away_team}</button>
+                                        <button onclick="startSuperOver('home')" class="impact-btn primary" style="font-size:0.7rem; padding:2px 8px;">Option 1: ${escapeHtml(data.home_team)}</button>
+                                        <button onclick="startSuperOver('away')" class="impact-btn primary" style="font-size:0.7rem; padding:2px 8px;">Option 2: ${escapeHtml(data.away_team)}</button>
                                     </span>
                                 `;
                                 logContainer.appendChild(div);
@@ -597,7 +635,7 @@ function startMatch() {
 
             // Normal Ball
             appendLog(data.commentary);
-            setTimeout(startMatch, delay);
+            scheduleNextBall(delay);
         })
         .catch(err => appendLog(`[system_error] ${err}`, 'error'));
 }
@@ -619,8 +657,8 @@ function showScorecard(data, completeData) {
     data.players.forEach(player => {
         const row = tbody.insertRow();
         row.innerHTML = `
-            <td>${displayValue(player.name)}</td>
-            <td style="font-size:0.7rem;color:var(--fg-secondary)">${displayValue(player.status)}</td>
+            <td>${escapeHtml(displayValue(player.name))}</td>
+            <td style="font-size:0.7rem;color:var(--fg-secondary)">${escapeHtml(displayValue(player.status))}</td>
             <td><strong>${displayValue(player.runs)}</strong></td>
             <td>${displayValue(player.balls)}</td>
             <td>${displayValue(player.fours)}</td>
@@ -635,7 +673,7 @@ function showScorecard(data, completeData) {
     data.bowlers.forEach(bowler => {
         const row = bTbody.insertRow();
         row.innerHTML = `
-            <td>${bowler.name}</td>
+            <td>${escapeHtml(bowler.name)}</td>
             <td>${bowler.overs}</td>
             <td>${bowler.maidens}</td>
             <td>${bowler.runs}</td>
@@ -650,7 +688,7 @@ function showScorecard(data, completeData) {
 
     // Target Info
     const targetInfo = document.getElementById('target-info');
-    if (data.target_info && data.inningsNumber !== 2) {
+    if (data.target_info && data.innings_number !== 2) {
         targetInfo.style.display = 'block';
         targetInfo.textContent = data.target_info;
     } else if (data.wickets === 10 || isFinalScoreboard) {
@@ -761,7 +799,8 @@ async function saveMatchArchive() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                html_content: document.documentElement.outerHTML
+                // C8: Send only the match content, not the full page (avoids leaking CSRF tokens/session data)
+                html_content: (document.querySelector('.match-layout') || document.body).outerHTML
             })
         });
 
@@ -813,17 +852,17 @@ function startSuperOver(firstBattingTeam) {
         .then(r => r.json())
         .then(data => {
             if (data.error) {
-                commentaryLog.innerHTML += `<p class="error">${data.error}</p>`;
+                commentaryLog.insertAdjacentHTML('beforeend', `<p class="error">${escapeHtml(data.error)}</p>`);
                 return;
             }
-            commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
-            commentaryLog.innerHTML += `
+            commentaryLog.insertAdjacentHTML('beforeend', `<p>${escapeHtml(data.commentary)}</p>`);
+            commentaryLog.insertAdjacentHTML('beforeend', `
             <div style="text-align: center; margin: 1rem 0;">
                 <button onclick="startSuperOverSimulation()" class="impact-btn primary">
-                    🏏 Start Super Over Simulation
+                    Start Super Over Simulation
                 </button>
             </div>
-        `;
+        `);
             commentaryLog.scrollTop = commentaryLog.scrollHeight;
         });
 }
@@ -839,26 +878,24 @@ function startSuperOverSimulation() {
         .then(r => r.json())
         .then(data => {
             if (data.error) {
-                commentaryLog.innerHTML += `<p class="error">${data.error}</p>`;
+                commentaryLog.insertAdjacentHTML('beforeend', `<p class="error">${escapeHtml(data.error)}</p>`);
                 return;
             }
 
-            commentaryLog.innerHTML += `<p>${data.commentary}</p>`;
+            commentaryLog.insertAdjacentHTML('beforeend', `<p>${escapeHtml(data.commentary)}</p>`);
             commentaryLog.scrollTop = commentaryLog.scrollHeight;
 
             scoreElem.textContent = `Super Over: ${data.score}/${data.wickets}`;
             overElem.textContent = `Ball: ${data.ball}/6`;
 
             if (data.super_over_tied_again) {
-                // Handle recursive super overs
-                commentaryLog.innerHTML += `<p style="color:orange; font-weight:bold;">TIED AGAIN!</p>`;
-                // Add buttons for next super over (simplified for brevity)
+                commentaryLog.insertAdjacentHTML('beforeend', `<p style="color:orange; font-weight:bold;">TIED AGAIN!</p>`);
                 matchOver = true;
                 return;
             }
 
             if (data.super_over_complete) {
-                commentaryLog.innerHTML += `<p style="color:green; font-weight:bold;">${data.result}</p>`;
+                commentaryLog.insertAdjacentHTML('beforeend', `<p style="color:green; font-weight:bold;">${escapeHtml(data.result)}</p>`);
                 matchOver = true;
                 return;
             }

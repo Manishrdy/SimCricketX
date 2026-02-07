@@ -5,10 +5,16 @@ from database import db
 import uuid
 
 class User(UserMixin, db.Model):
-    """User account"""
+    """User account
+
+    NOTE: id is currently the email string for legacy compatibility.
+    The stable_id column provides a UUID that can become the PK in a future
+    migration, allowing email changes without cascading FK updates.
+    """
     __tablename__ = 'users'
-    
-    id = db.Column(db.String(120), primary_key=True)  # Email as ID to match legacy system
+
+    id = db.Column(db.String(120), primary_key=True)  # Email as ID (legacy)
+    stable_id = db.Column(db.String(36), unique=True, default=lambda: str(uuid.uuid4()))
     password_hash = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -30,7 +36,7 @@ class Team(db.Model):
     __tablename__ = 'teams'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     short_code = db.Column(db.String(10), nullable=False)
     home_ground = db.Column(db.String(100))
@@ -38,6 +44,7 @@ class Team(db.Model):
     team_color = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_draft = db.Column(db.Boolean, default=False)
+    is_placeholder = db.Column(db.Boolean, default=False)  # True for BYE/TBD teams
 
     # Unique constraint: one short_code per user
     __table_args__ = (
@@ -56,7 +63,7 @@ class Player(db.Model):
     __tablename__ = 'players'
     
     id = db.Column(db.Integer, primary_key=True)
-    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     role = db.Column(db.String(50))  # Batsman, Bowler, All-rounder, Wicketkeeper
     
@@ -93,6 +100,11 @@ class Player(db.Model):
     best_bowling_wickets = db.Column(db.Integer, default=0)
     best_bowling_runs = db.Column(db.Integer, default=0)
     
+    # Unique constraint: one player name per team
+    __table_args__ = (
+        db.UniqueConstraint('team_id', 'name', name='uq_player_team_name'),
+    )
+
     # Relationships
     scorecard_entries = relationship('MatchScorecard', backref='player_ref', passive_deletes=True)
 
@@ -103,11 +115,11 @@ class Match(db.Model):
     id = db.Column(db.String(36), primary_key=True)  # UUID
     user_id = db.Column(db.String(120), db.ForeignKey('users.id'))
     
-    home_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'))
-    away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'))
-    
-    winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
-    tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=True)
+    home_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), index=True)
+    away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), index=True)
+
+    winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True, index=True)
+    tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=True, index=True)
     
     # Match Details
     venue = db.Column(db.String(100))
@@ -118,11 +130,11 @@ class Match(db.Model):
     # Scores
     home_team_score = db.Column(db.Integer)
     home_team_wickets = db.Column(db.Integer)
-    home_team_overs = db.Column(db.Float)
-    
+    home_team_overs = db.Column(db.String(10))
+
     away_team_score = db.Column(db.Integer)
     away_team_wickets = db.Column(db.Integer)
-    away_team_overs = db.Column(db.Float)
+    away_team_overs = db.Column(db.String(10))
     
     # Margin of Victory
     margin_type = db.Column(db.String(10))  # 'runs', 'wickets', or 'tie'
@@ -148,9 +160,9 @@ class MatchScorecard(db.Model):
     __tablename__ = 'match_scorecards'
     
     id = db.Column(db.Integer, primary_key=True)
-    match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=False)
-    player_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
-    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+    match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=False, index=True)
+    player_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False, index=True)
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False, index=True)
     innings_number = db.Column(db.Integer, default=1, nullable=False)
     record_type = db.Column(db.String(20), default="batting", nullable=False)
     position = db.Column(db.Integer, nullable=True)
@@ -164,7 +176,7 @@ class MatchScorecard(db.Model):
     wicket_type = db.Column(db.String(50), nullable=True)
     
     # Bowling
-    overs = db.Column(db.Float, default=0.0)
+    overs = db.Column(db.String(10), default='0.0')
     balls_bowled = db.Column(db.Integer, default=0)
     runs_conceded = db.Column(db.Integer, default=0)
     wickets = db.Column(db.Integer, default=0)
@@ -287,7 +299,7 @@ class TournamentPlayerStatsCache(db.Model):
 
     # Bowling Stats
     innings_bowled = db.Column(db.Integer, default=0)
-    overs_bowled = db.Column(db.Float, default=0.0)
+    overs_bowled = db.Column(db.String(10), default='0.0')
     runs_conceded = db.Column(db.Integer, default=0)
     wickets_taken = db.Column(db.Integer, default=0)
     maidens = db.Column(db.Integer, default=0)
@@ -330,9 +342,9 @@ class TournamentTeam(db.Model):
 
     # NRR Components
     runs_scored = db.Column(db.Integer, default=0, nullable=False)
-    overs_faced = db.Column(db.Float, default=0.0, nullable=False)
+    overs_faced = db.Column(db.String(10), default='0.0', nullable=False)
     runs_conceded = db.Column(db.Integer, default=0, nullable=False)
-    overs_bowled = db.Column(db.Float, default=0.0, nullable=False)
+    overs_bowled = db.Column(db.String(10), default='0.0', nullable=False)
 
     net_run_rate = db.Column(db.Float, default=0.0, nullable=False)
 

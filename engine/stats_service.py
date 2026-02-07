@@ -5,6 +5,7 @@ Handles all statistics calculations and queries for the SimCricketX application.
 """
 
 from sqlalchemy import func
+from sqlalchemy.orm import aliased
 from datetime import datetime
 from database.models import Match, MatchScorecard, Tournament, Player, Team
 from database import db
@@ -822,7 +823,7 @@ class StatsService:
             for card, match in records:
                 matches.add(match.id)
                 
-                if card.record_type == 'batting' and (card.balls or 0) > 0:
+                if card.record_type == 'batting' and ((card.balls or 0) > 0 or (card.runs or 0) > 0 or bool(card.is_out)):
                     batting_data.append({
                         'runs': card.runs or 0,
                         'balls': card.balls or 0,
@@ -1147,11 +1148,13 @@ class StatsService:
         try:
             from database.models import MatchPartnership
             
-            # Query partnerships from tournament matches
+            # Query partnerships from tournament matches with both batsmen joined
+            Batsman2 = aliased(Player)
             partnerships = (
-                db.session.query(MatchPartnership, Match, Player, Player, Team)
+                db.session.query(MatchPartnership, Match, Player, Batsman2, Team)
                 .join(Match, MatchPartnership.match_id == Match.id)
                 .join(Player, MatchPartnership.batsman1_id == Player.id)
+                .join(Batsman2, MatchPartnership.batsman2_id == Batsman2.id)
                 .join(Team, Player.team_id == Team.id)
                 .filter(Match.tournament_id == tournament_id)
                 .filter(Team.user_id == user_id)
@@ -1159,17 +1162,15 @@ class StatsService:
                 .limit(limit)
                 .all()
             )
-            
+
             leaderboard = []
-            for partnership, match, batsman1, batsman2_placeholder, team in partnerships:
-                # Get second batsman
-                batsman2 = Player.query.get(partnership.batsman2_id)
+            for partnership, match, batsman1, batsman2, team in partnerships:
                 
                 opponent = self._get_opponent_name(match, team.id)
                 
                 leaderboard.append({
                     'batsman1': batsman1.name,
-                    'batsman2': batsman2.name if batsman2 else 'Unknown',
+                    'batsman2': batsman2.name,
                     'team': team.name,
                     'runs': partnership.runs,
                     'balls': partnership.balls,
