@@ -30,7 +30,7 @@ from functools import wraps
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash
-from match_archiver import MatchArchiver, find_original_json_file
+from match_archiver import MatchArchiver, find_original_json_file, reverse_player_aggregates
 from engine.match import Match
 from flask_login import (
     LoginManager,
@@ -98,6 +98,7 @@ def _get_match_file_lock(match_id):
 # C3: Simple in-memory rate limiter (no external dependencies)
 _rate_limit_store = {}  # {user_id: deque of timestamps}
 _rate_limit_lock = threading.Lock()
+_rate_limit_bypass_emails = {"admin@projectx.com"}
 
 def rate_limit(max_requests=30, window_seconds=10):
     """Decorator to rate-limit endpoints per user."""
@@ -106,6 +107,8 @@ def rate_limit(max_requests=30, window_seconds=10):
         def wrapped(*args, **kwargs):
             from flask_login import current_user
             user_id = getattr(current_user, 'id', 'anonymous')
+            if isinstance(user_id, str) and user_id.lower() in _rate_limit_bypass_emails:
+                return f(*args, **kwargs)
             now = datetime.now().timestamp()
             with _rate_limit_lock:
                 if user_id not in _rate_limit_store:
@@ -562,6 +565,10 @@ def create_app():
                 if existing_match:
                     logger.info(f"[Tournament] Existing match {match_id} found. Reversing previous standings.")
                     tournament_engine.reverse_standings(existing_match, commit=False)
+                    # Reverse player career stats BEFORE deleting scorecards
+                    old_scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
+                    if old_scorecards:
+                        reverse_player_aggregates(old_scorecards, logger=logger)
                     # Clean up dependent rows to avoid FK nulling issues (sqlite NOT NULL)
                     try:
                         db.session.query(MatchPartnership).filter_by(match_id=match_id).delete(synchronize_session=False)
@@ -597,7 +604,8 @@ def create_app():
                     away_team_id=fixture.away_team_id,
                     match_json_path="autosaved",
                     result_description=final_result,
-                    date=datetime.now()
+                    date=datetime.now(),
+                    overs_per_side=match.data.get('overs', 20)
                 )
                 
                 logger.info(f"[Tournament] Created DBMatch record for {match_id}")
@@ -614,7 +622,7 @@ def create_app():
                     runs = sum(p.get("runs", 0) for p in batting_stats.values())
                     wickets = sum(1 for p in batting_stats.values() if p.get("wicket_type"))
                     balls_total = sum(b.get("balls_bowled", 0) for b in bowling_stats.values())
-                    overs = (balls_total // 6) + (balls_total % 6) / 10.0
+                    overs = f"{balls_total // 6}.{balls_total % 6}"
                     return runs, wickets, overs
                 
                 # First innings stats
@@ -726,9 +734,23 @@ def create_app():
                 
                 # Step 10: Update fixture status and link to match
                 fixture.match_id = match_id
-                fixture.status = 'Completed'
                 fixture.winner_team_id = db_match.winner_team_id
-                logger.info(f"[Tournament] Fixture {fixture_id} marked as Completed")
+
+                # Knockout/playoff fixtures MUST have a winner to progress.
+                # If the match ended as a tie/no-result in a non-league stage,
+                # keep the fixture as 'Scheduled' so the user can re-simulate.
+                is_knockout_stage = fixture.stage and fixture.stage != 'league'
+                if is_knockout_stage and not db_match.winner_team_id:
+                    fixture.status = 'Scheduled'
+                    fixture.standings_applied = False
+                    logger.warning(
+                        f"[Tournament] Knockout fixture {fixture_id} has no winner "
+                        f"(stage={fixture.stage}). Fixture kept as Scheduled for re-simulation."
+                    )
+                else:
+                    fixture.status = 'Completed'
+
+                logger.info(f"[Tournament] Fixture {fixture_id} status set to {fixture.status}")
                 
                 # Step 11: Update tournament standings (critical operation)
                 logger.info(f"[Tournament] Updating standings for tournament {tournament_id}")
@@ -772,6 +794,23 @@ def create_app():
                 db.session.rollback()
             except Exception:  # Fix D7: Don't swallow SystemExit/KeyboardInterrupt
                 pass
+
+    def _persist_non_tournament_match_completion(match, match_id, outcome, logger):
+        """
+        Persist a completed non-tournament match so it appears in history
+        and can be opened via the existing scoreboard endpoint.
+        """
+        try:
+            match.data["current_state"] = "completed"
+            final_result = outcome.get("result") or getattr(match, "result", None)
+            if final_result:
+                match.data["result_description"] = final_result
+
+            archiver = MatchArchiver(match.data, match)
+            archiver._save_to_database()
+            logger.info(f"[MatchHistory] Persisted non-tournament match {match_id}")
+        except Exception as e:
+            logger.error(f"[MatchHistory] Failed to persist match {match_id}: {e}", exc_info=True)
 
     def _compute_tournament_stats(user_id, tournament_id, use_cache=False):
         """
@@ -1276,7 +1315,9 @@ def create_app():
         teams = []
         try:
             # Query teams from DB for current user
-            db_teams = DBTeam.query.filter_by(user_id=current_user.id).all()
+            db_teams = DBTeam.query.filter_by(user_id=current_user.id).filter(
+                DBTeam.is_placeholder != True
+            ).all()
             for t in db_teams:
                 # Need player details for stats calculation in template (e.g. squad size)
                 # Naive serialization for now, but lightweight enough for manage view
@@ -2080,12 +2121,15 @@ def create_app():
             if outcome.get("match_over"):
                 # Only increment if this is the first time we're seeing the match end
                 # (Checking if it wasn't already marked completed prevents double counting on repeated API calls)
-                if match.data.get("current_state") != "completed":
-                     increment_matches_simulated()
-                     
-                # If this is a tournament match, autosave to DB and update standings
-                if match.data.get("tournament_id"):
-                    _handle_tournament_match_completion(match, match_id, outcome, app.logger)
+                first_completion = match.data.get("current_state") != "completed"
+                if first_completion:
+                    increment_matches_simulated()
+
+                    # Persist completed match data in DB.
+                    if match.data.get("tournament_id"):
+                        _handle_tournament_match_completion(match, match_id, outcome, app.logger)
+                    else:
+                        _persist_non_tournament_match_completion(match, match_id, outcome, app.logger)
 
                 return jsonify({
                     "innings_end":     match.innings == 2, # Flag generic innings end
@@ -2360,6 +2404,7 @@ def create_app():
         username    = current_user.id
         files_dir   = os.path.join(PROJECT_ROOT, "data")
         valid_files = []
+        match_history = []
 
         app.logger.info(f"User '{username}' requested /my-matches")
 
@@ -2386,6 +2431,8 @@ def create_app():
                     if age > max_age:
                         app.logger.info(f"Skipping old archive '{fn}' (age {age//3600}h > 7d)")
                         continue
+                    created_at = datetime.fromtimestamp(os.path.getmtime(full_path))
+                    expires_at = created_at + timedelta(days=7)
 
                     # Build URLs for download & delete
                     download_url = f"/archives/{username}/{fn}"
@@ -2394,15 +2441,62 @@ def create_app():
                     valid_files.append({
                         "filename":     fn,
                         "download_url": download_url,
-                        "delete_url":   delete_url
+                        "delete_url":   delete_url,
+                        "created_at":   created_at,
+                        "expires_at":   expires_at
                     })
 
                 app.logger.info(f"User '{username}' has {len(valid_files)} valid archives")
+                valid_files.sort(key=lambda x: x.get("created_at") or datetime.min, reverse=True)
 
         except Exception as e:
             app.logger.error(f"Error listing archives in '{files_dir}' for '{username}': {e}", exc_info=True)
 
-        return render_template("my_matches.html", files=valid_files)
+        try:
+            non_tournament_matches = (
+                DBMatch.query
+                .filter(
+                    DBMatch.user_id == current_user.id,
+                    DBMatch.tournament_id.is_(None)
+                )
+                .order_by(DBMatch.date.desc())
+                .all()
+            )
+
+            team_ids = set()
+            for m in non_tournament_matches:
+                if m.home_team_id:
+                    team_ids.add(m.home_team_id)
+                if m.away_team_id:
+                    team_ids.add(m.away_team_id)
+
+            teams_by_id = {}
+            if team_ids:
+                teams_by_id = {
+                    t.id: t for t in DBTeam.query.filter(DBTeam.id.in_(team_ids)).all()
+                }
+
+            for m in non_tournament_matches:
+                home_name = teams_by_id.get(m.home_team_id).name if m.home_team_id in teams_by_id else "Home"
+                away_name = teams_by_id.get(m.away_team_id).name if m.away_team_id in teams_by_id else "Away"
+                match_history.append({
+                    "match_id": m.id,
+                    "home_team": home_name,
+                    "away_team": away_name,
+                    "result_description": m.result_description or "Match Completed",
+                    "played_at": m.date,
+                    "scoreline": (
+                        f"{home_name} {m.home_team_score or 0}/{m.home_team_wickets or 0} "
+                        f"({m.home_team_overs or '0.0'}) vs "
+                        f"{away_name} {m.away_team_score or 0}/{m.away_team_wickets or 0} "
+                        f"({m.away_team_overs or '0.0'})"
+                    ),
+                    "scoreboard_url": url_for("view_scoreboard", match_id=m.id),
+                })
+        except Exception as e:
+            app.logger.error(f"Error loading non-tournament match history for '{username}': {e}", exc_info=True)
+
+        return render_template("my_matches.html", files=valid_files, match_history=match_history)
 
 
     @app.route("/archives/<username>/<filename>", methods=["GET"])
@@ -2502,6 +2596,86 @@ def create_app():
             return jsonify({'error': 'Internal server error'}), 500
         
 
+    # ===== Database Backup Endpoint =====
+    
+    @app.route('/admin/backup-database')
+    @limiter.limit("3 per hour")
+    def backup_database():
+        """
+        Secure endpoint to download cricket_sim.db for backup purposes.
+        Requires valid BACKUP_TOKEN in query parameter or request header.
+        
+        Usage:
+            curl -O "http://localhost:7860/admin/backup-database?token=YOUR_TOKEN"
+            curl -H "X-Backup-Token: YOUR_TOKEN" -O http://localhost:7860/admin/backup-database
+        """
+        import hmac
+        from datetime import datetime
+        
+        # Get token from query param or header
+        provided_token = request.args.get('token') or request.headers.get('X-Backup-Token')
+        
+        # Get configured backup token from environment or config
+        configured_token = os.getenv('BACKUP_TOKEN')
+        
+        # Try to load from .simcricketx.conf file if not in environment
+        if not configured_token:
+            config_file = os.path.join(PROJECT_ROOT, '.simcricketx.conf')
+            if os.path.exists(config_file):
+                try:
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            line = line.strip()
+                            if line.startswith('BACKUP_TOKEN=') and not line.startswith('#'):
+                                configured_token = line.split('=', 1)[1].strip()
+                                break
+                except Exception as e:
+                    app.logger.error(f"Error reading backup token from config: {e}")
+        
+        # If no token is configured, backup is disabled
+        if not configured_token:
+            app.logger.warning(f"[Backup] Attempt to access backup endpoint but BACKUP_TOKEN not configured. IP: {request.remote_addr}")
+            return jsonify({'error': 'Backup endpoint is not configured'}), 503
+        
+        # If no token provided by client
+        if not provided_token:
+            app.logger.warning(f"[Backup] Unauthorized access attempt without token. IP: {request.remote_addr}")
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        # Use constant-time comparison to prevent timing attacks
+        if not hmac.compare_digest(provided_token, configured_token):
+            app.logger.warning(f"[Backup] Unauthorized access attempt with invalid token. IP: {request.remote_addr}")
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        # Token is valid - proceed with backup
+        db_path = os.path.join(PROJECT_ROOT, 'cricket_sim.db')
+        
+        if not os.path.exists(db_path):
+            app.logger.error(f"[Backup] Database file not found at {db_path}")
+            return jsonify({'error': 'Database file not found'}), 404
+        
+        try:
+            # Generate timestamped filename
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            download_name = f'cricket_sim_backup_{timestamp}.db'
+            
+            # Log successful backup
+            app.logger.info(f"[Backup] Database backup downloaded by IP: {request.remote_addr} at {timestamp}")
+            
+            # Send file with proper headers
+            return send_file(
+                db_path,
+                as_attachment=True,
+                download_name=download_name,
+                mimetype='application/x-sqlite3'
+            )
+            
+        except Exception as e:
+            app.logger.error(f"[Backup] Error sending database file: {e}", exc_info=True)
+            return jsonify({'error': 'Failed to send backup file'}), 500
+
+
+    # ============================================================================
     @app.route('/match/<match_id>/save-scorecard-images', methods=['POST'])
     @login_required
     @limiter.limit("10 per minute")
@@ -2594,7 +2768,7 @@ def create_app():
                 owned_team_ids = {
                     team.id
                     for team in DBTeam.query.filter_by(user_id=current_user.id)
-                    .filter(DBTeam.id.in_(team_ids))
+                    .filter(DBTeam.id.in_(team_ids), DBTeam.is_placeholder != True)
                     .all()
                 }
                 if len(owned_team_ids) != len(team_ids):
@@ -2647,8 +2821,7 @@ def create_app():
 
         # GET - Show form with available modes
         teams = DBTeam.query.filter_by(user_id=current_user.id).filter(
-            ~DBTeam.name.in_(["BYE", "TBD"]),
-            ~DBTeam.short_code.in_(["BYE", "TBD"])
+            DBTeam.is_placeholder != True
         ).all()
         num_teams = len(teams)
 
@@ -2674,8 +2847,40 @@ def create_app():
     def delete_tournament(tournament_id):
         t = db.session.get(Tournament, tournament_id)
         if t and t.user_id == current_user.id:
+            # Clean up all matches linked to this tournament before
+            # deleting it, so scorecards, partnerships, player career
+            # stats, and JSON files are properly removed.
+            tournament_matches = DBMatch.query.filter_by(tournament_id=tournament_id).all()
+            for m in tournament_matches:
+                # Reverse player career stats
+                scorecards = MatchScorecard.query.filter_by(match_id=m.id).all()
+                if scorecards:
+                    reverse_player_aggregates(scorecards, logger=app.logger)
+                # Delete dependent rows
+                db.session.query(MatchPartnership).filter_by(match_id=m.id).delete(synchronize_session=False)
+                db.session.query(MatchScorecard).filter_by(match_id=m.id).delete(synchronize_session=False)
+                # Delete JSON file on disk
+                match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+                if os.path.isdir(match_dir):
+                    for fn in os.listdir(match_dir):
+                        if fn.endswith(".json"):
+                            path = os.path.join(match_dir, fn)
+                            try:
+                                with open(path, "r", encoding="utf-8") as f:
+                                    data = json.load(f)
+                                if data.get("match_id") == m.id:
+                                    os.remove(path)
+                                    break
+                            except Exception:
+                                continue
+                # Remove from in-memory cache
+                with MATCH_INSTANCES_LOCK:
+                    MATCH_INSTANCES.pop(m.id, None)
+                db.session.delete(m)
+
             db.session.delete(t)
             db.session.commit()
+            flash("Tournament deleted successfully.", "success")
         return redirect(url_for("tournaments"))
 
 
@@ -2713,6 +2918,10 @@ def create_app():
                     fixture.winner_team_id = None
                     fixture.match_id = None
                     fixture.standings_applied = False
+                # Reverse player career stats BEFORE deleting scorecards
+                old_scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
+                if old_scorecards:
+                    reverse_player_aggregates(old_scorecards, logger=app.logger)
                 # Clean up dependent rows to avoid FK nulling errors
                 db.session.query(MatchPartnership).filter_by(match_id=match_id).delete(synchronize_session=False)
                 db.session.query(MatchScorecard).filter_by(match_id=match_id).delete(synchronize_session=False)
@@ -2733,7 +2942,6 @@ def create_app():
                         with open(path, "r", encoding="utf-8") as f:
                             data = json.load(f)
                         if data.get("match_id") == match_id:
-                            f.close()
                             os.remove(path)
                             app.logger.info(f"Deleted match JSON: {fn}")
                             break
@@ -2913,7 +3121,9 @@ def create_app():
         """Render player comparison page"""
         try:
             # Get all teams and tournaments for the user
-            teams = Team.query.filter_by(user_id=current_user.id).all()
+            teams = Team.query.filter_by(user_id=current_user.id).filter(
+                Team.is_placeholder != True
+            ).all()
             tournaments = Tournament.query.filter_by(user_id=current_user.id).all()
             
             return render_template('compare_players.html', 
@@ -3159,7 +3369,7 @@ def create_app():
                 Batsman1, MatchPartnership.batsman1_id == Batsman1.id
             ).join(
                 Batsman2, MatchPartnership.batsman2_id == Batsman2.id
-            ).join(
+            ).outerjoin(
                 Tournament, DBMatch.tournament_id == Tournament.id
             ).filter(
                 DBMatch.user_id == current_user.id

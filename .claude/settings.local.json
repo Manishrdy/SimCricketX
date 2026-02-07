@@ -8,7 +8,8 @@
       "Bash(find:*)",
       "Bash(pip install:*)",
       "Bash(python -c:*)",
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Read(//d/**)"
     ]
   }
 }

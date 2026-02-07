@@ -15,9 +15,49 @@ let wormChart = null;
 // --- Wagon Wheel State ---
 const WAGON_NS = 'http://www.w3.org/2000/svg';
 let wagonWheelInitialized = false;
+let wagonViewMode = 'current'; // 'current' | 'first'
 
 // --- Timeline State (for incremental append) ---
 let _timelineRenderedCount = 0;  // how many balls we've already rendered
+
+function _drawWicketDot(ctx, x, y, r) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.stroke();
+    ctx.restore();
+}
+
+const wicketMarkerPlugin = {
+    id: 'wicketMarkerPlugin',
+    afterDatasetsDraw(chart) {
+        if (chart.config.type !== 'bar') return;
+        const { ctx } = chart;
+        chart.data.datasets.forEach((ds, dsIndex) => {
+            if (!Array.isArray(ds.wicketCounts)) return;
+            const meta = chart.getDatasetMeta(dsIndex);
+            if (!meta || !meta.data) return;
+
+            meta.data.forEach((bar, i) => {
+                const wk = ds.wicketCounts[i] || 0;
+                if (!wk) return;
+                const y = Math.min(bar.y, bar.base) - 8;
+                _drawWicketDot(ctx, bar.x, y, 5);
+                if (wk > 1) {
+                    ctx.save();
+                    ctx.fillStyle = '#d4d4d4';
+                    ctx.font = "600 9px 'IBM Plex Mono'";
+                    ctx.fillText(String(wk), bar.x + 6, y + 3);
+                    ctx.restore();
+                }
+            });
+        });
+    }
+};
 
 // ============================================================
 //  PUBLIC API — called from match_detail.js
@@ -26,12 +66,15 @@ let _timelineRenderedCount = 0;  // how many balls we've already rendered
 /**
  * Called on every ball. Only touches DOM when dashboard is visible.
  */
-function updateDashboard(ballData, history, oRuns) {
+function updateDashboard(ballData, history, oRuns, inn1Data) {
     if (typeof dashboardActive !== 'undefined' && !dashboardActive) return;
-    addWagonWheelShot(ballData);
+    if (wagonViewMode === 'current') {
+        addWagonWheelShot(ballData);
+    }
+    updateWagonViewControls(history, inn1Data);
     updatePlayerCards(history);
     appendBallToTimeline(ballData);
-    updateCharts(oRuns, history);
+    updateCharts(oRuns, history, inn1Data);
     updateWinProbability(history);
     updateLatestBallTicker(ballData);
 }
@@ -40,12 +83,7 @@ function updateDashboard(ballData, history, oRuns) {
  * Called when user toggles TO the dashboard. Full rebuild from accumulated data.
  */
 function refreshDashboard(history, oRuns, inn1Data) {
-    initWagonWheel();
-    const svg = document.getElementById('wagon-wheel-svg');
-    if (svg) {
-        svg.querySelectorAll('.wagon-shot, .wagon-six-dot').forEach(el => el.remove());
-        history.forEach(bd => addWagonWheelShot(bd));
-    }
+    renderWagonByMode(history, inn1Data);
     updatePlayerCards(history);
     rebuildOverTimeline(history);
     rebuildCharts(oRuns, history, inn1Data);
@@ -59,12 +97,11 @@ function refreshDashboard(history, oRuns, inn1Data) {
  * Called at innings transition to reset dashboard for new innings.
  */
 function resetDashboardForNewInnings() {
+    wagonViewMode = 'current';
     const svg = document.getElementById('wagon-wheel-svg');
     if (svg) svg.querySelectorAll('.wagon-shot, .wagon-six-dot').forEach(el => el.remove());
 
-    if (manhattanChart) { manhattanChart.destroy(); manhattanChart = null; }
-    if (wormChart) { wormChart.destroy(); wormChart = null; }
-
+    // Preserve charts; reset live-per-innings widgets.
     _timelineRenderedCount = 0;
     const el = id => document.getElementById(id);
     el('over-timeline').innerHTML = '';
@@ -74,6 +111,38 @@ function resetDashboardForNewInnings() {
     el('partnership-bar').innerHTML = '';
     el('win-prob-display').innerHTML = '';
     el('latest-ball-ticker').innerHTML = '';
+}
+
+function updateWagonViewControls(history, inn1Data) {
+    const label = document.getElementById('wagon-view-label');
+    const btn = document.getElementById('wagon-flip-btn');
+    if (!label || !btn) return;
+
+    const hasInn1 = !!(inn1Data && Array.isArray(inn1Data.ballHistory) && inn1Data.ballHistory.length > 0);
+    const hasCurrent = Array.isArray(history) && history.length > 0;
+    btn.style.display = (hasInn1 && hasCurrent) ? 'inline-flex' : 'none';
+
+    if (wagonViewMode === 'first' && !hasInn1) wagonViewMode = 'current';
+    if (wagonViewMode === 'first') {
+        label.textContent = 'Innings 1';
+    } else {
+        const inferred = (hasInn1 && hasCurrent) ? 'Innings 2' : ((history[0] && history[0].innings === 1) ? 'Innings 1' : 'Innings 2');
+        label.textContent = inferred;
+    }
+}
+
+function renderWagonByMode(history, inn1Data) {
+    initWagonWheel();
+    const svg = document.getElementById('wagon-wheel-svg');
+    if (!svg) return;
+    svg.querySelectorAll('.wagon-shot, .wagon-six-dot').forEach(el => el.remove());
+
+    let source = history;
+    if (wagonViewMode === 'first' && inn1Data && Array.isArray(inn1Data.ballHistory)) {
+        source = inn1Data.ballHistory;
+    }
+    source.forEach(bd => addWagonWheelShot(bd));
+    updateWagonViewControls(history, inn1Data);
 }
 
 // ============================================================
@@ -133,6 +202,7 @@ function addWagonWheelShot(bd) {
     line.setAttribute('stroke-linecap', 'round');
     line.setAttribute('stroke-dasharray', length); line.setAttribute('stroke-dashoffset', length);
     line.classList.add('wagon-shot');
+    line.setAttribute('opacity', bd.innings === 1 ? '0.55' : '0.9');
     svg.appendChild(line);
 
     if (runs >= 6 && !isExtra) {
@@ -284,55 +354,126 @@ function getBallDotText(b) {
 //  4/5. CHARTS — Manhattan (bar) + Worm (line)
 // ============================================================
 
-function updateCharts(oRuns, history) {
-    const overTotals = buildOverTotals(oRuns, history);
-    _updateManhattan(overTotals);
-    _updateWorm(history);
+function updateCharts(oRuns, history, inn1Data) {
+    const currentStats = buildOverStats(oRuns, history);
+    const inn1Stats = (inn1Data && Array.isArray(inn1Data.ballHistory))
+        ? buildOverStats(inn1Data.overRuns || [], inn1Data.ballHistory)
+        : null;
+    _updateManhattan(currentStats, inn1Stats);
+    _rebuildWorm(history, inn1Data);
 }
 
 function rebuildCharts(oRuns, history, inn1Data) {
     if (manhattanChart) { manhattanChart.destroy(); manhattanChart = null; }
     if (wormChart) { wormChart.destroy(); wormChart = null; }
-    const overTotals = buildOverTotals(oRuns, history);
-    _updateManhattan(overTotals);
-    _rebuildWorm(history, inn1Data);
+    updateCharts(oRuns, history, inn1Data);
 }
 
-function buildOverTotals(oRuns, history) {
-    const t = {};
-    for (const b of history) t[b.over] = (t[b.over] || 0) + b.runs;
-    for (let i = 0; i < oRuns.length; i++) if (oRuns[i] !== undefined) t[i] = oRuns[i];
-    return t;
+function buildOverStats(oRuns, history) {
+    const runsByOver = {};
+    const wicketsByOver = {};
+    for (const b of history) {
+        runsByOver[b.over] = (runsByOver[b.over] || 0) + (b.runs || 0);
+        if (b.batter_out) wicketsByOver[b.over] = (wicketsByOver[b.over] || 0) + 1;
+    }
+    for (let i = 0; i < oRuns.length; i++) if (oRuns[i] !== undefined) runsByOver[i] = oRuns[i];
+    return { runsByOver, wicketsByOver };
 }
 
-function _updateManhattan(overTotals) {
+function _buildWormSeries(history) {
+    const path = [{ x: 0, y: 0 }];
+    const wickets = [];
+    let cumulative = 0;
+    for (const b of history) {
+        cumulative += (b.runs || 0);
+        const point = { x: b.over + (b.ball + 1) / 6, y: cumulative };
+        path.push(point);
+        if (b.batter_out) wickets.push(point);
+    }
+    return { path, wickets };
+}
+
+function _updateManhattan(currentStats, inn1Stats) {
     const canvas = document.getElementById('manhattan-chart');
     if (!canvas || typeof Chart === 'undefined') return;
 
-    const maxOver = Math.max(...Object.keys(overTotals).map(Number), 0);
-    const labels = [], data = [], colors = [];
+    const hasTwoInnings = !!(inn1Stats && Object.keys(inn1Stats.runsByOver || {}).length > 0);
+    const allOvers = [
+        ...Object.keys(currentStats.runsByOver || {}).map(Number),
+        ...Object.keys((inn1Stats && inn1Stats.runsByOver) || {}).map(Number)
+    ];
+    const maxOver = Math.max(...allOvers, 0);
+    const labels = [];
+    const currentData = [];
+    const currentWkts = [];
+    const currentColors = [];
+    const inn1Data = [];
+    const inn1Wkts = [];
     for (let i = 0; i <= maxOver; i++) {
         labels.push(i + 1);
-        const r = overTotals[i] || 0;
-        data.push(r);
-        colors.push(r >= 15 ? '#8b5cf6' : r >= 10 ? '#3b82f6' : r >= 6 ? '#569cd6' : '#3c6e8f');
+        const rCurrent = currentStats.runsByOver[i] || 0;
+        const rInn1 = hasTwoInnings ? ((inn1Stats.runsByOver[i] || 0)) : 0;
+        currentData.push(rCurrent);
+        currentWkts.push(currentStats.wicketsByOver[i] || 0);
+        currentColors.push(rCurrent >= 15 ? '#8b5cf6' : rCurrent >= 10 ? '#3b82f6' : rCurrent >= 6 ? '#569cd6' : '#3c6e8f');
+        if (hasTwoInnings) {
+            inn1Data.push(rInn1);
+            inn1Wkts.push(inn1Stats.wicketsByOver[i] || 0);
+        }
+    }
+
+    const datasets = [];
+    if (hasTwoInnings) {
+        datasets.push({
+            label: '1st Inn',
+            data: inn1Data,
+            backgroundColor: '#4b5563',
+            borderRadius: 3,
+            borderSkipped: false,
+            wicketCounts: inn1Wkts
+        });
+        datasets.push({
+            label: '2nd Inn',
+            data: currentData,
+            backgroundColor: currentColors,
+            borderRadius: 3,
+            borderSkipped: false,
+            wicketCounts: currentWkts
+        });
+    } else {
+        datasets.push({
+            label: 'Runs',
+            data: currentData,
+            backgroundColor: currentColors,
+            borderRadius: 3,
+            borderSkipped: false,
+            wicketCounts: currentWkts
+        });
     }
 
     if (manhattanChart) {
         manhattanChart.data.labels = labels;
-        manhattanChart.data.datasets[0].data = data;
-        manhattanChart.data.datasets[0].backgroundColor = colors;
+        manhattanChart.data.datasets = datasets;
+        if (manhattanChart.options && manhattanChart.options.plugins && manhattanChart.options.plugins.legend) {
+            manhattanChart.options.plugins.legend.display = hasTwoInnings;
+        }
         manhattanChart.update('none');
         return;
     }
 
     manhattanChart = new Chart(canvas.getContext('2d'), {
+        plugins: [wicketMarkerPlugin],
         type: 'bar',
-        data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 3, borderSkipped: false }] },
+        data: { labels, datasets },
         options: {
             responsive: false,
             animation: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: {
+                    display: hasTwoInnings,
+                    labels: { color: '#a3a3a3', boxWidth: 8, boxHeight: 8, font: { size: 9, family: 'IBM Plex Mono' } }
+                }
+            },
             scales: {
                 x: { grid: { color: '#2d2d2d' }, ticks: { color: '#888', font: { size: 9, family: 'IBM Plex Mono' } } },
                 y: { beginAtZero: true, grid: { color: '#2d2d2d' }, ticks: { color: '#888', font: { size: 9, family: 'IBM Plex Mono' }, stepSize: 5 } }
@@ -342,51 +483,70 @@ function _updateManhattan(overTotals) {
     _resizeChartToParent(manhattanChart, canvas);
 }
 
-function _updateWorm(history) {
-    if (!wormChart) {
-        _rebuildWorm(history, typeof innings1Data !== 'undefined' ? innings1Data : null);
-        return;
-    }
-    // In-place update of current innings data only
-    const wormData = [{ x: 0, y: 0 }];
-    let cum = 0;
-    for (const b of history) { cum += b.runs; wormData.push({ x: b.over + (b.ball + 1) / 6, y: cum }); }
-    wormChart.data.datasets[0].data = wormData;
-    wormChart.update('none');
-}
-
 function _rebuildWorm(history, inn1Data) {
     const canvas = document.getElementById('worm-chart');
     if (!canvas || typeof Chart === 'undefined') return;
 
-    const wormData = [{ x: 0, y: 0 }];
-    let cum = 0;
-    for (const b of history) { cum += b.runs; wormData.push({ x: b.over + (b.ball + 1) / 6, y: cum }); }
+    const hasTwoInnings = !!(inn1Data && Array.isArray(inn1Data.ballHistory) && inn1Data.ballHistory.length > 0);
+    const currentSeries = _buildWormSeries(history);
 
     const datasets = [{
-        label: 'Current', data: wormData,
+        label: hasTwoInnings ? '2nd Innings' : 'Current',
+        data: currentSeries.path,
         borderColor: '#569cd6', backgroundColor: 'rgba(86,156,214,0.1)',
         fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
     }];
+    datasets.push({
+        type: 'scatter',
+        label: 'Wickets (Current)',
+        data: currentSeries.wickets,
+        pointRadius: 5,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#ffffff',
+        pointBorderColor: '#e5e7eb',
+        pointBorderWidth: 1,
+        showLine: false
+    });
 
-    if (inn1Data && inn1Data.ballHistory && inn1Data.ballHistory.length > 0) {
-        const inn1Worm = [{ x: 0, y: 0 }];
-        let c1 = 0;
-        for (const b of inn1Data.ballHistory) { c1 += b.runs; inn1Worm.push({ x: b.over + (b.ball + 1) / 6, y: c1 }); }
-        datasets.push({ label: '1st Innings', data: inn1Worm, borderColor: '#6b7280', borderDash: [5, 3], fill: false, tension: 0.3, pointRadius: 0, borderWidth: 1.5 });
+    if (hasTwoInnings) {
+        const inn1Series = _buildWormSeries(inn1Data.ballHistory);
+        datasets.push({ label: '1st Innings', data: inn1Series.path, borderColor: '#6b7280', borderDash: [5, 3], fill: false, tension: 0.3, pointRadius: 0, borderWidth: 1.5 });
+        datasets.push({
+            type: 'scatter',
+            label: 'Wickets (1st)',
+            data: inn1Series.wickets,
+            pointRadius: 5,
+            pointHoverRadius: 6,
+            pointBackgroundColor: '#ffffff',
+            pointBorderColor: '#e5e7eb',
+            pointBorderWidth: 1,
+            showLine: false
+        });
 
         const target = history.length > 0 ? history[history.length - 1].target : null;
         if (target) datasets.push({ label: 'Target', data: [{ x: 0, y: target }, { x: 20, y: target }], borderColor: '#ef4444', borderDash: [8, 4], fill: false, pointRadius: 0, borderWidth: 1 });
     }
 
-    if (wormChart) { wormChart.data.datasets = datasets; wormChart.update('none'); return; }
+    if (wormChart) {
+        wormChart.data.datasets = datasets;
+        if (wormChart.options && wormChart.options.plugins && wormChart.options.plugins.legend) {
+            wormChart.options.plugins.legend.display = hasTwoInnings;
+        }
+        wormChart.update('none');
+        return;
+    }
 
     wormChart = new Chart(canvas.getContext('2d'), {
         type: 'line', data: { datasets },
         options: {
             responsive: false,
             animation: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: {
+                    display: hasTwoInnings,
+                    labels: { color: '#a3a3a3', boxWidth: 8, boxHeight: 8, font: { size: 9, family: 'IBM Plex Mono' } }
+                }
+            },
             scales: {
                 x: { type: 'linear', min: 0, max: 20, grid: { color: '#2d2d2d' }, ticks: { color: '#888', font: { size: 9, family: 'IBM Plex Mono' }, stepSize: 5 } },
                 y: { beginAtZero: true, grid: { color: '#2d2d2d' }, ticks: { color: '#888', font: { size: 9, family: 'IBM Plex Mono' } } }
@@ -401,8 +561,9 @@ function _resizeChartToParent(chart, canvas) {
     const parent = canvas.parentElement;
     if (!parent) return;
     const headerH = parent.querySelector('.panel-header')?.offsetHeight || 0;
+    const badgeH = parent.querySelector('.panel-badge-row')?.offsetHeight || 0;
     const w = parent.clientWidth - 16;
-    const h = parent.clientHeight - headerH - 16;
+    const h = parent.clientHeight - headerH - badgeH - 16;
     if (w > 0 && h > 0) {
         canvas.style.width = w + 'px';
         canvas.style.height = h + 'px';
@@ -477,3 +638,95 @@ function updateLatestBallTicker(bd) {
         `<span style="color:#888">${overBall}</span>
          <span class="${cls}">${bd.batter_out ? 'W! ' : bd.runs + ' '}${desc}</span>`;
 }
+
+async function saveMatchCenterImage() {
+    if (typeof html2canvas === 'undefined') {
+        alert('Image export library is not loaded.');
+        return;
+    }
+    if (typeof dashboardActive !== 'undefined' && !dashboardActive) {
+        alert('Switch to Match Center view before saving.');
+        return;
+    }
+
+    const panelIds = ['wagon-panel', 'players-panel', 'manhattan-panel', 'worm-panel'];
+    const panels = panelIds.map(id => document.getElementById(id));
+    if (panels.some(p => !p)) {
+        alert('Unable to find dashboard panels for export.');
+        return;
+    }
+
+    const button = document.getElementById('save-dashboard-btn');
+    if (button) button.disabled = true;
+
+    try {
+        const captures = await Promise.all(
+            panels.map(panel => html2canvas(panel, {
+                backgroundColor: '#1e1e1e',
+                scale: 2,
+                useCORS: true,
+                logging: false
+            }))
+        );
+
+        const colWidths = [
+            Math.max(captures[0].width, captures[2].width),
+            Math.max(captures[1].width, captures[3].width)
+        ];
+        const rowHeights = [
+            Math.max(captures[0].height, captures[1].height),
+            Math.max(captures[2].height, captures[3].height)
+        ];
+        const gap = 16;
+        const canvas = document.createElement('canvas');
+        canvas.width = colWidths[0] + colWidths[1] + gap;
+        canvas.height = rowHeights[0] + rowHeights[1] + gap;
+
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#111827';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const drawInCell = (img, cellX, cellY, cellW, cellH) => {
+            const dx = cellX + Math.floor((cellW - img.width) / 2);
+            const dy = cellY + Math.floor((cellH - img.height) / 2);
+            ctx.drawImage(img, dx, dy);
+        };
+
+        drawInCell(captures[0], 0, 0, colWidths[0], rowHeights[0]);
+        drawInCell(captures[1], colWidths[0] + gap, 0, colWidths[1], rowHeights[0]);
+        drawInCell(captures[2], 0, rowHeights[0] + gap, colWidths[0], rowHeights[1]);
+        drawInCell(captures[3], colWidths[0] + gap, rowHeights[0] + gap, colWidths[1], rowHeights[1]);
+
+        const a = document.createElement('a');
+        const matchId = (window.matchData && window.matchData.match_id) ? window.matchData.match_id : 'match';
+        a.href = canvas.toDataURL('image/png');
+        a.download = `match_center_${matchId}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    } catch (e) {
+        console.error('Failed to export Match Center image', e);
+        alert('Failed to export Match Center image.');
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('save-dashboard-btn');
+    if (btn) btn.addEventListener('click', saveMatchCenterImage);
+
+    const flipBtn = document.getElementById('wagon-flip-btn');
+    if (flipBtn) {
+        flipBtn.addEventListener('click', () => {
+            const currentHistory = (typeof ballHistory !== 'undefined' && Array.isArray(ballHistory)) ? ballHistory : [];
+            const inn1 = (typeof innings1Data !== 'undefined') ? innings1Data : null;
+            const hasInn1 = !!(inn1 && Array.isArray(inn1.ballHistory) && inn1.ballHistory.length > 0);
+            const hasCurrent = currentHistory.length > 0;
+            if (!(hasInn1 && hasCurrent)) return;
+
+            wagonViewMode = wagonViewMode === 'first' ? 'current' : 'first';
+            renderWagonByMode(currentHistory, inn1);
+        });
+    }
+});

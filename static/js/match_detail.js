@@ -18,6 +18,7 @@ let impactPlayerState = {
 let matchOver = false;
 let currentInningsNumber = null;
 let delay = 300; // default 1x pace
+const MIN_BALL_DELAY_MS = 200; // Enforce 0.2s minimum gap between balls
 let logLineCount = 1; // Track line numbers for commentary display
 let isFinalScoreboard = false;
 let simTimerId = null; // F4: track simulation timer to prevent overlapping loops
@@ -32,6 +33,29 @@ let overRuns = [];             // Runs per completed over [8, 12, 5, ...]
 let currentOverBalls = [];     // Balls in the current over (for timeline)
 let innings1Data = null;       // Saved {ballHistory, overRuns} from 1st innings for worm overlay
 let dashboardActive = false;   // Which view is showing
+
+// Hard-lock code window height to available space in main panel.
+function syncCodeWindowHeight() {
+    const mainPanel = document.querySelector('.main-panel');
+    const scoreBanner = document.querySelector('.score-banner');
+    const controlsBar = document.querySelector('.controls-bar');
+    const codeWindow = document.querySelector('.code-window');
+
+    if (!mainPanel || !scoreBanner || !controlsBar || !codeWindow) return;
+
+    const panelHeight = mainPanel.clientHeight;
+    if (!panelHeight) return;
+
+    const panelStyle = getComputedStyle(mainPanel);
+    const rowGap = parseFloat(panelStyle.rowGap || panelStyle.gap || '0') || 0;
+    const available = panelHeight - scoreBanner.offsetHeight - controlsBar.offsetHeight - (rowGap * 2);
+
+    if (available > 120) {
+        const px = `${Math.floor(available)}px`;
+        codeWindow.style.height = px;
+        codeWindow.style.maxHeight = px;
+    }
+}
 
 // C1: HTML escaping utility to prevent XSS via innerHTML
 function escapeHtml(str) {
@@ -84,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (dashboardActive && typeof refreshDashboard === 'function') {
                 refreshDashboard(ballHistory, overRuns, innings1Data);
             }
+            requestAnimationFrame(syncCodeWindowHeight);
         });
     }
 
@@ -108,6 +133,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof matchData !== 'undefined') {
         initializeImpactPlayerState();
     }
+
+    // Initial and responsive lock for commentary panel height.
+    requestAnimationFrame(syncCodeWindowHeight);
+    setTimeout(syncCodeWindowHeight, 50);
+    window.addEventListener('resize', syncCodeWindowHeight);
 });
 
 
@@ -548,7 +578,7 @@ function spinTossAndStartMatch() {
 
 function scheduleNextBall(delayMs) {
     if (simTimerId) clearTimeout(simTimerId);
-    simTimerId = setTimeout(startMatch, delayMs);
+    simTimerId = setTimeout(startMatch, Math.max(MIN_BALL_DELAY_MS, delayMs));
 }
 
 function startMatch() {
@@ -577,7 +607,7 @@ function startMatch() {
                 ballHistory.push(data.ball_data);
                 updateCurrentOverBalls(data.ball_data);
                 if (typeof updateDashboard === 'function') {
-                    updateDashboard(data.ball_data, ballHistory, overRuns);
+                    updateDashboard(data.ball_data, ballHistory, overRuns, innings1Data);
                 }
             }
 

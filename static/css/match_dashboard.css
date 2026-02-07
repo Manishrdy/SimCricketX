@@ -107,6 +107,42 @@
     flex-shrink: 0;
 }
 
+.panel-badge-row {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.2rem;
+    min-height: 14px;
+}
+
+.innings-badge {
+    font-size: 0.52rem;
+    color: #9ca3af;
+    background: #111827;
+    border: 1px solid #374151;
+    border-radius: 10px;
+    padding: 1px 6px;
+    letter-spacing: 0.02em;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.innings-flip-btn {
+    border: 1px solid #374151;
+    background: #0f172a;
+    color: #d1d5db;
+    font-size: 0.52rem;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1.2;
+}
+
+.innings-flip-btn:hover {
+    border-color: #6b7280;
+    color: #ffffff;
+}
+
 /* --- Ground Panel (Wagon Wheel) --- */
 .ground-panel svg {
     width: 100%;
@@ -336,12 +372,12 @@
 
 .chart-panel canvas {
     position: absolute;
-    top: 30px; /* below panel-header */
+    top: 44px; /* below badge + panel-header */
     left: 8px;
     right: 8px;
     bottom: 8px;
     width: calc(100% - 16px) !important;
-    height: calc(100% - 38px) !important;
+    height: calc(100% - 52px) !important;
 }
 
 /* --- Ticker colors --- */

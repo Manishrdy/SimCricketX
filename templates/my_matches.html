@@ -1,1179 +1,1399 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "layout.html" %}
 
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Matches - SimCricketX</title>
+{% block title %}My Matches | SimCricketX{% endblock %}
 
-    <!-- Preserve saved theme -->
-    <script>
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme) {
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        }
-    </script>
+{% block extra_css %}
+<style>
+    /* ========== HERO ========== */
+    .matches-hero {
+        position: relative;
+        padding: 3.5rem 0 2.5rem;
+        margin-bottom: 2rem;
+        overflow: hidden;
+    }
 
-    <!-- Modern CSS Reset -->
-    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
-    <!-- Font Awesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
-        crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <!-- Google Fonts -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
-        rel="stylesheet">
+    .matches-hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(ellipse at 20% 50%, rgba(34, 139, 34, 0.05) 0%, transparent 60%),
+            radial-gradient(ellipse at 85% 30%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+        pointer-events: none;
+    }
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/shared.css') }}">
+    /* Decorative cricket field lines */
+    .matches-hero::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 600px;
+        height: 600px;
+        border-radius: 50%;
+        border: 2px solid var(--card-border);
+        opacity: 0.08;
+        pointer-events: none;
+    }
 
-    <style>
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                          CRICKET THEME VARIABLES                              */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        :root {
-            /* Light Theme - Minimalistic */
-            --bg: #ffffff;
-            --bg-secondary: #f8f9fa;
-            --fg: #1a1a1a;
-            --fg-secondary: #666666;
-            --card-bg: #ffffff;
-            --card-border: #e2e4e8;
-            --accent: #24292f;
-            --accent-hover: #000000;
-            --accent-light: #f3f4f6;
-            --shadow: rgba(0, 0, 0, 0.05);
-            --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
-            --gradient: linear-gradient(135deg, #24292f 0%, #4a5568 100%);
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --danger-hover: #dc2626;
-            /* Cricket specific */
-            --glass-bg: rgba(255, 255, 255, 0.15);
-            --cricket-primary: #2d5016;
-            --cricket-secondary: #8b4513;
-            --cricket-field: #228b22;
-            --cricket-ball: #cd853f;
-            --border: rgba(34, 41, 47, 0.2);
-            --modal-bg: rgba(0, 0, 0, 0.5);
-        }
+    .hero-deco-ball {
+        position: absolute;
+        top: 15%;
+        right: 4%;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 35%, #DC143C, #8B0000);
+        opacity: 0.08;
+        animation: heroBallFloat 7s ease-in-out infinite;
+        pointer-events: none;
+    }
 
-        [data-theme="dark"] {
-            /* Dark Theme - VS Code One Dark Pro */
-            --bg: #282c34;
-            --bg-secondary: #21252b;
-            --fg: #abb2bf;
-            --fg-secondary: #5c6370;
-            --card-bg: #21252b;
-            --card-border: #3e4451;
-            --accent: #61afef;
-            --accent-hover: #528bcc;
-            --accent-light: rgba(97, 175, 239, 0.15);
-            --shadow: rgba(0, 0, 0, 0.3);
-            --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 60px rgba(97, 175, 239, 0.1);
-            --gradient: linear-gradient(135deg, #61afef 0%, #c678dd 100%);
-            /* Cricket specific */
-            --glass-bg: rgba(255, 255, 255, 0.05);
-            --cricket-primary: #98c379;
-            --cricket-secondary: #e5c07b;
-            --border: rgba(97, 175, 239, 0.3);
+    .hero-deco-ball::before {
+        content: '';
+        position: absolute;
+        top: 12px;
+        left: 5px;
+        right: 5px;
+        height: 1.5px;
+        background: rgba(255, 255, 255, 0.4);
+        border-radius: 50%;
+        transform: rotate(15deg);
+    }
 
-            /* One Dark Pro Extended Palette */
-            --one-dark-red: #e06c75;
-            --one-dark-green: #98c379;
-            --one-dark-yellow: #e5c07b;
-            --one-dark-blue: #61afef;
-            --one-dark-purple: #c678dd;
-            --one-dark-cyan: #56b6c2;
-            --one-dark-orange: #d19a66;
-        }
+    @keyframes heroBallFloat {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50%      { transform: translateY(-14px) rotate(180deg); }
+    }
 
+    .hero-row {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 2rem;
+        position: relative;
+        z-index: 1;
+    }
 
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              GLOBAL FOUNDATION                                */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        * {
-            box-sizing: border-box;
-        }
+    .hero-text h1 {
+        font-size: 2.8rem;
+        font-weight: 900;
+        background: var(--gradient);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+        margin-bottom: 0.5rem;
+    }
 
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg);
-            color: var(--fg);
-            line-height: 1.6;
-            min-height: 100vh;
-            display: flex;
+    .hero-text p {
+        color: var(--fg-secondary);
+        font-size: 1.05rem;
+        max-width: 480px;
+        line-height: 1.6;
+    }
+
+    /* ========== STAT PILLS ========== */
+    .stat-pills {
+        display: flex;
+        gap: 1rem;
+        flex-shrink: 0;
+    }
+
+    .stat-pill {
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 16px;
+        padding: 1rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        min-width: 130px;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stat-pill::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, var(--accent-light) 0%, transparent 100%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .stat-pill:hover {
+        border-color: var(--accent);
+        transform: translateY(-3px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+
+    .stat-pill:hover::before { opacity: 1; }
+
+    .stat-pill .pill-value {
+        font-size: 2rem;
+        font-weight: 900;
+        font-family: 'IBM Plex Mono', monospace;
+        background: var(--gradient);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        line-height: 1;
+        position: relative;
+    }
+
+    .stat-pill .pill-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--fg-secondary);
+        font-weight: 600;
+        position: relative;
+    }
+
+    /* ========== TOOLBAR (tabs + search) ========== */
+    .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.75rem;
+        flex-wrap: wrap;
+    }
+
+    /* Tab Bar with sliding indicator */
+    .tab-bar {
+        display: flex;
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 14px;
+        padding: 4px;
+        position: relative;
+    }
+
+    .tab-indicator {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        height: calc(100% - 8px);
+        border-radius: 11px;
+        background: var(--accent);
+        transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    }
+
+    [data-theme="dark"] .tab-indicator {
+        box-shadow: 0 2px 12px rgba(97, 175, 239, 0.25);
+    }
+
+    .tab-item {
+        position: relative;
+        z-index: 1;
+        border: none;
+        background: transparent;
+        padding: 0.6rem 1.4rem;
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: var(--fg-secondary);
+        border-radius: 11px;
+        cursor: pointer;
+        transition: color 0.25s ease;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        white-space: nowrap;
+    }
+
+    .tab-item:hover { color: var(--fg); }
+
+    .tab-item.active { color: #fff; }
+
+    .tab-badge {
+        font-size: 0.68rem;
+        font-weight: 700;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 1px 7px;
+        border-radius: 8px;
+        line-height: 1.5;
+    }
+
+    .tab-item:not(.active) .tab-badge {
+        background: var(--accent-light);
+        color: var(--accent);
+    }
+
+    /* Search Bar */
+    .search-box {
+        position: relative;
+        width: 260px;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 0.55rem 0.9rem 0.55rem 2.3rem;
+        border: 2px solid var(--card-border);
+        border-radius: 11px;
+        background: var(--card-bg);
+        color: var(--fg);
+        font-size: 0.85rem;
+        font-family: inherit;
+        font-weight: 500;
+        transition: all 0.25s ease;
+        outline: none;
+    }
+
+    .search-box input::placeholder {
+        color: var(--fg-secondary);
+        opacity: 0.6;
+    }
+
+    .search-box input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
+    .search-box .search-icon {
+        position: absolute;
+        left: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--fg-secondary);
+        font-size: 0.78rem;
+        opacity: 0.6;
+        pointer-events: none;
+    }
+
+    .search-box .clear-search {
+        position: absolute;
+        right: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        border: none;
+        background: none;
+        color: var(--fg-secondary);
+        font-size: 0.75rem;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 6px;
+        display: none;
+        transition: color 0.2s;
+    }
+
+    .search-box .clear-search:hover { color: var(--fg); }
+    .search-box.has-query .clear-search { display: block; }
+
+    /* ========== PANELS ========== */
+    .panel {
+        display: none;
+        animation: panelIn 0.3s ease;
+    }
+
+    .panel.active { display: block; }
+
+    @keyframes panelIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ========== MATCH CARDS ========== */
+    .match-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        gap: 1.25rem;
+    }
+
+    .match-card {
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 20px;
+        overflow: hidden;
+        transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+    }
+
+    .match-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: var(--gradient);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .match-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-5px);
+        box-shadow:
+            0 20px 50px rgba(0, 0, 0, 0.1),
+            0 0 0 1px var(--accent);
+    }
+
+    .match-card:hover::before {
+        transform: scaleX(1);
+    }
+
+    .match-card-body {
+        padding: 1.25rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+    }
+
+    /* Teams & Date Row */
+    .match-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .match-teams {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--fg);
+        line-height: 1.3;
+    }
+
+    .match-teams .vs {
+        color: var(--fg-secondary);
+        font-weight: 400;
+        font-size: 0.78rem;
+        margin: 0 0.35rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .match-date-chip {
+        font-size: 0.72rem;
+        color: var(--fg-secondary);
+        font-weight: 600;
+        white-space: nowrap;
+        background: var(--bg-secondary);
+        padding: 3px 9px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-shrink: 0;
+    }
+
+    /* Score Comparison Block */
+    .score-block {
+        background: var(--bg-secondary);
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    .score-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.6rem 1rem;
+        transition: background 0.2s ease;
+    }
+
+    .score-row + .score-row {
+        border-top: 1px solid var(--card-border);
+    }
+
+    .score-row:hover {
+        background: var(--accent-light);
+    }
+
+    .score-team-name {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--fg);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .team-initial {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        background: var(--gradient);
+        color: #fff;
+        font-size: 0.65rem;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        letter-spacing: -0.02em;
+    }
+
+    .score-figures {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: var(--fg);
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
+    }
+
+    .score-overs {
+        font-size: 0.72rem;
+        font-weight: 500;
+        color: var(--fg-secondary);
+    }
+
+    /* Result */
+    .match-result {
+        font-size: 0.82rem;
+        color: var(--fg-secondary);
+        line-height: 1.5;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .result-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        flex-shrink: 0;
+        box-shadow: 0 0 6px var(--accent);
+    }
+
+    /* Footer */
+    .match-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.75rem 1.5rem;
+        border-top: 1px solid var(--card-border);
+        background: color-mix(in srgb, var(--bg-secondary) 50%, transparent);
+    }
+
+    .match-id {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.7rem;
+        color: var(--fg-secondary);
+        opacity: 0.6;
+    }
+
+    .scoreboard-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--accent);
+        text-decoration: none;
+        transition: all 0.2s ease;
+        padding: 0.4rem 0;
+    }
+
+    .scoreboard-link i {
+        transition: transform 0.25s ease;
+    }
+
+    .scoreboard-link:hover {
+        gap: 0.65rem;
+    }
+
+    .scoreboard-link:hover i.fa-arrow-right {
+        transform: translateX(3px);
+    }
+
+    /* No-results filter message */
+    .no-filter-results {
+        display: none;
+        text-align: center;
+        padding: 3rem 2rem;
+        color: var(--fg-secondary);
+        font-size: 0.95rem;
+    }
+
+    .no-filter-results i {
+        font-size: 2rem;
+        opacity: 0.3;
+        display: block;
+        margin-bottom: 0.75rem;
+    }
+
+    /* ========== ARCHIVE CARDS ========== */
+    .archive-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 1.25rem;
+    }
+
+    .archive-card {
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 20px;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .archive-card::after {
+        content: '';
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--accent) 0%, transparent 100%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .archive-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-4px);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
+    }
+
+    .archive-card:hover::after { opacity: 1; }
+
+    .archive-icon-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .archive-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 13px;
+        background: var(--accent-light);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+        transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .archive-card:hover .archive-icon {
+        background: var(--accent);
+        color: #fff;
+        transform: rotate(-8deg) scale(1.08);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    .archive-filename {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--fg);
+        word-break: break-word;
+        line-height: 1.35;
+    }
+
+    .archive-meta-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+    }
+
+    .meta-chip {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.75rem;
+        color: var(--fg-secondary);
+    }
+
+    .meta-chip i {
+        font-size: 0.65rem;
+        opacity: 0.5;
+    }
+
+    /* Expiry progress bar */
+    .expiry-bar-wrap {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+
+    .expiry-label {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .expiry-label.expired { color: var(--one-dark-red, #d43b52); }
+
+    .expiry-track {
+        height: 5px;
+        border-radius: 10px;
+        background: var(--card-border);
+        overflow: hidden;
+    }
+
+    .expiry-fill {
+        height: 100%;
+        border-radius: 10px;
+        background: var(--accent);
+        transition: width 1s linear, background 0.5s ease;
+        min-width: 2px;
+    }
+
+    .expiry-fill.low {
+        background: #e5c07b;
+    }
+
+    .expiry-fill.critical {
+        background: var(--one-dark-red, #d43b52);
+    }
+
+    .expiry-fill.gone {
+        width: 0 !important;
+        background: var(--one-dark-red, #d43b52);
+    }
+
+    .archive-actions {
+        display: flex;
+        gap: 0.6rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--card-border);
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.5rem 1rem;
+        border: 2px solid var(--card-border);
+        border-radius: 10px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        text-decoration: none;
+        background: var(--card-bg);
+        color: var(--fg);
+    }
+
+    .action-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-light);
+        transform: translateY(-1px);
+    }
+
+    .action-btn.download {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+    }
+
+    .action-btn.download:hover {
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+        color: #fff;
+    }
+
+    .action-btn.danger {
+        color: var(--one-dark-red, #d43b52);
+        border-color: transparent;
+        background: transparent;
+    }
+
+    .action-btn.danger:hover {
+        background: rgba(224, 108, 117, 0.1);
+        border-color: rgba(224, 108, 117, 0.3);
+        color: var(--one-dark-red, #d43b52);
+    }
+
+    /* ========== EMPTY STATE ========== */
+    .empty-state {
+        text-align: center;
+        padding: 4.5rem 2rem;
+        background: var(--card-bg);
+        border: 2px dashed var(--card-border);
+        border-radius: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .empty-state::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at 50% 120%, var(--accent-light) 0%, transparent 60%);
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+    .empty-icon {
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        background: var(--accent-light);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.2rem;
+        margin: 0 auto 1.5rem;
+        position: relative;
+        animation: emptyPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes emptyPulse {
+        0%, 100% { box-shadow: 0 0 0 0 var(--accent-light); }
+        50%      { box-shadow: 0 0 0 14px transparent; }
+    }
+
+    .empty-state h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--fg);
+        margin-bottom: 0.5rem;
+        position: relative;
+    }
+
+    .empty-state p {
+        color: var(--fg-secondary);
+        font-size: 0.95rem;
+        max-width: 400px;
+        margin: 0 auto 1.75rem;
+        line-height: 1.6;
+        position: relative;
+    }
+
+    .empty-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.8rem 1.6rem;
+        background: var(--gradient);
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        position: relative;
+    }
+
+    .empty-cta:hover {
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    /* ========== DELETE MODAL ========== */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(6px);
+        z-index: 100;
+        padding: 1rem;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.show {
+        display: flex;
+        opacity: 1;
+    }
+
+    .modal-box {
+        width: min(440px, 100%);
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 24px;
+        padding: 2rem;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+        animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes modalIn {
+        from { opacity: 0; transform: scale(0.92) translateY(12px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: rgba(224, 108, 117, 0.12);
+        color: var(--one-dark-red, #d43b52);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        margin-bottom: 1rem;
+    }
+
+    .modal-box h3 {
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin-bottom: 0.4rem;
+    }
+
+    .modal-box p {
+        color: var(--fg-secondary);
+        font-size: 0.88rem;
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+    }
+
+    .modal-btns {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+
+    .modal-btn {
+        padding: 0.6rem 1.3rem;
+        border-radius: 10px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 2px solid var(--card-border);
+        background: var(--card-bg);
+        color: var(--fg);
+    }
+
+    .modal-btn:hover { border-color: var(--accent); }
+
+    .modal-btn.confirm-delete {
+        background: var(--one-dark-red, #d43b52);
+        color: #fff;
+        border-color: transparent;
+    }
+
+    .modal-btn.confirm-delete:hover {
+        box-shadow: 0 6px 16px rgba(224, 108, 117, 0.35);
+        transform: translateY(-1px);
+    }
+
+    /* ========== TOAST ========== */
+    .toast-container {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        z-index: 200;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .toast {
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 14px;
+        padding: 0.85rem 1.25rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--fg);
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+        animation: toastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        max-width: 360px;
+    }
+
+    .toast.success { border-color: var(--one-dark-green, #98c379); }
+    .toast.success i { color: var(--one-dark-green, #98c379); }
+    .toast.error { border-color: var(--one-dark-red, #e06c75); }
+    .toast.error i { color: var(--one-dark-red, #e06c75); }
+
+    .toast.removing {
+        animation: toastOut 0.3s ease forwards;
+    }
+
+    @keyframes toastIn {
+        from { opacity: 0; transform: translateX(40px) scale(0.95); }
+        to   { opacity: 1; transform: translateX(0) scale(1); }
+    }
+
+    @keyframes toastOut {
+        to { opacity: 0; transform: translateX(40px) scale(0.95); }
+    }
+
+    /* ========== STAGGER ========== */
+    .match-card, .archive-card {
+        opacity: 0;
+        animation: cardReveal 0.4s ease forwards;
+    }
+
+    @keyframes cardReveal {
+        from { opacity: 0; transform: translateY(16px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 768px) {
+        .hero-row {
             flex-direction: column;
-            position: relative;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* Animated Cricket Stadium Background */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background:
-                radial-gradient(circle at 20% 30%, var(--cricket-field) 1px, transparent 1px),
-                radial-gradient(circle at 80% 70%, var(--cricket-ball) 1px, transparent 1px),
-                radial-gradient(circle at 50% 50%, rgba(34, 139, 34, 0.03) 2px, transparent 2px),
-                linear-gradient(135deg, transparent 40%, rgba(34, 139, 34, 0.02) 60%);
-            background-size: 600px 600px, 400px 400px, 800px 800px, 100% 100%;
-            animation: stadiumFloat 25s ease-in-out infinite;
-            pointer-events: none;
-            z-index: -1;
-            opacity: 0.7;
-        }
-
-        @keyframes stadiumFloat {
-
-            0%,
-            100% {
-                transform: translateY(0px) rotate(0deg);
-            }
-
-            25% {
-                transform: translateY(-15px) rotate(1deg);
-            }
-
-            50% {
-                transform: translateY(5px) rotate(-0.5deg);
-            }
-
-            75% {
-                transform: translateY(-10px) rotate(0.5deg);
-            }
-        }
-
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              HEADER & NAVIGATION                              */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        .nav-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: var(--card-bg);
-            border-bottom: 1px solid var(--card-border);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            z-index: 1000;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo {
-            font-size: 1.25rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            text-decoration: none;
-            color: var(--fg);
-        }
-
-        .logo-icon {
-            font-size: 1.5rem;
-            color: var(--accent);
-        }
-
-        .nav-logo-text {
-            background: linear-gradient(135deg, var(--accent), #8b5cf6);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-
-        .nav-controls {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .theme-toggle {
-            background: var(--bg);
-            border: 1px solid var(--card-border);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--fg-secondary);
-            transition: var(--transition);
-            cursor: pointer;
-            text-decoration: none;
-            font-size: 1rem;
-        }
-
-        .theme-toggle:hover {
-            color: var(--accent);
-            border-color: var(--accent);
-            background: var(--accent-light);
-        }
-
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              PAGE HERO SECTION                               */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        .page-hero {
-            text-align: center;
-            margin-bottom: 3rem;
-            padding: 2rem 0;
-        }
-
-        .page-title {
-            font-size: 2.5rem;
-            font-weight: 700;
-            background: var(--gradient);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            margin-bottom: 0.75rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-            line-height: 1.2;
-        }
-
-        .title-icon {
-            font-size: 2.2rem;
-            background: var(--gradient);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-
-        .page-subtitle {
-            font-size: 1.1rem;
-            color: var(--fg);
-            opacity: 0.7;
-            font-weight: 400;
-        }
-
-        .main-container {
-            flex: 1;
-            padding: 100px 2rem 2rem 2rem;
-            max-width: 1400px;
-            width: 100%;
-            margin: 0 auto;
-        }
-
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              FLASH MESSAGES                                   */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        .flash {
-            padding: 1rem 1.5rem;
-            border-radius: 16px;
-            margin-bottom: 2rem;
-            font-size: 1rem;
-            font-weight: 500;
-            backdrop-filter: blur(15px);
-            border: 1px solid;
-            animation: flashSlide 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            box-shadow: 0 8px 25px var(--shadow);
-        }
-
-        .flash-success {
-            background: rgba(16, 185, 129, 0.1);
-            border-color: var(--success);
-            color: var(--success);
-        }
-
-        .flash-error {
-            background: rgba(239, 68, 68, 0.1);
-            border-color: var(--danger);
-            color: var(--danger);
-        }
-
-        .flash-info {
-            background: rgba(59, 130, 246, 0.1);
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-
-        @keyframes flashSlide {
-            from {
-                opacity: 0;
-                transform: translateY(-20px) scale(0.95);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-
-        .flash.fade-out {
-            opacity: 0;
-            transform: translateY(-20px);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              MATCH CARDS GRID                                 */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        .matches-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 2rem;
-            animation: gridAppear 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        @keyframes gridAppear {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .match-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(20px) saturate(180%);
-            border-radius: 20px;
-            border: 1px solid var(--border);
-            box-shadow: 0 8px 25px var(--shadow);
-            padding: 2rem;
-            position: relative;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            overflow: hidden;
-            animation: cardSlideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .match-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--gradient);
-            border-radius: 20px 20px 0 0;
-        }
-
-        .match-card:hover {
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 20px 40px var(--shadow-strong);
-            border-color: var(--accent);
-        }
-
-        @keyframes cardSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px) scale(0.95);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              CARD CONTENT                                     */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        .delete-btn {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            background: var(--danger);
-            border: none;
-            color: #fff;
-            font-size: 0.9rem;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
-            z-index: 10;
-        }
-
-        .delete-btn:hover {
-            background: var(--danger-hover);
-            transform: scale(1.1) rotate(90deg);
-            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
-        }
-
-        .match-icon {
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .match-icon i {
-            font-size: 4rem;
-            background: var(--gradient);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            display: block;
-            animation: iconPulse 3s ease-in-out infinite;
-        }
-
-        @keyframes iconPulse {
-
-            0%,
-            100% {
-                transform: scale(1);
-            }
-
-            50% {
-                transform: scale(1.05);
-            }
-        }
-
-        .match-title {
-            font-size: 1.4rem;
-            font-weight: 700;
-            text-align: center;
-            margin-bottom: 1.5rem;
-            color: var(--fg);
-            word-break: break-word;
-            background: var(--gradient);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-
-        .match-details {
-            margin-bottom: 2rem;
-        }
-
-        .detail-item {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 0.75rem;
-            padding: 0.5rem;
-            border-radius: 12px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-        }
-
-        .detail-item:hover {
-            background: rgba(59, 130, 246, 0.1);
-            transform: translateX(4px);
-        }
-
-        .detail-icon {
-            color: var(--accent);
-            font-size: 1.1rem;
-            width: 20px;
-            text-align: center;
-        }
-
-        .detail-text {
-            flex: 1;
-            font-size: 0.95rem;
-            font-weight: 500;
-            color: var(--fg);
-        }
-
-        .countdown-item {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid var(--danger);
-        }
-
-        .countdown-item .detail-text {
-            color: var(--danger);
-            font-weight: 600;
-        }
-
-        .download-btn {
-            width: 100%;
-            background: var(--gradient);
-            color: #fff;
-            border: none;
-            padding: 1rem 1.5rem;
-            border-radius: 16px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            text-align: center;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
-        }
-
-        .download-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.5);
-        }
-
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              EMPTY STATE                                      */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        .no-matches {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--fg);
-            opacity: 0.7;
-            animation: fadeIn 1s ease;
-        }
-
-        .no-matches-icon {
-            font-size: 5rem;
-            margin-bottom: 1.5rem;
-            color: var(--accent);
-            opacity: 0.5;
-        }
-
-        .no-matches-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 0.75rem;
-        }
-
-        .no-matches-text {
-            font-size: 1.1rem;
-            max-width: 400px;
-            margin: 0 auto;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              CONFIRMATION MODAL                               */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--modal-bg);
-            backdrop-filter: blur(10px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            animation: modalFadeIn 0.3s ease;
-        }
-
-        .modal.hidden {
-            display: none;
-        }
-
-        @keyframes modalFadeIn {
-            from {
-                opacity: 0;
-                backdrop-filter: blur(0px);
-            }
-
-            to {
-                opacity: 1;
-                backdrop-filter: blur(10px);
-            }
-        }
-
-        .modal-content {
-            background: var(--card-bg);
-            backdrop-filter: blur(20px);
-            padding: 2.5rem;
-            border-radius: 24px;
-            border: 1px solid var(--border);
-            box-shadow: 0 25px 50px var(--shadow-strong);
-            width: 90%;
-            max-width: 480px;
-            text-align: center;
-            color: var(--fg);
-            animation: modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .modal-content::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--gradient);
-            border-radius: 24px 24px 0 0;
-        }
-
-        @keyframes modalSlideIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9) translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1) translateY(0);
-            }
-        }
-
-        .modal-icon {
-            font-size: 3rem;
-            color: var(--danger);
-            margin-bottom: 1rem;
-        }
-
-        .modal-title {
-            font-size: 1.3rem;
-            font-weight: 600;
-            margin-bottom: 0.75rem;
-            color: var(--fg);
-        }
-
-        .modal-text {
-            font-size: 1rem;
-            margin-bottom: 2rem;
-            color: var(--fg);
-            opacity: 0.8;
-        }
-
-        .modal-btns {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-        }
-
-        .modal-btn {
-            padding: 0.875rem 2rem;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .btn-cancel {
-            background: var(--glass-bg);
-            color: var(--fg);
-            border: 2px solid var(--border);
-            backdrop-filter: blur(10px);
-        }
-
-        .btn-cancel:hover {
-            background: rgba(107, 114, 128, 0.1);
-            transform: translateY(-1px);
-        }
-
-        .btn-delete {
-            background: var(--danger);
-            color: #fff;
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
-        }
-
-        .btn-delete:hover {
-            background: var(--danger-hover);
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
-        }
-
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              CRICKET BALL ANIMATION                           */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        .cricket-ball {
-            position: fixed;
-            top: 20%;
-            width: 18px;
-            height: 18px;
-            background: var(--cricket-ball);
-            border-radius: 50%;
-            opacity: 0;
-            animation: ballArchive 10s ease-in-out infinite;
-            box-shadow:
-                inset -2px -2px 4px rgba(0, 0, 0, 0.3),
-                0 3px 10px rgba(0, 0, 0, 0.4);
-            z-index: 50;
-        }
-
-        .cricket-ball::before,
-        .cricket-ball::after {
-            content: '';
-            position: absolute;
-            width: 1px;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.4);
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .cricket-ball::before {
-            transform: translateX(-50%) rotate(25deg);
-        }
-
-        .cricket-ball::after {
-            transform: translateX(-50%) rotate(-25deg);
-        }
-
-        @keyframes ballArchive {
-            0% {
-                opacity: 0;
-                transform: translateX(-100px) translateY(0px) rotate(0deg);
-            }
-
-            8% {
-                opacity: 1;
-            }
-
-            45% {
-                transform: translateX(50vw) translateY(-40px) rotate(900deg);
-            }
-
-            92% {
-                opacity: 1;
-            }
-
-            100% {
-                opacity: 0;
-                transform: translateX(calc(100vw + 100px)) translateY(0px) rotate(1800deg);
-            }
-        }
-
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        /*                              RESPONSIVE DESIGN                                */
-        /* ──────────────────────────────────────────────────────────────────────────── */
-        @media (max-width: 768px) {
-            .nav-header {
-                padding: 1rem;
-            }
-
-            .nav-controls {
-                gap: 0.5rem;
-            }
-
-            .theme-dropdown-btn {
-                padding: 0.5rem;
-                font-size: 0;
-            }
-
-            .theme-dropdown-text {
-                display: none;
-            }
-
-            .main-container {
-                padding: 80px 1rem 2rem 1rem;
-            }
-
-            .page-title {
-                font-size: 2rem;
-            }
-
-            .title-icon {
-                font-size: 1.8rem;
-            }
-
-            .matches-grid {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-            }
-
-            .match-card {
-                padding: 1.5rem;
-            }
-
-            .modal-content {
-                padding: 2rem;
-                margin: 1rem;
-            }
-
-            .modal-btns {
-                flex-direction: column;
-                gap: 0.75rem;
-            }
-
-            .modal-btn {
-                width: 100%;
-                justify-content: center;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .page-title {
-                font-size: 1.5rem;
-                flex-direction: column;
-                gap: 0.5rem;
-            }
-
-            .title-icon {
-                font-size: 1.4rem;
-            }
-
-            .match-card {
-                padding: 1.25rem;
-            }
-
-            .match-title {
-                font-size: 1.2rem;
-            }
-
-            .detail-item {
-                padding: 0.4rem;
-                margin-bottom: 0.5rem;
-            }
-        }
-    </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
-</head>
-
-<body>
-    <!-- Cricket Ball Animation -->
-    <div class="cricket-ball"></div>
-
-    <!-- Header Navigation -->
-    <header class="nav-header">
-        <a href="{{ url_for('home') }}" class="logo">
-            <i class="fa-solid fa-baseball-ball logo-icon"></i>
-            <span class="nav-logo-text">SimCricketX</span>
-        </a>
-
-        <div class="nav-controls">
-            <a href="{{ url_for('home') }}" class="theme-toggle" title="Home"><i class="fas fa-home"></i></a>
-            <form method="POST" action="{{ url_for('logout') }}" style="display:inline;margin:0;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="theme-toggle" title="Logout" style="border:none;cursor:pointer;">
-                    <i class="fas fa-sign-out-alt"></i>
-                </button>
-            </form>
-            <button class="theme-toggle" id="theme-toggle" title="Toggle Theme">🌙</button>
+            align-items: flex-start;
+        }
+
+        .hero-text h1 { font-size: 2rem; }
+
+        .stat-pills { width: 100%; }
+        .stat-pill { flex: 1; min-width: 0; padding: 0.75rem; }
+        .stat-pill .pill-value { font-size: 1.5rem; }
+
+        .toolbar { flex-direction: column; align-items: stretch; }
+        .tab-bar { width: 100%; }
+        .tab-item { flex: 1; justify-content: center; padding: 0.6rem 0.8rem; font-size: 0.82rem; }
+        .search-box { width: 100%; }
+
+        .match-grid { grid-template-columns: 1fr; }
+        .archive-grid { grid-template-columns: 1fr; }
+        .archive-meta-grid { grid-template-columns: 1fr; }
+
+        .hero-deco-ball { display: none; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<section class="matches-hero">
+    <div class="hero-deco-ball"></div>
+    <div class="hero-row">
+        <div class="hero-text">
+            <h1>My Matches</h1>
+            <p>Your completed matches and downloadable archives, all in one place.</p>
         </div>
-    </header>
-
-    <!-- Main Container -->
-    <main class="main-container">
-        <!-- Page Title Section -->
-        <section class="page-hero">
-            <h1 class="page-title">
-                <i class="fa-solid fa-folder-open title-icon"></i>
-                My Match Archives
-            </h1>
-            <p class="page-subtitle">Access and manage all your cricket match simulations</p>
-        </section>
-        <!-- Matches Grid -->
-        <div class="matches-grid" id="files-grid">
-            {% if files %}
-            {% for file in files %}
-            <div class="match-card" id="card-{{ loop.index }}" data-filename="{{ file.filename }}"
-                data-delete-url="{{ url_for('delete_archive', archive_name=file.filename) }}">
-
-                <!-- Delete Button -->
-                <button class="delete-btn" aria-label="Delete {{ file.filename }}"
-                    onclick="promptDelete('card-{{ loop.index }}')">
-                    <i class="fa-solid fa-times"></i>
-                </button>
-
-                <!-- Match Icon -->
-                <div class="match-icon">
-                    <i class="fa-solid fa-cricket-bat-ball"></i>
-                </div>
-
-                <!-- Match Title -->
-                <div class="match-title" id="title-{{ loop.index }}">Loading Match...</div>
-
-                <!-- Match Details -->
-                <div class="match-details">
-                    <div class="detail-item">
-                        <i class="fa-solid fa-calendar-days detail-icon"></i>
-                        <span class="detail-text" id="created-{{ loop.index }}">Created: --</span>
-                    </div>
-
-                    <div class="detail-item">
-                        <i class="fa-solid fa-user detail-icon"></i>
-                        <span class="detail-text" id="creator-{{ loop.index }}">Creator: --</span>
-                    </div>
-
-                    <div class="detail-item">
-                        <i class="fa-solid fa-hourglass-end detail-icon"></i>
-                        <span class="detail-text" id="expiry-{{ loop.index }}">Expires: --</span>
-                    </div>
-
-                    <div class="detail-item countdown-item">
-                        <i class="fa-solid fa-clock detail-icon"></i>
-                        <span class="detail-text" id="countdown-{{ loop.index }}">Time Left: --</span>
-                    </div>
-                </div>
-
-                <!-- Download Button -->
-                <a href="{{ file.download_url }}" class="download-btn" download>
-                    <i class="fa-solid fa-download"></i>
-                    Download Archive
-                </a>
+        <div class="stat-pills">
+            <div class="stat-pill">
+                <span class="pill-value">{{ (match_history or [])|length }}</span>
+                <span class="pill-label">Matches</span>
             </div>
-            {% endfor %}
-            {% else %}
-            <div id="no-files" class="no-matches">
-                <div class="no-matches-icon">
-                    <i class="fa-solid fa-folder-open"></i>
-                </div>
-                <div class="no-matches-title">No Match Archives Found</div>
-                <div class="no-matches-text">
-                    You haven't created any match simulations in the last 7 days.
-                    Start by creating teams and simulating matches!
-                </div>
-            </div>
-            {% endif %}
-        </div>
-    </main>
-
-    <!-- Confirmation Modal -->
-    <div id="confirm-modal" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-icon">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-            </div>
-            <div class="modal-title">Delete Match Archive?</div>
-            <div class="modal-text">
-                This action cannot be undone. The match archive will be permanently deleted.
-            </div>
-            <div class="modal-btns">
-                <button class="modal-btn btn-cancel" onclick="closeModal()">
-                    <i class="fa-solid fa-times"></i>
-                    Cancel
-                </button>
-                <button class="modal-btn btn-delete" id="confirm-delete-btn">
-                    <i class="fa-solid fa-trash"></i>
-                    Delete
-                </button>
+            <div class="stat-pill">
+                <span class="pill-value">{{ (files or [])|length }}</span>
+                <span class="pill-label">Archives</span>
             </div>
         </div>
     </div>
+</section>
 
-    <script>
-        // ────────────────────────────────────────────────────────────────────────────
-        //                           THEME MANAGEMENT
-        // ────────────────────────────────────────────────────────────────────────────
-        const themeToggleBtn = document.getElementById('theme-toggle');
-        const root = document.documentElement;
+<!-- Toolbar -->
+<div class="toolbar">
+    <div class="tab-bar" role="tablist">
+        <div class="tab-indicator" id="tab-indicator"></div>
+        <button class="tab-item active" type="button" data-target="history" role="tab" aria-selected="true">
+            <i class="fa-solid fa-cricket-bat-ball"></i>
+            Match History
+            <span class="tab-badge">{{ (match_history or [])|length }}</span>
+        </button>
+        <button class="tab-item" type="button" data-target="archives" role="tab" aria-selected="false">
+            <i class="fa-solid fa-box-archive"></i>
+            Archives
+            <span class="tab-badge">{{ (files or [])|length }}</span>
+        </button>
+    </div>
+    <div class="search-box" id="search-box">
+        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        <input type="text" id="search-input" placeholder="Search by team name..." autocomplete="off" spellcheck="false">
+        <button class="clear-search" id="clear-search" type="button" title="Clear"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+</div>
 
-        function updateToggleIcon(theme) {
-            const isDark = theme === 'dark' || ['dim', 'dracula', 'sunset'].includes(theme);
-            themeToggleBtn.textContent = isDark ? '☀️' : '🌙';
-        }
+<!-- Match History Panel -->
+<section id="panel-history" class="panel active" role="tabpanel">
+    {% if match_history and match_history|length > 0 %}
+    <div class="match-grid" id="match-grid">
+        {% for match in match_history %}
+        <article class="match-card" style="animation-delay: {{ loop.index0 * 0.05 }}s"
+                 data-teams="{{ match.home_team|lower }} {{ match.away_team|lower }}">
+            <div class="match-card-body">
+                <div class="match-header">
+                    <div class="match-teams">
+                        {{ match.home_team }}<span class="vs">vs</span>{{ match.away_team }}
+                    </div>
+                    <span class="match-date-chip">
+                        <i class="fa-regular fa-calendar"></i>
+                        {{ match.played_at.strftime('%d %b %Y') if match.played_at else 'Unknown' }}
+                    </span>
+                </div>
 
-        function applySavedTheme() {
-            const theme = localStorage.getItem('theme') || 'light';
-            root.setAttribute('data-theme', theme);
-            updateToggleIcon(theme);
+                <div class="score-block">
+                    <div class="score-row">
+                        <span class="score-team-name">
+                            <span class="team-initial">{{ match.home_team[:2]|upper }}</span>
+                            {{ match.home_team }}
+                        </span>
+                        <span class="score-figures">
+                            {{ match.scoreline.split(' vs ')[0].replace(match.home_team, '').strip() }}
+                        </span>
+                    </div>
+                    <div class="score-row">
+                        <span class="score-team-name">
+                            <span class="team-initial">{{ match.away_team[:2]|upper }}</span>
+                            {{ match.away_team }}
+                        </span>
+                        <span class="score-figures">
+                            {{ match.scoreline.split(' vs ')[1].replace(match.away_team, '').strip() if ' vs ' in match.scoreline else '' }}
+                        </span>
+                    </div>
+                </div>
 
-            // If Prototype, restore the last-picked Shadow variant colors
-            if (theme === 'prototype') {
-                const primary = localStorage.getItem('prototypePrimary');
-                const light = localStorage.getItem('prototypeLight');
-                if (primary && light) {
-                    root.style.setProperty('--accent', primary);
-                    root.style.setProperty('--accent-hover', light);
-                    root.style.setProperty('--accent-light', `${primary}1a`);
-                    root.style.setProperty('--gradient', `linear-gradient(135deg, ${primary}, ${light})`);
-                    root.style.setProperty('--gradient-accent', `linear-gradient(45deg, ${primary}, #ffffff)`);
-                }
-            }
-        }
+                <div class="match-result">
+                    <span class="result-dot"></span>
+                    {{ match.result_description }}
+                </div>
+            </div>
 
+            <div class="match-footer">
+                <span class="match-id">#{{ match.match_id }}</span>
+                <a class="scoreboard-link" href="{{ match.scoreboard_url }}">
+                    View Scoreboard
+                    <i class="fa-solid fa-arrow-right"></i>
+                </a>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    <div class="no-filter-results" id="no-filter-results">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        No matches found for your search.
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">
+            <i class="fa-solid fa-cricket-bat-ball"></i>
+        </div>
+        <h3>No matches yet</h3>
+        <p>Complete a non-tournament match to see your history here.</p>
+        <a href="{{ url_for('match_setup') }}" class="empty-cta">
+            <i class="fa-solid fa-play"></i>
+            Simulate a Match
+        </a>
+    </div>
+    {% endif %}
+</section>
 
-        themeToggleBtn.addEventListener('click', () => {
-            const current = root.getAttribute('data-theme') || 'light';
-            const nextTheme = current === 'dark' ? 'light' : 'dark';
-            root.setAttribute('data-theme', nextTheme);
-            localStorage.setItem('theme', nextTheme);
-            updateToggleIcon(nextTheme);
-        });
+<!-- Archives Panel -->
+<section id="panel-archives" class="panel" role="tabpanel">
+    {% if files and files|length > 0 %}
+    <div id="archive-grid" class="archive-grid">
+        {% for file in files %}
+        <article class="archive-card" id="archive-{{ loop.index }}" data-delete-url="{{ file.delete_url }}" style="animation-delay: {{ loop.index0 * 0.05 }}s">
+            <div class="archive-icon-row">
+                <div class="archive-icon">
+                    <i class="fa-solid fa-file-zipper"></i>
+                </div>
+                <div class="archive-filename">{{ file.filename }}</div>
+            </div>
 
+            <div class="archive-meta-grid">
+                <div class="meta-chip">
+                    <i class="fa-regular fa-calendar"></i>
+                    Created {{ file.created_at.strftime('%d %b %Y') if file.created_at else 'Unknown' }}
+                </div>
+                <div class="meta-chip">
+                    <i class="fa-regular fa-clock"></i>
+                    Expires {{ file.expires_at.strftime('%d %b %Y') if file.expires_at else 'Unknown' }}
+                </div>
+                <div class="expiry-bar-wrap"
+                     data-created="{{ file.created_at.isoformat() if file.created_at else '' }}"
+                     data-expire="{{ file.expires_at.isoformat() if file.expires_at else '' }}">
+                    <div class="expiry-label">
+                        <span class="el-left"><i class="fa-solid fa-hourglass-half"></i> <span class="cd-text">--</span></span>
+                        <span class="el-pct"></span>
+                    </div>
+                    <div class="expiry-track">
+                        <div class="expiry-fill" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
 
-        // ────────────────────────────────────────────────────────────────────────────
-        //                           FILE PROCESSING & COUNTDOWN
-        // ────────────────────────────────────────────────────────────────────────────
-        window.addEventListener('DOMContentLoaded', () => {
-            applySavedTheme();
+            <div class="archive-actions">
+                <a class="action-btn download" href="{{ file.download_url }}" download>
+                    <i class="fa-solid fa-download"></i>
+                    Download
+                </a>
+                <button class="action-btn danger" type="button" onclick="openDeleteModal('archive-{{ loop.index }}')">
+                    <i class="fa-solid fa-trash-can"></i>
+                    Delete
+                </button>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">
+            <i class="fa-solid fa-box-archive"></i>
+        </div>
+        <h3>No archives available</h3>
+        <p>Archives are kept for 7 days after creation. Complete a match and export it to see archives here.</p>
+    </div>
+    {% endif %}
+</section>
 
-            // Auto-dismiss flash messages after 4 seconds
-            setTimeout(() => {
-                document.querySelectorAll('.flash').forEach(el => {
-                    el.classList.add('fade-out');
-                    setTimeout(() => el.remove(), 400);
-                });
-            }, 4000);
+<!-- Delete Modal -->
+<div id="delete-modal" class="modal-overlay" role="dialog" aria-modal="true">
+    <div class="modal-box">
+        <div class="modal-icon">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <h3>Delete this archive?</h3>
+        <p>This action is permanent. The archive file will be removed from the server and cannot be recovered.</p>
+        <div class="modal-btns">
+            <button type="button" class="modal-btn" onclick="closeDeleteModal()">Cancel</button>
+            <button type="button" class="modal-btn confirm-delete" id="confirm-delete-btn">
+                <i class="fa-solid fa-trash-can"></i> Delete
+            </button>
+        </div>
+    </div>
+</div>
 
-            // Process each match card
-            document.querySelectorAll('.match-card').forEach(card => {
-                const filename = card.dataset.filename;
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
 
-                // Parse filename: "playing_SRH_vs_MI_admin@projectx.com_20250530154936.zip"
-                const base = filename.slice(0, -4); // Remove .zip
-                const parts = base.split('_');
-                const team1 = parts[1];
-                const team2 = parts[3];
-                const creator = parts[4];
-                const timestampStr = parts[5];
+{% block extra_js %}
+<script>
+(function () {
+    var deleteModal = document.getElementById('delete-modal');
+    var pendingDeleteCard = null;
 
-                // Parse timestamp: "20250530154936"
-                const year = parseInt(timestampStr.slice(0, 4), 10);
-                const month = parseInt(timestampStr.slice(4, 6), 10) - 1; // zero-based
-                const day = parseInt(timestampStr.slice(6, 8), 10);
-                const hour = parseInt(timestampStr.slice(8, 10), 10);
-                const minute = parseInt(timestampStr.slice(10, 12), 10);
-                const second = parseInt(timestampStr.slice(12, 14), 10);
+    // ============ Sliding Tab Indicator ============
+    function positionIndicator() {
+        var active = document.querySelector('.tab-item.active');
+        var indicator = document.getElementById('tab-indicator');
+        if (!active || !indicator) return;
+        indicator.style.width = active.offsetWidth + 'px';
+        indicator.style.left = active.offsetLeft + 'px';
+    }
 
-                const createdDate = new Date(year, month, day, hour, minute, second);
-                const expiryDate = new Date(createdDate);
-                expiryDate.setDate(expiryDate.getDate() + 7);
+    positionIndicator();
+    window.addEventListener('resize', positionIndicator);
 
-                // Format dates
-                const formatDate = (date) => {
-                    return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
-                };
-
-                // Update card content
-                const idx = card.id.split('-')[1];
-                document.getElementById(`title-${idx}`).textContent = `${team1} vs ${team2}`;
-                document.getElementById(`created-${idx}`).textContent = `Created: ${formatDate(createdDate)}`;
-                document.getElementById(`creator-${idx}`).textContent = `Creator: ${creator}`;
-                document.getElementById(`expiry-${idx}`).textContent = `Expires: ${formatDate(expiryDate)}`;
-
-                // Start countdown timer
-                const countdownElem = document.getElementById(`countdown-${idx}`);
-                function updateCountdown() {
-                    const now = new Date();
-                    const diffMs = expiryDate - now;
-
-                    if (diffMs <= 0) {
-                        countdownElem.textContent = 'Expired';
-                        countdownElem.style.color = 'var(--danger)';
-                        clearInterval(intervalId);
-                        return;
-                    }
-
-                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                    const diffHrs = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-                    const diffSecs = Math.floor((diffMs % (1000 * 60)) / 1000);
-
-                    countdownElem.textContent = `Time Left: ${diffDays}d ${diffHrs}h ${diffMins}m ${diffSecs}s`;
-                }
-
-                updateCountdown();
-                const intervalId = setInterval(updateCountdown, 1000);
+    document.querySelectorAll('.tab-item').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.tab-item').forEach(function (b) {
+                b.classList.remove('active');
+                b.setAttribute('aria-selected', 'false');
             });
+            btn.classList.add('active');
+            btn.setAttribute('aria-selected', 'true');
+            positionIndicator();
+
+            document.querySelectorAll('.panel').forEach(function (p) {
+                p.classList.remove('active');
+            });
+            var target = btn.getAttribute('data-target');
+            document.getElementById('panel-' + target).classList.add('active');
+
+            // Show/hide search box based on tab
+            var searchBox = document.getElementById('search-box');
+            if (searchBox) {
+                searchBox.style.display = target === 'history' ? '' : 'none';
+            }
+        });
+    });
+
+    // ============ Search / Filter ============
+    var searchInput = document.getElementById('search-input');
+    var clearBtn = document.getElementById('clear-search');
+    var searchBox = document.getElementById('search-box');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            var query = this.value.toLowerCase().trim();
+            searchBox.classList.toggle('has-query', query.length > 0);
+            filterCards(query);
+        });
+    }
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+            searchInput.value = '';
+            searchBox.classList.remove('has-query');
+            filterCards('');
+            searchInput.focus();
+        });
+    }
+
+    function filterCards(query) {
+        var cards = document.querySelectorAll('.match-card');
+        var noResults = document.getElementById('no-filter-results');
+        var visibleCount = 0;
+
+        cards.forEach(function (card) {
+            var teams = card.getAttribute('data-teams') || '';
+            var visible = !query || teams.indexOf(query) !== -1;
+            card.style.display = visible ? '' : 'none';
+            if (visible) visibleCount++;
         });
 
-        // ────────────────────────────────────────────────────────────────────────────
-        //                           DELETE CONFIRMATION
-        // ────────────────────────────────────────────────────────────────────────────
-        let pendingDeleteCardId = null;
-
-        function promptDelete(cardId) {
-            pendingDeleteCardId = cardId;
-            document.getElementById('confirm-modal').classList.remove('hidden');
+        if (noResults) {
+            noResults.style.display = (cards.length > 0 && visibleCount === 0) ? 'block' : 'none';
         }
+    }
 
-        function closeModal() {
-            pendingDeleteCardId = null;
-            document.getElementById('confirm-modal').classList.add('hidden');
+    // ============ Expiry Bars & Countdown ============
+    function tickExpiry() {
+        var bars = document.querySelectorAll('.expiry-bar-wrap[data-expire]');
+        var now = Date.now();
+
+        bars.forEach(function (wrap) {
+            var createdRaw = wrap.getAttribute('data-created');
+            var expireRaw = wrap.getAttribute('data-expire');
+            var created = createdRaw ? Date.parse(createdRaw) : NaN;
+            var expire = expireRaw ? Date.parse(expireRaw) : NaN;
+            var cdText = wrap.querySelector('.cd-text');
+            var pctSpan = wrap.querySelector('.el-pct');
+            var fill = wrap.querySelector('.expiry-fill');
+            var label = wrap.querySelector('.expiry-label');
+
+            if (isNaN(expire)) {
+                if (cdText) cdText.textContent = 'Unknown';
+                return;
+            }
+
+            var left = expire - now;
+            var total = isNaN(created) ? 7 * 86400000 : (expire - created);
+            var pct = total > 0 ? Math.max(0, Math.min(100, (left / total) * 100)) : 0;
+
+            if (cdText) cdText.textContent = left > 0 ? fmtDuration(left) : 'Expired';
+            if (pctSpan) pctSpan.textContent = left > 0 ? Math.round(pct) + '%' : '';
+            if (label) label.classList.toggle('expired', left <= 0);
+
+            if (fill) {
+                fill.style.width = Math.max(0, pct) + '%';
+                fill.classList.remove('low', 'critical', 'gone');
+                if (left <= 0) fill.classList.add('gone');
+                else if (pct < 15) fill.classList.add('critical');
+                else if (pct < 35) fill.classList.add('low');
+            }
+        });
+    }
+
+    function fmtDuration(ms) {
+        if (ms <= 0) return 'Expired';
+        var s = Math.floor(ms / 1000);
+        var d = Math.floor(s / 86400);
+        var h = Math.floor((s % 86400) / 3600);
+        var m = Math.floor((s % 3600) / 60);
+        var sec = s % 60;
+        var parts = [];
+        if (d) parts.push(d + 'd');
+        if (h) parts.push(h + 'h');
+        if (m) parts.push(m + 'm');
+        parts.push(sec + 's');
+        return parts.join(' ');
+    }
+
+    tickExpiry();
+    setInterval(tickExpiry, 1000);
+
+    // ============ Toast Notifications ============
+    function showToast(message, type) {
+        var container = document.getElementById('toast-container');
+        if (!container) return;
+        var icon = type === 'success' ? 'fa-circle-check' : 'fa-circle-xmark';
+        var toast = document.createElement('div');
+        toast.className = 'toast ' + type;
+        toast.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + message;
+        container.appendChild(toast);
+
+        setTimeout(function () {
+            toast.classList.add('removing');
+            setTimeout(function () { toast.remove(); }, 300);
+        }, 3500);
+    }
+
+    // ============ Delete Modal ============
+    window.openDeleteModal = function (cardId) {
+        pendingDeleteCard = document.getElementById(cardId);
+        deleteModal.classList.add('show');
+    };
+
+    window.closeDeleteModal = function () {
+        pendingDeleteCard = null;
+        deleteModal.classList.remove('show');
+    };
+
+    document.getElementById('confirm-delete-btn').addEventListener('click', async function () {
+        if (!pendingDeleteCard) return;
+        var deleteUrl = pendingDeleteCard.getAttribute('data-delete-url');
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
+
+        try {
+            var response = await fetch(deleteUrl, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                var errData = await response.json().catch(function () { return {}; });
+                showToast('Failed to delete: ' + (errData.error || response.statusText), 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Delete';
+                closeDeleteModal();
+                return;
+            }
+
+            pendingDeleteCard.style.transition = 'all 0.35s ease';
+            pendingDeleteCard.style.opacity = '0';
+            pendingDeleteCard.style.transform = 'scale(0.92) translateY(8px)';
+
+            setTimeout(function () {
+                pendingDeleteCard.remove();
+                if (!document.querySelector('.archive-card')) {
+                    var grid = document.getElementById('archive-grid');
+                    if (grid) {
+                        grid.outerHTML =
+                            '<div class="empty-state">' +
+                                '<div class="empty-icon"><i class="fa-solid fa-box-archive"></i></div>' +
+                                '<h3>No archives available</h3>' +
+                                '<p>Archives are kept for 7 days after creation.</p>' +
+                            '</div>';
+                    }
+                }
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Delete';
+                closeDeleteModal();
+                showToast('Archive deleted successfully', 'success');
+            }, 350);
+
+        } catch (err) {
+            showToast('Unexpected error while deleting archive.', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Delete';
+            closeDeleteModal();
         }
+    });
 
-        // Handle delete confirmation
-        document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
-            if (!pendingDeleteCardId) return;
+    deleteModal.addEventListener('click', function (e) {
+        if (e.target === deleteModal) closeDeleteModal();
+    });
 
-            const card = document.getElementById(pendingDeleteCardId);
-            const deleteUrl = card.dataset.deleteUrl;
-
-            try {
-                const response = await fetch(deleteUrl, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (!response.ok) {
-                    const err = await response.json().catch(() => ({}));
-                    alert("Failed to delete: " + (err.error || response.statusText));
-                    closeModal();
-                    return;
-                }
-
-                // Remove card with animation
-                card.style.transform = 'translateY(-20px) scale(0.9)';
-                card.style.opacity = '0';
-
-                setTimeout(() => {
-                    card.remove();
-
-                    // Show empty state if no cards remaining
-                    if (document.querySelectorAll('.match-card').length === 0) {
-                        const noFiles = document.createElement('div');
-                        noFiles.id = 'no-files';
-                        noFiles.className = 'no-matches';
-                        noFiles.innerHTML = `
-                            <div class="no-matches-icon">
-                                <i class="fa-solid fa-folder-open"></i>
-                            </div>
-                            <div class="no-matches-title">No Match Archives Found</div>
-                            <div class="no-matches-text">
-                                You haven't created any match simulations in the last 7 days. 
-                                Start by creating teams and simulating matches!
-                            </div>
-                        `;
-                        document.getElementById('files-grid').appendChild(noFiles);
-                    }
-                }, 300);
-
-                closeModal();
-
-            } catch (error) {
-                console.error("Error deleting archive:", error);
-                alert("Unexpected error occurred while deleting.");
-                closeModal();
-            }
-        });
-
-        // Close modal on background click
-        document.getElementById('confirm-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'confirm-modal') {
-                closeModal();
-            }
-        });
-
-        // Close modal on Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                if (!document.getElementById('confirm-modal').classList.contains('hidden')) {
-                    closeModal();
-                }
-                dropdown.classList.remove('active');
-            }
-        });
-    </script>
-</body>
-
-</html>
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeDeleteModal();
+    });
+})();
+</script>
+{% endblock %}

@@ -4,7 +4,7 @@
 .main-container {
     max-width: none !important;
     padding: 1rem !important;
-    height: calc(100vh - var(--nav-height));
+    height: calc(100vh - var(--nav-height, 64px));
     overflow: hidden;
 }
 
@@ -14,6 +14,7 @@
     grid-template-columns: 300px 1fr;
     gap: 1rem;
     height: 100%;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -40,6 +41,7 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    min-height: 0;
 }
 
 /* Meta Items - Compact */
@@ -137,11 +139,27 @@
 
 /* Main Panel - Fixed Height */
 .main-panel {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
     gap: 0.75rem;
     height: 100%;
+    min-height: 0;
     overflow: hidden;
+}
+
+.score-banner {
+    grid-row: 1;
+}
+
+.controls-bar {
+    grid-row: 2;
+}
+
+.code-window,
+.dashboard-container {
+    grid-row: 3;
+    min-height: 0;
+    height: 100%;
 }
 
 /* Score Banner - Compact */
