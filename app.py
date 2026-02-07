@@ -1582,6 +1582,10 @@ def create_app():
             cleanup_temp_scorecard_images()
 
             data = request.get_json()
+            simulation_mode = str(data.get("simulation_mode", "auto")).lower()
+            if simulation_mode not in {"auto", "manual"}:
+                simulation_mode = "auto"
+            data["simulation_mode"] = simulation_mode
 
             # Step 1: Load teams from DB using IDs from frontend
             home_id = data.get("team_home")
@@ -2157,6 +2161,64 @@ def create_app():
                 "details": str(e),
                 "match_id": match_id
             }), 500
+
+    @app.route("/match/<match_id>/set-simulation-mode", methods=["POST"])
+    @login_required
+    def set_simulation_mode(match_id):
+        data = request.get_json() or {}
+        mode = str(data.get("mode", "auto")).lower()
+        if mode not in {"auto", "manual"}:
+            return jsonify({"error": "mode must be auto or manual"}), 400
+
+        with _get_match_file_lock(match_id):
+            match_data, match_path, err = _load_match_file_for_user(match_id)
+            if err:
+                return err
+
+            match_data["simulation_mode"] = mode
+            with open(match_path, "w", encoding="utf-8") as f:
+                json.dump(match_data, f, indent=2)
+
+        with MATCH_INSTANCES_LOCK:
+            if match_id in MATCH_INSTANCES:
+                match = MATCH_INSTANCES[match_id]
+                if match.data.get("created_by") != current_user.id:
+                    return jsonify({"error": "Unauthorized"}), 403
+                match.simulation_mode = mode
+                match.data["simulation_mode"] = mode
+
+        return jsonify({"success": True, "mode": mode}), 200
+
+    @app.route("/match/<match_id>/submit-decision", methods=["POST"])
+    @login_required
+    def submit_decision(match_id):
+        payload = request.get_json() or {}
+        selected_index = payload.get("selected_index")
+        decision_type = payload.get("type")
+
+        if selected_index is None:
+            return jsonify({"error": "selected_index is required"}), 400
+
+        with MATCH_INSTANCES_LOCK:
+            if match_id not in MATCH_INSTANCES:
+                match_data, _path, err = _load_match_file_for_user(match_id)
+                if err:
+                    return err
+                if 'rain_probability' not in match_data:
+                    match_data['rain_probability'] = load_config().get('rain_probability', 0.0)
+                MATCH_INSTANCES[match_id] = Match(match_data)
+            match = MATCH_INSTANCES[match_id]
+
+        if match.data.get("created_by") != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
+
+        if not match.pending_decision:
+            return jsonify({"error": "No pending decision"}), 400
+        if decision_type and decision_type != match.pending_decision.get("type"):
+            return jsonify({"error": "Decision type mismatch"}), 400
+
+        result, status_code = match.submit_pending_decision(selected_index)
+        return jsonify(result), status_code
     
 
     @app.route("/match/<match_id>/start-super-over", methods=["POST"])

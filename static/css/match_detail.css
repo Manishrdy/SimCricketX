@@ -231,6 +231,71 @@
     border-color: var(--accent);
 }
 
+.sim-mode-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-left: 0.5rem;
+}
+
+.sim-mode-label {
+    font-size: 0.75rem;
+    color: var(--fg-secondary);
+    font-weight: 600;
+}
+
+.sim-mode-text {
+    font-size: 0.72rem;
+    color: var(--fg-secondary);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.sim-mode-switch {
+    position: relative;
+    width: 48px;
+    height: 26px;
+    display: inline-block;
+}
+
+.sim-mode-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.sim-mode-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.sim-mode-slider::before {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 2px;
+    top: 2px;
+    border-radius: 50%;
+    background: var(--accent);
+    transition: 0.2s ease;
+}
+
+.sim-mode-switch input:checked + .sim-mode-slider {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: var(--accent);
+}
+
+.sim-mode-switch input:checked + .sim-mode-slider::before {
+    transform: translateX(22px);
+}
+
 /* Commentary Box - Fills Remaining Space */
 .commentary-box {
     background: var(--card-bg);
@@ -277,6 +342,57 @@
     overflow: hidden;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     border: 1px solid var(--card-border);
+}
+
+.decision-panel {
+    max-width: 640px;
+}
+
+.decision-body {
+    padding: 1rem 1.25rem 1.25rem;
+}
+
+.decision-context {
+    margin: 0 0 0.75rem;
+    color: var(--fg-secondary);
+    font-size: 0.9rem;
+}
+
+.decision-options {
+    display: grid;
+    gap: 0.5rem;
+    max-height: 45vh;
+    overflow-y: auto;
+}
+
+.decision-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    background: var(--bg);
+    padding: 0.6rem 0.75rem;
+    cursor: pointer;
+}
+
+.decision-option.selected {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.decision-option strong {
+    font-size: 0.9rem;
+}
+
+.decision-meta {
+    font-size: 0.75rem;
+    color: var(--fg-secondary);
+}
+
+#resume-decision-btn {
+    margin-left: 0.3rem;
 }
 
 .scorecard-header {
