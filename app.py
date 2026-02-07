@@ -2059,45 +2059,60 @@ def create_app():
     @login_required
     @rate_limit(max_requests=30, window_seconds=10)  # C3: Rate limit to prevent DoS
     def next_ball(match_id):
-        with MATCH_INSTANCES_LOCK:  # Bug Fix B2: Thread-safe match creation
-            if match_id not in MATCH_INSTANCES:
-                # Try loading match data from JSON file first (for active/new matches)
-                match_data, _path, err = _load_match_file_for_user(match_id)
-                if match_data:
-                    if 'rain_probability' not in match_data:
-                        match_data['rain_probability'] = load_config().get('rain_probability', 0.0)
-                    MATCH_INSTANCES[match_id] = Match(match_data)
-                else:
-                    return err if err else (jsonify({"error": "Match not found"}), 404)
+        try:
+            with MATCH_INSTANCES_LOCK:  # Bug Fix B2: Thread-safe match creation
+                if match_id not in MATCH_INSTANCES:
+                    # Try loading match data from JSON file first (for active/new matches)
+                    match_data, _path, err = _load_match_file_for_user(match_id)
+                    if match_data:
+                        if 'rain_probability' not in match_data:
+                            match_data['rain_probability'] = load_config().get('rain_probability', 0.0)
+                        MATCH_INSTANCES[match_id] = Match(match_data)
+                    else:
+                        return err if err else (jsonify({"error": "Match not found"}), 404)
+                
+                match = MATCH_INSTANCES[match_id]
+            if match.data.get("created_by") != current_user.id:
+                return jsonify({"error": "Unauthorized"}), 403
+            outcome = match.next_ball()
+
+            # Explicitly send final score and wickets clearly
+            if outcome.get("match_over"):
+                # Only increment if this is the first time we're seeing the match end
+                # (Checking if it wasn't already marked completed prevents double counting on repeated API calls)
+                if match.data.get("current_state") != "completed":
+                     increment_matches_simulated()
+                     
+                # If this is a tournament match, autosave to DB and update standings
+                if match.data.get("tournament_id"):
+                    _handle_tournament_match_completion(match, match_id, outcome, app.logger)
+
+                return jsonify({
+                    "innings_end":     match.innings == 2, # Flag generic innings end
+                    "innings_number":  match.innings,
+                    "match_over":      True,
+                    "commentary":      outcome.get("commentary", "<b>Match Over!</b>"),
+                    "scorecard_data":  outcome.get("scorecard_data"),
+                    "score":           outcome.get("final_score", match.score),
+                    "wickets":         outcome.get("wickets",  match.wickets),
+                    "result":          outcome.get("result",  "Match ended")
+                })
+
+            return jsonify(outcome)
+        except Exception as e:
+            # Log the complete error with stack trace to execution.log
+            app.logger.error(f"[NextBall] Error processing ball for match {match_id}: {e}", exc_info=True)
             
-            match = MATCH_INSTANCES[match_id]
-        if match.data.get("created_by") != current_user.id:
-            return jsonify({"error": "Unauthorized"}), 403
-        outcome = match.next_ball()
-
-        # Explicitly send final score and wickets clearly
-        if outcome.get("match_over"):
-            # Only increment if this is the first time we're seeing the match end
-            # (Checking if it wasn't already marked completed prevents double counting on repeated API calls)
-            if match.data.get("current_state") != "completed":
-                 increment_matches_simulated()
-                 
-            # If this is a tournament match, autosave to DB and update standings
-            if match.data.get("tournament_id"):
-                _handle_tournament_match_completion(match, match_id, outcome, app.logger)
-
+            # Also log to console for immediate visibility
+            import traceback
+            traceback.print_exc()
+            
+            # Return JSON error response instead of HTML 500 page
             return jsonify({
-                "innings_end":     match.innings == 2, # Flag generic innings end
-                "innings_number":  match.innings,
-                "match_over":      True,
-                "commentary":      outcome.get("commentary", "<b>Match Over!</b>"),
-                "scorecard_data":  outcome.get("scorecard_data"),
-                "score":           outcome.get("final_score", match.score),
-                "wickets":         outcome.get("wickets",  match.wickets),
-                "result":          outcome.get("result",  "Match ended")
-            })
-
-        return jsonify(outcome)
+                "error": "An error occurred while processing the ball",
+                "details": str(e),
+                "match_id": match_id
+            }), 500
     
 
     @app.route("/match/<match_id>/start-super-over", methods=["POST"])
