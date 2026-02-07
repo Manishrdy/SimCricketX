@@ -80,6 +80,20 @@
                 <i class="fa fa-download"></i> Save Center
             </button>
 
+            <div class="sim-mode-wrapper">
+                <span class="sim-mode-label">Simulation</span>
+                <span class="sim-mode-text">Auto</span>
+                <label class="sim-mode-switch" title="Toggle simulation mode">
+                    <input type="checkbox" id="simulation-mode-toggle">
+                    <span class="sim-mode-slider"></span>
+                </label>
+                <span class="sim-mode-text">Manual</span>
+            </div>
+
+            <button class="pace-btn" id="resume-decision-btn" style="display:none;">
+                Resume Selection
+            </button>
+
             <div class="view-toggle-wrapper">
                 <span class="toggle-label" id="label-commentary">Commentary</span>
                 <label class="toggle-switch">
@@ -348,6 +362,24 @@
 
             <div class="scorecard-summary" id="scorecard-summary"></div>
             <div class="target-info" id="target-info" style="display:none;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Decision Modal -->
+<div class="overlay" id="decision-overlay">
+    <div class="overlay-content decision-panel">
+        <div class="scorecard-header">
+            <h2 class="scorecard-title" id="decision-title">Manual Selection Required</h2>
+            <button class="close-scorecard" id="decision-close-btn">Close</button>
+        </div>
+        <div class="decision-body">
+            <p id="decision-context" class="decision-context"></p>
+            <div id="decision-options" class="decision-options"></div>
+            <div class="impact-actions" style="margin-top:1rem;">
+                <button class="impact-btn" id="decision-auto-btn" style="margin-right:0.5rem;">Switch to Auto & Continue</button>
+                <button class="impact-btn primary" id="decision-submit-btn" disabled>Confirm Selection</button>
+            </div>
         </div>
     </div>
 </div>

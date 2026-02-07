@@ -23,6 +23,10 @@ let logLineCount = 1; // Track line numbers for commentary display
 let isFinalScoreboard = false;
 let simTimerId = null; // F4: track simulation timer to prevent overlapping loops
 let archiveSaved = false; // F7: guard against double archive saves
+let simulationMode = (typeof matchData !== 'undefined' && matchData.simulation_mode) ? matchData.simulation_mode : 'auto';
+let pendingManualDecision = null;
+let pendingDecisionSelection = null;
+let decisionModalVisible = false;
 
 // Global variable to store first innings scorecard image
 let firstInningsImageBlob = null;
@@ -111,6 +115,30 @@ document.addEventListener('DOMContentLoaded', () => {
             requestAnimationFrame(syncCodeWindowHeight);
         });
     }
+
+    const modeToggle = document.getElementById('simulation-mode-toggle');
+    if (modeToggle) {
+        modeToggle.checked = simulationMode === 'manual';
+        modeToggle.addEventListener('change', async () => {
+            const requestedMode = modeToggle.checked ? 'manual' : 'auto';
+            const ok = await setSimulationMode(requestedMode, true);
+            if (!ok) modeToggle.checked = simulationMode === 'manual';
+        });
+    }
+
+    const decisionSubmitBtn = document.getElementById('decision-submit-btn');
+    if (decisionSubmitBtn) decisionSubmitBtn.addEventListener('click', submitManualDecision);
+    const decisionCloseBtn = document.getElementById('decision-close-btn');
+    if (decisionCloseBtn) {
+        decisionCloseBtn.addEventListener('click', closeDecisionModalOnly);
+    }
+    const decisionAutoBtn = document.getElementById('decision-auto-btn');
+    if (decisionAutoBtn) decisionAutoBtn.addEventListener('click', async () => {
+        await setSimulationMode('auto', true);
+    });
+    const resumeDecisionBtn = document.getElementById('resume-decision-btn');
+    if (resumeDecisionBtn) resumeDecisionBtn.addEventListener('click', () => showDecisionModal());
+    updateDecisionResumeButton();
 
     // Spin Toss Button
     const spinBtn = document.getElementById('spin-toss');
@@ -531,6 +559,151 @@ function enableReorderingMode() {
     renderTeam('away');
 }
 
+function hideDecisionModal() {
+    const overlay = document.getElementById('decision-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'none';
+    decisionModalVisible = false;
+    const autoBtn = document.getElementById('decision-auto-btn');
+    if (autoBtn) autoBtn.style.display = simulationMode === 'manual' ? 'inline-flex' : 'none';
+    updateDecisionResumeButton();
+}
+
+function closeDecisionModalOnly() {
+    hideDecisionModal();
+    if (pendingManualDecision) {
+        appendLog('[MANUAL] Selection window closed. Use "Resume Selection" to continue.', 'comment');
+    }
+}
+
+function clearPendingDecisionState() {
+    pendingManualDecision = null;
+    pendingDecisionSelection = null;
+    updateDecisionResumeButton();
+}
+
+function updateDecisionResumeButton() {
+    const btn = document.getElementById('resume-decision-btn');
+    if (!btn) return;
+    const shouldShow = simulationMode === 'manual' && !!pendingManualDecision && !decisionModalVisible;
+    btn.style.display = shouldShow ? 'inline-flex' : 'none';
+}
+
+async function setSimulationMode(requestedMode, autoContinue = false) {
+    try {
+        const res = await fetch(`${window.location.pathname}/set-simulation-mode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: requestedMode })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to set simulation mode');
+
+        simulationMode = data.mode;
+        matchData.simulation_mode = data.mode;
+        const toggle = document.getElementById('simulation-mode-toggle');
+        if (toggle) toggle.checked = simulationMode === 'manual';
+
+        appendLog(`[MODE] Simulation set to ${data.mode.toUpperCase()}`, 'comment');
+
+        if (simulationMode === 'auto' && pendingManualDecision && autoContinue) {
+            hideDecisionModal();
+            clearPendingDecisionState();
+            startMatch();
+        } else {
+            updateDecisionResumeButton();
+        }
+        return true;
+    } catch (err) {
+        appendLog(`[ERROR] ${err.message || err}`, 'error');
+        return false;
+    }
+}
+
+function showDecisionModal(data) {
+    const overlay = document.getElementById('decision-overlay');
+    const title = document.getElementById('decision-title');
+    const context = document.getElementById('decision-context');
+    const optionsWrap = document.getElementById('decision-options');
+    const submitBtn = document.getElementById('decision-submit-btn');
+    const autoBtn = document.getElementById('decision-auto-btn');
+    if (!overlay || !title || !context || !optionsWrap || !submitBtn) return;
+
+    if (data) {
+        pendingManualDecision = data;
+        pendingDecisionSelection = null;
+    }
+    if (!pendingManualDecision) return;
+    data = pendingManualDecision;
+    submitBtn.disabled = true;
+
+    const type = data.decision_type;
+    const ctx = data.decision_context || {};
+    const options = Array.isArray(data.decision_options) ? data.decision_options : [];
+
+    if (type === 'next_batter') {
+        title.textContent = 'Select Next Batter';
+        context.textContent = `${ctx.dismissed_batter || 'Batter'} is out at ${data.score}/${data.wickets}.`;
+    } else {
+        title.textContent = 'Select Next Bowler';
+        context.textContent = `Choose bowler for over ${ctx.upcoming_over || ((data.over || 0) + 1)}.`;
+    }
+
+    optionsWrap.innerHTML = '';
+    options.forEach(opt => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'decision-option';
+        const meta = type === 'next_bowler'
+            ? `${opt.bowling_type || ''} | ${opt.overs_bowled || 0} ov done | ${opt.overs_remaining || 0} ov left`
+            : `${opt.role || ''} | Bat ${opt.batting_rating || 0}`;
+        card.innerHTML = `
+            <span><strong>${escapeHtml(opt.name)}</strong></span>
+            <span class="decision-meta">${escapeHtml(meta)}</span>
+        `;
+        card.addEventListener('click', () => {
+            optionsWrap.querySelectorAll('.decision-option').forEach(n => n.classList.remove('selected'));
+            card.classList.add('selected');
+            pendingDecisionSelection = opt.index;
+            submitBtn.disabled = false;
+        });
+        optionsWrap.appendChild(card);
+    });
+
+    overlay.style.display = 'flex';
+    decisionModalVisible = true;
+    if (autoBtn) autoBtn.style.display = simulationMode === 'manual' ? 'inline-flex' : 'none';
+    updateDecisionResumeButton();
+}
+
+async function submitManualDecision() {
+    if (!pendingManualDecision || pendingDecisionSelection === null || pendingDecisionSelection === undefined) return;
+    const btn = document.getElementById('decision-submit-btn');
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch(`${window.location.pathname}/submit-decision`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: pendingManualDecision.decision_type,
+                selected_index: pendingDecisionSelection
+            })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Failed to submit decision');
+        }
+
+        appendLog(`[MANUAL] ${data.applied.type === 'next_bowler' ? 'Bowler' : 'Batter'} selected: ${data.applied.name}`, 'comment');
+        hideDecisionModal();
+        clearPendingDecisionState();
+        startMatch();
+    } catch (err) {
+        appendLog(`[ERROR] ${err.message || err}`, 'error');
+        if (btn) btn.disabled = false;
+    }
+}
+
 
 // --- Simulation Loop ---
 
@@ -609,6 +782,12 @@ function startMatch() {
                 if (typeof updateDashboard === 'function') {
                     updateDashboard(data.ball_data, ballHistory, overRuns, innings1Data);
                 }
+            }
+
+            if (data.decision_required) {
+                if (data.commentary) appendLog(data.commentary, 'comment');
+                showDecisionModal(data);
+                return;
             }
 
             // End of First Innings
