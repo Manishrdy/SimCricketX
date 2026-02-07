@@ -33,6 +33,8 @@ class Match:
         self.first_innings_score = None
         self.target = None
         self.data = match_data
+        self.simulation_mode = match_data.get("simulation_mode", "auto")
+        self.pending_decision = None
         self.pitch = match_data["pitch"]
         self.stadium = match_data["stadium"]
         self.home_xi = match_data["playing_xi"]["home"]
@@ -78,6 +80,8 @@ class Match:
         self.current_striker = self.batting_team[0]
         self.current_non_striker = self.batting_team[1]
         self.current_bowler = None
+        self.bowler_selected_for_over = -1
+        self.remaining_batter_indices = set(range(2, len(self.batting_team)))
         # Add bowling pattern detection
         self.bowling_pattern = self._detect_bowling_pattern()
 
@@ -185,6 +189,190 @@ class Match:
         else:
             # End of second innings - just show title
             return f"<strong>{title}</strong>"
+
+    def _is_manual_mode(self):
+        return str(self.simulation_mode).lower() == "manual"
+
+    def _ensure_batsman_stats_entry(self, player_name):
+        if player_name not in self.batsman_stats:
+            self.batsman_stats[player_name] = {
+                "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0,
+                "wicket_type": "", "bowler_out": "", "fielder_out": ""
+            }
+
+    def _build_decision_required_response(self, decision, commentary="", ball_data=None):
+        response = {
+            "match_over": False,
+            "decision_required": True,
+            "decision_type": decision.get("type"),
+            "decision_context": decision.get("context", {}),
+            "decision_options": decision.get("options", []),
+            "score": self.score,
+            "wickets": self.wickets,
+            "over": self.current_over,
+            "ball": self.current_ball,
+            "striker": self.current_striker["name"] if self.current_striker else "",
+            "non_striker": self.current_non_striker["name"] if self.current_non_striker else "",
+            "bowler": self.current_bowler["name"] if self.current_bowler else "",
+            "commentary": commentary
+        }
+        if ball_data:
+            response["ball_data"] = ball_data
+        return response
+
+    def _get_manual_bowler_candidates(self):
+        all_bowlers = [(i, p) for i, p in enumerate(self.bowling_team) if p.get("will_bowl", False)]
+        previous_bowler = self.current_bowler["name"] if self.current_bowler else None
+        strict = [
+            (i, p) for i, p in all_bowlers
+            if self.bowler_history.get(p["name"], 0) < 4 and p["name"] != previous_bowler
+        ]
+        if strict:
+            return strict
+
+        quota_only = [(i, p) for i, p in all_bowlers if self.bowler_history.get(p["name"], 0) < 4]
+        if quota_only:
+            return quota_only
+        return all_bowlers
+
+    def _create_next_bowler_decision(self):
+        candidates = self._get_manual_bowler_candidates()
+        options = []
+        for idx, bowler in candidates:
+            overs_done = self.bowler_history.get(bowler["name"], 0)
+            options.append({
+                "index": idx,
+                "name": bowler["name"],
+                "role": bowler.get("role", ""),
+                "bowling_type": bowler.get("bowling_type", ""),
+                "bowling_rating": bowler.get("bowling_rating", 0),
+                "overs_bowled": overs_done,
+                "overs_remaining": max(0, 4 - overs_done)
+            })
+
+        options.sort(key=lambda b: (b["overs_remaining"], b["bowling_rating"]), reverse=True)
+        decision = {
+            "type": "next_bowler",
+            "context": {
+                "innings": self.innings,
+                "upcoming_over": self.current_over + 1,
+                "score": self.score,
+                "wickets": self.wickets
+            },
+            "options": options
+        }
+        self.pending_decision = decision
+        return decision
+
+    def _create_next_batter_decision(self, dismissed_name, provisional_index, candidate_indices):
+        options = []
+        for idx in candidate_indices:
+            player = self.batting_team[idx]
+            options.append({
+                "index": idx,
+                "name": player["name"],
+                "role": player.get("role", ""),
+                "batting_rating": player.get("batting_rating", 0)
+            })
+        options.sort(key=lambda b: b["batting_rating"], reverse=True)
+        decision = {
+            "type": "next_batter",
+            "context": {
+                "innings": self.innings,
+                "dismissed_batter": dismissed_name,
+                "provisional_index": provisional_index,
+                "provisional_batter": self.batting_team[provisional_index]["name"],
+                "incoming_slot": "striker" if self.current_striker["name"] == self.batting_team[provisional_index]["name"] else "non_striker",
+                "score": self.score,
+                "wickets": self.wickets,
+                "over": self.current_over,
+                "ball": self.current_ball
+            },
+            "options": options
+        }
+        self.pending_decision = decision
+        return decision
+
+    def _auto_pick_next_batter_index(self):
+        if not self.remaining_batter_indices:
+            return None
+        return min(self.remaining_batter_indices)
+
+    def _bring_new_batter(self, dismissed_end, selected_index):
+        selected_player = self.batting_team[selected_index]
+        self._ensure_batsman_stats_entry(selected_player["name"])
+
+        if dismissed_end == "non_striker":
+            self.batter_idx[1] = selected_index
+            self.current_non_striker = self.current_striker
+            self.current_striker = selected_player
+            self.batter_idx.reverse()
+        else:
+            self.batter_idx[0] = selected_index
+            self.current_striker = selected_player
+
+    def submit_pending_decision(self, selected_index):
+        if not self.pending_decision:
+            return {"error": "No pending decision"}, 400
+
+        decision = self.pending_decision
+        option_indices = {int(opt["index"]) for opt in decision.get("options", [])}
+        try:
+            selected_index = int(selected_index)
+        except Exception:
+            return {"error": "Invalid selected index"}, 400
+
+        if selected_index not in option_indices:
+            return {"error": "Selected player is not a valid option"}, 400
+
+        if decision["type"] == "next_bowler":
+            self.current_bowler = self.bowling_team[selected_index]
+            self.bowler_selected_for_over = self.current_over
+            if self.current_bowler["name"] not in self.bowler_stats:
+                self.bowler_stats[self.current_bowler["name"]] = {
+                    "runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0,
+                    "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0
+                }
+            result = {
+                "success": True,
+                "applied": {
+                    "type": "next_bowler",
+                    "name": self.current_bowler["name"],
+                    "index": selected_index
+                }
+            }
+        elif decision["type"] == "next_batter":
+            context = decision.get("context", {})
+            provisional_index = int(context.get("provisional_index"))
+            incoming_slot = context.get("incoming_slot", "striker")
+
+            if selected_index != provisional_index:
+                # Put provisional batter back in the queue and consume selected batter.
+                self.remaining_batter_indices.add(provisional_index)
+                self.remaining_batter_indices.discard(selected_index)
+                selected_player = self.batting_team[selected_index]
+                self._ensure_batsman_stats_entry(selected_player["name"])
+                if incoming_slot == "striker":
+                    self.current_striker = selected_player
+                    self.batter_idx[0] = selected_index
+                else:
+                    self.current_non_striker = selected_player
+                    self.batter_idx[1] = selected_index
+
+            selected_player = self.batting_team[selected_index]
+            result = {
+                "success": True,
+                "applied": {
+                    "type": "next_batter",
+                    "name": selected_player["name"],
+                    "index": selected_index
+                }
+            }
+        else:
+            return {"error": "Unsupported decision type"}, 400
+
+        self.pending_decision = None
+        return result, 200
 
     def _format_scorecard_block(self, scorecard, title):
         if not scorecard:
@@ -1211,10 +1399,13 @@ class Match:
         self.bowling_pattern = self._detect_bowling_pattern()
         self.over_bowler_log = {}
         self.pending_pre_ball_commentary = []
+        self.pending_decision = None
         self.current_over_maiden_invalid = False
         self.free_hit_active = False
         self.current_over_runs = 0
         self.current_over_outcomes = []
+        self.bowler_selected_for_over = -1
+        self.remaining_batter_indices = set(range(2, len(self.batting_team)))
         # Restore any modified bowler ratings
         self._restore_bowler_ratings()
         
@@ -2524,6 +2715,21 @@ class Match:
                 "result": self.result
             }
 
+        if self.pending_decision:
+            if self._is_manual_mode():
+                return self._build_decision_required_response(
+                    self.pending_decision,
+                    commentary="<em>Waiting for manual selection...</em>"
+                )
+            # Auto mode fallback: resolve any pending decision immediately.
+            options = self.pending_decision.get("options", [])
+            if not options:
+                return {"error": "Pending decision has no valid options"}
+            auto_index = options[0]["index"]
+            apply_result, status_code = self.submit_pending_decision(auto_index)
+            if status_code != 200:
+                return {"error": apply_result.get("error", "Failed to auto-resolve pending decision")}
+
 
         if self.current_over >= self.overs or self.wickets >= 10:
             # 🤝 SAVE UNFINISHED PARTNERSHIP (if overs completed and not all out)
@@ -2714,8 +2920,17 @@ class Match:
                  if self.current_partnership_contributions['batsman1']['name'] == '':
                      self.current_partnership_contributions['batsman1']['name'] = self.current_striker['name']
                      self.current_partnership_contributions['batsman2']['name'] = self.current_non_striker['name']
-
-            self.current_bowler = self.pick_bowler()
+            if self.bowler_selected_for_over != self.current_over:
+                if self._is_manual_mode():
+                    decision = self.pending_decision
+                    if not decision or decision.get("type") != "next_bowler":
+                        decision = self._create_next_bowler_decision()
+                    return self._build_decision_required_response(
+                        decision,
+                        commentary=f"<em>Select bowler for over {self.current_over + 1}</em>"
+                    )
+                self.current_bowler = self.pick_bowler()
+                self.bowler_selected_for_over = self.current_over
             if self.current_over == 0:
                 batting_team_name = self._get_team_name(self.batting_team)
                 bowling_team_name = self._get_team_name(self.bowling_team)
@@ -2838,6 +3053,7 @@ class Match:
             self.current_over_runs = 0
 
         commentary_line = f"{ball_number} {self.current_bowler['name']} to {self.current_striker['name']} - "
+        pending_decision_for_response = None
 
         # A5: Free hit - prepend indicator and convert non-Run-Out wickets to dot balls
         if self.free_hit_active:
@@ -2897,13 +3113,6 @@ class Match:
                 commentary_line += self._generate_wicket_commentary(outcome, fielder_name)
                 self.commentary.append(commentary_line)
 
-                # 7. Replace the dismissed batsman; new batter always on strike
-                new_batter_idx = max(self.batter_idx) + 1
-                if dismissed_end == "striker":
-                    self.batter_idx[0] = new_batter_idx
-                else:
-                    self.batter_idx[1] = new_batter_idx
-
             else:
                 # Non-Run-Out dismissals: striker is always out, 0 runs scored
                 if not extra:
@@ -2926,11 +3135,8 @@ class Match:
                 commentary_line += self._generate_wicket_commentary(outcome, fielder_name)
                 self.commentary.append(commentary_line)
 
-                # Striker dismissed: replace batter_idx[0]
-                self.batter_idx[0] = max(self.batter_idx) + 1
-
             # Check if team is all out (works for both striker and non-striker dismissals)
-            if max(self.batter_idx) >= len(self.batting_team):
+            if not self.remaining_batter_indices:
                 scorecard_data = self._generate_detailed_scorecard()
 
                 # ✅ BUILD ENHANCED ALL-OUT COMMENTARY
@@ -3145,27 +3351,22 @@ class Match:
             print("dismissal_line", dismissal_line)
             commentary_line += "<br>" + dismissal_line + "<br>"
 
-            # 6) Load new batter - always placed on strike
-            if dismissed_end == "non_striker":
-                # Non-striker was run out: load new batter from batter_idx[1], swap to put on strike
-                new_batter = self.batting_team[self.batter_idx[1]]
-                if new_batter["name"] not in self.batsman_stats:
-                    self.batsman_stats[new_batter["name"]] = {
-                        "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0,
-                        "wicket_type": "", "bowler_out": "", "fielder_out": ""
-                    }
-                self.current_non_striker = self.current_striker
-                self.current_striker = new_batter
-                self.batter_idx.reverse()
-            else:
-                # Striker was dismissed: load new batter from batter_idx[0]
-                self.current_striker = self.batting_team[self.batter_idx[0]]
-                if self.current_striker["name"] not in self.batsman_stats:
-                    self.batsman_stats[self.current_striker["name"]] = {
-                        "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0,
-                        "wicket_type": "", "bowler_out": "", "fielder_out": ""
-                    }
+            # 6) Load provisional new batter and optionally request manual override
+            candidate_indices = sorted(self.remaining_batter_indices)
+            provisional_index = self._auto_pick_next_batter_index()
+            if provisional_index is None:
+                return {"error": "No batter available after wicket"}
+            self.remaining_batter_indices.discard(provisional_index)
+            self._bring_new_batter(dismissed_end, provisional_index)
             commentary_line += f"<br>{self.current_striker['name']} walks in next."
+            if self._is_manual_mode():
+                pending_decision_for_response = {
+                    "type": "next_batter",
+                    "dismissed_name": dismissed_name,
+                    "provisional_index": provisional_index,
+                    "candidate_indices": candidate_indices
+                }
+                commentary_line += "<br><em>Manual batting decision required.</em>"
             self.commentary.append(commentary_line)
 
         else:
@@ -3389,11 +3590,47 @@ class Match:
 
             self.current_ball = 0
             self.current_over += 1
+            self.bowler_selected_for_over = -1
             self.current_over_runs = 0
             self.current_over_outcomes = []
             self.current_over_maiden_invalid = False  # A2: reset for new over
             self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
             self.batter_idx.reverse()
+
+        ball_data_payload = {
+            "runs": self.score - _bd_score_before,
+            "batter_out": wicket,
+            "is_extra": extra,
+            "extra_type": outcome.get("extra_type") if extra else None,
+            "wicket_type": outcome.get("wicket_type") if wicket else None,
+            "description": outcome.get("description", ""),
+            "free_hit": _bd_was_free_hit,
+            "over": _bd_over,
+            "ball": _bd_ball,
+            "striker": _bd_striker,
+            "non_striker": _bd_non_striker,
+            "bowler": _bd_bowler,
+            "innings": self.innings,
+            "score": self.score,
+            "wickets": self.wickets,
+            "target": getattr(self, 'target', None),
+            "partnership_runs": self.current_partnership_runs,
+            "partnership_balls": self.current_partnership_balls,
+        }
+
+        if pending_decision_for_response and pending_decision_for_response.get("type") == "next_batter":
+            pending_decision_for_response = self._create_next_batter_decision(
+                pending_decision_for_response["dismissed_name"],
+                pending_decision_for_response["provisional_index"],
+                pending_decision_for_response["candidate_indices"]
+            )
+
+        if pending_decision_for_response:
+            return self._build_decision_required_response(
+                pending_decision_for_response,
+                commentary="<br>".join(all_commentary),
+                ball_data=ball_data_payload
+            )
 
         return {
             "Test": "Manish7",
@@ -3406,26 +3643,7 @@ class Match:
             "striker": self.current_striker["name"],
             "non_striker": self.current_non_striker["name"],
             "bowler": self.current_bowler["name"] if self.current_bowler else "",
-            "ball_data": {
-                "runs": self.score - _bd_score_before,
-                "batter_out": wicket,
-                "is_extra": extra,
-                "extra_type": outcome.get("extra_type") if extra else None,
-                "wicket_type": outcome.get("wicket_type") if wicket else None,
-                "description": outcome.get("description", ""),
-                "free_hit": _bd_was_free_hit,
-                "over": _bd_over,
-                "ball": _bd_ball,
-                "striker": _bd_striker,
-                "non_striker": _bd_non_striker,
-                "bowler": _bd_bowler,
-                "innings": self.innings,
-                "score": self.score,
-                "wickets": self.wickets,
-                "target": getattr(self, 'target', None),
-                "partnership_runs": self.current_partnership_runs,
-                "partnership_balls": self.current_partnership_balls,
-            }
+            "ball_data": ball_data_payload
         }
 
     def _generate_detailed_scorecard(self):

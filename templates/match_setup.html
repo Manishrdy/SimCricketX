@@ -215,24 +215,18 @@
     }
 
     /* Conditions Form */
+    .conditions-layout {
+        display: grid;
+        grid-template-columns: 1.35fr 0.9fr;
+        gap: 1.25rem;
+        position: relative;
+        z-index: 1;
+    }
+
     .form-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 1.5rem;
-        max-width: 980px;
-        margin: 0 auto;
-    }
-
-    @media (max-width: 768px) {
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    @media (max-width: 1100px) {
-        .form-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
     }
 
     .conditions-panel {
@@ -278,6 +272,25 @@
     .conditions-subtitle {
         color: var(--fg-secondary);
         font-size: 0.95rem;
+    }
+
+    .matchup-ribbon {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-top: 0.6rem;
+        padding: 0.35rem 0.7rem;
+        background: rgba(15, 118, 110, 0.1);
+        border: 1px solid rgba(15, 118, 110, 0.25);
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--fg);
+    }
+
+    .matchup-ribbon i {
+        color: var(--accent);
+        font-size: 0.75rem;
     }
 
     .form-group {
@@ -340,6 +353,118 @@
         margin-top: 0.6rem;
     }
 
+    .mode-toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        margin-top: 0.2rem;
+    }
+
+    .mode-pill {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--fg-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .mode-toggle-switch {
+        position: relative;
+        width: 52px;
+        height: 28px;
+        display: inline-block;
+    }
+
+    .mode-toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .mode-toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: var(--bg);
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        transition: 0.2s ease;
+    }
+
+    .mode-toggle-slider::before {
+        content: "";
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        left: 2px;
+        top: 2px;
+        border-radius: 50%;
+        background: var(--accent);
+        transition: 0.2s ease;
+    }
+
+    .mode-toggle-switch input:checked + .mode-toggle-slider {
+        background: rgba(15, 118, 110, 0.15);
+        border-color: rgba(15, 118, 110, 0.4);
+    }
+
+    .mode-toggle-switch input:checked + .mode-toggle-slider::before {
+        transform: translateX(24px);
+    }
+
+    .conditions-summary {
+        background: linear-gradient(155deg, rgba(15, 118, 110, 0.13), rgba(15, 118, 110, 0.02) 55%);
+        border: 1px solid rgba(15, 118, 110, 0.25);
+        border-radius: var(--border-radius);
+        padding: 1.2rem 1.2rem;
+        box-shadow: 0 12px 22px rgba(0, 0, 0, 0.06);
+    }
+
+    .summary-title {
+        margin: 0;
+        font-size: 0.95rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+        font-weight: 700;
+    }
+
+    .summary-meta {
+        margin-top: 0.35rem;
+        margin-bottom: 1rem;
+        color: var(--fg-secondary);
+        font-size: 0.82rem;
+    }
+
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        border-bottom: 1px dashed rgba(15, 118, 110, 0.3);
+        padding: 0.5rem 0;
+    }
+
+    .summary-row:last-child {
+        border-bottom: none;
+    }
+
+    .summary-label {
+        font-size: 0.78rem;
+        color: var(--fg-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+    }
+
+    .summary-value {
+        font-size: 0.88rem;
+        color: var(--fg);
+        font-weight: 700;
+        text-align: right;
+    }
+
     select,
     input[type="range"] {
         width: 100%;
@@ -386,6 +511,18 @@
 
     input[type="radio"] {
         display: none;
+    }
+
+    @media (max-width: 1050px) {
+        .conditions-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
     }
 
     /* Squad Section */
@@ -578,57 +715,103 @@
                 <div>
                     <h2 class="conditions-title">Match Conditions</h2>
                     <p class="conditions-subtitle">Finalize the venue atmosphere and the toss setup.</p>
+                    <div class="matchup-ribbon">
+                        <span id="summary-home-team">Home</span>
+                        <i class="fas fa-bolt"></i>
+                        <span id="summary-away-team">Away</span>
+                    </div>
                 </div>
                 <div class="condition-tag">Step 2 of 3</div>
             </div>
-            <div class="form-grid">
-                <div class="form-group">
-                    <div class="condition-header">
-                        <div class="condition-icon"><i class="fas fa-location-dot"></i></div>
-                        <span class="condition-tag">Auto-set</span>
+
+            <div class="conditions-layout">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <div class="condition-header">
+                            <div class="condition-icon"><i class="fas fa-location-dot"></i></div>
+                            <span class="condition-tag">Auto-set</span>
+                        </div>
+                        <label class="form-label">Host Venue</label>
+                        <input type="text" id="venue-display" readonly style="opacity: 0.8;">
+                        <p class="helper-text">Auto-filled from the selected home team.</p>
                     </div>
-                    <label class="form-label">Host Venue</label>
-                    <input type="text" id="venue-display" readonly style="opacity: 0.8;">
-                    <p class="helper-text">Auto-filled from the home team selection.</p>
+
+                    <div class="form-group">
+                        <div class="condition-header">
+                            <div class="condition-icon"><i class="fas fa-mountain-sun"></i></div>
+                            <span class="condition-tag">Strategy</span>
+                        </div>
+                        <label class="form-label">Pitch Condition</label>
+                        <select id="pitch-select">
+                            <!-- Populated via JS -->
+                        </select>
+                        <p class="helper-text">Team balance and outcomes adapt to surface profile.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="condition-header">
+                            <div class="condition-icon"><i class="fas fa-coins"></i></div>
+                            <span class="condition-tag">Call</span>
+                        </div>
+                        <label class="form-label">Toss Winner Choice</label>
+                        <div class="radio-group">
+                            <label>
+                                <input type="radio" name="toss" value="Heads" checked>
+                                <div class="radio-label">
+                                    <i class="fas fa-coins"></i> Heads
+                                </div>
+                            </label>
+                            <label>
+                                <input type="radio" name="toss" value="Tails">
+                                <div class="radio-label">
+                                    <i class="fas fa-coins"></i> Tails
+                                </div>
+                            </label>
+                        </div>
+                        <p id="toss-context" class="helper-text" style="text-align:center; color:var(--accent);">
+                            Away Team calls the toss
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="condition-header">
+                            <div class="condition-icon"><i class="fas fa-sliders"></i></div>
+                            <span class="condition-tag">Simulation</span>
+                        </div>
+                        <label class="form-label">Simulation Mode</label>
+                        <div class="mode-toggle-row">
+                            <span class="mode-pill">Auto</span>
+                            <label class="mode-toggle-switch" title="Toggle simulation mode">
+                                <input type="checkbox" id="simulation-mode-toggle">
+                                <span class="mode-toggle-slider"></span>
+                            </label>
+                            <span class="mode-pill">Manual</span>
+                        </div>
+                        <input type="hidden" id="simulation-mode-select" value="auto">
+                        <p class="helper-text"><span id="simulation-mode-help">Auto sim runs continuously.</span></p>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <div class="condition-header">
-                        <div class="condition-icon"><i class="fas fa-mountain-sun"></i></div>
-                        <span class="condition-tag">Strategy</span>
+                <aside class="conditions-summary" aria-label="Match Summary">
+                    <h3 class="summary-title">Quick Summary</h3>
+                    <p class="summary-meta">Review before moving to squad selection.</p>
+                    <div class="summary-row">
+                        <span class="summary-label">Venue</span>
+                        <span class="summary-value" id="summary-venue">-</span>
                     </div>
-                    <label class="form-label">Pitch Condition</label>
-                    <select id="pitch-select">
-                        <!-- Populated via JS -->
-                    </select>
-                    <p class="helper-text">Match tactics adapt to the pitch profile.</p>
-                </div>
-
-                <div class="form-group">
-                    <div class="condition-header">
-                        <div class="condition-icon"><i class="fas fa-coins"></i></div>
-                        <span class="condition-tag">Call</span>
+                    <div class="summary-row">
+                        <span class="summary-label">Pitch</span>
+                        <span class="summary-value" id="summary-pitch">-</span>
                     </div>
-                    <label class="form-label">Toss Winner Choice</label>
-                    <div class="radio-group">
-                        <label>
-                            <input type="radio" name="toss" value="Heads" checked>
-                            <div class="radio-label">
-                                <i class="fas fa-coins"></i> Heads
-                            </div>
-                        </label>
-                        <label>
-                            <input type="radio" name="toss" value="Tails">
-                            <div class="radio-label">
-                                <i class="fas fa-coins"></i> Tails
-                            </div>
-                        </label>
+                    <div class="summary-row">
+                        <span class="summary-label">Toss Call</span>
+                        <span class="summary-value" id="summary-toss">-</span>
                     </div>
-                    <p id="toss-context" class="helper-text" style="text-align:center; color:var(--accent);">
-                        Away Team calls the toss
-                    </p>
-                </div>
-
+                    <div class="summary-row">
+                        <span class="summary-label">Mode</span>
+                        <span class="summary-value" id="summary-mode">Auto</span>
+                    </div>
+                </aside>
             </div>
         </div>
     </div>
@@ -872,6 +1055,8 @@
 
         document.getElementById('venue-display').value = home.home_ground;
         document.getElementById('toss-context').textContent = `${away.team_name} Calls the Toss`;
+        document.getElementById('summary-home-team').textContent = home.team_name;
+        document.getElementById('summary-away-team').textContent = away.team_name;
 
         // Populate pitch
         const pSel = document.getElementById('pitch-select');
@@ -887,6 +1072,53 @@
             if (p !== pref) opt.textContent = `${p} Pitch`;
             pSel.appendChild(opt);
         });
+
+        // Bind live summary updates.
+        pSel.onchange = updateConditionsSummary;
+        const modeToggle = document.getElementById('simulation-mode-toggle');
+        if (modeToggle) {
+            modeToggle.checked = false;
+            modeToggle.onchange = () => {
+                syncSimulationModeControl();
+                updateConditionsSummary();
+            };
+        }
+        document.querySelectorAll('input[name="toss"]').forEach((radio) => {
+            radio.onchange = updateConditionsSummary;
+        });
+
+        syncSimulationModeControl();
+        updateConditionsSummary();
+    }
+
+    function syncSimulationModeControl() {
+        const modeToggle = document.getElementById('simulation-mode-toggle');
+        const modeHidden = document.getElementById('simulation-mode-select');
+        const modeHelp = document.getElementById('simulation-mode-help');
+        const mode = modeToggle && modeToggle.checked ? 'manual' : 'auto';
+        if (modeHidden) modeHidden.value = mode;
+        if (modeHelp) {
+            modeHelp.textContent = mode === 'manual'
+                ? 'Manual asks for next batter/bowler at decision points.'
+                : 'Auto sim runs continuously.';
+        }
+    }
+
+    function updateConditionsSummary() {
+        const venue = document.getElementById('venue-display')?.value || '-';
+        const pitch = document.getElementById('pitch-select')?.value || '-';
+        const toss = document.querySelector('input[name="toss"]:checked')?.value || '-';
+        const mode = document.getElementById('simulation-mode-select')?.value || 'auto';
+
+        const setText = (id, value) => {
+            const node = document.getElementById(id);
+            if (node) node.textContent = value;
+        };
+
+        setText('summary-venue', venue);
+        setText('summary-pitch', `${pitch} Pitch`);
+        setText('summary-toss', toss);
+        setText('summary-mode', mode === 'manual' ? 'Manual' : 'Auto');
     }
 
     // --- STEP 3: SQUADS ---
@@ -1221,6 +1453,7 @@
                 stadium: h.home_ground,
                 pitch: document.getElementById('pitch-select').value,
                 toss: document.querySelector('input[name="toss"]:checked').value,
+                simulation_mode: document.getElementById('simulation-mode-select').value,
                 playing_xi: {
                     home: getPlayers('home-selected'),
                     away: getPlayers('away-selected')
