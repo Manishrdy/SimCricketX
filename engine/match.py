@@ -1,5 +1,6 @@
 import builtins
 import logging
+import os
 import random
 from engine.ball_outcome import calculate_outcome
 from engine.super_over_outcome import calculate_super_over_outcome
@@ -306,6 +307,12 @@ class Match:
             
             if success:
                 print(f"🎉 Match archive created successfully!")
+                # Clean up temp JSON — data is now in archive ZIP + DB
+                try:
+                    os.remove(original_json_path)
+                    print(f"🧹 Cleaned up temp JSON: {original_json_path}")
+                except Exception as cleanup_err:
+                    print(f"⚠️ JSON cleanup failed (non-critical): {cleanup_err}")
                 return True
             else:
                 print(f"❌ Failed to create match archive")
