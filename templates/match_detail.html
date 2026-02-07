@@ -6,6 +6,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/match_detail.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/match_dashboard.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -75,6 +76,15 @@
             <button class="pace-btn" data-pace="1000">1x</button>
             <button class="pace-btn" data-pace="300">3x</button>
             <button class="pace-btn" data-pace="50">MAX</button>
+
+            <div class="view-toggle-wrapper">
+                <span class="toggle-label" id="label-commentary">Commentary</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="view-toggle">
+                    <span class="toggle-slider"></span>
+                </label>
+                <span class="toggle-label" id="label-matchcenter">Match Center</span>
+            </div>
         </div>
 
         <!-- Premium AI-Style Code Block Console -->
@@ -92,6 +102,41 @@
                     <span class="token-comment">// Match simulation ready. Waiting
                         for toss...</span>
                 </div>
+            </div>
+        </div>
+
+        <!-- Match Center Dashboard (toggle view) — viewport-locked, no scroll -->
+        <div class="dashboard-container" id="dashboard-container" style="display:none;">
+            <!-- Row 1: Wagon Wheel | Players + Win Prob -->
+            <div class="dash-panel ground-panel">
+                <div class="panel-header">Wagon Wheel</div>
+                <svg id="wagon-wheel-svg" viewBox="0 0 300 300"></svg>
+            </div>
+            <div class="dash-panel players-panel">
+                <div class="panel-header">At the Crease</div>
+                <div id="striker-card" class="player-card striker"></div>
+                <div id="non-striker-card" class="player-card"></div>
+                <div class="panel-divider"></div>
+                <div id="bowler-card" class="player-card bowler-card"></div>
+                <div id="partnership-bar"></div>
+                <div class="panel-divider"></div>
+                <div id="win-prob-display"></div>
+            </div>
+
+            <!-- Row 2: Timeline strip + Ticker (full width) -->
+            <div class="dash-panel timeline-panel">
+                <div id="over-timeline" class="timeline-strip"></div>
+                <div id="latest-ball-ticker" class="timeline-ticker"></div>
+            </div>
+
+            <!-- Row 3: Manhattan | Worm -->
+            <div class="dash-panel chart-panel">
+                <div class="panel-header">Manhattan</div>
+                <canvas id="manhattan-chart"></canvas>
+            </div>
+            <div class="dash-panel chart-panel">
+                <div class="panel-header">Run Chase</div>
+                <canvas id="worm-chart"></canvas>
             </div>
         </div>
     </div>
@@ -354,6 +399,8 @@
 {% block extra_js %}
 <!-- HTML2Canvas for Scorecard Capture -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- Chart.js for Manhattan & Worm Charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 
 <!-- Initialize Match Data from Jinja -->
 <!-- Match Data Container -->
@@ -373,6 +420,8 @@
 
 <!-- Load Main Logic -->
 <script src="{{ url_for('static', filename='js/match_detail.js') }}"></script>
+<!-- Dashboard Rendering -->
+<script src="{{ url_for('static', filename='js/match_dashboard.js') }}"></script>
 
 <script>
     // Copy Log Functionality
