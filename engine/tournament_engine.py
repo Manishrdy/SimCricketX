@@ -67,29 +67,32 @@ class TournamentEngine:
         pass
 
     @staticmethod
-    def overs_to_balls(overs: float) -> int:
+    def overs_to_balls(overs) -> int:
         """
-        Convert cricket overs (float) to total balls.
-        E.g., 19.5 overs = 19*6 + 5 = 119 balls
+        Convert cricket overs (str or float) to total balls.
+        E.g., "19.5" overs = 19*6 + 5 = 119 balls
         """
-        if overs is None or overs < 0:
+        if overs is None:
             return 0
-        whole_overs = int(overs)
-        partial_balls = round((overs - whole_overs) * 10)
+        overs_f = float(overs)
+        if overs_f < 0:
+            return 0
+        whole_overs = int(overs_f)
+        partial_balls = round((overs_f - whole_overs) * 10)
         if partial_balls > 5:
             logger.warning(f"Invalid overs format: {overs} - partial balls {partial_balls} > 5")
             partial_balls = 5
         return whole_overs * 6 + partial_balls
 
     @staticmethod
-    def balls_to_overs(balls: int) -> float:
+    def balls_to_overs(balls: int) -> str:
         """
-        Convert total balls to cricket overs (float).
-        E.g., 119 balls = 19.5 overs
+        Convert total balls to cricket overs string.
+        E.g., 119 balls = "19.5"
         """
         if balls is None or balls < 0:
-            return 0.0
-        return balls // 6 + (balls % 6) / 10.0
+            return '0.0'
+        return f"{balls // 6}.{balls % 6}"
 
     def get_available_modes(self, num_teams: int) -> list:
         """
@@ -940,10 +943,14 @@ class TournamentEngine:
             if next_fixture:
                 next_fixture.home_team_id = m1.winner_team_id
                 next_fixture.away_team_id = m2.winner_team_id
-                
-                # If both teams are now known, unlock the match
+
+                # Unlock only if both teams are real (not TBD/BYE placeholders)
                 if next_fixture.home_team_id and next_fixture.away_team_id:
-                    next_fixture.status = 'Scheduled'
+                    home = db.session.get(Team, next_fixture.home_team_id)
+                    away = db.session.get(Team, next_fixture.away_team_id)
+                    if (home and not home.is_placeholder and
+                            away and not away.is_placeholder):
+                        next_fixture.status = 'Scheduled'
                     
         # Update tournament current stage
         next_round_fixture = TournamentFixture.query.filter_by(
@@ -1036,8 +1043,8 @@ class TournamentEngine:
             net_run_rate=0.0,
             runs_scored=0,
             runs_conceded=0,
-            overs_faced=0.0,
-            overs_bowled=0.0,
+            overs_faced='0.0',
+            overs_bowled='0.0',
         )
         db.session.add(stats)
         return stats
@@ -1191,8 +1198,8 @@ class TournamentEngine:
         """Update Net Run Rate components for both teams."""
         home_score = match.home_team_score or 0
         away_score = match.away_team_score or 0
-        home_overs = match.home_team_overs or 0.0
-        away_overs = match.away_team_overs or 0.0
+        home_overs = match.home_team_overs or '0.0'
+        away_overs = match.away_team_overs or '0.0'
 
         # Home Batting / Away Bowling
         home_stats.runs_scored += home_score
@@ -1226,21 +1233,21 @@ class TournamentEngine:
 
     def _add_overs(self, o1, o2):
         """Add two cricket overs values."""
-        balls1 = self.overs_to_balls(o1 or 0.0)
-        balls2 = self.overs_to_balls(o2 or 0.0)
+        balls1 = self.overs_to_balls(o1 or '0.0')
+        balls2 = self.overs_to_balls(o2 or '0.0')
         return self.balls_to_overs(balls1 + balls2)
 
     def _subtract_overs(self, total, sub):
         """Subtract cricket overs values."""
-        total_balls = self.overs_to_balls(total or 0.0)
-        sub_balls = self.overs_to_balls(sub or 0.0)
+        total_balls = self.overs_to_balls(total or '0.0')
+        sub_balls = self.overs_to_balls(sub or '0.0')
         result_balls = max(0, total_balls - sub_balls)
         return self.balls_to_overs(result_balls)
 
     def _calculate_nrr(self, team_stats):
         """Calculate and update the net run rate for a team."""
-        balls_faced = self.overs_to_balls(team_stats.overs_faced or 0.0)
-        balls_bowled = self.overs_to_balls(team_stats.overs_bowled or 0.0)
+        balls_faced = self.overs_to_balls(team_stats.overs_faced or '0.0')
+        balls_bowled = self.overs_to_balls(team_stats.overs_bowled or '0.0')
 
         if balls_faced > 0:
             run_rate_for = (team_stats.runs_scored or 0) / (balls_faced / 6.0)
@@ -1337,14 +1344,18 @@ class TournamentEngine:
         """
         Reset downstream knockout fixtures when a completed fixture is re-simulated.
 
-        This clears dependent teams, match links, and winners, and locks fixtures
-        that should be repopulated once earlier rounds are replayed.
+        Only resets fixtures that are actual descendants in the bracket tree,
+        not unrelated branches at higher bracket positions.
         """
         tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
+        descendant_positions = self._get_downstream_positions(tournament_id, from_bracket_position)
+
+        if not descendant_positions:
+            return
+
         downstream = TournamentFixture.query.filter(
             TournamentFixture.tournament_id == tournament_id,
-            TournamentFixture.bracket_position != None,
-            TournamentFixture.bracket_position > from_bracket_position
+            TournamentFixture.bracket_position.in_(descendant_positions)
         ).all()
 
         for fixture in downstream:
@@ -1354,6 +1365,66 @@ class TournamentEngine:
             fixture.match_id = None
             fixture.status = 'Locked'
             fixture.standings_applied = False
+
+    def _get_downstream_positions(self, tournament_id, from_bracket_position):
+        """
+        Compute all bracket positions that are descendants of a given position
+        in the binary tournament bracket tree.
+        """
+        all_fixtures = TournamentFixture.query.filter(
+            TournamentFixture.tournament_id == tournament_id,
+            TournamentFixture.bracket_position != None
+        ).order_by(TournamentFixture.bracket_position).all()
+
+        if not all_fixtures:
+            return set()
+
+        positions = [f.bracket_position for f in all_fixtures]
+        total = len(positions)
+        min_pos = positions[0]
+
+        # Compute round sizes (first round largest, halving each time)
+        # total fixtures = n/2 + n/4 + ... + 1 = n - 1 where n = first_round * 2
+        first_round_size = (total + 1) // 2
+        round_sizes = []
+        size = first_round_size
+        while size >= 1:
+            round_sizes.append(size)
+            size //= 2
+
+        # Build round start positions
+        round_starts = []
+        start = min_pos
+        for rs in round_sizes:
+            round_starts.append(start)
+            start += rs
+
+        # Find which round the from_position is in
+        from_round = -1
+        from_idx = -1
+        for r, (rs, rsize) in enumerate(zip(round_starts, round_sizes)):
+            if rs <= from_bracket_position < rs + rsize:
+                from_round = r
+                from_idx = from_bracket_position - rs
+                break
+
+        if from_round == -1:
+            return set()
+
+        # Walk downstream through the tree
+        descendants = set()
+        current_indices = {from_idx}
+
+        for r in range(from_round + 1, len(round_sizes)):
+            next_indices = set()
+            for idx in current_indices:
+                next_idx = idx // 2
+                next_pos = round_starts[r] + next_idx
+                descendants.add(next_pos)
+                next_indices.add(next_idx)
+            current_indices = next_indices
+
+        return descendants
 
     def _reset_post_league_fixtures(self, tournament_id: int):
         """
@@ -1391,7 +1462,8 @@ class TournamentEngine:
         placeholder = Team(
             user_id=tournament.user_id,
             name=label,
-            short_code=label
+            short_code=label,
+            is_placeholder=True
         )
         db.session.add(placeholder)
         db.session.flush()
@@ -1401,8 +1473,8 @@ class TournamentEngine:
         """Reverse the NRR component updates from a match."""
         home_score = match.home_team_score or 0
         away_score = match.away_team_score or 0
-        home_overs = match.home_team_overs or 0.0
-        away_overs = match.away_team_overs or 0.0
+        home_overs = match.home_team_overs or '0.0'
+        away_overs = match.away_team_overs or '0.0'
 
         home_stats.runs_scored = max(0, (home_stats.runs_scored or 0) - home_score)
         home_stats.overs_faced = self._subtract_overs(home_stats.overs_faced, home_overs)

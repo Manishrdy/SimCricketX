@@ -1,9 +1,3 @@
-google_sheets:
-  spreadsheet_id: 1eGdTZDdWfuQqh0GzcrsCaDIKNql0zgt7PvK5bBZMBfc
-  credentials_file: auth/google_service_account.json
-
 app:
-  secret_key: CHANGE_ME
-
-
-
+  secret_key: 0Lz7E2A1K8xFZJ5rM6P4N9QWcYdH2VnT3pBfR8mS
+  

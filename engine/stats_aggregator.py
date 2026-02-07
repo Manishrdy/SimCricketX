@@ -48,7 +48,7 @@ class StatsAggregator:
         self.batting_df[num_cols] = self.batting_df[num_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
 
         agg_funcs = {
-            'Matches': ('match_id', 'count'), 'Runs': ('Runs', 'sum'), 'Balls': ('Balls', 'sum'),
+            'Matches': ('match_id', 'nunique'), 'Runs': ('Runs', 'sum'), 'Balls': ('Balls', 'sum'),
             '1s': ('1s', 'sum'), '2s': ('2s', 'sum'), '3s': ('3s', 'sum'),
             'Fours': ('Fours', 'sum'), 'Sixes': ('Sixes', 'sum'), 'Dots': ('Dots', 'sum')
         }
@@ -97,7 +97,7 @@ class StatsAggregator:
             return pd.DataFrame()
 
         self.bowling_df['Balls'] = self.bowling_df['Overs'].apply(lambda x: int(x) * 6 + round((x - int(x)) * 10))
-        agg_funcs = {'Balls': 'sum', 'Maidens': 'sum', 'Runs': 'sum', 'Wickets': 'sum', 'Wides': 'sum', 'No Balls': 'sum', 'Byes': 'sum', 'Leg Byes': 'sum', 'match_id': 'count'}
+        agg_funcs = {'Balls': 'sum', 'Maidens': 'sum', 'Runs': 'sum', 'Wickets': 'sum', 'Wides': 'sum', 'No Balls': 'sum', 'Byes': 'sum', 'Leg Byes': 'sum', 'match_id': 'nunique'}
         
         bowling_stats = self.bowling_df.groupby(['Bowler Name', 'Team Name']).agg(agg_funcs).rename(columns={'match_id': 'Matches'}).reset_index()
         
@@ -106,9 +106,10 @@ class StatsAggregator:
         bowling_stats['Average'] = (bowling_stats['Runs'] / bowling_stats['Wickets'].where(bowling_stats['Wickets'] > 0, None)).fillna(0).round(2)
         bowling_stats['Strike Rate'] = (bowling_stats['Balls'] / bowling_stats['Wickets'].where(bowling_stats['Wickets'] > 0, None)).fillna(0).round(2)
 
-        best_idx = self.bowling_df.loc[self.bowling_df.groupby(['Bowler Name', 'Team Name'])['Wickets'].idxmax()]
+        best_sorted = self.bowling_df.sort_values(['Wickets', 'Runs'], ascending=[False, True])
+        best_idx = best_sorted.groupby(['Bowler Name', 'Team Name']).first().reset_index()
         best_df = best_idx.set_index(['Bowler Name', 'Team Name'])
-        bowling_stats['Best'] = bowling_stats.set_index(['Bowler Name', 'Team Name']).index.map(best_df.apply(lambda row: f"{row['Wickets']}/{row['Runs']}", axis=1))
+        bowling_stats['Best'] = bowling_stats.set_index(['Bowler Name', 'Team Name']).index.map(best_df.apply(lambda row: f"{int(row['Wickets'])}/{int(row['Runs'])}", axis=1))
         
         fours_df = self.bowling_df[self.bowling_df['Wickets'] >= 4].groupby(['Bowler Name', 'Team Name']).size().reset_index(name='4w')
         bowling_stats = pd.merge(bowling_stats, fours_df, on=['Bowler Name', 'Team Name'], how='left')
@@ -116,19 +117,20 @@ class StatsAggregator:
         if not self.batting_df.empty:
             wicket_df = self.batting_df[self.batting_df['Bowler Out'].notna() & (self.batting_df['Status'].isin(['Caught', 'Bowled', 'LBW']))]
             if not wicket_df.empty:
-                # Group by both bowler name and team to avoid cross-team merges
-                wicket_types = wicket_df.groupby(['Bowler Out', 'Team Name', 'Status']).size().unstack(fill_value=0).reset_index()
+                # Team Name in batting_df is the batting team, not the bowling team,
+                # so we must NOT join on Team Name (they are opposite teams)
+                wicket_types = wicket_df.groupby(['Bowler Out', 'Status']).size().unstack(fill_value=0).reset_index()
                 wicket_types.rename(columns={'Bowler Out': 'Bowler Name'}, inplace=True)
                 # Rename status columns to prefixed names
                 for col in ['Caught', 'Bowled', 'LBW']:
                     if col in wicket_types.columns:
                         wicket_types.rename(columns={col: f'D_{col}'}, inplace=True)
-                bowling_stats = pd.merge(bowling_stats, wicket_types, on=['Bowler Name', 'Team Name'], how='left')
+                bowling_stats = pd.merge(bowling_stats, wicket_types, on=['Bowler Name'], how='left')
 
         bowling_stats.fillna(0, inplace=True)
         bowling_stats.rename(columns={'Bowler Name':'Player','Team Name':'Team','No Balls':'no balls','Maidens':'maidens'}, inplace=True)
         
-        ordered_cols = ['Player', 'Team', 'Matches', 'Overs', 'Runs', 'Wickets', 'maidens', 'Best', 'Average', 'Strike Rate', '4w', 'Wides', 'no balls', 'Byes', 'Leg Byes', 'D_Caught', 'D_Bowled', 'D_LBW']
+        ordered_cols = ['Player', 'Team', 'Matches', 'Overs', 'Runs', 'Wickets', 'maidens', 'Best', 'Average', 'Economy', 'Strike Rate', '4w', 'Wides', 'no balls', 'Byes', 'Leg Byes', 'D_Caught', 'D_Bowled', 'D_LBW']
         for col in ordered_cols:
             if col not in bowling_stats.columns:
                 bowling_stats[col] = 0

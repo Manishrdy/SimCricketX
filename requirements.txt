@@ -2,8 +2,6 @@ Flask>=2.0
 Flask-Login>=0.6
 PyYAML>=5.4
 cryptography>=3.4
-gspread>=5.0.0
-google-auth>=2.0.0
 psutil
 beautifulsoup4
 gunicorn

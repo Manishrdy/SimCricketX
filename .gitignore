@@ -3,7 +3,11 @@
 # Never commit directories containing secrets or user-generated data.
 # These should be on a persistent disk in production.
 # =============================================================================
-/auth/
+# Auth directory - only ignore private/sensitive key files
+auth/*.key
+auth/*.ppk
+auth/*.pub
+auth/google_service_account.json
 /data/
 /logs/
 

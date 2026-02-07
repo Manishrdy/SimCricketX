@@ -23,7 +23,10 @@ import re
 import logging
 import yaml
 import uuid
+import threading  # Bug Fix B2: Add thread safety for MATCH_INSTANCES
+from collections import deque
 from datetime import datetime, timedelta
+from functools import wraps
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash
@@ -78,7 +81,46 @@ from sqlalchemy import func  # For aggregate functions
 
 
 MATCH_INSTANCES = {}
+MATCH_INSTANCES_LOCK = threading.Lock()  # Bug Fix B2: Thread safety for concurrent access
 tournament_engine = TournamentEngine()
+
+# D3: Per-match file locks to prevent JSON read/write races
+_match_file_locks = {}
+_match_file_locks_meta = threading.Lock()
+
+def _get_match_file_lock(match_id):
+    """Return a per-match threading lock (created on first access)."""
+    with _match_file_locks_meta:
+        if match_id not in _match_file_locks:
+            _match_file_locks[match_id] = threading.Lock()
+        return _match_file_locks[match_id]
+
+# C3: Simple in-memory rate limiter (no external dependencies)
+_rate_limit_store = {}  # {user_id: deque of timestamps}
+_rate_limit_lock = threading.Lock()
+
+def rate_limit(max_requests=30, window_seconds=10):
+    """Decorator to rate-limit endpoints per user."""
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            from flask_login import current_user
+            user_id = getattr(current_user, 'id', 'anonymous')
+            now = datetime.now().timestamp()
+            with _rate_limit_lock:
+                if user_id not in _rate_limit_store:
+                    _rate_limit_store[user_id] = deque()
+                timestamps = _rate_limit_store[user_id]
+                # Remove timestamps outside the window
+                cutoff = now - window_seconds
+                while timestamps and timestamps[0] < cutoff:
+                    timestamps.popleft()
+                if len(timestamps) >= max_requests:
+                    return jsonify({"error": "Rate limit exceeded. Please slow down."}), 429
+                timestamps.append(now)
+            return f(*args, **kwargs)
+        return wrapped
+    return decorator
 
 # How old is "too old"? 7 days -> 7*24*3600 seconds
 PROD_MAX_AGE = 7 * 24 * 3600
@@ -88,35 +130,51 @@ PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 VISIT_FILE = os.path.join(PROJECT_ROOT, "data", "visit_counter.txt")
 MATCHES_FILE = os.path.join(PROJECT_ROOT, "data", "matches_simulated.txt")
 
+# D2: Locks for file-based counters to prevent read-then-write races
+_matches_counter_lock = threading.Lock()
+_visit_counter_lock = threading.Lock()
+
 def get_matches_simulated():
-    try:
-        with open(MATCHES_FILE, "r") as f:
-            return int(f.read().strip())
-    except Exception:
-        return 0
+    with _matches_counter_lock:
+        try:
+            with open(MATCHES_FILE, "r") as f:
+                return int(f.read().strip())
+        except Exception:
+            return 0
 
 def increment_matches_simulated():
-    current = get_matches_simulated()
-    try:
-        with open(MATCHES_FILE, "w") as f:
-            f.write(str(current + 1))
-    except Exception as e:
-        print(f"[ERROR] Failed to write matches_simulated: {e}")
+    with _matches_counter_lock:
+        try:
+            with open(MATCHES_FILE, "r") as f:
+                current = int(f.read().strip())
+        except Exception:
+            current = 0
+        try:
+            with open(MATCHES_FILE, "w") as f:
+                f.write(str(current + 1))
+        except Exception as e:
+            print(f"[ERROR] Failed to write matches_simulated: {e}")
 
 def get_visit_counter():
-    try:
-        with open(VISIT_FILE, "r") as f:
-            return int(f.read().strip())
-    except Exception:
-        return 0
+    with _visit_counter_lock:
+        try:
+            with open(VISIT_FILE, "r") as f:
+                return int(f.read().strip())
+        except Exception:
+            return 0
 
 def increment_visit_counter():
-    count = get_visit_counter() + 1
-    try:
-        with open(VISIT_FILE, "w") as f:
-            f.write(str(count))
-    except Exception as e:
-        print(f"[ERROR] Could not write visit count: {e}")
+    with _visit_counter_lock:
+        try:
+            with open(VISIT_FILE, "r") as f:
+                count = int(f.read().strip())
+        except Exception:
+            count = 0
+        try:
+            with open(VISIT_FILE, "w") as f:
+                f.write(str(count + 1))
+        except Exception as e:
+            print(f"[ERROR] Could not write visit count: {e}")
 
 
 def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
@@ -179,16 +237,17 @@ def cleanup_old_match_instances(app):
         current_time = time.time()
         cutoff_time = current_time - (7 * 24 * 3600)  # 24 hours ago
         
-        instances_to_remove = []
-        for match_id, instance in MATCH_INSTANCES.items():
-            # Check if instance has a timestamp or creation time
-            instance_time = getattr(instance, 'created_at', current_time)
-            if instance_time < cutoff_time:
-                instances_to_remove.append(match_id)
-        
-        for match_id in instances_to_remove:
-            del MATCH_INSTANCES[match_id]
-            app.logger.info(f"[Cleanup] Removed old match instance: {match_id}")
+        with MATCH_INSTANCES_LOCK:  # Bug Fix B2: Thread-safe cleanup
+            instances_to_remove = []
+            for match_id, instance in MATCH_INSTANCES.items():
+                # Check if instance has a timestamp or creation time
+                instance_time = getattr(instance, 'created_at', current_time)
+                if instance_time < cutoff_time:
+                    instances_to_remove.append(match_id)
+            
+            for match_id in instances_to_remove:
+                del MATCH_INSTANCES[match_id]
+                app.logger.info(f"[Cleanup] Removed old match instance: {match_id}")
         
         if instances_to_remove:
             app.logger.info(f"[Cleanup] Cleaned up {len(instances_to_remove)} old match instances")
@@ -382,6 +441,19 @@ def create_app():
         if not os.path.isdir(match_dir):
             return None, None, (jsonify({"error": "Match not found"}), 404)
 
+        # D1: O(1) direct lookup by match_id filename first
+        direct_path = os.path.join(match_dir, f"match_{match_id}.json")
+        if os.path.isfile(direct_path):
+            try:
+                with open(direct_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("created_by") != current_user.id:
+                    return None, None, (jsonify({"error": "Unauthorized"}), 403)
+                return data, direct_path, None
+            except Exception as e:
+                app.logger.error(f"[MatchAuth] error loading match_{match_id}.json: {e}", exc_info=True)
+
+        # Fallback: O(N) scan for legacy files (old naming convention)
         for fn in os.listdir(match_dir):
             if not fn.endswith(".json"):
                 continue
@@ -665,7 +737,7 @@ def create_app():
             # Ensure rollback even if inner try didn't catch it
             try:
                 db.session.rollback()
-            except:
+            except Exception:  # Fix D7: Don't swallow SystemExit/KeyboardInterrupt
                 pass
 
     def _compute_tournament_stats(user_id, tournament_id, use_cache=False):
@@ -959,7 +1031,7 @@ def create_app():
 
         email = current_user.id
         app.logger.info(f"Account deletion requested for {email}")
-        if delete_user(email):
+        if delete_user(email, requesting_user_email=current_user.id):
             logout_user()
             return redirect(url_for("register"))
         else:
@@ -979,7 +1051,9 @@ def create_app():
         """Return list of team dicts created by this user from DB."""
         teams = []
         try:
-            db_teams = DBTeam.query.filter_by(user_id=user_email).all()
+            db_teams = DBTeam.query.filter_by(user_id=user_email).filter(
+                DBTeam.is_placeholder != True
+            ).all()
             for t in db_teams:
                 # Construct dict with full player data for frontend JS
                 team_dict = {
@@ -1527,7 +1601,8 @@ def create_app():
             match_id = str(uuid.uuid4())
             ts = datetime.now().strftime("%Y%m%d%H%M%S")
             user = current_user.id
-            fname = f"playing_{home_code}_vs_{away_code}_{user}_{ts}.json"
+            # D1: Use match_id in filename for O(1) lookup
+            fname = f"match_{match_id}.json"
 
             match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
             os.makedirs(match_dir, exist_ok=True)
@@ -1677,8 +1752,9 @@ def create_app():
             entry["extras"] = {
                 "wides": total_wides,
                 "noballs": total_noballs,
-                "total": total_extras
+                "total": total_extras,
             }
+            # Fix D11: Add total score (batting runs + extras)
             entry["score"] = batting_runs + total_extras
             entry["wickets"] = sum(1 for item in entry["batting"] if item["is_out"])
             entry["batting_team_name"] = teams.get(entry["batting_team_id"]).name if entry["batting_team_id"] in teams else "Unknown"
@@ -1704,82 +1780,65 @@ def create_app():
     @app.route("/match/<match_id>/set-toss", methods=["POST"])
     @login_required
     def set_toss(match_id):
-        match_data, match_path, err = _load_match_file_for_user(match_id)
-        if err:
-            return err
+        with _get_match_file_lock(match_id):  # D3: serialize file access per match
+            match_data, match_path, err = _load_match_file_for_user(match_id)
+            if err:
+                return err
 
-        data = request.get_json() or {}
-        toss_winner = data.get("winner")
-        decision = data.get("decision")
-        if not toss_winner or not decision:
-            return jsonify({"error": "winner and decision are required"}), 400
+            data = request.get_json() or {}
+            toss_winner = data.get("winner")
+            decision = data.get("decision")
+            if not toss_winner or not decision:
+                return jsonify({"error": "winner and decision are required"}), 400
 
-        match_data["toss_winner"] = toss_winner
-        match_data["toss_decision"] = decision
+            match_data["toss_winner"] = toss_winner
+            match_data["toss_decision"] = decision
 
-        with open(match_path, "w") as f:
-            json.dump(match_data, f, indent=2)
-        app.logger.info(f"[MatchToss] {toss_winner} chose to {decision} (Match: {match_id})")
-        return jsonify({"status": "success"}), 200
+            with open(match_path, "w") as f:
+                json.dump(match_data, f, indent=2)
+            app.logger.info(f"[MatchToss] {toss_winner} chose to {decision} (Match: {match_id})")
+            return jsonify({"status": "success"}), 200
     
     @app.route("/match/<match_id>/spin-toss", methods=["POST"])
     @login_required
     def spin_toss(match_id):
-        match_data, match_path, err = _load_match_file_for_user(match_id)
-        if err:
-            return err
+        with _get_match_file_lock(match_id):  # D3: serialize file access per match
+            match_data, match_path, err = _load_match_file_for_user(match_id)
+            if err:
+                return err
 
-        if not match_data:
-            return jsonify({"error": "Match not found"}), 404
+            if not match_data:
+                return jsonify({"error": "Match not found"}), 404
 
-        team_home = match_data["team_home"].split('_')[0]
-        team_away = match_data["team_away"].split('_')[0]
-        toss_choice = match_data["toss"]
-        toss_result = random.choice(["Heads", "Tails"])
-        home_captain = match_data["playing_xi"]["home"][0]["name"]
-        away_captain = match_data["playing_xi"]["away"][0]["name"]
+            team_home = match_data["team_home"].split('_')[0]
+            team_away = match_data["team_away"].split('_')[0]
+            toss_choice = match_data["toss"]
+            toss_result = random.choice(["Heads", "Tails"])
+            home_captain = match_data["playing_xi"]["home"][0]["name"]
+            away_captain = match_data["playing_xi"]["away"][0]["name"]
 
-        toss_winner = team_away if toss_choice == toss_result else team_home
-        toss_decision = random.choice(["Bat", "Bowl"])
+            toss_winner = team_away if toss_choice == toss_result else team_home
+            toss_decision = random.choice(["Bat", "Bowl"])
 
-        match_data["toss_winner"] = toss_winner
-        match_data["toss_decision"] = toss_decision
+            match_data["toss_winner"] = toss_winner
+            match_data["toss_decision"] = toss_decision
 
-        with open(match_path, "w") as f:
-            json.dump(match_data, f, indent=2)
-        
-        # ????? NEW: update the in-memory Match, if created
-        if match_id in MATCH_INSTANCES:
-            inst = MATCH_INSTANCES[match_id]
-            inst.toss_winner   = toss_winner
-            inst.toss_decision = toss_decision
-            inst.batting_team  = inst.home_xi if toss_decision=="Bat" else inst.away_xi
-            inst.bowling_team  = inst.away_xi if inst.batting_team==inst.home_xi else inst.home_xi
+            with open(match_path, "w") as f:
+                json.dump(match_data, f, indent=2)
 
-        commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
-                    f"{toss_winner} won the toss and choose to {toss_decision} first."
-        commentary = commentary +"\n"
+            # Update the in-memory Match instance, if created
+            with MATCH_INSTANCES_LOCK:
+                if match_id in MATCH_INSTANCES:
+                    inst = MATCH_INSTANCES[match_id]
+                    inst.toss_winner   = toss_winner
+                    inst.toss_decision = toss_decision
+                    inst.batting_team  = inst.home_xi if toss_decision=="Bat" else inst.away_xi
+                    inst.bowling_team  = inst.away_xi if inst.batting_team==inst.home_xi else inst.home_xi
 
-        # Determine batting and bowling teams based on toss result
-        if toss_winner == team_home:
-            if toss_decision == "Bat":
-                batting_team = match_data["playing_xi"]["home"]
-                bowling_team = match_data["playing_xi"]["away"]
-            else:  # Bowl
-                batting_team = match_data["playing_xi"]["away"]
-                bowling_team = match_data["playing_xi"]["home"]
-        else:  # toss_winner == team_away
-            if toss_decision == "Bat":
-                batting_team = match_data["playing_xi"]["away"]
-                bowling_team = match_data["playing_xi"]["home"]
-            else:  # Bowl
-                batting_team = match_data["playing_xi"]["home"]
-                bowling_team = match_data["playing_xi"]["away"]
-
-        # Build complete toss commentary
+        # Build toss commentary (outside lock — no file/instance access needed)
         full_commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
                         f"{toss_winner} won the toss and choose to {toss_decision} first."
-        
+
         return jsonify({
             "toss_commentary": full_commentary,
             "toss_winner":     toss_winner,
@@ -1789,97 +1848,65 @@ def create_app():
     @app.route("/match/<match_id>/impact-player-swap", methods=["POST"])
     @login_required
     def impact_player_swap(match_id):
-        """
-        Handle impact player substitution with optional swaps for each team.
-        
-        PRODUCTION-LEVEL ENDPOINT with comprehensive error handling, validation,
-        logging, and state management for mid-match player substitutions.
-        """
+        """Handle impact player substitution with optional swaps for each team."""
         app.logger.info(f"[ImpactSwap] Starting impact player swap for match {match_id}")
-        
+
         try:
             swap_data = request.get_json()
             if not swap_data:
                 return jsonify({"error": "Request body is required"}), 400
-                
+
             home_swap = swap_data.get("home_swap")
             away_swap = swap_data.get("away_swap")
-            
-            # Load match data from filesystem
-            match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
-            match_path, match_data = None, None
-            
-            for filename in os.listdir(match_dir):
-                if not filename.endswith(".json"): continue
-                file_path = os.path.join(match_dir, filename)
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    if data.get("match_id") == match_id:
-                        match_data, match_path = data, file_path
-                        break
-                except Exception as e:
-                    app.logger.warning(f"[ImpactSwap] Error reading {filename}: {e}")
-                    continue
-            
-            if not match_data:
-                return jsonify({"error": "Match not found"}), 404
 
-            if match_data.get("created_by") != current_user.id:
-                return jsonify({"error": "Unauthorized access"}), 403
+            with _get_match_file_lock(match_id):  # D3: serialize file access per match
+                match_data, match_path, err = _load_match_file_for_user(match_id)
+                if err:
+                    return err
 
-            impact_swaps = {}
-            
-            # Perform home team swap
-            if home_swap:
-                home_out_idx = home_swap["out_player_index"]
-                home_in_idx = home_swap["in_player_index"]
-                home_out_player = match_data["playing_xi"]["home"][home_out_idx]
-                home_in_player = match_data["substitutes"]["home"][home_in_idx]
-                match_data["playing_xi"]["home"][home_out_idx] = home_in_player
-                match_data["substitutes"]["home"][home_in_idx] = home_out_player
-                impact_swaps["home"] = {"out": home_out_player["name"], "in": home_in_player["name"]}
-            
-            # Perform away team swap
-            if away_swap:
-                away_out_idx = away_swap["out_player_index"]
-                away_in_idx = away_swap["in_player_index"]
-                away_out_player = match_data["playing_xi"]["away"][away_out_idx]
-                away_in_player = match_data["substitutes"]["away"][away_in_idx]
-                match_data["playing_xi"]["away"][away_out_idx] = away_in_player
-                match_data["substitutes"]["away"][away_in_idx] = away_out_player
-                impact_swaps["away"] = {"out": away_out_player["name"], "in": away_in_player["name"]}
+                impact_swaps = {}
 
-            # Mark that swaps have occurred
-            match_data["impact_players_swapped"] = True
-            
-            # =================================================================
-            # ? START: CRITICAL FIX - UPDATE IN-MEMORY INSTANCE
-            # =================================================================
-            if match_id in MATCH_INSTANCES:
-                app.logger.info(f"[ImpactSwap] Found active match instance for {match_id}. Updating state.")
-                match_instance = MATCH_INSTANCES[match_id]
-                
-                # Directly update the instance's player lists
-                match_instance.home_xi = match_data["playing_xi"]["home"]
-                match_instance.away_xi = match_data["playing_xi"]["away"]
-                
-                # Also update the raw data stored in the instance
-                match_instance.data = match_data
-                
-                app.logger.info(f"[ImpactSwap] Instance updated. Home XI now has {len(match_instance.home_xi)} players.")
-            else:
-                app.logger.warning(f"[ImpactSwap] No active match instance found for {match_id}. File will be updated, but live game may not reflect changes until reload.")
-            # =================================================================
-            # ? END: CRITICAL FIX
-            # =================================================================
-            
-            # Save the updated data back to the JSON file
-            with open(match_path, "w", encoding="utf-8") as f:
-                json.dump(match_data, f, indent=2)
-                
+                # Perform home team swap
+                if home_swap:
+                    home_out_idx = home_swap["out_player_index"]
+                    home_in_idx = home_swap["in_player_index"]
+                    home_out_player = match_data["playing_xi"]["home"][home_out_idx]
+                    home_in_player = match_data["substitutes"]["home"][home_in_idx]
+                    match_data["playing_xi"]["home"][home_out_idx] = home_in_player
+                    match_data["substitutes"]["home"][home_in_idx] = home_out_player
+                    impact_swaps["home"] = {"out": home_out_player["name"], "in": home_in_player["name"]}
+
+                # Perform away team swap
+                if away_swap:
+                    away_out_idx = away_swap["out_player_index"]
+                    away_in_idx = away_swap["in_player_index"]
+                    away_out_player = match_data["playing_xi"]["away"][away_out_idx]
+                    away_in_player = match_data["substitutes"]["away"][away_in_idx]
+                    match_data["playing_xi"]["away"][away_out_idx] = away_in_player
+                    match_data["substitutes"]["away"][away_in_idx] = away_out_player
+                    impact_swaps["away"] = {"out": away_out_player["name"], "in": away_in_player["name"]}
+
+                # Mark that swaps have occurred
+                match_data["impact_players_swapped"] = True
+
+                # Update in-memory instance under MATCH_INSTANCES_LOCK
+                with MATCH_INSTANCES_LOCK:
+                    if match_id in MATCH_INSTANCES:
+                        app.logger.info(f"[ImpactSwap] Found active match instance for {match_id}. Updating state.")
+                        match_instance = MATCH_INSTANCES[match_id]
+                        match_instance.home_xi = match_data["playing_xi"]["home"]
+                        match_instance.away_xi = match_data["playing_xi"]["away"]
+                        match_instance.data = match_data
+                        app.logger.info(f"[ImpactSwap] Instance updated. Home XI now has {len(match_instance.home_xi)} players.")
+                    else:
+                        app.logger.warning(f"[ImpactSwap] No active match instance found for {match_id}.")
+
+                # Save the updated data back to the JSON file
+                with open(match_path, "w", encoding="utf-8") as f:
+                    json.dump(match_data, f, indent=2)
+
             app.logger.info(f"[ImpactSwap] Successfully completed swaps for match {match_id}: {impact_swaps}")
-            
+
             return jsonify({
                 "success": True,
                 "match_id": match_id,
@@ -1989,21 +2016,25 @@ def create_app():
         
     @app.route("/match/<match_id>/next-ball", methods=["POST"])
     @login_required
+    @rate_limit(max_requests=30, window_seconds=10)  # C3: Rate limit to prevent DoS
     def next_ball(match_id):
-        if match_id not in MATCH_INSTANCES:
-            match_data, _match_path, err = _load_match_file_for_user(match_id)
-            if err:
-                return err
+        with MATCH_INSTANCES_LOCK:  # Bug Fix B2: Thread-safe match creation
+            if match_id not in MATCH_INSTANCES:
+                # Check if match exists in DB
+                db_match = DBMatch.query.get(match_id)
+                if not db_match:
+                    return jsonify({"error": "Match not found"}), 404
+                
+                # Load match data from JSON
+                match_data = json.loads(db_match.match_json_path) if isinstance(db_match.match_json_path, str) else db_match.match_json_path
+                
+                # Create new Match instance
+                # Use default_config for rain probability if not in match_data
+                if 'rain_probability' not in match_data:
+                    match_data['rain_probability'] = db_match.rain_probability or load_config().get('rain_probability', 0.0)
+                MATCH_INSTANCES[match_id] = Match(match_data)
             
-            # Reset impact player flags for fresh simulation
-            if "impact_players_swapped" in match_data:
-                del match_data["impact_players_swapped"]
-            if "impact_swaps" in match_data:
-                del match_data["impact_swaps"]
-
-            MATCH_INSTANCES[match_id] = Match(match_data)
-
-        match = MATCH_INSTANCES[match_id]
+            match = MATCH_INSTANCES[match_id]
         if match.data.get("created_by") != current_user.id:
             return jsonify({"error": "Unauthorized"}), 403
         outcome = match.next_ball()
@@ -2629,8 +2660,9 @@ def create_app():
                         continue
 
             # 4. Clear In-Memory Instance
-            if match_id in MATCH_INSTANCES:
-                del MATCH_INSTANCES[match_id]
+            with MATCH_INSTANCES_LOCK:  # Bug Fix B2: Thread-safe deletion
+                if match_id in MATCH_INSTANCES:
+                    del MATCH_INSTANCES[match_id]
 
             db.session.commit()
             flash("Match reset successfully. You can now re-simulate.", "success")
@@ -3120,13 +3152,8 @@ if __name__ == "__main__":
             webbrowser.open_new_tab(url)
 
         # Run Flask app
-        # app.run(
-        #     host=HOST,
-        #     port=PORT,
-        #     debug=is_local,
-        #     use_reloader=False  # Important: avoid reloader in prod threads
-        # )
-        app.run(host="0.0.0.0", port=7860, debug=False, use_reloader=False)
+        # C6: Use computed HOST (127.0.0.1 for local/dev, 0.0.0.0 for prod)
+        app.run(host=HOST, port=PORT, debug=is_local, use_reloader=False)
 
     except Exception as e:
         print("[ERROR] Failed to start SimCricketX:")

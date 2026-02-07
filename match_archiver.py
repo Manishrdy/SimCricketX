@@ -436,13 +436,15 @@ class MatchArchiver:
                 self.logger.error(f"Could not resolve teams for DB save. Match ID: {self.match_id}")
                 return
 
-            # Determine Winner (Logic restored)
+            # Determine Winner — match result format is "{short_code} won by ..."
             winner_team = None
             if self.match.result:
                 result_lower = self.match.result.lower()
-                if home_team.name.lower() in result_lower:
+                home_code = home_team.short_code.lower()
+                away_code = away_team.short_code.lower()
+                if result_lower.startswith(home_code + ' won'):
                     winner_team = home_team
-                elif away_team.name.lower() in result_lower:
+                elif result_lower.startswith(away_code + ' won'):
                     winner_team = away_team
             
             # Calculate margin of victory
@@ -478,6 +480,10 @@ class MatchArchiver:
                 # NEW: Match format
                 db_match.match_format = self.match_data.get('format', 'T20')
                 db_match.overs_per_side = self.match_data.get('overs', 20)
+                
+                # Bug Fix B4: Reverse old aggregate stats before deletion to prevent double-counting
+                old_scorecards = MatchScorecard.query.filter_by(match_id=self.match_id).all()
+                self._reverse_player_aggregates(old_scorecards)
                 
                 # Clear existing scorecards to avoid duplication/stale data
                 MatchScorecard.query.filter_by(match_id=self.match_id).delete()
@@ -518,7 +524,7 @@ class MatchArchiver:
             # Helper to calculate total overs faced
             def calc_overs(stats_dict):
                 balls = sum(p.get('balls', 0) for p in stats_dict.values())
-                return round(balls // 6 + (balls % 6) / 10.0, 1)
+                return f"{balls // 6}.{balls % 6}"
 
             if first_bat_name == self.match.match_data["team_home"].split('_')[0]:
                 db_match.home_team_score = self.match.first_innings_score
@@ -723,12 +729,21 @@ class MatchArchiver:
              b1 = DBPlayer.query.filter_by(name=p_data['batsman1_name'], team_id=batting_team_id).first()
              b2 = DBPlayer.query.filter_by(name=p_data['batsman2_name'], team_id=batting_team_id).first()
              
+             # Bug Fix B5: Validate players exist before creating partnership
+             if not b1 or not b2:
+                 self.logger.warning(
+                     f"Skipping partnership save - players not found: "
+                     f"{p_data['batsman1_name']} (found: {bool(b1)}), "
+                     f"{p_data['batsman2_name']} (found: {bool(b2)})"
+                 )
+                 continue
+             
              mp = MatchPartnership(
                  match_id=self.match_id,
                  innings_number=innings_number,
                  wicket_number=p_data.get('wicket_number'),
-                 batsman1_id=b1.id if b1 else None,
-                 batsman2_id=b2.id if b2 else None,
+                 batsman1_id=b1.id,
+                 batsman2_id=b2.id,
                  runs=p_data['runs'],
                  balls=p_data['balls'],
                  batsman1_contribution=p_data.get('batsman1_contribution', 0),
@@ -737,6 +752,61 @@ class MatchArchiver:
                  end_over=p_data['end_over']
              )
              db.session.add(mp)
+
+    def _reverse_player_aggregates(self, scorecards: List[MatchScorecard]) -> None:
+        """
+        Reverse player aggregate stats from old scorecards before re-simulation.
+        
+        Bug Fix B4: When re-simulating, we must reverse the old stats before they're deleted,
+        otherwise the new stats will be added on top of the old stats, causing inflation.
+        
+        Args:
+            scorecards: List of MatchScorecard objects to reverse
+        """
+        if not scorecards:
+            return
+        
+        updated_players = set()
+        
+        for card in scorecards:
+            player = DBPlayer.query.get(card.player_id)
+            if not player:
+                continue
+            
+            # Decrement matches_played only once per player
+            if card.player_id not in updated_players:
+                player.matches_played = max(0, player.matches_played - 1)
+                updated_players.add(card.player_id)
+            
+            # Reverse batting stats
+            if card.record_type == "batting":
+                player.total_runs = max(0, player.total_runs - (card.runs or 0))
+                player.total_balls_faced = max(0, player.total_balls_faced - (card.balls or 0))
+                player.total_fours = max(0, player.total_fours - (card.fours or 0))
+                player.total_sixes = max(0, player.total_sixes - (card.sixes or 0))
+                
+                # Reverse fifties/centuries
+                if card.runs and card.runs >= 50 and card.runs < 100:
+                    player.total_fifties = max(0, player.total_fifties - 1)
+                elif card.runs and card.runs >= 100:
+                    player.total_centuries = max(0, player.total_centuries - 1)
+                
+                # Reverse not outs
+                if not card.is_out and card.balls and card.balls > 0:
+                    player.not_outs = max(0, player.not_outs - 1)
+            
+            # Reverse bowling stats
+            if card.record_type == "bowling":
+                player.total_wickets = max(0, player.total_wickets - (card.wickets or 0))
+                player.total_balls_bowled = max(0, player.total_balls_bowled - (card.balls_bowled or 0))
+                player.total_runs_conceded = max(0, player.total_runs_conceded - (card.runs_conceded or 0))
+                player.total_maidens = max(0, player.total_maidens - (card.maidens or 0))
+                
+                # Reverse five wicket hauls
+                if card.wickets and card.wickets >= 5:
+                    player.five_wicket_hauls = max(0, player.five_wicket_hauls - 1)
+        
+        self.logger.info(f"Reversed aggregate stats for {len(updated_players)} players during re-simulation")
 
     def _copy_json_file(self, original_path: str) -> None:
         """Copy original JSON file to archive with validation"""
@@ -1838,23 +1908,35 @@ def find_original_json_file(match_id: str, base_path: str = "data/matches") -> O
         if not base_path.is_dir():
             logger.warning(f"Base path is not a directory: {base_path}")
             return None
-        
-        # Search for JSON files
+
+        # D1: O(1) direct lookup by match_id filename first
+        direct_path = base_path / f"match_{match_id}.json"
+        if direct_path.is_file():
+            try:
+                with open(direct_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if data.get('match_id') == match_id:
+                    logger.debug(f"Found match file (direct): {direct_path}")
+                    return str(direct_path)
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Error reading {direct_path}: {e}")
+
+        # Fallback: O(N) scan for legacy files
         json_files = list(base_path.glob("*.json"))
-        
+
         for json_file in json_files:
             try:
                 with open(json_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    
+
                 if data.get('match_id') == match_id:
                     logger.debug(f"Found match file: {json_file}")
                     return str(json_file)
-                    
+
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f"Error reading {json_file}: {e}")
                 continue
-        
+
         logger.warning(f"No JSON file found for match_id: {match_id}")
         return None
         
