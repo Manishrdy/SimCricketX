@@ -2564,6 +2564,8 @@ class Match:
                 # Capture first innings wickets before reset
                 first_innings_wickets = self.wickets
 
+                innings_complete_summary = self._format_innings_complete_summary("End of innings")
+
                 # Reset all innings-specific state
                 self.score = 0
                 self.wickets = 0
@@ -2971,6 +2973,7 @@ class Match:
                             self.batting_team, self.bowling_team = self.home_xi, self.away_xi
                         else:
                             self.batting_team, self.bowling_team = self.away_xi, self.home_xi
+                    innings_complete_summary = self._format_innings_complete_summary("End of innings")
                     self.score = 0
                     self.wickets = 0
                     self.current_over = 0
