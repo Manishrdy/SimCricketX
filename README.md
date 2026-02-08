@@ -4,179 +4,113 @@ SimCricketX is a Python Flask-based web application that simulates T20 cricket m
 
 ---
 
-## 🚀 What We've Built
+## 🚀 Features
 
-SimCricketX is a full-featured cricket simulation platform that transforms the traditional cricket gaming experience by combining realistic match dynamics with web-based deployment.
-
----
-
-## ⚙️ Key Features & Capabilities
-
-### 🔁 Authentic Cricket Simulation Engine
-- **Realistic Match Dynamics**: Ball-by-ball simulation considering pitch, skills, and context
-- **Full T20 Format**: 20-over matches with bowling restrictions and strategy
-- **Weather Integration**: Rain with simplified DLS rules
-- **Super Over Support**: Auto tie-breaker via super over gameplay
+### 🔄 Authentic Cricket Simulation Engine
+- **Realistic Match Dynamics**: Ball-by-ball simulation considering pitch, skills, and context.
+- **Full T20 Format**: 20-over matches with bowling restrictions and strategy.
+- **Weather Integration**: Rain with simplified DLS rules.
+- **Super Over Support**: Auto tie-breaker via super over gameplay.
 
 ### 🧢 Comprehensive Team Management
-- **Custom Teams**: Create teams with 15–18 players
-- **Detailed Player Profiles**: Batting, bowling, and special skills included
-- **Strategic Setup**: Choose captain, keeper, and playing XI
-- **Visual Branding**: Customize team colors and identity
+- **Custom Teams**: Create teams with 15–18 players.
+- **Detailed Player Profiles**: Batting, bowling, and special skills included.
+- **Strategic Setup**: Choose captain, keeper, and playing XI.
+- **Visual Branding**: Customize team colors and identity.
 
 ### 📢 Immersive Match Experience
-- **Interactive Setup**: Coin toss, pitch selection, and team choices
-- **Live Commentary**: Real-time dynamic ball-by-ball updates
-- **Advanced Stats**: Live scorecards, player performance, and match analytics
-- **Viewing Modes**: Switch between scoreboard, summary, and deep stats
+- **Interactive Setup**: Coin toss, pitch selection, and team choices.
+- **Live Commentary**: Real-time dynamic ball-by-ball updates.
+- **Advanced Stats**: Live scorecards, player performance, and match analytics.
+- **Viewing Modes**: Switch between scoreboard, summary, and deep stats.
 
 ### 📊 Data & Analytics
-- **Match Reports**: Auto-generated in HTML, CSV, JSON, and TXT
-- **History & Archive**: Searchable match history and data logs
-- **Performance Insights**: Player and match-level performance tracking
+- **Match Reports**: Auto-generated in HTML, CSV, JSON, and TXT.
+- **History & Archive**: Searchable match history and data logs.
+- **Performance Insights**: Player and match-level performance tracking.
 
 ### 🖥️ Modern UX
-- **6 Visual Themes**: Nord, Retro, Cupcake, Dim, Dracula, Sunset
-- **Responsive UI**: Desktop, tablet, and mobile support
-- **Dark/Light Mode**: Auto theme persistence
-- **Intuitive UX**: Drag-and-drop and easy navigation
+- **6 Visual Themes**: Nord, Retro, Cupcake, Dim, Dracula, Sunset.
+- **Responsive UI**: Desktop, tablet, and mobile support.
+- **Dark/Light Mode**: Auto theme persistence.
+- **Intuitive UX**: Drag-and-drop and easy navigation.
 
 ---
 
-## 🛠️ Technical Achievements
+## 🛠️ Installation
 
-### 🧠 Advanced Simulation
-- **Bowling AI**: Fatigue-aware, situation-sensitive bowling logic
-- **Pitch Types**: Green, Flat, Dry, Hard, Dead - each affects outcomes
-- **Probability Engine**: Skill + situation = dynamic result generation
+Follow these steps to set up SimCricketX on your local machine:
 
-### 🗃 Robust Data Management
-- **Secure Auth System**: Login and access control
-- **Optimized Storage**: File-based management with auto-cleanup
-- **Export-Ready**: Archive in multiple formats automatically
+### Prerequisites
+- Python 3.10 or higher
+- Git
+- A terminal or command prompt
 
-### ⚡ Performance & Reliability
-- **Scalable Design**: Modular backend with support for multiple users
-- **Error Resilience**: Input validation and fail-safe execution
-- **Smart Resource Use**: Optimized memory and disk usage
+### Steps
 
----
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/your-repo/SimCricketX.git
+   cd SimCricketX
+   ```
 
-## 🧩 Installation
+2. **Set Up a Virtual Environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
 
-### 1️⃣ Install Python
+3. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Download Python from: [https://www.python.org/downloads/](https://www.python.org/downloads/)  
-During installation, make sure to **check the box**: `Add Python to PATH`.
+4. **Set Up Configuration**:
+   - Copy the `config/config.yaml` file and update it with your settings if needed.
 
-![Python Installation Screenshot](assets/python-install.png)
-
----
-
-### 2️⃣ Download and Set Up Project
-
-1. Go to the GitHub repository.
-2. Click on **Code > Download ZIP**.
-3. Extract the ZIP to any folder of your choice.
-
----
-
-### 3️⃣ Run the App
-
-- Navigate to the extracted folder.
-- Navigate to the extracted folder.
-- **Windows**: Double-click on `run.bat`
-- **Linux/Mac**: Run `./run.sh` in terminal (you may need to run `chmod +x run.sh` first)
+5. **Run the Application**:
+   ```bash
+   python app.py
+   ```
+   The application will be available at `http://127.0.0.1:5000`.
 
 ---
 
-### 4️⃣ Access the Web App
+## 🧪 Testing
 
-Open your browser and visit:
-- `http://127.0.0.1:7860`  
-  _or_  
-- `http://192.168.254.131:7860` (for LAN access)
-
----
-
-## 👨‍💻 Manual Developer Setup
-
-If you prefer to set up the environment manually instead of using the scripts:
-
-### 1. Create Virtual Environment
+Run the test suite to ensure everything is working correctly:
 ```bash
-# Windows
-python -m venv venv
-venv\Scripts\activate
-
-# Linux/Mac
-python3 -m venv venv
-source venv/bin/activate
+python -m unittest discover tests
 ```
 
-### 2. Install Dependencies
-```bash
-# Upgrade pip first
-python -m pip install --upgrade pip
-
-# Install required packages
-pip install -r requirements.txt
-```
-
-### 3. Run Application
-```bash
-python app.py
-```
-*Access at http://127.0.0.1:7860*
-
 ---
 
-## 🔄 Auto-Update & Backup
+## 📂 Project Structure
 
-SimCricketX includes an intelligent maintenance system:
+- **`app.py`**: Main application entry point.
+- **`engine/`**: Core simulation logic and services.
+- **`templates/`**: HTML templates for the web interface.
+- **`static/`**: Static assets (CSS, JS, images).
+- **`data/`**: Match data and logs.
+- **`tests/`**: Unit tests for the application.
 
-- **Automatic Updates**: Checks for new versions daily (can be disabled)
-- **Smart Backups**: Automatically backs up your data before every update
-- **Rollback Capability**: Easily restore previous versions if needed
-- **Safety First**: Your critical data (saves, auth, logs) is preserved during updates
-
-**Commands:**
-```bash
-# Force an update check
-./run.sh --update      # or run.bat --update
-
-# Rollback to previous version
-./run.sh --rollback    # or run.bat --rollback
-```
+---
 
 ## ⚙️ Configuration
 
-You can customize the application behavior by creating a `.simcricketx.conf` file in the root directory:
-
-```bash
-# Example .simcricketx.conf
-AUTO_UPDATE_CHECK=true        # Enable/disable auto updates
-UPDATE_CHECK_INTERVAL=86400   # Check frequency in seconds
-DEFAULT_PORT=7860             # Custom port number
-```
+You can customize the application behavior by editing the `config/config.yaml` file. Key settings include:
+- `secret_key`: Application secret key.
+- `database`: Database connection settings.
 
 ---
 
-## 🤝 Contributing
+## 📜 License
 
-Interested in contributing? Raise an issue or submit a pull request!
-
----
-
-## 📄 License
-
-MIT License. See `LICENSE` file for details.
+This project is licensed under the MIT License. See the `LICENSE` file for details.
 
 ---
 
 ## 🙌 Credits
 
 Built with ❤️ using Flask, HTML/CSS/JS, and cricket fandom.
-
----
 
