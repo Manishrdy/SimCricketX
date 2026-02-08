@@ -307,15 +307,15 @@ def cleanup_temp_scorecard_images():
     Removes the entire temp_scorecard_images folder if it exists.
     """
     temp_images_dir = os.path.join(PROJECT_ROOT, "data", "temp_scorecard_images")
-    
+
     try:
         if os.path.exists(temp_images_dir) and os.path.isdir(temp_images_dir):
             shutil.rmtree(temp_images_dir)
-            app.logger.info(f"[Cleanup] Removed temp scorecard images directory: {temp_images_dir}")
+            current_app.logger.info(f"[Cleanup] Removed temp scorecard images directory: {temp_images_dir}")
         else:
-            app.logger.debug(f"[Cleanup] Temp scorecard images directory does not exist: {temp_images_dir}")
+            current_app.logger.debug(f"[Cleanup] Temp scorecard images directory does not exist: {temp_images_dir}")
     except Exception as e:
-        app.logger.error(f"[Cleanup] Error removing temp scorecard images directory: {e}", exc_info=True)
+        current_app.logger.error(f"[Cleanup] Error removing temp scorecard images directory: {e}", exc_info=True)
 
 
 
@@ -1915,11 +1915,12 @@ def create_app():
             # Update the in-memory Match instance, if created
             with MATCH_INSTANCES_LOCK:
                 if match_id in MATCH_INSTANCES:
-                    inst = MATCH_INSTANCES[match_id]
-                    inst.toss_winner   = toss_winner
-                    inst.toss_decision = toss_decision
-                    inst.batting_team  = inst.home_xi if toss_decision=="Bat" else inst.away_xi
-                    inst.bowling_team  = inst.away_xi if inst.batting_team==inst.home_xi else inst.home_xi
+                    app.logger.info(f"[ImpactSwap] Found active match instance for {match_id}. Updating state.")
+                    match_instance = MATCH_INSTANCES[match_id]
+                    match_instance.toss_winner   = toss_winner
+                    match_instance.toss_decision = toss_decision
+                    match_instance.batting_team  = match_instance.home_xi if toss_decision=="Bat" else match_instance.away_xi
+                    match_instance.bowling_team  = match_instance.away_xi if match_instance.batting_team==match_instance.home_xi else match_instance.home_xi
 
         # Build toss commentary (outside lock — no file/instance access needed)
         full_commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
@@ -2015,7 +2016,7 @@ def create_app():
             if match_id not in MATCH_INSTANCES:
                 _match_data, _match_path, err = _load_match_file_for_user(match_id)
                 if err:
-                    return err
+                    return err if err else (jsonify({"error": "Match not found"}), 404)
                 app.logger.info(f"[FinalLineups] Match instance {match_id} not yet in memory. No action needed.")
                 return jsonify({"success": True, "message": "Lineups will be loaded from updated file."}), 200
 
@@ -2499,7 +2500,6 @@ def create_app():
                     # Build URLs for download & delete
                     download_url = f"/archives/{username}/{fn}"
                     delete_url   = f"/archives/{username}/{fn}"
-
                     valid_files.append({
                         "filename":     fn,
                         "download_url": download_url,
