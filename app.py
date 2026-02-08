@@ -84,6 +84,9 @@ MATCH_INSTANCES = {}
 MATCH_INSTANCES_LOCK = threading.Lock()  # Bug Fix B2: Thread safety for concurrent access
 tournament_engine = TournamentEngine()
 
+# Module-level logger for functions outside create_app() scope
+logger = logging.getLogger("SimCricketX")
+
 # D3: Per-match file locks to prevent JSON read/write races
 _match_file_locks = {}
 _match_file_locks_meta = threading.Lock()
@@ -189,7 +192,7 @@ def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
     now = time.time()
 
     if not os.path.isdir(data_dir):
-        app.logger.warning(f"clean_old_archives: data directory does not exist: {data_dir}")
+        logger.warning(f"clean_old_archives: data directory does not exist: {data_dir}")
         return
 
     for filename in os.listdir(data_dir):
@@ -204,9 +207,9 @@ def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
         if age > max_age_seconds:
             try:
                 os.remove(full_path)
-                app.logger.info(f"Deleted old archive: {filename} (age {age//3600}h)")
+                logger.info(f"Deleted old archive: {filename} (age {age//3600}h)")
             except Exception as e:
-                app.logger.error(f"Failed to delete {full_path}: {e}", exc_info=True)
+                logger.error(f"Failed to delete {full_path}: {e}", exc_info=True)
 
 
 def load_match_metadata(match_id):
@@ -289,7 +292,8 @@ def cleanup_old_match_instances(app):
                 app.logger.info(f"[Cleanup] Cleaned up {removed_files} orphaned JSON files")
 
     except Exception as e:
-        app.logger.error(f"[Cleanup] Error cleaning up match instances: {e}", exc_info=True)
+        # app.logger.error(f"[Cleanup] Error cleaning up match instances: {e}", exc_info=True)
+        pass
 
 def periodic_cleanup(app):
     """Run cleanup every 6 hours"""
