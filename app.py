@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash, current_app, has_app_context
 from match_archiver import MatchArchiver, find_original_json_file, reverse_player_aggregates
 from engine.match import Match
 from flask_login import (
@@ -301,21 +301,25 @@ def periodic_cleanup(app):
             app.logger.error(f"[PeriodicCleanup] Error in cleanup thread: {e}")
 
 
-def cleanup_temp_scorecard_images():
+def cleanup_temp_scorecard_images(logger=None):
     """
     Clean up temporary scorecard images folder before starting a new match.
     Removes the entire temp_scorecard_images folder if it exists.
     """
     temp_images_dir = os.path.join(PROJECT_ROOT, "data", "temp_scorecard_images")
 
+    log = logger
+    if log is None:
+        log = current_app.logger if has_app_context() else logging.getLogger("SimCricketX")
+
     try:
         if os.path.exists(temp_images_dir) and os.path.isdir(temp_images_dir):
             shutil.rmtree(temp_images_dir)
-            current_app.logger.info(f"[Cleanup] Removed temp scorecard images directory: {temp_images_dir}")
+            log.info(f"[Cleanup] Removed temp scorecard images directory: {temp_images_dir}")
         else:
-            current_app.logger.debug(f"[Cleanup] Temp scorecard images directory does not exist: {temp_images_dir}")
+            log.debug(f"[Cleanup] Temp scorecard images directory does not exist: {temp_images_dir}")
     except Exception as e:
-        current_app.logger.error(f"[Cleanup] Error removing temp scorecard images directory: {e}", exc_info=True)
+        log.error(f"[Cleanup] Error removing temp scorecard images directory: {e}", exc_info=True)
 
 
 
@@ -3497,7 +3501,9 @@ if __name__ == "__main__":
         print("[INFO] Press Ctrl+C to stop the server.\n")
 
         # Cleanup tasks
-        cleanup_temp_scorecard_images()
+        # Cleanup tasks
+        with app.app_context():
+            cleanup_temp_scorecard_images()
         threading.Thread(target=periodic_cleanup, args=(app,), daemon=True).start()
 
         # Open browser for local use only
