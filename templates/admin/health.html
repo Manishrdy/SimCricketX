@@ -1,0 +1,125 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">System Health</h1>
+        <p class="admin-page-subtitle">Server resources and status monitoring</p>
+    </div>
+    <div class="admin-page-actions">
+        <button onclick="location.reload()" class="a-btn a-btn-secondary"><i class="fas fa-sync-alt"></i> Refresh</button>
+    </div>
+</div>
+
+<style>
+    .health-meter {
+        width: 100%;
+        height: 8px;
+        background: var(--bg-secondary);
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 0.5rem;
+    }
+
+    .health-meter-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.5s ease;
+    }
+
+    .meter-ok { background: #22c55e; }
+    .meter-warn { background: #f59e0b; }
+    .meter-danger { background: #dc2626; }
+</style>
+
+<!-- Resource Stats -->
+<div class="a-stats-grid">
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-clock"></i></div>
+        <div class="a-stat-label">Uptime</div>
+        <div class="a-stat-value" style="font-size: 1.5rem;">{{ health.uptime }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-memory"></i></div>
+        <div class="a-stat-label">Memory Usage</div>
+        <div class="a-stat-value" style="font-size: 1.5rem;">{{ health.memory_mb }}</div>
+        <div class="a-stat-sub">MB</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-microchip"></i></div>
+        <div class="a-stat-label">CPU</div>
+        <div class="a-stat-value" style="font-size: 1.5rem;">{{ health.cpu_percent }}{% if health.cpu_percent != 'N/A' %}%{% endif %}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-gamepad"></i></div>
+        <div class="a-stat-label">Active Matches</div>
+        <div class="a-stat-value">{{ health.active_matches }}</div>
+        <div class="a-stat-sub">in memory</div>
+    </div>
+</div>
+
+<!-- Disk & Storage -->
+<div class="a-grid-2">
+    <div class="a-card-flat">
+        <h3 class="a-section-title"><i class="fas fa-hdd"></i> Disk Usage</h3>
+        {% if health.disk_total_gb != 'N/A' %}
+        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--fg-secondary); margin-bottom: 0.35rem;">
+            <span>{{ health.disk_used_gb }} GB used</span>
+            <span>{{ health.disk_free_gb }} GB free</span>
+        </div>
+        <div class="health-meter">
+            <div class="health-meter-fill {% if health.disk_percent < 70 %}meter-ok{% elif health.disk_percent < 90 %}meter-warn{% else %}meter-danger{% endif %}"
+                 style="width: {{ health.disk_percent }}%"></div>
+        </div>
+        <div style="font-size: 0.78rem; color: var(--fg-secondary); margin-top: 0.35rem;">
+            {{ health.disk_percent }}% of {{ health.disk_total_gb }} GB total
+        </div>
+        {% else %}
+        <p style="color: var(--fg-secondary); font-size: 0.88rem;">Install <code>psutil</code> for disk metrics.</p>
+        {% endif %}
+    </div>
+
+    <div class="a-card-flat">
+        <h3 class="a-section-title"><i class="fas fa-database"></i> Storage Breakdown</h3>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.88rem; color: var(--fg);">Database File</span>
+                <span class="a-badge a-badge-info">{{ health.db_size_mb }} MB</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.88rem; color: var(--fg);">Data Directory</span>
+                <span class="a-badge a-badge-info">{{ health.data_dir_mb }} MB</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.88rem; color: var(--fg);">Log File</span>
+                <span class="a-badge a-badge-info">{{ health.log_size_mb }} MB</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Backups Section -->
+<div class="a-section" style="margin-top: 1.5rem;">
+    <h3 class="a-section-title"><i class="fas fa-archive"></i> Recent Backups ({{ health.backup_count }})</h3>
+    {% if health.backups %}
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead><tr><th>Filename</th><th>Size</th><th>Date</th></tr></thead>
+            <tbody>
+                {% for b in health.backups %}
+                <tr>
+                    <td style="font-size: 0.82rem; font-family: monospace;">{{ b.name }}</td>
+                    <td><span class="a-badge a-badge-info">{{ b.size_mb }} MB</span></td>
+                    <td style="color: var(--fg-secondary); font-size: 0.82rem;">{{ b.date }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="a-card-flat">
+        <div class="a-empty"><i class="fas fa-archive"></i><p>No backups found</p></div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -46,7 +46,10 @@ from flask_limiter.util import get_remote_address
 from auth.user_auth import (
     register_user,
     verify_user,
-    delete_user
+    delete_user,
+    update_user_email,
+    update_user_password,
+    log_admin_action
 )
 from engine.team import Team, save_team, PITCH_PREFERENCES
 from engine.player import Player, PLAYER_ROLES, BATTING_HANDS, BOWLING_TYPES, BOWLING_HANDS
@@ -73,9 +76,10 @@ except ImportError:
 
 from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, Tournament, TournamentTeam, TournamentFixture
-from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership # Distinct from engine.match.Match
+from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership, AdminAuditLog  # Distinct from engine.match.Match
+from database.models import FailedLoginAttempt, BlockedIP, ActiveSession
 from engine.tournament_engine import TournamentEngine
-from sqlalchemy import func  # For aggregate functions
+from sqlalchemy import func, text  # For aggregate functions
 
 
 
@@ -86,6 +90,10 @@ tournament_engine = TournamentEngine()
 
 # Module-level logger for functions outside create_app() scope
 logger = logging.getLogger("SimCricketX")
+
+# Maintenance mode: when True, only admins can access the app
+MAINTENANCE_MODE = False
+MAINTENANCE_MODE_LOCK = threading.Lock()
 
 # D3: Per-match file locks to prevent JSON read/write races
 _match_file_locks = {}
@@ -101,17 +109,19 @@ def _get_match_file_lock(match_id):
 # C3: Simple in-memory rate limiter (no external dependencies)
 _rate_limit_store = {}  # {user_id: deque of timestamps}
 _rate_limit_lock = threading.Lock()
-_rate_limit_bypass_emails = {"admin@projectx.com"}
+_backup_scheduler_started = False
+_backup_scheduler_lock = threading.Lock()
+RUNTIME_FINGERPRINT = "SCX-ADMIN-ROUTE-FIX-20260208-2358"
 
 def rate_limit(max_requests=30, window_seconds=10):
-    """Decorator to rate-limit endpoints per user."""
+    """Decorator to rate-limit endpoints per user. Admins get 3x the limit (not unlimited)."""
     def decorator(f):
         @wraps(f)
         def wrapped(*args, **kwargs):
             from flask_login import current_user
             user_id = getattr(current_user, 'id', 'anonymous')
-            if isinstance(user_id, str) and user_id.lower() in _rate_limit_bypass_emails:
-                return f(*args, **kwargs)
+            # Admins get a higher limit, not a bypass
+            effective_max = max_requests * 3 if getattr(current_user, 'is_admin', False) else max_requests
             now = datetime.now().timestamp()
             with _rate_limit_lock:
                 if user_id not in _rate_limit_store:
@@ -121,7 +131,7 @@ def rate_limit(max_requests=30, window_seconds=10):
                 cutoff = now - window_seconds
                 while timestamps and timestamps[0] < cutoff:
                     timestamps.popleft()
-                if len(timestamps) >= max_requests:
+                if len(timestamps) >= effective_max:
                     return jsonify({"error": "Rate limit exceeded. Please slow down."}), 429
                 timestamps.append(now)
             return f(*args, **kwargs)
@@ -341,15 +351,94 @@ def _safe_get_attr(obj, attr, default=None):
 
 # ?????? App Factory ??????
 def create_app():
+    global _backup_scheduler_started, MAINTENANCE_MODE
     # --- Flask setup ---
     app = Flask(__name__)
     config = load_config()
+
+    # Load maintenance mode from config (persists across restarts)
+    MAINTENANCE_MODE = bool(config.get("app", {}).get("maintenance_mode", False))
+
+    @app.context_processor
+    def inject_route_helpers():
+        def has_endpoint(endpoint_name):
+            return endpoint_name in app.view_functions
+        return {"has_endpoint": has_endpoint, "maintenance_mode": MAINTENANCE_MODE}
+
+    @app.before_request
+    def check_maintenance_mode():
+        """Block non-admin users when maintenance mode is active."""
+        if not MAINTENANCE_MODE:
+            return None
+        # Always allow static files
+        if request.path.startswith('/static'):
+            return None
+        # Allow login/logout so admin can authenticate
+        if request.endpoint in ('login', 'logout', 'static'):
+            return None
+        # Allow admin users through
+        if current_user.is_authenticated and getattr(current_user, 'is_admin', False):
+            return None
+        # Everyone else sees the maintenance page
+        return render_template('maintenance.html'), 503
+
+    @app.before_request
+    def check_ip_blocklist():
+        """Block requests from banned IPs."""
+        if request.path.startswith('/static'):
+            return None
+        try:
+            blocked = BlockedIP.query.filter_by(ip_address=request.remote_addr).first()
+            if blocked:
+                return jsonify({"error": "Access denied"}), 403
+        except Exception:
+            pass
+        return None
+
+    @app.before_request
+    def check_force_password_reset():
+        """Redirect users who must change their password."""
+        if not current_user.is_authenticated:
+            return None
+        if request.path.startswith('/static'):
+            return None
+        if request.endpoint in ('force_change_password', 'logout', 'static'):
+            return None
+        if getattr(current_user, 'force_password_reset', False):
+            session['force_password_reset'] = True
+            return redirect(url_for('force_change_password'))
+        return None
+
+    @app.before_request
+    def update_session_activity():
+        """Update last_active timestamp for session tracking."""
+        token = session.get('session_token')
+        if token and current_user.is_authenticated:
+            try:
+                active = ActiveSession.query.filter_by(session_token=token).first()
+                if active:
+                    active.last_active = datetime.utcnow()
+                    db.session.commit()
+                else:
+                    # Session record missing (e.g. DB was wiped) — skip
+                    pass
+            except Exception:
+                db.session.rollback()
+        return None
 
     @app.before_request
     def configure_session_cookie():
         is_secure = request.is_secure or (request.headers.get('X-Forwarded-Proto') == 'https')
         app.config["SESSION_COOKIE_SECURE"] = is_secure
-        app.logger.info(f"[Session] Setting SESSION_COOKIE_SECURE to {is_secure} (HTTPS: {request.scheme}, X-Forwarded-Proto: {request.headers.get('X-Forwarded-Proto')})")
+        app.logger.info(
+            f"[Session:{RUNTIME_FINGERPRINT}] Setting SESSION_COOKIE_SECURE to {is_secure} "
+            f"(HTTPS: {request.scheme}, X-Forwarded-Proto: {request.headers.get('X-Forwarded-Proto')})"
+        )
+
+    @app.after_request
+    def add_runtime_fingerprint_header(response):
+        response.headers["X-SimCricketX-Build"] = RUNTIME_FINGERPRINT
+        return response
 
     # --- Secret key setup ---
     secret = None
@@ -413,7 +502,7 @@ def create_app():
     try:
         from scripts.fix_db_schema import ensure_schema
         with app.app_context():
-            ensure_schema(db.engine)
+            ensure_schema(db.engine, db)
     except Exception as e:
         print(f"[WARN] Schema check skipped: {e}")
 
@@ -448,9 +537,12 @@ def create_app():
     # Setup logging globally
     logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
 
-    # Attach logger to app
+    # Attach logger to app with its own handlers
     app.logger = logging.getLogger("SimCricketX")
     app.logger.setLevel(logging.DEBUG)  # You can change to INFO for production
+    app.logger.addHandler(file_handler)
+    app.logger.addHandler(console_handler)
+    app.logger.propagate = False  # Prevent duplicate logs via root logger
 
     # --- Flask-Login setup ---
     login_manager = LoginManager(app)
@@ -520,10 +612,1222 @@ def create_app():
         # Use DBUser (User model) directly
         return db.session.get(DBUser, email)
 
+    # --- Admin Access Control Decorator ---
+    def admin_required(f):
+        """Decorator to require admin access for a route"""
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                return redirect(url_for('login'))
+            if not getattr(current_user, 'is_admin', False):
+                app.logger.warning(f"[Admin] Unauthorized access attempt by {current_user.id}")
+                return jsonify({"error": "Forbidden: Admin access required"}), 403
+            return f(*args, **kwargs)
+        return decorated_function
+
+    # --- Backup token brute-force protection ---
+    _backup_token_attempts = {}  # {user_id: deque of timestamps}
+    _backup_token_lock = threading.Lock()
+
+    def _check_backup_rate_limit(user_id, max_attempts=3, window_seconds=60):
+        """Returns True if the user is rate-limited on backup attempts."""
+        now = datetime.now().timestamp()
+        with _backup_token_lock:
+            if user_id not in _backup_token_attempts:
+                _backup_token_attempts[user_id] = deque()
+            attempts = _backup_token_attempts[user_id]
+            cutoff = now - window_seconds
+            while attempts and attempts[0] < cutoff:
+                attempts.popleft()
+            if len(attempts) >= max_attempts:
+                return True
+            attempts.append(now)
+            return False
+
+    # --- Scheduled backup management ---
+    BACKUP_DIR = os.path.join(PROJECT_ROOT, "data", "backups")
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+
+    def _run_scheduled_backup():
+        """Create a scheduled backup copy of the database."""
+        try:
+            src = os.path.join(basedir, 'cricket_sim.db')
+            if not os.path.exists(src):
+                return
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            dst = os.path.join(BACKUP_DIR, f"scheduled_backup_{ts}.db")
+            shutil.copy2(src, dst)
+            app.logger.info(f"[Backup] Scheduled backup created: {dst}")
+            # Clean up backups older than 7 days
+            _cleanup_old_backups()
+        except Exception as e:
+            app.logger.error(f"[Backup] Scheduled backup failed: {e}")
+
+    def _cleanup_old_backups(max_age_days=7):
+        """Delete backup files older than max_age_days."""
+        cutoff = time.time() - (max_age_days * 86400)
+        try:
+            for fn in os.listdir(BACKUP_DIR):
+                if not fn.endswith('.db'):
+                    continue
+                path = os.path.join(BACKUP_DIR, fn)
+                if os.path.getmtime(path) < cutoff:
+                    os.remove(path)
+                    app.logger.info(f"[Backup] Deleted old backup: {fn}")
+        except Exception as e:
+            app.logger.error(f"[Backup] Cleanup failed: {e}")
+
+    def _backup_scheduler():
+        """Background thread: run backup every 24 hours."""
+        while True:
+            try:
+                time.sleep(86400)  # 24 hours
+                with app.app_context():
+                    _run_scheduled_backup()
+            except Exception as e:
+                app.logger.error(f"[Backup] Scheduler error: {e}")
+
+    # Start backup scheduler + initial backup only once per process.
+    with _backup_scheduler_lock:
+        if not _backup_scheduler_started:
+            backup_thread = threading.Thread(target=_backup_scheduler, daemon=True)
+            backup_thread.start()
+
+            try:
+                _run_scheduled_backup()
+            except Exception:
+                pass
+
+            _backup_scheduler_started = True
+        else:
+            app.logger.info("[Backup] Scheduler already initialized; skipping duplicate startup backup")
+
+    # --- Admin Routes ---
+
+    @app.route('/admin/backup-database', methods=['POST'])
+    @login_required
+    @admin_required
+    def backup_database():
+        """Download database backup (admin only, requires token). Uses POST to prevent CSRF."""
+        try:
+            # Brute-force protection: 3 attempts per minute
+            if _check_backup_rate_limit(current_user.id):
+                app.logger.warning(f"[Admin] Backup rate limit hit by {current_user.id}")
+                return jsonify({"error": "Too many attempts. Please wait 60 seconds."}), 429
+
+            # Get token from POST body
+            token = request.form.get('token', '').strip()
+
+            # Load backup token from config (env var takes priority)
+            expected_token = os.environ.get('BACKUP_TOKEN', '')
+            if not expected_token:
+                backup_config = config.get('backup', {})
+                expected_token = str(backup_config.get('token', ''))
+
+            if not expected_token or expected_token in ['CHANGE_ME', 'your_backup_token_here', '']:
+                app.logger.error("[Admin] Backup token not configured")
+                return jsonify({"error": "Backup not configured. Set BACKUP_TOKEN env var or config.yaml"}), 503
+
+            # Verify token
+            if token != expected_token:
+                app.logger.warning(f"[Admin] Invalid backup token attempt by {current_user.id}")
+                return jsonify({"error": "Invalid backup token"}), 403
+
+            # Create a temporary copy to avoid exposing DB path
+            src_path = os.path.join(basedir, 'cricket_sim.db')
+            if not os.path.exists(src_path):
+                return jsonify({"error": "Database file not found"}), 404
+
+            import tempfile
+            backup_name = f'cricket_sim_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db'
+            tmp_dir = tempfile.mkdtemp()
+            tmp_path = os.path.join(tmp_dir, backup_name)
+            shutil.copy2(src_path, tmp_path)
+
+            app.logger.info(f"[Admin] Database backup downloaded by {current_user.id}")
+            log_admin_action(current_user.id, 'backup_database', None, 'Database backup downloaded', request.remote_addr)
+
+            return send_file(
+                tmp_path,
+                as_attachment=True,
+                download_name=backup_name,
+                mimetype='application/x-sqlite3'
+            )
+
+        except Exception as e:
+            app.logger.error(f"[Admin] Database backup failed: {e}", exc_info=True)
+            return jsonify({"error": "Backup failed"}), 500
+
+    @app.route('/admin/dashboard')
+    @login_required
+    @admin_required
+    def admin_dashboard():
+        """Admin dashboard home"""
+        try:
+            stats = {}
+            stats['total_users'] = db.session.query(DBUser).count()
+            stats['total_teams'] = db.session.query(DBTeam).count()
+            stats['total_matches'] = db.session.query(DBMatch).count()
+            stats['total_tournaments'] = db.session.query(Tournament).count()
+
+            # Database size
+            db_path = os.path.join(basedir, 'cricket_sim.db')
+            if os.path.exists(db_path):
+                stats['db_size_mb'] = round(os.path.getsize(db_path) / (1024 * 1024), 2)
+            else:
+                stats['db_size_mb'] = 0
+
+            # Active users (logged in last 7 days)
+            seven_days_ago = datetime.utcnow() - timedelta(days=7)
+            stats['active_users_7d'] = db.session.query(DBUser).filter(DBUser.last_login >= seven_days_ago).count()
+
+            # Active match instances
+            with MATCH_INSTANCES_LOCK:
+                stats['active_matches'] = len(MATCH_INSTANCES)
+
+            # Recent activity from audit log
+            recent_audit = db.session.query(AdminAuditLog).order_by(AdminAuditLog.timestamp.desc()).limit(10).all()
+            audit_entries = []
+            for entry in recent_audit:
+                time_diff = datetime.utcnow() - entry.timestamp if entry.timestamp else None
+                if time_diff:
+                    if time_diff.days > 0:
+                        time_str = f"{time_diff.days}d ago"
+                    elif time_diff.seconds > 3600:
+                        time_str = f"{time_diff.seconds // 3600}h ago"
+                    else:
+                        time_str = f"{max(1, time_diff.seconds // 60)}m ago"
+                else:
+                    time_str = "just now"
+                audit_entries.append({
+                    'admin': entry.admin_email,
+                    'action': entry.action.replace('_', ' ').title(),
+                    'target': entry.target or '',
+                    'time': time_str
+                })
+
+            # Recent user logins
+            recent_users = db.session.query(DBUser).order_by(DBUser.last_login.desc()).limit(10).all()
+            recent_activity = []
+            for user in recent_users:
+                if user.last_login:
+                    time_diff = datetime.utcnow() - user.last_login
+                    if time_diff.days > 0:
+                        time_str = f"{time_diff.days}d ago"
+                    elif time_diff.seconds > 3600:
+                        time_str = f"{time_diff.seconds // 3600}h ago"
+                    else:
+                        time_str = f"{max(1, time_diff.seconds // 60)}m ago"
+                    recent_activity.append({
+                        'email': user.id,
+                        'action': 'logged in',
+                        'time': time_str
+                    })
+
+            return render_template('admin/dashboard.html',
+                                   stats=stats,
+                                   recent_activity=recent_activity,
+                                   audit_entries=audit_entries)
+        except Exception as e:
+            app.logger.error(f"[Admin] Dashboard error: {e}", exc_info=True)
+            return "Error loading dashboard", 500
+
+    @app.route('/admin/users')
+    @login_required
+    @admin_required
+    def admin_users():
+        """List all users"""
+        try:
+            users = db.session.query(DBUser).all()
+            user_data = []
+            for user in users:
+                user_data.append({
+                    'email': user.id,
+                    'display_name': user.display_name,
+                    'is_admin': user.is_admin,
+                    'teams_count': db.session.query(DBTeam).filter_by(user_id=user.id).count(),
+                    'matches_count': db.session.query(DBMatch).filter_by(user_id=user.id).count(),
+                    'last_login': user.last_login
+                })
+
+            return render_template('admin/users_list.html', users=user_data)
+        except Exception as e:
+            app.logger.error(f"[Admin] Users list error: {e}", exc_info=True)
+            return "Error loading users", 500
+
+    @app.route('/admin/users/<user_email>')
+    @login_required
+    @admin_required
+    def admin_user_detail(user_email):
+        """View user details"""
+        try:
+            user = db.session.get(DBUser, user_email)
+            if not user:
+                return "User not found", 404
+
+            teams = db.session.query(DBTeam).filter_by(user_id=user_email).all()
+            matches = db.session.query(DBMatch).filter_by(user_id=user_email).all()
+
+            return render_template('admin/user_detail.html', user=user, teams=teams, matches=matches)
+        except Exception as e:
+            app.logger.error(f"[Admin] User detail error: {e}", exc_info=True)
+            return "Error loading user", 500
+
+    @app.route('/admin/users/<user_email>/change-email', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_change_email(user_email):
+        """Change user email"""
+        try:
+            new_email = request.form.get('new_email', '').strip()
+            if not new_email:
+                return jsonify({"error": "New email is required"}), 400
+
+            success, message = update_user_email(user_email, new_email, current_user.id)
+            if success:
+                return jsonify({"message": message}), 200
+            else:
+                return jsonify({"error": message}), 400
+        except Exception as e:
+            app.logger.error(f"[Admin] Change email error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to change email"}), 500
+
+    @app.route('/admin/users/<user_email>/reset-password', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_reset_password(user_email):
+        """Reset user password"""
+        try:
+            new_password = request.form.get('new_password', '')
+            if not new_password:
+                return jsonify({"error": "New password is required"}), 400
+
+            success, message = update_user_password(user_email, new_password, current_user.id)
+            if success:
+                return jsonify({"message": message}), 200
+            else:
+                return jsonify({"error": message}), 400
+        except Exception as e:
+            app.logger.error(f"[Admin] Reset password error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to reset password"}), 500
+
+    @app.route('/admin/users/<user_email>/delete', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_delete_user(user_email):
+        """Delete user (cannot delete admin or self)"""
+        try:
+            if user_email == current_user.id:
+                return jsonify({"error": "Cannot delete your own account"}), 400
+
+            target = db.session.get(DBUser, user_email)
+            if target and target.is_admin:
+                return jsonify({"error": "Cannot delete an admin account"}), 400
+
+            success = delete_user(user_email, current_user.id)
+            if success:
+                return jsonify({"message": f"User {user_email} deleted successfully"}), 200
+            else:
+                return jsonify({"error": "Failed to delete user"}), 400
+        except Exception as e:
+            app.logger.error(f"[Admin] Delete user error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to delete user"}), 500
+
+    @app.route('/admin/database/stats')
+    @login_required
+    @admin_required
+    def admin_database_stats():
+        """Database statistics"""
+        try:
+            stats = {}
+
+            db_path = os.path.join(basedir, 'cricket_sim.db')
+            if os.path.exists(db_path):
+                stats['db_size_mb'] = round(os.path.getsize(db_path) / (1024 * 1024), 2)
+            else:
+                stats['db_size_mb'] = 0
+
+            from sqlalchemy import inspect as sa_inspect
+            inspector = sa_inspect(db.engine)
+            stats['total_tables'] = len(inspector.get_table_names())
+
+            stats['total_users'] = db.session.query(DBUser).count()
+            stats['total_teams'] = db.session.query(DBTeam).count()
+            stats['total_matches'] = db.session.query(DBMatch).count()
+            stats['total_tournaments'] = db.session.query(Tournament).count()
+
+            return render_template('admin/database_stats.html', stats=stats)
+        except Exception as e:
+            app.logger.error(f"[Admin] Database stats error: {e}", exc_info=True)
+            return "Error loading database stats", 500
+
+    @app.route('/admin/database/optimize', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_optimize_database():
+        """Optimize database (VACUUM)"""
+        try:
+            db.session.execute(text('VACUUM'))
+            db.session.commit()
+            app.logger.info(f"[Admin] Database optimized by {current_user.id}")
+            log_admin_action(current_user.id, 'optimize_db', None, 'Database VACUUM executed', request.remote_addr)
+            return jsonify({"message": "Database optimized successfully"}), 200
+        except Exception as e:
+            app.logger.error(f"[Admin] Database optimize error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to optimize database"}), 500
+
+    # --- User Activity Dashboard ---
+    @app.route('/admin/activity')
+    @login_required
+    @admin_required
+    def admin_activity():
+        """User activity dashboard with signup/login trends"""
+        try:
+            from sqlalchemy import func as sa_func
+
+            # Signups per day (last 30 days)
+            thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+            signups_raw = db.session.query(
+                sa_func.date(DBUser.created_at).label('day'),
+                sa_func.count(DBUser.id).label('count')
+            ).filter(DBUser.created_at >= thirty_days_ago).group_by(sa_func.date(DBUser.created_at)).all()
+
+            signups_data = {str(row.day): row.count for row in signups_raw}
+
+            # Logins per day (last 30 days)
+            logins_raw = db.session.query(
+                sa_func.date(DBUser.last_login).label('day'),
+                sa_func.count(DBUser.id).label('count')
+            ).filter(DBUser.last_login >= thirty_days_ago).group_by(sa_func.date(DBUser.last_login)).all()
+
+            logins_data = {str(row.day): row.count for row in logins_raw}
+
+            # Matches per day (last 30 days)
+            matches_raw = db.session.query(
+                sa_func.date(DBMatch.date).label('day'),
+                sa_func.count(DBMatch.id).label('count')
+            ).filter(DBMatch.date >= thirty_days_ago).group_by(sa_func.date(DBMatch.date)).all()
+
+            matches_data = {str(row.day): row.count for row in matches_raw}
+
+            # Build 30-day date list
+            days = []
+            for i in range(30, -1, -1):
+                d = (datetime.utcnow() - timedelta(days=i)).strftime('%Y-%m-%d')
+                days.append(d)
+
+            chart_data = {
+                'labels': days,
+                'signups': [signups_data.get(d, 0) for d in days],
+                'logins': [logins_data.get(d, 0) for d in days],
+                'matches': [matches_data.get(d, 0) for d in days],
+            }
+
+            # Top users by matches
+            top_users = db.session.query(
+                DBUser.id,
+                sa_func.count(DBMatch.id).label('match_count')
+            ).outerjoin(DBMatch, DBUser.id == DBMatch.user_id).group_by(DBUser.id).order_by(sa_func.count(DBMatch.id).desc()).limit(10).all()
+
+            # Audit log
+            audit_log = db.session.query(AdminAuditLog).order_by(AdminAuditLog.timestamp.desc()).limit(50).all()
+
+            return render_template('admin/activity.html',
+                                   chart_data=json.dumps(chart_data),
+                                   top_users=top_users,
+                                   audit_log=audit_log)
+        except Exception as e:
+            app.logger.error(f"[Admin] Activity page error: {e}", exc_info=True)
+            return "Error loading activity", 500
+
+    # --- System Health Page ---
+    @app.route('/admin/health')
+    @login_required
+    @admin_required
+    def admin_health():
+        """System health overview"""
+        try:
+            health = {}
+
+            # Disk usage
+            db_path = os.path.join(basedir, 'cricket_sim.db')
+            if os.path.exists(db_path):
+                health['db_size_mb'] = round(os.path.getsize(db_path) / (1024 * 1024), 2)
+            else:
+                health['db_size_mb'] = 0
+
+            # Data directory size
+            data_dir = os.path.join(PROJECT_ROOT, "data")
+            total_data_size = 0
+            if os.path.isdir(data_dir):
+                for dirpath, dirnames, filenames in os.walk(data_dir):
+                    for f in filenames:
+                        fp = os.path.join(dirpath, f)
+                        total_data_size += os.path.getsize(fp)
+            health['data_dir_mb'] = round(total_data_size / (1024 * 1024), 2)
+
+            # Active match instances
+            with MATCH_INSTANCES_LOCK:
+                health['active_matches'] = len(MATCH_INSTANCES)
+
+            # Memory usage (if psutil available)
+            if psutil:
+                process = psutil.Process()
+                mem = process.memory_info()
+                health['memory_mb'] = round(mem.rss / (1024 * 1024), 1)
+                health['cpu_percent'] = process.cpu_percent(interval=0.1)
+
+                disk = psutil.disk_usage(basedir)
+                health['disk_total_gb'] = round(disk.total / (1024**3), 1)
+                health['disk_used_gb'] = round(disk.used / (1024**3), 1)
+                health['disk_free_gb'] = round(disk.free / (1024**3), 1)
+                health['disk_percent'] = disk.percent
+            else:
+                health['memory_mb'] = 'N/A'
+                health['cpu_percent'] = 'N/A'
+                health['disk_total_gb'] = 'N/A'
+                health['disk_used_gb'] = 'N/A'
+                health['disk_free_gb'] = 'N/A'
+                health['disk_percent'] = 'N/A'
+
+            # Backup status
+            backups = []
+            if os.path.isdir(BACKUP_DIR):
+                for fn in sorted(os.listdir(BACKUP_DIR), reverse=True):
+                    if fn.endswith('.db'):
+                        path = os.path.join(BACKUP_DIR, fn)
+                        backups.append({
+                            'name': fn,
+                            'size_mb': round(os.path.getsize(path) / (1024 * 1024), 2),
+                            'date': datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y-%m-%d %H:%M')
+                        })
+            health['backups'] = backups[:10]
+            health['backup_count'] = len(backups)
+
+            # Log file size
+            log_path = os.path.join(PROJECT_ROOT, "logs", "execution.log")
+            if os.path.exists(log_path):
+                health['log_size_mb'] = round(os.path.getsize(log_path) / (1024 * 1024), 2)
+            else:
+                health['log_size_mb'] = 0
+
+            # Uptime (approx from process start)
+            if psutil:
+                create_time = process.create_time()
+                uptime_seconds = time.time() - create_time
+                hours = int(uptime_seconds // 3600)
+                minutes = int((uptime_seconds % 3600) // 60)
+                health['uptime'] = f"{hours}h {minutes}m"
+            else:
+                health['uptime'] = 'N/A'
+
+            return render_template('admin/health.html', health=health)
+        except Exception as e:
+            app.logger.error(f"[Admin] Health page error: {e}", exc_info=True)
+            return "Error loading health page", 500
+
+    # --- Backup Management ---
+    @app.route('/admin/backups')
+    @login_required
+    @admin_required
+    def admin_backups():
+        """List and manage database backups"""
+        try:
+            backups = []
+            if os.path.isdir(BACKUP_DIR):
+                for fn in sorted(os.listdir(BACKUP_DIR), reverse=True):
+                    if fn.endswith('.db'):
+                        path = os.path.join(BACKUP_DIR, fn)
+                        backups.append({
+                            'name': fn,
+                            'size_mb': round(os.path.getsize(path) / (1024 * 1024), 2),
+                            'date': datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y-%m-%d %H:%M:%S'),
+                            'age_days': round((time.time() - os.path.getmtime(path)) / 86400, 1)
+                        })
+            return render_template('admin/backups.html', backups=backups)
+        except Exception as e:
+            app.logger.error(f"[Admin] Backups page error: {e}", exc_info=True)
+            return "Error loading backups", 500
+
+    @app.route('/admin/backups/create', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_create_backup():
+        """Manually trigger a backup"""
+        try:
+            _run_scheduled_backup()
+            log_admin_action(current_user.id, 'create_backup', None, 'Manual backup created', request.remote_addr)
+            return jsonify({"message": "Backup created successfully"}), 200
+        except Exception as e:
+            app.logger.error(f"[Admin] Manual backup error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to create backup"}), 500
+
+    @app.route('/admin/backups/<filename>/download')
+    @login_required
+    @admin_required
+    def admin_download_backup(filename):
+        """Download a specific backup file"""
+        try:
+            safe_name = secure_filename(filename)
+            path = os.path.join(BACKUP_DIR, safe_name)
+            if not os.path.exists(path):
+                return jsonify({"error": "Backup not found"}), 404
+            return send_file(path, as_attachment=True, download_name=safe_name, mimetype='application/x-sqlite3')
+        except Exception as e:
+            return jsonify({"error": "Download failed"}), 500
+
+    @app.route('/admin/backups/<filename>/delete', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_delete_backup(filename):
+        """Delete a specific backup file"""
+        try:
+            safe_name = secure_filename(filename)
+            path = os.path.join(BACKUP_DIR, safe_name)
+            if not os.path.exists(path):
+                return jsonify({"error": "Backup not found"}), 404
+            os.remove(path)
+            log_admin_action(current_user.id, 'delete_backup', safe_name, 'Backup file deleted', request.remote_addr)
+            return jsonify({"message": f"Backup {safe_name} deleted"}), 200
+        except Exception as e:
+            return jsonify({"error": "Failed to delete backup"}), 500
+
+    # --- User Impersonation ---
+    @app.route('/admin/impersonate/<user_email>', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_impersonate(user_email):
+        """Impersonate a user (login as them). Stores original admin session."""
+        try:
+            target = db.session.get(DBUser, user_email)
+            if not target:
+                return jsonify({"error": "User not found"}), 404
+
+            if target.is_admin:
+                return jsonify({"error": "Cannot impersonate another admin"}), 400
+
+            # Store admin identity in session for returning later
+            session['impersonating_from'] = current_user.id
+            log_admin_action(current_user.id, 'impersonate', user_email, f'Started impersonating {user_email}', request.remote_addr)
+
+            login_user(target)
+            flash(f"Now viewing as {user_email}. Click 'Stop Impersonating' to return.", "info")
+            return redirect(url_for('home'))
+        except Exception as e:
+            app.logger.error(f"[Admin] Impersonate error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to impersonate"}), 500
+
+    @app.route('/admin/stop-impersonation')
+    @login_required
+    def admin_stop_impersonation():
+        """Return to the original admin account after impersonation."""
+        try:
+            original_admin = session.pop('impersonating_from', None)
+            if not original_admin:
+                return redirect(url_for('home'))
+
+            admin_user = db.session.get(DBUser, original_admin)
+            if admin_user and admin_user.is_admin:
+                log_admin_action(original_admin, 'stop_impersonate', current_user.id, 'Stopped impersonation')
+                login_user(admin_user)
+                flash("Returned to admin account.", "info")
+                return redirect(url_for('admin_dashboard'))
+            else:
+                return redirect(url_for('home'))
+        except Exception as e:
+            app.logger.error(f"[Admin] Stop impersonate error: {e}", exc_info=True)
+            return redirect(url_for('home'))
+
+    # --- Config Management ---
+    @app.route('/admin/config')
+    @login_required
+    @admin_required
+    def admin_config():
+        """View and edit configuration"""
+        try:
+            config_path = os.path.join(basedir, "config", "config.yaml")
+            with open(config_path, "r") as f:
+                current_config = yaml.safe_load(f) or {}
+
+            # Mask sensitive values for display
+            display_config = {}
+            for section, values in current_config.items():
+                if isinstance(values, dict):
+                    display_config[section] = {}
+                    for key, val in values.items():
+                        if any(s in key.lower() for s in ['token', 'secret', 'password', 'key']):
+                            display_config[section][key] = '***HIDDEN***'
+                        else:
+                            display_config[section][key] = val
+                else:
+                    display_config[section] = values
+
+            return render_template('admin/config.html', config=current_config, display_config=display_config)
+        except Exception as e:
+            app.logger.error(f"[Admin] Config page error: {e}", exc_info=True)
+            return "Error loading config", 500
+
+    @app.route('/admin/config/update', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_config_update():
+        """Update a config value"""
+        try:
+            section = request.form.get('section', '').strip()
+            key = request.form.get('key', '').strip()
+            value = request.form.get('value', '').strip()
+
+            if not section or not key:
+                return jsonify({"error": "Section and key are required"}), 400
+
+            config_path = os.path.join(basedir, "config", "config.yaml")
+            with open(config_path, "r") as f:
+                current_config = yaml.safe_load(f) or {}
+
+            if section not in current_config:
+                current_config[section] = {}
+
+            old_value = current_config.get(section, {}).get(key, '')
+            # Preserve original type when updating config values
+            if isinstance(old_value, bool):
+                value = value.lower() in ('true', '1', 'yes')
+            elif isinstance(old_value, int):
+                try:
+                    value = int(value)
+                except ValueError:
+                    pass
+            elif isinstance(old_value, float):
+                try:
+                    value = float(value)
+                except ValueError:
+                    pass
+            current_config[section][key] = value
+
+            with open(config_path, "w") as f:
+                yaml.dump(current_config, f, default_flow_style=False)
+
+            log_admin_action(current_user.id, 'update_config', f"{section}.{key}", f"Changed from '{old_value}' to '{value}'", request.remote_addr)
+            return jsonify({"message": f"Config {section}.{key} updated"}), 200
+        except Exception as e:
+            app.logger.error(f"[Admin] Config update error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to update config"}), 500
+
+    # --- Match/Tournament Management ---
+    @app.route('/admin/matches')
+    @login_required
+    @admin_required
+    def admin_matches():
+        """View and manage matches and tournaments"""
+        try:
+            # Active in-memory matches
+            active_matches = []
+            with MATCH_INSTANCES_LOCK:
+                for mid, instance in MATCH_INSTANCES.items():
+                    data = getattr(instance, 'data', {})
+                    home = data.get('team_home', '?').split('_')[0]
+                    away = data.get('team_away', '?').split('_')[0]
+                    active_matches.append({
+                        'id': mid,
+                        'teams': f"{home} vs {away}",
+                        'user': data.get('created_by', '?'),
+                        'created': data.get('created_at', None),
+                    })
+
+            # Recent DB matches
+            recent_matches = db.session.query(DBMatch).order_by(DBMatch.date.desc()).limit(25).all()
+
+            # Active tournaments
+            active_tournaments = db.session.query(Tournament).filter_by(status='Active').all()
+            completed_tournaments = db.session.query(Tournament).filter_by(status='Completed').order_by(Tournament.created_at.desc()).limit(10).all()
+
+            return render_template('admin/matches.html',
+                                   active_matches=active_matches,
+                                   recent_matches=recent_matches,
+                                   active_tournaments=active_tournaments,
+                                   completed_tournaments=completed_tournaments)
+        except Exception as e:
+            app.logger.error(f"[Admin] Matches page error: {e}", exc_info=True)
+            return "Error loading matches", 500
+
+    @app.route('/admin/matches/<match_id>/terminate', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_terminate_match(match_id):
+        """Terminate an active in-memory match"""
+        try:
+            with MATCH_INSTANCES_LOCK:
+                if match_id in MATCH_INSTANCES:
+                    del MATCH_INSTANCES[match_id]
+                    log_admin_action(current_user.id, 'terminate_match', match_id, 'Active match terminated', request.remote_addr)
+                    return jsonify({"message": f"Match {match_id[:8]}... terminated"}), 200
+                else:
+                    return jsonify({"error": "Match not found in active instances"}), 404
+        except Exception as e:
+            return jsonify({"error": "Failed to terminate match"}), 500
+
+    # --- Audit Log ---
+    @app.route('/admin/audit-log')
+    @login_required
+    @admin_required
+    def admin_audit_log():
+        """View full admin audit log"""
+        try:
+            page = request.args.get('page', 1, type=int)
+            per_page = 25
+            offset = (page - 1) * per_page
+
+            total = db.session.query(AdminAuditLog).count()
+            entries = db.session.query(AdminAuditLog).order_by(AdminAuditLog.timestamp.desc()).offset(offset).limit(per_page).all()
+
+            total_pages = (total + per_page - 1) // per_page
+
+            return render_template('admin/audit_log.html',
+                                   entries=entries,
+                                   page=page,
+                                   total_pages=total_pages,
+                                   total=total)
+        except Exception as e:
+            app.logger.error(f"[Admin] Audit log error: {e}", exc_info=True)
+            return "Error loading audit log", 500
+
+    # --- Maintenance Mode Toggle ---
+    @app.route('/admin/maintenance/toggle', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_toggle_maintenance():
+        """Toggle maintenance mode on/off (admin only)."""
+        global MAINTENANCE_MODE
+        with MAINTENANCE_MODE_LOCK:
+            MAINTENANCE_MODE = not MAINTENANCE_MODE
+            state = 'enabled' if MAINTENANCE_MODE else 'disabled'
+            # Persist to config.yaml
+            try:
+                config_path = os.getenv("SIMCRICKETX_CONFIG_PATH") or os.path.join(basedir, "config", "config.yaml")
+                cfg = {}
+                if os.path.exists(config_path):
+                    with open(config_path, "r") as f:
+                        cfg = yaml.safe_load(f) or {}
+                cfg.setdefault("app", {})["maintenance_mode"] = MAINTENANCE_MODE
+                with open(config_path, "w") as f:
+                    yaml.safe_dump(cfg, f, default_flow_style=False)
+            except Exception as e:
+                app.logger.error(f"[Admin] Failed to persist maintenance mode to config: {e}")
+        log_admin_action(current_user.id, 'toggle_maintenance', state, f'Maintenance mode {state}', request.remote_addr)
+        app.logger.info(f"[Admin] Maintenance mode {state} by {current_user.id}")
+        return jsonify({"maintenance_mode": MAINTENANCE_MODE, "message": f"Maintenance mode {state}"}), 200
+
+    @app.route('/admin/maintenance/status')
+    @login_required
+    @admin_required
+    def admin_maintenance_status():
+        """Get current maintenance mode status."""
+        return jsonify({"maintenance_mode": MAINTENANCE_MODE}), 200
+
+    # --- Ban / Suspend Users ---
+    @app.route('/admin/users/<user_email>/ban', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_ban_user(user_email):
+        user = db.session.get(DBUser, user_email)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        if user.is_admin:
+            return jsonify({"error": "Cannot ban an admin"}), 400
+        reason = request.form.get('reason', '').strip() or 'No reason provided'
+        duration = request.form.get('duration', '').strip()  # e.g. '7' for 7 days, empty=permanent
+        user.is_banned = True
+        user.ban_reason = reason
+        if duration and duration.isdigit() and int(duration) > 0:
+            user.banned_until = datetime.utcnow() + timedelta(days=int(duration))
+        else:
+            user.banned_until = None  # permanent
+        db.session.commit()
+        # Terminate their active sessions
+        ActiveSession.query.filter_by(user_id=user_email).delete()
+        db.session.commit()
+        until_str = f"for {duration} days" if duration and duration.isdigit() else "permanently"
+        log_admin_action(current_user.id, 'ban_user', user_email, f"Banned {until_str}: {reason}", request.remote_addr)
+        return jsonify({"message": f"User {user_email} banned {until_str}"}), 200
+
+    @app.route('/admin/users/<user_email>/unban', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_unban_user(user_email):
+        user = db.session.get(DBUser, user_email)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        user.is_banned = False
+        user.banned_until = None
+        user.ban_reason = None
+        db.session.commit()
+        log_admin_action(current_user.id, 'unban_user', user_email, 'Ban lifted', request.remote_addr)
+        return jsonify({"message": f"User {user_email} unbanned"}), 200
+
+    # --- Force Password Reset ---
+    @app.route('/admin/users/<user_email>/force-reset', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_force_password_reset(user_email):
+        user = db.session.get(DBUser, user_email)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        if user.is_admin:
+            return jsonify({"error": "Cannot force reset on admin"}), 400
+        user.force_password_reset = True
+        db.session.commit()
+        log_admin_action(current_user.id, 'force_password_reset', user_email, 'Flagged for password reset', request.remote_addr)
+        return jsonify({"message": f"{user_email} will be forced to change password on next login"}), 200
+
+    # --- Active Sessions ---
+    @app.route('/admin/sessions')
+    @login_required
+    @admin_required
+    def admin_sessions():
+        sessions = ActiveSession.query.order_by(ActiveSession.last_active.desc()).all()
+        return render_template('admin/sessions.html', sessions=sessions)
+
+    @app.route('/admin/sessions/<int:session_id>/terminate', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_terminate_session(session_id):
+        s = db.session.get(ActiveSession, session_id)
+        if not s:
+            return jsonify({"error": "Session not found"}), 404
+        target_user = s.user_id
+        db.session.delete(s)
+        db.session.commit()
+        log_admin_action(current_user.id, 'terminate_session', target_user, f'Session {session_id} terminated', request.remote_addr)
+        return jsonify({"message": "Session terminated"}), 200
+
+    @app.route('/admin/sessions/cleanup', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_cleanup_sessions():
+        cutoff = datetime.utcnow() - timedelta(days=7)
+        count = ActiveSession.query.filter(ActiveSession.last_active < cutoff).delete()
+        db.session.commit()
+        return jsonify({"message": f"Cleaned up {count} stale sessions"}), 200
+
+    # --- Failed Login Tracker ---
+    @app.route('/admin/failed-logins')
+    @login_required
+    @admin_required
+    def admin_failed_logins():
+        page = request.args.get('page', 1, type=int)
+        per_page = 30
+        query = FailedLoginAttempt.query.order_by(FailedLoginAttempt.timestamp.desc())
+        total = query.count()
+        entries = query.offset((page - 1) * per_page).limit(per_page).all()
+        total_pages = (total + per_page - 1) // per_page
+        # Top offending IPs (last 24h)
+        cutoff_24h = datetime.utcnow() - timedelta(hours=24)
+        top_ips = db.session.query(
+            FailedLoginAttempt.ip_address,
+            func.count(FailedLoginAttempt.id).label('count')
+        ).filter(FailedLoginAttempt.timestamp >= cutoff_24h).group_by(
+            FailedLoginAttempt.ip_address
+        ).order_by(func.count(FailedLoginAttempt.id).desc()).limit(10).all()
+        return render_template('admin/failed_logins.html',
+                               entries=entries, page=page, total_pages=total_pages, total=total, top_ips=top_ips)
+
+    @app.route('/admin/failed-logins/clear', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_clear_failed_logins():
+        count = FailedLoginAttempt.query.delete()
+        db.session.commit()
+        log_admin_action(current_user.id, 'clear_failed_logins', None, f'Cleared {count} entries', request.remote_addr)
+        return jsonify({"message": f"Cleared {count} failed login records"}), 200
+
+    # --- IP Blocklist ---
+    @app.route('/admin/ip-blocklist')
+    @login_required
+    @admin_required
+    def admin_ip_blocklist():
+        blocked = BlockedIP.query.order_by(BlockedIP.blocked_at.desc()).all()
+        return render_template('admin/ip_blocklist.html', blocked=blocked)
+
+    @app.route('/admin/ip-blocklist/add', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_block_ip():
+        ip = request.form.get('ip_address', '').strip()
+        reason = request.form.get('reason', '').strip() or 'No reason'
+        if not ip:
+            return jsonify({"error": "IP address required"}), 400
+        if BlockedIP.query.filter_by(ip_address=ip).first():
+            return jsonify({"error": "IP already blocked"}), 400
+        entry = BlockedIP(ip_address=ip, reason=reason, blocked_by=current_user.id)
+        db.session.add(entry)
+        db.session.commit()
+        log_admin_action(current_user.id, 'block_ip', ip, reason, request.remote_addr)
+        return jsonify({"message": f"IP {ip} blocked"}), 200
+
+    @app.route('/admin/ip-blocklist/<int:block_id>/remove', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_unblock_ip(block_id):
+        entry = db.session.get(BlockedIP, block_id)
+        if not entry:
+            return jsonify({"error": "Entry not found"}), 404
+        ip = entry.ip_address
+        db.session.delete(entry)
+        db.session.commit()
+        log_admin_action(current_user.id, 'unblock_ip', ip, 'IP unblocked', request.remote_addr)
+        return jsonify({"message": f"IP {ip} unblocked"}), 200
+
+    # --- Log Viewer ---
+    @app.route('/admin/logs')
+    @login_required
+    @admin_required
+    def admin_logs():
+        log_path = os.path.join(PROJECT_ROOT, "logs", "execution.log")
+        lines = []
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                    lines = f.readlines()
+            except Exception:
+                lines = ["Error reading log file"]
+        # Show last 500 lines by default, most recent first
+        lines = lines[-500:]
+        lines.reverse()
+        return render_template('admin/logs.html', lines=lines, total_lines=len(lines))
+
+    # --- Rate Limit Config ---
+    @app.route('/admin/rate-limits')
+    @login_required
+    @admin_required
+    def admin_rate_limits():
+        cfg = load_config()
+        rl = cfg.get('rate_limits', {})
+        return render_template('admin/rate_limits.html',
+                               max_requests=rl.get('max_requests', 30),
+                               window_seconds=rl.get('window_seconds', 10),
+                               admin_multiplier=rl.get('admin_multiplier', 3),
+                               login_limit=rl.get('login_limit', '10 per minute'))
+
+    @app.route('/admin/rate-limits/update', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_update_rate_limits():
+        try:
+            config_path = os.getenv("SIMCRICKETX_CONFIG_PATH") or os.path.join(basedir, "config", "config.yaml")
+            cfg = {}
+            if os.path.exists(config_path):
+                with open(config_path, "r") as f:
+                    cfg = yaml.safe_load(f) or {}
+            cfg['rate_limits'] = {
+                'max_requests': int(request.form.get('max_requests', 30)),
+                'window_seconds': int(request.form.get('window_seconds', 10)),
+                'admin_multiplier': int(request.form.get('admin_multiplier', 3)),
+                'login_limit': request.form.get('login_limit', '10 per minute')
+            }
+            with open(config_path, "w") as f:
+                yaml.safe_dump(cfg, f, default_flow_style=False)
+            log_admin_action(current_user.id, 'update_rate_limits', None, json.dumps(cfg['rate_limits']), request.remote_addr)
+            return jsonify({"message": "Rate limits updated (restart required for full effect)"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # --- Global Team Browser ---
+    @app.route('/admin/global-teams')
+    @login_required
+    @admin_required
+    def admin_global_teams():
+        page = request.args.get('page', 1, type=int)
+        search = request.args.get('q', '').strip()
+        per_page = 25
+        query = DBTeam.query.filter(DBTeam.is_placeholder != True)
+        if search:
+            query = query.filter(
+                db.or_(DBTeam.name.ilike(f'%{search}%'), DBTeam.user_id.ilike(f'%{search}%'), DBTeam.short_code.ilike(f'%{search}%'))
+            )
+        total = query.count()
+        teams = query.order_by(DBTeam.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+        total_pages = (total + per_page - 1) // per_page
+        return render_template('admin/global_teams.html',
+                               teams=teams, page=page, total_pages=total_pages, total=total, search=search)
+
+    # --- Global Match Browser ---
+    @app.route('/admin/global-matches')
+    @login_required
+    @admin_required
+    def admin_global_matches():
+        page = request.args.get('page', 1, type=int)
+        search = request.args.get('q', '').strip()
+        per_page = 25
+        query = DBMatch.query
+        if search:
+            query = query.filter(
+                db.or_(DBMatch.user_id.ilike(f'%{search}%'), DBMatch.result_description.ilike(f'%{search}%'))
+            )
+        total = query.count()
+        matches = query.order_by(DBMatch.date.desc()).offset((page - 1) * per_page).limit(per_page).all()
+        total_pages = (total + per_page - 1) // per_page
+        return render_template('admin/global_matches.html',
+                               matches=matches, page=page, total_pages=total_pages, total=total, search=search)
+
+    # --- DB Export ---
+    @app.route('/admin/export')
+    @login_required
+    @admin_required
+    def admin_export_page():
+        return render_template('admin/export.html')
+
+    @app.route('/admin/export/<table>/<fmt>')
+    @login_required
+    @admin_required
+    def admin_export_data(table, fmt):
+        if fmt not in ('csv', 'json', 'txt'):
+            return jsonify({"error": "Invalid format. Use csv, json, or txt"}), 400
+        table_map = {
+            'users': DBUser,
+            'teams': DBTeam,
+            'players': DBPlayer,
+            'matches': DBMatch,
+            'tournaments': Tournament,
+        }
+        if table not in table_map:
+            return jsonify({"error": f"Unknown table: {table}"}), 400
+        model = table_map[table]
+        rows = model.query.all()
+        # Build list of dicts from columns
+        columns = [c.name for c in model.__table__.columns]
+        data = []
+        for row in rows:
+            d = {}
+            for col in columns:
+                val = getattr(row, col, None)
+                if isinstance(val, datetime):
+                    val = val.isoformat()
+                d[col] = val
+            data.append(d)
+        log_admin_action(current_user.id, 'export_data', f'{table}.{fmt}', f'{len(data)} rows', request.remote_addr)
+        if fmt == 'json':
+            return Response(json.dumps(data, indent=2, default=str),
+                            mimetype='application/json',
+                            headers={'Content-Disposition': f'attachment; filename={table}_export.json'})
+        elif fmt == 'csv':
+            import io, csv
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(data)
+            return Response(output.getvalue(),
+                            mimetype='text/csv',
+                            headers={'Content-Disposition': f'attachment; filename={table}_export.csv'})
+        else:  # txt
+            lines = []
+            for d in data:
+                lines.append(' | '.join(str(d.get(c, '')) for c in columns))
+            header = ' | '.join(columns)
+            sep = '-' * len(header)
+            content = header + '\n' + sep + '\n' + '\n'.join(lines)
+            return Response(content,
+                            mimetype='text/plain',
+                            headers={'Content-Disposition': f'attachment; filename={table}_export.txt'})
+
+    # --- Scheduled Tasks Dashboard ---
+    @app.route('/admin/scheduled-tasks')
+    @login_required
+    @admin_required
+    def admin_scheduled_tasks():
+        tasks = []
+        # Backup scheduler
+        tasks.append({
+            'name': 'Database Backup',
+            'status': 'Active' if _backup_scheduler_started else 'Inactive',
+            'interval': '24 hours',
+            'description': 'Automatic database backup to data/backups/',
+            'last_run': _get_last_backup_time(),
+        })
+        # Cleanup task
+        tasks.append({
+            'name': 'Match Instance Cleanup',
+            'status': 'Active',
+            'interval': '6 hours',
+            'description': 'Removes old in-memory match instances and orphaned JSON files',
+            'last_run': None,
+        })
+        # Backup retention
+        tasks.append({
+            'name': 'Backup Retention Cleanup',
+            'status': 'Active',
+            'interval': 'On each backup',
+            'description': 'Removes backups older than 7 days',
+            'last_run': None,
+        })
+        # Session cleanup hint
+        tasks.append({
+            'name': 'Stale Session Cleanup',
+            'status': 'Manual',
+            'interval': 'On demand',
+            'description': 'Clean up sessions inactive for 7+ days (via Active Sessions page)',
+            'last_run': None,
+        })
+        return render_template('admin/scheduled_tasks.html', tasks=tasks)
+
+    def _get_last_backup_time():
+        """Get timestamp of the most recent backup file."""
+        backup_dir = os.path.join(PROJECT_ROOT, "data", "backups")
+        if not os.path.isdir(backup_dir):
+            return None
+        files = [f for f in os.listdir(backup_dir) if f.endswith('.db')]
+        if not files:
+            return None
+        files.sort(key=lambda f: os.path.getmtime(os.path.join(backup_dir, f)), reverse=True)
+        mtime = os.path.getmtime(os.path.join(backup_dir, files[0]))
+        return datetime.fromtimestamp(mtime)
+
     # --- Request logging ---
     @app.before_request
     def log_request():
         app.logger.info(f"{request.remote_addr} {request.method} {request.path}")
+        if request.path.startswith("/admin") or request.path.startswith("/__codex_probe"):
+            from werkzeug.routing import MapAdapter
+            adapter = app.url_map.bind("")
+            try:
+                endpoint, values = adapter.match(request.path, method=request.method)
+                app.logger.info(f"[RouteMatch] path={request.path} endpoint={endpoint} values={values}")
+            except Exception as e:
+                admin_routes = sorted([r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/admin')])
+                app.logger.error(
+                    f"[RouteMatch] no-match path={request.path} method={request.method} err={e} "
+                    f"admin_routes_count={len(admin_routes)} probe_present="
+                    f"{any(r.rule == '/__codex_probe' for r in app.url_map.iter_rules())}"
+                )
+
+    @app.route('/__codex_probe')
+    def codex_probe():
+        admin_routes = sorted([r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/admin')])
+        return jsonify({
+            "probe": "simcricketx-admin-diagnostic",
+            "file": os.path.abspath(__file__),
+            "admin_route_count": len(admin_routes),
+            "has_admin_activity": "/admin/activity" in admin_routes,
+            "has_admin_catchall": "/admin/<path:subpath>" in admin_routes,
+            "admin_routes": admin_routes,
+        }), 200
+
+    @app.route('/__codex_probe.')
+    def codex_probe_dot():
+        return codex_probe()
+
+    @app.errorhandler(404)
+    def handle_not_found(err):
+        path = request.path or ""
+        if path.startswith('/admin') or path.startswith('/__codex_probe'):
+            admin_routes = sorted([r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/admin')])
+            app.logger.error(
+                f"[RouteDebug] 404 for {path}. file={os.path.abspath(__file__)} "
+                f"admin_routes_count={len(admin_routes)} admin_routes={admin_routes}"
+            )
+        # For API/JSON requests, return JSON
+        if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+            return jsonify({"error": "Not found"}), 404
+        reason = getattr(err, 'description', None)
+        return render_template('404.html', reason=reason), 404
 
     # --- Tournament Match Completion Handler ---
     def _handle_tournament_match_completion(match, match_id, outcome, logger):
@@ -1070,36 +2374,104 @@ def create_app():
     @app.route("/login", methods=["GET", "POST"])
     @limiter.limit("10 per minute", methods=["POST"])
     def login():
-        """
-        Simplified login route
-        """
         try:
             if request.method == "GET":
                 if current_user.is_authenticated:
                     return redirect(url_for("home"))
                 return render_template("login.html")
-            
+
             email = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
-            
+
             if not email or not password:
                 return render_template("login.html", error="Email and password required")
 
             if verify_user(email, password):
-                # Fetch user model from DB (aliased as DBUser or just User from models)
-                # In app.py imports: from database.models import User as DBUser
                 user = db.session.get(DBUser, email)
                 if user:
+                    # Check ban status
+                    if user.is_banned:
+                        if user.banned_until and user.banned_until <= datetime.utcnow():
+                            # Temp ban expired — lift it
+                            user.is_banned = False
+                            user.banned_until = None
+                            user.ban_reason = None
+                            db.session.commit()
+                        else:
+                            reason = user.ban_reason or "No reason provided"
+                            until = f" until {user.banned_until.strftime('%Y-%m-%d %H:%M UTC')}" if user.banned_until else " (permanent)"
+                            app.logger.warning(f"[Auth] Banned user {email} attempted login")
+                            return render_template("login.html", error=f"Account suspended{until}. Reason: {reason}")
+
                     login_user(user, remember=True, duration=app.config.get("REMEMBER_COOKIE_DURATION"))
                     session.permanent = True
-                app.logger.info(f"Successful login for {email}")
-                return redirect(url_for("home"))
+
+                    # Track active session
+                    try:
+                        import secrets
+                        token = secrets.token_hex(32)
+                        session['session_token'] = token
+                        active = ActiveSession(
+                            session_token=token,
+                            user_id=email,
+                            ip_address=request.remote_addr,
+                            user_agent=request.user_agent.string[:300] if request.user_agent.string else None
+                        )
+                        db.session.add(active)
+                        db.session.commit()
+                    except Exception as e:
+                        db.session.rollback()
+                        app.logger.error(f"[Auth] Session tracking error: {e}")
+
+                    # Check force password reset
+                    if user.force_password_reset:
+                        session['force_password_reset'] = True
+                        return redirect(url_for("force_change_password"))
+
+                    app.logger.info(f"Successful login for {email}")
+                    return redirect(url_for("home"))
             else:
+                # Record failed login attempt
+                try:
+                    failed = FailedLoginAttempt(
+                        email=email,
+                        ip_address=request.remote_addr,
+                        user_agent=request.user_agent.string[:300] if request.user_agent.string else None
+                    )
+                    db.session.add(failed)
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
                 return render_template("login.html", error="Invalid email or password")
-            
+
         except Exception as e:
             app.logger.error(f"Login error: {e}")
             return render_template("login.html", error="System error")
+
+    @app.route("/change-password", methods=["GET", "POST"])
+    @login_required
+    def force_change_password():
+        """Force password change page."""
+        if request.method == "GET":
+            return render_template("force_change_password.html")
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        if not new_password or len(new_password) < 8:
+            return render_template("force_change_password.html", error="Password must be at least 8 characters")
+        if new_password != confirm_password:
+            return render_template("force_change_password.html", error="Passwords do not match")
+        try:
+            from werkzeug.security import generate_password_hash
+            current_user.password_hash = generate_password_hash(new_password)
+            current_user.force_password_reset = False
+            db.session.commit()
+            session.pop('force_password_reset', None)
+            flash("Password changed successfully.", "success")
+            return redirect(url_for("home"))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Auth] Force password change error: {e}")
+            return render_template("force_change_password.html", error="Failed to change password")
 
     @app.route("/delete_account", methods=["POST"])
     @login_required
@@ -1121,10 +2493,20 @@ def create_app():
     @app.route("/logout", methods=["POST"])
     @login_required
     def logout():
+        # Clean up active session
+        token = session.get('session_token')
+        if token:
+            try:
+                ActiveSession.query.filter_by(session_token=token).delete()
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
         session.pop("visit_counted", None)
+        session.pop("session_token", None)
+        session.pop("force_password_reset", None)
         app.logger.info(f"Logout for {current_user.id}")
         logout_user()
-        session.pop('_flashes', None) 
+        session.pop('_flashes', None)
         return redirect(url_for("login"))
     
     def load_user_teams(user_email):
@@ -2666,83 +4048,10 @@ def create_app():
             return jsonify({'error': 'Internal server error'}), 500
         
 
-    # ===== Database Backup Endpoint =====
-    
-    @app.route('/admin/backup-database')
-    @limiter.limit("3 per hour")
-    def backup_database():
-        """
-        Secure endpoint to download cricket_sim.db for backup purposes.
-        Requires valid BACKUP_TOKEN in query parameter or request header.
-        
-        Usage:
-            curl -O "http://localhost:7860/admin/backup-database?token=YOUR_TOKEN"
-            curl -H "X-Backup-Token: YOUR_TOKEN" -O http://localhost:7860/admin/backup-database
-        """
-        import hmac
-        from datetime import datetime
-        
-        # Get token from query param or header
-        provided_token = request.args.get('token') or request.headers.get('X-Backup-Token')
-        
-        # Get configured backup token from environment or config
-        configured_token = os.getenv('BACKUP_TOKEN')
-        
-        # Try to load from .simcricketx.conf file if not in environment
-        if not configured_token:
-            config_file = os.path.join(PROJECT_ROOT, '.simcricketx.conf')
-            if os.path.exists(config_file):
-                try:
-                    with open(config_file, 'r', encoding='utf-8') as f:
-                        for line in f:
-                            line = line.strip()
-                            if line.startswith('BACKUP_TOKEN=') and not line.startswith('#'):
-                                configured_token = line.split('=', 1)[1].strip()
-                                break
-                except Exception as e:
-                    app.logger.error(f"Error reading backup token from config: {e}")
-        
-        # If no token is configured, backup is disabled
-        if not configured_token:
-            app.logger.warning(f"[Backup] Attempt to access backup endpoint but BACKUP_TOKEN not configured. IP: {request.remote_addr}")
-            return jsonify({'error': 'Backup endpoint is not configured'}), 503
-        
-        # If no token provided by client
-        if not provided_token:
-            app.logger.warning(f"[Backup] Unauthorized access attempt without token. IP: {request.remote_addr}")
-            return jsonify({'error': 'Unauthorized'}), 403
-        
-        # Use constant-time comparison to prevent timing attacks
-        if not hmac.compare_digest(provided_token, configured_token):
-            app.logger.warning(f"[Backup] Unauthorized access attempt with invalid token. IP: {request.remote_addr}")
-            return jsonify({'error': 'Unauthorized'}), 403
-        
-        # Token is valid - proceed with backup
-        db_path = os.path.join(PROJECT_ROOT, 'cricket_sim.db')
-        
-        if not os.path.exists(db_path):
-            app.logger.error(f"[Backup] Database file not found at {db_path}")
-            return jsonify({'error': 'Database file not found'}), 404
-        
-        try:
-            # Generate timestamped filename
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            download_name = f'cricket_sim_backup_{timestamp}.db'
-            
-            # Log successful backup
-            app.logger.info(f"[Backup] Database backup downloaded by IP: {request.remote_addr} at {timestamp}")
-            
-            # Send file with proper headers
-            return send_file(
-                db_path,
-                as_attachment=True,
-                download_name=download_name,
-                mimetype='application/x-sqlite3'
-            )
-            
-        except Exception as e:
-            app.logger.error(f"[Backup] Error sending database file: {e}", exc_info=True)
-            return jsonify({'error': 'Failed to send backup file'}), 500
+
+    # Note: Database backup endpoint has been moved to admin routes section
+    # See /admin/backup-database route above with admin_required decorator
+
 
 
     # ============================================================================
@@ -3475,7 +4784,144 @@ def create_app():
 
 
 
+    # Register minimal fallback admin routes if any expected endpoints are missing.
+    # This prevents template/url build failures when a partial app initialization occurs.
+    def _register_admin_fallback(endpoint_name, route_path):
+        if endpoint_name in app.view_functions:
+            return
+
+        def _missing_admin_route():
+            app.logger.warning(f"[Admin] Fallback route hit for missing endpoint: {endpoint_name}")
+            flash(f"{endpoint_name.replace('_', ' ').title()} is unavailable in this process.", "warning")
+            return redirect('/admin/dashboard')
+
+        app.add_url_rule(
+            route_path,
+            endpoint=endpoint_name,
+            view_func=login_required(admin_required(_missing_admin_route))
+        )
+
+    _register_admin_fallback('admin_dashboard', '/admin/dashboard')
+    _register_admin_fallback('admin_users', '/admin/users')
+    _register_admin_fallback('admin_activity', '/admin/activity')
+    _register_admin_fallback('admin_health', '/admin/health')
+    _register_admin_fallback('admin_matches', '/admin/matches')
+    _register_admin_fallback('admin_database_stats', '/admin/database/stats')
+    _register_admin_fallback('admin_backups', '/admin/backups')
+    _register_admin_fallback('admin_config', '/admin/config')
+    _register_admin_fallback('admin_audit_log', '/admin/audit-log')
+
+    @app.route('/admin')
+    @login_required
+    @admin_required
+    def admin_root():
+        return redirect('/admin/dashboard')
+
+    @app.route('/admin/<path:subpath>')
+    @login_required
+    @admin_required
+    def admin_route_catchall(subpath):
+        requested = f"/admin/{subpath}"
+        known_routes = sorted([r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/admin')])
+        app.logger.error(
+            f"[Admin] Unmatched admin route: {requested}. Known admin routes: {known_routes}. File: {os.path.abspath(__file__)}"
+        )
+
+        # Avoid redirect loops if dashboard route itself is unavailable.
+        if requested != '/admin/dashboard' and '/admin/dashboard' in known_routes:
+            return redirect('/admin/dashboard')
+
+        return (
+            "Admin route unavailable in this running process.\n"
+            f"Requested: {requested}\n"
+            f"Running file: {os.path.abspath(__file__)}\n"
+            f"Known admin routes: {', '.join(known_routes)}",
+            503,
+            {"Content-Type": "text/plain; charset=utf-8"},
+        )
+
     return app
+
+
+# WSGI entrypoint used by gunicorn/flask CLI.
+app = create_app()
+
+
+def _ensure_route(rule, endpoint, view_func, methods=None):
+    if any(r.rule == rule for r in app.url_map.iter_rules()):
+        return
+    app.add_url_rule(rule, endpoint=endpoint, view_func=view_func, methods=methods or ["GET"])
+
+
+def _admin_guard_or_redirect():
+    if not current_user.is_authenticated:
+        return redirect(url_for("login", next=request.path))
+    if not getattr(current_user, "is_admin", False):
+        return jsonify({"error": "Forbidden: Admin access required"}), 403
+    return None
+
+
+def _global_admin_fallback(target_label):
+    guard = _admin_guard_or_redirect()
+    if guard is not None:
+        return guard
+    flash(f"{target_label} is unavailable in this process.", "warning")
+    return redirect("/admin/dashboard")
+
+
+_ensure_route(
+    "/admin/activity",
+    "admin_activity_global_fallback",
+    lambda: _global_admin_fallback("Activity"),
+)
+_ensure_route(
+    "/admin/health",
+    "admin_health_global_fallback",
+    lambda: _global_admin_fallback("System Health"),
+)
+_ensure_route(
+    "/admin/backups",
+    "admin_backups_global_fallback",
+    lambda: _global_admin_fallback("Backups"),
+)
+_ensure_route(
+    "/admin/database/stats",
+    "admin_database_stats_global_fallback",
+    lambda: _global_admin_fallback("Database"),
+)
+_ensure_route(
+    "/admin/config",
+    "admin_config_global_fallback",
+    lambda: _global_admin_fallback("Config"),
+)
+_ensure_route(
+    "/admin/matches",
+    "admin_matches_global_fallback",
+    lambda: _global_admin_fallback("Matches"),
+)
+_ensure_route(
+    "/admin/audit-log",
+    "admin_audit_log_global_fallback",
+    lambda: _global_admin_fallback("Audit Log"),
+)
+
+
+def _global_probe():
+    admin_routes = sorted([r.rule for r in app.url_map.iter_rules() if r.rule.startswith("/admin")])
+    return jsonify(
+        {
+            "probe": "simcricketx-global-route-guarantee",
+            "file": os.path.abspath(__file__),
+            "admin_route_count": len(admin_routes),
+            "has_admin_activity": "/admin/activity" in admin_routes,
+            "has_admin_health": "/admin/health" in admin_routes,
+            "admin_routes": admin_routes,
+        }
+    ), 200
+
+
+_ensure_route("/__codex_probe", "codex_probe_global", _global_probe)
+_ensure_route("/__codex_probe.", "codex_probe_global_dot", _global_probe)
 
 # ?????? Run Server ??????
 if __name__ == "__main__":
@@ -3486,8 +4932,6 @@ if __name__ == "__main__":
     import threading
 
     try:
-        app = create_app()
-
         # Choose host based on environment
         hostname = socket.gethostname()
         ip_address = socket.gethostbyname(hostname)
@@ -3498,6 +4942,22 @@ if __name__ == "__main__":
         HOST = "127.0.0.1" if is_local else "0.0.0.0"
         PORT = 7860
         url = f"http://{HOST}:{PORT}"
+
+        # Startup diagnostics to catch path/route mismatch in dev.
+        admin_rules = sorted(
+            [r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/admin')]
+        )
+        required_routes = ['/__codex_probe', '/admin/dashboard', '/admin/activity', '/admin/health']
+        missing_required = [r for r in required_routes if not any(rule.rule == r for rule in app.url_map.iter_rules())]
+        if missing_required:
+            raise RuntimeError(
+                f"Startup route check failed. Missing routes: {missing_required}. "
+                f"Admin routes seen: {admin_rules}"
+            )
+        print(f"[INFO] Running from: {os.path.abspath(__file__)}")
+        print(f"[INFO] Registered admin routes: {len(admin_rules)}")
+        for route in admin_rules:
+            print(f"  - {route}")
 
         # Console info
         print("[OK] SimCricketX is up and running!")

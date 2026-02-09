@@ -1,0 +1,244 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">{{ user.id }}</h1>
+        <p class="admin-page-subtitle">User account management</p>
+    </div>
+    <div class="admin-page-actions">
+        <a href="{{ url_for('admin_users') }}" class="a-btn a-btn-ghost"><i class="fas fa-arrow-left"></i> Back</a>
+        {% if not user.is_admin %}
+        <form method="POST" action="{{ url_for('admin_impersonate', user_email=user.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="a-btn a-btn-secondary" onclick="return confirm('Impersonate {{ user.id }}? You will be logged in as this user.')">
+                <i class="fas fa-user-secret"></i> Impersonate
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+<!-- User Info Cards -->
+<div class="a-stats-grid" style="margin-bottom: 2rem;">
+    <div class="a-stat-card">
+        <div class="a-stat-label">Email</div>
+        <div style="font-size: 0.95rem; font-weight: 600; color: var(--fg); word-break: break-all;">{{ user.id }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Display Name</div>
+        <div style="font-size: 0.95rem; font-weight: 600; color: var(--fg);">{{ user.display_name or 'Not set' }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Role</div>
+        <div style="font-size: 0.95rem; font-weight: 600;">
+            {% if user.is_admin %}
+            <span style="color: var(--accent);"><i class="fas fa-shield-alt"></i> Administrator</span>
+            {% else %}
+            <span style="color: var(--fg-secondary);">User</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Teams</div>
+        <div class="a-stat-value">{{ teams|length }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Matches</div>
+        <div class="a-stat-value">{{ matches|length }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Last Login</div>
+        <div style="font-size: 0.88rem; font-weight: 600; color: var(--fg);">
+            {% if user.last_login %}{{ user.last_login.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}
+        </div>
+    </div>
+</div>
+
+{% if not user.is_admin %}
+
+<!-- Ban Status -->
+{% if user.is_banned %}
+<div class="a-card-flat" style="border-color: rgba(220, 38, 38, 0.4); border-left: 4px solid #dc2626; margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+            <span class="a-badge a-badge-danger"><i class="fas fa-ban"></i> BANNED</span>
+            <span style="font-size: 0.85rem; color: var(--fg); margin-left: 0.5rem;">
+                {{ user.ban_reason or 'No reason' }}
+                {% if user.banned_until %} &mdash; until {{ user.banned_until.strftime('%Y-%m-%d %H:%M UTC') }}{% else %} (permanent){% endif %}
+            </span>
+        </div>
+        <button onclick="unbanUser()" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-unlock"></i> Unban</button>
+    </div>
+</div>
+{% endif %}
+
+{% if user.force_password_reset %}
+<div class="a-card-flat" style="border-color: rgba(245, 158, 11, 0.4); border-left: 4px solid #f59e0b; margin-bottom: 1.5rem;">
+    <span class="a-badge a-badge-warning"><i class="fas fa-key"></i> Password Reset Pending</span>
+    <span style="font-size: 0.85rem; color: var(--fg); margin-left: 0.5rem;">User will be forced to change password on next login.</span>
+</div>
+{% endif %}
+
+<!-- Quick Actions -->
+<div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+    {% if not user.is_banned %}
+    <button onclick="document.getElementById('banModal').style.display='flex'" class="a-btn a-btn-danger a-btn-sm">
+        <i class="fas fa-ban"></i> Ban User
+    </button>
+    {% endif %}
+    {% if not user.force_password_reset %}
+    <button onclick="forceReset()" class="a-btn a-btn-secondary a-btn-sm">
+        <i class="fas fa-key"></i> Force Password Reset
+    </button>
+    {% endif %}
+</div>
+
+<!-- Ban Modal -->
+<div id="banModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:var(--card-bg); border:1px solid var(--card-border); border-radius:12px; padding:1.5rem; max-width:400px; width:90%;">
+        <h3 style="margin:0 0 1rem; font-size:1.1rem; color:var(--fg);"><i class="fas fa-ban" style="color:#dc2626;"></i> Ban {{ user.id }}</h3>
+        <div class="a-form-group">
+            <label class="a-form-label">Reason</label>
+            <input type="text" id="banReason" class="a-form-input" placeholder="Reason for ban">
+        </div>
+        <div class="a-form-group">
+            <label class="a-form-label">Duration (days)</label>
+            <input type="number" id="banDuration" class="a-form-input" placeholder="Leave empty for permanent" min="1">
+        </div>
+        <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+            <button onclick="document.getElementById('banModal').style.display='none'" class="a-btn a-btn-ghost">Cancel</button>
+            <button onclick="banUser()" class="a-btn a-btn-danger">Ban User</button>
+        </div>
+    </div>
+</div>
+
+<!-- Admin actions only for non-admin users -->
+<div class="a-grid-2">
+    <!-- Change Email -->
+    <div class="a-card-flat">
+        <h3 class="a-section-title"><i class="fas fa-envelope"></i> Change Email</h3>
+        <form id="emailForm" onsubmit="changeEmail(event)">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="a-form-group">
+                <label class="a-form-label">New Email Address</label>
+                <input type="email" name="new_email" class="a-form-input" placeholder="user@example.com" required>
+            </div>
+            <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-save"></i> Update Email</button>
+        </form>
+    </div>
+
+    <!-- Reset Password -->
+    <div class="a-card-flat">
+        <h3 class="a-section-title"><i class="fas fa-key"></i> Reset Password</h3>
+        <form id="passwordForm" onsubmit="resetPassword(event)">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="a-form-group">
+                <label class="a-form-label">New Password</label>
+                <input type="password" name="new_password" class="a-form-input" placeholder="Min 6 characters" required minlength="6">
+            </div>
+            <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-save"></i> Reset Password</button>
+        </form>
+    </div>
+</div>
+
+<!-- Danger Zone -->
+<div class="a-card-flat" style="border-color: rgba(220, 38, 38, 0.3); margin-top: 1.5rem;">
+    <h3 class="a-section-title" style="color: #dc2626;"><i class="fas fa-exclamation-triangle"></i> Danger Zone</h3>
+    <p style="color: var(--fg-secondary); font-size: 0.88rem; margin-bottom: 1rem;">
+        Deleting this user will permanently remove all their teams, matches, and tournaments.
+    </p>
+    <button onclick="deleteUser()" class="a-btn a-btn-danger"><i class="fas fa-trash"></i> Delete User Account</button>
+</div>
+{% else %}
+<div class="a-card-flat" style="border-color: var(--accent); border-left: 4px solid var(--accent);">
+    <p style="color: var(--fg); font-size: 0.9rem;">
+        <i class="fas fa-info-circle" style="color: var(--accent);"></i>
+        This is the admin account. Admin accounts cannot be modified or deleted from this panel for security.
+    </p>
+</div>
+{% endif %}
+
+<script>
+const userEmail = "{{ user.id }}";
+
+function showAlert(message, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}">${message}</div>`;
+    c.querySelector('.a-alert').style.display = 'block';
+    setTimeout(() => { c.innerHTML = ''; }, 5000);
+}
+
+async function changeEmail(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch(`/admin/users/${encodeURIComponent(userEmail)}/change-email`, {
+            method: 'POST', body: new FormData(e.target)
+        });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => window.location.href = '/admin/users', 2000); }
+        else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+
+async function resetPassword(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch(`/admin/users/${encodeURIComponent(userEmail)}/reset-password`, {
+            method: 'POST', body: new FormData(e.target)
+        });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(data.message, 'success'); e.target.reset(); }
+        else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+
+async function deleteUser() {
+    if (!confirm(`Delete ${userEmail}? This removes ALL their data and cannot be undone!`)) return;
+    if (!confirm('Final confirmation. Delete user and all data?')) return;
+    try {
+        const resp = await fetch(`/admin/users/${encodeURIComponent(userEmail)}/delete`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => window.location.href = '/admin/users', 2000); }
+        else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+
+async function banUser() {
+    const reason = document.getElementById('banReason')?.value || '';
+    const duration = document.getElementById('banDuration')?.value || '';
+    const fd = new FormData();
+    fd.append('reason', reason);
+    fd.append('duration', duration);
+    try {
+        const resp = await fetch(`/admin/users/${encodeURIComponent(userEmail)}/ban`, { method: 'POST', body: fd });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+        else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+    document.getElementById('banModal').style.display = 'none';
+}
+
+async function unbanUser() {
+    if (!confirm('Unban this user?')) return;
+    try {
+        const resp = await fetch(`/admin/users/${encodeURIComponent(userEmail)}/unban`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+        else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+
+async function forceReset() {
+    if (!confirm('Force this user to change their password on next login?')) return;
+    try {
+        const resp = await fetch(`/admin/users/${encodeURIComponent(userEmail)}/force-reset`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+        else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+</script>
+{% endblock %}

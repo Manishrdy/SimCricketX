@@ -1,4 +1,0 @@
-# Database Backup Token Configuration
-# Generate a secure token with: python -c "import secrets; print(secrets.token_urlsafe(32))"
-# Uncomment and set your secure token below:
-# BACKUP_TOKEN=your_secure_random_token_here

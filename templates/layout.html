@@ -795,8 +795,13 @@
             transform: translateY(0);
         }
 
-        .backup-feedback.error { color: var(--danger); }
-        .backup-feedback.success { color: var(--success); }
+        .backup-feedback.error {
+            color: var(--danger);
+        }
+
+        .backup-feedback.success {
+            color: var(--success);
+        }
 
         .backup-actions {
             display: flex;
@@ -853,7 +858,9 @@
         }
 
         @keyframes backup-spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
@@ -874,7 +881,11 @@
             {% block navbar_items %}
             {% if current_user.is_authenticated %}
             <a href="{{ url_for('home') }}" class="theme-toggle" title="Home"><i class="fas fa-home"></i></a>
-            {% if current_user.id == 'admin' or current_user.id == 'admin@projectx.com' %}
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}" class="theme-toggle" title="Admin Panel"
+                style="background: var(--accent-light); color: var(--accent); border-color: var(--accent);">
+                <i class="fas fa-shield-alt"></i>
+            </a>
             <button onclick="downloadDatabase()" class="theme-toggle" title="Download Database Backup"
                 style="background: var(--accent-light); color: var(--accent); border-color: var(--accent);">
                 <i class="fas fa-database"></i>
@@ -895,12 +906,44 @@
     </nav>
 
 
+    <!-- Maintenance Mode Banner (admin only) -->
+    {% if maintenance_mode and current_user.is_authenticated and current_user.is_admin %}
+    <div style="background: linear-gradient(135deg, #f59e0b, #e67e22); color: #000; padding: 0.4rem 1rem; text-align: center; font-weight: 600; font-size: 0.82rem; display: flex; align-items: center; justify-content: center; gap: 0.75rem; z-index: 9999;">
+        <i class="fas fa-cog fa-spin"></i>
+        Maintenance Mode Active &mdash; Only you can access the site
+        <a href="{{ url_for('admin_dashboard') }}" style="background: #000; color: #f59e0b; padding: 0.2rem 0.65rem; border-radius: 6px; text-decoration: none; font-size: 0.78rem;">
+            <i class="fas fa-shield-alt"></i> Admin Panel
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- Impersonation Banner -->
+    {% if session.get('impersonating_from') %}
+    <div style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; padding: 0.5rem 1rem; text-align: center; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.75rem; z-index: 9999;">
+        <i class="fas fa-user-secret"></i>
+        Impersonating {{ current_user.id }} (Admin: {{ session.get('impersonating_from') }})
+        <a href="{{ url_for('admin_stop_impersonation') }}" style="background: #000; color: #f59e0b; padding: 0.25rem 0.75rem; border-radius: 6px; text-decoration: none; font-size: 0.8rem;">
+            <i class="fas fa-sign-out-alt"></i> Stop Impersonating
+        </a>
+    </div>
+    {% endif %}
+
     <!-- Main Content -->
     <main class="main-container">
         {% block content %}{% endblock %}
     </main>
 
-    {% if current_user.is_authenticated and (current_user.id == 'admin' or current_user.id == 'admin@projectx.com') %}
+    <!-- Site Footer -->
+    <footer style="text-align: center; padding: 1.25rem 1rem; font-size: 0.75rem; color: var(--fg-secondary); border-top: 1px solid var(--card-border); opacity: 0.7;">
+        <span>SimCricketX</span>
+        <span style="margin: 0 0.4rem;">&middot;</span>
+        <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer"
+           style="color: var(--accent); text-decoration: none; font-weight: 500;">
+            <i class="fas fa-envelope" style="font-size: 0.7rem;"></i> Contact Developer
+        </a>
+    </footer>
+
+    {% if current_user.is_authenticated and current_user.is_admin %}
     <!-- Backup Modal -->
     <div class="backup-modal" id="backupModal">
         <div class="backup-modal-content">
@@ -915,8 +958,8 @@
                 <label for="backup-input" class="backup-input-label">Backup Token</label>
                 <div class="backup-input-wrap">
                     <i class="fa-solid fa-key input-icon"></i>
-                    <input type="password" id="backup-input" class="backup-input"
-                        placeholder="Paste your token" autocomplete="off" spellcheck="false">
+                    <input type="password" id="backup-input" class="backup-input" placeholder="Paste your token"
+                        autocomplete="off" spellcheck="false">
                     <button type="button" id="backup-toggle-vis" class="backup-vis-toggle" title="Show token">
                         <i class="fa-solid fa-eye"></i>
                     </button>
@@ -1006,9 +1049,12 @@
                 goBtn.innerHTML = '<i class="fa-solid fa-spinner"></i> Verifying\u2026';
 
                 try {
-                    const resp = await fetch(
-                        `/admin/backup-database?token=${encodeURIComponent(token)}`
-                    );
+                    const formData = new FormData();
+                    formData.append('token', token);
+                    const resp = await fetch('/admin/backup-database', {
+                        method: 'POST',
+                        body: formData
+                    });
 
                     if (!resp.ok) {
                         const data = await resp.json().catch(() => null);

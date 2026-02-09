@@ -1,3 +1,5 @@
 app:
+  maintenance_mode: false
   secret_key: 0Lz7E2A1K8xFZJ5rM6P4N9QWcYdH2VnT3pBfR8mS
-  
+backup:
+  token: 53479bbdcfff64e78e39f6bd06196b347b53e5d9801774246f69a5d37d02b30c

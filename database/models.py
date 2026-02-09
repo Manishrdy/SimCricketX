@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_login import UserMixin
 from sqlalchemy.orm import relationship
 from database import db
@@ -24,8 +24,18 @@ class User(UserMixin, db.Model):
     mac_address = db.Column(db.String(50))
     hostname = db.Column(db.String(100))
     display_name = db.Column(db.String(100))
-
     
+    # Admin flag for role-based access control
+    is_admin = db.Column(db.Boolean, default=False, nullable=False, index=True)
+
+    # Ban/Suspend
+    is_banned = db.Column(db.Boolean, default=False, nullable=False)
+    banned_until = db.Column(db.DateTime, nullable=True)  # NULL = permanent, set = temp ban
+    ban_reason = db.Column(db.String(500), nullable=True)
+
+    # Force password reset on next login
+    force_password_reset = db.Column(db.Boolean, default=False, nullable=False)
+
     # Relationships — cascade so deleting a User removes all owned data
     teams = relationship('Team', backref='owner', lazy=True, cascade="all, delete-orphan")
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
@@ -384,3 +394,60 @@ class TournamentFixture(db.Model):
         db.Index('ix_fixture_tournament_status', 'tournament_id', 'status'),
         db.Index('ix_fixture_tournament_stage', 'tournament_id', 'stage'),
     )
+
+class AdminAuditLog(db.Model):
+    """Persistent audit trail for all admin actions"""
+    __tablename__ = 'admin_audit_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    admin_email = db.Column(db.String(120), nullable=False, index=True)
+    action = db.Column(db.String(50), nullable=False)  # e.g. 'reset_password', 'delete_user', 'change_email'
+    target = db.Column(db.String(200), nullable=True)   # target user/entity
+    details = db.Column(db.Text, nullable=True)          # extra context (JSON or text)
+    ip_address = db.Column(db.String(50), nullable=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index('ix_audit_admin_action', 'admin_email', 'action'),
+    )
+
+
+class FailedLoginAttempt(db.Model):
+    """Track failed login attempts for security monitoring"""
+    __tablename__ = 'failed_login_attempts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), nullable=False, index=True)
+    ip_address = db.Column(db.String(50), nullable=True)
+    user_agent = db.Column(db.String(300), nullable=True)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index('ix_failed_login_ip', 'ip_address'),
+    )
+
+
+class BlockedIP(db.Model):
+    """IP addresses blocked by admin"""
+    __tablename__ = 'blocked_ips'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(50), nullable=False, unique=True)
+    reason = db.Column(db.String(300), nullable=True)
+    blocked_by = db.Column(db.String(120), nullable=False)
+    blocked_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class ActiveSession(db.Model):
+    """Track active user sessions for admin monitoring"""
+    __tablename__ = 'active_sessions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False, index=True)
+    ip_address = db.Column(db.String(50), nullable=True)
+    user_agent = db.Column(db.String(300), nullable=True)
+    login_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    last_active = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    user = relationship('User', backref=db.backref('sessions', cascade='all, delete-orphan'))

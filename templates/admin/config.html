@@ -1,0 +1,99 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Configuration</h1>
+        <p class="admin-page-subtitle">View and edit application settings (config.yaml)</p>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+{% for section, values in config.items() %}
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-folder"></i> {{ section }}</h3>
+    <div class="a-card-flat">
+        {% if values is mapping %}
+        {% for key, val in values.items() %}
+        <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--card-border); flex-wrap: wrap;">
+            <div style="min-width: 140px;">
+                <span style="font-size: 0.82rem; font-weight: 600; color: var(--fg); font-family: monospace;">{{ key }}</span>
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+                {% set is_secret = 'token' in key|lower or 'secret' in key|lower or 'password' in key|lower or 'key' in key|lower %}
+                {% if is_secret %}
+                <input type="password" value="{{ val }}" class="a-form-input" style="max-width: 100%; font-family: monospace; font-size: 0.82rem;"
+                    id="cfg-{{ section }}-{{ key }}" readonly>
+                {% else %}
+                <input type="text" value="{{ val }}" class="a-form-input" style="max-width: 100%; font-size: 0.88rem;"
+                    id="cfg-{{ section }}-{{ key }}">
+                {% endif %}
+            </div>
+            <div style="display: flex; gap: 0.25rem;">
+                {% if is_secret %}
+                <button onclick="toggleVisibility('cfg-{{ section }}-{{ key }}')" class="a-btn a-btn-ghost a-btn-sm" title="Toggle visibility">
+                    <i class="fas fa-eye"></i>
+                </button>
+                {% endif %}
+                <button onclick="updateConfig('{{ section }}', '{{ key }}', 'cfg-{{ section }}-{{ key }}')" class="a-btn a-btn-primary a-btn-sm">
+                    <i class="fas fa-save"></i> Save
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div style="padding: 0.75rem 0; font-size: 0.88rem; color: var(--fg);">
+            <span style="font-family: monospace;">{{ values }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+<div class="a-card-flat" style="border-left: 4px solid #f59e0b; margin-top: 1rem;">
+    <p style="font-size: 0.85rem; color: var(--fg-secondary);">
+        <i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i>
+        Changes are written directly to <code>config.yaml</code>. Some settings may require a server restart.
+        Sensitive values (tokens, secrets) are masked but can be revealed with the eye icon.
+    </p>
+</div>
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}">${msg}</div>`;
+    c.querySelector('.a-alert').style.display = 'block';
+    setTimeout(() => c.innerHTML = '', 5000);
+}
+
+function toggleVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    if (input.type === 'password') {
+        input.type = 'text';
+        input.readOnly = false;
+    } else {
+        input.type = 'password';
+        input.readOnly = true;
+    }
+}
+
+async function updateConfig(section, key, inputId) {
+    const input = document.getElementById(inputId);
+    const value = input.value;
+    if (!confirm(`Update ${section}.${key}?`)) return;
+
+    const formData = new FormData();
+    formData.append('section', section);
+    formData.append('key', key);
+    formData.append('value', value);
+
+    try {
+        const resp = await fetch('/admin/config/update', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (resp.ok) showAlert(data.message, 'success');
+        else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+</script>
+{% endblock %}
