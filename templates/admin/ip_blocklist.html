@@ -1,0 +1,82 @@
+{% extends "admin/layout.html" %}
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">IP Blocklist</h1>
+        <p class="admin-page-subtitle">{{ blocked|length }} blocked IP{{ 's' if blocked|length != 1 }}</p>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+<!-- Add IP Form -->
+<div class="a-card-flat" style="margin-bottom: 1.5rem;">
+    <h3 class="a-section-title"><i class="fas fa-plus"></i> Block an IP</h3>
+    <form id="blockForm" onsubmit="addBlock(event)" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="a-form-group" style="margin-bottom: 0;">
+            <label class="a-form-label">IP Address</label>
+            <input type="text" name="ip_address" class="a-form-input" placeholder="e.g. 192.168.1.100" required
+                   pattern="[0-9a-fA-F.:]+">
+        </div>
+        <div class="a-form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+            <label class="a-form-label">Reason</label>
+            <input type="text" name="reason" class="a-form-input" placeholder="Optional reason">
+        </div>
+        <button type="submit" class="a-btn a-btn-primary" style="height: 38px;"><i class="fas fa-ban"></i> Block</button>
+    </form>
+</div>
+
+<div class="a-table-wrap">
+    <table class="a-table">
+        <thead>
+            <tr>
+                <th>IP Address</th>
+                <th>Reason</th>
+                <th>Blocked By</th>
+                <th>Blocked At</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in blocked %}
+            <tr id="block-{{ b.id }}">
+                <td><code style="font-weight: 600;">{{ b.ip_address }}</code></td>
+                <td>{{ b.reason or '-' }}</td>
+                <td>{{ b.blocked_by }}</td>
+                <td>{{ b.blocked_at.strftime('%Y-%m-%d %H:%M') if b.blocked_at else 'N/A' }}</td>
+                <td>
+                    <button onclick="unblock({{ b.id }}, '{{ b.ip_address }}')" class="a-btn a-btn-secondary a-btn-sm">
+                        <i class="fas fa-unlock"></i> Unblock
+                    </button>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="a-empty"><p>No blocked IPs</p></td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
+    setTimeout(() => c.innerHTML = '', 4000);
+}
+async function addBlock(e) {
+    e.preventDefault();
+    const res = await fetch('/admin/ip-blocklist/add', { method: 'POST', body: new FormData(e.target) });
+    const data = await res.json();
+    if (res.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1000); }
+    else showAlert(data.error, 'error');
+}
+async function unblock(id, ip) {
+    if (!confirm(`Unblock IP ${ip}?`)) return;
+    const res = await fetch(`/admin/ip-blocklist/${id}/remove`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) { document.getElementById('block-' + id)?.remove(); showAlert(data.message, 'success'); }
+    else showAlert(data.error, 'error');
+}
+</script>
+{% endblock %}

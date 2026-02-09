@@ -1,0 +1,63 @@
+{% extends "admin/layout.html" %}
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Rate Limit Configuration</h1>
+        <p class="admin-page-subtitle">Configure request throttling for the application</p>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+<div class="a-card-flat" style="max-width: 600px;">
+    <form id="rlForm" onsubmit="saveRateLimits(event)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="a-form-group">
+            <label class="a-form-label">Max Requests (per window)</label>
+            <input type="number" name="max_requests" class="a-form-input" value="{{ max_requests }}" min="5" max="1000">
+            <p style="font-size: 0.78rem; color: var(--fg-secondary); margin-top: 0.25rem;">Default: 30. Number of requests allowed per time window for regular users.</p>
+        </div>
+
+        <div class="a-form-group">
+            <label class="a-form-label">Window (seconds)</label>
+            <input type="number" name="window_seconds" class="a-form-input" value="{{ window_seconds }}" min="1" max="300">
+            <p style="font-size: 0.78rem; color: var(--fg-secondary); margin-top: 0.25rem;">Default: 10. Time window in seconds.</p>
+        </div>
+
+        <div class="a-form-group">
+            <label class="a-form-label">Admin Multiplier</label>
+            <input type="number" name="admin_multiplier" class="a-form-input" value="{{ admin_multiplier }}" min="1" max="10">
+            <p style="font-size: 0.78rem; color: var(--fg-secondary); margin-top: 0.25rem;">Default: 3. Admins get this many times the base limit.</p>
+        </div>
+
+        <div class="a-form-group">
+            <label class="a-form-label">Login Rate Limit</label>
+            <input type="text" name="login_limit" class="a-form-input" value="{{ login_limit }}">
+            <p style="font-size: 0.78rem; color: var(--fg-secondary); margin-top: 0.25rem;">Flask-Limiter format, e.g. "10 per minute".</p>
+        </div>
+
+        <div style="padding-top: 0.5rem; border-top: 1px solid var(--card-border); margin-top: 0.5rem;">
+            <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-save"></i> Save Configuration</button>
+            <p style="font-size: 0.75rem; color: var(--fg-secondary); margin-top: 0.5rem;">
+                <i class="fas fa-info-circle"></i> Changes are saved to config.yaml. A server restart is required for full effect.
+            </p>
+        </div>
+    </form>
+</div>
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
+    setTimeout(() => c.innerHTML = '', 4000);
+}
+async function saveRateLimits(e) {
+    e.preventDefault();
+    const res = await fetch('/admin/rate-limits/update', { method: 'POST', body: new FormData(e.target) });
+    const data = await res.json();
+    if (res.ok) showAlert(data.message, 'success');
+    else showAlert(data.error, 'error');
+}
+</script>
+{% endblock %}

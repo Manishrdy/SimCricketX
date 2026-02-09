@@ -1,0 +1,56 @@
+{% extends "admin/layout.html" %}
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Scheduled Tasks</h1>
+        <p class="admin-page-subtitle">Background jobs and scheduled operations</p>
+    </div>
+</div>
+
+<div class="a-table-wrap">
+    <table class="a-table">
+        <thead>
+            <tr>
+                <th>Task</th>
+                <th>Status</th>
+                <th>Interval</th>
+                <th>Description</th>
+                <th>Last Run</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in tasks %}
+            <tr>
+                <td style="font-weight: 600;">{{ t.name }}</td>
+                <td>
+                    {% if t.status == 'Active' %}
+                    <span class="a-badge a-badge-success"><i class="fas fa-circle" style="font-size: 0.5rem;"></i> Active</span>
+                    {% elif t.status == 'Manual' %}
+                    <span class="a-badge a-badge-info"><i class="fas fa-hand-pointer" style="font-size: 0.5rem;"></i> Manual</span>
+                    {% else %}
+                    <span class="a-badge a-badge-warning"><i class="fas fa-circle" style="font-size: 0.5rem;"></i> Inactive</span>
+                    {% endif %}
+                </td>
+                <td>{{ t.interval }}</td>
+                <td style="color: var(--fg-secondary); font-size: 0.85rem;">{{ t.description }}</td>
+                <td>
+                    {% if t.last_run %}
+                    {{ t.last_run.strftime('%Y-%m-%d %H:%M') }}
+                    {% else %}
+                    <span style="color: var(--fg-secondary);">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="a-card-flat" style="margin-top: 1.5rem; border-left: 3px solid var(--accent);">
+    <p style="font-size: 0.85rem; color: var(--fg-secondary); margin: 0;">
+        <i class="fas fa-info-circle" style="color: var(--accent);"></i>
+        Tasks run in background threads. Status reflects whether the scheduler thread is alive.
+        Manual tasks can be triggered from their respective admin pages.
+    </p>
+</div>
+{% endblock %}

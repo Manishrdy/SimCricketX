@@ -1,0 +1,817 @@
+{% extends "layout.html" %}
+
+{% block extra_css %}
+<style>
+    /* === ADMIN PREMIUM LAYOUT === */
+    .admin-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 0;
+        min-height: calc(100vh - var(--nav-height));
+        margin: -2rem;
+    }
+
+    /* --- Sidebar --- */
+    .admin-sidebar {
+        background: var(--bg-secondary);
+        border-right: 1px solid var(--card-border);
+        position: sticky;
+        top: var(--nav-height);
+        height: calc(100vh - var(--nav-height));
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .admin-sidebar-header {
+        padding: 1.75rem 1.5rem 1.25rem;
+        border-bottom: 1px solid var(--card-border);
+    }
+
+    .admin-sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--fg);
+        letter-spacing: -0.02em;
+    }
+
+    .admin-sidebar-brand-icon {
+        width: 36px;
+        height: 36px;
+        background: var(--gradient);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.9rem;
+    }
+
+    .admin-sidebar-version {
+        font-size: 0.7rem;
+        color: var(--fg-secondary);
+        margin-top: 0.25rem;
+        padding-left: 3rem;
+        letter-spacing: 0.05em;
+    }
+
+    .admin-nav {
+        flex: 1;
+        padding: 1rem 0;
+        overflow-y: auto;
+    }
+
+    .admin-nav-section {
+        margin-bottom: 0.5rem;
+    }
+
+    .admin-nav-label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--fg-secondary);
+        padding: 0.5rem 1.5rem 0.35rem;
+        opacity: 0.7;
+    }
+
+    .admin-nav-items {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .admin-nav-link {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.6rem 1.5rem;
+        color: var(--fg);
+        text-decoration: none;
+        font-size: 0.88rem;
+        font-weight: 500;
+        transition: all 0.15s ease;
+        border-left: 3px solid transparent;
+        position: relative;
+    }
+
+    .admin-nav-link:hover {
+        background: var(--accent-light);
+        color: var(--accent);
+        border-left-color: var(--accent);
+    }
+
+    .admin-nav-link.active {
+        background: var(--accent-light);
+        color: var(--accent);
+        border-left-color: var(--accent);
+        font-weight: 600;
+    }
+
+    .admin-nav-link i {
+        width: 18px;
+        text-align: center;
+        font-size: 0.85rem;
+        opacity: 0.8;
+    }
+
+    .admin-nav-link.active i,
+    .admin-nav-link:hover i {
+        opacity: 1;
+    }
+
+    .admin-nav-badge {
+        margin-left: auto;
+        background: var(--accent);
+        color: white;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 0.1rem 0.45rem;
+        border-radius: 10px;
+        min-width: 18px;
+        text-align: center;
+    }
+
+    .admin-sidebar-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid var(--card-border);
+        font-size: 0.78rem;
+        color: var(--fg-secondary);
+    }
+
+    .admin-sidebar-footer a {
+        color: var(--accent);
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.35rem 0;
+    }
+
+    .admin-sidebar-footer a:hover {
+        opacity: 0.8;
+    }
+
+    /* --- Main Content Area --- */
+    .admin-content {
+        padding: 2rem 2.5rem;
+        overflow-y: auto;
+        background: var(--bg);
+        min-height: calc(100vh - var(--nav-height));
+    }
+
+    /* --- Reusable Admin Components --- */
+    .admin-page-header {
+        margin-bottom: 2rem;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .admin-page-title {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--fg);
+        margin: 0;
+        letter-spacing: -0.03em;
+        line-height: 1.2;
+    }
+
+    .admin-page-subtitle {
+        font-size: 0.9rem;
+        color: var(--fg-secondary);
+        margin: 0.25rem 0 0 0;
+    }
+
+    .admin-page-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    .a-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.55rem 1.1rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        border: 1px solid transparent;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .a-btn-primary {
+        background: var(--gradient);
+        color: white;
+        border-color: transparent;
+    }
+
+    .a-btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px var(--shadow);
+        opacity: 0.9;
+    }
+
+    .a-btn-secondary {
+        background: var(--card-bg);
+        color: var(--fg);
+        border-color: var(--card-border);
+    }
+
+    .a-btn-secondary:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .a-btn-danger {
+        background: #dc2626;
+        color: white;
+    }
+
+    .a-btn-danger:hover {
+        background: #b91c1c;
+        transform: translateY(-1px);
+    }
+
+    .a-btn-ghost {
+        background: transparent;
+        color: var(--fg-secondary);
+        border-color: transparent;
+    }
+
+    .a-btn-ghost:hover {
+        color: var(--accent);
+        background: var(--accent-light);
+    }
+
+    .a-btn-sm {
+        padding: 0.35rem 0.7rem;
+        font-size: 0.78rem;
+    }
+
+    /* Cards */
+    .a-card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 1.5rem;
+        transition: all 0.2s ease;
+    }
+
+    .a-card:hover {
+        border-color: var(--accent);
+        box-shadow: 0 2px 8px var(--shadow);
+    }
+
+    .a-card-flat {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 1.5rem;
+    }
+
+    /* Stats Grid */
+    .a-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .a-stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .a-stat-card::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: var(--gradient);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+
+    .a-stat-card:hover::after {
+        opacity: 1;
+    }
+
+    .a-stat-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--fg-secondary);
+        margin-bottom: 0.5rem;
+    }
+
+    .a-stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--fg);
+        line-height: 1;
+    }
+
+    .a-stat-icon {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        font-size: 1.5rem;
+        opacity: 0.1;
+        color: var(--fg);
+    }
+
+    .a-stat-sub {
+        font-size: 0.75rem;
+        color: var(--fg-secondary);
+        margin-top: 0.35rem;
+    }
+
+    /* Tables */
+    .a-table-wrap {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .a-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .a-table th {
+        background: var(--bg-secondary);
+        color: var(--fg-secondary);
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--card-border);
+    }
+
+    .a-table td {
+        padding: 0.75rem 1rem;
+        font-size: 0.88rem;
+        color: var(--fg);
+        border-bottom: 1px solid var(--card-border);
+    }
+
+    .a-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .a-table tbody tr:hover {
+        background: var(--accent-light);
+    }
+
+    /* Badges */
+    .a-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+    }
+
+    .a-badge-admin {
+        background: var(--accent-light);
+        color: var(--accent);
+    }
+
+    .a-badge-user {
+        background: var(--bg-secondary);
+        color: var(--fg-secondary);
+    }
+
+    .a-badge-success {
+        background: rgba(34, 197, 94, 0.12);
+        color: #16a34a;
+    }
+
+    .a-badge-warning {
+        background: rgba(245, 158, 11, 0.12);
+        color: #d97706;
+    }
+
+    .a-badge-danger {
+        background: rgba(220, 38, 38, 0.12);
+        color: #dc2626;
+    }
+
+    .a-badge-info {
+        background: rgba(59, 130, 246, 0.12);
+        color: #2563eb;
+    }
+
+    /* Search */
+    .a-search-wrap {
+        position: relative;
+        max-width: 360px;
+        margin-bottom: 1.25rem;
+    }
+
+    .a-search-icon {
+        position: absolute;
+        left: 0.85rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--fg-secondary);
+        font-size: 0.85rem;
+    }
+
+    .a-search-input {
+        width: 100%;
+        padding: 0.6rem 1rem 0.6rem 2.5rem;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        background: var(--card-bg);
+        color: var(--fg);
+        font-size: 0.88rem;
+        transition: border-color 0.15s;
+    }
+
+    .a-search-input:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+    /* Forms */
+    .a-form-group {
+        margin-bottom: 1.25rem;
+    }
+
+    .a-form-label {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--fg);
+        margin-bottom: 0.35rem;
+    }
+
+    .a-form-input {
+        width: 100%;
+        max-width: 400px;
+        padding: 0.6rem 0.85rem;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--fg);
+        font-size: 0.88rem;
+        transition: border-color 0.15s;
+    }
+
+    .a-form-input:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+    /* Alerts */
+    .a-alert {
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+        display: none;
+        animation: a-slide-in 0.2s ease;
+    }
+
+    .a-alert-success {
+        background: rgba(34, 197, 94, 0.08);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        color: #16a34a;
+    }
+
+    .a-alert-error {
+        background: rgba(220, 38, 38, 0.08);
+        border: 1px solid rgba(220, 38, 38, 0.3);
+        color: #dc2626;
+    }
+
+    .a-alert-info {
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        color: #2563eb;
+    }
+
+    @keyframes a-slide-in {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Section separator */
+    .a-section {
+        margin-bottom: 2rem;
+    }
+
+    .a-section-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--fg);
+        margin: 0 0 1rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .a-section-title i {
+        opacity: 0.5;
+        font-size: 0.9rem;
+    }
+
+    /* Grid layouts */
+    .a-grid-2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .a-grid-3 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+    }
+
+    /* Empty state */
+    .a-empty {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--fg-secondary);
+    }
+
+    .a-empty i {
+        font-size: 2.5rem;
+        opacity: 0.2;
+        margin-bottom: 0.75rem;
+    }
+
+    .a-empty p {
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    /* Pagination */
+    .a-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        margin-top: 1.5rem;
+    }
+
+    .a-pagination a, .a-pagination span {
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-decoration: none;
+        color: var(--fg);
+        border: 1px solid var(--card-border);
+        background: var(--card-bg);
+    }
+
+    .a-pagination a:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .a-pagination .active {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+    }
+
+    /* Mobile */
+    @media (max-width: 900px) {
+        .admin-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .admin-sidebar {
+            position: static;
+            height: auto;
+            border-right: none;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .admin-nav {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 0.5rem;
+        }
+
+        .admin-nav-section {
+            width: 100%;
+        }
+
+        .admin-nav-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+        }
+
+        .admin-nav-link {
+            border-left: none;
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+        }
+
+        .admin-nav-label {
+            padding: 0.35rem 0.5rem;
+        }
+
+        .admin-content {
+            padding: 1.25rem;
+        }
+
+        .admin-sidebar-header,
+        .admin-sidebar-footer {
+            display: none;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar-header">
+            <div class="admin-sidebar-brand">
+                <div class="admin-sidebar-brand-icon"><i class="fas fa-shield-alt"></i></div>
+                <span>Admin Console</span>
+            </div>
+            <div class="admin-sidebar-version">SimCricketX</div>
+        </div>
+
+        <nav class="admin-nav">
+            <div class="admin-nav-section">
+                <div class="admin-nav-label">Overview</div>
+                <ul class="admin-nav-items">
+                    <li><a href="/admin/dashboard" class="admin-nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
+                        <i class="fas fa-th-large"></i> Dashboard
+                    </a></li>
+                    <li><a href="/admin/activity" class="admin-nav-link {% if request.endpoint == 'admin_activity' %}active{% endif %}">
+                        <i class="fas fa-chart-bar"></i> Activity
+                    </a></li>
+                    <li><a href="/admin/health" class="admin-nav-link {% if request.endpoint == 'admin_health' %}active{% endif %}">
+                        <i class="fas fa-heartbeat"></i> System Health
+                    </a></li>
+                </ul>
+            </div>
+
+            <div class="admin-nav-section">
+                <div class="admin-nav-label">Management</div>
+                <ul class="admin-nav-items">
+                    <li><a href="/admin/users" class="admin-nav-link {% if request.endpoint in ['admin_users', 'admin_user_detail'] %}active{% endif %}">
+                        <i class="fas fa-users"></i> Users
+                    </a></li>
+                    <li><a href="/admin/matches" class="admin-nav-link {% if request.endpoint == 'admin_matches' %}active{% endif %}">
+                        <i class="fas fa-cricket-bat-ball"></i> Matches
+                    </a></li>
+                    <li><a href="/admin/global-teams" class="admin-nav-link {% if request.endpoint == 'admin_global_teams' %}active{% endif %}">
+                        <i class="fas fa-shield-alt"></i> All Teams
+                    </a></li>
+                    <li><a href="/admin/global-matches" class="admin-nav-link {% if request.endpoint == 'admin_global_matches' %}active{% endif %}">
+                        <i class="fas fa-list"></i> All Matches
+                    </a></li>
+                </ul>
+            </div>
+
+            <div class="admin-nav-section">
+                <div class="admin-nav-label">Security</div>
+                <ul class="admin-nav-items">
+                    <li><a href="/admin/sessions" class="admin-nav-link {% if request.endpoint == 'admin_sessions' %}active{% endif %}">
+                        <i class="fas fa-desktop"></i> Sessions
+                    </a></li>
+                    <li><a href="/admin/failed-logins" class="admin-nav-link {% if request.endpoint == 'admin_failed_logins' %}active{% endif %}">
+                        <i class="fas fa-exclamation-triangle"></i> Failed Logins
+                    </a></li>
+                    <li><a href="/admin/ip-blocklist" class="admin-nav-link {% if request.endpoint == 'admin_ip_blocklist' %}active{% endif %}">
+                        <i class="fas fa-ban"></i> IP Blocklist
+                    </a></li>
+                    <li><a href="/admin/rate-limits" class="admin-nav-link {% if request.endpoint == 'admin_rate_limits' %}active{% endif %}">
+                        <i class="fas fa-tachometer-alt"></i> Rate Limits
+                    </a></li>
+                </ul>
+            </div>
+
+            <div class="admin-nav-section">
+                <div class="admin-nav-label">System</div>
+                <ul class="admin-nav-items">
+                    <li><a href="/admin/database/stats" class="admin-nav-link {% if request.endpoint == 'admin_database_stats' %}active{% endif %}">
+                        <i class="fas fa-database"></i> Database
+                    </a></li>
+                    <li><a href="/admin/backups" class="admin-nav-link {% if request.endpoint == 'admin_backups' %}active{% endif %}">
+                        <i class="fas fa-archive"></i> Backups
+                    </a></li>
+                    <li><a href="/admin/config" class="admin-nav-link {% if request.endpoint == 'admin_config' %}active{% endif %}">
+                        <i class="fas fa-cog"></i> Config
+                    </a></li>
+                    <li><a href="/admin/logs" class="admin-nav-link {% if request.endpoint == 'admin_logs' %}active{% endif %}">
+                        <i class="fas fa-file-alt"></i> Logs
+                    </a></li>
+                    <li><a href="/admin/export" class="admin-nav-link {% if request.endpoint == 'admin_export_page' %}active{% endif %}">
+                        <i class="fas fa-file-export"></i> Export
+                    </a></li>
+                    <li><a href="/admin/scheduled-tasks" class="admin-nav-link {% if request.endpoint == 'admin_scheduled_tasks' %}active{% endif %}">
+                        <i class="fas fa-clock"></i> Tasks
+                    </a></li>
+                    <li><a href="/admin/audit-log" class="admin-nav-link {% if request.endpoint == 'admin_audit_log' %}active{% endif %}">
+                        <i class="fas fa-scroll"></i> Audit Log
+                    </a></li>
+                </ul>
+            </div>
+
+            <div class="admin-nav-section">
+                <div class="admin-nav-label">Quick Actions</div>
+                <ul class="admin-nav-items">
+                    <li>
+                        <a href="#" onclick="toggleMaintenance(); return false;" class="admin-nav-link" id="maintenance-toggle-link"
+                           style="{% if maintenance_mode %}background: rgba(245, 158, 11, 0.1); border-left-color: #f59e0b; color: #d97706;{% endif %}">
+                            <i class="fas fa-{% if maintenance_mode %}toggle-on{% else %}toggle-off{% endif %}" id="maintenance-toggle-icon"></i>
+                            <span id="maintenance-toggle-text">{% if maintenance_mode %}Maintenance: ON{% else %}Maintenance: OFF{% endif %}</span>
+                        </a>
+                    </li>
+                    <li><a href="#" onclick="downloadDatabase(); return false;" class="admin-nav-link">
+                        <i class="fas fa-download"></i> Download DB
+                    </a></li>
+                    <li><a href="{{ url_for('home') }}" class="admin-nav-link">
+                        <i class="fas fa-arrow-left"></i> Back to App
+                    </a></li>
+                </ul>
+            </div>
+        </nav>
+
+        <div class="admin-sidebar-footer">
+            <a href="{{ url_for('home') }}"><i class="fas fa-arrow-left"></i> Return to App</a>
+        </div>
+    </aside>
+
+    <main class="admin-content">
+        {% block admin_content %}{% endblock %}
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function toggleMaintenance() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    try {
+        const res = await fetch('/admin/maintenance/toggle', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json'
+            }
+        });
+        const data = await res.json();
+        if (res.ok) {
+            const link = document.getElementById('maintenance-toggle-link');
+            const icon = document.getElementById('maintenance-toggle-icon');
+            const text = document.getElementById('maintenance-toggle-text');
+            if (data.maintenance_mode) {
+                link.style.background = 'rgba(245, 158, 11, 0.1)';
+                link.style.borderLeftColor = '#f59e0b';
+                link.style.color = '#d97706';
+                icon.className = 'fas fa-toggle-on';
+                text.textContent = 'Maintenance: ON';
+            } else {
+                link.style.background = '';
+                link.style.borderLeftColor = 'transparent';
+                link.style.color = '';
+                icon.className = 'fas fa-toggle-off';
+                text.textContent = 'Maintenance: OFF';
+            }
+        } else {
+            alert(data.error || 'Failed to toggle maintenance mode');
+        }
+    } catch (err) {
+        alert('Error toggling maintenance mode');
+    }
+}
+</script>
+{% endblock %}

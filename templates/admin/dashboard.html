@@ -1,0 +1,113 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Dashboard</h1>
+        <p class="admin-page-subtitle">System overview and quick actions</p>
+    </div>
+</div>
+
+<div class="a-stats-grid">
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-users"></i></div>
+        <div class="a-stat-label">Total Users</div>
+        <div class="a-stat-value">{{ stats.total_users }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-layer-group"></i></div>
+        <div class="a-stat-label">Teams</div>
+        <div class="a-stat-value">{{ stats.total_teams }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-baseball-ball"></i></div>
+        <div class="a-stat-label">Matches</div>
+        <div class="a-stat-value">{{ stats.total_matches }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-trophy"></i></div>
+        <div class="a-stat-label">Tournaments</div>
+        <div class="a-stat-value">{{ stats.total_tournaments }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-database"></i></div>
+        <div class="a-stat-label">Database</div>
+        <div class="a-stat-value">{{ stats.db_size_mb }}</div>
+        <div class="a-stat-sub">MB</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-signal"></i></div>
+        <div class="a-stat-label">Active (7d)</div>
+        <div class="a-stat-value">{{ stats.active_users_7d }}</div>
+    </div>
+</div>
+
+<div class="a-grid-2">
+    <!-- Quick Actions -->
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-bolt"></i> Quick Actions</h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+            <a href="/admin/users" class="a-btn a-btn-primary"><i class="fas fa-users"></i> Manage Users</a>
+            <a href="/admin/database/stats" class="a-btn a-btn-secondary"><i class="fas fa-database"></i> Database</a>
+            <a href="/admin/backups" class="a-btn a-btn-secondary"><i class="fas fa-archive"></i> Backups</a>
+            <a href="/admin/health" class="a-btn a-btn-secondary"><i class="fas fa-heartbeat"></i> Health</a>
+            <button onclick="downloadDatabase()" class="a-btn a-btn-secondary"><i class="fas fa-download"></i> Download DB</button>
+        </div>
+    </div>
+
+    <!-- Recent User Logins -->
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-clock"></i> Recent Logins</h3>
+        <div class="a-card-flat">
+            {% if recent_activity %}
+            <div style="max-height: 280px; overflow-y: auto;">
+                {% for activity in recent_activity %}
+                <div style="padding: 0.5rem 0; border-bottom: 1px solid var(--card-border); font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
+                    <span><strong>{{ activity.email }}</strong></span>
+                    <span style="color: var(--fg-secondary); font-size: 0.78rem;">{{ activity.time }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="a-empty"><p>No recent activity</p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Audit Trail -->
+<div class="a-section" style="margin-top: 1rem;">
+    <h3 class="a-section-title"><i class="fas fa-scroll"></i> Recent Admin Actions</h3>
+    {% if audit_entries %}
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead>
+                <tr>
+                    <th>Admin</th>
+                    <th>Action</th>
+                    <th>Target</th>
+                    <th>When</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in audit_entries %}
+                <tr>
+                    <td><strong>{{ e.admin }}</strong></td>
+                    <td><span class="a-badge a-badge-info">{{ e.action }}</span></td>
+                    <td style="color: var(--fg-secondary);">{{ e.target or '-' }}</td>
+                    <td style="color: var(--fg-secondary); font-size: 0.8rem;">{{ e.time }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div style="margin-top: 0.75rem;">
+        <a href="/admin/audit-log" class="a-btn a-btn-ghost a-btn-sm">View Full Audit Log <i class="fas fa-arrow-right"></i></a>
+    </div>
+    {% else %}
+    <div class="a-card-flat">
+        <div class="a-empty"><i class="fas fa-check-circle"></i><p>No admin actions recorded yet</p></div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

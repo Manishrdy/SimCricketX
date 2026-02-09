@@ -1,0 +1,68 @@
+{% extends "admin/layout.html" %}
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">All Matches</h1>
+        <p class="admin-page-subtitle">{{ total }} match{{ 'es' if total != 1 }} across all users</p>
+    </div>
+</div>
+
+<!-- Search -->
+<div class="a-search-wrap">
+    <i class="fas fa-search a-search-icon"></i>
+    <form method="GET" style="width: 100%;">
+        <input type="text" name="q" class="a-search-input" placeholder="Search by owner or result..." value="{{ search }}">
+    </form>
+</div>
+
+<div class="a-table-wrap">
+    <table class="a-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Owner</th>
+                <th>Result</th>
+                <th>Score</th>
+                <th>Venue</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in matches %}
+            <tr>
+                <td style="font-size: 0.78rem; font-family: 'IBM Plex Mono', monospace;">{{ m.id[:8] }}...</td>
+                <td>
+                    <a href="{{ url_for('admin_user_detail', user_email=m.user_id) }}" style="color: var(--accent); text-decoration: none;">
+                        {{ m.user_id }}
+                    </a>
+                </td>
+                <td style="font-weight: 600; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    {{ m.result_description or 'N/A' }}
+                </td>
+                <td style="font-size: 0.82rem;">
+                    {{ m.home_team_score or 0 }}/{{ m.home_team_wickets or 0 }}
+                    vs
+                    {{ m.away_team_score or 0 }}/{{ m.away_team_wickets or 0 }}
+                </td>
+                <td>{{ m.venue or '-' }}</td>
+                <td>{{ m.date.strftime('%Y-%m-%d') if m.date else 'N/A' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="a-empty"><p>No matches found</p></td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="a-pagination">
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="active">{{ p }}</span>
+        {% else %}
+        <a href="?page={{ p }}{% if search %}&q={{ search }}{% endif %}">{{ p }}</a>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

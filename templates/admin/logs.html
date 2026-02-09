@@ -1,0 +1,38 @@
+{% extends "admin/layout.html" %}
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Application Logs</h1>
+        <p class="admin-page-subtitle">Showing last {{ lines|length }} lines (most recent first)</p>
+    </div>
+    <div class="admin-page-actions">
+        <button onclick="location.reload()" class="a-btn a-btn-secondary"><i class="fas fa-sync-alt"></i> Refresh</button>
+    </div>
+</div>
+
+<!-- Filter -->
+<div class="a-search-wrap" style="max-width: 500px;">
+    <i class="fas fa-filter a-search-icon"></i>
+    <input type="text" id="logFilter" class="a-search-input" placeholder="Filter logs (e.g. ERROR, Admin, login...)" oninput="filterLogs()">
+</div>
+
+<div class="a-card-flat" style="padding: 0; overflow: hidden;">
+    <div id="logContainer" style="max-height: 70vh; overflow-y: auto; padding: 1rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; line-height: 1.7; background: var(--bg-secondary);">
+        {% for line in lines %}
+        <div class="log-line" style="padding: 0.15rem 0; border-bottom: 1px solid var(--card-border); word-break: break-all;
+            {% if 'ERROR' in line %}color: #dc2626;{% elif 'WARNING' in line %}color: #d97706;{% else %}color: var(--fg);{% endif %}">{{ line.rstrip() }}</div>
+        {% else %}
+        <div style="text-align: center; padding: 3rem; color: var(--fg-secondary);">No log entries found</div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+function filterLogs() {
+    const filter = document.getElementById('logFilter').value.toLowerCase();
+    document.querySelectorAll('.log-line').forEach(el => {
+        el.style.display = el.textContent.toLowerCase().includes(filter) || !filter ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

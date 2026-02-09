@@ -1,0 +1,178 @@
+{% extends "layout.html" %}
+
+{% block title %}404 - Page Not Found | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .error-page {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - var(--nav-height) - 8rem);
+        text-align: center;
+        padding: 2rem;
+    }
+
+    .error-code {
+        font-size: 8rem;
+        font-weight: 800;
+        line-height: 1;
+        background: var(--gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: -0.06em;
+        margin: 0;
+        position: relative;
+    }
+
+    .error-code::after {
+        content: '';
+        position: absolute;
+        bottom: 0.1em;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80px;
+        height: 4px;
+        background: var(--gradient);
+        border-radius: 2px;
+    }
+
+    .error-icon {
+        font-size: 3rem;
+        color: var(--fg-secondary);
+        opacity: 0.3;
+        margin-bottom: 1rem;
+    }
+
+    .error-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--fg);
+        margin: 1.5rem 0 0.5rem;
+        letter-spacing: -0.02em;
+    }
+
+    .error-message {
+        font-size: 0.95rem;
+        color: var(--fg-secondary);
+        max-width: 440px;
+        line-height: 1.6;
+        margin: 0 auto 2rem;
+    }
+
+    .error-reason {
+        background: var(--bg-secondary);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        padding: 0.75rem 1.25rem;
+        font-size: 0.85rem;
+        color: var(--fg-secondary);
+        font-family: 'IBM Plex Mono', monospace;
+        margin-bottom: 2rem;
+        max-width: 500px;
+        word-break: break-all;
+    }
+
+    .error-reason span {
+        color: var(--fg);
+        font-weight: 600;
+    }
+
+    .error-actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .error-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1.5rem;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        border: none;
+    }
+
+    .error-btn-primary {
+        background: var(--gradient);
+        color: white;
+    }
+
+    .error-btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px var(--shadow);
+        opacity: 0.9;
+    }
+
+    .error-btn-secondary {
+        background: var(--card-bg);
+        color: var(--fg);
+        border: 1px solid var(--card-border);
+    }
+
+    .error-btn-secondary:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .error-cricket {
+        margin-top: 2.5rem;
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+        opacity: 0.5;
+        font-style: italic;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-icon"><i class="fas fa-cricket-bat-ball"></i></div>
+    <h1 class="error-code">404</h1>
+    <h2 class="error-title">Bowled Out!</h2>
+    <p class="error-message">
+        The page you're looking for doesn't exist or has been moved. Looks like this delivery went wide of the stumps.
+    </p>
+
+    {% if reason %}
+    <div class="error-reason">
+        <span>Details:</span> {{ reason }}
+    </div>
+    {% endif %}
+
+    <div class="error-reason">
+        <span>Path:</span> {{ request.path }}
+    </div>
+
+    <div class="error-actions">
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('home') }}" class="error-btn error-btn-primary">
+            <i class="fas fa-home"></i> Back to Home
+        </a>
+        {% else %}
+        <a href="{{ url_for('login') }}" class="error-btn error-btn-primary">
+            <i class="fas fa-sign-in-alt"></i> Go to Login
+        </a>
+        {% endif %}
+        <button onclick="history.back()" class="error-btn error-btn-secondary">
+            <i class="fas fa-arrow-left"></i> Go Back
+        </button>
+    </div>
+
+    <p class="error-cricket">That's a dot ball... no runs scored here.</p>
+
+    <p style="margin-top: 1.5rem; font-size: 0.82rem; color: var(--fg-secondary);">
+        Think this is a bug?
+        <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer"
+           style="color: var(--accent); text-decoration: none; font-weight: 600;">Contact the developer</a>
+    </p>
+</div>
+{% endblock %}
