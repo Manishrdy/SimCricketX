@@ -1,0 +1,96 @@
+{% extends "admin/layout.html" %}
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Failed Login Attempts</h1>
+        <p class="admin-page-subtitle">{{ total }} total recorded attempt{{ 's' if total != 1 }}</p>
+    </div>
+    <div class="admin-page-actions">
+        <button onclick="clearAll()" class="a-btn a-btn-danger"><i class="fas fa-trash"></i> Clear All</button>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+{% if top_ips %}
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-exclamation-triangle"></i> Top Offending IPs (24h)</h3>
+    <div class="a-stats-grid">
+        {% for ip, count in top_ips %}
+        <div class="a-stat-card">
+            <div class="a-stat-label">{{ ip or 'Unknown' }}</div>
+            <div class="a-stat-value">{{ count }}</div>
+            <div class="a-stat-sub">failed attempts</div>
+            <button onclick="blockIP('{{ ip }}')" class="a-btn a-btn-danger a-btn-sm" style="margin-top: 0.5rem;">
+                <i class="fas fa-ban"></i> Block
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="a-table-wrap">
+    <table class="a-table">
+        <thead>
+            <tr>
+                <th>Email Attempted</th>
+                <th>IP Address</th>
+                <th>Time</th>
+                <th>User Agent</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in entries %}
+            <tr>
+                <td style="font-weight: 600;">{{ e.email }}</td>
+                <td><code style="font-size: 0.8rem;">{{ e.ip_address or 'Unknown' }}</code></td>
+                <td>{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') if e.timestamp else 'N/A' }}</td>
+                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem;">
+                    {{ e.user_agent or 'Unknown' }}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="a-empty"><p>No failed login attempts recorded</p></td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="a-pagination">
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="active">{{ p }}</span>
+        {% else %}
+        <a href="?page={{ p }}">{{ p }}</a>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
+    setTimeout(() => c.innerHTML = '', 4000);
+}
+async function clearAll() {
+    if (!confirm('Clear all failed login records?')) return;
+    const res = await fetch('/admin/failed-logins/clear', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+    else showAlert(data.error, 'error');
+}
+async function blockIP(ip) {
+    if (!confirm(`Block IP ${ip}?`)) return;
+    const fd = new FormData();
+    fd.append('ip_address', ip);
+    fd.append('reason', 'Blocked from failed login tracker');
+    const res = await fetch('/admin/ip-blocklist/add', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (res.ok) showAlert(data.message, 'success');
+    else showAlert(data.error, 'error');
+}
+</script>
+{% endblock %}

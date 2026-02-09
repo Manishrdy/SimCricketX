@@ -1,0 +1,86 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Audit Log</h1>
+        <p class="admin-page-subtitle">{{ total }} total entries &middot; Page {{ page }} of {{ total_pages }}</p>
+    </div>
+</div>
+
+{% if entries %}
+<div class="a-table-wrap">
+    <table class="a-table">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Admin</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Details</th>
+                <th>IP</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in entries %}
+            <tr>
+                <td style="font-size: 0.78rem; color: var(--fg-secondary); white-space: nowrap;">
+                    {% if e.timestamp %}{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% endif %}
+                </td>
+                <td><strong style="font-size: 0.85rem;">{{ e.admin_email }}</strong></td>
+                <td>
+                    {% if 'delete' in e.action %}
+                    <span class="a-badge a-badge-danger">{{ e.action }}</span>
+                    {% elif 'impersonate' in e.action %}
+                    <span class="a-badge a-badge-warning">{{ e.action }}</span>
+                    {% elif 'backup' in e.action %}
+                    <span class="a-badge a-badge-success">{{ e.action }}</span>
+                    {% else %}
+                    <span class="a-badge a-badge-info">{{ e.action }}</span>
+                    {% endif %}
+                </td>
+                <td style="font-size: 0.85rem; color: var(--fg-secondary);">{{ e.target or '-' }}</td>
+                <td style="font-size: 0.78rem; color: var(--fg-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="{{ e.details or '' }}">
+                    {{ e.details or '-' }}
+                </td>
+                <td style="font-size: 0.78rem; font-family: monospace; color: var(--fg-secondary);">{{ e.ip_address or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="a-pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}"><i class="fas fa-chevron-left"></i></a>
+    {% endif %}
+
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="active">{{ p }}</span>
+        {% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+        <a href="?page={{ p }}">{{ p }}</a>
+        {% elif p == 4 and page > 5 %}
+        <span style="border: none; background: none; color: var(--fg-secondary);">...</span>
+        {% elif p == total_pages - 2 and page < total_pages - 4 %}
+        <span style="border: none; background: none; color: var(--fg-secondary);">...</span>
+        {% endif %}
+    {% endfor %}
+
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}"><i class="fas fa-chevron-right"></i></a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="a-card-flat">
+    <div class="a-empty">
+        <i class="fas fa-scroll"></i>
+        <p>No audit entries yet. Admin actions will be logged here automatically.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

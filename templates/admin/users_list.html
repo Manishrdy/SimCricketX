@@ -1,0 +1,71 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Users</h1>
+        <p class="admin-page-subtitle">{{ users|length }} registered user{{ 's' if users|length != 1 }}</p>
+    </div>
+</div>
+
+<div class="a-search-wrap">
+    <i class="fas fa-search a-search-icon"></i>
+    <input type="text" id="userSearch" class="a-search-input" placeholder="Search by email...">
+</div>
+
+<div class="a-table-wrap">
+    <table class="a-table">
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Teams</th>
+                <th>Matches</th>
+                <th>Last Login</th>
+                <th style="text-align: right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="usersTableBody">
+            {% for user in users %}
+            <tr data-email="{{ user.email }}">
+                <td><strong>{{ user.email }}</strong></td>
+                <td style="color: var(--fg-secondary);">{{ user.display_name or '-' }}</td>
+                <td>
+                    {% if user.is_admin %}
+                    <span class="a-badge a-badge-admin"><i class="fas fa-shield-alt"></i> Admin</span>
+                    {% else %}
+                    <span class="a-badge a-badge-user">User</span>
+                    {% endif %}
+                </td>
+                <td>{{ user.teams_count }}</td>
+                <td>{{ user.matches_count }}</td>
+                <td style="color: var(--fg-secondary); font-size: 0.82rem;">
+                    {% if user.last_login %}{{ user.last_login.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}
+                </td>
+                <td style="text-align: right;">
+                    <a href="{{ url_for('admin_user_detail', user_email=user.email) }}" class="a-btn a-btn-secondary a-btn-sm">
+                        <i class="fas fa-eye"></i> View
+                    </a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7">
+                    <div class="a-empty"><i class="fas fa-users"></i><p>No users found</p></div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+document.getElementById('userSearch').addEventListener('input', function(e) {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll('#usersTableBody tr[data-email]').forEach(row => {
+        row.style.display = row.dataset.email.toLowerCase().includes(q) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

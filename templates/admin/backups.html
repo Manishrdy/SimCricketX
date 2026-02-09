@@ -1,0 +1,111 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Backups</h1>
+        <p class="admin-page-subtitle">{{ backups|length }} backup{{ 's' if backups|length != 1 }} &middot; Auto-cleanup after 7 days</p>
+    </div>
+    <div class="admin-page-actions">
+        <button onclick="createBackup()" class="a-btn a-btn-primary" id="createBtn">
+            <i class="fas fa-plus"></i> Create Backup Now
+        </button>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+{% if backups %}
+<div class="a-table-wrap">
+    <table class="a-table">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Size</th>
+                <th>Created</th>
+                <th>Age</th>
+                <th style="text-align: right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in backups %}
+            <tr id="row-{{ loop.index }}">
+                <td style="font-family: monospace; font-size: 0.82rem;">{{ b.name }}</td>
+                <td><span class="a-badge a-badge-info">{{ b.size_mb }} MB</span></td>
+                <td style="color: var(--fg-secondary); font-size: 0.82rem;">{{ b.date }}</td>
+                <td>
+                    {% if b.age_days < 1 %}
+                    <span class="a-badge a-badge-success">Today</span>
+                    {% elif b.age_days < 3 %}
+                    <span class="a-badge a-badge-success">{{ b.age_days|round(0)|int }}d</span>
+                    {% elif b.age_days < 6 %}
+                    <span class="a-badge a-badge-warning">{{ b.age_days|round(0)|int }}d</span>
+                    {% else %}
+                    <span class="a-badge a-badge-danger">{{ b.age_days|round(0)|int }}d</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: right;">
+                    <a href="/admin/backups/{{ b.name }}/download" class="a-btn a-btn-secondary a-btn-sm">
+                        <i class="fas fa-download"></i>
+                    </a>
+                    <button onclick="deleteBackup('{{ b.name }}', 'row-{{ loop.index }}')" class="a-btn a-btn-danger a-btn-sm">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="a-card-flat">
+    <div class="a-empty">
+        <i class="fas fa-archive"></i>
+        <p>No backups yet. Backups are created automatically every 24 hours.</p>
+    </div>
+</div>
+{% endif %}
+
+<div class="a-card-flat" style="margin-top: 1.5rem; border-left: 4px solid var(--accent);">
+    <p style="font-size: 0.85rem; color: var(--fg-secondary);">
+        <i class="fas fa-info-circle" style="color: var(--accent);"></i>
+        Automatic backups run every 24 hours. Backups older than 7 days are automatically deleted.
+        You can also trigger a manual backup or download the live database via the backup token modal.
+    </p>
+</div>
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}">${msg}</div>`;
+    c.querySelector('.a-alert').style.display = 'block';
+    setTimeout(() => c.innerHTML = '', 5000);
+}
+
+async function createBackup() {
+    const btn = document.getElementById('createBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+    try {
+        const resp = await fetch('/admin/backups/create', { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+        else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-plus"></i> Create Backup Now';
+}
+
+async function deleteBackup(name, rowId) {
+    if (!confirm(`Delete backup ${name}?`)) return;
+    try {
+        const resp = await fetch(`/admin/backups/${encodeURIComponent(name)}/delete`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) {
+            document.getElementById(rowId).remove();
+            showAlert(data.message, 'success');
+        } else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "admin/layout.html" %}
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Database Export</h1>
+        <p class="admin-page-subtitle">Export database tables in CSV, JSON, or TXT format</p>
+    </div>
+</div>
+
+<div class="a-grid-3">
+    {% set tables = [
+        ('users', 'Users', 'fas fa-users', 'All user accounts'),
+        ('teams', 'Teams', 'fas fa-shield-alt', 'All teams across users'),
+        ('players', 'Players', 'fas fa-running', 'All player records'),
+        ('matches', 'Matches', 'fas fa-cricket-bat-ball', 'All match records'),
+        ('tournaments', 'Tournaments', 'fas fa-trophy', 'All tournaments')
+    ] %}
+
+    {% for key, name, icon, desc in tables %}
+    <div class="a-card">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+            <div style="width: 40px; height: 40px; background: var(--accent-light); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                <i class="{{ icon }}" style="color: var(--accent);"></i>
+            </div>
+            <div>
+                <div style="font-weight: 700; color: var(--fg);">{{ name }}</div>
+                <div style="font-size: 0.78rem; color: var(--fg-secondary);">{{ desc }}</div>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="{{ url_for('admin_export_data', table=key, fmt='csv') }}" class="a-btn a-btn-secondary a-btn-sm">
+                <i class="fas fa-file-csv"></i> CSV
+            </a>
+            <a href="{{ url_for('admin_export_data', table=key, fmt='json') }}" class="a-btn a-btn-secondary a-btn-sm">
+                <i class="fas fa-file-code"></i> JSON
+            </a>
+            <a href="{{ url_for('admin_export_data', table=key, fmt='txt') }}" class="a-btn a-btn-secondary a-btn-sm">
+                <i class="fas fa-file-alt"></i> TXT
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

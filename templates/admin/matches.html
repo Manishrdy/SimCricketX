@@ -1,0 +1,172 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Matches & Tournaments</h1>
+        <p class="admin-page-subtitle">View and manage game instances</p>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+<!-- Active In-Memory Matches -->
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-play-circle"></i> Active Match Instances ({{ active_matches|length }})</h3>
+    {% if active_matches %}
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead>
+                <tr>
+                    <th>Match ID</th>
+                    <th>Teams</th>
+                    <th>User</th>
+                    <th style="text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in active_matches %}
+                <tr id="match-{{ loop.index }}">
+                    <td style="font-family: monospace; font-size: 0.78rem;">{{ m.id[:12] }}...</td>
+                    <td><strong>{{ m.teams }}</strong></td>
+                    <td style="color: var(--fg-secondary); font-size: 0.85rem;">{{ m.user }}</td>
+                    <td style="text-align: right;">
+                        <button onclick="terminateMatch('{{ m.id }}', 'match-{{ loop.index }}')" class="a-btn a-btn-danger a-btn-sm">
+                            <i class="fas fa-stop"></i> Terminate
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="a-card-flat">
+        <div class="a-empty"><i class="fas fa-gamepad"></i><p>No active match instances in memory</p></div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Active Tournaments -->
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-trophy"></i> Active Tournaments ({{ active_tournaments|length }})</h3>
+    {% if active_tournaments %}
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Mode</th>
+                    <th>Stage</th>
+                    <th>Owner</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in active_tournaments %}
+                <tr>
+                    <td><strong>{{ t.name }}</strong></td>
+                    <td><span class="a-badge a-badge-info">{{ t.mode }}</span></td>
+                    <td><span class="a-badge a-badge-warning">{{ t.current_stage }}</span></td>
+                    <td style="color: var(--fg-secondary); font-size: 0.85rem;">{{ t.user_id }}</td>
+                    <td style="color: var(--fg-secondary); font-size: 0.82rem;">
+                        {% if t.created_at %}{{ t.created_at.strftime('%Y-%m-%d') }}{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="a-card-flat">
+        <div class="a-empty"><i class="fas fa-trophy"></i><p>No active tournaments</p></div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Recent Completed Matches -->
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-history"></i> Recent Matches (Last 25)</h3>
+    {% if recent_matches %}
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Match</th>
+                    <th>Result</th>
+                    <th>User</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in recent_matches %}
+                <tr>
+                    <td style="color: var(--fg-secondary); font-size: 0.82rem;">
+                        {% if m.date %}{{ m.date.strftime('%Y-%m-%d') }}{% endif %}
+                    </td>
+                    <td>
+                        <strong>
+                            {% if m.home_team %}{{ m.home_team.name }}{% else %}Team{% endif %}
+                            vs
+                            {% if m.away_team %}{{ m.away_team.name }}{% else %}Team{% endif %}
+                        </strong>
+                    </td>
+                    <td style="font-size: 0.82rem; color: var(--fg-secondary);">{{ m.result_description or '-' }}</td>
+                    <td style="color: var(--fg-secondary); font-size: 0.82rem;">{{ m.user_id }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="a-card-flat">
+        <div class="a-empty"><i class="fas fa-baseball-ball"></i><p>No matches recorded yet</p></div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Completed Tournaments -->
+{% if completed_tournaments %}
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-flag-checkered"></i> Completed Tournaments</h3>
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead><tr><th>Name</th><th>Mode</th><th>Owner</th><th>Completed</th></tr></thead>
+            <tbody>
+                {% for t in completed_tournaments %}
+                <tr>
+                    <td><strong>{{ t.name }}</strong></td>
+                    <td><span class="a-badge a-badge-success">{{ t.mode }}</span></td>
+                    <td style="color: var(--fg-secondary); font-size: 0.85rem;">{{ t.user_id }}</td>
+                    <td style="color: var(--fg-secondary); font-size: 0.82rem;">
+                        {% if t.created_at %}{{ t.created_at.strftime('%Y-%m-%d') }}{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}">${msg}</div>`;
+    c.querySelector('.a-alert').style.display = 'block';
+    setTimeout(() => c.innerHTML = '', 5000);
+}
+
+async function terminateMatch(matchId, rowId) {
+    if (!confirm('Terminate this active match? The match data will be lost.')) return;
+    try {
+        const resp = await fetch(`/admin/matches/${encodeURIComponent(matchId)}/terminate`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) {
+            document.getElementById(rowId).remove();
+            showAlert(data.message, 'success');
+        } else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+</script>
+{% endblock %}
