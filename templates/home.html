@@ -502,6 +502,11 @@
             <span class="stat-number">{{ total_visits }}</span>
             <span class="stat-label">Fans</span>
         </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+            <span class="stat-number" style="{% if active_users > 0 %}color: #22c55e; -webkit-text-fill-color: #22c55e;{% endif %}">{{ active_users }}</span>
+            <span class="stat-label">Online Now</span>
+        </div>
     </div>
 </section>
 
