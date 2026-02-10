@@ -451,3 +451,11 @@ class ActiveSession(db.Model):
     last_active = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     user = relationship('User', backref=db.backref('sessions', cascade='all, delete-orphan'))
+
+
+class SiteCounter(db.Model):
+    """Key-value store for site-wide counters (visits, matches simulated, etc.)"""
+    __tablename__ = 'site_counters'
+
+    key = db.Column(db.String(50), primary_key=True)
+    value = db.Column(db.Integer, default=0, nullable=False)
