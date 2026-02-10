@@ -143,54 +143,48 @@ PROD_MAX_AGE = 7 * 24 * 3600
 
 # Make sure PROJECT_ROOT is defined near the top of app.py:
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
-VISIT_FILE = os.path.join(PROJECT_ROOT, "data", "visit_counter.txt")
-MATCHES_FILE = os.path.join(PROJECT_ROOT, "data", "matches_simulated.txt")
-
-# D2: Locks for file-based counters to prevent read-then-write races
-_matches_counter_lock = threading.Lock()
-_visit_counter_lock = threading.Lock()
 
 def get_matches_simulated():
-    with _matches_counter_lock:
-        try:
-            with open(MATCHES_FILE, "r") as f:
-                return int(f.read().strip())
-        except Exception:
-            return 0
+    from database.models import SiteCounter
+    try:
+        row = db.session.get(SiteCounter, 'matches_simulated')
+        return row.value if row else 0
+    except Exception:
+        return 0
 
 def increment_matches_simulated():
-    with _matches_counter_lock:
-        try:
-            with open(MATCHES_FILE, "r") as f:
-                current = int(f.read().strip())
-        except Exception:
-            current = 0
-        try:
-            with open(MATCHES_FILE, "w") as f:
-                f.write(str(current + 1))
-        except Exception as e:
-            print(f"[ERROR] Failed to write matches_simulated: {e}")
+    from database.models import SiteCounter
+    try:
+        row = db.session.get(SiteCounter, 'matches_simulated')
+        if row:
+            row.value += 1
+        else:
+            db.session.add(SiteCounter(key='matches_simulated', value=1))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Failed to increment matches_simulated: {e}")
 
 def get_visit_counter():
-    with _visit_counter_lock:
-        try:
-            with open(VISIT_FILE, "r") as f:
-                return int(f.read().strip())
-        except Exception:
-            return 0
+    from database.models import SiteCounter
+    try:
+        row = db.session.get(SiteCounter, 'total_visits')
+        return row.value if row else 0
+    except Exception:
+        return 0
 
 def increment_visit_counter():
-    with _visit_counter_lock:
-        try:
-            with open(VISIT_FILE, "r") as f:
-                count = int(f.read().strip())
-        except Exception:
-            count = 0
-        try:
-            with open(VISIT_FILE, "w") as f:
-                f.write(str(count + 1))
-        except Exception as e:
-            print(f"[ERROR] Could not write visit count: {e}")
+    from database.models import SiteCounter
+    try:
+        row = db.session.get(SiteCounter, 'total_visits')
+        if row:
+            row.value += 1
+        else:
+            db.session.add(SiteCounter(key='total_visits', value=1))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Could not increment visit count: {e}")
 
 
 def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
