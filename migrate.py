@@ -1,5 +1,5 @@
 """
-SimCricketX — Pre-deploy migration script.
+SimCricketX - Pre-deploy migration script.
 
 Run this ONCE before starting the Flask server after pulling new code:
     python migrate.py
@@ -7,7 +7,7 @@ Run this ONCE before starting the Flask server after pulling new code:
 What it does:
   1. Backs up the current database (timestamped copy)
   2. Runs schema migration (adds missing columns/tables, never drops anything)
-  3. Checks that an admin user exists — prompts to set one if not
+  3. Checks that an admin user exists - prompts to set one if not
 """
 
 import os
