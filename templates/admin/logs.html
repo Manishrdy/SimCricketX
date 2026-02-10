@@ -6,6 +6,7 @@
         <p class="admin-page-subtitle">Showing last {{ lines|length }} lines (most recent first)</p>
     </div>
     <div class="admin-page-actions">
+        <a href="{{ url_for('admin_download_logs') }}" class="a-btn a-btn-primary"><i class="fas fa-download"></i> Download Full Log</a>
         <button onclick="location.reload()" class="a-btn a-btn-secondary"><i class="fas fa-sync-alt"></i> Refresh</button>
     </div>
 </div>

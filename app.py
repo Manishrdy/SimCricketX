@@ -25,7 +25,7 @@ import yaml
 import uuid
 import threading  # Bug Fix B2: Add thread safety for MATCH_INSTANCES
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
@@ -867,8 +867,9 @@ def create_app():
 
             teams = db.session.query(DBTeam).filter_by(user_id=user_email).all()
             matches = db.session.query(DBMatch).filter_by(user_id=user_email).all()
+            sessions = db.session.query(ActiveSession).filter_by(user_id=user_email).order_by(ActiveSession.login_at.desc()).all()
 
-            return render_template('admin/user_detail.html', user=user, teams=teams, matches=matches)
+            return render_template('admin/user_detail.html', user=user, teams=teams, matches=matches, sessions=sessions)
         except Exception as e:
             app.logger.error(f"[Admin] User detail error: {e}", exc_info=True)
             return "Error loading user", 500
@@ -1594,6 +1595,16 @@ def create_app():
         lines.reverse()
         return render_template('admin/logs.html', lines=lines, total_lines=len(lines))
 
+    @app.route('/admin/logs/download')
+    @login_required
+    @admin_required
+    def admin_download_logs():
+        """Download the full execution.log file."""
+        log_path = os.path.join(PROJECT_ROOT, "logs", "execution.log")
+        if not os.path.exists(log_path):
+            return jsonify({"error": "Log file not found"}), 404
+        return send_file(log_path, as_attachment=True, download_name='execution.log', mimetype='text/plain')
+
     # --- Rate Limit Config ---
     @app.route('/admin/rate-limits')
     @login_required
@@ -1687,6 +1698,15 @@ def create_app():
             'players': DBPlayer,
             'matches': DBMatch,
             'tournaments': Tournament,
+            'match_scorecards': MatchScorecard,
+            'tournament_teams': TournamentTeam,
+            'tournament_fixtures': TournamentFixture,
+            'tournament_player_stats': TournamentPlayerStatsCache,
+            'match_partnerships': MatchPartnership,
+            'audit_log': AdminAuditLog,
+            'failed_logins': FailedLoginAttempt,
+            'blocked_ips': BlockedIP,
+            'active_sessions': ActiveSession,
         }
         if table not in table_map:
             return jsonify({"error": f"Unknown table: {table}"}), 400
@@ -1727,6 +1747,56 @@ def create_app():
             return Response(content,
                             mimetype='text/plain',
                             headers={'Content-Disposition': f'attachment; filename={table}_export.txt'})
+
+    @app.route('/admin/export/all/<fmt>')
+    @login_required
+    @admin_required
+    def admin_export_all(fmt):
+        """Export all tables in a single ZIP file."""
+        if fmt not in ('csv', 'json', 'txt'):
+            return jsonify({"error": "Invalid format"}), 400
+        import io, csv, zipfile
+        all_tables = {
+            'users': DBUser, 'teams': DBTeam, 'players': DBPlayer,
+            'matches': DBMatch, 'tournaments': Tournament,
+            'match_scorecards': MatchScorecard, 'tournament_teams': TournamentTeam,
+            'tournament_fixtures': TournamentFixture, 'tournament_player_stats': TournamentPlayerStatsCache,
+            'match_partnerships': MatchPartnership, 'audit_log': AdminAuditLog,
+            'failed_logins': FailedLoginAttempt, 'blocked_ips': BlockedIP, 'active_sessions': ActiveSession,
+        }
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for tbl_name, model in all_tables.items():
+                columns = [c.name for c in model.__table__.columns]
+                rows = model.query.all()
+                data = []
+                for row in rows:
+                    d = {}
+                    for col in columns:
+                        val = getattr(row, col, None)
+                        if isinstance(val, datetime):
+                            val = val.isoformat()
+                        d[col] = val
+                    data.append(d)
+                if fmt == 'json':
+                    content = json.dumps(data, indent=2, default=str)
+                    zf.writestr(f'{tbl_name}.json', content)
+                elif fmt == 'csv':
+                    output = io.StringIO()
+                    writer = csv.DictWriter(output, fieldnames=columns)
+                    writer.writeheader()
+                    writer.writerows(data)
+                    zf.writestr(f'{tbl_name}.csv', output.getvalue())
+                else:
+                    header = ' | '.join(columns)
+                    sep = '-' * len(header)
+                    lines = [' | '.join(str(d.get(c, '')) for c in columns) for d in data]
+                    zf.writestr(f'{tbl_name}.txt', header + '\n' + sep + '\n' + '\n'.join(lines))
+        zip_buffer.seek(0)
+        log_admin_action(current_user.id, 'export_all', fmt, f'All tables exported as {fmt}', request.remote_addr)
+        return Response(zip_buffer.getvalue(),
+                        mimetype='application/zip',
+                        headers={'Content-Disposition': f'attachment; filename=simcricketx_export_{fmt}.zip'})
 
     # --- Scheduled Tasks Dashboard ---
     @app.route('/admin/scheduled-tasks')
@@ -2328,7 +2398,11 @@ def create_app():
             increment_visit_counter()
             session["visit_counted"] = True
             
-        return render_template("home.html", user=current_user, total_visits=get_visit_counter(), matches_simulated=get_matches_simulated())
+        # Count currently active users (active session in last 15 minutes)
+        active_threshold = datetime.now(timezone.utc) - timedelta(minutes=15)
+        active_users_count = db.session.query(ActiveSession).filter(ActiveSession.last_active >= active_threshold).distinct(ActiveSession.user_id).count()
+
+        return render_template("home.html", user=current_user, total_visits=get_visit_counter(), matches_simulated=get_matches_simulated(), active_users=active_users_count)
 
     @app.route("/register", methods=["GET", "POST"])
     @limiter.limit("5 per minute", methods=["POST"])

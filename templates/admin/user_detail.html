@@ -57,6 +57,57 @@
     </div>
 </div>
 
+<!-- Login IP History -->
+{% if sessions %}
+<div class="a-card-flat" style="margin-bottom: 1.5rem;">
+    <h3 class="a-section-title"><i class="fas fa-network-wired"></i> Login IP History ({{ sessions|length }} session{{ 's' if sessions|length != 1 }})</h3>
+    <div class="a-table-wrap" style="overflow-x: auto;">
+        <table class="a-table" style="min-width: 600px;">
+            <thead>
+                <tr>
+                    <th style="width: 140px;">IP Address</th>
+                    <th style="width: 155px;">Login Time</th>
+                    <th style="width: 155px;">Last Active</th>
+                    <th>User Agent</th>
+                    <th style="width: 80px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr>
+                    <td style="font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem;">{{ s.ip_address or '-' }}</td>
+                    <td style="font-size: 0.78rem; color: var(--fg-secondary); white-space: nowrap;">
+                        {% if s.login_at %}{{ s.login_at.strftime('%Y-%m-%d %H:%M:%S') }}{% endif %}
+                    </td>
+                    <td style="font-size: 0.78rem; color: var(--fg-secondary); white-space: nowrap;">
+                        {% if s.last_active %}{{ s.last_active.strftime('%Y-%m-%d %H:%M:%S') }}{% endif %}
+                    </td>
+                    <td style="font-size: 0.75rem; color: var(--fg-secondary); word-break: break-word;" title="{{ s.user_agent or '' }}">
+                        {{ s.user_agent[:80] if s.user_agent else '-' }}{{ '...' if s.user_agent and s.user_agent|length > 80 }}
+                    </td>
+                    <td>
+                        {% if s.ip_address %}
+                        <button onclick="blockIPFromHistory('{{ s.ip_address }}')" class="a-btn a-btn-danger a-btn-sm" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Block this IP">
+                            <i class="fas fa-ban"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="a-card-flat" style="margin-bottom: 1.5rem;">
+    <h3 class="a-section-title"><i class="fas fa-network-wired"></i> Login IP History</h3>
+    <div class="a-empty" style="padding: 1.5rem;">
+        <i class="fas fa-desktop"></i>
+        <p>No session records found for this user.</p>
+    </div>
+</div>
+{% endif %}
+
 {% if not user.is_admin %}
 
 <!-- Ban Status -->
@@ -238,6 +289,19 @@ async function forceReset() {
         const data = await resp.json();
         if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
         else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+
+async function blockIPFromHistory(ip) {
+    if (!confirm(`Block IP ${ip}? This will prevent all logins from this address.`)) return;
+    const fd = new FormData();
+    fd.append('ip_address', ip);
+    fd.append('reason', `Blocked from user detail: ${userEmail}`);
+    try {
+        const resp = await fetch('/admin/ip-blocklist/add', { method: 'POST', body: fd });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(`IP ${ip} blocked`, 'success'); }
+        else showAlert(data.error || 'Failed to block IP', 'error');
     } catch { showAlert('Network error', 'error'); }
 }
 </script>
