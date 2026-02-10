@@ -9,16 +9,16 @@
 </div>
 
 {% if entries %}
-<div class="a-table-wrap">
-    <table class="a-table">
+<div class="a-table-wrap" style="overflow-x: auto;">
+    <table class="a-table" style="min-width: 800px;">
         <thead>
             <tr>
-                <th>Timestamp</th>
-                <th>Admin</th>
-                <th>Action</th>
-                <th>Target</th>
+                <th style="width: 145px;">Timestamp</th>
+                <th style="width: 160px;">Admin</th>
+                <th style="width: 130px;">Action</th>
+                <th style="width: 150px;">Target</th>
                 <th>Details</th>
-                <th>IP</th>
+                <th style="width: 110px;">IP</th>
             </tr>
         </thead>
         <tbody>
@@ -27,23 +27,23 @@
                 <td style="font-size: 0.78rem; color: var(--fg-secondary); white-space: nowrap;">
                     {% if e.timestamp %}{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% endif %}
                 </td>
-                <td><strong style="font-size: 0.85rem;">{{ e.admin_email }}</strong></td>
+                <td style="word-break: break-all;"><strong style="font-size: 0.85rem;">{{ e.admin_email }}</strong></td>
                 <td>
-                    {% if 'delete' in e.action %}
+                    {% if 'delete' in e.action or 'ban' in e.action %}
                     <span class="a-badge a-badge-danger">{{ e.action }}</span>
                     {% elif 'impersonate' in e.action %}
                     <span class="a-badge a-badge-warning">{{ e.action }}</span>
-                    {% elif 'backup' in e.action %}
+                    {% elif 'backup' in e.action or 'export' in e.action %}
                     <span class="a-badge a-badge-success">{{ e.action }}</span>
                     {% else %}
                     <span class="a-badge a-badge-info">{{ e.action }}</span>
                     {% endif %}
                 </td>
-                <td style="font-size: 0.85rem; color: var(--fg-secondary);">{{ e.target or '-' }}</td>
-                <td style="font-size: 0.78rem; color: var(--fg-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="{{ e.details or '' }}">
+                <td style="font-size: 0.85rem; color: var(--fg-secondary); word-break: break-all;">{{ e.target or '-' }}</td>
+                <td style="font-size: 0.78rem; color: var(--fg-secondary); word-break: break-word;" title="{{ e.details or '' }}">
                     {{ e.details or '-' }}
                 </td>
-                <td style="font-size: 0.78rem; font-family: monospace; color: var(--fg-secondary);">{{ e.ip_address or '-' }}</td>
+                <td style="font-size: 0.78rem; font-family: 'IBM Plex Mono', monospace; color: var(--fg-secondary); white-space: nowrap;">{{ e.ip_address or '-' }}</td>
             </tr>
             {% endfor %}
         </tbody>
