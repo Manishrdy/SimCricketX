@@ -75,6 +75,44 @@ def run_schema_migration(app, db):
             print("  [OK] No new columns needed.")
 
 
+def migrate_counters(app, db):
+    """Migrate visit_counter.txt and matches_simulated.txt into site_counters DB table."""
+    from database.models import SiteCounter
+
+    data_dir = os.path.join(BASE_DIR, "data")
+    files = {
+        'total_visits': os.path.join(data_dir, 'visit_counter.txt'),
+        'matches_simulated': os.path.join(data_dir, 'matches_simulated.txt'),
+    }
+
+    with app.app_context():
+        migrated = False
+        for key, filepath in files.items():
+            # Skip if already in DB
+            existing = db.session.get(SiteCounter, key)
+            if existing:
+                print(f"  [OK] {key} already in DB (value: {existing.value})")
+                continue
+
+            # Read from text file
+            value = 0
+            if os.path.exists(filepath):
+                try:
+                    with open(filepath, 'r') as f:
+                        value = int(f.read().strip())
+                except Exception:
+                    value = 0
+
+            db.session.add(SiteCounter(key=key, value=value))
+            migrated = True
+            print(f"  [MIGRATED] {key}: {value} (from {os.path.basename(filepath)})")
+
+        if migrated:
+            db.session.commit()
+        else:
+            print("  [OK] No counter migration needed.")
+
+
 def check_admin(app, db):
     """Ensure at least one admin user exists."""
     from database.models import User
@@ -156,11 +194,11 @@ def main():
     print("=" * 56)
 
     # Step 1: Backup
-    print("\n[1/3] Backing up database...")
+    print("\n[1/4] Backing up database...")
     had_db = backup_database()
 
     # Step 2: Schema migration
-    print("\n[2/3] Running schema migration...")
+    print("\n[2/4] Running schema migration...")
     # Import app factory here so we don't fail on import errors before backup
     from app import create_app
     from database import db
@@ -173,8 +211,12 @@ def main():
             db.create_all()
         print("  [OK] Fresh database created with all tables.")
 
-    # Step 3: Admin check
-    print("\n[3/3] Checking admin user...")
+    # Step 3: Migrate counters from text files to DB
+    print("\n[3/4] Migrating counters to database...")
+    migrate_counters(app, db)
+
+    # Step 4: Admin check
+    print("\n[4/4] Checking admin user...")
     check_admin(app, db)
 
     print("\n" + "=" * 56)

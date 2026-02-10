@@ -59,10 +59,10 @@ def ensure_schema(engine, db_obj=None):
                 for stmt in alters:
                     conn.execute(text(stmt))
 
-    # New tables for admin features
-    missing_new = [t for t in ("failed_login_attempts", "blocked_ips", "active_sessions") if t not in tables]
+    # New tables for admin features and site counters
+    missing_new = [t for t in ("failed_login_attempts", "blocked_ips", "active_sessions", "site_counters") if t not in tables]
     if missing_new and db_obj is not None:
-        from database.models import FailedLoginAttempt, BlockedIP, ActiveSession  # noqa: F401
+        from database.models import FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter  # noqa: F401
         db_obj.create_all()
 
 
