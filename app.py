@@ -2391,10 +2391,10 @@ def create_app():
         if not session.get("visit_counted"):
             increment_visit_counter()
             session["visit_counted"] = True
-            
+
         # Count currently active users (active session in last 15 minutes)
         active_threshold = datetime.now(timezone.utc) - timedelta(minutes=15)
-        active_users_count = db.session.query(ActiveSession).filter(ActiveSession.last_active >= active_threshold).distinct(ActiveSession.user_id).count()
+        active_users_count = db.session.query(func.count(func.distinct(ActiveSession.user_id))).filter(ActiveSession.last_active >= active_threshold).scalar() or 0
 
         return render_template("home.html", user=current_user, total_visits=get_visit_counter(), matches_simulated=get_matches_simulated(), active_users=active_users_count)
 
@@ -2460,11 +2460,18 @@ def create_app():
             if request.method == "GET":
                 return render_template("register.html")
             
+            display_name = request.form.get("display_name", "").strip()
             email = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
             
             if not email or "@" not in email or "." not in email:
                 return render_template("register.html", error="Invalid email")
+
+            if not display_name:
+                return render_template("register.html", error="Display name is required")
+
+            if len(display_name) > 50:
+                return render_template("register.html", error="Display name must be 50 characters or fewer")
             
             if not password:
                 return render_template("register.html", error="Password required")
@@ -2481,7 +2488,7 @@ def create_app():
             if not re.search(r'[0-9]', password):
                 return render_template("register.html", error="Password must contain at least one digit")
 
-            if register_user(email, password):
+            if register_user(email, password, display_name=display_name):
                 return redirect(url_for("login"))
             else:
                 return render_template("register.html", error="Registration failed. Please try a different email.")

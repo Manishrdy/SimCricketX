@@ -382,8 +382,51 @@ class Match:
         total = scorecard.get("total_score", 0)
         wkts = scorecard.get("wickets", 0)
         overs = scorecard.get("overs", "0.0")
+
+        def dismissal_text(player):
+            wicket_type = (player.get("wicket_type") or "").strip()
+            bowler_out = (player.get("bowler_out") or "").strip()
+            fielder_out = (player.get("fielder_out") or "").strip()
+            status = (player.get("status") or "").strip()
+            runs = player.get("runs", "")
+            balls = player.get("balls", "")
+
+            # Player has not batted.
+            if runs == "" and balls == "":
+                return "DNB"
+
+            # Not out batter at innings end.
+            if not wicket_type:
+                if status.lower() == "not out":
+                    return "not out*"
+                return status if status else "not out*"
+
+            if wicket_type == "Caught":
+                if fielder_out and bowler_out:
+                    return f"c {fielder_out} b {bowler_out}"
+                if bowler_out:
+                    return f"c ? b {bowler_out}"
+                return "c ? b ?"
+            if wicket_type == "Bowled":
+                return f"b {bowler_out}" if bowler_out else "b ?"
+            if wicket_type == "LBW":
+                return f"lbw b {bowler_out}" if bowler_out else "lbw b ?"
+            if wicket_type == "Run Out":
+                return f"run out ({fielder_out})" if fielder_out else "run out"
+            if wicket_type == "Stumped":
+                if fielder_out and bowler_out:
+                    return f"st {fielder_out} b {bowler_out}"
+                if bowler_out:
+                    return f"st ? b {bowler_out}"
+                return "st ? b ?"
+            if wicket_type == "Hit Wicket":
+                return f"hit wicket b {bowler_out}" if bowler_out else "hit wicket"
+
+            # Fallback for any uncommon dismissal status.
+            return status if status else wicket_type
+
         batting_rows = "".join(
-            f"<tr><td>{p.get('name','')}</td><td>{p.get('runs',0)}</td><td>{p.get('balls',0)}</td><td>{p.get('fours',0)}</td><td>{p.get('sixes',0)}</td></tr>"
+            f"<tr><td>{p.get('name','')}</td><td>{dismissal_text(p)}</td><td>{p.get('runs',0)}</td><td>{p.get('balls',0)}</td><td>{p.get('fours',0)}</td><td>{p.get('sixes',0)}</td></tr>"
             for p in scorecard.get("players", [])
         )
         bowling_rows = "".join(
@@ -396,6 +439,7 @@ class Match:
             f"<div style='margin-top:6px;font-weight:600;'>Batting</div>"
             f"<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>"
             f"<thead><tr><th style='text-align:left;border-bottom:1px solid #444;'>Batter</th>"
+            f"<th style='text-align:left;border-bottom:1px solid #444;'>Dismissal</th>"
             f"<th style='text-align:right;border-bottom:1px solid #444;'>R</th>"
             f"<th style='text-align:right;border-bottom:1px solid #444;'>B</th>"
             f"<th style='text-align:right;border-bottom:1px solid #444;'>4s</th>"
@@ -3800,6 +3844,7 @@ class Match:
                     players.append({
                         "name": player_name,
                         "status": status,
+                        "wicket_type": stats.get("wicket_type", ""),
                         "runs": stats["runs"],
                         "balls": stats["balls"],
                         "fours": stats["fours"],
@@ -3813,6 +3858,7 @@ class Match:
                     players.append({
                         "name": player_name,
                         "status": "",
+                        "wicket_type": "",
                         "runs": "",
                         "balls": "",
                         "fours": "",
@@ -3826,6 +3872,7 @@ class Match:
                 players.append({
                     "name": player_name,
                     "status": "",
+                    "wicket_type": "",
                     "runs": "",
                     "balls": "",
                     "fours": "",
