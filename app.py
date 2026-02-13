@@ -10,9 +10,21 @@ import os
 if sys.platform == "win32":
     # Ensure stdout and stderr use UTF-8
     if hasattr(sys.stdout, 'buffer'):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stdout = io.TextIOWrapper(
+            sys.stdout.buffer,
+            encoding='utf-8',
+            errors='replace',
+            line_buffering=True,
+            write_through=True
+        )
     if hasattr(sys.stderr, 'buffer'):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(
+            sys.stderr.buffer,
+            encoding='utf-8',
+            errors='replace',
+            line_buffering=True,
+            write_through=True
+        )
     
     # Set environment variables for UTF-8
     os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -359,6 +371,21 @@ def create_app():
             return endpoint_name in app.view_functions
         return {"has_endpoint": has_endpoint, "maintenance_mode": MAINTENANCE_MODE}
 
+    @app.context_processor
+    def inject_user_stats():
+        """Inject user statistics for profile dropdown"""
+        if current_user.is_authenticated:
+            try:
+                user_stats = {
+                    'teams_count': db.session.query(DBTeam).filter_by(user_id=current_user.id).count(),
+                    'matches_count': db.session.query(DBMatch).filter_by(user_id=current_user.id).count(),
+                    'tournaments_count': db.session.query(Tournament).filter_by(user_id=current_user.id).count()
+                }
+                return {'user_stats': user_stats}
+            except Exception:
+                return {'user_stats': {'teams_count': 0, 'matches_count': 0, 'tournaments_count': 0}}
+        return {}
+
     @app.before_request
     def check_maintenance_mode():
         """Block non-admin users when maintenance mode is active."""
@@ -402,6 +429,53 @@ def create_app():
             session['force_password_reset'] = True
             return redirect(url_for('force_change_password'))
         return None
+
+
+    @app.before_request
+    def check_display_name():
+        """Redirect users who don't have a display name set."""
+        try:
+            if not current_user.is_authenticated:
+                return None
+
+            if request.path.startswith('/static'):
+                return None
+            if request.path == '/favicon.ico':
+                return None
+
+            # Allow auth and setup routes to avoid redirect loops.
+            if request.endpoint in (
+                'set_display_name',
+                'logout',
+                'login',
+                'register',
+                'static',
+                'force_change_password',
+            ):
+                return None
+
+            # Re-fetch from DB to avoid stale/detached user objects in request context.
+            user_row = db.session.get(DBUser, current_user.id)
+            raw_display_name = (user_row.display_name if user_row else None)
+            normalized = (raw_display_name or "").strip()
+
+            # Treat textual null sentinels as missing as well.
+            missing_display_name = (not normalized) or (normalized.lower() in {"none", "null"})
+            if missing_display_name:
+                app.logger.info(
+                    f"[DisplayName Check] Redirecting {current_user.id} to set display name"
+                )
+                return redirect(url_for('set_display_name'))
+
+            return None
+        except Exception as e:
+            app.logger.error(f"[DisplayName Check] Guard error: {e}", exc_info=True)
+            # Fail closed for authenticated users if guard errors unexpectedly.
+            if current_user.is_authenticated and request.endpoint != 'set_display_name':
+                return redirect(url_for('set_display_name'))
+            return None
+
+
 
     @app.before_request
     def update_session_activity():
@@ -519,8 +593,10 @@ def create_app():
     )
     file_handler.setLevel(logging.DEBUG)
 
-    # Console handler for terminal visibility using stderr
-    console_handler = logging.StreamHandler(sys.stderr)
+    # Console handler for terminal visibility.
+    # Use stdout because some launchers/IDEs suppress stderr by default.
+    console_stream = sys.stdout if getattr(sys, "stdout", None) else sys.stderr
+    console_handler = logging.StreamHandler(console_stream)
     console_handler.setLevel(logging.DEBUG)
 
     # Formatter for both
@@ -528,15 +604,29 @@ def create_app():
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
 
-    # Setup logging globally
-    logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
+    # Setup root logger explicitly for deterministic behavior.
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.handlers.clear()
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
 
-    # Attach logger to app with its own handlers
-    app.logger = logging.getLogger("SimCricketX")
-    app.logger.setLevel(logging.DEBUG)  # You can change to INFO for production
-    app.logger.addHandler(file_handler)
-    app.logger.addHandler(console_handler)
-    app.logger.propagate = False  # Prevent duplicate logs via root logger
+    # App logger
+    app_logger = logging.getLogger("SimCricketX")
+    app_logger.setLevel(logging.DEBUG)  # You can change to INFO for production
+    app_logger.handlers.clear()
+    app_logger.addHandler(file_handler)
+    app_logger.addHandler(console_handler)
+    app_logger.propagate = False
+    app.logger = app_logger
+
+    # Werkzeug request logger
+    werkzeug_logger = logging.getLogger("werkzeug")
+    werkzeug_logger.setLevel(logging.INFO)
+    werkzeug_logger.handlers.clear()
+    werkzeug_logger.addHandler(file_handler)
+    werkzeug_logger.addHandler(console_handler)
+    werkzeug_logger.propagate = False
 
     # --- Flask-Login setup ---
     login_manager = LoginManager(app)
@@ -2599,6 +2689,36 @@ def create_app():
             db.session.rollback()
             app.logger.error(f"[Auth] Force password change error: {e}")
             return render_template("force_change_password.html", error="Failed to change password")
+
+    @app.route("/set-display-name", methods=["GET", "POST"])
+    @login_required
+    def set_display_name():
+        """Force display name entry for users who don't have one."""
+        if request.method == "GET":
+            return render_template("set_display_name.html")
+        
+        display_name = request.form.get("display_name", "").strip()
+        
+        # Validation
+        if not display_name:
+            return render_template("set_display_name.html", error="Display name is required")
+        
+        if len(display_name) < 2:
+            return render_template("set_display_name.html", error="Display name must be at least 2 characters")
+        
+        if len(display_name) > 50:
+            return render_template("set_display_name.html", error="Display name must be less than 50 characters")
+        
+        try:
+            current_user.display_name = display_name
+            db.session.commit()
+            app.logger.info(f"[Auth] Display name set for {current_user.id}: {display_name}")
+            flash("Display name set successfully!", "success")
+            return redirect(url_for("home"))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Auth] Set display name error: {e}")
+            return render_template("set_display_name.html", error="Failed to set display name")
 
     @app.route("/delete_account", methods=["POST"])
     @login_required

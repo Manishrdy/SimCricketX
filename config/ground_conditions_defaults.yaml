@@ -141,13 +141,13 @@ game_modes:
     icon: "fa-bolt"
     modifiers:
       dot_mult: 0.85
-      single_mult: 0.90
-      double_mult: 1.0
-      three_mult: 1.0
-      four_mult: 1.30
-      six_mult: 1.40
+      single_mult: 0.81
+      double_mult: 0.90
+      three_mult: 0.90
+      four_mult: 1.17
+      six_mult: 1.26
       wicket_mult: 1.25
-      extras_mult: 1.10
+      extras_mult: 0.99
 
   defensive:
     label: "Defensive"
@@ -169,13 +169,13 @@ game_modes:
     icon: "fa-fire"
     modifiers:
       dot_mult: 0.80
-      single_mult: 0.95
-      double_mult: 1.10
-      three_mult: 1.0
-      four_mult: 1.35
-      six_mult: 1.50
+      single_mult: 0.86
+      double_mult: 0.99
+      three_mult: 0.90
+      four_mult: 1.22
+      six_mult: 1.35
       wicket_mult: 0.60
-      extras_mult: 0.90
+      extras_mult: 0.81
 
   bowlers_day:
     label: "Bowler's Day"
