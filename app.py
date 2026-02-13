@@ -2398,6 +2398,58 @@ def create_app():
 
         return render_template("home.html", user=current_user, total_visits=get_visit_counter(), matches_simulated=get_matches_simulated(), active_users=active_users_count)
 
+    # ───── Ground Conditions ─────
+
+    @app.route("/ground-conditions")
+    @login_required
+    def ground_conditions():
+        from engine.ground_config import get_config
+        config = get_config() or {}
+        return render_template("ground_conditions.html", config=config)
+
+    @app.route("/ground-conditions/save", methods=["POST"])
+    @login_required
+    def ground_conditions_save():
+        from engine.ground_config import save_config
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        ok, err = save_config(data)
+        if ok:
+            return jsonify({"message": "Ground conditions saved successfully"}), 200
+        return jsonify({"error": err}), 400
+
+    @app.route("/ground-conditions/mode", methods=["POST"])
+    @login_required
+    def ground_conditions_set_mode():
+        import yaml as _yaml
+        from engine.ground_config import reload as reload_gc
+        mode = request.json.get("mode", "natural_game")
+        gc_path = os.path.join(basedir, "config", "ground_conditions.yaml")
+        try:
+            with open(gc_path, "r", encoding="utf-8") as f:
+                cfg = _yaml.safe_load(f) or {}
+            cfg["active_game_mode"] = mode
+            with open(gc_path, "w", encoding="utf-8") as f:
+                _yaml.dump(cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            reload_gc()
+            return jsonify({"message": f"Game mode set to {mode}"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/ground-conditions/reset", methods=["POST"])
+    @login_required
+    def ground_conditions_reset():
+        from engine.ground_config import reset_to_defaults
+        ok, err = reset_to_defaults()
+        if ok:
+            return jsonify({"message": "Reset to defaults"}), 200
+        return jsonify({"error": err}), 500
+
+    @app.route("/ground-conditions/guide")
+    def ground_conditions_guide():
+        return render_template("ground_conditions_guide.html")
+
     @app.route("/register", methods=["GET", "POST"])
     @limiter.limit("5 per minute", methods=["POST"])
     def register():
@@ -3159,12 +3211,17 @@ def create_app():
             app.logger.info(f"[MatchSetup] Saved {fname} for {user}")
             return jsonify(match_id=match_id), 200
 
-        return render_template("match_setup.html", 
-                               teams=teams, 
-                               preselect_home=preselect_home, 
-                               preselect_away=preselect_away, 
+        from engine.ground_config import get_active_game_mode
+        active_mode = get_active_game_mode() or {}
+        active_mode_label = active_mode.get("label", "Natural Game")
+
+        return render_template("match_setup.html",
+                               teams=teams,
+                               preselect_home=preselect_home,
+                               preselect_away=preselect_away,
                                tournament_id=tournament_id,
-                               fixture_id=fixture_id)
+                               fixture_id=fixture_id,
+                               active_game_mode_label=active_mode_label)
 
     @app.route("/match/<match_id>")
     @login_required
@@ -3382,7 +3439,7 @@ def create_app():
 
         # Build toss commentary (outside lock — no file/instance access needed)
         full_commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
-                        f"{toss_winner} won the toss and choose to {toss_decision} first."
+                        f"{toss_winner} won the toss and choose to {toss_decision} first.<br>"
 
         return jsonify({
             "toss_commentary": full_commentary,

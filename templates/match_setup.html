@@ -746,6 +746,15 @@
                             <!-- Populated via JS -->
                         </select>
                         <p class="helper-text">Team balance and outcomes adapt to surface profile.</p>
+                        <a href="/ground-conditions" target="_blank"
+                           style="display:inline-flex;align-items:center;gap:0.35rem;margin-top:0.4rem;
+                                  font-size:0.72rem;font-weight:600;color:var(--accent);opacity:0.8;
+                                  text-decoration:none;transition:opacity 0.2s;"
+                           onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+                            <i class="fa-solid fa-gamepad" style="font-size:0.65rem;"></i>
+                            <span id="gameModeLabel">Mode: {{ active_game_mode_label | default('Natural Game') }}</span>
+                            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.55rem;"></i>
+                        </a>
                     </div>
 
                     <div class="form-group">
