@@ -1,0 +1,447 @@
+{% extends "layout.html" %}
+{% block title %}Ground Conditions — SimCricketX{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ground_conditions.css') }}">
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="gc-header">
+    <h1 class="gc-title">Ground Conditions</h1>
+    <p class="gc-subtitle">Configure pitch profiles, game modes, and simulation engine parameters</p>
+</div>
+
+<!-- Game Mode Selector -->
+<section class="gc-modes">
+    <div class="gc-modes-label"><i class="fa-solid fa-gamepad"></i> Game Mode</div>
+    <div class="gc-modes-row" id="gcModesRow">
+        {% for key, mode in (config.get('game_modes') or {}).items() %}
+        <div class="gc-mode-card{% if key == config.get('active_game_mode', 'natural_game') %} active{% endif %}"
+             data-mode="{{ key }}" onclick="setGameMode('{{ key }}')">
+            <div class="gc-mode-glow"></div>
+            <div class="gc-mode-check"><i class="fa-solid fa-check"></i></div>
+            <div class="gc-mode-icon"><i class="fa-solid {{ mode.get('icon', 'fa-circle') }}"></i></div>
+            <div class="gc-mode-name">{{ mode.get('label', key) }}</div>
+            <div class="gc-mode-desc">{{ mode.get('description', '') }}</div>
+            <div class="gc-mode-badge">
+                {% if key == 'natural_game' %}
+                    <span class="gc-badge-tag">All x1.0</span>
+                {% elif key == 'aggressive' %}
+                    <span class="gc-badge-tag gc-badge-up">6s +40%</span>
+                    <span class="gc-badge-tag gc-badge-up">W +25%</span>
+                {% elif key == 'defensive' %}
+                    <span class="gc-badge-tag gc-badge-down">6s -40%</span>
+                    <span class="gc-badge-tag gc-badge-up">Dots +20%</span>
+                {% elif key == 'flat_track_bully' %}
+                    <span class="gc-badge-tag gc-badge-up">6s +50%</span>
+                    <span class="gc-badge-tag gc-badge-down">W -40%</span>
+                {% elif key == 'bowlers_day' %}
+                    <span class="gc-badge-tag gc-badge-up">W +50%</span>
+                    <span class="gc-badge-tag gc-badge-down">6s -50%</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Pitch Profile Cards -->
+<section>
+    <div class="gc-section-header">
+        <i class="fa-solid fa-mountain-sun"></i>
+        <span class="gc-section-title">Pitch Profiles</span>
+    </div>
+    <div class="gc-pitch-grid" id="gcPitchGrid">
+        {% for pitch_name, profile in (config.get('pitch_profiles') or {}).items() %}
+        <div class="gc-pitch-card" data-pitch="{{ pitch_name }}">
+            <div class="gc-pitch-header">
+                <div class="gc-pitch-name">
+                    <span class="gc-pitch-dot"></span>
+                    {{ pitch_name }}
+                </div>
+                <div class="gc-pitch-desc">{{ profile.get('description', '') }}</div>
+            </div>
+            <div class="gc-pitch-body">
+                <!-- Scoring Matrix -->
+                <div class="gc-matrix-group">
+                    <div class="gc-matrix-label">Scoring Matrix</div>
+                    {% for outcome, value in (profile.get('scoring_matrix') or {}).items() %}
+                    <div class="gc-matrix-row">
+                        <span class="gc-matrix-name">{{ outcome }}</span>
+                        <div class="gc-bar-track">
+                            <div class="gc-bar-fill" data-type="{{ outcome }}"
+                                 data-width="{{ (value * 200) | round(1) }}"></div>
+                        </div>
+                        <input type="number" class="gc-matrix-input" step="0.005" min="0" max="1"
+                               value="{{ value }}"
+                               data-pitch="{{ pitch_name }}" data-outcome="{{ outcome }}"
+                               oninput="onMatrixChange(this)">
+                    </div>
+                    {% endfor %}
+                    <div class="gc-matrix-footer">
+                        <span class="gc-total valid" id="total-{{ pitch_name }}">Total: 1.000</span>
+                        <button class="gc-btn-normalize" onclick="normalizePitch('{{ pitch_name }}')">Normalize</button>
+                    </div>
+                </div>
+
+                <!-- Run Factor -->
+                <div class="gc-factors-row">
+                    <div class="gc-factor-group">
+                        <div class="gc-factor-label">Run Factor</div>
+                        <input type="number" class="gc-factor-input" step="0.01" min="0" max="3"
+                               value="{{ profile.get('run_factor', 1.0) }}"
+                               data-pitch="{{ pitch_name }}" data-field="run_factor">
+                    </div>
+                </div>
+
+                <!-- Wicket Factors -->
+                <div class="gc-wicket-factors">
+                    <div class="gc-factor-label">Wicket Factors (by bowling style)</div>
+                    {% for style, wf_val in (profile.get('wicket_factors') or {}).items() %}
+                    <div class="gc-wf-row">
+                        <span class="gc-wf-name">{{ style }}</span>
+                        <input type="number" class="gc-wf-input" step="0.05" min="0" max="3"
+                               value="{{ wf_val }}"
+                               data-pitch="{{ pitch_name }}" data-wf="{{ style }}">
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Phase Boosts (Collapsible) -->
+<section class="gc-phase-section">
+    <button class="gc-phase-toggle" onclick="togglePhase(this)" aria-expanded="false">
+        <span><i class="fa-solid fa-bolt" style="color:var(--accent);margin-right:0.5rem;"></i> Phase Boosts</span>
+        <i class="fa-solid fa-chevron-down chevron"></i>
+    </button>
+    <div class="gc-phase-body" id="gcPhaseBody">
+        {% set pb = config.get('phase_boosts', {}) %}
+        {% set pp = pb.get('powerplay', {}) %}
+        {% set death = pb.get('death_overs', {}) %}
+        {% set inn2 = pb.get('second_innings_death', {}) %}
+
+        <div class="gc-factor-label" style="margin-bottom:0.75rem;">Powerplay (Overs {{ pp.get('overs_start', 0)+1 }}-{{ pp.get('overs_end', 5)+1 }})</div>
+        <div class="gc-phase-grid" style="margin-bottom:1.5rem;">
+            <div class="gc-phase-item">
+                <label>Boundary Multiplier</label>
+                <input type="number" step="0.05" min="0" max="5" value="{{ pp.get('boundary_multiplier', 1.25) }}" id="pp-boundary">
+            </div>
+        </div>
+
+        <div class="gc-factor-label" style="margin-bottom:0.75rem;">Death Overs (Overs {{ death.get('overs_start', 16)+1 }}-{{ death.get('overs_end', 19)+1 }})</div>
+        <div class="gc-phase-grid" style="margin-bottom:1.5rem;">
+            <div class="gc-phase-item">
+                <label>Boundary Boost (Batting Pitch)</label>
+                <input type="number" step="0.1" min="0" max="5" value="{{ death.get('boundary_boost_batting_pitch', 2.2) }}" id="death-bat-boundary">
+            </div>
+            <div class="gc-phase-item">
+                <label>Boundary Boost (Bowling Pitch)</label>
+                <input type="number" step="0.1" min="0" max="5" value="{{ death.get('boundary_boost_bowling_pitch', 1.8) }}" id="death-bowl-boundary">
+            </div>
+            <div class="gc-phase-item">
+                <label>Wicket Boost</label>
+                <input type="number" step="0.1" min="0" max="5" value="{{ death.get('wicket_boost', 1.6) }}" id="death-wicket">
+            </div>
+        </div>
+
+        <div class="gc-factor-label" style="margin-bottom:0.75rem;">2nd Innings Death Overs</div>
+        <div class="gc-phase-grid">
+            <div class="gc-phase-item">
+                <label>Scoring Boost</label>
+                <input type="number" step="0.05" min="0" max="5" value="{{ inn2.get('scoring_boost', 1.15) }}" id="inn2-scoring">
+            </div>
+            <div class="gc-phase-item">
+                <label>Wicket Boost</label>
+                <input type="number" step="0.05" min="0" max="5" value="{{ inn2.get('wicket_boost', 1.1) }}" id="inn2-wicket">
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Blending Weights -->
+<section class="gc-blending">
+    <div class="gc-section-header" style="border-bottom:none;margin-bottom:0;padding-bottom:0;">
+        <i class="fa-solid fa-sliders"></i>
+        <span class="gc-section-title">Blending Weights</span>
+    </div>
+    {% set bl = config.get('blending', {}) %}
+    <div class="gc-blend-row">
+        <span class="gc-blend-label">Pitch</span>
+        <input type="range" class="gc-blend-slider" id="blendPitch" min="0" max="100"
+               value="{{ ((bl.get('pitch_weight', 0.6)) * 100) | int }}"
+               oninput="onBlendChange(this)">
+        <span class="gc-blend-value" id="blendPitchVal">{{ ((bl.get('pitch_weight', 0.6)) * 100) | int }}%</span>
+    </div>
+    <div class="gc-blend-row">
+        <span class="gc-blend-label">Skill</span>
+        <input type="range" class="gc-blend-slider" id="blendSkill" min="0" max="100"
+               value="{{ ((bl.get('skill_weight', 0.4)) * 100) | int }}"
+               oninput="onBlendChange(this)" disabled style="opacity:0.6;">
+        <span class="gc-blend-value" id="blendSkillVal">{{ ((bl.get('skill_weight', 0.4)) * 100) | int }}%</span>
+    </div>
+</section>
+
+<!-- Action Bar -->
+<div class="gc-actions">
+    <button class="gc-btn gc-btn-reset" onclick="confirmReset()">
+        <i class="fa-solid fa-rotate-left"></i> Reset to Defaults
+    </button>
+    <button class="gc-btn gc-btn-save" id="btnSaveAll" onclick="saveAll()">
+        <i class="fa-solid fa-floppy-disk"></i> Save All
+    </button>
+</div>
+
+<!-- Guide FAB -->
+<a href="/ground-conditions/guide" target="_blank" class="gc-guide-fab" title="Open Ground Conditions Guide">
+    <i class="fa-solid fa-book-open"></i>
+    <span>Guide</span>
+</a>
+
+<!-- Toast -->
+<div class="gc-toast" id="gcToast"></div>
+
+<!-- Reset Confirmation Modal -->
+<div class="gc-modal-overlay" id="gcResetModal">
+    <div class="gc-modal">
+        <div class="gc-modal-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <h3>Reset to Defaults?</h3>
+        <p>This will revert all pitch profiles, game modes, and phase boosts to their factory settings.</p>
+        <div class="gc-modal-actions">
+            <button class="gc-btn gc-btn-reset" onclick="closeResetModal()" style="border-color:var(--card-border);color:var(--fg-secondary);">Cancel</button>
+            <button class="gc-btn gc-btn-save" onclick="doReset()">
+                <i class="fa-solid fa-rotate-left"></i> Reset
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="application/json" id="gc-config-data">
+{{ config | tojson | safe }}
+</script>
+<script>
+(function() {
+    // ── State ──
+    const CONFIG = JSON.parse(document.getElementById('gc-config-data').textContent);
+
+    // ── Toast ──
+    function showToast(msg, type) {
+        const t = document.getElementById('gcToast');
+        t.textContent = msg;
+        t.className = 'gc-toast ' + type + ' show';
+        setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // ── Game Mode ──
+    window.setGameMode = async function(mode) {
+        try {
+            const resp = await fetch('/ground-conditions/mode', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({mode})
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                document.querySelectorAll('.gc-mode-card').forEach(c => {
+                    c.classList.toggle('active', c.dataset.mode === mode);
+                });
+                CONFIG.active_game_mode = mode;
+                // Pulse animation on the newly active card
+                const activeCard = document.querySelector(`.gc-mode-card[data-mode="${mode}"]`);
+                if (activeCard) {
+                    activeCard.classList.add('gc-mode-pulse');
+                    activeCard.addEventListener('animationend', () => {
+                        activeCard.classList.remove('gc-mode-pulse');
+                    }, { once: true });
+                }
+                showToast(data.message, 'success');
+            } else {
+                showToast(data.error || 'Failed to set mode', 'error');
+            }
+        } catch(e) {
+            showToast('Network error', 'error');
+        }
+    };
+
+    // ── Matrix Input Change ──
+    window.onMatrixChange = function(input) {
+        const pitch = input.dataset.pitch;
+        const val = parseFloat(input.value) || 0;
+        // Update bar
+        const row = input.closest('.gc-matrix-row');
+        const bar = row.querySelector('.gc-bar-fill');
+        bar.style.width = (val * 200) + '%';
+        // Update total
+        updateTotal(pitch);
+    };
+
+    function updateTotal(pitch) {
+        const inputs = document.querySelectorAll(`.gc-matrix-input[data-pitch="${pitch}"]`);
+        let total = 0;
+        inputs.forEach(inp => total += parseFloat(inp.value) || 0);
+        const el = document.getElementById('total-' + pitch);
+        el.textContent = 'Total: ' + total.toFixed(3);
+        el.className = 'gc-total ' + (Math.abs(total - 1.0) < 0.02 ? 'valid' : 'invalid');
+    }
+
+    // ── Normalize ──
+    window.normalizePitch = function(pitch) {
+        const inputs = document.querySelectorAll(`.gc-matrix-input[data-pitch="${pitch}"]`);
+        let total = 0;
+        inputs.forEach(inp => total += parseFloat(inp.value) || 0);
+        if (total <= 0) return;
+        inputs.forEach(inp => {
+            const normalized = (parseFloat(inp.value) || 0) / total;
+            inp.value = normalized.toFixed(4);
+            const bar = inp.closest('.gc-matrix-row').querySelector('.gc-bar-fill');
+            bar.style.width = (normalized * 200) + '%';
+        });
+        updateTotal(pitch);
+    };
+
+    // ── Blending ──
+    window.onBlendChange = function(slider) {
+        const pitchVal = parseInt(document.getElementById('blendPitch').value);
+        const skillVal = 100 - pitchVal;
+        document.getElementById('blendSkill').value = skillVal;
+        document.getElementById('blendPitchVal').textContent = pitchVal + '%';
+        document.getElementById('blendSkillVal').textContent = skillVal + '%';
+    };
+
+    // ── Phase Toggle ──
+    window.togglePhase = function(btn) {
+        const body = document.getElementById('gcPhaseBody');
+        const expanded = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', !expanded);
+        body.classList.toggle('open');
+    };
+
+    // ── Build config from UI ──
+    function buildConfig() {
+        const cfg = JSON.parse(JSON.stringify(CONFIG));
+
+        // Pitch profiles
+        document.querySelectorAll('.gc-pitch-card').forEach(card => {
+            const pName = card.dataset.pitch;
+            if (!cfg.pitch_profiles[pName]) cfg.pitch_profiles[pName] = {};
+            const profile = cfg.pitch_profiles[pName];
+
+            // Scoring matrix
+            profile.scoring_matrix = {};
+            card.querySelectorAll('.gc-matrix-input').forEach(inp => {
+                profile.scoring_matrix[inp.dataset.outcome] = parseFloat(inp.value) || 0;
+            });
+
+            // Run factor
+            const rfInp = card.querySelector('.gc-factor-input[data-field="run_factor"]');
+            if (rfInp) profile.run_factor = parseFloat(rfInp.value) || 1.0;
+
+            // Wicket factors
+            profile.wicket_factors = {};
+            card.querySelectorAll('.gc-wf-input').forEach(inp => {
+                profile.wicket_factors[inp.dataset.wf] = parseFloat(inp.value) || 1.0;
+            });
+        });
+
+        // Phase boosts
+        cfg.phase_boosts = cfg.phase_boosts || {};
+        cfg.phase_boosts.powerplay = cfg.phase_boosts.powerplay || {};
+        cfg.phase_boosts.powerplay.boundary_multiplier = parseFloat(document.getElementById('pp-boundary').value) || 1.25;
+        cfg.phase_boosts.powerplay.overs_start = 0;
+        cfg.phase_boosts.powerplay.overs_end = 5;
+
+        cfg.phase_boosts.death_overs = cfg.phase_boosts.death_overs || {};
+        cfg.phase_boosts.death_overs.boundary_boost_batting_pitch = parseFloat(document.getElementById('death-bat-boundary').value) || 2.2;
+        cfg.phase_boosts.death_overs.boundary_boost_bowling_pitch = parseFloat(document.getElementById('death-bowl-boundary').value) || 1.8;
+        cfg.phase_boosts.death_overs.wicket_boost = parseFloat(document.getElementById('death-wicket').value) || 1.6;
+        cfg.phase_boosts.death_overs.overs_start = 16;
+        cfg.phase_boosts.death_overs.overs_end = 19;
+
+        cfg.phase_boosts.second_innings_death = cfg.phase_boosts.second_innings_death || {};
+        cfg.phase_boosts.second_innings_death.scoring_boost = parseFloat(document.getElementById('inn2-scoring').value) || 1.15;
+        cfg.phase_boosts.second_innings_death.wicket_boost = parseFloat(document.getElementById('inn2-wicket').value) || 1.1;
+
+        // Blending
+        const pitchW = parseInt(document.getElementById('blendPitch').value) / 100;
+        cfg.blending = { pitch_weight: pitchW, skill_weight: 1 - pitchW };
+
+        return cfg;
+    }
+
+    // ── Save All ──
+    window.saveAll = async function() {
+        const btn = document.getElementById('btnSaveAll');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+
+        try {
+            const cfg = buildConfig();
+            const resp = await fetch('/ground-conditions/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(cfg)
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                showToast(data.message, 'success');
+            } else {
+                showToast(data.error || 'Save failed', 'error');
+            }
+        } catch(e) {
+            showToast('Network error', 'error');
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save All';
+    };
+
+    // ── Reset ──
+    window.confirmReset = function() {
+        document.getElementById('gcResetModal').classList.add('show');
+    };
+    window.closeResetModal = function() {
+        document.getElementById('gcResetModal').classList.remove('show');
+    };
+    window.doReset = async function() {
+        closeResetModal();
+        try {
+            const resp = await fetch('/ground-conditions/reset', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                showToast('Reset to defaults — reloading...', 'success');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showToast(data.error || 'Reset failed', 'error');
+            }
+        } catch(e) {
+            showToast('Network error', 'error');
+        }
+    };
+
+    // Close modal on backdrop click / Escape
+    document.getElementById('gcResetModal').addEventListener('click', function(e) {
+        if (e.target === this) closeResetModal();
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeResetModal();
+    });
+
+    // ── Init: Set bar widths and update totals ──
+    document.querySelectorAll('.gc-bar-fill[data-width]').forEach(bar => {
+        bar.style.width = bar.dataset.width + '%';
+    });
+    document.querySelectorAll('.gc-pitch-card').forEach(card => {
+        updateTotal(card.dataset.pitch);
+    });
+})();
+</script>
+{% endblock %}

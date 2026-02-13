@@ -1,0 +1,723 @@
+{% extends "layout.html" %}
+
+{% block title %}Ground Conditions Guide — SimCricketX{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ground_conditions_guide.css') }}">
+{% endblock %}
+
+{% block navbar_items %}
+<a href="{{ url_for('ground_conditions') }}" class="theme-toggle">
+    <i class="fas fa-arrow-left"></i> Back to Ground Conditions
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="guide-container">
+
+    <!-- ── Back Link ── -->
+    <a href="{{ url_for('ground_conditions') }}" class="guide-back">
+        <i class="fas fa-arrow-left"></i> Ground Conditions
+    </a>
+
+    <!-- ── Hero ── -->
+    <div class="guide-hero">
+        <h1 class="guide-title">Ground Conditions Guide</h1>
+        <p class="guide-subtitle">
+            Everything you need to know about pitch profiles, game modes, phase boosts,
+            and how they shape every ball of the simulation.
+        </p>
+    </div>
+
+    <!-- ── Table of Contents ── -->
+    <div class="guide-toc">
+        <div class="guide-toc-title">Contents</div>
+        <ul class="guide-toc-list">
+            <li>
+                <span class="toc-num">01</span>
+                <a href="#overview" onclick="openSection('overview')">Overview</a>
+            </li>
+            <li>
+                <span class="toc-num">02</span>
+                <a href="#pitches" onclick="openSection('pitches')">Pitch Profiles</a>
+            </li>
+            <li>
+                <span class="toc-num">03</span>
+                <a href="#modes" onclick="openSection('modes')">Game Modes</a>
+            </li>
+            <li>
+                <span class="toc-num">04</span>
+                <a href="#phases" onclick="openSection('phases')">Phase Boosts</a>
+            </li>
+            <li>
+                <span class="toc-num">05</span>
+                <a href="#blending" onclick="openSection('blending')">Blending Weights</a>
+            </li>
+            <li>
+                <span class="toc-num">06</span>
+                <a href="#recipes" onclick="openSection('recipes')">Tips &amp; Recipes</a>
+            </li>
+        </ul>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECTION 01 — Overview                                  -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="guide-section" id="overview">
+        <button class="guide-section-toggle" onclick="toggleSection(this)">
+            <span class="guide-section-num">01</span>
+            <h2>Overview</h2>
+            <i class="fas fa-chevron-down guide-chevron"></i>
+        </button>
+        <div class="guide-section-body">
+            <p>
+                <strong>Ground Conditions</strong> controls how every ball in SimCricketX is simulated.
+                Instead of hardcoded values, every scoring probability, wicket chance, and phase boost
+                lives in a single configuration file that you can tune from the UI.
+            </p>
+
+            <h3>How It Works</h3>
+            <p>
+                Each delivery is resolved through a <strong>blending formula</strong> that combines
+                two factors: the pitch conditions and the individual player's skill rating. By default,
+                the pitch contributes 60% of the outcome probability and player skill contributes 40%.
+            </p>
+
+            <div class="guide-callout">
+                <strong>The Formula:</strong> Final probability = (Pitch Matrix &times; 0.6) + (Skill Matrix &times; 0.4)
+                <br>This means even the best batters will struggle on a Green pitch, and even average
+                players can score freely on a Dead track.
+            </div>
+
+            <h3>Three Layers</h3>
+            <p>
+                The simulation stacks three layers to determine each ball's outcome:
+            </p>
+            <p>
+                <strong>1. Pitch Profile</strong> — Sets the base scoring matrix (8 outcome probabilities).
+                A Green pitch has high Dot and Wicket chances; a Dead pitch has high Four and Six chances.
+            </p>
+            <p>
+                <strong>2. Game Mode</strong> — Applies multipliers on top of the pitch profile. Aggressive mode
+                boosts boundaries and wickets; Defensive mode increases dots and singles. The matrix is
+                always re-normalized to sum to 1.0 after multipliers are applied.
+            </p>
+            <p>
+                <strong>3. Phase Boosts</strong> — Situational multipliers for powerplay overs (1-6),
+                death overs (17-20), and second-innings pressure. These kick in after blending.
+            </p>
+
+            <h3>Quick Start</h3>
+            <p>
+                New to the system? Start with <strong>Natural Game</strong> mode on a <strong>Hard</strong>
+                pitch for balanced, realistic T20 cricket. Once you're comfortable, try switching game
+                modes to see how they affect scoring patterns.
+            </p>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECTION 02 — Pitch Profiles                            -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="guide-section" id="pitches">
+        <button class="guide-section-toggle" onclick="toggleSection(this)">
+            <span class="guide-section-num">02</span>
+            <h2>Pitch Profiles</h2>
+            <i class="fas fa-chevron-down guide-chevron"></i>
+        </button>
+        <div class="guide-section-body">
+            <p>
+                Five pitch types are available, each with a unique <strong>scoring matrix</strong>,
+                <strong>run factor</strong>, and <strong>wicket factors</strong>. The pitch is selected
+                when setting up a match and remains constant throughout.
+            </p>
+
+            <!-- Green -->
+            <div class="guide-pitch-card" data-pitch="Green">
+                <div class="guide-pitch-title">
+                    <span class="dot"></span> Green Pitch
+                </div>
+                <div class="guide-pitch-meta">
+                    <span><i class="fas fa-cricket-bat-ball"></i> Run Factor: 0.85</span>
+                    <span><i class="fas fa-bullseye"></i> Expected: 120-160 runs</span>
+                    <span><i class="fas fa-globe"></i> Think: Melbourne, Johannesburg</span>
+                </div>
+                <p class="guide-pitch-desc">
+                    Seamer-friendly surface with lateral movement. Fast bowlers dominate with a 1.4&times;
+                    wicket multiplier, while spinners are largely neutralized (0.55&times;). High dot ball
+                    rate (35%) and significant wicket probability (6.5%). Boundaries are scarce — Fours
+                    at 7%, Sixes at just 2.5%.
+                </p>
+            </div>
+
+            <!-- Dry -->
+            <div class="guide-pitch-card" data-pitch="Dry">
+                <div class="guide-pitch-title">
+                    <span class="dot"></span> Dry Pitch
+                </div>
+                <div class="guide-pitch-meta">
+                    <span><i class="fas fa-cricket-bat-ball"></i> Run Factor: 0.85</span>
+                    <span><i class="fas fa-bullseye"></i> Expected: 130-165 runs</span>
+                    <span><i class="fas fa-globe"></i> Think: Chennai, Sharjah</span>
+                </div>
+                <p class="guide-pitch-desc">
+                    Spin-friendly surface with variable bounce and turn. Leg spinners get a 1.4&times;
+                    wicket boost, wrist spinners 1.35&times;, off spinners 1.3&times;, and finger spinners
+                    1.2&times;. Pace bowlers are less effective (0.6&times;). Slightly more scoring
+                    potential than Green due to higher Six probability (3%).
+                </p>
+            </div>
+
+            <!-- Hard -->
+            <div class="guide-pitch-card" data-pitch="Hard">
+                <div class="guide-pitch-title">
+                    <span class="dot"></span> Hard Pitch
+                </div>
+                <div class="guide-pitch-meta">
+                    <span><i class="fas fa-cricket-bat-ball"></i> Run Factor: 1.1</span>
+                    <span><i class="fas fa-bullseye"></i> Expected: 170-210 runs</span>
+                    <span><i class="fas fa-globe"></i> Think: Perth, Cape Town</span>
+                </div>
+                <p class="guide-pitch-desc">
+                    True bounce with carry — a balanced contest with a slight batting edge. The run
+                    factor of 1.1 lifts scoring, with healthy Four (10%) and Six (6%) rates. Wicket
+                    chance is moderate at 4%. Fast bowlers get a slight edge (1.1&times;) but it's
+                    the most evenly-matched surface.
+                </p>
+            </div>
+
+            <!-- Flat -->
+            <div class="guide-pitch-card" data-pitch="Flat">
+                <div class="guide-pitch-title">
+                    <span class="dot"></span> Flat Pitch
+                </div>
+                <div class="guide-pitch-meta">
+                    <span><i class="fas fa-cricket-bat-ball"></i> Run Factor: 1.08</span>
+                    <span><i class="fas fa-bullseye"></i> Expected: 190-230 runs</span>
+                    <span><i class="fas fa-globe"></i> Think: Chinnaswamy, Wankhede</span>
+                </div>
+                <p class="guide-pitch-desc">
+                    True surface with even bounce — a batting paradise where bowlers need exceptional
+                    skill to survive. High Four (13%) and Six (8%) probabilities with low Dots (24%).
+                    Wicket chance is 5.5% and all bowling styles face a uniform 0.85&times; penalty.
+                    Expect high-scoring, entertaining matches.
+                </p>
+            </div>
+
+            <!-- Dead -->
+            <div class="guide-pitch-card" data-pitch="Dead">
+                <div class="guide-pitch-title">
+                    <span class="dot"></span> Dead Pitch
+                </div>
+                <div class="guide-pitch-meta">
+                    <span><i class="fas fa-cricket-bat-ball"></i> Run Factor: 1.3</span>
+                    <span><i class="fas fa-bullseye"></i> Expected: 230-270 runs</span>
+                    <span><i class="fas fa-globe"></i> Think: Rajkot, Lucknow</span>
+                </div>
+                <p class="guide-pitch-desc">
+                    Lifeless track with nothing for bowlers — a batting festival guaranteed. The
+                    highest run factor (1.3) and massive boundary chances: Fours at 17%, Sixes at 9%.
+                    Only 20% Dots and a tiny 3.5% Wicket rate. All bowling styles get a punishing
+                    0.6&times; wicket multiplier. Use this for T20 fireworks.
+                </p>
+            </div>
+
+            <h3>Understanding the Numbers</h3>
+
+            <p>
+                <strong>Scoring Matrix</strong> — Eight probabilities that sum to 1.0:
+                Dot, Single, Double, Three, Four, Six, Wicket, and Extras. When a ball is bowled,
+                the engine picks an outcome by rolling against these probabilities (after blending
+                with player skill and applying game mode multipliers).
+            </p>
+            <p>
+                <strong>Run Factor</strong> — A global multiplier on run output. Values below 1.0
+                suppress scoring (Green/Dry = 0.85), while values above 1.0 amplify it (Dead = 1.3).
+                This stacks with the scoring matrix to shape total innings scores.
+            </p>
+            <p>
+                <strong>Wicket Factors</strong> — Per-bowling-style multipliers on the Wicket probability.
+                A Fast bowler on a Green pitch (1.4&times;) is much more likely to take wickets than
+                a spinner (0.55&times;). The <code>default</code> value is used for any bowling style
+                not explicitly listed.
+            </p>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECTION 03 — Game Modes                                -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="guide-section" id="modes">
+        <button class="guide-section-toggle" onclick="toggleSection(this)">
+            <span class="guide-section-num">03</span>
+            <h2>Game Modes</h2>
+            <i class="fas fa-chevron-down guide-chevron"></i>
+        </button>
+        <div class="guide-section-body">
+            <p>
+                Game modes are <strong>multiplier layers</strong> that sit on top of the pitch profile.
+                They adjust outcome probabilities without changing the pitch itself. After multipliers
+                are applied, the matrix is <strong>re-normalized</strong> so all probabilities still
+                sum to 1.0.
+            </p>
+
+            <div class="guide-callout">
+                <strong>How re-normalization works:</strong> If Aggressive mode boosts Sixes by 1.4&times;
+                and Fours by 1.3&times;, the raw sum will exceed 1.0. The engine divides every probability
+                by the new sum, preserving the relative ratios while keeping it a valid probability
+                distribution.
+            </div>
+
+            <p>
+                The active game mode is a <strong>global setting</strong> — it applies to all matches
+                until changed. You can switch modes anytime from the Ground Conditions page.
+            </p>
+
+            <!-- Natural Game -->
+            <div class="guide-mode-card" data-mode="natural_game">
+                <div class="guide-mode-title">
+                    <i class="fas fa-cricket-bat-ball"></i> Natural Game
+                </div>
+                <div class="guide-mode-use">Best for: Realistic T20 simulation</div>
+                <table class="guide-mod-table">
+                    <thead>
+                        <tr>
+                            <th>Outcome</th>
+                            <th>Multiplier</th>
+                            <th>Effect</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>All outcomes</td><td class="mod-neutral">1.0&times;</td><td>No change — pure pitch profile</td></tr>
+                    </tbody>
+                </table>
+                <p class="guide-pitch-desc" style="margin-top: 0.75rem;">
+                    The default mode. No adjustments are made — what you see in the pitch profile is
+                    exactly what you get. Use this when you want the pitch to be the sole differentiator.
+                </p>
+            </div>
+
+            <!-- Aggressive -->
+            <div class="guide-mode-card" data-mode="aggressive">
+                <div class="guide-mode-title">
+                    <i class="fas fa-bolt"></i> Aggressive
+                </div>
+                <div class="guide-mode-use">Best for: High-octane T20 action, IPL-style entertainment</div>
+                <table class="guide-mod-table">
+                    <thead>
+                        <tr>
+                            <th>Outcome</th>
+                            <th>Multiplier</th>
+                            <th>Effect</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Sixes</td><td class="mod-up">1.4&times;</td><td>+40% six probability</td></tr>
+                        <tr><td>Fours</td><td class="mod-up">1.3&times;</td><td>+30% four probability</td></tr>
+                        <tr><td>Wickets</td><td class="mod-up">1.25&times;</td><td>+25% wicket probability</td></tr>
+                        <tr><td>Extras</td><td class="mod-up">1.1&times;</td><td>+10% extras</td></tr>
+                        <tr><td>Singles</td><td class="mod-down">0.9&times;</td><td>-10% singles</td></tr>
+                        <tr><td>Dots</td><td class="mod-down">0.85&times;</td><td>-15% dot balls</td></tr>
+                    </tbody>
+                </table>
+                <p class="guide-pitch-desc" style="margin-top: 0.75rem;">
+                    High risk, high reward. Boundaries fly but wickets tumble too. Expect dramatic
+                    collapses and explosive partnerships. Pairs well with Flat or Hard pitches for
+                    run-fests, or with Green pitches for volatile, unpredictable matches.
+                </p>
+            </div>
+
+            <!-- Defensive -->
+            <div class="guide-mode-card" data-mode="defensive">
+                <div class="guide-mode-title">
+                    <i class="fas fa-shield-halved"></i> Defensive
+                </div>
+                <div class="guide-mode-use">Best for: Tactical, low-scoring battles</div>
+                <table class="guide-mod-table">
+                    <thead>
+                        <tr>
+                            <th>Outcome</th>
+                            <th>Multiplier</th>
+                            <th>Effect</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Dots</td><td class="mod-up">1.2&times;</td><td>+20% dot balls</td></tr>
+                        <tr><td>Singles</td><td class="mod-up">1.15&times;</td><td>+15% singles</td></tr>
+                        <tr><td>Doubles</td><td class="mod-up">1.05&times;</td><td>+5% doubles</td></tr>
+                        <tr><td>Wickets</td><td class="mod-down">0.9&times;</td><td>-10% wickets</td></tr>
+                        <tr><td>Fours</td><td class="mod-down">0.75&times;</td><td>-25% fours</td></tr>
+                        <tr><td>Sixes</td><td class="mod-down">0.6&times;</td><td>-40% sixes</td></tr>
+                    </tbody>
+                </table>
+                <p class="guide-pitch-desc" style="margin-top: 0.75rem;">
+                    Run-scoring becomes a grind. Batters rotate strike with singles and twos while
+                    boundaries dry up. Wickets are slightly harder to come by, leading to tense,
+                    attritional cricket. Great on Green or Dry pitches for a true Test-match feel.
+                </p>
+            </div>
+
+            <!-- Flat Track Bully -->
+            <div class="guide-mode-card" data-mode="flat_track_bully">
+                <div class="guide-mode-title">
+                    <i class="fas fa-fire"></i> Flat Track Bully
+                </div>
+                <div class="guide-mode-use">Best for: Batting-dominated matches with few wickets</div>
+                <table class="guide-mod-table">
+                    <thead>
+                        <tr>
+                            <th>Outcome</th>
+                            <th>Multiplier</th>
+                            <th>Effect</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Sixes</td><td class="mod-up">1.5&times;</td><td>+50% six probability</td></tr>
+                        <tr><td>Fours</td><td class="mod-up">1.35&times;</td><td>+35% four probability</td></tr>
+                        <tr><td>Doubles</td><td class="mod-up">1.1&times;</td><td>+10% doubles</td></tr>
+                        <tr><td>Extras</td><td class="mod-down">0.9&times;</td><td>-10% extras</td></tr>
+                        <tr><td>Dots</td><td class="mod-down">0.8&times;</td><td>-20% dot balls</td></tr>
+                        <tr><td>Wickets</td><td class="mod-down">0.6&times;</td><td>-40% wickets</td></tr>
+                    </tbody>
+                </table>
+                <p class="guide-pitch-desc" style="margin-top: 0.75rem;">
+                    Batters feast, bowlers suffer. Massive boundary rates with heavily suppressed
+                    wickets mean both teams post huge totals. On a Dead or Flat pitch, expect scores
+                    well above 250. Even Green pitches become batting-friendly under this mode.
+                </p>
+            </div>
+
+            <!-- Bowler's Day -->
+            <div class="guide-mode-card" data-mode="bowlers_day">
+                <div class="guide-mode-title">
+                    <i class="fas fa-bowling-ball"></i> Bowler's Day
+                </div>
+                <div class="guide-mode-use">Best for: Low-scoring thrillers, bowler showcases</div>
+                <table class="guide-mod-table">
+                    <thead>
+                        <tr>
+                            <th>Outcome</th>
+                            <th>Multiplier</th>
+                            <th>Effect</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Wickets</td><td class="mod-up">1.5&times;</td><td>+50% wicket probability</td></tr>
+                        <tr><td>Dots</td><td class="mod-up">1.3&times;</td><td>+30% dot balls</td></tr>
+                        <tr><td>Extras</td><td class="mod-up">1.1&times;</td><td>+10% extras</td></tr>
+                        <tr><td>Singles</td><td class="mod-up">1.05&times;</td><td>+5% singles</td></tr>
+                        <tr><td>Doubles</td><td class="mod-down">0.9&times;</td><td>-10% doubles</td></tr>
+                        <tr><td>Threes</td><td class="mod-down">0.9&times;</td><td>-10% threes</td></tr>
+                        <tr><td>Fours</td><td class="mod-down">0.65&times;</td><td>-35% fours</td></tr>
+                        <tr><td>Sixes</td><td class="mod-down">0.5&times;</td><td>-50% sixes</td></tr>
+                    </tbody>
+                </table>
+                <p class="guide-pitch-desc" style="margin-top: 0.75rem;">
+                    Bowlers rule. Wickets fall regularly, boundaries are rare, and dot balls dominate.
+                    On a Green pitch with Bowler's Day mode, expect all-out scores under 100. Even
+                    Dead pitches become competitive. Perfect for testing your bowling attack.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECTION 04 — Phase Boosts                              -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="guide-section" id="phases">
+        <button class="guide-section-toggle" onclick="toggleSection(this)">
+            <span class="guide-section-num">04</span>
+            <h2>Phase Boosts</h2>
+            <i class="fas fa-chevron-down guide-chevron"></i>
+        </button>
+        <div class="guide-section-body">
+            <p>
+                Real T20 cricket has distinct phases with different strategies. Phase boosts replicate
+                this by applying situational multipliers during specific overs. These activate
+                <strong>after</strong> the pitch + skill blending is done.
+            </p>
+
+            <h3>Innings Timeline</h3>
+            <div class="guide-timeline">
+                <div class="guide-phase-bar pp">
+                    <i class="fas fa-bolt"></i> Powerplay (1-6)
+                </div>
+                <div class="guide-phase-bar middle">
+                    Middle Overs (7-16)
+                </div>
+                <div class="guide-phase-bar death">
+                    <i class="fas fa-fire"></i> Death (17-20)
+                </div>
+            </div>
+
+            <h3>Powerplay (Overs 1-6)</h3>
+            <p>
+                Only two fielders allowed outside the 30-yard circle. Batters attack, and
+                boundaries are more frequent.
+            </p>
+            <table class="guide-mod-table">
+                <tbody>
+                    <tr>
+                        <td>Boundary multiplier</td>
+                        <td class="mod-up">1.25&times;</td>
+                        <td>Fours and Sixes are 25% more likely during powerplay overs</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Death Overs (Overs 17-20)</h3>
+            <p>
+                The final push. Batters go all-out while bowlers try yorkers and slower balls.
+                The most volatile phase of the innings.
+            </p>
+            <table class="guide-mod-table">
+                <tbody>
+                    <tr>
+                        <td>Boundary boost (batting pitch)</td>
+                        <td class="mod-up">2.2&times;</td>
+                        <td>On Flat/Dead pitches, boundaries become very common</td>
+                    </tr>
+                    <tr>
+                        <td>Boundary boost (bowling pitch)</td>
+                        <td class="mod-up">1.8&times;</td>
+                        <td>Even on Green/Dry pitches, death overs see more boundaries</td>
+                    </tr>
+                    <tr>
+                        <td>Wicket boost</td>
+                        <td class="mod-up">1.6&times;</td>
+                        <td>Aggressive batting means more dismissals too</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Second Innings — Death Overs</h3>
+            <p>
+                Chasing teams face additional pressure in the final overs, especially in tight games.
+            </p>
+            <table class="guide-mod-table">
+                <tbody>
+                    <tr>
+                        <td>Scoring boost</td>
+                        <td class="mod-up">1.15&times;</td>
+                        <td>Chasing teams swing harder, scoring 15% faster</td>
+                    </tr>
+                    <tr>
+                        <td>Wicket boost</td>
+                        <td class="mod-up">1.1&times;</td>
+                        <td>But the desperation leads to 10% more wickets</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="guide-callout warning">
+                <strong>Note:</strong> Phase boosts are applied <em>after</em> the pitch-skill blending.
+                They multiply the already-blended probabilities, so their effect compounds with the
+                pitch profile and game mode settings.
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECTION 05 — Blending Weights                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="guide-section" id="blending">
+        <button class="guide-section-toggle" onclick="toggleSection(this)">
+            <span class="guide-section-num">05</span>
+            <h2>Blending Weights</h2>
+            <i class="fas fa-chevron-down guide-chevron"></i>
+        </button>
+        <div class="guide-section-body">
+            <p>
+                The blending weights control how much influence the <strong>pitch</strong> has versus
+                <strong>individual player skill</strong> in determining each ball's outcome. The two
+                weights always sum to 1.0.
+            </p>
+
+            <div class="guide-callout">
+                <strong>Default: 60% Pitch / 40% Skill</strong> — The pitch is the dominant factor,
+                but skilled players can still overcome tough conditions. This produces the most
+                realistic cricket simulation.
+            </div>
+
+            <h3>What Changing the Weights Does</h3>
+
+            <div class="guide-recipe">
+                <div class="guide-recipe-title">Pitch-Dominated (e.g., 80% / 20%)</div>
+                <div class="guide-recipe-config">pitch_weight: 0.8 &bull; skill_weight: 0.2</div>
+                <p class="guide-recipe-desc">
+                    The pitch becomes almost everything. Individual player ratings matter less —
+                    a tailender and a star batter will perform more similarly. Green pitches become
+                    nightmarish; Dead pitches guarantee run-fests regardless of bowling quality.
+                    Use this when you want the venue to be the story.
+                </p>
+            </div>
+
+            <div class="guide-recipe">
+                <div class="guide-recipe-title">Balanced Default (60% / 40%)</div>
+                <div class="guide-recipe-config">pitch_weight: 0.6 &bull; skill_weight: 0.4</div>
+                <p class="guide-recipe-desc">
+                    The recommended setting. The pitch sets the stage but talented players can
+                    overcome it. A great fast bowler will still take wickets on a Flat pitch; a
+                    quality batter can grind runs on a Green surface. Most realistic outcome.
+                </p>
+            </div>
+
+            <div class="guide-recipe">
+                <div class="guide-recipe-title">Skill-Dominated (e.g., 40% / 60%)</div>
+                <div class="guide-recipe-config">pitch_weight: 0.4 &bull; skill_weight: 0.6</div>
+                <p class="guide-recipe-desc">
+                    Player ratings drive outcomes more than conditions. Star players dominate
+                    regardless of pitch type. The gap between good and average players widens
+                    significantly. Pitch selection becomes less strategic. Use this if you want
+                    individual talent to be the deciding factor.
+                </p>
+            </div>
+
+            <div class="guide-callout warning">
+                <strong>Caution:</strong> Extreme values (e.g., 95/5 or 5/95) can produce unrealistic
+                results. The pitch and skill should always have meaningful influence. Stick to the
+                30-70 range for each weight for best results.
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  SECTION 06 — Tips & Recipes                            -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="guide-section" id="recipes">
+        <button class="guide-section-toggle" onclick="toggleSection(this)">
+            <span class="guide-section-num">06</span>
+            <h2>Tips &amp; Recipes</h2>
+            <i class="fas fa-chevron-down guide-chevron"></i>
+        </button>
+        <div class="guide-section-body">
+            <p>
+                Here are some tried-and-tested combinations of pitch profiles and game modes.
+                Use these as starting points, then tweak to your liking.
+            </p>
+
+            <div class="guide-recipe">
+                <div class="guide-recipe-title">Realistic IPL</div>
+                <div class="guide-recipe-config">Natural Game + Flat Pitch &bull; Blending: 60/40</div>
+                <p class="guide-recipe-desc">
+                    High-scoring but realistic. Expect totals around 170-210, with good batters
+                    hitting 40-60 and bowlers taking 2-4 wickets. The closest you'll get to watching
+                    an actual IPL game. Boundaries flow but wickets keep things interesting.
+                </p>
+            </div>
+
+            <div class="guide-recipe">
+                <div class="guide-recipe-title">Test Match Feel</div>
+                <div class="guide-recipe-config">Bowler's Day + Green Pitch &bull; Blending: 70/30</div>
+                <p class="guide-recipe-desc">
+                    Low-scoring thriller territory. Totals around 90-130, frequent wickets, rare
+                    boundaries. Fast bowlers become match-winners. Every run is hard-earned. Increase
+                    pitch weight to 70% for even more pitch dominance. Great for testing your
+                    best bowling lineup.
+                </p>
+            </div>
+
+            <div class="guide-recipe">
+                <div class="guide-recipe-title">Chaos Mode</div>
+                <div class="guide-recipe-config">Aggressive + Dead Pitch &bull; Blending: 60/40</div>
+                <p class="guide-recipe-desc">
+                    Pure entertainment. Expect 240+ scores with sixes raining down, but also
+                    frequent wickets from reckless batting. Matches are unpredictable — a team
+                    could be 180/3 one game and 150 all out the next. Not realistic, but incredibly fun.
+                </p>
+            </div>
+
+            <div class="guide-recipe">
+                <div class="guide-recipe-title">Spin Masterclass</div>
+                <div class="guide-recipe-config">Natural Game + Dry Pitch &bull; Blending: 70/30</div>
+                <p class="guide-recipe-desc">
+                    Spinners dominate with massive wicket multipliers (up to 1.4&times; for leg spin).
+                    Scoring is tough, and teams with strong spin attacks have a huge advantage.
+                    Totals around 130-160. Pack your team with spinners and watch them work.
+                </p>
+            </div>
+
+            <div class="guide-recipe">
+                <div class="guide-recipe-title">T20 World Cup Final</div>
+                <div class="guide-recipe-config">Natural Game + Hard Pitch &bull; Blending: 60/40</div>
+                <p class="guide-recipe-desc">
+                    The most balanced setup possible. Both teams have a fair chance, scoring is
+                    in the 170-210 range, and the match could go either way. Skill matters, the
+                    pitch offers something for everyone, and no single strategy dominates. The
+                    perfect neutral venue.
+                </p>
+            </div>
+
+            <h3>Build Your Own</h3>
+            <p>
+                Want to experiment? Here's how to think about it:
+            </p>
+            <p>
+                <strong>Higher scores?</strong> Use Dead/Flat pitch + Aggressive/Flat Track Bully mode.
+                Lower the pitch weight if you want star batters to dominate even more.
+            </p>
+            <p>
+                <strong>Lower scores?</strong> Use Green/Dry pitch + Bowler's Day/Defensive mode.
+                Increase the pitch weight to make conditions even tougher for batters.
+            </p>
+            <p>
+                <strong>More drama?</strong> Aggressive mode on any pitch keeps wickets high alongside
+                boundaries. The contrast between collapse and explosion creates tension.
+            </p>
+            <p>
+                <strong>More consistency?</strong> Defensive mode smooths out variance. Fewer boundaries
+                means fewer huge overs, and lower wicket rates mean fewer dramatic collapses. Results
+                become more predictable and repeatable.
+            </p>
+
+            <div class="guide-callout">
+                <strong>Pro tip:</strong> After changing settings, play 3-5 matches to see the average
+                effect. A single match can be an outlier — the true impact of your changes shows up
+                over multiple games.
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleSection(btn) {
+    const body = btn.nextElementSibling;
+    const chevron = btn.querySelector('.guide-chevron');
+    const isOpen = body.classList.contains('open');
+
+    if (isOpen) {
+        body.classList.remove('open');
+        chevron.style.transform = 'rotate(0deg)';
+    } else {
+        body.classList.add('open');
+        chevron.style.transform = 'rotate(180deg)';
+    }
+}
+
+function openSection(id) {
+    const section = document.getElementById(id);
+    if (!section) return;
+
+    const body = section.querySelector('.guide-section-body');
+    const chevron = section.querySelector('.guide-chevron');
+
+    if (body && !body.classList.contains('open')) {
+        body.classList.add('open');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+    }
+
+    setTimeout(() => {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+}
+
+// Auto-open section if URL has a hash
+document.addEventListener('DOMContentLoaded', () => {
+    const hash = window.location.hash.replace('#', '');
+    if (hash) openSection(hash);
+});
+</script>
+{% endblock %}

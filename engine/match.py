@@ -144,7 +144,9 @@ class Match:
             if extra_type == "Wide":
                 return "Wd"
             if extra_type == "No Ball":
-                return f"Nb+{runs}" if runs else "Nb"
+                bat_runs = outcome.get("bat_runs")
+                nb_runs = bat_runs if bat_runs is not None else runs
+                return f"Nb+{nb_runs}" if nb_runs else "Nb"
             if extra_type == "Byes":
                 return f"B{runs}"
             if extra_type == "Leg Bye":
@@ -3005,8 +3007,40 @@ class Match:
             over_number=self.current_over,
             batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"],
             innings=self.innings,
-            pressure_effects=pressure_effects
+            pressure_effects=pressure_effects,
+            free_hit=self.free_hit_active
         )
+
+        # No Ball: roll an additional bat outcome (no extras), wicket invalidated
+        extra_type = outcome.get("extra_type")
+        if outcome.get("is_extra") and extra_type == "No Ball":
+            bat_outcome = calculate_outcome(
+                batter=self.current_striker,
+                bowler=self.current_bowler,
+                pitch=self.pitch,
+                streak={},
+                over_number=self.current_over,
+                batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"],
+                innings=self.innings,
+                pressure_effects=pressure_effects,
+                allow_extras=False,
+                free_hit=False
+            )
+
+            bat_runs = bat_outcome.get("runs", 0)
+            bat_wicket = bat_outcome.get("batter_out", False)
+
+            if bat_wicket:
+                bat_runs = 0
+                bat_desc = "No Ball! Wicket invalidated."
+            else:
+                bat_desc = bat_outcome.get("description", "")
+
+            outcome["bat_runs"] = bat_runs
+            outcome["bat_description"] = bat_desc
+            outcome["runs"] = outcome.get("runs", 0) + bat_runs
+            outcome["batter_out"] = False
+            outcome["wicket_type"] = None
 
         # Update pressure engine with outcome
         self.pressure_engine.update_recent_events(outcome)
@@ -3395,17 +3429,38 @@ class Match:
                 elif runs == 6:
                     self.batsman_stats[self.current_striker["name"]]["sixes"] += 1
 
-            commentary_line += f"{runs} run(s), {outcome['description']}"
+            if extra and outcome.get("extra_type") == "No Ball":
+                bat_runs = outcome.get("bat_runs", 0)
+                if bat_runs > 0:
+                    self.batsman_stats[self.current_striker["name"]]["runs"] += bat_runs
+                    if bat_runs == 1:
+                        self.batsman_stats[self.current_striker["name"]]["ones"] += 1
+                    elif bat_runs == 2:
+                        self.batsman_stats[self.current_striker["name"]]["twos"] += 1
+                    elif bat_runs == 3:
+                        self.batsman_stats[self.current_striker["name"]]["threes"] += 1
+                    elif bat_runs == 4:
+                        self.batsman_stats[self.current_striker["name"]]["fours"] += 1
+                    elif bat_runs == 6:
+                        self.batsman_stats[self.current_striker["name"]]["sixes"] += 1
+
+                commentary_line += f"No Ball + {bat_runs} run(s), {outcome.get('bat_description', '')}"
+            else:
+                commentary_line += f"{runs} run(s), {outcome['description']}"
             self.commentary.append(commentary_line)
 
-            # A3: Strike rotates on all odd runs, including byes/leg-byes, but NOT wides/no-balls
+            # A3: Strike rotates on odd runs (byes/leg-byes), and on no-ball bat-runs
             should_rotate = False
-            if runs % 2 == 1:
-                if not extra:
+            if not extra:
+                if runs % 2 == 1:
                     should_rotate = True
-                else:
-                    extra_type = outcome.get("extra_type", "")
-                    if extra_type in ("Leg Bye", "Byes"):
+            else:
+                extra_type = outcome.get("extra_type", "")
+                if extra_type in ("Leg Bye", "Byes") and runs % 2 == 1:
+                    should_rotate = True
+                elif extra_type == "No Ball":
+                    bat_runs = outcome.get("bat_runs", 0)
+                    if bat_runs % 2 == 1:
                         should_rotate = True
             if should_rotate:
                 self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker

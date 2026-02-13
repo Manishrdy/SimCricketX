@@ -1,7 +1,21 @@
 import random
 import logging
+from engine.ground_config import (
+    get_scoring_matrix as _gc_scoring_matrix,
+    get_run_factor as _gc_run_factor,
+    get_wicket_factors as _gc_wicket_factors,
+    get_phase_boosts as _gc_phase_boosts,
+    get_blending_weights as _gc_blending_weights,
+)
 
 logger = logging.getLogger(__name__)
+
+# Tune extras frequency to target ~3-6 extras per innings (120 balls).
+EXTRA_ERROR_FLOOR = 0.25
+EXTRA_WEIGHT_MULTIPLIER = 1.8
+
+# Free hit boundary share (combined Four+Six probability share).
+FREE_HIT_BOUNDARY_SHARE = 0.40
 
 # -----------------------------------------------------------------------------
 # ball_outcome.py
@@ -329,19 +343,23 @@ PITCH_WICKET_FACTOR = {
 def get_pitch_run_multiplier(pitch: str) -> float:
     """
     Returns the run-friendly multiplier for the given pitch.
+    Uses ground_conditions.yaml if available, falls back to hardcoded constants.
     """
-    factor = PITCH_RUN_FACTOR.get(pitch, 1.0)
-    # print(f"[get_pitch_run_multiplier] Pitch: {pitch}, RunFactor: {factor}")
+    factor = _gc_run_factor(pitch)
+    if factor is None:
+        factor = PITCH_RUN_FACTOR.get(pitch, 1.0)
     return factor
 
 def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
     """
     Returns the wicket-friendly multiplier for the given pitch and bowling type.
+    Uses ground_conditions.yaml if available, falls back to hardcoded constants.
     """
+    wf = _gc_wicket_factors(pitch)
+    if wf:
+        return wf.get(bowling_type, wf.get("default", 1.0))
     slot = PITCH_WICKET_FACTOR.get(pitch, {})
-    factor = slot.get(bowling_type, slot.get("default", 1.0))
-    # print(f"[get_pitch_wicket_multiplier] Pitch: {pitch}, BowlingType: {bowling_type}, WicketFactor: {factor}")
-    return factor
+    return slot.get(bowling_type, slot.get("default", 1.0))
 
 # -----------------------------------------------------------------------------
 # 3) Base outcome probabilities (raw frequencies)
@@ -519,8 +537,9 @@ def compute_weighted_prob(
     # 🔧 USER REQUEST: "If flat, batsman will have advantage over bowlers"
     # Logic: Boosting the skill component if favorable to bat
     
-    alpha = 0.6 # Pitch weight
-    beta = 0.4  # Skill weight
+    _weights = _gc_blending_weights()
+    alpha = _weights[0] if _weights else 0.6  # Pitch weight
+    beta = _weights[1] if _weights else 0.4   # Skill weight
 
     if pitch == "Hard":
         # User explicitly mentioned 80/20. We applied that in skill logic.
@@ -531,8 +550,9 @@ def compute_weighted_prob(
 
     # 4) Compute raw weight
     if outcome_type == "Extras":
-         # Extras depend solely on bowler error
-        raw_weight = base_prob * ((100 - bowling) / 100.0)
+        # Extras depend on bowler error but are floored to avoid near-zero rates.
+        error_rate = max(EXTRA_ERROR_FLOOR, (100 - bowling) / 100.0)
+        raw_weight = base_prob * error_rate * EXTRA_WEIGHT_MULTIPLIER
         return max(raw_weight, 0.0)
 
     # Apply specific boosts/penalties logic
@@ -584,7 +604,9 @@ def calculate_outcome(
     over_number: int,
     batter_runs: int,
     innings: int = 1,
-    pressure_effects: dict = None
+    pressure_effects: dict = None,
+    allow_extras: bool = True,
+    free_hit: bool = False
 ) -> dict:
     """
     Determines the outcome of a single delivery.
@@ -617,14 +639,18 @@ def calculate_outcome(
     bowling_hand = bowler["bowling_hand"]
     bowling_type = bowler["bowling_type"]
 
-    # 2) Get pitch-specific scoring matrix
-    pitch_matrix = PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX)
+    # 2) Get pitch-specific scoring matrix (ground_config with game mode applied, or hardcoded fallback)
+    pitch_matrix = _gc_scoring_matrix(pitch) or PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX)
     # print(f"[calculate_outcome] Using scoring matrix for pitch: {pitch}")
 
     raw_weights = {}
     for outcome in pitch_matrix:
         base = pitch_matrix[outcome]
         # print(f"\n-- Computing weight for outcome: {outcome} (Base: {base}) --")
+
+        if outcome == "Extras" and not allow_extras:
+            raw_weights[outcome] = 0.0
+            continue
 
         # Compute base weight via 60/40 blending
         if outcome in ("Dot", "Single", "Double", "Three", "Four", "Six"):
@@ -657,58 +683,50 @@ def calculate_outcome(
                 pitch, bowling_type, streak
             )
 
-            # 3) Death-over adjustments
-            
-            # 🔧 USER REQUEST: "In power play first 6 overs, we can keep some boundaries"
-            # Powerplay boosts (Overs 0-5)
-            if over_number < 6:
-                if outcome in ("Four", "Six"):
-                    pp_boost = 1.25 # 25% more boundaries in PP
-                    logger.debug(f"  [Powerplay] Boosting {outcome} by {pp_boost}x")
-                    weight *= pp_boost
-                elif outcome == "Wicket":
-                    # Wickets slightly less likely in PP if batsman is just attacking gaps
-                    # But we don't want to make it too safe.
-                    # Let's leave wicket as is or slight reduction unless reckless.
-                    pass
+        # --- Phase boosts (apply to ALL outcome types, not just Extras) ---
+        # Load configurable phase boosts with hardcoded fallbacks
+        _phase = _gc_phase_boosts() or {}
+        _pp_cfg = _phase.get("powerplay", {})
+        _death_cfg = _phase.get("death_overs", {})
+        _inn2_cfg = _phase.get("second_innings_death", {})
 
-            # 3) Death-over adjustments
-            # AGGRESSIVE DEATH OVERS (Last 4 overs: 17-20)
-            in_death = over_number >= 16  # Overs 16, 17, 18, 19 (which are 17th to 20th overs)
-            
-            if in_death:
-                if outcome in ("Four", "Six"):
-                    # 🔧 USER REQUEST: "Last 4 overs scoring to be little aggressive"
-                    # Significantly increased boost factors for chaos
-                    if pitch in ("Flat", "Dead", "Hard"):
-                        # Super aggressive on batting pitches
-                        boundary_boost = 2.2  # Was 1.4
-                    else:  # Green or Dry
-                        # Still very aggressive on bowling pitches
-                        boundary_boost = 1.8  # Was 1.2
-                    
-                    logger.debug(f"  DeathOver: AGGRESSIVE BOUNDARY ({outcome}) on {pitch} by factor {boundary_boost}")
-                    weight *= boundary_boost
+        # Powerplay boosts
+        pp_start = _pp_cfg.get("overs_start", 0)
+        pp_end = _pp_cfg.get("overs_end", 5)
+        if pp_start <= over_number <= pp_end:
+            if outcome in ("Four", "Six"):
+                pp_boost = _pp_cfg.get("boundary_multiplier", 1.25)
+                logger.debug(f"  [Powerplay] Boosting {outcome} by {pp_boost}x")
+                weight *= pp_boost
 
-                if outcome == "Wicket":
-                    # Increased wicket chance for frantic finishes
-                    wicket_boost = 1.6  # Was 1.3
-                    logger.debug(f"  DeathOver: AGGRESSIVE WICKET on {pitch} by factor {wicket_boost}")
-                    weight *= wicket_boost
+        # Death-over boosts (last 4 overs: 17-20)
+        death_start = _death_cfg.get("overs_start", 16)
+        death_end = _death_cfg.get("overs_end", 19)
+        in_death = death_start <= over_number <= death_end
 
-            # 4) Second innings special boosts (last 4 overs)
-            if innings == 2 and over_number >= 16:
-                # Scoring boost by 15% for all run-scoring outcomes
-                if outcome in ("Single", "Double", "Three", "Four", "Six"):
-                    second_innings_scoring_boost = 1.15
-                    # print(f"  SecondInnings: Boosting scoring ({outcome}) by factor {second_innings_scoring_boost}")
-                    weight *= second_innings_scoring_boost
-                
-                # Wicket boost by 3% additional
-                if outcome == "Wicket":
-                    second_innings_wicket_boost = 1.1 # Increased from 1.03
-                    # print(f"  SecondInnings: Additional wicket boost by factor {second_innings_wicket_boost}")
-                    weight *= second_innings_wicket_boost
+        if in_death:
+            if outcome in ("Four", "Six"):
+                if pitch in ("Flat", "Dead", "Hard"):
+                    boundary_boost = _death_cfg.get("boundary_boost_batting_pitch", 2.2)
+                else:  # Green or Dry
+                    boundary_boost = _death_cfg.get("boundary_boost_bowling_pitch", 1.8)
+                logger.debug(f"  DeathOver: BOUNDARY ({outcome}) on {pitch} by factor {boundary_boost}")
+                weight *= boundary_boost
+
+            if outcome == "Wicket":
+                wicket_boost = _death_cfg.get("wicket_boost", 1.6)
+                logger.debug(f"  DeathOver: WICKET on {pitch} by factor {wicket_boost}")
+                weight *= wicket_boost
+
+        # Second innings death-over boosts
+        if innings == 2 and in_death:
+            if outcome in ("Single", "Double", "Three", "Four", "Six"):
+                scoring_boost = _inn2_cfg.get("scoring_boost", 1.15)
+                weight *= scoring_boost
+
+            if outcome == "Wicket":
+                wicket_boost_2nd = _inn2_cfg.get("wicket_boost", 1.1)
+                weight *= wicket_boost_2nd
 
         # Ensure no negative weights
         weight = max(weight, 0.0)
@@ -775,7 +793,23 @@ def calculate_outcome(
         # Recalculate total weight after pressure modifications
         total_weight = sum(raw_weights.values())
     
-    # 4) Normalize weights into probabilities
+    # 4) Free hit: enforce combined Four+Six share (default 40%)
+    if free_hit and "Four" in raw_weights and "Six" in raw_weights:
+        total_weight = sum(raw_weights.values())
+        if total_weight > 0:
+            boundary_weight = raw_weights["Four"] + raw_weights["Six"]
+            target_boundary = FREE_HIT_BOUNDARY_SHARE * total_weight
+            if boundary_weight > 0 and total_weight > boundary_weight:
+                boundary_scale = target_boundary / boundary_weight
+                other_scale = (total_weight - target_boundary) / (total_weight - boundary_weight)
+                for key in raw_weights:
+                    if key in ("Four", "Six"):
+                        raw_weights[key] *= boundary_scale
+                    else:
+                        raw_weights[key] *= other_scale
+                total_weight = sum(raw_weights.values())
+
+    # 5) Normalize weights into probabilities
     # print(f"\n[calculate_outcome] Total raw weight sum: {total_weight:.6f}")
     if total_weight <= 0:
         # Fallback in pathological case
@@ -858,7 +892,7 @@ def calculate_outcome(
         if extra_choice == "Wide":
             result["runs"] = 1
         elif extra_choice == "No Ball":
-            result["runs"] = random.choices([1, 2, 5], weights=[0.70, 0.20, 0.10])[0]
+            result["runs"] = 1
         elif extra_choice == "Leg Bye":
             result["runs"] = random.choices([1, 2], weights=[0.80, 0.20])[0]
         elif extra_choice == "Byes":

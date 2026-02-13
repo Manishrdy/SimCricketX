@@ -1,0 +1,468 @@
+/* ═══════════════════════════════════════════════════════════
+   Ground Conditions Guide — Documentation Page Styles
+   ═══════════════════════════════════════════════════════════ */
+
+.guide-container {
+    max-width: 820px;
+    margin: 0 auto;
+    padding-bottom: 4rem;
+}
+
+/* ── Hero ── */
+.guide-hero {
+    text-align: center;
+    padding: 3rem 0 2.5rem;
+}
+
+.guide-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.03em;
+}
+
+.guide-subtitle {
+    font-size: 1.05rem;
+    color: var(--fg-secondary);
+    max-width: 500px;
+    margin: 0 auto;
+    line-height: 1.6;
+}
+
+/* ── Table of Contents ── */
+.guide-toc {
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 16px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 2.5rem;
+}
+
+.guide-toc-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    color: var(--fg-secondary);
+    margin-bottom: 0.75rem;
+}
+
+.guide-toc-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.5rem;
+}
+
+.guide-toc-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.guide-toc-list .toc-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-light);
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+}
+
+.guide-toc-list a {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none;
+    padding: 0.3rem 0;
+    transition: color 0.2s ease;
+}
+
+.guide-toc-list a:hover {
+    text-decoration: underline;
+}
+
+/* ── Collapsible Sections ── */
+.guide-section {
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 20px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.guide-section-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    background: none;
+    border: none;
+    color: var(--fg);
+    cursor: pointer;
+    transition: background 0.2s ease;
+    font-family: inherit;
+}
+
+.guide-section-toggle:hover {
+    background: var(--accent-light);
+}
+
+.guide-section-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-light);
+    padding: 0.25rem 0.6rem;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.guide-section-toggle h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    flex: 1;
+    text-align: left;
+    margin: 0;
+}
+
+.guide-chevron {
+    color: var(--fg-secondary);
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+}
+
+.guide-section-body {
+    display: none;
+    padding: 0 1.5rem 1.5rem;
+}
+
+.guide-section-body.open {
+    display: block;
+    animation: guideSlideDown 0.3s ease;
+}
+
+@keyframes guideSlideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Content Typography ── */
+.guide-section-body p {
+    font-size: 0.92rem;
+    line-height: 1.7;
+    color: var(--fg);
+    margin-bottom: 1rem;
+}
+
+.guide-section-body h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--fg);
+    margin: 1.5rem 0 0.75rem;
+}
+
+.guide-section-body h3:first-child {
+    margin-top: 0;
+}
+
+/* ── Callout Box ── */
+.guide-callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 12px 12px 0;
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--fg);
+}
+
+.guide-callout strong {
+    color: var(--accent);
+}
+
+.guide-callout.warning {
+    border-left-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.guide-callout.warning strong {
+    color: #d97706;
+}
+
+/* ── Pitch Cards in Guide ── */
+.guide-pitch-card {
+    border: 2px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.guide-pitch-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+}
+
+.guide-pitch-card[data-pitch="Green"]::before { background: linear-gradient(90deg, #16a34a, #22c55e); }
+.guide-pitch-card[data-pitch="Dry"]::before   { background: linear-gradient(90deg, #d97706, #f59e0b); }
+.guide-pitch-card[data-pitch="Hard"]::before  { background: linear-gradient(90deg, #6b7280, #9ca3af); }
+.guide-pitch-card[data-pitch="Flat"]::before  { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+.guide-pitch-card[data-pitch="Dead"]::before  { background: linear-gradient(90deg, #78716c, #a8a29e); }
+
+.guide-pitch-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--fg);
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.guide-pitch-title .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.guide-pitch-card[data-pitch="Green"] .dot { background: #22c55e; }
+.guide-pitch-card[data-pitch="Dry"] .dot   { background: #f59e0b; }
+.guide-pitch-card[data-pitch="Hard"] .dot  { background: #9ca3af; }
+.guide-pitch-card[data-pitch="Flat"] .dot  { background: #a78bfa; }
+.guide-pitch-card[data-pitch="Dead"] .dot  { background: #a8a29e; }
+
+.guide-pitch-meta {
+    font-size: 0.8rem;
+    color: var(--fg-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.guide-pitch-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-right: 1rem;
+}
+
+.guide-pitch-desc {
+    font-size: 0.85rem;
+    color: var(--fg);
+    line-height: 1.55;
+}
+
+/* ── Mode Cards in Guide ── */
+.guide-mode-card {
+    border: 2px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.guide-mode-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+}
+
+.guide-mode-card[data-mode="natural_game"]::before     { background: linear-gradient(135deg, #0d9488, #14b8a6); }
+.guide-mode-card[data-mode="aggressive"]::before       { background: linear-gradient(135deg, #dc2626, #f97316); }
+.guide-mode-card[data-mode="defensive"]::before        { background: linear-gradient(135deg, #2563eb, #64748b); }
+.guide-mode-card[data-mode="flat_track_bully"]::before { background: linear-gradient(135deg, #d97706, #fbbf24); }
+.guide-mode-card[data-mode="bowlers_day"]::before      { background: linear-gradient(135deg, #7c3aed, #6366f1); }
+
+.guide-mode-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.guide-mode-title i { font-size: 1rem; }
+.guide-mode-card[data-mode="natural_game"] .guide-mode-title i     { color: #0d9488; }
+.guide-mode-card[data-mode="aggressive"] .guide-mode-title i       { color: #dc2626; }
+.guide-mode-card[data-mode="defensive"] .guide-mode-title i        { color: #2563eb; }
+.guide-mode-card[data-mode="flat_track_bully"] .guide-mode-title i { color: #d97706; }
+.guide-mode-card[data-mode="bowlers_day"] .guide-mode-title i      { color: #7c3aed; }
+
+[data-theme="dark"] .guide-mode-card[data-mode="natural_game"] .guide-mode-title i     { color: #2dd4bf; }
+[data-theme="dark"] .guide-mode-card[data-mode="aggressive"] .guide-mode-title i       { color: #f87171; }
+[data-theme="dark"] .guide-mode-card[data-mode="defensive"] .guide-mode-title i        { color: #60a5fa; }
+[data-theme="dark"] .guide-mode-card[data-mode="flat_track_bully"] .guide-mode-title i { color: #fbbf24; }
+[data-theme="dark"] .guide-mode-card[data-mode="bowlers_day"] .guide-mode-title i      { color: #a78bfa; }
+
+.guide-mode-use {
+    font-size: 0.8rem;
+    color: var(--fg-secondary);
+    font-style: italic;
+    margin-bottom: 0.75rem;
+}
+
+/* ── Modifier Table ── */
+.guide-mod-table {
+    width: 100%;
+    font-size: 0.82rem;
+    border-collapse: collapse;
+}
+
+.guide-mod-table th,
+.guide-mod-table td {
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.guide-mod-table th {
+    font-weight: 700;
+    color: var(--fg-secondary);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.guide-mod-table .mod-up {
+    color: #16a34a;
+    font-weight: 600;
+}
+
+.guide-mod-table .mod-down {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.guide-mod-table .mod-neutral {
+    color: var(--fg-secondary);
+}
+
+[data-theme="dark"] .guide-mod-table .mod-up { color: #4ade80; }
+[data-theme="dark"] .guide-mod-table .mod-down { color: #f87171; }
+
+/* ── Phase Timeline ── */
+.guide-timeline {
+    display: flex;
+    gap: 0;
+    margin: 1.5rem 0;
+    border-radius: 10px;
+    overflow: hidden;
+    height: 44px;
+}
+
+.guide-phase-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #fff;
+    gap: 0.3rem;
+}
+
+.guide-phase-bar.pp {
+    background: linear-gradient(135deg, #3b82f6, #60a5fa);
+    flex: 6;
+}
+
+.guide-phase-bar.middle {
+    background: linear-gradient(135deg, #6b7280, #9ca3af);
+    flex: 10;
+    color: rgba(255,255,255,0.8);
+}
+
+.guide-phase-bar.death {
+    background: linear-gradient(135deg, #ef4444, #f97316);
+    flex: 4;
+}
+
+/* ── Recipe Cards ── */
+.guide-recipe {
+    background: var(--bg-secondary);
+    border: 2px solid var(--card-border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.guide-recipe-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    color: var(--fg);
+}
+
+.guide-recipe-config {
+    font-size: 0.8rem;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+}
+
+.guide-recipe-desc {
+    font-size: 0.85rem;
+    color: var(--fg-secondary);
+    line-height: 1.55;
+}
+
+/* ── Back Link ── */
+.guide-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--accent);
+    font-size: 0.88rem;
+    font-weight: 600;
+    text-decoration: none;
+    margin-bottom: 1rem;
+    padding: 0.4rem 0;
+    transition: gap 0.2s ease;
+}
+
+.guide-back:hover {
+    gap: 0.6rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    .guide-title {
+        font-size: 1.8rem;
+    }
+
+    .guide-toc-list {
+        grid-template-columns: 1fr;
+    }
+
+    .guide-section-toggle {
+        padding: 1rem 1.25rem;
+    }
+
+    .guide-section-body {
+        padding: 0 1.25rem 1.25rem;
+    }
+
+    .guide-timeline {
+        height: 36px;
+    }
+
+    .guide-phase-bar {
+        font-size: 0.6rem;
+    }
+}
