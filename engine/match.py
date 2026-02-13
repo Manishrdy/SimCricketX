@@ -2939,12 +2939,18 @@ class Match:
                 opener_1 = self.current_non_striker['name']
                 opener_2 = self.current_striker['name']
                 self.pending_pre_ball_commentary.extend([
+                    "",
                     f"<strong>INNINGS {self.innings}</strong>",
+                    "",
                     f"{opener_1} and {opener_2} will open the attack for {batting_team_name}. {opener_2} is on strike.",
-                    f"{self.current_bowler['name']} will bowl the opening over for {bowling_team_name}."
+                    f"{self.current_bowler['name']} will bowl the opening over for {bowling_team_name}.",
+                    ""
                 ])
             else:
-                self.pending_pre_ball_commentary.append(f"{self.current_bowler['name']} is into the attack.")
+                self.pending_pre_ball_commentary.extend([
+                    f"{self.current_bowler['name']} is into the attack.",
+                    ""
+                ])
 
         # Calculate pressure and effects
         match_state = self._calculate_current_match_state()
@@ -3111,16 +3117,32 @@ class Match:
 
             if wicket_type == "Run Out":
                 # A1: Run out after completing 1 run, dismissed attempting the 2nd
-                # 1. Credit the 1 completed run to score, bowler, and striker
+                # 1. Credit the 1 completed run to score
                 self.score += 1
                 self.current_over_runs += 1
                 self.current_over_maiden_invalid = True  # A2: bat-run invalidates maiden
-                self.bowler_stats[self.current_bowler["name"]]["runs"] += 1
-                self.batsman_stats[self.current_striker["name"]]["runs"] += 1
-                self.batsman_stats[self.current_striker["name"]]["ones"] += 1
+                
+                # For Byes/Leg Byes, don't charge runs to bowler or batsman (extras only)
+                if extra:
+                    extra_type = outcome.get("extra_type", "")
+                    if extra_type not in ("Byes", "Leg Bye"):
+                        self.bowler_stats[self.current_bowler["name"]]["runs"] += 1
+                        self.batsman_stats[self.current_striker["name"]]["runs"] += 1
+                        self.batsman_stats[self.current_striker["name"]]["ones"] += 1
+                    # Byes/Leg Byes: runs are extras, not charged to bowler or credited to batsman
+                else:
+                    self.bowler_stats[self.current_bowler["name"]]["runs"] += 1
+                    self.batsman_stats[self.current_striker["name"]]["runs"] += 1
+                    self.batsman_stats[self.current_striker["name"]]["ones"] += 1
 
-                # 2. Count the ball
-                if not extra:
+                # 2. Count the ball (Byes/Leg Byes are legal deliveries)
+                is_legal_delivery = not extra
+                if extra:
+                    extra_type = outcome.get("extra_type", "")
+                    if extra_type in ("Byes", "Leg Bye"):
+                        is_legal_delivery = True
+                
+                if is_legal_delivery:
                     self.current_ball += 1
                     self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
                     self.batsman_stats[self.current_striker["name"]]["balls"] += 1
@@ -3149,7 +3171,14 @@ class Match:
 
             else:
                 # Non-Run-Out dismissals: striker is always out, 0 runs scored
-                if not extra:
+                # (Byes/Leg Byes are legal deliveries)
+                is_legal_delivery = not extra
+                if extra:
+                    extra_type = outcome.get("extra_type", "")
+                    if extra_type in ("Byes", "Leg Bye"):
+                        is_legal_delivery = True
+                
+                if is_legal_delivery:
                     self.current_ball += 1
                     self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
                     self.batsman_stats[self.current_striker["name"]]["balls"] += 1
@@ -3406,7 +3435,14 @@ class Match:
         else:
             self.score += runs
             self.current_over_runs += runs
-            self.bowler_stats[self.current_bowler["name"]]["runs"] += runs
+            
+            # Byes and Leg Byes are not charged to the bowler
+            if extra:
+                extra_type = outcome.get("extra_type", "")
+                if extra_type not in ("Byes", "Leg Bye"):
+                    self.bowler_stats[self.current_bowler["name"]]["runs"] += runs
+            else:
+                self.bowler_stats[self.current_bowler["name"]]["runs"] += runs
             
             if not extra:
                 self.batsman_stats[self.current_striker["name"]]["runs"] += runs
@@ -3415,6 +3451,11 @@ class Match:
                 # A2: Bat-runs > 0 invalidate maiden over
                 if runs > 0:
                     self.current_over_maiden_invalid = True
+            else:
+                # Byes and Leg Byes are legal deliveries: increment batsman balls faced
+                extra_type = outcome.get("extra_type", "")
+                if extra_type in ("Byes", "Leg Bye"):
+                    self.batsman_stats[self.current_striker["name"]]["balls"] += 1
 
                 if runs == 0:
                     self.batsman_stats[self.current_striker["name"]]["dots"] += 1
@@ -3468,7 +3509,14 @@ class Match:
 
             if self.innings == 2 and self.score >= self.target:
                 # ✅ UPDATE BOWLER STATS FOR THE MATCH-WINNING BALL
-                if not extra:
+                # Increment ball count for legal deliveries (non-extras OR Byes/Leg Byes)
+                is_legal_delivery = not extra
+                if extra:
+                    extra_type = outcome.get("extra_type", "")
+                    if extra_type in ("Byes", "Leg Bye"):
+                        is_legal_delivery = True
+                
+                if is_legal_delivery:
                     self.current_ball += 1  # Increment ball count for this delivery
                     self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
 
@@ -3576,7 +3624,15 @@ class Match:
                     }
                 }
 
-        if not extra and not wicket:
+        # Increment ball count for legal deliveries (non-extras OR Byes/Leg Byes)
+        is_legal_delivery = not extra and not wicket
+        if extra and not wicket:
+            extra_type = outcome.get("extra_type", "")
+            # Byes and Leg Byes are legal deliveries, Wide and No Ball are not
+            if extra_type in ("Byes", "Leg Bye"):
+                is_legal_delivery = True
+        
+        if is_legal_delivery:
             self.current_ball += 1
             self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
 
@@ -3634,6 +3690,7 @@ class Match:
             # D4: Increment bowler_history at over completion, not at selection
             self.bowler_history[self.current_bowler["name"]] = self.bowler_history.get(self.current_bowler["name"], 0) + 1
             
+            all_commentary.append("")
             all_commentary.append(self._format_over_summary(f"End of over {self.current_over + 1}"))
 
             if self.innings == 2:
