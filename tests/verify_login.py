@@ -42,7 +42,7 @@ def test_auth():
             db.session.delete(existing)
             db.session.commit()
             
-        success = register_user(new_user_email, new_user_pass)
+        success = register_user(new_user_email, new_user_pass, display_name="Test User")
         if success:
             logger.info("✅ Registration successful")
         else:

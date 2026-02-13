@@ -39,10 +39,12 @@ def log_admin_action(admin_email: str, action: str, target: str = None, details:
 
 # --- Core Auth Functions ---
 
-def register_user(email: str, password: str) -> bool:
+def register_user(email: str, password: str, display_name: str | None = None) -> bool:
     """Register a new user in the database."""
     if not email or not password:
         return False
+
+    display_name = display_name.strip() if display_name else None
 
     # C4: Enforce minimum password length
     if len(password) < MIN_PASSWORD_LENGTH:
@@ -61,7 +63,8 @@ def register_user(email: str, password: str) -> bool:
             id=email,
             password_hash=generate_password_hash(password),
             ip_address=get_ip_address(),
-            last_login=datetime.now(timezone.utc)
+            last_login=datetime.now(timezone.utc),
+            display_name=display_name
         )
 
         db.session.add(new_user)
