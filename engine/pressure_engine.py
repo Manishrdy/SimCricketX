@@ -284,7 +284,7 @@ class PressureEngine:
         # Pitch-specific momentum
         pitch = state['pitch']
         
-        if pitch in ['Green', 'Dusty']:  # Bowler-friendly
+        if pitch in ['Green', 'Dry']:  # Bowler-friendly
             # Dots create more pressure
             if recent_dots >= 2:
                 momentum_pressure += 15

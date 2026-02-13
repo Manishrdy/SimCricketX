@@ -223,7 +223,7 @@ def calculate_super_over_outcome(
         if extra_choice == "Wide":
             result["runs"] = 1
         elif extra_choice == "No Ball":
-            result["runs"] = random.choices([1, 2, 5], weights=[0.70, 0.20, 0.10])[0]
+            result["runs"] = 1
         elif extra_choice == "Leg Bye":
             result["runs"] = random.choices([1, 2], weights=[0.80, 0.20])[0]
         elif extra_choice == "Byes":

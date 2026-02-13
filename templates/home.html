@@ -596,6 +596,19 @@
         </div>
     </div>
 
+    <div class="dashboard-card" onclick="location.href='/ground-conditions'">
+        <div class="card-content">
+            <div class="card-icon-wrapper">
+                <i class="fa-solid fa-mountain-sun"></i>
+            </div>
+            <h2 class="card-title">Ground Conditions</h2>
+            <p class="card-description">Fine-tune pitch profiles, set game modes, and calibrate the simulation engine to your preferred style of cricket.</p>
+        </div>
+        <div class="card-action">
+            Configure <i class="fa-solid fa-arrow-right"></i>
+        </div>
+    </div>
+
     <form method="POST" action="{{ url_for('logout') }}" id="logoutForm" style="display:contents;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="dashboard-card" onclick="document.getElementById('logoutForm').submit();" style="cursor:pointer;">

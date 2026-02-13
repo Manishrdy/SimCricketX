@@ -36,7 +36,12 @@ def run_simulation(pitch_type, num_balls=1000, over_phase="Middle"):
         "wickets": 0,
         "fours": 0,
         "sixes": 0,
-        "dots": 0
+        "dots": 0,
+        "extras": 0,
+        "wides": 0,
+        "noballs": 0,
+        "byes": 0,
+        "legbyes": 0
     }
     
     for _ in range(num_balls):
@@ -63,6 +68,18 @@ def run_simulation(pitch_type, num_balls=1000, over_phase="Middle"):
             elif outcome["runs"] == 6:
                 stats["sixes"] += 1
 
+        if outcome.get("is_extra"):
+            stats["extras"] += 1
+            extra_type = outcome.get("extra_type", "")
+            if extra_type == "Wide":
+                stats["wides"] += 1
+            elif extra_type == "No Ball":
+                stats["noballs"] += 1
+            elif extra_type == "Byes":
+                stats["byes"] += 1
+            elif extra_type == "Leg Bye":
+                stats["legbyes"] += 1
+
     # Analysis
     avg_score_per_over = (stats['runs'] / num_balls) * 6
     avg_wickets_per_match = (stats['wickets'] / num_balls) * 120
@@ -72,6 +89,9 @@ def run_simulation(pitch_type, num_balls=1000, over_phase="Middle"):
     print(f"Total Wickets: {stats['wickets']} (Wickets/20ov: {avg_wickets_per_match:.2f})")
     print(f"Boundaries: 4s={stats['fours']}, 6s={stats['sixes']}")
     print(f"Dot Ball %: {stats['dots']/num_balls*100:.1f}%")
+    extras_per_innings = (stats['extras'] / num_balls) * 120
+    print(f"Extras: {stats['extras']} (Extras/20ov: {extras_per_innings:.2f})")
+    print(f"  - Wides: {stats['wides']}, No Balls: {stats['noballs']}, Byes: {stats['byes']}, Leg Byes: {stats['legbyes']}")
 
 if __name__ == "__main__":
     # Test Hard Pitch (Should be Batting Dominant but balanced 80/20)
