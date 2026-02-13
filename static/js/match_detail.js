@@ -89,40 +89,65 @@ function updateCurrentOverBalls(bd) {
 
 // --- Initialization ---
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Pace buttons
-    document.querySelectorAll('.pace-btn').forEach(btn => {
-        btn.onclick = () => {
-            delay = parseInt(btn.dataset.pace);
-            document.querySelectorAll('.pace-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-        };
-    });
+// Track this-over ball results for the banner strip
+let thisOverBallResults = [];
 
-    // View toggle (Commentary / Match Center)
-    const viewToggle = document.getElementById('view-toggle');
-    if (viewToggle) {
-        viewToggle.addEventListener('change', () => {
-            dashboardActive = viewToggle.checked;
-            document.querySelector('.code-window').style.display = dashboardActive ? 'none' : 'flex';
-            document.getElementById('dashboard-container').style.display = dashboardActive ? 'grid' : 'none';
-            // Update toggle label styling
-            document.getElementById('label-commentary').classList.toggle('active-label', !dashboardActive);
-            document.getElementById('label-matchcenter').classList.toggle('active-label', dashboardActive);
-            if (dashboardActive && typeof refreshDashboard === 'function') {
-                refreshDashboard(ballHistory, overRuns, innings1Data);
-            }
-            requestAnimationFrame(syncCodeWindowHeight);
-        });
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Pill toggle: Simulation Mode (Auto / Manual) ---
+    const pillAuto = document.getElementById('pill-auto');
+    const pillManual = document.getElementById('pill-manual');
+    const modeToggle = document.getElementById('simulation-mode-toggle');
+
+    function syncModePills() {
+        if (!pillAuto || !pillManual) return;
+        pillAuto.classList.toggle('active', simulationMode === 'auto');
+        pillManual.classList.toggle('active', simulationMode === 'manual');
+        if (modeToggle) modeToggle.checked = simulationMode === 'manual';
     }
 
-    const modeToggle = document.getElementById('simulation-mode-toggle');
+    if (pillAuto) pillAuto.addEventListener('click', async () => {
+        if (simulationMode === 'auto') return;
+        const ok = await setSimulationMode('auto', true);
+        if (ok) syncModePills();
+    });
+    if (pillManual) pillManual.addEventListener('click', async () => {
+        if (simulationMode === 'manual') return;
+        const ok = await setSimulationMode('manual', true);
+        if (ok) syncModePills();
+    });
+    syncModePills();
+
+    // --- Pill toggle: Commentary / Match Center ---
+    const pillCommentary = document.getElementById('pill-commentary');
+    const pillMatchCenter = document.getElementById('pill-matchcenter');
+    const viewToggle = document.getElementById('view-toggle');
+
+    function setView(showDashboard) {
+        dashboardActive = showDashboard;
+        document.querySelector('.code-window').style.display = dashboardActive ? 'none' : 'flex';
+        document.getElementById('dashboard-container').style.display = dashboardActive ? 'grid' : 'none';
+        if (pillCommentary) pillCommentary.classList.toggle('active', !dashboardActive);
+        if (pillMatchCenter) pillMatchCenter.classList.toggle('active', dashboardActive);
+        if (viewToggle) viewToggle.checked = dashboardActive;
+        if (dashboardActive && typeof refreshDashboard === 'function') {
+            refreshDashboard(ballHistory, overRuns, innings1Data);
+        }
+        requestAnimationFrame(syncCodeWindowHeight);
+    }
+
+    if (pillCommentary) pillCommentary.addEventListener('click', () => setView(false));
+    if (pillMatchCenter) pillMatchCenter.addEventListener('click', () => setView(true));
+
+    // Keep hidden checkbox in sync (for any legacy code)
+    if (viewToggle) {
+        viewToggle.addEventListener('change', () => setView(viewToggle.checked));
+    }
     if (modeToggle) {
-        modeToggle.checked = simulationMode === 'manual';
         modeToggle.addEventListener('change', async () => {
             const requestedMode = modeToggle.checked ? 'manual' : 'auto';
             const ok = await setSimulationMode(requestedMode, true);
-            if (!ok) modeToggle.checked = simulationMode === 'manual';
+            if (ok) syncModePills();
+            else if (modeToggle) modeToggle.checked = simulationMode === 'manual';
         });
     }
 
@@ -738,6 +763,16 @@ function spinTossAndStartMatch() {
         .then(d => {
             resultEl.textContent = `${d.toss_winner} chose to ${d.toss_decision}`;
             appendLog(`[TOSS] ${d.toss_commentary}`, 'comment');
+
+            // Set batting team name in banner based on toss result
+            const homeTeam = matchData.team_home.split('_')[0];
+            const awayTeam = matchData.team_away.split('_')[0];
+            const batFirst = (d.toss_winner === homeTeam && d.toss_decision === 'Bat') ||
+                             (d.toss_winner === awayTeam && d.toss_decision === 'Bowl')
+                             ? homeTeam : awayTeam;
+            const batNameEl = document.getElementById('sb-bat-name');
+            if (batNameEl) batNameEl.textContent = batFirst;
+
             setTimeout(startMatch, 1000);
         })
         .catch(err => {
@@ -754,12 +789,163 @@ function scheduleNextBall(delayMs) {
     simTimerId = setTimeout(startMatch, Math.max(MIN_BALL_DELAY_MS, delayMs));
 }
 
+// Track completed-over run totals for the over-flow display
+let completedOverTotals = [];   // [{over: 0, runs: 8}, {over: 1, runs: 12}, ...]
+let currentOverRunsAccum = 0;   // runs accumulated in the current (incomplete) over
+
+function updateScoreBanner(data) {
+    // Main score
+    const scoreEl = document.getElementById('sb-score');
+    if (scoreEl) scoreEl.textContent = `${data.score}/${data.wickets}`;
+
+    // Overs
+    const oversEl = document.getElementById('sb-overs');
+    if (oversEl) oversEl.textContent = `${data.over}.${data.ball} ov`;
+
+    // Current Run Rate
+    const totalBalls = data.over * 6 + data.ball;
+    const crr = totalBalls > 0 ? ((data.score / totalBalls) * 6).toFixed(2) : '0.00';
+    const crrEl = document.getElementById('sb-crr');
+    if (crrEl) crrEl.textContent = crr;
+
+    // Required Run Rate (2nd innings)
+    const rrrWrap = document.getElementById('sb-rrr-wrap');
+    const rrrEl = document.getElementById('sb-rrr');
+    if (data.target && data.innings_number === 2) {
+        const remaining = data.target - data.score;
+        const totalOvers = data.total_overs || 20;
+        const ballsLeft = (totalOvers * 6) - totalBalls;
+        if (ballsLeft > 0 && remaining > 0) {
+            const rrr = ((remaining / ballsLeft) * 6).toFixed(2);
+            if (rrrEl) rrrEl.textContent = rrr;
+            if (rrrWrap) rrrWrap.style.display = '';
+        }
+    }
+
+    // Match phase
+    const phaseEl = document.getElementById('sb-phase');
+    if (phaseEl) {
+        const totalOvers = data.total_overs || 20;
+        if (data.over < 6) phaseEl.textContent = 'POWERPLAY';
+        else if (data.over >= totalOvers - 4) phaseEl.textContent = 'DEATH OVERS';
+        else phaseEl.textContent = '';
+    }
+
+    // Target info
+    const targetEl = document.getElementById('sb-target');
+    if (targetEl && data.target && data.innings_number === 2) {
+        const need = data.target - data.score;
+        const ballsLeft = ((data.total_overs || 20) * 6) - totalBalls;
+        if (need > 0) {
+            targetEl.textContent = `Need ${need} off ${ballsLeft}b`;
+            targetEl.style.display = '';
+        } else {
+            targetEl.style.display = 'none';
+        }
+    }
+
+    // --- Top Row: Batsmen ---
+    const strikerEl = document.getElementById('sb-striker');
+    if (strikerEl && data.striker) {
+        strikerEl.className = 'sb-bat-row sb-on-strike';
+        strikerEl.innerHTML = `
+            <span class="sb-bat-name">${escapeHtml(data.striker)}*</span>
+            <span class="sb-bat-fig">${data.striker_runs ?? 0} (${data.striker_balls ?? 0})</span>
+        `;
+    }
+
+    const nsEl = document.getElementById('sb-nonstriker');
+    if (nsEl && data.non_striker) {
+        nsEl.className = 'sb-bat-row';
+        nsEl.innerHTML = `
+            <span class="sb-bat-name">${escapeHtml(data.non_striker)}</span>
+            <span class="sb-bat-fig">${data.nonstriker_runs ?? 0} (${data.nonstriker_balls ?? 0})</span>
+        `;
+    }
+
+    // --- Strip: Bowler ---
+    const bowlerEl = document.getElementById('sb-bowler');
+    if (bowlerEl && data.bowler) {
+        bowlerEl.innerHTML = `
+            <span class="sb-strip-label">BOWL</span>
+            <span class="sb-player-name">${escapeHtml(data.bowler)}</span>
+            <span class="sb-player-stat">${data.bowler_wickets ?? 0}/${data.bowler_runs ?? 0} (${data.bowler_overs ?? '0.0'})</span>
+        `;
+    }
+
+    // --- Strip: Partnership ---
+    const partEl = document.getElementById('sb-partnership');
+    if (partEl) {
+        const pRuns = data.partnership_runs ?? (data.ball_data ? data.ball_data.partnership_runs : 0) ?? 0;
+        const pBalls = data.partnership_balls ?? (data.ball_data ? data.ball_data.partnership_balls : 0) ?? 0;
+        partEl.innerHTML = `<span class="sb-strip-label">P'SHIP</span><span>${pRuns} (${pBalls})</span>`;
+    }
+
+    // --- Strip: Over flow + This Over ball dots ---
+    if (data.ball_data) {
+        const bd = data.ball_data;
+
+        // Detect new over: finalize previous over total, reset current
+        if (thisOverBallResults.length > 0 && bd.over !== thisOverBallResults[0].over) {
+            const prevOverRuns = thisOverBallResults.reduce((s, b) => s + b.runs, 0);
+            completedOverTotals.push({ over: thisOverBallResults[0].over, runs: prevOverRuns });
+            thisOverBallResults = [];
+            currentOverRunsAccum = 0;
+        }
+
+        thisOverBallResults.push(bd);
+        currentOverRunsAccum += bd.runs;
+
+        renderOverFlow();
+        renderThisOverBalls();
+    }
+}
+
+function renderOverFlow() {
+    const container = document.getElementById('sb-over-flow');
+    if (!container) return;
+
+    // Show last 5 completed overs + current in-progress
+    const show = completedOverTotals.slice(-5);
+    let html = '<span class="sb-strip-label">OVERS</span>';
+
+    show.forEach(ov => {
+        let cls = 'sb-over-box';
+        if (ov.runs >= 10) cls += ' sb-over-high';
+        else if (ov.runs <= 4) cls += ' sb-over-low';
+        html += `<span class="${cls}">${ov.runs}</span>`;
+    });
+
+    // Current incomplete over
+    if (thisOverBallResults.length > 0) {
+        html += `<span class="sb-over-box sb-over-current">${currentOverRunsAccum}*</span>`;
+    }
+
+    container.innerHTML = html;
+}
+
+function renderThisOverBalls() {
+    const container = document.getElementById('sb-this-over');
+    if (!container) return;
+    container.innerHTML = '';
+    thisOverBallResults.forEach(bd => {
+        const span = document.createElement('span');
+        let label = String(bd.runs);
+        let cls = 'sb-ball-dot ball-' + bd.runs;
+        if (bd.batter_out) { label = 'W'; cls = 'sb-ball-dot ball-w'; }
+        else if (bd.extra_type === 'Wide') { label = 'Wd'; cls = 'sb-ball-dot ball-wd'; }
+        else if (bd.extra_type === 'NoBall') { label = 'Nb'; cls = 'sb-ball-dot ball-nb'; }
+        else if (bd.runs === 4) { cls = 'sb-ball-dot ball-4'; }
+        else if (bd.runs === 6) { cls = 'sb-ball-dot ball-6'; }
+        span.className = cls;
+        span.textContent = label;
+        container.appendChild(span);
+    });
+}
+
 function startMatch() {
     simTimerId = null;
     if (matchOver) return;
-
-    const scoreElem = document.getElementById('score');
-    const overInfoElem = document.getElementById('over-info');
 
     fetch(window.location.pathname + "/next-ball", { method: 'POST' })
         .then(res => res.json())
@@ -769,10 +955,9 @@ function startMatch() {
                 return;
             }
 
-            // Update Scoreboard Header
+            // Update broadcast score banner
             if (data.score !== undefined) {
-                scoreElem.textContent = `Score: ${data.score}/${data.wickets}`;
-                overInfoElem.textContent = `Over: ${data.over}.${data.ball}`;
+                updateScoreBanner(data);
             }
 
             // Dashboard: process ball_data for every ball (runs in background regardless of view)
@@ -797,9 +982,34 @@ function startMatch() {
                 ballHistory = [];
                 overRuns = [];
                 currentOverBalls = [];
+                thisOverBallResults = [];
+                completedOverTotals = [];
+                currentOverRunsAccum = 0;
                 if (typeof resetDashboardForNewInnings === 'function') {
                     resetDashboardForNewInnings();
                 }
+
+                // Swap batting team name in banner for 2nd innings
+                const batNameEl = document.getElementById('sb-bat-name');
+                if (batNameEl) {
+                    const homeTeam = matchData.team_home.split('_')[0];
+                    const awayTeam = matchData.team_away.split('_')[0];
+                    batNameEl.textContent = batNameEl.textContent === homeTeam ? awayTeam : homeTeam;
+                }
+                // Reset score display
+                // Reset banner displays for 2nd innings
+                const sbScoreEl = document.getElementById('sb-score');
+                if (sbScoreEl) sbScoreEl.textContent = '0/0';
+                const sbOversEl = document.getElementById('sb-overs');
+                if (sbOversEl) sbOversEl.textContent = '0.0 ov';
+                const rrrWrap = document.getElementById('sb-rrr-wrap');
+                if (rrrWrap) rrrWrap.style.display = '';
+                const phaseEl = document.getElementById('sb-phase');
+                if (phaseEl) phaseEl.textContent = '';
+                const overFlowEl = document.getElementById('sb-over-flow');
+                if (overFlowEl) overFlowEl.innerHTML = '<span class="sb-strip-label">OVERS</span>';
+                const thisOverEl = document.getElementById('sb-this-over');
+                if (thisOverEl) thisOverEl.innerHTML = '';
 
                 if (data.commentary) appendLog(data.commentary, 'comment');
 
@@ -1126,8 +1336,8 @@ window.startSuperOver = startSuperOver; // Expose
 function startSuperOverSimulation() {
     matchOver = false;
     const commentaryLog = document.getElementById('commentary-log');
-    const scoreElem = document.getElementById('score');
-    const overElem = document.getElementById('over-info');
+    const sbScore = document.getElementById('sb-score');
+    const sbOvers = document.getElementById('sb-overs');
 
     fetch(`${window.location.pathname}/next-super-over-ball`, { method: 'POST' })
         .then(r => r.json())
@@ -1139,8 +1349,8 @@ function startSuperOverSimulation() {
 
             commentaryLog.insertAdjacentHTML('beforeend', `<p>${escapeHtml(data.commentary)}</p>`);
 
-            scoreElem.textContent = `Super Over: ${data.score}/${data.wickets}`;
-            overElem.textContent = `Ball: ${data.ball}/6`;
+            if (sbScore) sbScore.textContent = `SO: ${data.score}/${data.wickets}`;
+            if (sbOvers) sbOvers.textContent = `Ball ${data.ball}/6`;
 
             if (data.super_over_tied_again) {
                 commentaryLog.insertAdjacentHTML('beforeend', `<p style="color:orange; font-weight:bold;">TIED AGAIN!</p>`);
