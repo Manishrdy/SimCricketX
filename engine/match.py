@@ -3462,7 +3462,38 @@ class Match:
             candidate_indices = sorted(self.remaining_batter_indices)
             provisional_index = self._auto_pick_next_batter_index()
             if provisional_index is None:
-                return {"error": "No batter available after wicket"}
+                # Recovery path: lineup/index state may desync after swaps/reorder.
+                # Try to find any batter who is not currently at crease and not out yet.
+                recovery_candidates = []
+                for idx, player in enumerate(self.batting_team):
+                    if idx in self.batter_idx:
+                        continue
+                    pstats = self.batsman_stats.get(player["name"], {})
+                    if (pstats.get("wicket_type") or "").strip():
+                        continue
+                    recovery_candidates.append(idx)
+
+                if recovery_candidates:
+                    provisional_index = recovery_candidates[0]
+                    self.remaining_batter_indices.discard(provisional_index)
+                    print(f"⚠️ Recovered missing next batter index via fallback: {self.batting_team[provisional_index]['name']}")
+                else:
+                    # No batter left to come in: mark innings closed and let the
+                    # normal next-call completion path finalize scorecard/result.
+                    self.wickets = 10
+                    commentary_line += "<br><em>No batter available. Innings closed.</em>"
+                    self.commentary.append(commentary_line)
+                    return {
+                        "match_over": False,
+                        "score": self.score,
+                        "wickets": self.wickets,
+                        "over": self.current_over,
+                        "ball": self.current_ball,
+                        "commentary": commentary_line,
+                        "striker": self.current_striker["name"] if self.current_striker else "",
+                        "non_striker": self.current_non_striker["name"] if self.current_non_striker else "",
+                        "bowler": self.current_bowler["name"] if self.current_bowler else ""
+                    }
             self.remaining_batter_indices.discard(provisional_index)
             self._bring_new_batter(dismissed_end, provisional_index)
             commentary_line += f"<br>{self.current_striker['name']} walks in next."
