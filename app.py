@@ -270,7 +270,7 @@ def cleanup_old_match_instances(app):
     """Clean up old match instances from memory and orphaned JSON files"""
     try:
         current_time = time.time()
-        cutoff_time = current_time - (7 * 24 * 3600)  # 7 days ago
+        cutoff_time = current_time - (24 * 3600)  # 24 hours ago
 
         # Phase 1: Clean up old in-memory match instances
         with MATCH_INSTANCES_LOCK:
@@ -1411,11 +1411,18 @@ def create_app():
                     data = getattr(instance, 'data', {})
                     home = data.get('team_home', '?').split('_')[0]
                     away = data.get('team_away', '?').split('_')[0]
+                    created_at = data.get('created_at')
+                    if created_at is None:
+                        created_at = getattr(instance, 'created_at', None)
+                    if isinstance(created_at, (int, float)):
+                        created_display = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        created_display = created_at
                     active_matches.append({
                         'id': mid,
                         'teams': f"{home} vs {away}",
                         'user': data.get('created_by', '?'),
-                        'created': data.get('created_at', None),
+                        'created': created_display,
                     })
 
             # Recent DB matches
@@ -3329,6 +3336,7 @@ def create_app():
                 "created_by": user,
                 "tournament_id": req_tournament_id,
                 "fixture_id": req_fixture_id,
+                "created_at": time.time(),
                 "timestamp": ts,
             })
 

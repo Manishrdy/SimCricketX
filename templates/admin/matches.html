@@ -21,6 +21,7 @@
                     <th>Match ID</th>
                     <th>Teams</th>
                     <th>User</th>
+                    <th>Created</th>
                     <th style="text-align: right;">Actions</th>
                 </tr>
             </thead>
@@ -30,6 +31,7 @@
                     <td style="font-family: monospace; font-size: 0.78rem;">{{ m.id[:12] }}...</td>
                     <td><strong>{{ m.teams }}</strong></td>
                     <td style="color: var(--fg-secondary); font-size: 0.85rem;">{{ m.user }}</td>
+                    <td style="color: var(--fg-secondary); font-size: 0.82rem;">{{ m.created or '-' }}</td>
                     <td style="text-align: right;">
                         <button onclick="terminateMatch('{{ m.id }}', 'match-{{ loop.index }}')" class="a-btn a-btn-danger a-btn-sm">
                             <i class="fas fa-stop"></i> Terminate
