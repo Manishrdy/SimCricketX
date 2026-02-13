@@ -254,6 +254,12 @@
         color: transparent;
     }
 
+    .stat-number.is-online {
+        background: none;
+        color: #22c55e;
+        -webkit-text-fill-color: #22c55e;
+    }
+
     .stat-label {
         font-size: 0.7rem;
         color: var(--fg-secondary);
@@ -504,7 +510,7 @@
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item">
-            <span class="stat-number" style="{% if active_users > 0 %}color: #22c55e; -webkit-text-fill-color: #22c55e;{% endif %}">{{ active_users }}</span>
+            <span class="stat-number{% if active_users > 0 %} is-online{% endif %}">{{ active_users }}</span>
             <span class="stat-label">Online Now</span>
         </div>
     </div>

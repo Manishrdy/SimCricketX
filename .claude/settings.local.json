@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python test_admin_endpoints.py:*)",
-      "Bash(git -C \"d:\\\\SimCricketX\" rm --cached data/visit_counter.txt)"
+      "Bash(git -C \"d:\\\\SimCricketX\" rm --cached data/visit_counter.txt)",
+      "Bash(git checkout:*)"
     ]
   }
 }
