@@ -1,4 +1,4 @@
-active_game_mode: flat_track_bully
+active_game_mode: natural_game
 blending:
   pitch_weight: 0.6
   skill_weight: 0.4

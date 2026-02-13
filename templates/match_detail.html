@@ -58,49 +58,79 @@
     <!-- Main Panel: Score & Commentary -->
     <div class="main-panel">
         <div class="score-banner">
-            <div>
-                <div style="font-size: 0.9rem; margin-bottom: 0.5rem; opacity: 0.9;">
-                    {{ match.team_home.split('_')[0] }} vs {{ match.team_away.split('_')[0] }}
+            <!-- Top Row: Score + Overs + Batsmen -->
+            <div class="sb-top">
+                <div class="sb-team sb-batting" id="sb-batting-team">
+                    <span class="sb-team-name" id="sb-bat-name">{{ match.team_home.split('_')[0] }}</span>
+                    <span class="sb-score" id="sb-score">0/0</span>
                 </div>
-                <!-- <div class="team-name" id="batting-team">{{ match.team_home.split('_')[0] }}</div> -->
-                <div class="main-score" id="score">0/0</div>
+                <div class="sb-center-col">
+                    <div class="sb-overs" id="sb-overs">0.0 ov</div>
+                    <div class="sb-rates">
+                        <span class="sb-rate-item">CRR <strong id="sb-crr">0.00</strong></span>
+                        <span class="sb-rate-item sb-rrr-item" id="sb-rrr-wrap" style="display:none;">RRR <strong id="sb-rrr">0.00</strong></span>
+                    </div>
+                    <div class="sb-phase" id="sb-phase"></div>
+                </div>
+                <div class="sb-batsmen">
+                    <div class="sb-bat-row sb-on-strike" id="sb-striker">
+                        <span class="sb-bat-name">-</span>
+                        <span class="sb-bat-fig">0 (0)</span>
+                    </div>
+                    <div class="sb-bat-row" id="sb-nonstriker">
+                        <span class="sb-bat-name">-</span>
+                        <span class="sb-bat-fig">0 (0)</span>
+                    </div>
+                </div>
             </div>
-            <div class="score-meta">
-                <div class="overs-display" id="over-info">0.0</div>
-                <div class="rr-display">OVERS</div>
+            <!-- Bottom Strip: Bowler, Partnership, Over Flow, This Over -->
+            <div class="sb-strip">
+                <div class="sb-player sb-bowler" id="sb-bowler">
+                    <span class="sb-strip-label">BOWL</span>
+                    <span class="sb-player-name">-</span>
+                    <span class="sb-player-stat">0/0 (0.0)</span>
+                </div>
+                <div class="sb-divider"></div>
+                <div class="sb-partnership" id="sb-partnership">
+                    <span class="sb-strip-label">P'SHIP</span>
+                    <span>0 (0)</span>
+                </div>
+                <div class="sb-divider"></div>
+                <div class="sb-over-flow" id="sb-over-flow">
+                    <span class="sb-strip-label">OVERS</span>
+                </div>
+                <div class="sb-divider"></div>
+                <div class="sb-this-over" id="sb-last-ball">
+                    <span class="sb-strip-label">THIS OVER</span>
+                    <span class="sb-this-over-balls" id="sb-this-over"></span>
+                </div>
+                <div class="sb-target" id="sb-target" style="display:none;"></div>
             </div>
         </div>
 
         <div class="controls-bar">
-            <span class="pace-label">Sim Speed:</span>
-            <button class="pace-btn" data-pace="1000">1x</button>
-            <button class="pace-btn" data-pace="300">3x</button>
-            <button class="pace-btn" data-pace="50">MAX</button>
-            <button class="pace-btn" id="save-dashboard-btn" title="Save Match Center image">
-                <i class="fa fa-download"></i> Save Center
+            <button class="ctrl-btn" id="save-dashboard-btn" title="Save Match Center image">
+                <i class="fa fa-camera"></i>
+                <span>Save Center</span>
             </button>
 
-            <div class="sim-mode-wrapper">
-                <span class="sim-mode-label">Simulation</span>
-                <span class="sim-mode-text">Auto</span>
-                <label class="sim-mode-switch" title="Toggle simulation mode">
-                    <input type="checkbox" id="simulation-mode-toggle">
-                    <span class="sim-mode-slider"></span>
-                </label>
-                <span class="sim-mode-text">Manual</span>
+            <button class="ctrl-btn ctrl-resume" id="resume-decision-btn" style="display:none;">
+                <i class="fa fa-hand-pointer"></i>
+                <span>Resume Selection</span>
+            </button>
+
+            <div class="ctrl-spacer"></div>
+
+            <div class="ctrl-pill-group">
+                <button class="ctrl-pill active" id="pill-auto" data-mode="auto">Auto</button>
+                <button class="ctrl-pill" id="pill-manual" data-mode="manual">Manual</button>
+                <input type="checkbox" id="simulation-mode-toggle" style="display:none;">
             </div>
 
-            <button class="pace-btn" id="resume-decision-btn" style="display:none;">
-                Resume Selection
-            </button>
-
-            <div class="view-toggle-wrapper">
-                <span class="toggle-label" id="label-commentary">Commentary</span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="view-toggle">
-                    <span class="toggle-slider"></span>
-                </label>
-                <span class="toggle-label" id="label-matchcenter">Match Center</span>
+            <div class="ctrl-pill-group">
+                <button class="ctrl-pill active" id="pill-commentary" data-view="commentary">Commentary</button>
+                <button class="ctrl-pill" id="pill-matchcenter" data-view="matchcenter">Match Center</button>
+                <input type="checkbox" id="view-toggle" style="display:none;">
             </div>
         </div>
 

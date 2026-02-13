@@ -2,6 +2,7 @@ import builtins
 import logging
 import os
 import random
+import time
 from engine.ball_outcome import calculate_outcome
 from engine.super_over_outcome import calculate_super_over_outcome
 from match_archiver import MatchArchiver, find_original_json_file
@@ -11,6 +12,8 @@ from engine.pressure_engine import PressureEngine
 logger = logging.getLogger(__name__)
 
 # Guard console output on Windows consoles that choke on emoji/unicode.
+from engine.commentary_engine import CommentaryEngine
+
 def safe_print(*args, **kwargs):
     try:
         builtins.print(*args, **kwargs)
@@ -29,6 +32,11 @@ print = safe_print
 
 class Match:
     def __init__(self, match_data):
+        created_at = match_data.get("created_at")
+        if not isinstance(created_at, (int, float)):
+            created_at = time.time()
+            match_data["created_at"] = created_at
+        self.created_at = created_at
         self.innings = 1
         self.first_innings_score = None
         self.target = None
@@ -130,6 +138,10 @@ class Match:
             'batsman1': {'name': '', 'runs': 0, 'balls': 0},
             'batsman2': {'name': '', 'runs': 0, 'balls': 0}
         }
+
+        # Initialize Commentary Engine
+        self.commentary_engine = CommentaryEngine()
+
 
     def _get_team_name(self, team_list):
         if team_list is self.home_xi:
@@ -3061,6 +3073,25 @@ class Match:
             free_hit=self.free_hit_active
         )
 
+        # 🎙️ COMMENTARY REVAMP INTEGRATION
+        if hasattr(self, 'commentary_engine'):
+            # Enrich outcome with context for the engine
+            outcome['batter'] = self.current_striker['name']
+            outcome['bowler'] = self.current_bowler['name']
+            outcome['batting_team'] = self._get_team_name(self.batting_team)
+            outcome['bowling_team'] = self._get_team_name(self.bowling_team)
+            
+            # Build state object
+            comm_state = self._calculate_current_match_state()
+            comm_state['recent_wickets_match'] = getattr(self, 'recent_wickets_count', 0)
+            comm_state['batter_runs'] = self.batsman_stats[self.current_striker["name"]]["runs"]
+            comm_state['partnership_runs'] = self.current_partnership_runs
+            
+            # Generate new commentary
+            new_text = self.commentary_engine.get_commentary(outcome, comm_state)
+            if new_text:
+                outcome['description'] = new_text
+
         # No Ball: roll an additional bat outcome (no extras), wicket invalidated
         extra_type = outcome.get("extra_type")
         if outcome.get("is_extra") and extra_type == "No Ball":
@@ -3819,17 +3850,37 @@ class Match:
                 ball_data=ball_data_payload
             )
 
+        # Build player stat summaries for the score banner
+        _striker_name = self.current_striker["name"]
+        _nonstriker_name = self.current_non_striker["name"]
+        _bowler_name = self.current_bowler["name"] if self.current_bowler else ""
+        _s_stats = self.batsman_stats.get(_striker_name, {})
+        _ns_stats = self.batsman_stats.get(_nonstriker_name, {})
+        _bw_stats = self.bowler_stats.get(_bowler_name, {})
+        _bw_overs_display = _bw_stats.get("overs", 0) + (_bw_stats.get("balls_bowled", 0) % 6) / 10
+
         return {
-            "Test": "Manish7",
             "match_over": False,
             "score": self.score,
             "wickets": self.wickets,
             "over": self.current_over,
             "ball": self.current_ball,
             "commentary": "<br>".join(all_commentary),
-            "striker": self.current_striker["name"],
-            "non_striker": self.current_non_striker["name"],
-            "bowler": self.current_bowler["name"] if self.current_bowler else "",
+            "striker": _striker_name,
+            "non_striker": _nonstriker_name,
+            "bowler": _bowler_name,
+            "striker_runs": _s_stats.get("runs", 0),
+            "striker_balls": _s_stats.get("balls", 0),
+            "nonstriker_runs": _ns_stats.get("runs", 0),
+            "nonstriker_balls": _ns_stats.get("balls", 0),
+            "bowler_wickets": _bw_stats.get("wickets", 0),
+            "bowler_runs": _bw_stats.get("runs", 0),
+            "bowler_overs": f"{_bw_overs_display:.1f}",
+            "innings_number": self.innings,
+            "target": getattr(self, "target", None),
+            "total_overs": self.overs,
+            "partnership_runs": self.current_partnership_runs,
+            "partnership_balls": self.current_partnership_balls,
             "ball_data": ball_data_payload
         }
 
