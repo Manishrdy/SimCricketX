@@ -11,8 +11,8 @@ from engine.ground_config import (
 logger = logging.getLogger(__name__)
 
 # Tune extras frequency to target ~3-6 extras per innings (120 balls).
-EXTRA_ERROR_FLOOR = 0.25
-EXTRA_WEIGHT_MULTIPLIER = 1.8
+EXTRA_ERROR_FLOOR = 0.30
+EXTRA_WEIGHT_MULTIPLIER = 2.2
 
 # Free hit boundary share (combined Four+Six probability share).
 FREE_HIT_BOUNDARY_SHARE = 0.40
