@@ -1,4 +1,4 @@
-active_game_mode: natural_game
+active_game_mode: flat_track_bully
 blending:
   pitch_weight: 0.6
   skill_weight: 0.4
@@ -9,12 +9,12 @@ game_modes:
     label: Aggressive
     modifiers:
       dot_mult: 0.85
-      double_mult: 1
-      extras_mult: 1.1
-      four_mult: 1.3
-      single_mult: 0.9
-      six_mult: 1.4
-      three_mult: 1
+      double_mult: 0.9
+      extras_mult: 0.99
+      four_mult: 1.17
+      single_mult: 0.81
+      six_mult: 1.26
+      three_mult: 0.9
       wicket_mult: 1.25
   bowlers_day:
     description: High dot rates, high wickets, low boundaries
@@ -48,12 +48,12 @@ game_modes:
     label: Flat Track Bully
     modifiers:
       dot_mult: 0.8
-      double_mult: 1.1
-      extras_mult: 0.9
-      four_mult: 1.35
-      single_mult: 0.95
-      six_mult: 1.5
-      three_mult: 1
+      double_mult: 0.99
+      extras_mult: 0.81
+      four_mult: 1.22
+      single_mult: 0.86
+      six_mult: 1.35
+      three_mult: 0.9
       wicket_mult: 0.6
   natural_game:
     description: Balanced, realistic T20 cricket simulation

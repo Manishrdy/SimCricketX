@@ -154,6 +154,219 @@
             background: var(--accent-light);
         }
 
+        /* ===== User Profile Dropdown ===== */
+        .profile-dropdown-wrapper {
+            position: relative;
+        }
+
+        .profile-trigger {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.75rem;
+            background: var(--bg);
+            border: 1px solid var(--card-border);
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            color: var(--fg);
+        }
+
+        .profile-trigger:hover {
+            border-color: var(--accent);
+            background: var(--accent-light);
+        }
+
+        .profile-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .profile-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .profile-trigger i {
+            font-size: 0.7rem;
+            color: var(--fg-secondary);
+            transition: transform 0.3s ease;
+        }
+
+        .profile-trigger.active i {
+            transform: rotate(180deg);
+        }
+
+        .profile-dropdown {
+            position: absolute;
+            top: calc(100% + 0.5rem);
+            right: 0;
+            width: 320px;
+            background: var(--card-bg);
+            border: 2px solid var(--card-border);
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .profile-dropdown.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .profile-header {
+            padding: 1.5rem;
+            background: linear-gradient(135deg,
+                    var(--accent-light) 0%,
+                    transparent 100%);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .profile-avatar-large {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 900;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .profile-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .profile-display-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--fg);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .profile-email {
+            font-size: 0.8rem;
+            color: var(--fg-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .profile-stats {
+            padding: 1rem 1.5rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--fg-secondary);
+        }
+
+        .stat-item i {
+            color: var(--accent);
+            font-size: 0.9rem;
+            width: 16px;
+        }
+
+        .profile-divider {
+            height: 1px;
+            background: var(--card-border);
+            margin: 0 1rem;
+        }
+
+        .profile-actions {
+            padding: 0.75rem 0.5rem;
+        }
+
+        .profile-action-item {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            color: var(--fg);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            font-family: inherit;
+        }
+
+        .profile-action-item:hover {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+
+        .profile-action-item i {
+            width: 20px;
+            color: var(--fg-secondary);
+        }
+
+        .profile-action-item:hover i {
+            color: var(--accent);
+        }
+
+        .profile-signout {
+            color: #ef4444;
+        }
+
+        .profile-signout:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: #dc2626;
+        }
+
+        .profile-signout:hover i {
+            color: #dc2626;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .profile-name {
+                display: none;
+            }
+
+            .profile-dropdown {
+                width: 280px;
+                right: -1rem;
+            }
+        }
+
         /* Content Wrapper */
         .main-container {
             flex: 1;
@@ -891,12 +1104,83 @@
                 <i class="fas fa-database"></i>
             </button>
             {% endif %}
-            <form method="POST" action="{{ url_for('logout') }}" style="display:inline;margin:0;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="theme-toggle" title="Logout" style="border:none;cursor:pointer;">
-                    <i class="fas fa-sign-out-alt"></i>
+
+            <!-- User Profile Dropdown -->
+            <div class="profile-dropdown-wrapper">
+                <button class="profile-trigger" id="profileBtn">
+                    <div class="profile-avatar">{{ (current_user.display_name or current_user.id)[0]|upper }}</div>
+                    <span class="profile-name">{{ current_user.display_name or current_user.id.split('@')[0] }}</span>
+                    <i class="fas fa-chevron-down"></i>
                 </button>
-            </form>
+
+                <!-- Dropdown Menu -->
+                <div class="profile-dropdown" id="profileDropdown">
+                    <!-- Profile Header -->
+                    <div class="profile-header">
+                        <div class="profile-avatar-large">{{ (current_user.display_name or current_user.id)[0]|upper }}
+                        </div>
+                        <div class="profile-info">
+                            <div class="profile-display-name">{{ current_user.display_name or
+                                current_user.id.split('@')[0] }}</div>
+                            <div class="profile-email">{{ current_user.id }}</div>
+                        </div>
+                    </div>
+
+                    <!-- Account Stats -->
+                    <div class="profile-stats">
+                        <div class="stat-item">
+                            <i class="fas fa-users"></i>
+                            <span>{{ user_stats.teams_count }} Teams</span>
+                        </div>
+                        <div class="stat-item">
+                            <i class="fas fa-circle-play"></i>
+                            <span>{{ user_stats.matches_count }} Matches</span>
+                        </div>
+                        <div class="stat-item">
+                            <i class="fas fa-trophy"></i>
+                            <span>{{ user_stats.tournaments_count }} Tournaments</span>
+                        </div>
+                        <div class="stat-item">
+                            <i class="fas fa-calendar"></i>
+                            <span>Since {{ current_user.created_at.strftime('%b %Y') if current_user.created_at else
+                                'N/A' }}</span>
+                        </div>
+                    </div>
+
+                    <div class="profile-divider"></div>
+
+                    <!-- Quick Actions -->
+                    <div class="profile-actions">
+                        <a href="{{ url_for('manage_teams') }}" class="profile-action-item">
+                            <i class="fas fa-users"></i>
+                            <span>My Teams</span>
+                        </a>
+                        <a href="{{ url_for('my_matches') }}" class="profile-action-item">
+                            <i class="fas fa-history"></i>
+                            <span>Match History</span>
+                        </a>
+                        <a href="{{ url_for('tournaments') }}" class="profile-action-item">
+                            <i class="fas fa-trophy"></i>
+                            <span>Tournaments</span>
+                        </a>
+                        <button class="profile-action-item" onclick="toggleThemeFromDropdown()">
+                            <i class="fas fa-moon" id="dropdownThemeIcon"></i>
+                            <span>Toggle Theme</span>
+                        </button>
+                    </div>
+
+                    <div class="profile-divider"></div>
+
+                    <!-- Sign Out -->
+                    <form method="POST" action="{{ url_for('logout') }}" style="margin: 0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="profile-action-item profile-signout">
+                            <i class="fas fa-right-from-bracket"></i>
+                            <span>Sign Out</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
             {% endif %}
             {% endblock %}
             <button id="theme-btn" class="theme-toggle" title="Toggle Theme">
@@ -908,10 +1192,12 @@
 
     <!-- Maintenance Mode Banner (admin only) -->
     {% if maintenance_mode and current_user.is_authenticated and current_user.is_admin %}
-    <div style="background: linear-gradient(135deg, #f59e0b, #e67e22); color: #000; padding: 0.4rem 1rem; text-align: center; font-weight: 600; font-size: 0.82rem; display: flex; align-items: center; justify-content: center; gap: 0.75rem; z-index: 9999;">
+    <div
+        style="background: linear-gradient(135deg, #f59e0b, #e67e22); color: #000; padding: 0.4rem 1rem; text-align: center; font-weight: 600; font-size: 0.82rem; display: flex; align-items: center; justify-content: center; gap: 0.75rem; z-index: 9999;">
         <i class="fas fa-cog fa-spin"></i>
         Maintenance Mode Active &mdash; Only you can access the site
-        <a href="{{ url_for('admin_dashboard') }}" style="background: #000; color: #f59e0b; padding: 0.2rem 0.65rem; border-radius: 6px; text-decoration: none; font-size: 0.78rem;">
+        <a href="{{ url_for('admin_dashboard') }}"
+            style="background: #000; color: #f59e0b; padding: 0.2rem 0.65rem; border-radius: 6px; text-decoration: none; font-size: 0.78rem;">
             <i class="fas fa-shield-alt"></i> Admin Panel
         </a>
     </div>
@@ -919,10 +1205,12 @@
 
     <!-- Impersonation Banner -->
     {% if session.get('impersonating_from') %}
-    <div style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; padding: 0.5rem 1rem; text-align: center; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.75rem; z-index: 9999;">
+    <div
+        style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; padding: 0.5rem 1rem; text-align: center; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.75rem; z-index: 9999;">
         <i class="fas fa-user-secret"></i>
         Impersonating {{ current_user.id }} (Admin: {{ session.get('impersonating_from') }})
-        <a href="{{ url_for('admin_stop_impersonation') }}" style="background: #000; color: #f59e0b; padding: 0.25rem 0.75rem; border-radius: 6px; text-decoration: none; font-size: 0.8rem;">
+        <a href="{{ url_for('admin_stop_impersonation') }}"
+            style="background: #000; color: #f59e0b; padding: 0.25rem 0.75rem; border-radius: 6px; text-decoration: none; font-size: 0.8rem;">
             <i class="fas fa-sign-out-alt"></i> Stop Impersonating
         </a>
     </div>
@@ -934,11 +1222,12 @@
     </main>
 
     <!-- Site Footer -->
-    <footer style="text-align: center; padding: 1.25rem 1rem; font-size: 0.75rem; color: var(--fg-secondary); border-top: 1px solid var(--card-border); opacity: 0.7;">
+    <footer
+        style="text-align: center; padding: 1.25rem 1rem; font-size: 0.75rem; color: var(--fg-secondary); border-top: 1px solid var(--card-border); opacity: 0.7;">
         <span>SimCricketX</span>
         <span style="margin: 0 0.4rem;">&middot;</span>
         <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer"
-           style="color: var(--accent); text-decoration: none; font-weight: 500;">
+            style="color: var(--accent); text-decoration: none; font-weight: 500;">
             <i class="fas fa-envelope" style="font-size: 0.7rem;"></i> Contact Developer
         </a>
     </footer>
@@ -1115,10 +1404,44 @@
     </script>
 
     <script>
+        // Profile Dropdown Toggle
+        (function () {
+            const profileBtn = document.getElementById('profileBtn');
+            const profileDropdown = document.getElementById('profileDropdown');
+
+            if (!profileBtn || !profileDropdown) return;
+
+            // Toggle dropdown
+            profileBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                profileBtn.classList.toggle('active');
+                profileDropdown.classList.toggle('active');
+            });
+
+            // Close when clicking outside
+            document.addEventListener('click', function (e) {
+                if (!profileDropdown.contains(e.target) && e.target !== profileBtn && !profileBtn.contains(e.target)) {
+                    profileBtn.classList.remove('active');
+                    profileDropdown.classList.remove('active');
+                }
+            });
+
+            // Close on escape key
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && profileDropdown.classList.contains('active')) {
+                    profileBtn.classList.remove('active');
+                    profileDropdown.classList.remove('active');
+                }
+            });
+        })();
+    </script>
+
+    <script>
         // Theme Logic
         (function () {
             const themeBtn = document.getElementById('theme-btn');
             const icon = themeBtn.querySelector('i');
+            const dropdownIcon = document.getElementById('dropdownThemeIcon');
             const html = document.documentElement;
 
             // Load saved theme
@@ -1127,17 +1450,29 @@
             function applyTheme(theme) {
                 html.setAttribute('data-theme', theme);
                 localStorage.setItem('theme', theme);
-                icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+                const iconClass = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+                icon.className = iconClass;
+                // Also update dropdown icon if it exists
+                if (dropdownIcon) {
+                    dropdownIcon.className = iconClass;
+                }
             }
 
             applyTheme(savedTheme);
 
-            // Toggle handler
+            // Toggle handler for main button
             themeBtn.addEventListener('click', function () {
                 const current = html.getAttribute('data-theme');
                 const next = current === 'dark' ? 'light' : 'dark';
                 applyTheme(next);
             });
+
+            // Global function for dropdown theme toggle
+            window.toggleThemeFromDropdown = function () {
+                const current = html.getAttribute('data-theme');
+                const next = current === 'dark' ? 'light' : 'dark';
+                applyTheme(next);
+            };
         })();
     </script>
 
