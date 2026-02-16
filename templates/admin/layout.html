@@ -517,8 +517,15 @@
     }
 
     @keyframes a-slide-in {
-        from { opacity: 0; transform: translateY(-8px); }
-        to { opacity: 1; transform: translateY(0); }
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     /* Section separator */
@@ -581,7 +588,8 @@
         margin-top: 1.5rem;
     }
 
-    .a-pagination a, .a-pagination span {
+    .a-pagination a,
+    .a-pagination span {
         padding: 0.4rem 0.8rem;
         border-radius: 6px;
         font-size: 0.82rem;
@@ -670,78 +678,100 @@
             <div class="admin-nav-section">
                 <div class="admin-nav-label">Overview</div>
                 <ul class="admin-nav-items">
-                    <li><a href="/admin/dashboard" class="admin-nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
-                        <i class="fas fa-th-large"></i> Dashboard
-                    </a></li>
-                    <li><a href="/admin/activity" class="admin-nav-link {% if request.endpoint == 'admin_activity' %}active{% endif %}">
-                        <i class="fas fa-chart-bar"></i> Activity
-                    </a></li>
-                    <li><a href="/admin/health" class="admin-nav-link {% if request.endpoint == 'admin_health' %}active{% endif %}">
-                        <i class="fas fa-heartbeat"></i> System Health
-                    </a></li>
+                    <li><a href="/admin/dashboard"
+                            class="admin-nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
+                            <i class="fas fa-th-large"></i> Dashboard
+                        </a></li>
+                    <li><a href="/admin/activity"
+                            class="admin-nav-link {% if request.endpoint == 'admin_activity' %}active{% endif %}">
+                            <i class="fas fa-chart-bar"></i> Activity
+                        </a></li>
+                    <li><a href="/admin/health"
+                            class="admin-nav-link {% if request.endpoint == 'admin_health' %}active{% endif %}">
+                            <i class="fas fa-heartbeat"></i> System Health
+                        </a></li>
                 </ul>
             </div>
 
             <div class="admin-nav-section">
                 <div class="admin-nav-label">Management</div>
                 <ul class="admin-nav-items">
-                    <li><a href="/admin/users" class="admin-nav-link {% if request.endpoint in ['admin_users', 'admin_user_detail'] %}active{% endif %}">
-                        <i class="fas fa-users"></i> Users
-                    </a></li>
-                    <li><a href="/admin/matches" class="admin-nav-link {% if request.endpoint == 'admin_matches' %}active{% endif %}">
-                        <i class="fas fa-cricket-bat-ball"></i> Matches
-                    </a></li>
-                    <li><a href="/admin/global-teams" class="admin-nav-link {% if request.endpoint == 'admin_global_teams' %}active{% endif %}">
-                        <i class="fas fa-shield-alt"></i> All Teams
-                    </a></li>
-                    <li><a href="/admin/global-matches" class="admin-nav-link {% if request.endpoint == 'admin_global_matches' %}active{% endif %}">
-                        <i class="fas fa-list"></i> All Matches
-                    </a></li>
+                    <li><a href="/admin/users"
+                            class="admin-nav-link {% if request.endpoint in ['admin_users', 'admin_user_detail'] %}active{% endif %}">
+                            <i class="fas fa-users"></i> Users
+                        </a></li>
+                    <li><a href="/admin/matches"
+                            class="admin-nav-link {% if request.endpoint == 'admin_matches' %}active{% endif %}">
+                            <i class="fas fa-cricket-bat-ball"></i> Matches
+                        </a></li>
+                    <li><a href="/admin/global-teams"
+                            class="admin-nav-link {% if request.endpoint == 'admin_global_teams' %}active{% endif %}">
+                            <i class="fas fa-shield-alt"></i> All Teams
+                        </a></li>
+                    <li><a href="/admin/global-matches"
+                            class="admin-nav-link {% if request.endpoint == 'admin_global_matches' %}active{% endif %}">
+                            <i class="fas fa-list"></i> All Matches
+                        </a></li>
                 </ul>
             </div>
 
             <div class="admin-nav-section">
                 <div class="admin-nav-label">Security</div>
                 <ul class="admin-nav-items">
-                    <li><a href="/admin/sessions" class="admin-nav-link {% if request.endpoint == 'admin_sessions' %}active{% endif %}">
-                        <i class="fas fa-desktop"></i> Sessions
-                    </a></li>
-                    <li><a href="/admin/failed-logins" class="admin-nav-link {% if request.endpoint == 'admin_failed_logins' %}active{% endif %}">
-                        <i class="fas fa-exclamation-triangle"></i> Failed Logins
-                    </a></li>
-                    <li><a href="/admin/ip-blocklist" class="admin-nav-link {% if request.endpoint == 'admin_ip_blocklist' %}active{% endif %}">
-                        <i class="fas fa-ban"></i> IP Blocklist
-                    </a></li>
-                    <li><a href="/admin/rate-limits" class="admin-nav-link {% if request.endpoint == 'admin_rate_limits' %}active{% endif %}">
-                        <i class="fas fa-tachometer-alt"></i> Rate Limits
-                    </a></li>
+                    <li><a href="/admin/sessions"
+                            class="admin-nav-link {% if request.endpoint == 'admin_sessions' %}active{% endif %}">
+                            <i class="fas fa-desktop"></i> Sessions
+                        </a></li>
+                    <li><a href="/admin/failed-logins"
+                            class="admin-nav-link {% if request.endpoint == 'admin_failed_logins' %}active{% endif %}">
+                            <i class="fas fa-exclamation-triangle"></i> Failed Logins
+                        </a></li>
+                    <li><a href="/admin/ip-blocklist"
+                            class="admin-nav-link {% if request.endpoint == 'admin_ip_blocklist' %}active{% endif %}">
+                            <i class="fas fa-ban"></i> IP Blocklist
+                        </a></li>
+                    <li><a href="/admin/rate-limits"
+                            class="admin-nav-link {% if request.endpoint == 'admin_rate_limits' %}active{% endif %}">
+                            <i class="fas fa-tachometer-alt"></i> Rate Limits
+                        </a></li>
                 </ul>
             </div>
 
             <div class="admin-nav-section">
                 <div class="admin-nav-label">System</div>
                 <ul class="admin-nav-items">
-                    <li><a href="/admin/database/stats" class="admin-nav-link {% if request.endpoint == 'admin_database_stats' %}active{% endif %}">
-                        <i class="fas fa-database"></i> Database
-                    </a></li>
-                    <li><a href="/admin/backups" class="admin-nav-link {% if request.endpoint == 'admin_backups' %}active{% endif %}">
-                        <i class="fas fa-archive"></i> Backups
-                    </a></li>
-                    <li><a href="/admin/config" class="admin-nav-link {% if request.endpoint == 'admin_config' %}active{% endif %}">
-                        <i class="fas fa-cog"></i> Config
-                    </a></li>
-                    <li><a href="/admin/logs" class="admin-nav-link {% if request.endpoint == 'admin_logs' %}active{% endif %}">
-                        <i class="fas fa-file-alt"></i> Logs
-                    </a></li>
-                    <li><a href="/admin/export" class="admin-nav-link {% if request.endpoint == 'admin_export_page' %}active{% endif %}">
-                        <i class="fas fa-file-export"></i> Export
-                    </a></li>
-                    <li><a href="/admin/scheduled-tasks" class="admin-nav-link {% if request.endpoint == 'admin_scheduled_tasks' %}active{% endif %}">
-                        <i class="fas fa-clock"></i> Tasks
-                    </a></li>
-                    <li><a href="/admin/audit-log" class="admin-nav-link {% if request.endpoint == 'admin_audit_log' %}active{% endif %}">
-                        <i class="fas fa-scroll"></i> Audit Log
-                    </a></li>
+                    <li><a href="/admin/database/stats"
+                            class="admin-nav-link {% if request.endpoint == 'admin_database_stats' %}active{% endif %}">
+                            <i class="fas fa-database"></i> Database
+                        </a></li>
+                    <li><a href="/admin/backups"
+                            class="admin-nav-link {% if request.endpoint == 'admin_backups' %}active{% endif %}">
+                            <i class="fas fa-archive"></i> Backups
+                        </a></li>
+                    <li><a href="/admin/config"
+                            class="admin-nav-link {% if request.endpoint == 'admin_config' %}active{% endif %}">
+                            <i class="fas fa-cog"></i> Config
+                        </a></li>
+                    <li><a href="/admin/logs"
+                            class="admin-nav-link {% if request.endpoint == 'admin_logs' %}active{% endif %}">
+                            <i class="fas fa-file-alt"></i> Logs
+                        </a></li>
+                    <li><a href="/admin/files"
+                            class="admin-nav-link {% if request.endpoint == 'admin_files' %}active{% endif %}">
+                            <i class="fas fa-folder-open"></i> Files
+                        </a></li>
+                    <li><a href="/admin/export"
+                            class="admin-nav-link {% if request.endpoint == 'admin_export_page' %}active{% endif %}">
+                            <i class="fas fa-file-export"></i> Export
+                        </a></li>
+                    <li><a href="/admin/scheduled-tasks"
+                            class="admin-nav-link {% if request.endpoint == 'admin_scheduled_tasks' %}active{% endif %}">
+                            <i class="fas fa-clock"></i> Tasks
+                        </a></li>
+                    <li><a href="/admin/audit-log"
+                            class="admin-nav-link {% if request.endpoint == 'admin_audit_log' %}active{% endif %}">
+                            <i class="fas fa-scroll"></i> Audit Log
+                        </a></li>
                 </ul>
             </div>
 
@@ -749,18 +779,21 @@
                 <div class="admin-nav-label">Quick Actions</div>
                 <ul class="admin-nav-items">
                     <li>
-                        <a href="#" onclick="toggleMaintenance(); return false;" class="admin-nav-link" id="maintenance-toggle-link"
-                           style="{% if maintenance_mode %}background: rgba(245, 158, 11, 0.1); border-left-color: #f59e0b; color: #d97706;{% endif %}">
-                            <i class="fas fa-{% if maintenance_mode %}toggle-on{% else %}toggle-off{% endif %}" id="maintenance-toggle-icon"></i>
-                            <span id="maintenance-toggle-text">{% if maintenance_mode %}Maintenance: ON{% else %}Maintenance: OFF{% endif %}</span>
+                        <a href="#" onclick="toggleMaintenance(); return false;" class="admin-nav-link"
+                            id="maintenance-toggle-link"
+                            style="{% if maintenance_mode %}background: rgba(245, 158, 11, 0.1); border-left-color: #f59e0b; color: #d97706;{% endif %}">
+                            <i class="fas fa-{% if maintenance_mode %}toggle-on{% else %}toggle-off{% endif %}"
+                                id="maintenance-toggle-icon"></i>
+                            <span id="maintenance-toggle-text">{% if maintenance_mode %}Maintenance: ON{% else
+                                %}Maintenance: OFF{% endif %}</span>
                         </a>
                     </li>
                     <li><a href="#" onclick="downloadDatabase(); return false;" class="admin-nav-link">
-                        <i class="fas fa-download"></i> Download DB
-                    </a></li>
+                            <i class="fas fa-download"></i> Download DB
+                        </a></li>
                     <li><a href="{{ url_for('home') }}" class="admin-nav-link">
-                        <i class="fas fa-arrow-left"></i> Back to App
-                    </a></li>
+                            <i class="fas fa-arrow-left"></i> Back to App
+                        </a></li>
                 </ul>
             </div>
         </nav>
@@ -778,40 +811,40 @@
 
 {% block extra_js %}
 <script>
-async function toggleMaintenance() {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-    try {
-        const res = await fetch('/admin/maintenance/toggle', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken,
-                'Content-Type': 'application/json'
-            }
-        });
-        const data = await res.json();
-        if (res.ok) {
-            const link = document.getElementById('maintenance-toggle-link');
-            const icon = document.getElementById('maintenance-toggle-icon');
-            const text = document.getElementById('maintenance-toggle-text');
-            if (data.maintenance_mode) {
-                link.style.background = 'rgba(245, 158, 11, 0.1)';
-                link.style.borderLeftColor = '#f59e0b';
-                link.style.color = '#d97706';
-                icon.className = 'fas fa-toggle-on';
-                text.textContent = 'Maintenance: ON';
+    async function toggleMaintenance() {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        try {
+            const res = await fetch('/admin/maintenance/toggle', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                const link = document.getElementById('maintenance-toggle-link');
+                const icon = document.getElementById('maintenance-toggle-icon');
+                const text = document.getElementById('maintenance-toggle-text');
+                if (data.maintenance_mode) {
+                    link.style.background = 'rgba(245, 158, 11, 0.1)';
+                    link.style.borderLeftColor = '#f59e0b';
+                    link.style.color = '#d97706';
+                    icon.className = 'fas fa-toggle-on';
+                    text.textContent = 'Maintenance: ON';
+                } else {
+                    link.style.background = '';
+                    link.style.borderLeftColor = 'transparent';
+                    link.style.color = '';
+                    icon.className = 'fas fa-toggle-off';
+                    text.textContent = 'Maintenance: OFF';
+                }
             } else {
-                link.style.background = '';
-                link.style.borderLeftColor = 'transparent';
-                link.style.color = '';
-                icon.className = 'fas fa-toggle-off';
-                text.textContent = 'Maintenance: OFF';
+                alert(data.error || 'Failed to toggle maintenance mode');
             }
-        } else {
-            alert(data.error || 'Failed to toggle maintenance mode');
+        } catch (err) {
+            alert('Error toggling maintenance mode');
         }
-    } catch (err) {
-        alert('Error toggling maintenance mode');
     }
-}
 </script>
 {% endblock %}
