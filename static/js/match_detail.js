@@ -1067,31 +1067,24 @@ function startMatch() {
 
             // Match Tied / Super Over
             if (data.match_tied) {
-                appendLog("MATCH TIED! Super Over Required!", 'keyword');
+                appendLog("MATCH TIED! Super Over Required!");
                 if (data.scorecard_data) {
                     setTimeout(() => {
                         showScorecard(data.scorecard_data, data);
                         const closeBtn = document.querySelector('.close-scorecard');
                         const oldOnClick = closeBtn.onclick;
                         closeBtn.onclick = async () => {
-                            if (oldOnClick) await oldOnClick(); // standard close
+                            if (oldOnClick) await oldOnClick();
                             else document.getElementById('scorecard-overlay').style.display = 'none';
-
-                            // Show Super Over Options
+                            // Launch super over modal
                             setTimeout(() => {
-                                appendLog("waiting for super over decision...", 'comment');
-                                const logContainer = document.getElementById('commentary-log');
-                                const div = document.createElement('div');
-                                div.className = 'code-line';
-                                div.innerHTML = `
-                                    <span class="line-number">${logLineCount++}</span>
-                                    <span class="token-keyword">
-                                        <button onclick="startSuperOver('home')" class="impact-btn primary" style="font-size:0.7rem; padding:2px 8px;">Option 1: ${escapeHtml(data.home_team)}</button>
-                                        <button onclick="startSuperOver('away')" class="impact-btn primary" style="font-size:0.7rem; padding:2px 8px;">Option 2: ${escapeHtml(data.away_team)}</button>
-                                    </span>
-                                `;
-                                logContainer.appendChild(div);
-                            }, 500);
+                                soOpenModal({
+                                    home_team: data.home_team,
+                                    away_team: data.away_team,
+                                    home_players: data.home_players,
+                                    away_players: data.away_players,
+                                }, 1);
+                            }, 400);
                         };
                     }, 1500);
                 }
@@ -1307,69 +1300,488 @@ async function saveMatchArchive() {
 
 // --- Super Over Utils ---
 
-function startSuperOver(firstBattingTeam) {
-    const commentaryLog = document.getElementById('commentary-log');
+// ===================================================================
+// SUPER OVER MODAL SYSTEM
+// ===================================================================
 
-    fetch(`${window.location.pathname}/start-super-over`, {
+// State
+let soState = {
+    round: 1,
+    innings: 1,
+    battingTeam: null,  // "home" or "away"
+    selectedBatsmen: [],
+    selectedBowler: null,
+    teamData: null,
+    target: null,
+    ballResults: [],
+    innings1Scorecard: null,
+};
+
+function soResetState(round) {
+    soState = {
+        round: round || 1, innings: 1, battingTeam: null,
+        selectedBatsmen: [], selectedBowler: null, teamData: null,
+        target: null, ballResults: [], innings1Scorecard: null,
+    };
+}
+
+// --- Open Modal ---
+function soOpenModal(teamData, round) {
+    soResetState(round);
+    soState.teamData = teamData;
+
+    const overlay = document.getElementById('super-over-overlay');
+    overlay.style.display = 'flex';
+
+    document.getElementById('so-title').textContent = 'SUPER OVER';
+    document.getElementById('so-round-badge').textContent = `Round ${round}`;
+    document.getElementById('so-innings-badge').textContent = 'Innings 1';
+
+    // Show team pick, hide others
+    document.getElementById('so-team-pick').style.display = '';
+    document.getElementById('so-selection').style.display = 'none';
+    document.getElementById('so-simulation').style.display = 'none';
+    document.getElementById('so-scorecard').style.display = 'none';
+
+    // Add round divider to commentary if continuing from a previous round
+    const soComm = document.getElementById('so-commentary');
+    if (round > 1 && soComm.children.length > 0) {
+        const divider = document.createElement('div');
+        divider.className = 'code-line';
+        divider.innerHTML = `<span class="token-comment" style="border-top:2px solid var(--accent-color);display:block;margin:10px 0;padding-top:10px;font-weight:bold;">══ Super Over Round ${round} ══</span>`;
+        soComm.appendChild(divider);
+    } else {
+        soComm.innerHTML = '';
+    }
+
+    document.getElementById('so-pick-home').textContent = teamData.home_team;
+    document.getElementById('so-pick-away').textContent = teamData.away_team;
+}
+window.soOpenModal = soOpenModal;
+
+// --- Team Pick ---
+function soPickBattingTeam(team) {
+    soState.battingTeam = team;
+    const td = soState.teamData;
+
+    const battingPlayers = team === 'home' ? td.home_players : td.away_players;
+    const bowlingPlayers = team === 'home' ? td.away_players : td.home_players;
+    const battingName = team === 'home' ? td.home_team : td.away_team;
+
+    soState.selectedBatsmen = [];
+    soState.selectedBowler = null;
+
+    document.getElementById('so-team-pick').style.display = 'none';
+    document.getElementById('so-selection').style.display = '';
+    document.getElementById('so-selection-title').textContent =
+        `${battingName} batting — pick your players`;
+
+    soPopulatePlayerCards(battingPlayers, bowlingPlayers);
+    soUpdateSelectionCounts();
+}
+window.soPickBattingTeam = soPickBattingTeam;
+
+function soPopulatePlayerCards(battingPlayers, bowlingPlayers) {
+    const batList = document.getElementById('so-batsmen-list');
+    const bowlList = document.getElementById('so-bowler-list');
+    batList.innerHTML = '';
+    bowlList.innerHTML = '';
+
+    // Sort by rating
+    const sortedBat = [...battingPlayers].sort((a, b) => b.batting_rating - a.batting_rating);
+    const sortedBowl = [...bowlingPlayers].filter(p => p.will_bowl).sort((a, b) => b.bowling_rating - a.bowling_rating);
+
+    sortedBat.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'so-player-card';
+        card.innerHTML = `
+            <span class="so-pc-name">${escapeHtml(p.name)}</span>
+            <span class="so-pc-role">${escapeHtml(p.role || '')}</span>
+            <span class="so-pc-rating">${p.batting_rating}</span>
+        `;
+        card.onclick = () => soToggleBatsman(p.name, card);
+        batList.appendChild(card);
+    });
+
+    sortedBowl.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'so-player-card';
+        card.innerHTML = `
+            <span class="so-pc-name">${escapeHtml(p.name)}</span>
+            <span class="so-pc-role">${escapeHtml(p.role || '')}</span>
+            <span class="so-pc-rating">${p.bowling_rating}</span>
+        `;
+        card.onclick = () => soToggleBowler(p.name, card);
+        bowlList.appendChild(card);
+    });
+}
+
+function soToggleBatsman(name, card) {
+    const idx = soState.selectedBatsmen.indexOf(name);
+    if (idx >= 0) {
+        soState.selectedBatsmen.splice(idx, 1);
+        card.classList.remove('selected');
+    } else if (soState.selectedBatsmen.length < 2) {
+        soState.selectedBatsmen.push(name);
+        card.classList.add('selected');
+    }
+    soUpdateSelectionCounts();
+}
+
+function soToggleBowler(name, card) {
+    // Deselect previous
+    const prev = document.querySelector('#so-bowler-list .so-player-card.selected');
+    if (prev) prev.classList.remove('selected');
+
+    if (soState.selectedBowler === name) {
+        soState.selectedBowler = null;
+    } else {
+        soState.selectedBowler = name;
+        card.classList.add('selected');
+    }
+    soUpdateSelectionCounts();
+}
+
+function soUpdateSelectionCounts() {
+    const batCount = document.getElementById('so-bat-count');
+    const bowlCount = document.getElementById('so-bowl-count');
+    const btn = document.getElementById('so-start-btn');
+
+    batCount.textContent = `Batsmen: ${soState.selectedBatsmen.length}/2`;
+    bowlCount.textContent = `Bowler: ${soState.selectedBowler ? 1 : 0}/1`;
+
+    batCount.classList.toggle('valid', soState.selectedBatsmen.length === 2);
+    bowlCount.classList.toggle('valid', !!soState.selectedBowler);
+
+    btn.disabled = !(soState.selectedBatsmen.length === 2 && soState.selectedBowler);
+}
+
+// --- Start Innings ---
+function soStartInnings() {
+    const isInnings2 = soState.innings === 2;
+    const url = isInnings2
+        ? `${window.location.pathname}/start-super-over-innings2`
+        : `${window.location.pathname}/start-super-over`;
+
+    const body = isInnings2
+        ? { batsmen: soState.selectedBatsmen, bowler: soState.selectedBowler }
+        : { first_batting_team: soState.battingTeam, batsmen: soState.selectedBatsmen, bowler: soState.selectedBowler };
+
+    fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ first_batting_team: firstBattingTeam })
+        body: JSON.stringify(body),
     })
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) {
-                commentaryLog.insertAdjacentHTML('beforeend', `<p class="error">${escapeHtml(data.error)}</p>`);
-                return;
-            }
-            commentaryLog.insertAdjacentHTML('beforeend', `<p>${escapeHtml(data.commentary)}</p>`);
-            commentaryLog.insertAdjacentHTML('beforeend', `
-            <div style="text-align: center; margin: 1rem 0;">
-                <button onclick="startSuperOverSimulation()" class="impact-btn primary">
-                    Start Super Over Simulation
-                </button>
-            </div>
-        `);
-        });
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { console.error(data.error); return; }
+
+        if (data.target) soState.target = data.target;
+
+        // Update header
+        document.getElementById('so-innings-badge').textContent = `Innings ${soState.innings}`;
+
+        // Switch to simulation view
+        document.getElementById('so-selection').style.display = 'none';
+        document.getElementById('so-scorecard').style.display = 'none';
+        document.getElementById('so-simulation').style.display = '';
+
+        // Init simulation UI
+        const teamName = data.batting_team_name || (soState.battingTeam === 'home' ? soState.teamData.home_team : soState.teamData.away_team);
+        document.getElementById('so-team-name').textContent = teamName;
+        document.getElementById('so-score-display').textContent = '0/0';
+        document.getElementById('so-balls-display').textContent = '(0.0)';
+        document.getElementById('so-target-info').textContent =
+            soState.target ? `Need ${soState.target} to win` : '';
+
+        document.getElementById('so-striker-name').textContent = data.batsmen[0] + ' *';
+        document.getElementById('so-striker-stat').textContent = '0 (0)';
+        document.getElementById('so-nonstriker-name').textContent = data.batsmen[1];
+        document.getElementById('so-nonstriker-stat').textContent = '0 (0)';
+        document.getElementById('so-bowler-name').textContent = data.bowler;
+        document.getElementById('so-bowler-stat').textContent = '0/0 (0.0)';
+
+        document.getElementById('so-this-over').innerHTML = '';
+        soState.ballResults = [];
+
+        // Preserve innings 1 commentary with a divider instead of clearing
+        const soComm = document.getElementById('so-commentary');
+        if (soState.innings === 2 && soComm.children.length > 0) {
+            const divider = document.createElement('div');
+            divider.className = 'code-line';
+            divider.innerHTML = '<span class="token-comment" style="border-top:1px solid var(--border-color);display:block;margin:8px 0;padding-top:8px;">── Innings 2 ──</span>';
+            soComm.appendChild(divider);
+        } else {
+            soComm.innerHTML = '';
+        }
+
+        // Start simulation
+        setTimeout(soSimulateBall, 600);
+    });
 }
-window.startSuperOver = startSuperOver; // Expose
+window.soStartInnings = soStartInnings;
 
-function startSuperOverSimulation() {
-    matchOver = false;
-    const commentaryLog = document.getElementById('commentary-log');
-    const sbScore = document.getElementById('sb-score');
-    const sbOvers = document.getElementById('sb-overs');
-
+// --- Simulate Ball ---
+function soSimulateBall() {
     fetch(`${window.location.pathname}/next-super-over-ball`, { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) {
-                commentaryLog.insertAdjacentHTML('beforeend', `<p class="error">${escapeHtml(data.error)}</p>`);
-                return;
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { console.error(data.error); return; }
+
+        // Append commentary
+        soAppendLog(data.commentary);
+
+        // Update score
+        document.getElementById('so-score-display').textContent = `${data.score}/${data.wickets}`;
+        document.getElementById('so-balls-display').textContent = `(0.${data.ball})`;
+
+        // Update target info
+        if (soState.target) {
+            const need = soState.target - data.score;
+            const ballsLeft = 6 - data.ball;
+            if (need > 0 && ballsLeft > 0) {
+                document.getElementById('so-target-info').textContent = `Need ${need} off ${ballsLeft}b`;
+            } else if (need <= 0) {
+                document.getElementById('so-target-info').textContent = 'Target reached!';
             }
+        }
 
-            commentaryLog.insertAdjacentHTML('beforeend', `<p>${escapeHtml(data.commentary)}</p>`);
+        // Update players
+        document.getElementById('so-striker-name').textContent = (data.striker || '') + ' *';
+        document.getElementById('so-striker-stat').textContent = `${data.striker_runs ?? 0} (${data.striker_balls ?? 0})`;
+        document.getElementById('so-nonstriker-name').textContent = data.non_striker || '';
+        document.getElementById('so-nonstriker-stat').textContent = `${data.nonstriker_runs ?? 0} (${data.nonstriker_balls ?? 0})`;
+        document.getElementById('so-bowler-stat').textContent =
+            `${data.bowler_wickets ?? 0}/${data.bowler_runs ?? 0} (${data.bowler_overs || '0.0'})`;
 
-            if (sbScore) sbScore.textContent = `SO: ${data.score}/${data.wickets}`;
-            if (sbOvers) sbOvers.textContent = `Ball ${data.ball}/6`;
+        // Add ball indicator
+        if (data.ball_data) {
+            soState.ballResults.push(data.ball_data);
+            soRenderBalls();
+        }
 
-            if (data.super_over_tied_again) {
-                commentaryLog.insertAdjacentHTML('beforeend', `<p style="color:orange; font-weight:bold;">TIED AGAIN!</p>`);
-                matchOver = true;
-                return;
-            }
+        // --- Handle end states ---
 
-            if (data.super_over_complete) {
-                commentaryLog.insertAdjacentHTML('beforeend', `<p style="color:green; font-weight:bold;">${escapeHtml(data.result)}</p>`);
-                matchOver = true;
-                return;
-            }
+        // Innings 1 complete
+        if (data.super_over_innings_end) {
+            soState.innings1Scorecard = data.innings_scorecard;
+            setTimeout(() => {
+                soShowMiniScorecard(data.innings_scorecard,
+                    `Innings 1 — ${data.first_innings_score} runs`,
+                    false, data);
+            }, 800);
+            return;
+        }
 
-            if (data.super_over_innings_end || data.innings_complete) {
-                setTimeout(startSuperOverSimulation, 1000);
-            } else {
-                setTimeout(startSuperOverSimulation, delay);
-            }
-        });
+        // Innings complete (2 wickets or 6 balls) — not explicitly innings_end
+        if (data.innings_complete && !data.super_over_complete && !data.super_over_tied_again) {
+            // This is the last ball of an innings; next call will get _end_super_over_innings
+            setTimeout(soSimulateBall, 600);
+            return;
+        }
+
+        // Match decided
+        if (data.super_over_complete) {
+            const result = data.result;
+            appendLog(result); // Also log to main commentary
+            setTimeout(() => {
+                soShowFinalResult(data);
+            }, 800);
+            return;
+        }
+
+        // Tied again
+        if (data.super_over_tied_again) {
+            setTimeout(() => {
+                soShowTiedAgain(data);
+            }, 800);
+            return;
+        }
+
+        // Normal ball — continue
+        setTimeout(soSimulateBall, delay);
+    });
 }
-window.startSuperOverSimulation = startSuperOverSimulation; // Expose
+
+function soAppendLog(message) {
+    const container = document.getElementById('so-commentary');
+    const div = document.createElement('div');
+    div.className = 'code-line';
+
+    let tokenClass = 'token-string';
+    if (/OUT|WICKET|Wicket/i.test(message)) tokenClass = 'token-error';
+    else if (/FOUR|SIX|BOUNDARY/i.test(message)) tokenClass = 'token-keyword';
+    else if (/End of|Innings|Target/i.test(message)) tokenClass = 'token-comment';
+
+    div.innerHTML = `<span class="${tokenClass}">${escapeHtml(message)}</span>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function soRenderBalls() {
+    const container = document.getElementById('so-this-over');
+    container.innerHTML = '';
+    soState.ballResults.forEach(bd => {
+        const span = document.createElement('span');
+        span.className = 'sb-ball-dot';
+        let label, cls;
+        if (bd.batter_out) { label = 'W'; cls = 'ball-w'; }
+        else if (bd.extra_type === 'Wide') { label = 'Wd'; cls = 'ball-wd'; }
+        else if (bd.extra_type === 'No Ball') { label = 'Nb'; cls = 'ball-nb'; }
+        else if (bd.runs === 4) { label = '4'; cls = 'ball-4'; }
+        else if (bd.runs === 6) { label = '6'; cls = 'ball-6'; }
+        else { label = String(bd.runs); cls = `ball-${bd.runs}`; }
+        span.classList.add(cls);
+        span.textContent = label;
+        container.appendChild(span);
+    });
+}
+
+// --- Mini Scorecard ---
+function soShowMiniScorecard(sc, title, isFinal, responseData) {
+    document.getElementById('so-simulation').style.display = 'none';
+    document.getElementById('so-scorecard').style.display = '';
+
+    document.getElementById('so-sc-title').textContent = title;
+
+    // Batting table
+    const tbody = document.getElementById('so-sc-batting');
+    tbody.innerHTML = '';
+    (sc.batting || []).forEach(b => {
+        const tr = document.createElement('tr');
+        if (b.out) tr.className = 'so-out';
+        tr.innerHTML = `
+            <td>${escapeHtml(b.name)} <small style="color:var(--fg-secondary)">${escapeHtml(b.status)}</small></td>
+            <td>${b.runs}</td><td>${b.balls}</td>
+            <td>${b.fours}</td><td>${b.sixes}</td><td>${b.sr}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Bowling line
+    const bowl = sc.bowling || {};
+    document.getElementById('so-sc-bowling').textContent =
+        `${bowl.name || '?'}: ${bowl.overs || '0.0'} ov — ${bowl.runs || 0}/${bowl.wickets || 0}`;
+
+    // Total
+    document.getElementById('so-sc-total').textContent =
+        `Total: ${sc.total || 0}/${sc.wickets || 0} (0.${sc.bowling?.balls || 0} ov)`;
+
+    // Result text
+    const resultEl = document.getElementById('so-result-text');
+    resultEl.style.display = 'none';
+
+    // Continue button
+    const btn = document.getElementById('so-continue-btn');
+    if (isFinal) {
+        btn.textContent = 'Close';
+        btn.onclick = () => soCloseModal();
+    } else {
+        btn.textContent = 'Continue to Innings 2 →';
+        btn.onclick = () => soSetupInnings2(responseData);
+    }
+}
+
+function soSetupInnings2(data) {
+    soState.innings = 2;
+    soState.selectedBatsmen = [];
+    soState.selectedBowler = null;
+    soState.target = data.target;
+    soState.ballResults = [];
+
+    document.getElementById('so-innings-badge').textContent = 'Innings 2';
+    document.getElementById('so-scorecard').style.display = 'none';
+    document.getElementById('so-selection').style.display = '';
+
+    const battingName = data.batting_team_name || '';
+    document.getElementById('so-selection-title').textContent =
+        `${battingName} batting — pick your players`;
+
+    soPopulatePlayerCards(data.batting_team_players, data.bowling_team_players);
+    soUpdateSelectionCounts();
+}
+
+// --- Final Result ---
+function soShowFinalResult(data) {
+    document.getElementById('so-simulation').style.display = 'none';
+    document.getElementById('so-scorecard').style.display = '';
+
+    // Show innings 2 scorecard
+    const sc2 = data.innings2_scorecard;
+    if (sc2) {
+        soShowMiniScorecard(sc2, 'Innings 2', true, data);
+    }
+
+    // Show result
+    const resultEl = document.getElementById('so-result-text');
+    resultEl.textContent = data.result || 'Match Complete';
+    resultEl.style.display = '';
+
+    const btn = document.getElementById('so-continue-btn');
+    btn.textContent = 'Close';
+    btn.onclick = () => {
+        soCloseModal();
+        // Show main match scorecard if available
+        if (data.scorecard_data) {
+            isFinalScoreboard = true;
+            showScorecard(data.scorecard_data, { innings_number: 2, result: data.result });
+            // Reset close button to default — prevent stale onclick from re-triggering super over
+            const closeBtn = document.querySelector('.close-scorecard');
+            if (closeBtn) closeBtn.onclick = () => closeScorecard();
+        }
+    };
+}
+
+// --- Tied Again ---
+function soShowTiedAgain(data) {
+    document.getElementById('so-simulation').style.display = 'none';
+    document.getElementById('so-scorecard').style.display = '';
+
+    const sc2 = data.innings2_scorecard;
+    if (sc2) {
+        document.getElementById('so-sc-title').textContent = 'SUPER OVER TIED!';
+        const tbody = document.getElementById('so-sc-batting');
+        tbody.innerHTML = '';
+        (sc2.batting || []).forEach(b => {
+            const tr = document.createElement('tr');
+            if (b.out) tr.className = 'so-out';
+            tr.innerHTML = `
+                <td>${escapeHtml(b.name)} <small style="color:var(--fg-secondary)">${escapeHtml(b.status)}</small></td>
+                <td>${b.runs}</td><td>${b.balls}</td>
+                <td>${b.fours}</td><td>${b.sixes}</td><td>${b.sr}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        const bowl = sc2.bowling || {};
+        document.getElementById('so-sc-bowling').textContent =
+            `${bowl.name || '?'}: ${bowl.overs || '0.0'} ov — ${bowl.runs || 0}/${bowl.wickets || 0}`;
+        document.getElementById('so-sc-total').textContent =
+            `Total: ${sc2.total || 0}/${sc2.wickets || 0}`;
+    }
+
+    const resultEl = document.getElementById('so-result-text');
+    resultEl.textContent = `TIED! ${data.home_team} ${data.home_score} - ${data.away_team} ${data.away_score}. Another Super Over!`;
+    resultEl.style.display = '';
+
+    const btn = document.getElementById('so-continue-btn');
+    btn.textContent = 'Next Super Over →';
+    btn.onclick = () => {
+        soOpenModal({
+            home_team: data.home_team,
+            away_team: data.away_team,
+            home_players: data.home_players,
+            away_players: data.away_players,
+        }, soState.round + 1);
+    };
+}
+
+function soCloseModal() {
+    document.getElementById('super-over-overlay').style.display = 'none';
+    matchOver = true;
+}
+
+// Expose for inline onclick handlers
+window.soPickBattingTeam = soPickBattingTeam;
+window.soStartInnings = soStartInnings;
+window.soContinue = function() {}; // placeholder, overridden dynamically
 

@@ -799,6 +799,21 @@
                         <input type="hidden" id="simulation-mode-select" value="auto">
                         <p class="helper-text"><span id="simulation-mode-help">Auto sim runs continuously.</span></p>
                     </div>
+
+                    <div class="form-group">
+                        <div class="condition-header">
+                            <div class="condition-icon"><i class="fas fa-film"></i></div>
+                            <span class="condition-tag">Drama</span>
+                        </div>
+                        <label class="form-label">Match Scenario</label>
+                        <select id="scenario-select">
+                            <option value="">None (Regular Match)</option>
+                            <option value="last_ball_six">Last-Ball Six</option>
+                            <option value="win_by_1_run">Win by 1 Run</option>
+                            <option value="super_over_thriller">Super Over Thriller</option>
+                        </select>
+                        <p class="helper-text">Script a dramatic finish, or leave as 'None' for a normal match.</p>
+                    </div>
                 </div>
 
                 <aside class="conditions-summary" aria-label="Match Summary">
@@ -819,6 +834,10 @@
                     <div class="summary-row">
                         <span class="summary-label">Mode</span>
                         <span class="summary-value" id="summary-mode">Auto</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Scenario</span>
+                        <span class="summary-value" id="summary-scenario">None</span>
                     </div>
                 </aside>
             </div>
@@ -1095,6 +1114,8 @@
         document.querySelectorAll('input[name="toss"]').forEach((radio) => {
             radio.onchange = updateConditionsSummary;
         });
+        const scenarioSel = document.getElementById('scenario-select');
+        if (scenarioSel) scenarioSel.onchange = updateConditionsSummary;
 
         syncSimulationModeControl();
         updateConditionsSummary();
@@ -1128,6 +1149,10 @@
         setText('summary-pitch', `${pitch} Pitch`);
         setText('summary-toss', toss);
         setText('summary-mode', mode === 'manual' ? 'Manual' : 'Auto');
+
+        const scenarioEl = document.getElementById('scenario-select');
+        const scenarioLabel = scenarioEl ? (scenarioEl.options[scenarioEl.selectedIndex]?.text || 'None') : 'None';
+        setText('summary-scenario', scenarioLabel);
     }
 
     // --- STEP 3: SQUADS ---
@@ -1463,6 +1488,7 @@
                 pitch: document.getElementById('pitch-select').value,
                 toss: document.querySelector('input[name="toss"]:checked').value,
                 simulation_mode: document.getElementById('simulation-mode-select').value,
+                scenario_mode: document.getElementById('scenario-select').value || null,
                 playing_xi: {
                     home: getPlayers('home-selected'),
                     away: getPlayers('away-selected')

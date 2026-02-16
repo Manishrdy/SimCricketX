@@ -21,14 +21,14 @@ from engine.ball_outcome import (
 # 1) Super Over outcome probabilities (more exciting than a regular over)
 # -----------------------------------------------------------------------------
 SUPER_OVER_SCORING_MATRIX = {
-    "Dot":     0.25,   # Reduced from 35%
-    "Single":  0.28,   # Slightly reduced
-    "Double":  0.12,   # Slightly reduced  
-    "Three":   0.05,   # Slightly reduced
-    "Four":    0.15,   # Increased from 8%
-    "Six":     0.08,   # Doubled from 4%
-    "Wicket":  0.035,  # Slightly increased (pressure)
-    "Extras":  0.045   # Slightly reduced
+    "Dot":     0.20,   # Reduced — high pressure, fewer leaves/blocks
+    "Single":  0.25,   # Quick singles under pressure
+    "Double":  0.10,   # Running twos
+    "Three":   0.005,  # Almost never in a super over
+    "Four":    0.18,   # Boundaries flow in super overs
+    "Six":     0.12,   # Big hits under pressure
+    "Wicket":  0.04,   # Pressure wickets
+    "Extras":  0.045   # Bowler nerves
 }
 
 def calculate_super_over_outcome(

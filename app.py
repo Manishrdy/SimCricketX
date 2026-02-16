@@ -3231,6 +3231,12 @@ def create_app():
                 simulation_mode = "auto"
             data["simulation_mode"] = simulation_mode
 
+            # Validate scenario mode
+            scenario_mode = data.get("scenario_mode")
+            if scenario_mode and scenario_mode not in ("last_ball_six", "win_by_1_run", "super_over_thriller"):
+                scenario_mode = None
+            data["scenario_mode"] = scenario_mode
+
             # Step 1: Load teams from DB using IDs from frontend
             home_id = data.get("team_home")
             away_id = data.get("team_away")
@@ -3877,15 +3883,32 @@ def create_app():
     def start_super_over(match_id):
         if match_id not in MATCH_INSTANCES:
             return jsonify({"error": "Match not found"}), 404
-        
+
         match = MATCH_INSTANCES[match_id]
         if match.data.get("created_by") != current_user.id:
             return jsonify({"error": "Unauthorized"}), 403
         data = request.get_json()
         first_batting_team = data.get("first_batting_team")
-        
-        result = match.start_super_over(first_batting_team)
-        
+        batsmen_names = data.get("batsmen")  # list of 2 names
+        bowler_name = data.get("bowler")      # single name
+
+        result = match.start_super_over(first_batting_team, batsmen_names, bowler_name)
+        return jsonify(result)
+
+    @app.route("/match/<match_id>/start-super-over-innings2", methods=["POST"])
+    @login_required
+    def start_super_over_innings2(match_id):
+        if match_id not in MATCH_INSTANCES:
+            return jsonify({"error": "Match not found"}), 404
+
+        match = MATCH_INSTANCES[match_id]
+        if match.data.get("created_by") != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
+        data = request.get_json()
+        batsmen_names = data.get("batsmen")
+        bowler_name = data.get("bowler")
+
+        result = match.start_super_over_innings2(batsmen_names, bowler_name)
         return jsonify(result)
 
     @app.route("/match/<match_id>/next-super-over-ball", methods=["POST"])
@@ -3893,7 +3916,7 @@ def create_app():
     def next_super_over_ball(match_id):
         if match_id not in MATCH_INSTANCES:
             return jsonify({"error": "Match not found"}), 404
-        
+
         match = MATCH_INSTANCES[match_id]
         if match.data.get("created_by") != current_user.id:
             return jsonify({"error": "Unauthorized"}), 403
