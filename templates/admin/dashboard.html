@@ -51,7 +51,8 @@
             <a href="/admin/database/stats" class="a-btn a-btn-secondary"><i class="fas fa-database"></i> Database</a>
             <a href="/admin/backups" class="a-btn a-btn-secondary"><i class="fas fa-archive"></i> Backups</a>
             <a href="/admin/health" class="a-btn a-btn-secondary"><i class="fas fa-heartbeat"></i> Health</a>
-            <button onclick="downloadDatabase()" class="a-btn a-btn-secondary"><i class="fas fa-download"></i> Download DB</button>
+            <button onclick="downloadDatabase()" class="a-btn a-btn-secondary"><i class="fas fa-download"></i> Download
+                DB</button>
         </div>
     </div>
 
@@ -62,14 +63,17 @@
             {% if recent_activity %}
             <div style="max-height: 280px; overflow-y: auto;">
                 {% for activity in recent_activity %}
-                <div style="padding: 0.5rem 0; border-bottom: 1px solid var(--card-border); font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
+                <div
+                    style="padding: 0.5rem 0; border-bottom: 1px solid var(--card-border); font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
                     <span><strong>{{ activity.email }}</strong></span>
                     <span style="color: var(--fg-secondary); font-size: 0.78rem;">{{ activity.time }}</span>
                 </div>
                 {% endfor %}
             </div>
             {% else %}
-            <div class="a-empty"><p>No recent activity</p></div>
+            <div class="a-empty">
+                <p>No recent activity</p>
+            </div>
             {% endif %}
         </div>
     </div>
@@ -102,11 +106,14 @@
         </table>
     </div>
     <div style="margin-top: 0.75rem;">
-        <a href="/admin/audit-log" class="a-btn a-btn-ghost a-btn-sm">View Full Audit Log <i class="fas fa-arrow-right"></i></a>
+        <a href="/admin/audit-log" class="a-btn a-btn-ghost a-btn-sm">View Full Audit Log <i
+                class="fas fa-arrow-right"></i></a>
     </div>
     {% else %}
     <div class="a-card-flat">
-        <div class="a-empty"><i class="fas fa-check-circle"></i><p>No admin actions recorded yet</p></div>
+        <div class="a-empty"><i class="fas fa-check-circle"></i>
+            <p>No admin actions recorded yet</p>
+        </div>
     </div>
     {% endif %}
 </div>
