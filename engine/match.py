@@ -102,6 +102,9 @@ class Match:
         self.recent_wickets_count = 0  # Track wickets in last few balls
         self.recent_wickets_tracker = []  # Track when wickets fell
 
+        # Streak tracking: consecutive boundaries per batter (activates boundary penalty + wicket boost)
+        self.batter_streaks = {}  # {batter_name: {"boundaries": int}}
+
 
         # ===== NEW ARCHIVING VARIABLES =====
         self.match_data = match_data  # Store original match data
@@ -141,6 +144,13 @@ class Match:
 
         # Initialize Commentary Engine
         self.commentary_engine = CommentaryEngine()
+
+        # Initialize Scenario Engine (if scenario_mode is set)
+        self.scenario_mode = match_data.get("scenario_mode", None)
+        self.scenario_engine = None
+        if self.scenario_mode:
+            from engine.scenario_engine import ScenarioEngine
+            self.scenario_engine = ScenarioEngine(self.scenario_mode, self)
 
 
     def _get_team_name(self, team_list):
@@ -1467,6 +1477,9 @@ class Match:
         # Restore any modified bowler ratings
         self._restore_bowler_ratings()
         
+        # Reset streak tracking for new innings
+        self.batter_streaks = {}
+
         # Reset partnership tracking
         self.current_partnership_balls = 0
         self.current_partnership_runs = 0
@@ -1758,27 +1771,51 @@ class Match:
             return eligible_bowlers
 
     def _apply_matchup_strategy_debug(self, eligible_bowlers):
-        """Matchup strategy with debugging"""
-        striker_hand = self.current_striker.get("batting_hand", "Right")
-        print(f"    🥊 Matchup - Striker batting hand: {striker_hand}")
-        
-        if striker_hand == "Right":
-            left_arm_bowlers = [b for b in eligible_bowlers if b.get("bowling_hand", "Right") == "Left"]
-            print(f"    Left-arm bowlers available: {[b['name'] for b in left_arm_bowlers]}")
-            
-            if left_arm_bowlers:
-                print(f"    ✅ Favorable matchup found - boosting left-arm bowlers")
-                # Apply temporary rating bonus
-                for bowler in left_arm_bowlers:
-                    if not hasattr(bowler, 'original_bowling_rating'):
-                        bowler['original_bowling_rating'] = bowler['bowling_rating']
-                        boosted_rating = min(100, int(bowler['bowling_rating'] * 1.1))
-                        bowler['bowling_rating'] = boosted_rating
-                        print(f"    {bowler['name']} rating boosted: {bowler['original_bowling_rating']} → {boosted_rating}")
-                
-                return left_arm_bowlers
-        
-        print(f"    No favorable matchups - using all eligible")
+        """Enhanced matchup strategy — considers batter's hand, rating, and bowler type"""
+        striker = self.current_striker
+        striker_hand = striker.get("batting_hand", "Right")
+        striker_rating = striker.get("batting_rating", 50)
+        print(f"    🥊 Matchup - Striker: {striker.get('name', '?')} (hand={striker_hand}, rating={striker_rating})")
+
+        scored = []
+        for b in eligible_bowlers:
+            bonus = 0
+            btype = b.get("bowling_type", "")
+            bhand = b.get("bowling_hand", "Right")
+
+            # 1. Left-arm pace angle vs right-handers
+            if bhand == "Left" and striker_hand == "Right" and btype in ("Fast", "Fast-medium", "Medium-fast"):
+                bonus += 8
+
+            # 2. Spin turning away from bat
+            if btype in ("Off spin", "Finger spin") and striker_hand == "Left":
+                bonus += 10
+            if btype in ("Leg spin", "Wrist spin") and striker_hand == "Right":
+                bonus += 10
+
+            # 3. Pace vs tail-enders
+            if striker_rating < 30 and btype in ("Fast", "Fast-medium", "Medium-fast"):
+                bonus += 12
+
+            # 4. Spin vs lower-order on turning tracks
+            if striker_rating < 45 and btype in ("Off spin", "Leg spin", "Finger spin", "Wrist spin"):
+                if self.pitch in ("Dry",):
+                    bonus += 8
+
+            scored.append((b, bonus))
+
+        scored.sort(key=lambda x: -x[1])
+
+        if scored and scored[0][1] >= 8:
+            best_bowler, best_bonus = scored[0]
+            if 'original_bowling_rating' not in best_bowler:
+                best_bowler['original_bowling_rating'] = best_bowler['bowling_rating']
+            boost_pct = min(best_bonus / 100, 0.15)  # Max 15% boost
+            best_bowler['bowling_rating'] = min(100, int(best_bowler['bowling_rating'] * (1 + boost_pct)))
+            print(f"    ✅ Best matchup: {best_bowler['name']} (bonus={best_bonus}, type={best_bowler.get('bowling_type','')})")
+            return [b for b, _ in scored]
+
+        print(f"    No strong matchups — using all eligible")
         return eligible_bowlers
 
     def _is_death_specialist(self, bowler):
@@ -2862,6 +2899,10 @@ class Match:
                 self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p.get("will_bowl")}
                 self._reset_innings_state()
 
+                # Notify scenario engine of innings transition
+                if self.scenario_engine:
+                    self.scenario_engine.on_innings_transition()
+
                 return {
                     "innings_end": True,
                     "innings_number": 1,
@@ -3061,17 +3102,52 @@ class Match:
                 pressure_effects['strike_rotation_penalty'] = risk_effects['strike_rotation_penalty']
                 pressure_effects['single_floor'] = risk_effects['single_floor']
 
-        outcome = calculate_outcome(
-            batter=self.current_striker,
-            bowler=self.current_bowler,
-            pitch=self.pitch,
-            streak={},
-            over_number=self.current_over,
-            batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"],
-            innings=self.innings,
-            pressure_effects=pressure_effects,
-            free_hit=self.free_hit_active
-        )
+        # First innings collapse psychology (works even outside death overs)
+        if self.innings == 1:
+            recent_wickets = getattr(self, 'recent_wickets_count', 0)
+            if self.pressure_engine.should_trigger_wicket_cluster(match_state, recent_wickets):
+                pressure_effects['wicket_modifier'] *= 1.25
+                logger.info(f"FIRST INNINGS COLLAPSE: 1.25x wicket boost! ({self.wickets} down, {recent_wickets} recent)")
+
+        # ===== SCENARIO ENGINE HOOK =====
+        scenario_override = None
+        if self.scenario_engine and self.innings == 2:
+            scenario_override = self.scenario_engine.get_override_outcome(
+                batter=self.current_striker, bowler=self.current_bowler
+            )
+
+        if scenario_override:
+            outcome = scenario_override
+        else:
+            # Merge scenario bias into pressure_effects (convergence/free-play phases)
+            if self.scenario_engine and self.innings == 2:
+                scenario_bias = self.scenario_engine.get_scenario_bias(
+                    self._calculate_current_match_state()
+                )
+                for key, value in scenario_bias.items():
+                    if key in pressure_effects:
+                        if key == "dot_bonus":
+                            pressure_effects[key] += value  # additive for dot_bonus
+                        else:
+                            pressure_effects[key] *= value  # multiplicative for modifiers
+                    else:
+                        pressure_effects[key] = value
+
+            striker_name = self.current_striker["name"]
+            streak = self.batter_streaks.get(striker_name, {"boundaries": 0})
+
+            outcome = calculate_outcome(
+                batter=self.current_striker,
+                bowler=self.current_bowler,
+                pitch=self.pitch,
+                streak=streak,
+                over_number=self.current_over,
+                batter_runs=self.batsman_stats[striker_name]["runs"],
+                innings=self.innings,
+                pressure_effects=pressure_effects,
+                free_hit=self.free_hit_active,
+                balls_faced=self.batsman_stats[striker_name]["balls"]
+            )
 
         # 🎙️ COMMENTARY REVAMP INTEGRATION
         if hasattr(self, 'commentary_engine'):
@@ -3080,13 +3156,24 @@ class Match:
             outcome['bowler'] = self.current_bowler['name']
             outcome['batting_team'] = self._get_team_name(self.batting_team)
             outcome['bowling_team'] = self._get_team_name(self.bowling_team)
-            
+            outcome['bowling_type'] = self.current_bowler.get('bowling_type', '')
+            if outcome.get('batter_out'):
+                outcome['type'] = 'wicket'
+
             # Build state object
             comm_state = self._calculate_current_match_state()
             comm_state['recent_wickets_match'] = getattr(self, 'recent_wickets_count', 0)
             comm_state['batter_runs'] = self.batsman_stats[self.current_striker["name"]]["runs"]
             comm_state['partnership_runs'] = self.current_partnership_runs
-            
+            comm_state['current_over_runs'] = self.current_over_runs
+            comm_state['current_ball'] = self.current_ball
+
+            # Maiden over detection: last legal ball of over, no runs all over, this ball also a dot
+            is_legal = not outcome.get('is_extra') or outcome.get('extra_type', '') in ('Byes', 'Leg Bye')
+            is_last_ball = is_legal and self.current_ball == 5
+            this_ball_dot = outcome.get('runs', 0) == 0 or (outcome.get('is_extra') and outcome.get('extra_type', '') in ('Byes', 'Leg Bye') and outcome.get('runs', 0) == 0)
+            comm_state['is_maiden_over'] = is_last_ball and self.current_over_runs == 0 and not self.current_over_maiden_invalid and this_ball_dot
+
             # Generate new commentary
             new_text = self.commentary_engine.get_commentary(outcome, comm_state)
             if new_text:
@@ -3099,13 +3186,14 @@ class Match:
                 batter=self.current_striker,
                 bowler=self.current_bowler,
                 pitch=self.pitch,
-                streak={},
+                streak=self.batter_streaks.get(self.current_striker["name"], {"boundaries": 0}),
                 over_number=self.current_over,
                 batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"],
                 innings=self.innings,
                 pressure_effects=pressure_effects,
                 allow_extras=False,
-                free_hit=False
+                free_hit=False,
+                balls_faced=self.batsman_stats[self.current_striker["name"]]["balls"]
             )
 
             bat_runs = bat_outcome.get("runs", 0)
@@ -3159,7 +3247,17 @@ class Match:
             self.recent_wickets_count = len(self.recent_wickets_tracker)
             logger.info(f"Wicket tracking: {self.recent_wickets_count} wickets in last 12 balls")
 
-        
+        # Update batter streak tracking (boundaries in a row)
+        if not extra:
+            if runs in (4, 6) and not wicket:
+                cur = self.batter_streaks.get(_bd_striker, {"boundaries": 0})
+                self.batter_streaks[_bd_striker] = {"boundaries": cur["boundaries"] + 1}
+            else:
+                self.batter_streaks[_bd_striker] = {"boundaries": 0}
+        # On dismissal, clear the dismissed batter's streak
+        if wicket:
+            self.batter_streaks.pop(_bd_striker, None)
+
         self.prev_delivery_was_extra = extra
 
         if not hasattr(self, 'current_over_runs'):
@@ -3352,6 +3450,10 @@ class Match:
                     self.bowler_history = {}
                     self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p["will_bowl"]}
                     self._reset_innings_state()
+
+                    # Notify scenario engine of innings transition
+                    if self.scenario_engine:
+                        self.scenario_engine.on_innings_transition()
 
                     return {
                         "Test": "AllOut_FirstInnings",
@@ -3553,6 +3655,20 @@ class Match:
             if not extra:
                 self.batsman_stats[self.current_striker["name"]]["runs"] += runs
                 self.batsman_stats[self.current_striker["name"]]["balls"] += 1
+
+                # Track run breakdown for legal deliveries
+                if runs == 0:
+                    self.batsman_stats[self.current_striker["name"]]["dots"] += 1
+                elif runs == 1:
+                    self.batsman_stats[self.current_striker["name"]]["ones"] += 1
+                elif runs == 2:
+                    self.batsman_stats[self.current_striker["name"]]["twos"] += 1
+                elif runs == 3:
+                    self.batsman_stats[self.current_striker["name"]]["threes"] += 1
+                elif runs == 4:
+                    self.batsman_stats[self.current_striker["name"]]["fours"] += 1
+                elif runs == 6:
+                    self.batsman_stats[self.current_striker["name"]]["sixes"] += 1
 
                 # A2: Bat-runs > 0 invalidate maiden over
                 if runs > 0:
@@ -4043,29 +4159,39 @@ class Match:
         }
     
     def _setup_super_over(self):
-        """Setup super over after a tie"""
+        """Setup super over after a tie — returns team rosters for player selection"""
         scorecard_data = self._generate_detailed_scorecard()
         scorecard_data["target_info"] = "Match Tied - Super Over Required!"
-        
+
+        def _player_info(p):
+            return {
+                "name": p["name"],
+                "role": p.get("role", ""),
+                "batting_rating": p.get("batting_rating", 0),
+                "bowling_rating": p.get("bowling_rating", 0),
+                "will_bowl": p.get("will_bowl", False),
+            }
+
         return {
             "match_tied": True,
             "super_over_required": True,
             "scorecard_data": scorecard_data,
-            "commentary": "<br><strong>MATCH TIED!</strong><br>Super Over Required to decide the winner!<br>",
+            "commentary": "MATCH TIED! Super Over Required to decide the winner!",
             "home_team": self.data["team_home"].split("_")[0],
-            "away_team": self.data["team_away"].split("_")[0]
+            "away_team": self.data["team_away"].split("_")[0],
+            "home_players": [_player_info(p) for p in self.home_xi],
+            "away_players": [_player_info(p) for p in self.away_xi],
         }
 
-    # Modify the start_super_over method:
-    def start_super_over(self, first_batting_team):
-        """Start the super over with selected team batting first"""
+    def start_super_over(self, first_batting_team, batsmen_names=None, bowler_name=None):
+        """Start the super over with user-chosen or auto-selected players"""
         self.super_over_round += 1
         self.super_over_innings = 1
-        
+
         # Reset scores for this round (but keep history)
         self.super_over_scores = {"home": 0, "away": 0}
         self.super_over_wickets = {"home": 0, "away": 0}
-        
+
         # Determine teams
         if first_batting_team == "home":
             self.super_over_batting_team = self.home_xi
@@ -4073,35 +4199,93 @@ class Match:
         else:
             self.super_over_batting_team = self.away_xi
             self.super_over_bowling_team = self.home_xi
-        
-        # Select players automatically
-        self.super_over_batsmen = self._select_super_over_batsmen(self.super_over_batting_team)
-        self.super_over_bowler = self._select_super_over_bowler(self.super_over_bowling_team)
-        
-        # Initialize super over state
-        self.super_over_ball = 0
-        self.super_over_current_striker = self.super_over_batsmen[0]
-        self.super_over_current_non_striker = self.super_over_batsmen[1]
-        self.super_over_batter_idx = [0, 1]
-        
-        # Stats
-        self.super_over_batsman_stats = {
-            p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "wicket_type": "", "out": False}
-            for p in self.super_over_batsmen
-        }
-        
-        round_text = f"SUPER OVER {self.super_over_round}" if self.super_over_round == 1 else f"SUPER OVER {self.super_over_round} (Previous tied)"
-        
+
+        # Track which side is batting for team key
+        self.super_over_first_batting = first_batting_team
+
+        # Select players: user-chosen or auto
+        if batsmen_names and len(batsmen_names) >= 2:
+            self.super_over_batsmen = self._find_players_by_name(
+                self.super_over_batting_team, batsmen_names[:2]
+            )
+        else:
+            self.super_over_batsmen = self._select_super_over_batsmen(self.super_over_batting_team)
+
+        if bowler_name:
+            found = self._find_players_by_name(self.super_over_bowling_team, [bowler_name])
+            self.super_over_bowler = found[0] if found else self._select_super_over_bowler(self.super_over_bowling_team)
+        else:
+            self.super_over_bowler = self._select_super_over_bowler(self.super_over_bowling_team)
+
+        self._init_super_over_innings_state()
+
+        batting_team_name = self.data["team_home"].split("_")[0] if self.super_over_batting_team is self.home_xi else self.data["team_away"].split("_")[0]
+
         return {
             "super_over_started": True,
             "innings": self.super_over_innings,
             "round": self.super_over_round,
             "batting_team": first_batting_team,
+            "batting_team_name": batting_team_name,
             "batsmen": [p["name"] for p in self.super_over_batsmen],
             "bowler": self.super_over_bowler["name"],
-            "commentary": f"<br><strong>{round_text}</strong><br>" +
-                        f"Batsmen: {self.super_over_batsmen[0]['name']}, {self.super_over_batsmen[1]['name']}<br>" +
-                        f"Bowler: {self.super_over_bowler['name']}<br>"
+        }
+
+    def _find_players_by_name(self, team, names):
+        """Find player dicts by name from a team list"""
+        result = []
+        for name in names:
+            for p in team:
+                if p["name"] == name:
+                    result.append(p)
+                    break
+        return result
+
+    def _init_super_over_innings_state(self):
+        """Initialize/reset super over innings state"""
+        self.super_over_ball = 0
+        self.super_over_current_striker = self.super_over_batsmen[0]
+        self.super_over_current_non_striker = self.super_over_batsmen[1]
+        self.super_over_batter_idx = [0, 1]
+        self.super_over_bowler_runs = 0
+        self.super_over_bowler_wickets = 0
+
+        self.super_over_batsman_stats = {
+            p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "wicket_type": "", "out": False}
+            for p in self.super_over_batsmen
+        }
+
+    def start_super_over_innings2(self, batsmen_names=None, bowler_name=None):
+        """Start innings 2 of the current super over with user-chosen players"""
+        # Teams were already swapped by _end_super_over_innings
+        if batsmen_names and len(batsmen_names) >= 2:
+            self.super_over_batsmen = self._find_players_by_name(
+                self.super_over_batting_team, batsmen_names[:2]
+            )
+        else:
+            self.super_over_batsmen = self._select_super_over_batsmen(self.super_over_batting_team)
+
+        if bowler_name:
+            found = self._find_players_by_name(self.super_over_bowling_team, [bowler_name])
+            self.super_over_bowler = found[0] if found else self._select_super_over_bowler(self.super_over_bowling_team)
+        else:
+            self.super_over_bowler = self._select_super_over_bowler(self.super_over_bowling_team)
+
+        self._init_super_over_innings_state()
+
+        batting_team_name = self.data["team_home"].split("_")[0] if self.super_over_batting_team is self.home_xi else self.data["team_away"].split("_")[0]
+        team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
+        other_key = "away" if team_key == "home" else "home"
+        target = self.super_over_scores[other_key] + 1
+
+        return {
+            "super_over_innings2_started": True,
+            "innings": 2,
+            "round": self.super_over_round,
+            "target": target,
+            "batting_team_name": batting_team_name,
+            "batsmen": [p["name"] for p in self.super_over_batsmen],
+            "bowler": self.super_over_bowler["name"],
         }
 
     def _select_super_over_batsmen(self, team):
@@ -4115,13 +4299,13 @@ class Match:
         return max(bowlers, key=lambda p: p["bowling_rating"])
 
     def next_super_over_ball(self):
-        """Process next ball in super over"""
-        if self.super_over_ball >= 6 or self.super_over_wickets[
-            "home" if self.super_over_batting_team == self.home_xi else "away"
-        ] >= 2:
+        """Process next ball in super over — returns rich data for modal UI"""
+        team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
+
+        if self.super_over_ball >= 6 or self.super_over_wickets[team_key] >= 2:
             return self._end_super_over_innings()
-        
-        # Calculate outcome using super over logic
+
+        # Calculate outcome
         outcome = calculate_super_over_outcome(
             batter=self.super_over_current_striker,
             bowler=self.super_over_bowler,
@@ -4130,34 +4314,65 @@ class Match:
             over_number=0,
             batter_runs=self.super_over_batsman_stats[self.super_over_current_striker["name"]]["runs"]
         )
-        
+
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
-        team_key = "home" if self.super_over_batting_team == self.home_xi else "away"
-        
-        commentary_line = f"Ball {self.super_over_ball + 1}: {self.super_over_bowler['name']} to {self.super_over_current_striker['name']} - "
-        
+        extra_type = outcome.get("extra_type", "")
+
+        # Rich commentary: use commentary_engine (same as regular match) with ball/player prefix
+        ball_num = self.super_over_ball + 1  # 1-indexed for display
+        commentary_prefix = f"0.{ball_num} {self.super_over_bowler['name']} to {self.super_over_current_striker['name']} - "
+
+        if hasattr(self, 'commentary_engine'):
+            # Enrich outcome with context for the commentary engine
+            outcome['batter'] = self.super_over_current_striker['name']
+            outcome['bowler'] = self.super_over_bowler['name']
+            outcome['batting_team'] = self._get_team_name(self.super_over_batting_team)
+            outcome['bowling_team'] = self._get_team_name(self.super_over_bowling_team)
+            outcome['bowling_type'] = self.super_over_bowler.get('bowling_type', '')
+            if outcome.get('batter_out'):
+                outcome['type'] = 'wicket'
+
+            # Build minimal match state for commentary engine
+            so_comm_state = {
+                'innings': self.super_over_innings,
+                'score': self.super_over_scores[team_key],
+                'wickets': self.super_over_wickets[team_key],
+                'overs': 0,
+                'current_ball': self.super_over_ball,
+                'batter_runs': self.super_over_batsman_stats[self.super_over_current_striker["name"]]["runs"],
+                'partnership_runs': 0,
+                'current_over_runs': 0,
+                'recent_wickets_match': 0,
+                'is_maiden_over': False,
+            }
+
+            new_text = self.commentary_engine.get_commentary(outcome, so_comm_state)
+            if new_text:
+                commentary_line = f"{commentary_prefix}{runs} run(s), {new_text}"
+            else:
+                commentary_line = f"{commentary_prefix}{outcome.get('description', '')}"
+        else:
+            commentary_line = f"{commentary_prefix}{outcome.get('description', '')}"
+
         if wicket:
             self.super_over_wickets[team_key] += 1
+            self.super_over_bowler_wickets += 1
             wicket_type = outcome["wicket_type"]
 
             if wicket_type == "Run Out":
-                # A1: Run out after completing 1 run, credit the run
                 self.super_over_scores[team_key] += 1
+                self.super_over_bowler_runs += 1
                 self.super_over_batsman_stats[self.super_over_current_striker["name"]]["runs"] += 1
                 if not extra:
                     self.super_over_batsman_stats[self.super_over_current_striker["name"]]["balls"] += 1
 
-                # 50/50: either batsman can be run out
                 so_dismissed_end = random.choice(["striker", "non_striker"])
-                if so_dismissed_end == "striker":
-                    so_dismissed_name = self.super_over_current_striker["name"]
-                else:
-                    so_dismissed_name = self.super_over_current_non_striker["name"]
-
+                so_dismissed_name = (self.super_over_current_striker["name"]
+                                     if so_dismissed_end == "striker"
+                                     else self.super_over_current_non_striker["name"])
                 self.super_over_batsman_stats[so_dismissed_name]["wicket_type"] = "Run Out"
                 self.super_over_batsman_stats[so_dismissed_name]["out"] = True
             else:
-                # Non-run-out: striker always dismissed, 0 runs
                 so_dismissed_name = self.super_over_current_striker["name"]
                 so_dismissed_end = "striker"
                 self.super_over_batsman_stats[so_dismissed_name]["wicket_type"] = wicket_type
@@ -4165,70 +4380,58 @@ class Match:
                 if not extra:
                     self.super_over_batsman_stats[self.super_over_current_striker["name"]]["balls"] += 1
 
-            commentary_line += f"WICKET! {outcome['description']}"
-
-            # Check if 2 wickets down
-            if self.super_over_wickets[team_key] >= 2:
-                commentary_line += "<br><strong>Two wickets down! Super over innings complete!</strong>"
-                return {
-                    "super_over_ball_complete": True,
-                    "wicket": True,
-                    "runs": outcome["runs"],
-                    "commentary": commentary_line,
-                    "score": self.super_over_scores[team_key],
-                    "wickets": self.super_over_wickets[team_key],
-                    "ball": self.super_over_ball + 1,
-                    "innings_complete": True
-                }
-
-            # Bring in 3rd batsman to replace the dismissed one
-            all_batsmen = sorted(self.super_over_batting_team, key=lambda p: p["batting_rating"], reverse=True)
-            third_batsman = all_batsmen[2]  # 3rd best
-            if third_batsman["name"] not in self.super_over_batsman_stats:
-                self.super_over_batsmen.append(third_batsman)
-                self.super_over_batsman_stats[third_batsman["name"]] = {
-                    "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "wicket_type": "", "out": False
-                }
-
-            # New batter always on strike
-            if so_dismissed_end == "non_striker":
-                self.super_over_current_non_striker = self.super_over_current_striker
-                self.super_over_current_striker = third_batsman
-            else:
-                self.super_over_current_striker = third_batsman
-            commentary_line += f"<br>{third_batsman['name']} comes to bat."
+            # Super over: only 2 batsmen allowed, 2 wickets = all out
+            # If 1st wicket and non-striker was dismissed, swap so remaining batter is striker
+            if self.super_over_wickets[team_key] < 2:
+                if so_dismissed_end == "non_striker":
+                    # Non-striker run out: striker continues, no replacement needed
+                    pass
+                # If striker was dismissed, non-striker becomes striker (no new batter)
+                elif so_dismissed_end == "striker":
+                    self.super_over_current_striker = self.super_over_current_non_striker
         else:
             self.super_over_scores[team_key] += runs
-            commentary_line += f"{runs} run(s). {outcome['description']}"
-            
+            self.super_over_bowler_runs += runs
+
             if not extra:
                 self.super_over_batsman_stats[self.super_over_current_striker["name"]]["runs"] += runs
                 self.super_over_batsman_stats[self.super_over_current_striker["name"]]["balls"] += 1
-                
+
                 if runs == 4:
                     self.super_over_batsman_stats[self.super_over_current_striker["name"]]["fours"] += 1
                 elif runs == 6:
                     self.super_over_batsman_stats[self.super_over_current_striker["name"]]["sixes"] += 1
-                
-                # A3: Rotate strike on all odd runs, including byes/leg-byes, not wides/no-balls
+
                 so_should_rotate = False
                 if runs % 2 == 1:
                     if not extra:
                         so_should_rotate = True
                     else:
-                        so_extra_type = outcome.get("extra_type", "")
-                        if so_extra_type in ("Leg Bye", "Byes"):
+                        if extra_type in ("Leg Bye", "Byes"):
                             so_should_rotate = True
                 if so_should_rotate:
                     self.super_over_current_striker, self.super_over_current_non_striker = \
                         self.super_over_current_non_striker, self.super_over_current_striker
-        
+
         if not extra:
             self.super_over_ball += 1
-        
-        # Check if over complete
+
         over_complete = self.super_over_ball >= 6
-        
+        # Innings 2: end immediately when target is reached or exceeded
+        target_reached = False
+        if self.super_over_innings == 2:
+            other_key = "away" if team_key == "home" else "home"
+            target = self.super_over_scores[other_key] + 1
+            if self.super_over_scores[team_key] >= target:
+                target_reached = True
+        is_innings_complete = over_complete or self.super_over_wickets[team_key] >= 2 or target_reached
+
+        # Build rich response
+        striker_name = self.super_over_current_striker["name"]
+        non_striker_name = self.super_over_current_non_striker["name"]
+        striker_stats = self.super_over_batsman_stats.get(striker_name, {})
+        non_striker_stats = self.super_over_batsman_stats.get(non_striker_name, {})
+
         return {
             "super_over_ball_complete": True,
             "wicket": wicket,
@@ -4237,118 +4440,188 @@ class Match:
             "score": self.super_over_scores[team_key],
             "wickets": self.super_over_wickets[team_key],
             "ball": self.super_over_ball,
-            "innings_complete": over_complete or self.super_over_wickets[team_key] >= 2
+            "innings_complete": is_innings_complete,
+            # Rich data for modal UI
+            "striker": striker_name,
+            "striker_runs": striker_stats.get("runs", 0),
+            "striker_balls": striker_stats.get("balls", 0),
+            "non_striker": non_striker_name,
+            "nonstriker_runs": non_striker_stats.get("runs", 0),
+            "nonstriker_balls": non_striker_stats.get("balls", 0),
+            "bowler": self.super_over_bowler["name"],
+            "bowler_runs": self.super_over_bowler_runs,
+            "bowler_wickets": self.super_over_bowler_wickets,
+            "bowler_overs": f"0.{self.super_over_ball}",
+            "ball_data": {
+                "runs": runs,
+                "batter_out": wicket,
+                "extra_type": extra_type if extra else None,
+                "is_extra": extra,
+            },
+        }
+
+    def _get_super_over_innings_scorecard(self):
+        """Build mini scorecard data for the current super over innings"""
+        batting = []
+        for name, stats in self.super_over_batsman_stats.items():
+            sr = round((stats["runs"] / stats["balls"]) * 100, 1) if stats["balls"] > 0 else 0
+            status = f"{stats['wicket_type']}" if stats["out"] else "not out"
+            batting.append({
+                "name": name, "runs": stats["runs"], "balls": stats["balls"],
+                "fours": stats["fours"], "sixes": stats["sixes"],
+                "sr": sr, "status": status, "out": stats["out"],
+            })
+        bowling = {
+            "name": self.super_over_bowler["name"],
+            "runs": self.super_over_bowler_runs,
+            "wickets": self.super_over_bowler_wickets,
+            "balls": self.super_over_ball,
+            "overs": f"0.{self.super_over_ball}",
+        }
+        team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
+        return {
+            "batting": batting,
+            "bowling": bowling,
+            "total": self.super_over_scores[team_key],
+            "wickets": self.super_over_wickets[team_key],
         }
 
     def _end_super_over_innings(self):
         """Handle end of super over innings"""
-        team_key = "home" if self.super_over_batting_team == self.home_xi else "away"
-        
+        team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
+
+        # Save innings 1 scorecard before swapping
+        innings_scorecard = self._get_super_over_innings_scorecard()
+
         if self.super_over_innings == 1:
-            # Start second innings of this super over
+            # Save innings 1 data
+            self.super_over_innings1_scorecard = innings_scorecard
+
+            # Swap teams for innings 2
             self.super_over_innings = 2
             self.super_over_batting_team, self.super_over_bowling_team = \
                 self.super_over_bowling_team, self.super_over_batting_team
-            
-            # Reset for second innings
-            self.super_over_ball = 0
-            self.super_over_batsmen = self._select_super_over_batsmen(self.super_over_batting_team)
-            self.super_over_bowler = self._select_super_over_bowler(self.super_over_bowling_team)
-            self.super_over_current_striker = self.super_over_batsmen[0]
-            self.super_over_current_non_striker = self.super_over_batsmen[1]
-            
-            # Stats for new innings
-            self.super_over_batsman_stats = {
-                p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "wicket_type": "", "out": False}
-                for p in self.super_over_batsmen
-            }
-            
-            target = self.super_over_scores["home" if team_key == "away" else "away"] + 1
-            
+
+            other_key = "away" if team_key == "home" else "home"
+            target = self.super_over_scores[team_key] + 1
+
+            def _pi(p):
+                return {
+                    "name": p["name"], "role": p.get("role", ""),
+                    "batting_rating": p.get("batting_rating", 0),
+                    "bowling_rating": p.get("bowling_rating", 0),
+                    "will_bowl": p.get("will_bowl", False),
+                }
+
+            batting_team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
+
             return {
                 "super_over_innings_end": True,
-                "innings": 2,
+                "innings": 1,
                 "round": self.super_over_round,
                 "target": target,
                 "first_innings_score": self.super_over_scores[team_key],
-                "batting_team": "away" if team_key == "home" else "home",
-                "commentary": f"<br><strong>End of Super Over {self.super_over_round} Innings 1</strong><br>" +
-                            f"Target: {target} runs<br>" +
-                            f"<strong>SUPER OVER {self.super_over_round} INNINGS 2</strong><br>" +
-                            f"Batsmen: {self.super_over_batsmen[0]['name']}, {self.super_over_batsmen[1]['name']}<br>" +
-                            f"Bowler: {self.super_over_bowler['name']}<br>"
+                "innings_scorecard": innings_scorecard,
+                "batting_team": batting_team_key,
+                "batting_team_name": self.data["team_home"].split("_")[0] if self.super_over_batting_team is self.home_xi else self.data["team_away"].split("_")[0],
+                "bowling_team_name": self.data["team_home"].split("_")[0] if self.super_over_bowling_team is self.home_xi else self.data["team_away"].split("_")[0],
+                # Team rosters for innings 2 player selection
+                "batting_team_players": [_pi(p) for p in self.super_over_batting_team],
+                "bowling_team_players": [_pi(p) for p in self.super_over_bowling_team],
             }
         else:
-            # End of second innings - determine winner or continue
+            # End of second innings — determine winner
             home_score = self.super_over_scores["home"]
             away_score = self.super_over_scores["away"]
-            
-            # Store this super over result in history
+
             self.super_over_history.append({
                 "round": self.super_over_round,
                 "home_score": home_score,
-                "away_score": away_score
+                "away_score": away_score,
             })
-            
-            if home_score > away_score:
-                winner = self.data["team_home"].split("_")[0]
-                margin = home_score - away_score
-                result = f"{winner} won Super Over {self.super_over_round} by {margin} run(s)"
-                
-                self.result = result
-                self.innings = 5  # Super over complete
 
-                # ✅ Update original scorecard with super over result
-                self.original_scorecard["target_info"] = result
-                
-                # Save stats and create archive (Bug Fix B6)
-                self._save_second_innings_stats()
-                self._create_match_archive()
-                
-                return {
-                    "super_over_complete": True,
-                    "match_over": True,
-                    "result": result,
-                    "scorecard_data": self.original_scorecard,
-                    "round": self.super_over_round,
-                    "total_super_overs": self.super_over_round,
-                    "home_score": home_score,
-                    "away_score": away_score,
-                    "commentary": f"<br><strong>SUPER OVER {self.super_over_round} COMPLETE!</strong><br>{result}"
-                }
-                
-            elif away_score > home_score:
-                winner = self.data["team_away"].split("_")[0]
-                margin = away_score - home_score
-                result = f"{winner} won Super Over {self.super_over_round} by {margin} run(s)"
-                
+            home_name = self.data["team_home"].split("_")[0]
+            away_name = self.data["team_away"].split("_")[0]
+
+            if home_score != away_score:
+                if home_score > away_score:
+                    winner = home_name
+                    margin = home_score - away_score
+                else:
+                    winner = away_name
+                    margin = away_score - home_score
+
+                result = f"{winner} won by Super Over"
                 self.result = result
-                self.innings = 5  # Super over complete
-                
+                self.innings = 5
+
+                if hasattr(self, 'original_scorecard'):
+                    self.original_scorecard["target_info"] = result
+
                 self._save_second_innings_stats()
                 self._create_match_archive()
-                
+
                 return {
                     "super_over_complete": True,
                     "match_over": True,
                     "result": result,
+                    "scorecard_data": getattr(self, 'original_scorecard', None),
                     "round": self.super_over_round,
-                    "total_super_overs": self.super_over_round,
                     "home_score": home_score,
                     "away_score": away_score,
-                    "commentary": f"<br><strong>SUPER OVER {self.super_over_round} COMPLETE!</strong><br>{result}"
+                    "home_team": home_name,
+                    "away_team": away_name,
+                    "innings1_scorecard": getattr(self, 'super_over_innings1_scorecard', None),
+                    "innings2_scorecard": innings_scorecard,
                 }
             else:
-                # Another tie! Set up next super over
+                # Another tie — but cap at 5 super overs max
+                if self.super_over_round >= 5:
+                    # After 5 super overs, decide by total boundaries across all super overs
+                    # or declare shared victory
+                    result = f"Match Drawn after {self.super_over_round} Super Overs — scores level"
+                    self.result = result
+                    self.innings = 5
+
+                    if hasattr(self, 'original_scorecard'):
+                        self.original_scorecard["target_info"] = result
+
+                    self._save_second_innings_stats()
+                    self._create_match_archive()
+
+                    return {
+                        "super_over_complete": True,
+                        "match_over": True,
+                        "result": result,
+                        "scorecard_data": getattr(self, 'original_scorecard', None),
+                        "round": self.super_over_round,
+                        "home_score": home_score,
+                        "away_score": away_score,
+                        "home_team": home_name,
+                        "away_team": away_name,
+                        "innings1_scorecard": getattr(self, 'super_over_innings1_scorecard', None),
+                        "innings2_scorecard": innings_scorecard,
+                    }
+
+                # Another tie — allow next super over
+                def _pi(p):
+                    return {
+                        "name": p["name"], "role": p.get("role", ""),
+                        "batting_rating": p.get("batting_rating", 0),
+                        "bowling_rating": p.get("bowling_rating", 0),
+                        "will_bowl": p.get("will_bowl", False),
+                    }
+
                 return {
                     "super_over_tied_again": True,
                     "match_over": False,
                     "round": self.super_over_round,
                     "home_score": home_score,
                     "away_score": away_score,
-                    "home_team": self.data["team_home"].split("_")[0],
-                    "away_team": self.data["team_away"].split("_")[0],
-                    "commentary": f"<br><strong>SUPER OVER {self.super_over_round} TIED!</strong><br>" +
-                                f"Score: {home_score}-{away_score}<br>" +
-                                f"Another Super Over is required to decide the winner!<br>"
+                    "home_team": home_name,
+                    "away_team": away_name,
+                    "innings1_scorecard": getattr(self, 'super_over_innings1_scorecard', None),
+                    "innings2_scorecard": innings_scorecard,
+                    "home_players": [_pi(p) for p in self.home_xi],
+                    "away_players": [_pi(p) for p in self.away_xi],
                 }

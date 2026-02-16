@@ -13,9 +13,9 @@ pitch_profiles:
     description: "Seamer-friendly surface with lateral movement — pace bowlers dominate, low scoring"
     scoring_matrix:
       Dot: 0.35
-      Single: 0.36
-      Double: 0.08
-      Three: 0.01
+      Single: 0.365
+      Double: 0.085
+      Three: 0.005
       Four: 0.07
       Six: 0.025
       Wicket: 0.065
@@ -31,9 +31,9 @@ pitch_profiles:
     description: "Spin-friendly surface with variable bounce — spinners thrive, tough to score"
     scoring_matrix:
       Dot: 0.33
-      Single: 0.36
-      Double: 0.08
-      Three: 0.02
+      Single: 0.367
+      Double: 0.088
+      Three: 0.008
       Four: 0.07
       Six: 0.03
       Wicket: 0.06
@@ -50,9 +50,9 @@ pitch_profiles:
     description: "True bounce with carry — balanced contest with slight batting edge"
     scoring_matrix:
       Dot: 0.28
-      Single: 0.33
-      Double: 0.10
-      Three: 0.05
+      Single: 0.345
+      Double: 0.12
+      Three: 0.008
       Four: 0.10
       Six: 0.06
       Wicket: 0.04
@@ -68,9 +68,9 @@ pitch_profiles:
     description: "True surface with even bounce — batting paradise, bowlers need skill"
     scoring_matrix:
       Dot: 0.24
-      Single: 0.32
-      Double: 0.12
-      Three: 0.03
+      Single: 0.335
+      Double: 0.14
+      Three: 0.008
       Four: 0.13
       Six: 0.08
       Wicket: 0.055
@@ -83,9 +83,9 @@ pitch_profiles:
     description: "Lifeless track with nothing for bowlers — batting festival guaranteed"
     scoring_matrix:
       Dot: 0.20
-      Single: 0.32
-      Double: 0.14
-      Three: 0.01
+      Single: 0.325
+      Double: 0.145
+      Three: 0.005
       Four: 0.17
       Six: 0.09
       Wicket: 0.035
