@@ -168,7 +168,7 @@
             0 0 0 1px rgba(255, 255, 255, 0.05) inset;
     }
 
-    .stat-item {
+    .hero-stat-item {
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -176,7 +176,7 @@
         position: relative;
     }
 
-    .stat-item:not(:last-child)::after {
+    .hero-stat-item:not(:last-child)::after {
         content: '';
         position: absolute;
         right: 0;
@@ -365,16 +365,16 @@
             gap: 0;
         }
 
-        .stat-item {
+        .hero-stat-item {
             padding: 1.5rem;
             border-bottom: 1px solid var(--card-border);
         }
 
-        .stat-item:last-child {
+        .hero-stat-item:last-child {
             border-bottom: none;
         }
 
-        .stat-item::after {
+        .hero-stat-item::after {
             display: none;
         }
 
@@ -401,19 +401,19 @@
 
     <!-- Glass Stats Board -->
     <div class="hero-stats">
-        <div class="stat-item">
+        <div class="hero-stat-item">
             <span class="stat-number">∞</span>
             <span class="stat-label">Teams</span>
         </div>
-        <div class="stat-item">
+        <div class="hero-stat-item">
             <span class="stat-number">{{ matches_simulated }}</span>
             <span class="stat-label">Matches</span>
         </div>
-        <div class="stat-item">
+        <div class="hero-stat-item">
             <span class="stat-number">{{ total_visits }}</span>
             <span class="stat-label">Fans</span>
         </div>
-        <div class="stat-item">
+        <div class="hero-stat-item">
             <span class="stat-number{% if active_users > 0 %} is-online{% endif %}">{{ active_users }}</span>
             <span class="stat-label">Online Now</span>
         </div>

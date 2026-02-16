@@ -5067,6 +5067,112 @@ def create_app():
 
 
 
+
+    # ============================================================================
+    # ADMIN FILE EXPLORER
+    # ============================================================================
+
+    @app.route('/admin/files')
+    @login_required
+    @admin_required
+    def admin_files():
+        return render_template('admin/files.html')
+
+    @app.route('/admin/api/files')
+    @login_required
+    @admin_required
+    def admin_api_files():
+        base_dir = os.path.abspath(PROJECT_ROOT)
+        req_path = request.args.get('path', '')
+        # Resolve target path securely
+        target_path = os.path.abspath(os.path.join(base_dir, req_path))
+        
+        # Security check: Ensure target path is within base_dir
+        if not target_path.startswith(base_dir):
+            return jsonify({'error': 'Access denied: Cannot traverse outside project root'}), 403
+            
+        if not os.path.exists(target_path):
+             return jsonify({'error': 'Path not found'}), 404
+             
+        if not os.path.isdir(target_path):
+            return jsonify({'error': 'Path is not a directory'}), 400
+
+        items = []
+        try:
+            with os.scandir(target_path) as entries:
+                for entry in entries:
+                    try:
+                        stats = entry.stat()
+                        # Format modification time
+                        mtime = datetime.fromtimestamp(stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        is_dir = entry.is_dir()
+                        # Calculate relative path from project root
+                        rel_path = os.path.relpath(entry.path, base_dir).replace('\\', '/')
+                        if rel_path == '.':
+                            rel_path = ''
+
+                        items.append({
+                            'name': entry.name,
+                            'path': rel_path,
+                            'type': 'directory' if is_dir else 'file',
+                            'size': stats.st_size,
+                            'modified': mtime,
+                            'is_dir': is_dir
+                        })
+                    except OSError:
+                        continue # Skip inaccessible items
+        except PermissionError:
+             return jsonify({'error': 'Permission denied'}), 403
+
+        # Sort: Directories first, then files (alphabetical)
+        items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
+
+        # Determine parent directory for navigation
+        current_rel = os.path.relpath(target_path, base_dir).replace('\\', '/')
+        if current_rel == '.':
+            current_rel = ''
+            
+        parent_rel = ''
+        if current_rel:
+            parent_rel = os.path.dirname(current_rel)
+
+        return jsonify({
+            'items': items,
+            'current_path': current_rel,
+            'parent_path': parent_rel
+        })
+
+    @app.route('/admin/api/files', methods=['DELETE'])
+    @login_required
+    @admin_required
+    def admin_api_delete_file():
+        file_path = request.args.get('path', '')
+        if not file_path:
+            return jsonify({'error': 'Path is required'}), 400
+
+        base_dir = os.path.abspath(PROJECT_ROOT)
+        target_path = os.path.abspath(os.path.join(base_dir, file_path))
+
+        # Security check
+        if not target_path.startswith(base_dir):
+            return jsonify({'error': 'Access denied'}), 403
+        
+        if not os.path.exists(target_path):
+            return jsonify({'error': 'File not found'}), 404
+            
+        if os.path.isdir(target_path):
+            return jsonify({'error': 'Deleting directories is not supported'}), 400
+
+        try:
+            os.remove(target_path)
+            app.logger.info(f"[FileExplorer] Admin {current_user.id} deleted file: {file_path}")
+            return jsonify({'success': True})
+        except Exception as e:
+            app.logger.error(f"[FileExplorer] Error deleting file {file_path}: {e}")
+            return jsonify({'error': str(e)}), 500
+
+
     # Register minimal fallback admin routes if any expected endpoints are missing.
     # This prevents template/url build failures when a partial app initialization occurs.
     def _register_admin_fallback(endpoint_name, route_path):
