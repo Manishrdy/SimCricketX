@@ -3,9 +3,8 @@
  * Real-time visual analytics: Wagon Wheel, Charts, Timeline, Win Probability
  * Expects Chart.js and match_detail.js globals to be available.
  *
- * PERF: All DOM rendering is gated behind `dashboardActive` (from match_detail.js).
- *       Data accumulation (ballHistory) always runs; rendering only when visible.
- *       Timeline uses incremental append, not full rebuild.
+ * PERF: Timeline and chart updates use incremental rendering to stay smooth.
+ *       Match Center now stays "warm" in the background for seamless view switches.
  */
 
 // --- Chart instances (reused across updates) ---
@@ -67,7 +66,6 @@ const wicketMarkerPlugin = {
  * Called on every ball. Only touches DOM when dashboard is visible.
  */
 function updateDashboard(ballData, history, oRuns, inn1Data) {
-    if (typeof dashboardActive !== 'undefined' && !dashboardActive) return;
     if (wagonViewMode === 'current') {
         addWagonWheelShot(ballData);
     }
