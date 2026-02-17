@@ -1,0 +1,220 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">{{ user.id }}</h1>
+        <p class="admin-page-subtitle">User 360 overview: profile, activity, ownership, and security context</p>
+    </div>
+    <div class="admin-page-actions">
+        <a href="{{ url_for('admin_users') }}" class="a-btn a-btn-ghost"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="{{ url_for('admin_user_detail', user_email=user.id) }}" class="a-btn a-btn-secondary"><i class="fas fa-tools"></i> Manage User</a>
+    </div>
+</div>
+
+<div class="a-stats-grid">
+    <div class="a-stat-card">
+        <div class="a-stat-label">Role</div>
+        <div style="font-size: 1rem; font-weight: 700;">
+            {% if user.is_admin %}
+            <span class="a-badge a-badge-admin"><i class="fas fa-shield-alt"></i> Admin</span>
+            {% else %}
+            <span class="a-badge a-badge-user">User</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Teams</div>
+        <div class="a-stat-value">{{ teams_count }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Players</div>
+        <div class="a-stat-value">{{ players_count }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Matches</div>
+        <div class="a-stat-value">{{ matches_count }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Tournaments</div>
+        <div class="a-stat-value">{{ tournaments_count }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Last Login</div>
+        <div style="font-size: 0.9rem; font-weight: 600;">{% if user.last_login %}{{ user.last_login.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}</div>
+    </div>
+</div>
+
+<div class="a-grid-3" style="margin-bottom: 1.5rem;">
+    <div class="a-card-flat">
+        <div class="a-stat-label">Ban Status</div>
+        {% if user.is_banned %}
+        <span class="a-badge a-badge-danger"><i class="fas fa-ban"></i> Banned</span>
+        <div style="font-size: 0.8rem; color: var(--fg-secondary); margin-top: 0.4rem;">
+            {{ user.ban_reason or 'No reason provided' }}
+        </div>
+        {% else %}
+        <span class="a-badge a-badge-success"><i class="fas fa-check"></i> Active</span>
+        {% endif %}
+    </div>
+    <div class="a-card-flat">
+        <div class="a-stat-label">Security Signals</div>
+        <div style="font-size: 0.84rem; color: var(--fg);">Active sessions: <strong>{{ security_overview.active_sessions }}</strong></div>
+        <div style="font-size: 0.84rem; color: var(--fg);">Failed logins (24h): <strong>{{ security_overview.failed_logins_24h }}</strong></div>
+        <div style="font-size: 0.84rem; color: var(--fg);">Unique recent IPs: <strong>{{ security_overview.unique_recent_ips }}</strong></div>
+    </div>
+    <div class="a-card-flat">
+        <div class="a-stat-label">Password Policy State</div>
+        {% if user.force_password_reset %}
+        <span class="a-badge a-badge-warning"><i class="fas fa-key"></i> Reset Required</span>
+        {% else %}
+        <span class="a-badge a-badge-success"><i class="fas fa-check"></i> Normal</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="a-grid-2">
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-network-wired"></i> Active Sessions</h3>
+        <div class="a-table-wrap">
+            <table class="a-table">
+                <thead><tr><th>IP</th><th>Last Active</th><th>User Agent</th></tr></thead>
+                <tbody>
+                    {% for s in sessions %}
+                    <tr>
+                        <td><code>{{ s.ip_address or '-' }}</code></td>
+                        <td>{% if s.last_active %}{{ s.last_active.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}-{% endif %}</td>
+                        <td style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.user_agent or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3"><div class="a-empty"><p>No active sessions</p></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-exclamation-triangle"></i> Failed Logins</h3>
+        <div class="a-table-wrap">
+            <table class="a-table">
+                <thead><tr><th>IP</th><th>When</th><th>User Agent</th></tr></thead>
+                <tbody>
+                    {% for f in failed_logins %}
+                    <tr>
+                        <td><code>{{ f.ip_address or '-' }}</code></td>
+                        <td>{% if f.timestamp %}{{ f.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}-{% endif %}</td>
+                        <td style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ f.user_agent or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3"><div class="a-empty"><p>No failed logins recorded</p></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="a-grid-2">
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-shield-alt"></i> Recent Teams</h3>
+        <div class="a-table-wrap">
+            <table class="a-table">
+                <thead><tr><th>Name</th><th>Code</th><th>Created</th></tr></thead>
+                <tbody>
+                    {% for t in recent_teams %}
+                    <tr>
+                        <td>{{ t.name }}</td>
+                        <td><span class="a-badge a-badge-info">{{ t.short_code }}</span></td>
+                        <td>{% if t.created_at %}{{ t.created_at.strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3"><div class="a-empty"><p>No teams</p></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-cricket-bat-ball"></i> Recent Matches</h3>
+        <div class="a-table-wrap">
+            <table class="a-table">
+                <thead><tr><th>Date</th><th>Result</th><th>Venue</th></tr></thead>
+                <tbody>
+                    {% for m in recent_matches %}
+                    <tr>
+                        <td>{% if m.date %}{{ m.date.strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td>
+                        <td>{{ m.result_description or '-' }}</td>
+                        <td>{{ m.venue or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3"><div class="a-empty"><p>No matches</p></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="a-grid-2">
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-trophy"></i> Recent Tournaments</h3>
+        <div class="a-table-wrap">
+            <table class="a-table">
+                <thead><tr><th>Name</th><th>Status</th><th>Created</th></tr></thead>
+                <tbody>
+                    {% for t in recent_tournaments %}
+                    <tr>
+                        <td>{{ t.name }}</td>
+                        <td><span class="a-badge a-badge-info">{{ t.status or '-' }}</span></td>
+                        <td>{% if t.created_at %}{{ t.created_at.strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3"><div class="a-empty"><p>No tournaments</p></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-scroll"></i> Admin Audit Context</h3>
+        <div class="a-table-wrap">
+            <table class="a-table">
+                <thead><tr><th>Type</th><th>Action</th><th>When</th></tr></thead>
+                <tbody>
+                    {% for e in admin_actions_by_user %}
+                    <tr>
+                        <td><span class="a-badge a-badge-warning">By User</span></td>
+                        <td>{{ e.action }}</td>
+                        <td>{% if e.timestamp %}{{ e.timestamp.strftime('%Y-%m-%d %H:%M') }}{% else %}-{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                    {% for e in actions_targeting_user %}
+                    <tr>
+                        <td><span class="a-badge a-badge-danger">Targeting User</span></td>
+                        <td>{{ e.action }}</td>
+                        <td>{% if e.timestamp %}{{ e.timestamp.strftime('%Y-%m-%d %H:%M') }}{% else %}-{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not admin_actions_by_user and not actions_targeting_user %}
+                    <tr><td colspan="3"><div class="a-empty"><p>No audit records</p></div></td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if unique_ips %}
+<div class="a-card-flat" style="margin-top: 1rem;">
+    <div class="a-stat-label">Recent IPs</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+        {% for ip in unique_ips %}
+        <span class="a-badge a-badge-info"><code>{{ ip }}</code></span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

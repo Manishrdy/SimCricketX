@@ -35,7 +35,7 @@
                 <td style="font-weight: 600;">{{ t.name }}</td>
                 <td><span class="a-badge a-badge-info">{{ t.short_code }}</span></td>
                 <td>
-                    <a href="{{ url_for('admin_user_detail', user_email=t.user_id) }}" style="color: var(--accent); text-decoration: none;">
+                    <a href="{{ url_for('admin_user_360', user_email=t.user_id) }}" style="color: var(--accent); text-decoration: none;">
                         {{ t.user_id }}
                     </a>
                 </td>

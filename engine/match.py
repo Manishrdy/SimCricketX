@@ -514,7 +514,11 @@ class Match:
             pass
         else:
             # Continue partnership
-            if not outcome.get('is_extra'):
+            # Legal deliveries: non-extras + byes/leg-byes (they ARE legal deliveries)
+            is_legal = not outcome.get('is_extra')
+            if outcome.get('is_extra') and outcome.get('extra_type', '') in ('Byes', 'Leg Bye'):
+                is_legal = True
+            if is_legal:
                 self.current_partnership_balls += 1
             self.current_partnership_runs += outcome.get('runs', 0)
 
@@ -3674,23 +3678,17 @@ class Match:
                 if runs > 0:
                     self.current_over_maiden_invalid = True
             else:
-                # Byes and Leg Byes are legal deliveries: increment batsman balls faced
                 extra_type = outcome.get("extra_type", "")
-                if extra_type in ("Byes", "Leg Bye"):
+                # Byes, Leg Byes, and No Balls: batsman faced the delivery
+                if extra_type in ("Byes", "Leg Bye", "No Ball"):
                     self.batsman_stats[self.current_striker["name"]]["balls"] += 1
 
-                if runs == 0:
+                # Byes/Leg Byes: batsman scored 0 off the bat → dot ball
+                # (runs go to extras, not credited to batsman)
+                if extra_type in ("Byes", "Leg Bye"):
                     self.batsman_stats[self.current_striker["name"]]["dots"] += 1
-                elif runs == 1:
-                    self.batsman_stats[self.current_striker["name"]]["ones"] += 1
-                elif runs == 2:
-                    self.batsman_stats[self.current_striker["name"]]["twos"] += 1
-                elif runs == 3:
-                    self.batsman_stats[self.current_striker["name"]]["threes"] += 1
-                elif runs == 4:
-                    self.batsman_stats[self.current_striker["name"]]["fours"] += 1
-                elif runs == 6:
-                    self.batsman_stats[self.current_striker["name"]]["sixes"] += 1
+                # No Ball: bat_runs breakdown handled in the No Ball section below
+                # Wide: batsman doesn't face the delivery — no stats at all
 
             if extra and outcome.get("extra_type") == "No Ball":
                 bat_runs = outcome.get("bat_runs", 0)
@@ -3706,13 +3704,16 @@ class Match:
                         self.batsman_stats[self.current_striker["name"]]["fours"] += 1
                     elif bat_runs == 6:
                         self.batsman_stats[self.current_striker["name"]]["sixes"] += 1
+                else:
+                    # No Ball with 0 bat runs = dot ball for the batsman
+                    self.batsman_stats[self.current_striker["name"]]["dots"] += 1
 
                 commentary_line += f"No Ball + {bat_runs} run(s), {outcome.get('bat_description', '')}"
             else:
                 commentary_line += f"{runs} run(s), {outcome['description']}"
             self.commentary.append(commentary_line)
 
-            # A3: Strike rotates on odd runs (byes/leg-byes), and on no-ball bat-runs
+            # A3: Strike rotates on odd runs for all delivery types
             should_rotate = False
             if not extra:
                 if runs % 2 == 1:
@@ -3724,6 +3725,12 @@ class Match:
                 elif extra_type == "No Ball":
                     bat_runs = outcome.get("bat_runs", 0)
                     if bat_runs % 2 == 1:
+                        should_rotate = True
+                elif extra_type == "Wide":
+                    # Wide: 1 penalty run auto-credited; rotate only if
+                    # additional completed runs beyond the penalty are odd
+                    additional_runs = runs - 1
+                    if additional_runs > 0 and additional_runs % 2 == 1:
                         should_rotate = True
             if should_rotate:
                 self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
@@ -4363,7 +4370,11 @@ class Match:
                 self.super_over_scores[team_key] += 1
                 self.super_over_bowler_runs += 1
                 self.super_over_batsman_stats[self.super_over_current_striker["name"]]["runs"] += 1
-                if not extra:
+                # Byes/Leg Byes/No Balls are faced deliveries — count the ball
+                so_ro_legal = not extra
+                if extra and extra_type in ("Byes", "Leg Bye", "No Ball"):
+                    so_ro_legal = True
+                if so_ro_legal:
                     self.super_over_batsman_stats[self.super_over_current_striker["name"]]["balls"] += 1
 
                 so_dismissed_end = random.choice(["striker", "non_striker"])
@@ -4377,7 +4388,11 @@ class Match:
                 so_dismissed_end = "striker"
                 self.super_over_batsman_stats[so_dismissed_name]["wicket_type"] = wicket_type
                 self.super_over_batsman_stats[so_dismissed_name]["out"] = True
-                if not extra:
+                # Byes/Leg Byes/No Balls are faced deliveries — count the ball
+                so_wk_legal = not extra
+                if extra and extra_type in ("Byes", "Leg Bye", "No Ball"):
+                    so_wk_legal = True
+                if so_wk_legal:
                     self.super_over_batsman_stats[self.super_over_current_striker["name"]]["balls"] += 1
 
             # Super over: only 2 batsmen allowed, 2 wickets = all out
@@ -4394,6 +4409,7 @@ class Match:
             self.super_over_bowler_runs += runs
 
             if not extra:
+                # Legal delivery: credit runs, balls, boundaries to batsman
                 self.super_over_batsman_stats[self.super_over_current_striker["name"]]["runs"] += runs
                 self.super_over_batsman_stats[self.super_over_current_striker["name"]]["balls"] += 1
 
@@ -4401,19 +4417,37 @@ class Match:
                     self.super_over_batsman_stats[self.super_over_current_striker["name"]]["fours"] += 1
                 elif runs == 6:
                     self.super_over_batsman_stats[self.super_over_current_striker["name"]]["sixes"] += 1
+            else:
+                # Fix #9: Byes, Leg Byes, No Balls — batsman faced the delivery
+                if extra_type in ("Byes", "Leg Bye", "No Ball"):
+                    self.super_over_batsman_stats[self.super_over_current_striker["name"]]["balls"] += 1
+                # Wide: batsman doesn't face — no stats
 
-                so_should_rotate = False
+            # Fix #8: Strike rotation applies to ALL delivery types
+            so_should_rotate = False
+            if not extra:
                 if runs % 2 == 1:
-                    if not extra:
+                    so_should_rotate = True
+            else:
+                if extra_type in ("Leg Bye", "Byes") and runs % 2 == 1:
+                    so_should_rotate = True
+                elif extra_type == "No Ball":
+                    so_bat_runs = outcome.get("bat_runs", 0)
+                    if so_bat_runs % 2 == 1:
                         so_should_rotate = True
-                    else:
-                        if extra_type in ("Leg Bye", "Byes"):
-                            so_should_rotate = True
-                if so_should_rotate:
-                    self.super_over_current_striker, self.super_over_current_non_striker = \
-                        self.super_over_current_non_striker, self.super_over_current_striker
+                elif extra_type == "Wide":
+                    so_additional = runs - 1
+                    if so_additional > 0 and so_additional % 2 == 1:
+                        so_should_rotate = True
+            if so_should_rotate:
+                self.super_over_current_striker, self.super_over_current_non_striker = \
+                    self.super_over_current_non_striker, self.super_over_current_striker
 
-        if not extra:
+        # Fix #7: Ball counter — Byes/Leg Byes ARE legal deliveries
+        is_so_legal = not extra
+        if extra and extra_type in ("Byes", "Leg Bye"):
+            is_so_legal = True
+        if is_so_legal:
             self.super_over_ball += 1
 
         over_complete = self.super_over_ball >= 6

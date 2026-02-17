@@ -1,0 +1,129 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Global Search</h1>
+        <p class="admin-page-subtitle">Search users, teams, matches, and tournaments from one place</p>
+    </div>
+</div>
+
+<div class="a-search-wrap" style="max-width: 720px;">
+    <i class="fas fa-search a-search-icon"></i>
+    <form method="GET" style="width: 100%;">
+        <input type="text" name="q" class="a-search-input" placeholder="Try email, team code, match id, result, or tournament name..." value="{{ q }}">
+    </form>
+</div>
+
+{% if q %}
+<div class="a-stats-grid">
+    <div class="a-stat-card">
+        <div class="a-stat-label">Users</div>
+        <div class="a-stat-value">{{ totals.users }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Teams</div>
+        <div class="a-stat-value">{{ totals.teams }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Matches</div>
+        <div class="a-stat-value">{{ totals.matches }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Tournaments</div>
+        <div class="a-stat-value">{{ totals.tournaments }}</div>
+    </div>
+</div>
+
+<div class="a-grid-2">
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-users"></i> Users</h3>
+        <div class="a-table-wrap">
+            <table class="a-table">
+                <thead><tr><th>Email</th><th>Name</th><th>Role</th></tr></thead>
+                <tbody>
+                    {% for u in results.users %}
+                    <tr>
+                        <td><a href="{{ url_for('admin_user_360', user_email=u.id) }}" style="color: var(--accent); text-decoration: none;">{{ u.id }}</a></td>
+                        <td>{{ u.display_name or '-' }}</td>
+                        <td>{% if u.is_admin %}<span class="a-badge a-badge-admin">Admin</span>{% else %}<span class="a-badge a-badge-user">User</span>{% endif %}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3"><div class="a-empty"><p>No users found</p></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-shield-alt"></i> Teams</h3>
+        <div class="a-table-wrap">
+            <table class="a-table">
+                <thead><tr><th>Team</th><th>Code</th><th>Owner</th></tr></thead>
+                <tbody>
+                    {% for t in results.teams %}
+                    <tr>
+                        <td>{{ t.name }}</td>
+                        <td><span class="a-badge a-badge-info">{{ t.short_code }}</span></td>
+                        <td><a href="{{ url_for('admin_user_360', user_email=t.user_id) }}" style="color: var(--accent); text-decoration: none;">{{ t.user_id }}</a></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3"><div class="a-empty"><p>No teams found</p></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="a-grid-2">
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-cricket-bat-ball"></i> Matches</h3>
+        <div class="a-table-wrap">
+            <table class="a-table">
+                <thead><tr><th>ID</th><th>Owner</th><th>Result</th></tr></thead>
+                <tbody>
+                    {% for m in results.matches %}
+                    <tr>
+                        <td style="font-family: monospace; font-size: 0.78rem;">{{ m.id[:10] }}...</td>
+                        <td><a href="{{ url_for('admin_user_360', user_email=m.user_id) }}" style="color: var(--accent); text-decoration: none;">{{ m.user_id }}</a></td>
+                        <td>{{ m.result_description or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3"><div class="a-empty"><p>No matches found</p></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="a-section">
+        <h3 class="a-section-title"><i class="fas fa-trophy"></i> Tournaments</h3>
+        <div class="a-table-wrap">
+            <table class="a-table">
+                <thead><tr><th>Name</th><th>Owner</th><th>Status</th></tr></thead>
+                <tbody>
+                    {% for t in results.tournaments %}
+                    <tr>
+                        <td>{{ t.name }}</td>
+                        <td><a href="{{ url_for('admin_user_360', user_email=t.user_id) }}" style="color: var(--accent); text-decoration: none;">{{ t.user_id }}</a></td>
+                        <td><span class="a-badge a-badge-info">{{ t.status or '-' }}</span></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3"><div class="a-empty"><p>No tournaments found</p></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="a-card-flat">
+    <div class="a-empty">
+        <i class="fas fa-search"></i>
+        <p>Enter a keyword to search across the entire application.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
