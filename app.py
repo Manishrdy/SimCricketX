@@ -3863,10 +3863,21 @@ def create_app():
                 simulation_mode = "auto"
             data["simulation_mode"] = simulation_mode
 
-            # Validate scenario mode
-            scenario_mode = data.get("scenario_mode")
-            if scenario_mode and scenario_mode not in ("last_ball_six", "win_by_1_run", "super_over_thriller"):
-                scenario_mode = None
+            scenario_options = ("last_ball_six", "win_by_1_run", "super_over_thriller")
+            interesting_raw = data.get("make_match_interesting", False)
+            if isinstance(interesting_raw, str):
+                make_match_interesting = interesting_raw.strip().lower() in {"true", "1", "yes", "on"}
+            else:
+                make_match_interesting = bool(interesting_raw)
+
+            # If interesting mode is enabled, pick one dramatic scenario at random.
+            if make_match_interesting:
+                scenario_mode = random.choice(scenario_options)
+            else:
+                # Backward-compatible path for older clients that still post scenario_mode directly.
+                scenario_mode = data.get("scenario_mode")
+                if scenario_mode and scenario_mode not in scenario_options:
+                    scenario_mode = None
             data["scenario_mode"] = scenario_mode
 
             # Step 1: Load teams from DB using IDs from frontend
@@ -3977,6 +3988,8 @@ def create_app():
                 "created_at": time.time(),
                 "timestamp": ts,
             })
+            # Transient setup flag: do not persist beyond match creation.
+            data.pop("make_match_interesting", None)
 
             with open(path, "w") as f:
                 json.dump(data, f, indent=2)

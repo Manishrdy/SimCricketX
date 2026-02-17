@@ -37,6 +37,7 @@ let overRuns = [];             // Runs per completed over [8, 12, 5, ...]
 let currentOverBalls = [];     // Balls in the current over (for timeline)
 let innings1Data = null;       // Saved {ballHistory, overRuns} from 1st innings for worm overlay
 let dashboardActive = false;   // Which view is showing
+let currentMainView = 'commentary'; // 'commentary' | 'animation' | 'matchcenter'
 
 // Hard-lock code window height to available space in main panel.
 function syncCodeWindowHeight() {
@@ -117,30 +118,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     syncModePills();
 
-    // --- Pill toggle: Commentary / Match Center ---
+    // --- Pill toggle: Commentary / Animation / Match Center ---
     const pillCommentary = document.getElementById('pill-commentary');
+    const pillAnimation = document.getElementById('pill-animation');
     const pillMatchCenter = document.getElementById('pill-matchcenter');
     const viewToggle = document.getElementById('view-toggle');
 
-    function setView(showDashboard) {
-        dashboardActive = showDashboard;
-        document.querySelector('.code-window').style.display = dashboardActive ? 'none' : 'flex';
-        document.getElementById('dashboard-container').style.display = dashboardActive ? 'grid' : 'none';
-        if (pillCommentary) pillCommentary.classList.toggle('active', !dashboardActive);
-        if (pillMatchCenter) pillMatchCenter.classList.toggle('active', dashboardActive);
-        if (viewToggle) viewToggle.checked = dashboardActive;
-        if (dashboardActive && typeof refreshDashboard === 'function') {
+    function setView(view) {
+        currentMainView = view;
+        dashboardActive = view === 'matchcenter';
+
+        const panes = document.querySelectorAll('.view-pane[data-view-pane]');
+        panes.forEach((pane) => {
+            pane.classList.toggle('is-active', pane.dataset.viewPane === view);
+        });
+
+        if (pillCommentary) pillCommentary.classList.toggle('active', view === 'commentary');
+        if (pillAnimation) pillAnimation.classList.toggle('active', view === 'animation');
+        if (pillMatchCenter) pillMatchCenter.classList.toggle('active', view === 'matchcenter');
+        if (viewToggle) viewToggle.checked = view === 'matchcenter';
+
+        if (view === 'matchcenter' && typeof refreshDashboard === 'function') {
             refreshDashboard(ballHistory, overRuns, innings1Data);
+        }
+        if (view === 'animation' && typeof refreshMatchAnimation === 'function') {
+            refreshMatchAnimation(ballHistory);
         }
         requestAnimationFrame(syncCodeWindowHeight);
     }
 
-    if (pillCommentary) pillCommentary.addEventListener('click', () => setView(false));
-    if (pillMatchCenter) pillMatchCenter.addEventListener('click', () => setView(true));
+    if (pillCommentary) pillCommentary.addEventListener('click', () => setView('commentary'));
+    if (pillAnimation) pillAnimation.addEventListener('click', () => setView('animation'));
+    if (pillMatchCenter) pillMatchCenter.addEventListener('click', () => setView('matchcenter'));
 
     // Keep hidden checkbox in sync (for any legacy code)
     if (viewToggle) {
-        viewToggle.addEventListener('change', () => setView(viewToggle.checked));
+        viewToggle.addEventListener('change', () => setView(viewToggle.checked ? 'matchcenter' : 'commentary'));
     }
     if (modeToggle) {
         modeToggle.addEventListener('change', async () => {
@@ -186,6 +199,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof matchData !== 'undefined') {
         initializeImpactPlayerState();
     }
+
+    if (typeof initMatchAnimation === 'function') {
+        initMatchAnimation();
+    }
+    const audioToggleBtn = document.getElementById('audio-toggle-btn');
+    if (audioToggleBtn && typeof toggleMatchAnimationAudio === 'function') {
+        audioToggleBtn.addEventListener('click', () => {
+            const enabled = toggleMatchAnimationAudio();
+            const icon = audioToggleBtn.querySelector('i');
+            const label = audioToggleBtn.querySelector('span');
+            if (icon) icon.className = enabled ? 'fa fa-volume-high' : 'fa fa-volume-xmark';
+            if (label) label.textContent = enabled ? 'Audio On' : 'Audio Off';
+        });
+    }
+    const animationSettingsBtn = document.getElementById('animation-settings-btn');
+    if (animationSettingsBtn && typeof toggleMatchAnimationSettingsPanel === 'function') {
+        animationSettingsBtn.addEventListener('click', () => toggleMatchAnimationSettingsPanel());
+    }
+
+    setView('commentary');
 
     // Initial and responsive lock for commentary panel height.
     requestAnimationFrame(syncCodeWindowHeight);
@@ -967,6 +1000,14 @@ function startMatch() {
                 if (typeof updateDashboard === 'function') {
                     updateDashboard(data.ball_data, ballHistory, overRuns, innings1Data);
                 }
+                if (typeof updateMatchAnimation === 'function') {
+                    updateMatchAnimation(data.ball_data, {
+                        commentary: data.commentary || '',
+                        inningsNumber: data.innings_number,
+                        score: data.score,
+                        wickets: data.wickets
+                    });
+                }
             }
 
             if (data.decision_required) {
@@ -987,6 +1028,9 @@ function startMatch() {
                 currentOverRunsAccum = 0;
                 if (typeof resetDashboardForNewInnings === 'function') {
                     resetDashboardForNewInnings();
+                }
+                if (typeof resetMatchAnimationForNewInnings === 'function') {
+                    resetMatchAnimationForNewInnings();
                 }
 
                 // Swap batting team name in banner for 2nd innings

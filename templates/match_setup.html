@@ -805,14 +805,17 @@
                             <div class="condition-icon"><i class="fas fa-film"></i></div>
                             <span class="condition-tag">Drama</span>
                         </div>
-                        <label class="form-label">Match Scenario</label>
-                        <select id="scenario-select">
-                            <option value="">None (Regular Match)</option>
-                            <option value="last_ball_six">Last-Ball Six</option>
-                            <option value="win_by_1_run">Win by 1 Run</option>
-                            <option value="super_over_thriller">Super Over Thriller</option>
-                        </select>
-                        <p class="helper-text">Script a dramatic finish, or leave as 'None' for a normal match.</p>
+                        <label class="form-label">Make Match Interesting</label>
+                        <div class="mode-toggle-row">
+                            <span class="mode-pill">Off</span>
+                            <label class="mode-toggle-switch" title="Toggle interesting match mode">
+                                <input type="checkbox" id="interesting-match-toggle">
+                                <span class="mode-toggle-slider"></span>
+                            </label>
+                            <span class="mode-pill">On</span>
+                        </div>
+                        <input type="hidden" id="interesting-match-flag" value="false">
+                        <p class="helper-text"><span id="interesting-match-help">Regular match flow.</span></p>
                     </div>
                 </div>
 
@@ -837,7 +840,7 @@
                     </div>
                     <div class="summary-row">
                         <span class="summary-label">Scenario</span>
-                        <span class="summary-value" id="summary-scenario">None</span>
+                        <span class="summary-value" id="summary-scenario">Disabled</span>
                     </div>
                 </aside>
             </div>
@@ -1114,10 +1117,17 @@
         document.querySelectorAll('input[name="toss"]').forEach((radio) => {
             radio.onchange = updateConditionsSummary;
         });
-        const scenarioSel = document.getElementById('scenario-select');
-        if (scenarioSel) scenarioSel.onchange = updateConditionsSummary;
+        const interestingToggle = document.getElementById('interesting-match-toggle');
+        if (interestingToggle) {
+            interestingToggle.checked = false;
+            interestingToggle.onchange = () => {
+                syncInterestingMatchControl();
+                updateConditionsSummary();
+            };
+        }
 
         syncSimulationModeControl();
+        syncInterestingMatchControl();
         updateConditionsSummary();
     }
 
@@ -1134,11 +1144,26 @@
         }
     }
 
+    function syncInterestingMatchControl() {
+        const interestingToggle = document.getElementById('interesting-match-toggle');
+        const interestingHidden = document.getElementById('interesting-match-flag');
+        const interestingHelp = document.getElementById('interesting-match-help');
+        const isInteresting = !!(interestingToggle && interestingToggle.checked);
+
+        if (interestingHidden) interestingHidden.value = isInteresting ? 'true' : 'false';
+        if (interestingHelp) {
+            interestingHelp.textContent = isInteresting
+                ? 'A dramatic finish will be chosen randomly at runtime.'
+                : 'Regular match flow.';
+        }
+    }
+
     function updateConditionsSummary() {
         const venue = document.getElementById('venue-display')?.value || '-';
         const pitch = document.getElementById('pitch-select')?.value || '-';
         const toss = document.querySelector('input[name="toss"]:checked')?.value || '-';
         const mode = document.getElementById('simulation-mode-select')?.value || 'auto';
+        const interesting = document.getElementById('interesting-match-flag')?.value === 'true';
 
         const setText = (id, value) => {
             const node = document.getElementById(id);
@@ -1149,10 +1174,7 @@
         setText('summary-pitch', `${pitch} Pitch`);
         setText('summary-toss', toss);
         setText('summary-mode', mode === 'manual' ? 'Manual' : 'Auto');
-
-        const scenarioEl = document.getElementById('scenario-select');
-        const scenarioLabel = scenarioEl ? (scenarioEl.options[scenarioEl.selectedIndex]?.text || 'None') : 'None';
-        setText('summary-scenario', scenarioLabel);
+        setText('summary-scenario', interesting ? 'Enabled' : 'Disabled');
     }
 
     // --- STEP 3: SQUADS ---
@@ -1488,7 +1510,7 @@
                 pitch: document.getElementById('pitch-select').value,
                 toss: document.querySelector('input[name="toss"]:checked').value,
                 simulation_mode: document.getElementById('simulation-mode-select').value,
-                scenario_mode: document.getElementById('scenario-select').value || null,
+                make_match_interesting: document.getElementById('interesting-match-flag').value === 'true',
                 playing_xi: {
                     home: getPlayers('home-selected'),
                     away: getPlayers('away-selected')
