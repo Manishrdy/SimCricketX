@@ -7,7 +7,6 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/match_detail.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/match_dashboard.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/match_animation.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -114,14 +113,6 @@
                 <i class="fa fa-camera"></i>
                 <span>Save Center</span>
             </button>
-            <button class="ctrl-btn" id="audio-toggle-btn" title="Toggle animation audio cues">
-                <i class="fa fa-volume-xmark"></i>
-                <span>Audio Off</span>
-            </button>
-            <button class="ctrl-btn" id="animation-settings-btn" title="Open animation settings">
-                <i class="fa fa-sliders"></i>
-                <span>Anim Settings</span>
-            </button>
 
             <button class="ctrl-btn ctrl-resume" id="resume-decision-btn" style="display:none;">
                 <i class="fa fa-hand-pointer"></i>
@@ -138,7 +129,6 @@
 
             <div class="ctrl-pill-group">
                 <button class="ctrl-pill active" id="pill-commentary" data-view="commentary">Commentary</button>
-                <button class="ctrl-pill" id="pill-animation" data-view="animation">Animation</button>
                 <button class="ctrl-pill" id="pill-matchcenter" data-view="matchcenter">Match Center</button>
                 <input type="checkbox" id="view-toggle" style="display:none;">
             </div>
@@ -160,14 +150,6 @@
                         <span class="token-comment">// Match simulation ready. Waiting
                             for toss...</span>
                     </div>
-                </div>
-            </div>
-
-            <!-- Match Animation View -->
-            <div class="animation-container view-pane pane-animation" id="animation-container" data-view-pane="animation">
-                <div class="animation-stage" id="animation-stage">
-                    <div class="animation-status" id="animation-status">Waiting for toss...</div>
-                    <svg id="animation-ground-svg" viewBox="0 0 1000 560" aria-label="Live match animation ground"></svg>
                 </div>
             </div>
 
@@ -625,8 +607,6 @@
 <script src="{{ url_for('static', filename='js/match_detail.js') }}"></script>
 <!-- Dashboard Rendering -->
 <script src="{{ url_for('static', filename='js/match_dashboard.js') }}"></script>
-<!-- Live Ground Animation Rendering -->
-<script src="{{ url_for('static', filename='js/match_animation.js') }}"></script>
 
 <script>
     // Copy Log Functionality

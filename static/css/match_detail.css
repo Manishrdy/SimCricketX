@@ -188,10 +188,6 @@
     flex-direction: column;
 }
 
-.pane-animation {
-    display: block;
-}
-
 .pane-matchcenter {
     display: grid;
 }
