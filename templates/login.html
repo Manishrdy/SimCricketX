@@ -627,6 +627,9 @@
             <!-- Login Form -->
             <form class="login-form" method="POST" action="/login" id="loginForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="challenge_id" id="challenge_id">
+                <input type="hidden" name="challenge_counter" id="challenge_counter">
+                <input type="hidden" name="challenge_digest" id="challenge_digest">
                 <div class="form-group">
                     <label for="email" class="form-label">Email Address</label>
                     <div style="position: relative;">
@@ -695,17 +698,79 @@
             updateIcon(newTheme);
         };
 
-        // Form Enhancement
+        // Form Enhancement + invisible proof-of-work challenge
         const loginForm = document.getElementById('loginForm');
         const submitBtn = document.getElementById('submitBtn');
+        const challengeIdInput = document.getElementById('challenge_id');
+        const challengeCounterInput = document.getElementById('challenge_counter');
+        const challengeDigestInput = document.getElementById('challenge_digest');
+        let powChallenge = null;
+        let submittingWithPow = false;
+
+        async function sha256Hex(input) {
+            const data = new TextEncoder().encode(input);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function fetchChallenge() {
+            const res = await fetch('/auth/challenge', { method: 'GET', cache: 'no-store' });
+            if (!res.ok) throw new Error('Could not start security check');
+            powChallenge = await res.json();
+        }
+
+        async function solveChallenge(challenge) {
+            if (!window.crypto || !window.crypto.subtle) {
+                throw new Error('Browser security API unavailable');
+            }
+            const prefix = '0'.repeat(challenge.difficulty || 3);
+            const maxIterations = Math.max(10_000, Number(challenge.max_iterations || 1_500_000));
+            for (let counter = 0; counter < maxIterations; counter++) {
+                const digest = await sha256Hex(`${challenge.nonce}:${counter}`);
+                if (digest.startsWith(prefix)) {
+                    return { counter, digest };
+                }
+                if (counter % 250 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+            throw new Error('Security check timed out');
+        }
 
         // Add loading state on form submit
         if (loginForm) {
-            loginForm.addEventListener('submit', function (e) {
-                submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Signing In...';
+            loginForm.addEventListener('submit', async function (e) {
+                if (submittingWithPow) return;
+                e.preventDefault();
+                submitBtn.innerHTML = '<i class="fa-solid fa-shield-halved fa-spin"></i> Running Security Check...';
                 submitBtn.disabled = true;
                 submitBtn.style.opacity = '0.8';
                 document.body.classList.add('loading');
+
+                try {
+                    if (!powChallenge) {
+                        await fetchChallenge();
+                    }
+                    if (powChallenge.enabled === false) {
+                        submittingWithPow = true;
+                        loginForm.submit();
+                        return;
+                    }
+                    const solved = await solveChallenge(powChallenge);
+                    challengeIdInput.value = powChallenge.challenge_id;
+                    challengeCounterInput.value = String(solved.counter);
+                    challengeDigestInput.value = solved.digest;
+                    submittingWithPow = true;
+                    loginForm.submit();
+                } catch (err) {
+                    submitBtn.innerHTML = '<span class="btn-text">Sign In</span>';
+                    submitBtn.disabled = false;
+                    submitBtn.style.opacity = '1';
+                    document.body.classList.remove('loading');
+                    alert(err.message || 'Security check failed');
+                    try { await fetchChallenge(); } catch (_) {}
+                }
             });
         }
 
@@ -722,6 +787,7 @@
 
         // Auto-dismiss flash messages after 5 seconds
         window.addEventListener('DOMContentLoaded', () => {
+            fetchChallenge().catch(() => {});
             setTimeout(() => {
                 document.querySelectorAll('.alert').forEach(el => {
                     el.style.transition = 'opacity 0.3s, transform 0.3s';

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from werkzeug.security import check_password_hash, generate_password_hash
 from database.models import User, AdminAuditLog
@@ -17,8 +18,22 @@ def get_ip_address() -> str:
     except Exception:
         return ""
 
-# C4: Minimum password length
-MIN_PASSWORD_LENGTH = 6
+# C4: Unified password policy
+MIN_PASSWORD_LENGTH = 8
+
+def validate_password_policy(password: str) -> tuple[bool, str]:
+    """Validate password against the unified security policy."""
+    if not password:
+        return False, "Password is required"
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return False, f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+    if not re.search(r"[A-Z]", password):
+        return False, "Password must contain at least one uppercase letter"
+    if not re.search(r"[a-z]", password):
+        return False, "Password must contain at least one lowercase letter"
+    if not re.search(r"[0-9]", password):
+        return False, "Password must contain at least one digit"
+    return True, ""
 
 def log_admin_action(admin_email: str, action: str, target: str = None, details: str = None, ip_address: str = None):
     """Record an admin action in the persistent audit log."""
@@ -46,9 +61,10 @@ def register_user(email: str, password: str, display_name: str | None = None) ->
 
     display_name = display_name.strip() if display_name else None
 
-    # C4: Enforce minimum password length
-    if len(password) < MIN_PASSWORD_LENGTH:
-        logging.warning(f"[Auth] Password too short for {email} (min {MIN_PASSWORD_LENGTH} chars)")
+    # C4: Enforce unified password policy
+    ok, msg = validate_password_policy(password)
+    if not ok:
+        logging.warning(f"[Auth] Invalid password for {email}: {msg}")
         return False
 
     email = email.lower().strip()
@@ -150,14 +166,17 @@ def update_user_email(old_email: str, new_email: str, admin_email: str = None) -
         return False, f"User {old_email} not found"
 
     try:
-        from database.models import Team, Match, Tournament
         from sqlalchemy import text
 
         # Use raw SQL to update the primary key and all FK references in one transaction
-        # This is safer than delete+recreate
+        # This is safer than delete+recreate and keeps user-linked records consistent.
         db.session.execute(text("UPDATE teams SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
         db.session.execute(text("UPDATE matches SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
         db.session.execute(text("UPDATE tournaments SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
+        db.session.execute(text("UPDATE active_sessions SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
+        db.session.execute(text("UPDATE blocked_ips SET blocked_by = :new WHERE blocked_by = :old"), {"new": new_email, "old": old_email})
+        db.session.execute(text("UPDATE failed_login_attempts SET email = :new WHERE email = :old"), {"new": new_email, "old": old_email})
+        db.session.execute(text("UPDATE admin_audit_log SET admin_email = :new WHERE admin_email = :old"), {"new": new_email, "old": old_email})
 
         # Update the primary key last
         db.session.execute(text("UPDATE users SET id = :new WHERE id = :old"), {"new": new_email, "old": old_email})
@@ -182,9 +201,10 @@ def update_user_password(email: str, new_password: str, admin_email: str = None)
     if not email or not new_password:
         return False, "Email and new password are required"
 
-    # Enforce minimum password length
-    if len(new_password) < MIN_PASSWORD_LENGTH:
-        return False, f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+    # Enforce unified password policy
+    ok, msg = validate_password_policy(new_password)
+    if not ok:
+        return False, msg
 
     email = email.lower().strip()
     user = db.session.get(User, email)

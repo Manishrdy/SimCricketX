@@ -1,0 +1,216 @@
+{% extends "admin/layout.html" %}
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Bot Defense</h1>
+        <p class="admin-page-subtitle">Manage invisible proof-of-work challenge settings for login and registration</p>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+<div class="a-card-flat" style="max-width: 860px;">
+    <form id="botDefenseForm" onsubmit="saveBotDefense(event)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="a-form-group">
+            <label class="a-form-label" for="enabled">Enable Bot Defense</label>
+            <select id="enabled" name="enabled" class="a-form-input">
+                <option value="true" {% if settings.enabled %}selected{% endif %}>Enabled</option>
+                <option value="false" {% if not settings.enabled %}selected{% endif %}>Disabled</option>
+            </select>
+        </div>
+
+        <div class="a-grid-3">
+            <div class="a-form-group">
+                <label class="a-form-label">Base Difficulty</label>
+                <input type="number" id="base_difficulty" name="base_difficulty" class="a-form-input" min="1" max="7" value="{{ settings.base_difficulty }}">
+            </div>
+            <div class="a-form-group">
+                <label class="a-form-label">Elevated Difficulty</label>
+                <input type="number" id="elevated_difficulty" name="elevated_difficulty" class="a-form-input" min="1" max="8" value="{{ settings.elevated_difficulty }}">
+            </div>
+            <div class="a-form-group">
+                <label class="a-form-label">High Difficulty</label>
+                <input type="number" id="high_difficulty" name="high_difficulty" class="a-form-input" min="1" max="9" value="{{ settings.high_difficulty }}">
+            </div>
+        </div>
+
+        <div class="a-grid-3">
+            <div class="a-form-group">
+                <label class="a-form-label">Elevated Threshold (fails/window)</label>
+                <input type="number" name="elevated_threshold" class="a-form-input" min="1" value="{{ settings.elevated_threshold }}">
+            </div>
+            <div class="a-form-group">
+                <label class="a-form-label">High Threshold (fails/window)</label>
+                <input type="number" name="high_threshold" class="a-form-input" min="1" value="{{ settings.high_threshold }}">
+            </div>
+            <div class="a-form-group">
+                <label class="a-form-label">Window Minutes</label>
+                <input type="number" name="window_minutes" class="a-form-input" min="1" max="120" value="{{ settings.window_minutes }}">
+            </div>
+        </div>
+
+        <div class="a-grid-3">
+            <div class="a-form-group">
+                <label class="a-form-label">Challenge TTL (seconds)</label>
+                <input type="number" name="ttl_seconds" class="a-form-input" min="30" max="900" value="{{ settings.ttl_seconds }}">
+            </div>
+            <div class="a-form-group">
+                <label class="a-form-label">Max Counter</label>
+                <input type="number" name="max_counter" class="a-form-input" min="10000" max="100000000" value="{{ settings.max_counter }}">
+            </div>
+            <div class="a-form-group">
+                <label class="a-form-label">Client Max Iterations</label>
+                <input type="number" id="max_iterations" name="max_iterations" class="a-form-input" min="10000" max="5000000" value="{{ settings.max_iterations }}">
+            </div>
+        </div>
+
+        <div class="a-form-group">
+            <label class="a-form-label">Trusted IP Rules (bypass challenge)</label>
+            <input type="text" name="trusted_ip_prefixes" class="a-form-input" style="max-width: 100%;"
+                   value="{{ settings.trusted_ip_prefixes or '' }}"
+                   placeholder="Examples: 127.0.0.1, 192.168., 10.0.0.0/8">
+            <p style="font-size: 0.78rem; color: var(--fg-secondary); margin-top: 0.35rem;">
+                Comma-separated entries. Supports exact IP, prefix ending with dot, or CIDR blocks.
+            </p>
+        </div>
+
+        <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-save"></i> Save Bot Defense Settings</button>
+    </form>
+</div>
+
+<div class="a-card-flat" style="max-width: 860px; margin-top: 1rem;">
+    <h3 class="a-section-title"><i class="fas fa-chart-line"></i> Live Solve-Time Estimator</h3>
+    <p style="font-size: 0.82rem; color: var(--fg-secondary); margin-bottom: 0.85rem;">
+        Estimate expected client-side proof-of-work solve times from the current difficulty values.
+    </p>
+
+    <div class="a-grid-3">
+        <div class="a-form-group">
+            <label class="a-form-label">Device Hash Rate (hash/sec)</label>
+            <input type="number" id="hash_rate" class="a-form-input" min="1000" max="5000000" step="1000" value="150000">
+        </div>
+        <div class="a-form-group">
+            <label class="a-form-label">Quick Presets</label>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button type="button" class="a-btn a-btn-secondary a-btn-sm" onclick="setHashRate(60000)">Low-End</button>
+                <button type="button" class="a-btn a-btn-secondary a-btn-sm" onclick="setHashRate(150000)">Mid</button>
+                <button type="button" class="a-btn a-btn-secondary a-btn-sm" onclick="setHashRate(350000)">High</button>
+            </div>
+        </div>
+        <div class="a-form-group">
+            <label class="a-form-label">Average Attempts Formula</label>
+            <div class="a-form-input" style="display:flex; align-items:center; background:var(--bg-secondary);">
+                16<sup>difficulty</sup>
+            </div>
+        </div>
+    </div>
+
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead>
+                <tr>
+                    <th>Level</th>
+                    <th>Difficulty</th>
+                    <th>Avg Attempts</th>
+                    <th>Estimated Time</th>
+                    <th>Fits Max Iterations?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Base</td>
+                    <td id="sim_base_diff">-</td>
+                    <td id="sim_base_attempts">-</td>
+                    <td id="sim_base_time">-</td>
+                    <td id="sim_base_fit">-</td>
+                </tr>
+                <tr>
+                    <td>Elevated</td>
+                    <td id="sim_elev_diff">-</td>
+                    <td id="sim_elev_attempts">-</td>
+                    <td id="sim_elev_time">-</td>
+                    <td id="sim_elev_fit">-</td>
+                </tr>
+                <tr>
+                    <td>High</td>
+                    <td id="sim_high_diff">-</td>
+                    <td id="sim_high_attempts">-</td>
+                    <td id="sim_high_time">-</td>
+                    <td id="sim_high_fit">-</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
+    setTimeout(() => c.innerHTML = '', 4500);
+}
+
+async function saveBotDefense(e) {
+    e.preventDefault();
+    const res = await fetch('/admin/bot-defense/update', { method: 'POST', body: new FormData(e.target) });
+    const data = await res.json();
+    if (res.ok) showAlert(data.message, 'success');
+    else showAlert(data.error || 'Failed to update bot defense', 'error');
+}
+
+function setHashRate(v) {
+    const input = document.getElementById('hash_rate');
+    input.value = String(v);
+    updateEstimator();
+}
+
+function formatAttempts(n) {
+    if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + 'B';
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(2) + 'K';
+    return String(Math.round(n));
+}
+
+function formatSeconds(seconds) {
+    if (!isFinite(seconds) || seconds < 0) return '-';
+    if (seconds < 1) return (seconds * 1000).toFixed(0) + ' ms';
+    if (seconds < 60) return seconds.toFixed(1) + ' s';
+    const m = Math.floor(seconds / 60);
+    const s = Math.round(seconds % 60);
+    return `${m}m ${s}s`;
+}
+
+function writeRow(prefix, difficulty, hashRate, maxIterations) {
+    const attempts = Math.pow(16, difficulty);
+    const estSeconds = attempts / hashRate;
+    const fits = attempts <= maxIterations;
+    document.getElementById(`sim_${prefix}_diff`).textContent = difficulty;
+    document.getElementById(`sim_${prefix}_attempts`).textContent = formatAttempts(attempts);
+    document.getElementById(`sim_${prefix}_time`).textContent = formatSeconds(estSeconds);
+    const fitEl = document.getElementById(`sim_${prefix}_fit`);
+    fitEl.innerHTML = fits
+        ? '<span class="a-badge a-badge-success">Yes</span>'
+        : '<span class="a-badge a-badge-danger">No</span>';
+}
+
+function updateEstimator() {
+    const base = Math.max(1, Number(document.getElementById('base_difficulty').value || 1));
+    const elevated = Math.max(1, Number(document.getElementById('elevated_difficulty').value || 1));
+    const high = Math.max(1, Number(document.getElementById('high_difficulty').value || 1));
+    const maxIterations = Math.max(10_000, Number(document.getElementById('max_iterations').value || 10_000));
+    const hashRate = Math.max(1_000, Number(document.getElementById('hash_rate').value || 150_000));
+
+    writeRow('base', base, hashRate, maxIterations);
+    writeRow('elev', elevated, hashRate, maxIterations);
+    writeRow('high', high, hashRate, maxIterations);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    ['base_difficulty', 'elevated_difficulty', 'high_difficulty', 'max_iterations', 'hash_rate']
+        .forEach(id => document.getElementById(id)?.addEventListener('input', updateEstimator));
+    updateEstimator();
+});
+</script>
+{% endblock %}
