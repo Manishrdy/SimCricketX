@@ -155,11 +155,56 @@
     grid-row: 2;
 }
 
-.code-window,
-.dashboard-container {
+.live-view-stack {
     grid-row: 3;
     min-height: 0;
     height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.view-pane {
+    position: absolute;
+    inset: 0;
+    min-height: 0;
+    height: 100%;
+    opacity: 0;
+    transform: translateY(6px) scale(0.994);
+    pointer-events: none;
+    transition:
+        opacity 220ms ease,
+        transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.view-pane.is-active {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+    z-index: 2;
+}
+
+.pane-commentary {
+    display: flex;
+    flex-direction: column;
+}
+
+.pane-animation {
+    display: block;
+}
+
+.pane-matchcenter {
+    display: grid;
+}
+
+.main-panel .dashboard-container {
+    margin-top: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .view-pane {
+        transition: none !important;
+        transform: none !important;
+    }
 }
 
 /* ===== BROADCAST SCORE BANNER — Premium Gradient ===== */

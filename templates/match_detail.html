@@ -7,6 +7,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/match_detail.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/match_dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/match_animation.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -113,6 +114,14 @@
                 <i class="fa fa-camera"></i>
                 <span>Save Center</span>
             </button>
+            <button class="ctrl-btn" id="audio-toggle-btn" title="Toggle animation audio cues">
+                <i class="fa fa-volume-xmark"></i>
+                <span>Audio Off</span>
+            </button>
+            <button class="ctrl-btn" id="animation-settings-btn" title="Open animation settings">
+                <i class="fa fa-sliders"></i>
+                <span>Anim Settings</span>
+            </button>
 
             <button class="ctrl-btn ctrl-resume" id="resume-decision-btn" style="display:none;">
                 <i class="fa fa-hand-pointer"></i>
@@ -129,71 +138,82 @@
 
             <div class="ctrl-pill-group">
                 <button class="ctrl-pill active" id="pill-commentary" data-view="commentary">Commentary</button>
+                <button class="ctrl-pill" id="pill-animation" data-view="animation">Animation</button>
                 <button class="ctrl-pill" id="pill-matchcenter" data-view="matchcenter">Match Center</button>
                 <input type="checkbox" id="view-toggle" style="display:none;">
             </div>
         </div>
 
-        <!-- Premium AI-Style Code Block Console -->
-        <div class="code-window">
-            <div class="window-header">
-                <div class="window-controls">
-                    <span class="window-title">simulation_log.txt</span>
+        <div class="live-view-stack" id="live-view-stack">
+            <!-- Premium AI-Style Code Block Console -->
+            <div class="code-window view-pane pane-commentary is-active" data-view-pane="commentary">
+                <div class="window-header">
+                    <div class="window-controls">
+                        <span class="window-title">simulation_log.txt</span>
+                    </div>
+                    <button class="copy-action-btn" id="copy-log-btn">
+                        <i class="fa-regular fa-clone"></i> <span>Copy</span>
+                    </button>
                 </div>
-                <button class="copy-action-btn" id="copy-log-btn">
-                    <i class="fa-regular fa-clone"></i> <span>Copy</span>
-                </button>
-            </div>
-            <div class="commentary-box" id="commentary-log">
-                <div class="code-line system-msg">
-                    <span class="token-comment">// Match simulation ready. Waiting
-                        for toss...</span>
+                <div class="commentary-box" id="commentary-log">
+                    <div class="code-line system-msg">
+                        <span class="token-comment">// Match simulation ready. Waiting
+                            for toss...</span>
+                    </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Match Center Dashboard (toggle view) — viewport-locked, no scroll -->
-        <div class="dashboard-container" id="dashboard-container" style="display:none;">
-            <!-- Row 1: Wagon Wheel | Players + Win Prob -->
-            <div class="dash-panel ground-panel" id="wagon-panel">
-                <div class="panel-badge-row">
-                    <span class="innings-badge" id="wagon-view-label">Innings 2</span>
-                    <button class="innings-flip-btn" id="wagon-flip-btn" title="Flip wagon innings view">Flip</button>
-                </div>
-                <div class="panel-header">Wagon Wheel</div>
-                <svg id="wagon-wheel-svg" viewBox="0 0 300 300"></svg>
-            </div>
-            <div class="dash-panel players-panel" id="players-panel">
-                <div class="panel-header">At the Crease</div>
-                <div id="striker-card" class="player-card striker"></div>
-                <div id="non-striker-card" class="player-card"></div>
-                <div class="panel-divider"></div>
-                <div id="bowler-card" class="player-card bowler-card"></div>
-                <div id="partnership-bar"></div>
-                <div class="panel-divider"></div>
-                <div id="win-prob-display"></div>
             </div>
 
-            <!-- Row 2: Timeline strip + Ticker (full width) -->
-            <div class="dash-panel timeline-panel">
-                <div id="over-timeline" class="timeline-strip"></div>
-                <div id="latest-ball-ticker" class="timeline-ticker"></div>
+            <!-- Match Animation View -->
+            <div class="animation-container view-pane pane-animation" id="animation-container" data-view-pane="animation">
+                <div class="animation-stage" id="animation-stage">
+                    <div class="animation-status" id="animation-status">Waiting for toss...</div>
+                    <svg id="animation-ground-svg" viewBox="0 0 1000 560" aria-label="Live match animation ground"></svg>
+                </div>
             </div>
 
-            <!-- Row 3: Manhattan | Worm -->
-            <div class="dash-panel chart-panel" id="manhattan-panel">
-                <div class="panel-badge-row">
-                    <span class="innings-badge">White ball = wicket</span>
+            <!-- Match Center Dashboard -->
+            <div class="dashboard-container view-pane pane-matchcenter" id="dashboard-container" data-view-pane="matchcenter">
+                <!-- Row 1: Wagon Wheel | Players + Win Prob -->
+                <div class="dash-panel ground-panel" id="wagon-panel">
+                    <div class="panel-badge-row">
+                        <span class="innings-badge" id="wagon-view-label">Innings 2</span>
+                        <button class="innings-flip-btn" id="wagon-flip-btn" title="Flip wagon innings view">Flip</button>
+                    </div>
+                    <div class="panel-header">Wagon Wheel</div>
+                    <svg id="wagon-wheel-svg" viewBox="0 0 300 300"></svg>
                 </div>
-                <div class="panel-header">Manhattan</div>
-                <canvas id="manhattan-chart"></canvas>
-            </div>
-            <div class="dash-panel chart-panel" id="worm-panel">
-                <div class="panel-badge-row">
-                    <span class="innings-badge">White ball = wicket</span>
+                <div class="dash-panel players-panel" id="players-panel">
+                    <div class="panel-header">At the Crease</div>
+                    <div id="striker-card" class="player-card striker"></div>
+                    <div id="non-striker-card" class="player-card"></div>
+                    <div class="panel-divider"></div>
+                    <div id="bowler-card" class="player-card bowler-card"></div>
+                    <div id="partnership-bar"></div>
+                    <div class="panel-divider"></div>
+                    <div id="win-prob-display"></div>
                 </div>
-                <div class="panel-header">Run Chase</div>
-                <canvas id="worm-chart"></canvas>
+
+                <!-- Row 2: Timeline strip + Ticker (full width) -->
+                <div class="dash-panel timeline-panel">
+                    <div id="over-timeline" class="timeline-strip"></div>
+                    <div id="latest-ball-ticker" class="timeline-ticker"></div>
+                </div>
+
+                <!-- Row 3: Manhattan | Worm -->
+                <div class="dash-panel chart-panel" id="manhattan-panel">
+                    <div class="panel-badge-row">
+                        <span class="innings-badge">White ball = wicket</span>
+                    </div>
+                    <div class="panel-header">Manhattan</div>
+                    <canvas id="manhattan-chart"></canvas>
+                </div>
+                <div class="dash-panel chart-panel" id="worm-panel">
+                    <div class="panel-badge-row">
+                        <span class="innings-badge">White ball = wicket</span>
+                    </div>
+                    <div class="panel-header">Run Chase</div>
+                    <canvas id="worm-chart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -605,6 +625,8 @@
 <script src="{{ url_for('static', filename='js/match_detail.js') }}"></script>
 <!-- Dashboard Rendering -->
 <script src="{{ url_for('static', filename='js/match_dashboard.js') }}"></script>
+<!-- Live Ground Animation Rendering -->
+<script src="{{ url_for('static', filename='js/match_animation.js') }}"></script>
 
 <script>
     // Copy Log Functionality
