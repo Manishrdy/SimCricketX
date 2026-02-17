@@ -95,11 +95,13 @@ def _make_run_outcome(runs, batter, bowler):
     }
 
 
-def _make_wicket_outcome(batter, bowler, bowling_team, runs=0):
+def _make_wicket_outcome(batter, bowler, bowling_team, runs=0, wicket_type=None):
     """Build a wicket outcome dict."""
-    wtype = _pick_wicket_type(bowler)
+    wtype = wicket_type if wicket_type else _pick_wicket_type(bowler)
     if wtype == "Run Out":
-        runs = 1
+        # Allow explicit 0-run run outs (e.g. last-ball failed single).
+        if runs is None:
+            runs = 1
     fielder = ""
     if wtype == "Caught":
         fielder = _pick_fielder(bowling_team, bowler["name"])
@@ -277,36 +279,171 @@ def _generate_last_ball_six_script(runs_needed, wickets_remaining, balls_left):
 def _generate_win_by_1_run_script(runs_needed, wickets_remaining, balls_left):
     """
     Script for 'win by 1 run': chasing team falls 1 run short.
-    Score (runs_needed - 2) in balls 1..(N-1), then a dot on the last ball.
-    They needed `runs_needed` but only scored `runs_needed - 1` total, losing by 1.
+    Supports two last-ball endings:
+      1) Wicket on the final ball (Caught/Run Out)
+      2) 6 needed to win on final ball, batter hits 4
+    Ending mode is chosen at the start of the last over based on runs needed.
     """
-    if balls_left <= 1:
-        return [{"runs": 0, "is_wicket": False}]
+    if balls_left <= 0:
+        return []
 
-    # They need to score runs_needed to win. We want them to score runs_needed - 1.
-    # So in balls before last: score (runs_needed - 1), last ball: dot.
-    # Wait — they need to NOT reach target. Target = runs_needed.
-    # Total scored in finale = runs_needed - 1 means they fall 1 short.
-    runs_before_last = runs_needed - 1
-    if runs_before_last < 0:
-        runs_before_last = 0
+    def _add_tension_wickets(script_local):
+        """
+        Replace a couple of late dot balls with wicket balls so the finish feels
+        less "dot-ball heavy" while preserving total runs.
+        """
+        if not script_local:
+            return script_local
 
-    include_wicket = wickets_remaining >= 5 and balls_left >= 6
-    include_boundary = balls_left >= 5
+        # Keep this conservative to avoid unrealistic collapses.
+        if wickets_remaining >= 5:
+            desired_total_wickets = 2
+        elif wickets_remaining >= 3:
+            desired_total_wickets = 1
+        else:
+            desired_total_wickets = 0
+
+        existing_wickets = sum(1 for b in script_local if b.get("is_wicket"))
+        wickets_to_add = max(0, desired_total_wickets - existing_wickets)
+        if wickets_to_add == 0:
+            return script_local
+
+        # Leave enough wickets in hand so the chase isn't all-out before the finish.
+        max_safe_additional = max(0, wickets_remaining - existing_wickets - 1)
+        wickets_to_add = min(wickets_to_add, max_safe_additional)
+        if wickets_to_add <= 0:
+            return script_local
+
+        # Prefer wicket moments in the latter half, but never on the final ball.
+        start_idx = max(0, len(script_local) // 2 - 1)
+        candidate_indices = [
+            i for i in range(start_idx, max(0, len(script_local) - 1))
+            if (
+                not script_local[i].get("is_wicket")
+                and script_local[i].get("runs", 0) == 0
+            )
+        ]
+        if not candidate_indices:
+            candidate_indices = [
+                i for i in range(0, max(0, len(script_local) - 1))
+                if (
+                    not script_local[i].get("is_wicket")
+                    and script_local[i].get("runs", 0) == 0
+                )
+            ]
+        if not candidate_indices:
+            return script_local
+
+        random.shuffle(candidate_indices)
+        for idx in candidate_indices[:wickets_to_add]:
+            script_local[idx] = {
+                "runs": 0,
+                "is_wicket": True,
+                "wicket_type": random.choice(["Caught", "Bowled", "LBW"])
+            }
+
+        return script_local
+
+    def _build_finish(need_now, balls_now, mode):
+        """
+        Build remaining-ball script ending in the requested mode while
+        preserving a 1-run loss margin.
+        """
+        if balls_now <= 0:
+            return []
+
+        if mode == "six_needed_hit_four":
+            # Final ball: 6 to win (5 tie), batter hits 4.
+            need_before_last_ball = 6
+            last_ball = {"runs": 4, "is_wicket": False}
+        else:
+            # Final ball: 2 to win (1 tie), wicket trying to score.
+            need_before_last_ball = 2
+            last_ball = {
+                "runs": 0,
+                "is_wicket": True,
+                # Avoid Run Out here; match logic credits 1 run on run-outs.
+                "wicket_type": random.choice(["Caught", "Bowled", "LBW"])
+            }
+
+        pre_balls = balls_now - 1
+        runs_before_last_ball = need_now - need_before_last_ball
+        if runs_before_last_ball < 0:
+            return None
+        if pre_balls >= 0 and runs_before_last_ball > pre_balls * 6:
+            return None
+
+        script_local = []
+        if pre_balls > 0:
+            pre_seq = _distribute_runs(
+                runs_before_last_ball,
+                pre_balls,
+                include_wicket=(wickets_remaining >= 5 and pre_balls >= 6),
+                include_boundary=(pre_balls >= 4)
+            )
+            for runs_val, is_wkt in pre_seq:
+                script_local.append({"runs": runs_val, "is_wicket": is_wkt})
+
+        script_local.append(last_ball)
+        return script_local
+
+    def _pick_mode_from_last_over_need(last_over_need):
+        # Higher required runs in last over -> use big-hit finish.
+        if last_over_need >= 6:
+            return "six_needed_hit_four"
+        return "last_ball_wicket"
+
+    # Case 1: already in last over (or later) -> decide directly from current need.
+    if balls_left <= 6:
+        primary_mode = _pick_mode_from_last_over_need(runs_needed)
+        script = _build_finish(runs_needed, balls_left, primary_mode)
+        if script is None:
+            fallback_mode = "last_ball_wicket" if primary_mode == "six_needed_hit_four" else "six_needed_hit_four"
+            script = _build_finish(runs_needed, balls_left, fallback_mode)
+        if script is None:
+            return []
+        return _add_tension_wickets(script)
+
+    # Case 2: before last over -> shape pre-last-over balls, then choose ending
+    # from projected start-of-last-over requirement.
+    pre_last_over_balls = balls_left - 6
+    min_last_over_need = max(2, runs_needed - pre_last_over_balls * 6)
+    max_last_over_need = min(runs_needed, 36)
+    if min_last_over_need > max_last_over_need:
+        min_last_over_need = max_last_over_need
+
+    projected_last_over_need = round(runs_needed * 6 / balls_left)
+    projected_last_over_need = max(min_last_over_need, min(max_last_over_need, projected_last_over_need))
+
+    primary_mode = _pick_mode_from_last_over_need(projected_last_over_need)
+    if primary_mode == "six_needed_hit_four" and projected_last_over_need < 6:
+        projected_last_over_need = 6
+    if primary_mode == "last_ball_wicket" and projected_last_over_need < 2:
+        projected_last_over_need = 2
+
+    last_over_script = _build_finish(projected_last_over_need, 6, primary_mode)
+    if last_over_script is None:
+        fallback_mode = "last_ball_wicket" if primary_mode == "six_needed_hit_four" else "six_needed_hit_four"
+        last_over_script = _build_finish(projected_last_over_need, 6, fallback_mode)
+        if last_over_script is None:
+            return []
+
+    runs_before_last_over = runs_needed - projected_last_over_need
+    if runs_before_last_over < 0:
+        runs_before_last_over = 0
 
     pre_sequence = _distribute_runs(
-        runs_before_last, balls_left - 1,
-        include_wicket=include_wicket,
-        include_boundary=include_boundary
+        runs_before_last_over,
+        pre_last_over_balls,
+        include_wicket=(wickets_remaining >= 5 and pre_last_over_balls >= 6),
+        include_boundary=(pre_last_over_balls >= 4)
     )
 
     script = []
     for runs_val, is_wkt in pre_sequence:
         script.append({"runs": runs_val, "is_wicket": is_wkt})
-
-    # Last ball: dot — agonizing defeat
-    script.append({"runs": 0, "is_wicket": False})
-    return script
+    script.extend(last_over_script)
+    return _add_tension_wickets(script)
 
 
 def _generate_super_over_script(runs_needed, wickets_remaining, balls_left):
@@ -350,6 +487,7 @@ class ScenarioEngine:
         self.finale_ball_index = 0
         self.active = True
         self._convergence_logged = False
+        self._endgame_checked = False
 
         logger.info(f"[Scenario] Initialized: {scenario_type}")
 
@@ -358,7 +496,77 @@ class ScenarioEngine:
         self.finale_script = None
         self.finale_ball_index = 0
         self._convergence_logged = False
+        self._endgame_checked = False
         logger.info(f"[Scenario] Innings transition — ready for 2nd innings steering")
+
+    def _is_endgame_scenario_feasible(self, runs_needed, wickets_remaining, balls_left):
+        """
+        Decide whether scenario steering is still believable from the start
+        of the last 3 overs. If not, fall back to normal simulation.
+        """
+        if runs_needed <= 0 or wickets_remaining <= 0 or balls_left <= 0:
+            return False
+
+        required_rr = (runs_needed * 6) / max(1, balls_left)
+
+        # Universal realism guard: very low pressure + wickets in hand should not
+        # be dragged into forced last-ball drama.
+        if balls_left >= 10 and runs_needed <= 4 and wickets_remaining >= 4:
+            return False
+        if balls_left >= 8 and wickets_remaining >= 5 and required_rr < 3.0:
+            return False
+
+        # Scenario-specific feasibility checks.
+        if self.scenario_type == "last_ball_six":
+            if runs_needed < 6:
+                return False
+            if balls_left >= 12 and runs_needed < 10 and wickets_remaining >= 4:
+                return False
+            if runs_needed > balls_left * 5:
+                return False
+        elif self.scenario_type == "win_by_1_run":
+            if balls_left >= 12 and runs_needed < 7 and wickets_remaining >= 4:
+                return False
+            if runs_needed > balls_left * 5:
+                return False
+        elif self.scenario_type == "super_over_thriller":
+            if balls_left >= 12 and runs_needed < 6 and wickets_remaining >= 4:
+                return False
+            if runs_needed - 1 > balls_left * 5:
+                return False
+
+        return True
+
+    def _evaluate_endgame_feasibility_if_needed(self):
+        """
+        One-time feasibility check at start of last 3 overs (or first access
+        after that). Disables scenario mode when forcing the scripted path would
+        look unnatural.
+        """
+        if self._endgame_checked or not self.active or self.match.innings != 2:
+            return
+        if self.match.target is None:
+            return
+        if self.match.current_over < 17:
+            return
+
+        runs_needed = self.match.target - self.match.score
+        wickets_remaining = 10 - self.match.wickets
+        balls_left = (20 - self.match.current_over) * 6 - self.match.current_ball
+
+        self._endgame_checked = True
+        if not self._is_endgame_scenario_feasible(runs_needed, wickets_remaining, balls_left):
+            self.active = False
+            self.finale_script = None
+            self.finale_ball_index = 0
+            logger.info(
+                "[Scenario] Disabled at %s.%s due to infeasible endgame: need=%s, wkts=%s, balls=%s",
+                self.match.current_over,
+                self.match.current_ball,
+                runs_needed,
+                wickets_remaining,
+                balls_left,
+            )
 
     # ------------------------------------------------------------------ #
     #  Phase detection
@@ -368,6 +576,10 @@ class ScenarioEngine:
         """Return the current scenario phase."""
         if self.match.innings == 1:
             return "first_innings"
+
+        # Run one-time realism gate at the start of last 3 overs.
+        self._evaluate_endgame_feasibility_if_needed()
+
         if not self.active:
             return "inactive"
 
@@ -486,7 +698,13 @@ class ScenarioEngine:
 
         # Build the outcome dict
         if ball_spec.get("is_wicket"):
-            outcome = _make_wicket_outcome(batter, bowler, self.match.bowling_team, runs=1)
+            outcome = _make_wicket_outcome(
+                batter,
+                bowler,
+                self.match.bowling_team,
+                runs=ball_spec.get("runs", 1),
+                wicket_type=ball_spec.get("wicket_type")
+            )
         else:
             outcome = _make_run_outcome(ball_spec["runs"], batter, bowler)
 
