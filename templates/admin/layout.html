@@ -686,6 +686,10 @@
                             class="admin-nav-link {% if request.endpoint == 'admin_activity' %}active{% endif %}">
                             <i class="fas fa-chart-bar"></i> Activity
                         </a></li>
+                    <li><a href="/admin/search"
+                            class="admin-nav-link {% if request.endpoint == 'admin_search' %}active{% endif %}">
+                            <i class="fas fa-search"></i> Global Search
+                        </a></li>
                     <li><a href="/admin/health"
                             class="admin-nav-link {% if request.endpoint == 'admin_health' %}active{% endif %}">
                             <i class="fas fa-heartbeat"></i> System Health
@@ -697,7 +701,7 @@
                 <div class="admin-nav-label">Management</div>
                 <ul class="admin-nav-items">
                     <li><a href="/admin/users"
-                            class="admin-nav-link {% if request.endpoint in ['admin_users', 'admin_user_detail'] %}active{% endif %}">
+                            class="admin-nav-link {% if request.endpoint in ['admin_users', 'admin_user_detail', 'admin_user_360'] %}active{% endif %}">
                             <i class="fas fa-users"></i> Users
                         </a></li>
                     <li><a href="/admin/matches"
@@ -734,6 +738,10 @@
                             class="admin-nav-link {% if request.endpoint == 'admin_rate_limits' %}active{% endif %}">
                             <i class="fas fa-tachometer-alt"></i> Rate Limits
                         </a></li>
+                    <li><a href="/admin/bot-defense"
+                            class="admin-nav-link {% if request.endpoint == 'admin_bot_defense' %}active{% endif %}">
+                            <i class="fas fa-shield-virus"></i> Bot Defense
+                        </a></li>
                 </ul>
             </div>
 
@@ -747,6 +755,10 @@
                     <li><a href="/admin/backups"
                             class="admin-nav-link {% if request.endpoint == 'admin_backups' %}active{% endif %}">
                             <i class="fas fa-archive"></i> Backups
+                        </a></li>
+                    <li><a href="/admin/restore-center"
+                            class="admin-nav-link {% if request.endpoint == 'admin_restore_center' %}active{% endif %}">
+                            <i class="fas fa-history"></i> Restore Center
                         </a></li>
                     <li><a href="/admin/config"
                             class="admin-nav-link {% if request.endpoint == 'admin_config' %}active{% endif %}">

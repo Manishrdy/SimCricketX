@@ -188,7 +188,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="a-form-group">
                 <label class="a-form-label">New Password</label>
-                <input type="password" name="new_password" class="a-form-input" placeholder="Min 6 characters" required minlength="6">
+                <input type="password" name="new_password" class="a-form-input" placeholder="Min 8 chars, upper/lower/digit" required minlength="8">
             </div>
             <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-save"></i> Reset Password</button>
         </form>

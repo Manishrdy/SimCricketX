@@ -1,0 +1,148 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Restore Center</h1>
+        <p class="admin-page-subtitle">Restore from backups and rollback points with pre-restore snapshots</p>
+    </div>
+    <div class="admin-page-actions">
+        <a href="{{ url_for('admin_backups') }}" class="a-btn a-btn-secondary"><i class="fas fa-archive"></i> Backups</a>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+<div class="a-stats-grid">
+    <div class="a-stat-card">
+        <div class="a-stat-label">Current DB</div>
+        <div class="a-stat-value" style="font-size: 1.5rem;">{{ current_db.size_mb }}</div>
+        <div class="a-stat-sub">MB</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Backups</div>
+        <div class="a-stat-value">{{ backups|length }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Rollback Points</div>
+        <div class="a-stat-value">{{ rollback_points|length }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Last Modified</div>
+        <div style="font-size: 0.86rem; font-weight: 600;">{{ current_db.modified }}</div>
+    </div>
+</div>
+
+<div class="a-card-flat" style="border-left: 4px solid #f59e0b; margin-bottom: 1.5rem;">
+    <p style="margin: 0; font-size: 0.86rem; color: var(--fg-secondary);">
+        <i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i>
+        A restore automatically creates a <code>pre_restore_*</code> snapshot and enables maintenance mode.
+        Restore only during a planned admin window.
+    </p>
+</div>
+
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-archive"></i> Backup Files</h3>
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead><tr><th>Filename</th><th>Size</th><th>Created</th><th>Age</th><th style="text-align:right;">Actions</th></tr></thead>
+            <tbody>
+                {% for b in backups %}
+                <tr>
+                    <td style="font-family: monospace; font-size: 0.8rem;">{{ b.name }}</td>
+                    <td>{{ b.size_mb }} MB</td>
+                    <td>{{ b.date }}</td>
+                    <td>{{ b.age_days }}d</td>
+                    <td style="text-align: right;">
+                        <button onclick="applyRestore('{{ b.name }}', 'backup')" class="a-btn a-btn-danger a-btn-sm">
+                            <i class="fas fa-history"></i> Restore
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5"><div class="a-empty"><p>No backups available</p></div></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-undo"></i> Rollback Points</h3>
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead><tr><th>Snapshot</th><th>Size</th><th>Created</th><th>Age</th><th style="text-align:right;">Actions</th></tr></thead>
+            <tbody>
+                {% for b in rollback_points %}
+                <tr>
+                    <td style="font-family: monospace; font-size: 0.8rem;">{{ b.name }}</td>
+                    <td>{{ b.size_mb }} MB</td>
+                    <td>{{ b.date }}</td>
+                    <td>{{ b.age_days }}d</td>
+                    <td style="text-align: right;">
+                        <button onclick="applyRestore('{{ b.name }}', 'rollback')" class="a-btn a-btn-secondary a-btn-sm">
+                            <i class="fas fa-undo"></i> Rollback
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5"><div class="a-empty"><p>No rollback snapshots yet</p></div></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-scroll"></i> Recent Restore Events</h3>
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
+            <tbody>
+                {% for e in restore_events %}
+                <tr>
+                    <td>{% if e.timestamp %}{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}-{% endif %}</td>
+                    <td>{{ e.admin_email }}</td>
+                    <td><span class="a-badge a-badge-info">{{ e.action }}</span></td>
+                    <td>{{ e.target or '-' }}</td>
+                    <td style="font-size: 0.8rem; color: var(--fg-secondary);">{{ e.details or '-' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5"><div class="a-empty"><p>No restore actions recorded</p></div></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
+    setTimeout(() => c.innerHTML = '', 5000);
+}
+
+async function applyRestore(filename, sourceType) {
+    const verb = sourceType === 'rollback' ? 'rollback' : 'restore';
+    if (!confirm(`Proceed with ${verb} using ${filename}?`)) return;
+    if (!confirm('Final confirmation. This replaces the live database and enables maintenance mode.')) return;
+
+    const fd = new FormData();
+    fd.append('filename', filename);
+    fd.append('source_type', sourceType);
+
+    try {
+        const res = await fetch('/admin/restore/apply', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (res.ok) {
+            showAlert(data.message, 'success');
+            setTimeout(() => location.reload(), 1600);
+        } else {
+            showAlert(data.error || 'Restore failed', 'error');
+        }
+    } catch {
+        showAlert('Network error while restoring database', 'error');
+    }
+}
+</script>
+{% endblock %}

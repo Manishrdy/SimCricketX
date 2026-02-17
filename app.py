@@ -35,6 +35,10 @@ import re
 import logging
 import yaml
 import uuid
+import sqlite3
+import hashlib
+import secrets
+import ipaddress
 import threading  # Bug Fix B2: Add thread safety for MATCH_INSTANCES
 from collections import deque
 from datetime import datetime, timedelta, timezone
@@ -61,7 +65,8 @@ from auth.user_auth import (
     delete_user,
     update_user_email,
     update_user_password,
-    log_admin_action
+    log_admin_action,
+    validate_password_policy
 )
 from engine.team import Team, save_team, PITCH_PREFERENCES
 from engine.player import Player, PLAYER_ROLES, BATTING_HANDS, BOWLING_TYPES, BOWLING_HANDS
@@ -70,6 +75,7 @@ import shutil
 import time
 import threading
 import traceback
+from pathlib import Path
 
 from werkzeug.utils import secure_filename
 from engine.stats_aggregator import StatsAggregator 
@@ -364,6 +370,248 @@ def create_app():
 
     # Load maintenance mode from config (persists across restarts)
     MAINTENANCE_MODE = bool(config.get("app", {}).get("maintenance_mode", False))
+    trust_proxy_headers = bool(config.get("security", {}).get("trust_proxy_headers", False))
+
+    ADMIN_CONFIG_ALLOWLIST = {
+        "app": {"maintenance_mode": bool},
+        "rate_limits": {
+            "max_requests": int,
+            "window_seconds": int,
+            "admin_multiplier": int,
+            "login_limit": str,
+        },
+        "bot_defense": {
+            "enabled": bool,
+            "base_difficulty": int,
+            "elevated_difficulty": int,
+            "high_difficulty": int,
+            "elevated_threshold": int,
+            "high_threshold": int,
+            "window_minutes": int,
+            "ttl_seconds": int,
+            "max_counter": int,
+            "max_iterations": int,
+            "trusted_ip_prefixes": str,
+        },
+    }
+
+    bot_defense_settings = {
+        "enabled": bool(config.get("bot_defense", {}).get("enabled", True)),
+        "base_difficulty": int(config.get("bot_defense", {}).get("base_difficulty", 3)),
+        "elevated_difficulty": int(config.get("bot_defense", {}).get("elevated_difficulty", 4)),
+        "high_difficulty": int(config.get("bot_defense", {}).get("high_difficulty", 5)),
+        "elevated_threshold": int(config.get("bot_defense", {}).get("elevated_threshold", 5)),
+        "high_threshold": int(config.get("bot_defense", {}).get("high_threshold", 20)),
+        "window_minutes": int(config.get("bot_defense", {}).get("window_minutes", 15)),
+        "ttl_seconds": int(config.get("bot_defense", {}).get("ttl_seconds", 180)),
+        "max_counter": int(config.get("bot_defense", {}).get("max_counter", 10_000_000)),
+        "max_iterations": int(config.get("bot_defense", {}).get("max_iterations", 1_500_000)),
+        "trusted_ip_prefixes": str(config.get("bot_defense", {}).get("trusted_ip_prefixes", "")).strip(),
+    }
+
+    def get_client_ip() -> str:
+        """Resolve client IP safely; only trust proxy headers when explicitly enabled."""
+        if trust_proxy_headers:
+            forwarded = request.headers.get("X-Forwarded-For", "")
+            if forwarded:
+                first = forwarded.split(",")[0].strip()
+                if first:
+                    return first
+        return (request.remote_addr or "").strip()
+
+    def parse_ip(value: str):
+        try:
+            return ipaddress.ip_address((value or "").strip())
+        except ValueError:
+            return None
+
+    def is_path_within_base(base_dir: str, candidate_path: str) -> bool:
+        """True only when candidate resolves under base_dir (safe on Windows/symlinks)."""
+        try:
+            base_path = Path(base_dir).resolve(strict=False)
+            target_path = Path(candidate_path).resolve(strict=False)
+            target_path.relative_to(base_path)
+            return True
+        except Exception:
+            return False
+
+    def is_ip_blocked(client_ip: str) -> bool:
+        """Check whether a client IP is blocked by exact match or CIDR entry."""
+        ip_obj = parse_ip(client_ip)
+        if not ip_obj:
+            return False
+        blocked_entries = BlockedIP.query.all()
+        for entry in blocked_entries:
+            raw = (entry.ip_address or "").strip()
+            if not raw:
+                continue
+            if "/" in raw:
+                try:
+                    if ip_obj in ipaddress.ip_network(raw, strict=False):
+                        return True
+                except ValueError:
+                    continue
+            elif raw == str(ip_obj):
+                return True
+        return False
+
+    def coerce_config_value(raw_value: str, expected_type):
+        if expected_type is bool:
+            v = (raw_value or "").strip().lower()
+            if v in {"true", "1", "yes", "on"}:
+                return True
+            if v in {"false", "0", "no", "off"}:
+                return False
+            raise ValueError("Boolean values must be one of: true/false, 1/0, yes/no, on/off")
+        if expected_type is int:
+            return int((raw_value or "").strip())
+        if expected_type is float:
+            return float((raw_value or "").strip())
+        return (raw_value or "").strip()
+
+    def _is_trusted_bot_defense_ip(ip_addr: str) -> bool:
+        raw_rules = bot_defense_settings.get("trusted_ip_prefixes", "") or ""
+        rules = [r.strip() for r in raw_rules.split(",") if r.strip()]
+        if not rules:
+            return False
+        ip_obj = parse_ip(ip_addr or "")
+        if not ip_obj:
+            return False
+        ip_text = str(ip_obj)
+        for rule in rules:
+            try:
+                if "/" in rule:
+                    if ip_obj in ipaddress.ip_network(rule, strict=False):
+                        return True
+                elif rule.endswith("."):
+                    if ip_text.startswith(rule):
+                        return True
+                elif ip_text == rule:
+                    return True
+            except Exception:
+                continue
+        return False
+
+    # --- Modern Bot Defense (Proof-of-Work challenge) ---
+    _auth_pow_challenges = {}  # challenge_id -> challenge data
+    _auth_pow_lock = threading.Lock()
+
+    def _cleanup_auth_pow_challenges(now_ts=None):
+        now_ts = now_ts or time.time()
+        stale_ids = []
+        for cid, ch in _auth_pow_challenges.items():
+            if ch.get("used") or ch.get("expires_at", 0) < now_ts:
+                stale_ids.append(cid)
+        for cid in stale_ids:
+            _auth_pow_challenges.pop(cid, None)
+
+    def _auth_pow_difficulty_for_ip(ip_addr: str) -> int:
+        """Adaptive challenge hardness based on recent failed logins from same IP."""
+        if _is_trusted_bot_defense_ip(ip_addr):
+            return 0
+        try:
+            cutoff = datetime.utcnow() - timedelta(minutes=max(1, int(bot_defense_settings.get("window_minutes", 15))))
+            recent_failures = db.session.query(FailedLoginAttempt).filter(
+                FailedLoginAttempt.ip_address == (ip_addr or ""),
+                FailedLoginAttempt.timestamp >= cutoff
+            ).count()
+        except Exception:
+            recent_failures = 0
+
+        high_threshold = max(1, int(bot_defense_settings.get("high_threshold", 20)))
+        elevated_threshold = max(1, int(bot_defense_settings.get("elevated_threshold", 5)))
+        base_difficulty = max(1, int(bot_defense_settings.get("base_difficulty", 3)))
+        elevated_difficulty = max(1, int(bot_defense_settings.get("elevated_difficulty", 4)))
+        high_difficulty = max(1, int(bot_defense_settings.get("high_difficulty", 5)))
+
+        if recent_failures >= high_threshold:
+            return high_difficulty
+        if recent_failures >= elevated_threshold:
+            return elevated_difficulty
+        return base_difficulty
+
+    def issue_auth_pow_challenge():
+        if not bool(bot_defense_settings.get("enabled", True)):
+            return {
+                "enabled": False,
+                "algorithm": "none",
+                "ttl_seconds": 0,
+                "max_iterations": 0,
+            }
+        now_ts = time.time()
+        with _auth_pow_lock:
+            _cleanup_auth_pow_challenges(now_ts=now_ts)
+            challenge_id = secrets.token_urlsafe(18)
+            nonce = secrets.token_hex(16)
+            ip_addr = get_client_ip()
+            difficulty = _auth_pow_difficulty_for_ip(ip_addr)
+            ttl_seconds = max(30, int(bot_defense_settings.get("ttl_seconds", 180)))
+            _auth_pow_challenges[challenge_id] = {
+                "nonce": nonce,
+                "difficulty": difficulty,
+                "ip": ip_addr,
+                "created_at": now_ts,
+                "expires_at": now_ts + ttl_seconds,
+                "used": False,
+            }
+
+        return {
+            "challenge_id": challenge_id,
+            "nonce": nonce,
+            "difficulty": difficulty,
+            "algorithm": "sha256-prefix-zeros",
+            "ttl_seconds": ttl_seconds,
+            "max_iterations": max(10_000, int(bot_defense_settings.get("max_iterations", 1_500_000))),
+            "enabled": True,
+        }
+
+    def verify_auth_pow_solution(challenge_id: str, counter_raw: str, digest_raw: str) -> tuple[bool, str]:
+        if app.config.get("TESTING"):
+            return True, ""
+        if not bool(bot_defense_settings.get("enabled", True)):
+            return True, ""
+        if _is_trusted_bot_defense_ip(get_client_ip()):
+            return True, ""
+        if not challenge_id:
+            return False, "Missing challenge"
+        try:
+            counter = int((counter_raw or "").strip())
+        except Exception:
+            return False, "Invalid challenge counter"
+        if counter < 0 or counter > max(10_000, int(bot_defense_settings.get("max_counter", 10_000_000))):
+            return False, "Invalid challenge counter"
+
+        digest = (digest_raw or "").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            return False, "Invalid challenge digest"
+
+        now_ts = time.time()
+        with _auth_pow_lock:
+            _cleanup_auth_pow_challenges(now_ts=now_ts)
+            challenge = _auth_pow_challenges.get(challenge_id)
+            if not challenge:
+                return False, "Challenge expired"
+            if challenge.get("used"):
+                return False, "Challenge already used"
+            if challenge.get("expires_at", 0) < now_ts:
+                _auth_pow_challenges.pop(challenge_id, None)
+                return False, "Challenge expired"
+
+            # Bind challenge to source IP to make replaying across clients harder.
+            if challenge.get("ip") != get_client_ip():
+                return False, "Challenge source mismatch"
+
+            nonce = challenge.get("nonce", "")
+            difficulty = int(challenge.get("difficulty", 3))
+            expected = hashlib.sha256(f"{nonce}:{counter}".encode("utf-8")).hexdigest()
+            if expected != digest:
+                return False, "Challenge verification failed"
+            if not expected.startswith("0" * difficulty):
+                return False, "Challenge verification failed"
+
+            challenge["used"] = True
+            _auth_pow_challenges.pop(challenge_id, None)
+            return True, ""
 
     @app.context_processor
     def inject_route_helpers():
@@ -395,7 +643,7 @@ def create_app():
         if request.path.startswith('/static'):
             return None
         # Allow login/logout so admin can authenticate
-        if request.endpoint in ('login', 'logout', 'static'):
+        if request.endpoint in ('login', 'logout', 'static', 'auth_challenge'):
             return None
         # Allow admin users through
         if current_user.is_authenticated and getattr(current_user, 'is_admin', False):
@@ -409,8 +657,8 @@ def create_app():
         if request.path.startswith('/static'):
             return None
         try:
-            blocked = BlockedIP.query.filter_by(ip_address=request.remote_addr).first()
-            if blocked:
+            client_ip = get_client_ip()
+            if is_ip_blocked(client_ip):
                 return jsonify({"error": "Access denied"}), 403
         except Exception:
             pass
@@ -479,19 +727,38 @@ def create_app():
 
     @app.before_request
     def update_session_activity():
-        """Update last_active timestamp for session tracking."""
+        """Update last_active and enforce that authenticated sessions are revocable."""
+        if not current_user.is_authenticated:
+            return None
+        if request.endpoint in ('login', 'logout', 'static'):
+            return None
+
         token = session.get('session_token')
-        if token and current_user.is_authenticated:
-            try:
-                active = ActiveSession.query.filter_by(session_token=token).first()
-                if active:
-                    active.last_active = datetime.utcnow()
-                    db.session.commit()
-                else:
-                    # Session record missing (e.g. DB was wiped) — skip
-                    pass
-            except Exception:
-                db.session.rollback()
+        if not token:
+            app.logger.warning(f"[Auth] Missing session token for authenticated user {current_user.id}")
+            logout_user()
+            session.clear()
+            if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+                return jsonify({"error": "Session expired. Please log in again."}), 401
+            return redirect(url_for('login'))
+
+        try:
+            active = ActiveSession.query.filter_by(
+                session_token=token,
+                user_id=current_user.id
+            ).first()
+            if not active:
+                app.logger.warning(f"[Auth] Revoked or invalid session token for {current_user.id}")
+                logout_user()
+                session.clear()
+                if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+                    return jsonify({"error": "Session expired. Please log in again."}), 401
+                return redirect(url_for('login'))
+
+            active.last_active = datetime.utcnow()
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         return None
 
     @app.before_request
@@ -761,6 +1028,55 @@ def create_app():
         except Exception as e:
             app.logger.error(f"[Backup] Cleanup failed: {e}")
 
+    def _list_backup_files(prefix_filter=None):
+        files = []
+        if not os.path.isdir(BACKUP_DIR):
+            return files
+        for fn in sorted(os.listdir(BACKUP_DIR), reverse=True):
+            if not fn.endswith('.db'):
+                continue
+            if prefix_filter and not fn.startswith(prefix_filter):
+                continue
+            if prefix_filter is None and fn.startswith('pre_restore_'):
+                continue
+            path = os.path.join(BACKUP_DIR, fn)
+            files.append({
+                'name': fn,
+                'size_mb': round(os.path.getsize(path) / (1024 * 1024), 2),
+                'date': datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y-%m-%d %H:%M:%S'),
+                'age_days': round((time.time() - os.path.getmtime(path)) / 86400, 1)
+            })
+        return files
+
+    def _persist_maintenance_mode(enabled: bool):
+        global MAINTENANCE_MODE
+        with MAINTENANCE_MODE_LOCK:
+            MAINTENANCE_MODE = bool(enabled)
+            try:
+                config_path = os.getenv("SIMCRICKETX_CONFIG_PATH") or os.path.join(basedir, "config", "config.yaml")
+                cfg = {}
+                if os.path.exists(config_path):
+                    with open(config_path, "r") as f:
+                        cfg = yaml.safe_load(f) or {}
+                cfg.setdefault("app", {})["maintenance_mode"] = MAINTENANCE_MODE
+                with open(config_path, "w") as f:
+                    yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
+            except Exception as e:
+                app.logger.error(f"[Admin] Failed to persist maintenance mode to config: {e}")
+
+    def _verify_sqlite_integrity(db_file: str):
+        conn = None
+        try:
+            conn = sqlite3.connect(db_file)
+            row = conn.execute("PRAGMA integrity_check;").fetchone()
+            status = (row[0] if row and row[0] else "").strip().lower()
+            return status == "ok", (row[0] if row and row[0] else "integrity check failed")
+        except Exception as e:
+            return False, str(e)
+        finally:
+            if conn:
+                conn.close()
+
     def _backup_scheduler():
         """Background thread: run backup every 24 hours."""
         while True:
@@ -939,6 +1255,53 @@ def create_app():
             app.logger.error(f"[Admin] Users list error: {e}", exc_info=True)
             return "Error loading users", 500
 
+    @app.route('/admin/search')
+    @login_required
+    @admin_required
+    def admin_search():
+        q = request.args.get('q', '').strip()
+        results = {
+            'users': [],
+            'teams': [],
+            'matches': [],
+            'tournaments': [],
+        }
+        if q:
+            results['users'] = db.session.query(DBUser).filter(
+                db.or_(
+                    DBUser.id.ilike(f'%{q}%'),
+                    DBUser.display_name.ilike(f'%{q}%')
+                )
+            ).order_by(DBUser.last_login.desc()).limit(20).all()
+
+            results['teams'] = db.session.query(DBTeam).filter(
+                db.or_(
+                    DBTeam.name.ilike(f'%{q}%'),
+                    DBTeam.short_code.ilike(f'%{q}%'),
+                    DBTeam.user_id.ilike(f'%{q}%')
+                )
+            ).order_by(DBTeam.created_at.desc()).limit(20).all()
+
+            results['matches'] = db.session.query(DBMatch).filter(
+                db.or_(
+                    DBMatch.id.ilike(f'%{q}%'),
+                    DBMatch.user_id.ilike(f'%{q}%'),
+                    DBMatch.result_description.ilike(f'%{q}%'),
+                    DBMatch.venue.ilike(f'%{q}%')
+                )
+            ).order_by(DBMatch.date.desc()).limit(20).all()
+
+            results['tournaments'] = db.session.query(Tournament).filter(
+                db.or_(
+                    Tournament.name.ilike(f'%{q}%'),
+                    Tournament.user_id.ilike(f'%{q}%'),
+                    Tournament.status.ilike(f'%{q}%')
+                )
+            ).order_by(Tournament.created_at.desc()).limit(20).all()
+
+        totals = {k: len(v) for k, v in results.items()}
+        return render_template('admin/search.html', q=q, results=results, totals=totals)
+
     @app.route('/admin/users/<user_email>')
     @login_required
     @admin_required
@@ -958,6 +1321,69 @@ def create_app():
             app.logger.error(f"[Admin] User detail error: {e}", exc_info=True)
             return "Error loading user", 500
 
+    @app.route('/admin/users/<user_email>/360')
+    @login_required
+    @admin_required
+    def admin_user_360(user_email):
+        """Consolidated user profile and security/activity context."""
+        try:
+            user = db.session.get(DBUser, user_email)
+            if not user:
+                return "User not found", 404
+
+            teams_count = db.session.query(DBTeam).filter_by(user_id=user_email).count()
+            matches_count = db.session.query(DBMatch).filter_by(user_id=user_email).count()
+            tournaments_count = db.session.query(Tournament).filter_by(user_id=user_email).count()
+            players_count = db.session.query(DBPlayer).join(DBTeam, DBPlayer.team_id == DBTeam.id).filter(DBTeam.user_id == user_email).count()
+
+            recent_teams = db.session.query(DBTeam).filter_by(user_id=user_email).order_by(DBTeam.created_at.desc()).limit(8).all()
+            recent_matches = db.session.query(DBMatch).filter_by(user_id=user_email).order_by(DBMatch.date.desc()).limit(10).all()
+            recent_tournaments = db.session.query(Tournament).filter_by(user_id=user_email).order_by(Tournament.created_at.desc()).limit(10).all()
+            sessions = db.session.query(ActiveSession).filter_by(user_id=user_email).order_by(ActiveSession.last_active.desc()).limit(10).all()
+            failed_logins = db.session.query(FailedLoginAttempt).filter_by(email=user_email).order_by(FailedLoginAttempt.timestamp.desc()).limit(20).all()
+
+            cutoff_24h = datetime.utcnow() - timedelta(hours=24)
+            failed_24h = db.session.query(FailedLoginAttempt).filter(
+                FailedLoginAttempt.email == user_email,
+                FailedLoginAttempt.timestamp >= cutoff_24h
+            ).count()
+
+            admin_actions_by_user = db.session.query(AdminAuditLog).filter(
+                AdminAuditLog.admin_email == user_email
+            ).order_by(AdminAuditLog.timestamp.desc()).limit(15).all()
+
+            actions_targeting_user = db.session.query(AdminAuditLog).filter(
+                AdminAuditLog.target == user_email
+            ).order_by(AdminAuditLog.timestamp.desc()).limit(15).all()
+
+            unique_ips = sorted({s.ip_address for s in sessions if s.ip_address})
+            security_overview = {
+                'active_sessions': len(sessions),
+                'failed_logins_24h': failed_24h,
+                'unique_recent_ips': len(unique_ips),
+            }
+
+            return render_template(
+                'admin/user_360.html',
+                user=user,
+                teams_count=teams_count,
+                matches_count=matches_count,
+                tournaments_count=tournaments_count,
+                players_count=players_count,
+                recent_teams=recent_teams,
+                recent_matches=recent_matches,
+                recent_tournaments=recent_tournaments,
+                sessions=sessions,
+                failed_logins=failed_logins,
+                admin_actions_by_user=admin_actions_by_user,
+                actions_targeting_user=actions_targeting_user,
+                unique_ips=unique_ips,
+                security_overview=security_overview,
+            )
+        except Exception as e:
+            app.logger.error(f"[Admin] User 360 error: {e}", exc_info=True)
+            return "Error loading user 360", 500
+
     @app.route('/admin/users/<user_email>/change-email', methods=['POST'])
     @login_required
     @admin_required
@@ -967,6 +1393,9 @@ def create_app():
             new_email = request.form.get('new_email', '').strip()
             if not new_email:
                 return jsonify({"error": "New email is required"}), 400
+            target = db.session.get(DBUser, user_email)
+            if target and target.is_admin:
+                return jsonify({"error": "Cannot modify admin account email from this panel"}), 400
 
             success, message = update_user_email(user_email, new_email, current_user.id)
             if success:
@@ -986,6 +1415,9 @@ def create_app():
             new_password = request.form.get('new_password', '')
             if not new_password:
                 return jsonify({"error": "New password is required"}), 400
+            target = db.session.get(DBUser, user_email)
+            if target and target.is_admin:
+                return jsonify({"error": "Cannot reset admin account password from this panel"}), 400
 
             success, message = update_user_password(user_email, new_password, current_user.id)
             if success:
@@ -1218,21 +1650,100 @@ def create_app():
     def admin_backups():
         """List and manage database backups"""
         try:
-            backups = []
-            if os.path.isdir(BACKUP_DIR):
-                for fn in sorted(os.listdir(BACKUP_DIR), reverse=True):
-                    if fn.endswith('.db'):
-                        path = os.path.join(BACKUP_DIR, fn)
-                        backups.append({
-                            'name': fn,
-                            'size_mb': round(os.path.getsize(path) / (1024 * 1024), 2),
-                            'date': datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y-%m-%d %H:%M:%S'),
-                            'age_days': round((time.time() - os.path.getmtime(path)) / 86400, 1)
-                        })
+            backups = _list_backup_files(prefix_filter=None)
             return render_template('admin/backups.html', backups=backups)
         except Exception as e:
             app.logger.error(f"[Admin] Backups page error: {e}", exc_info=True)
             return "Error loading backups", 500
+
+    @app.route('/admin/restore-center')
+    @login_required
+    @admin_required
+    def admin_restore_center():
+        """Restore and rollback management."""
+        try:
+            db_path = os.path.join(basedir, 'cricket_sim.db')
+            backups = _list_backup_files(prefix_filter=None)
+            rollback_points = _list_backup_files(prefix_filter='pre_restore_')
+            restore_events = db.session.query(AdminAuditLog).filter(
+                AdminAuditLog.action.in_(['restore_database', 'rollback_database'])
+            ).order_by(AdminAuditLog.timestamp.desc()).limit(20).all()
+            current_db = {
+                'exists': os.path.exists(db_path),
+                'size_mb': round(os.path.getsize(db_path) / (1024 * 1024), 2) if os.path.exists(db_path) else 0,
+                'modified': datetime.fromtimestamp(os.path.getmtime(db_path)).strftime('%Y-%m-%d %H:%M:%S') if os.path.exists(db_path) else 'N/A',
+            }
+            return render_template(
+                'admin/restore_center.html',
+                backups=backups,
+                rollback_points=rollback_points,
+                restore_events=restore_events,
+                current_db=current_db,
+            )
+        except Exception as e:
+            app.logger.error(f"[Admin] Restore center error: {e}", exc_info=True)
+            return "Error loading restore center", 500
+
+    @app.route('/admin/restore/apply', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_restore_apply():
+        """Restore live DB from a backup or rollback point."""
+        try:
+            filename = request.form.get('filename', '').strip()
+            source_type = request.form.get('source_type', 'backup').strip().lower()
+            if source_type not in {'backup', 'rollback'}:
+                return jsonify({"error": "Invalid source_type"}), 400
+            if not filename or not filename.endswith('.db'):
+                return jsonify({"error": "Valid backup filename is required"}), 400
+
+            safe_name = secure_filename(filename)
+            source_path = os.path.join(BACKUP_DIR, safe_name)
+            if not os.path.exists(source_path):
+                return jsonify({"error": "Selected backup file not found"}), 404
+
+            is_rollback_file = safe_name.startswith('pre_restore_')
+            if source_type == 'backup' and is_rollback_file:
+                return jsonify({"error": "Rollback points must use source_type=rollback"}), 400
+            if source_type == 'rollback' and not is_rollback_file:
+                return jsonify({"error": "Only rollback snapshots are allowed for rollback source_type"}), 400
+
+            ok, status = _verify_sqlite_integrity(source_path)
+            if not ok:
+                return jsonify({"error": f"Backup integrity check failed: {status}"}), 400
+
+            db_path = os.path.join(basedir, 'cricket_sim.db')
+            snapshot_name = None
+            if os.path.exists(db_path):
+                admin_label = re.sub(r'[^a-zA-Z0-9_-]+', '_', (current_user.id or 'admin'))[:40]
+                snapshot_name = f"pre_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{admin_label}.db"
+                snapshot_path = os.path.join(BACKUP_DIR, snapshot_name)
+                shutil.copy2(db_path, snapshot_path)
+
+            _persist_maintenance_mode(True)
+            db.session.remove()
+            db.engine.dispose()
+            shutil.copy2(source_path, db_path)
+
+            ok_live, status_live = _verify_sqlite_integrity(db_path)
+            if not ok_live:
+                if snapshot_name:
+                    snapshot_path = os.path.join(BACKUP_DIR, snapshot_name)
+                    if os.path.exists(snapshot_path):
+                        shutil.copy2(snapshot_path, db_path)
+                return jsonify({"error": f"Post-restore integrity check failed: {status_live}"}), 500
+
+            action = 'rollback_database' if source_type == 'rollback' else 'restore_database'
+            details = f"Restored from {safe_name}. Pre-restore snapshot: {snapshot_name or 'not-created'}. Maintenance mode enabled."
+            log_admin_action(current_user.id, action, safe_name, details, get_client_ip())
+            return jsonify({
+                "message": f"Database restore completed from {safe_name}. Maintenance mode is ON.",
+                "snapshot": snapshot_name,
+                "maintenance_mode": True
+            }), 200
+        except Exception as e:
+            app.logger.error(f"[Admin] Restore apply error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to restore database"}), 500
 
     @app.route('/admin/backups/create', methods=['POST'])
     @login_required
@@ -1291,11 +1802,26 @@ def create_app():
             if target.is_admin:
                 return jsonify({"error": "Cannot impersonate another admin"}), 400
 
-            # Store admin identity in session for returning later
+            # Store admin identity/session for returning later.
             session['impersonating_from'] = current_user.id
-            log_admin_action(current_user.id, 'impersonate', user_email, f'Started impersonating {user_email}', request.remote_addr)
+            session['impersonating_from_token'] = session.get('session_token')
+            log_admin_action(current_user.id, 'impersonate', user_email, f'Started impersonating {user_email}', get_client_ip())
 
             login_user(target)
+            try:
+                import secrets
+                token = secrets.token_hex(32)
+                session['session_token'] = token
+                active = ActiveSession(
+                    session_token=token,
+                    user_id=user_email,
+                    ip_address=get_client_ip(),
+                    user_agent=request.user_agent.string[:300] if request.user_agent.string else None
+                )
+                db.session.add(active)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
             flash(f"Now viewing as {user_email}. Click 'Stop Impersonating' to return.", "info")
             return redirect(url_for('home'))
         except Exception as e:
@@ -1307,14 +1833,41 @@ def create_app():
     def admin_stop_impersonation():
         """Return to the original admin account after impersonation."""
         try:
+            current_token = session.get('session_token')
             original_admin = session.pop('impersonating_from', None)
+            original_admin_token = session.pop('impersonating_from_token', None)
             if not original_admin:
                 return redirect(url_for('home'))
+
+            # End the impersonated user's active session token.
+            if current_token:
+                ActiveSession.query.filter_by(session_token=current_token).delete()
+                db.session.commit()
 
             admin_user = db.session.get(DBUser, original_admin)
             if admin_user and admin_user.is_admin:
                 log_admin_action(original_admin, 'stop_impersonate', current_user.id, 'Stopped impersonation')
                 login_user(admin_user)
+                if original_admin_token:
+                    existing = ActiveSession.query.filter_by(
+                        session_token=original_admin_token,
+                        user_id=original_admin
+                    ).first()
+                    if existing:
+                        existing.last_active = datetime.utcnow()
+                        session['session_token'] = original_admin_token
+                        db.session.commit()
+                    else:
+                        import secrets
+                        token = secrets.token_hex(32)
+                        session['session_token'] = token
+                        db.session.add(ActiveSession(
+                            session_token=token,
+                            user_id=original_admin,
+                            ip_address=get_client_ip(),
+                            user_agent=request.user_agent.string[:300] if request.user_agent.string else None
+                        ))
+                        db.session.commit()
                 flash("Returned to admin account.", "info")
                 return redirect(url_for('admin_dashboard'))
             else:
@@ -1330,7 +1883,7 @@ def create_app():
     def admin_config():
         """View and edit configuration"""
         try:
-            config_path = os.path.join(basedir, "config", "config.yaml")
+            config_path = os.getenv("SIMCRICKETX_CONFIG_PATH") or os.path.join(basedir, "config", "config.yaml")
             with open(config_path, "r") as f:
                 current_config = yaml.safe_load(f) or {}
 
@@ -1347,7 +1900,7 @@ def create_app():
                 else:
                     display_config[section] = values
 
-            return render_template('admin/config.html', config=current_config, display_config=display_config)
+            return render_template('admin/config.html', display_config=display_config)
         except Exception as e:
             app.logger.error(f"[Admin] Config page error: {e}", exc_info=True)
             return "Error loading config", 500
@@ -1364,8 +1917,14 @@ def create_app():
 
             if not section or not key:
                 return jsonify({"error": "Section and key are required"}), 400
+            if any(s in key.lower() for s in ['token', 'secret', 'password', 'key']):
+                return jsonify({"error": "Sensitive keys cannot be updated from the admin UI"}), 403
+            section_schema = ADMIN_CONFIG_ALLOWLIST.get(section, {})
+            expected_type = section_schema.get(key)
+            if expected_type is None:
+                return jsonify({"error": f"Config field {section}.{key} is not editable from admin UI"}), 400
 
-            config_path = os.path.join(basedir, "config", "config.yaml")
+            config_path = os.getenv("SIMCRICKETX_CONFIG_PATH") or os.path.join(basedir, "config", "config.yaml")
             with open(config_path, "r") as f:
                 current_config = yaml.safe_load(f) or {}
 
@@ -1373,26 +1932,21 @@ def create_app():
                 current_config[section] = {}
 
             old_value = current_config.get(section, {}).get(key, '')
-            # Preserve original type when updating config values
-            if isinstance(old_value, bool):
-                value = value.lower() in ('true', '1', 'yes')
-            elif isinstance(old_value, int):
-                try:
-                    value = int(value)
-                except ValueError:
-                    pass
-            elif isinstance(old_value, float):
-                try:
-                    value = float(value)
-                except ValueError:
-                    pass
+            value = coerce_config_value(value, expected_type)
+            if section == "rate_limits":
+                if key in {"max_requests", "window_seconds", "admin_multiplier"} and value <= 0:
+                    return jsonify({"error": f"{section}.{key} must be greater than zero"}), 400
             current_config[section][key] = value
 
             with open(config_path, "w") as f:
-                yaml.dump(current_config, f, default_flow_style=False)
+                yaml.safe_dump(current_config, f, default_flow_style=False, sort_keys=False)
 
-            log_admin_action(current_user.id, 'update_config', f"{section}.{key}", f"Changed from '{old_value}' to '{value}'", request.remote_addr)
+            old_safe = "***HIDDEN***" if any(s in key.lower() for s in ['token', 'secret', 'password', 'key']) else str(old_value)
+            new_safe = "***HIDDEN***" if any(s in key.lower() for s in ['token', 'secret', 'password', 'key']) else str(value)
+            log_admin_action(current_user.id, 'update_config', f"{section}.{key}", f"Changed from '{old_safe}' to '{new_safe}'", get_client_ip())
             return jsonify({"message": f"Config {section}.{key} updated"}), 200
+        except ValueError as ve:
+            return jsonify({"error": str(ve)}), 400
         except Exception as e:
             app.logger.error(f"[Admin] Config update error: {e}", exc_info=True)
             return jsonify({"error": "Failed to update config"}), 500
@@ -1588,7 +2142,7 @@ def create_app():
         target_user = s.user_id
         db.session.delete(s)
         db.session.commit()
-        log_admin_action(current_user.id, 'terminate_session', target_user, f'Session {session_id} terminated', request.remote_addr)
+        log_admin_action(current_user.id, 'terminate_session', target_user, f'Session {session_id} terminated', get_client_ip())
         return jsonify({"message": "Session terminated"}), 200
 
     @app.route('/admin/sessions/cleanup', methods=['POST'])
@@ -1598,6 +2152,7 @@ def create_app():
         cutoff = datetime.utcnow() - timedelta(days=7)
         count = ActiveSession.query.filter(ActiveSession.last_active < cutoff).delete()
         db.session.commit()
+        log_admin_action(current_user.id, 'cleanup_sessions', None, f'Cleaned {count} stale sessions', get_client_ip())
         return jsonify({"message": f"Cleaned up {count} stale sessions"}), 200
 
     # --- Failed Login Tracker ---
@@ -1647,13 +2202,20 @@ def create_app():
         reason = request.form.get('reason', '').strip() or 'No reason'
         if not ip:
             return jsonify({"error": "IP address required"}), 400
-        if BlockedIP.query.filter_by(ip_address=ip).first():
+        ip_obj = parse_ip(ip)
+        if not ip_obj:
+            return jsonify({"error": "Invalid IP address format"}), 400
+        normalized_ip = str(ip_obj)
+        requester_ip = get_client_ip()
+        if normalized_ip == requester_ip:
+            return jsonify({"error": "Cannot block your current IP address"}), 400
+        if BlockedIP.query.filter_by(ip_address=normalized_ip).first():
             return jsonify({"error": "IP already blocked"}), 400
-        entry = BlockedIP(ip_address=ip, reason=reason, blocked_by=current_user.id)
+        entry = BlockedIP(ip_address=normalized_ip, reason=reason, blocked_by=current_user.id)
         db.session.add(entry)
         db.session.commit()
-        log_admin_action(current_user.id, 'block_ip', ip, reason, request.remote_addr)
-        return jsonify({"message": f"IP {ip} blocked"}), 200
+        log_admin_action(current_user.id, 'block_ip', normalized_ip, reason, requester_ip)
+        return jsonify({"message": f"IP {normalized_ip} blocked"}), 200
 
     @app.route('/admin/ip-blocklist/<int:block_id>/remove', methods=['POST'])
     @login_required
@@ -1665,7 +2227,7 @@ def create_app():
         ip = entry.ip_address
         db.session.delete(entry)
         db.session.commit()
-        log_admin_action(current_user.id, 'unblock_ip', ip, 'IP unblocked', request.remote_addr)
+        log_admin_action(current_user.id, 'unblock_ip', ip, 'IP unblocked', get_client_ip())
         return jsonify({"message": f"IP {ip} unblocked"}), 200
 
     # --- Log Viewer ---
@@ -1731,6 +2293,63 @@ def create_app():
             return jsonify({"message": "Rate limits updated (restart required for full effect)"}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
+    @app.route('/admin/bot-defense')
+    @login_required
+    @admin_required
+    def admin_bot_defense():
+        return render_template('admin/bot_defense.html', settings=bot_defense_settings)
+
+    @app.route('/admin/bot-defense/update', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_bot_defense_update():
+        try:
+            updated = {
+                "enabled": str(request.form.get("enabled", "false")).lower() in {"1", "true", "yes", "on"},
+                "base_difficulty": int(request.form.get("base_difficulty", bot_defense_settings["base_difficulty"])),
+                "elevated_difficulty": int(request.form.get("elevated_difficulty", bot_defense_settings["elevated_difficulty"])),
+                "high_difficulty": int(request.form.get("high_difficulty", bot_defense_settings["high_difficulty"])),
+                "elevated_threshold": int(request.form.get("elevated_threshold", bot_defense_settings["elevated_threshold"])),
+                "high_threshold": int(request.form.get("high_threshold", bot_defense_settings["high_threshold"])),
+                "window_minutes": int(request.form.get("window_minutes", bot_defense_settings["window_minutes"])),
+                "ttl_seconds": int(request.form.get("ttl_seconds", bot_defense_settings["ttl_seconds"])),
+                "max_counter": int(request.form.get("max_counter", bot_defense_settings["max_counter"])),
+                "max_iterations": int(request.form.get("max_iterations", bot_defense_settings["max_iterations"])),
+                "trusted_ip_prefixes": (request.form.get("trusted_ip_prefixes", "") or "").strip(),
+            }
+
+            if updated["base_difficulty"] < 1 or updated["elevated_difficulty"] < updated["base_difficulty"] or updated["high_difficulty"] < updated["elevated_difficulty"]:
+                return jsonify({"error": "Difficulty levels must be non-decreasing (base <= elevated <= high)"}), 400
+            if updated["elevated_threshold"] < 1 or updated["high_threshold"] < updated["elevated_threshold"]:
+                return jsonify({"error": "Thresholds must satisfy: 1 <= elevated <= high"}), 400
+            if updated["window_minutes"] < 1 or updated["window_minutes"] > 120:
+                return jsonify({"error": "Window minutes must be between 1 and 120"}), 400
+            if updated["ttl_seconds"] < 30 or updated["ttl_seconds"] > 900:
+                return jsonify({"error": "TTL must be between 30 and 900 seconds"}), 400
+            if updated["max_counter"] < 10_000 or updated["max_counter"] > 100_000_000:
+                return jsonify({"error": "Max counter out of allowed range"}), 400
+            if updated["max_iterations"] < 10_000 or updated["max_iterations"] > 5_000_000:
+                return jsonify({"error": "Max iterations out of allowed range"}), 400
+
+            config_path = os.getenv("SIMCRICKETX_CONFIG_PATH") or os.path.join(basedir, "config", "config.yaml")
+            cfg = {}
+            if os.path.exists(config_path):
+                with open(config_path, "r") as f:
+                    cfg = yaml.safe_load(f) or {}
+            cfg["bot_defense"] = updated
+            with open(config_path, "w") as f:
+                yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
+
+            bot_defense_settings.update(updated)
+            details = json.dumps(updated)
+            log_admin_action(current_user.id, "update_bot_defense", None, details, get_client_ip())
+            return jsonify({"message": "Bot defense settings updated"}), 200
+        except ValueError:
+            return jsonify({"error": "All numeric fields must be valid integers"}), 400
+        except Exception as e:
+            app.logger.error(f"[Admin] Bot defense update error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to update bot defense settings"}), 500
 
     # --- Global Team Browser ---
     @app.route('/admin/global-teams')
@@ -2560,6 +3179,13 @@ def create_app():
             display_name = request.form.get("display_name", "").strip()
             email = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
+            challenge_id = request.form.get("challenge_id", "")
+            challenge_counter = request.form.get("challenge_counter", "")
+            challenge_digest = request.form.get("challenge_digest", "")
+
+            challenge_ok, challenge_msg = verify_auth_pow_solution(challenge_id, challenge_counter, challenge_digest)
+            if not challenge_ok:
+                return render_template("register.html", error=f"Security challenge failed: {challenge_msg}")
             
             if not email or "@" not in email or "." not in email:
                 return render_template("register.html", error="Invalid email")
@@ -2572,18 +3198,9 @@ def create_app():
             
             if not password:
                 return render_template("register.html", error="Password required")
-
-            if len(password) < 8:
-                return render_template("register.html", error="Password must be at least 8 characters")
-
-            if not re.search(r'[A-Z]', password):
-                return render_template("register.html", error="Password must contain at least one uppercase letter")
-
-            if not re.search(r'[a-z]', password):
-                return render_template("register.html", error="Password must contain at least one lowercase letter")
-
-            if not re.search(r'[0-9]', password):
-                return render_template("register.html", error="Password must contain at least one digit")
+            ok, policy_error = validate_password_policy(password)
+            if not ok:
+                return render_template("register.html", error=policy_error)
 
             if register_user(email, password, display_name=display_name):
                 return redirect(url_for("login"))
@@ -2606,9 +3223,16 @@ def create_app():
 
             email = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
+            challenge_id = request.form.get("challenge_id", "")
+            challenge_counter = request.form.get("challenge_counter", "")
+            challenge_digest = request.form.get("challenge_digest", "")
 
             if not email or not password:
                 return render_template("login.html", error="Email and password required")
+
+            challenge_ok, challenge_msg = verify_auth_pow_solution(challenge_id, challenge_counter, challenge_digest)
+            if not challenge_ok:
+                return render_template("login.html", error=f"Security challenge failed: {challenge_msg}")
 
             if verify_user(email, password):
                 user = db.session.get(DBUser, email)
@@ -2638,7 +3262,7 @@ def create_app():
                         active = ActiveSession(
                             session_token=token,
                             user_id=email,
-                            ip_address=request.remote_addr,
+                            ip_address=get_client_ip(),
                             user_agent=request.user_agent.string[:300] if request.user_agent.string else None
                         )
                         db.session.add(active)
@@ -2659,7 +3283,7 @@ def create_app():
                 try:
                     failed = FailedLoginAttempt(
                         email=email,
-                        ip_address=request.remote_addr,
+                        ip_address=get_client_ip(),
                         user_agent=request.user_agent.string[:300] if request.user_agent.string else None
                     )
                     db.session.add(failed)
@@ -2672,6 +3296,13 @@ def create_app():
             app.logger.error(f"Login error: {e}")
             return render_template("login.html", error="System error")
 
+    @app.route("/auth/challenge", methods=["GET"])
+    @limiter.limit("30 per minute")
+    def auth_challenge():
+        """Issue short-lived proof-of-work challenge for auth forms."""
+        payload = issue_auth_pow_challenge()
+        return jsonify(payload), 200
+
     @app.route("/change-password", methods=["GET", "POST"])
     @login_required
     def force_change_password():
@@ -2680,8 +3311,9 @@ def create_app():
             return render_template("force_change_password.html")
         new_password = request.form.get("new_password", "")
         confirm_password = request.form.get("confirm_password", "")
-        if not new_password or len(new_password) < 8:
-            return render_template("force_change_password.html", error="Password must be at least 8 characters")
+        ok, policy_error = validate_password_policy(new_password)
+        if not ok:
+            return render_template("force_change_password.html", error=policy_error)
         if new_password != confirm_password:
             return render_template("force_change_password.html", error="Passwords do not match")
         try:
@@ -5088,7 +5720,7 @@ def create_app():
         target_path = os.path.abspath(os.path.join(base_dir, req_path))
         
         # Security check: Ensure target path is within base_dir
-        if not target_path.startswith(base_dir):
+        if not is_path_within_base(base_dir, target_path):
             return jsonify({'error': 'Access denied: Cannot traverse outside project root'}), 403
             
         if not os.path.exists(target_path):
@@ -5155,7 +5787,7 @@ def create_app():
         target_path = os.path.abspath(os.path.join(base_dir, file_path))
 
         # Security check
-        if not target_path.startswith(base_dir):
+        if not is_path_within_base(base_dir, target_path):
             return jsonify({'error': 'Access denied'}), 403
         
         if not os.path.exists(target_path):
@@ -5167,6 +5799,7 @@ def create_app():
         try:
             os.remove(target_path)
             app.logger.info(f"[FileExplorer] Admin {current_user.id} deleted file: {file_path}")
+            log_admin_action(current_user.id, 'delete_file', file_path, 'File deleted from admin explorer', get_client_ip())
             return jsonify({'success': True})
         except Exception as e:
             app.logger.error(f"[FileExplorer] Error deleting file {file_path}: {e}")
@@ -5197,6 +5830,9 @@ def create_app():
     _register_admin_fallback('admin_matches', '/admin/matches')
     _register_admin_fallback('admin_database_stats', '/admin/database/stats')
     _register_admin_fallback('admin_backups', '/admin/backups')
+    _register_admin_fallback('admin_restore_center', '/admin/restore-center')
+    _register_admin_fallback('admin_bot_defense', '/admin/bot-defense')
+    _register_admin_fallback('admin_search', '/admin/search')
     _register_admin_fallback('admin_config', '/admin/config')
     _register_admin_fallback('admin_audit_log', '/admin/audit-log')
 

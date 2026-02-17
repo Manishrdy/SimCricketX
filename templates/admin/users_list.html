@@ -44,8 +44,8 @@
                     {% if user.last_login %}{{ user.last_login.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}
                 </td>
                 <td style="text-align: right;">
-                    <a href="{{ url_for('admin_user_detail', user_email=user.email) }}" class="a-btn a-btn-secondary a-btn-sm">
-                        <i class="fas fa-eye"></i> View
+                    <a href="{{ url_for('admin_user_360', user_email=user.email) }}" class="a-btn a-btn-secondary a-btn-sm">
+                        <i class="fas fa-compass"></i> 360
                     </a>
                 </td>
             </tr>
