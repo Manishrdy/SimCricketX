@@ -302,272 +302,743 @@
     color: var(--fg);
 }
 
-/* ── Pitch Profile Cards Grid ── */
+/* ═══════════════════════════════════════════════════════════
+   Pitch Profile Tiles — Premium Compact Design
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Pitch Color Tokens ── */
+.gc-pitch-card[data-pitch="Green"] { --pitch-color: #22c55e; --pitch-gradient: linear-gradient(135deg, #16a34a, #22c55e); --pitch-glow: rgba(34,197,94,0.12); }
+.gc-pitch-card[data-pitch="Dry"]   { --pitch-color: #f59e0b; --pitch-gradient: linear-gradient(135deg, #d97706, #f59e0b); --pitch-glow: rgba(245,158,11,0.12); }
+.gc-pitch-card[data-pitch="Hard"]  { --pitch-color: #94a3b8; --pitch-gradient: linear-gradient(135deg, #64748b, #94a3b8); --pitch-glow: rgba(148,163,184,0.12); }
+.gc-pitch-card[data-pitch="Flat"]  { --pitch-color: #a78bfa; --pitch-gradient: linear-gradient(135deg, #8b5cf6, #a78bfa); --pitch-glow: rgba(167,139,250,0.12); }
+.gc-pitch-card[data-pitch="Dead"]  { --pitch-color: #a8a29e; --pitch-gradient: linear-gradient(135deg, #78716c, #a8a29e); --pitch-glow: rgba(168,162,158,0.12); }
+
+[data-theme="dark"] .gc-pitch-card[data-pitch="Green"] { --pitch-glow: rgba(34,197,94,0.18); }
+[data-theme="dark"] .gc-pitch-card[data-pitch="Dry"]   { --pitch-glow: rgba(245,158,11,0.18); }
+[data-theme="dark"] .gc-pitch-card[data-pitch="Hard"]  { --pitch-glow: rgba(148,163,184,0.18); }
+[data-theme="dark"] .gc-pitch-card[data-pitch="Flat"]  { --pitch-glow: rgba(167,139,250,0.18); }
+[data-theme="dark"] .gc-pitch-card[data-pitch="Dead"]  { --pitch-glow: rgba(168,162,158,0.18); }
+
+/* ── Grid ── */
 .gc-pitch-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
     margin-bottom: 2.5rem;
 }
 
+/* ── Card Base ── */
 .gc-pitch-card {
     background: var(--card-bg);
-    border: 2px solid var(--card-border);
-    border-radius: 20px;
+    border: 1.5px solid var(--card-border);
+    border-radius: 16px;
     overflow: hidden;
-    transition: all 0.3s ease;
-}
-
-.gc-pitch-card:hover {
-    box-shadow: 0 8px 30px var(--shadow);
-    border-color: var(--accent);
-}
-
-/* Pitch card header — color-coded strip */
-.gc-pitch-header {
-    padding: 1.25rem 1.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
 }
 
-.gc-pitch-header::before {
+.gc-pitch-card::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--pitch-gradient);
+    opacity: 0.7;
+    transition: height 0.3s ease, opacity 0.3s ease;
 }
 
-.gc-pitch-card[data-pitch="Green"] .gc-pitch-header::before { background: linear-gradient(90deg, #16a34a, #22c55e); }
-.gc-pitch-card[data-pitch="Dry"] .gc-pitch-header::before { background: linear-gradient(90deg, #d97706, #f59e0b); }
-.gc-pitch-card[data-pitch="Hard"] .gc-pitch-header::before { background: linear-gradient(90deg, #6b7280, #9ca3af); }
-.gc-pitch-card[data-pitch="Flat"] .gc-pitch-header::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
-.gc-pitch-card[data-pitch="Dead"] .gc-pitch-header::before { background: linear-gradient(90deg, #78716c, #a8a29e); }
+.gc-pitch-card:hover::before { height: 4px; opacity: 1; }
+
+.gc-pitch-card:hover {
+    border-color: var(--pitch-color);
+    box-shadow: 0 4px 20px var(--pitch-glow), 0 1px 3px var(--shadow);
+    transform: translateY(-2px);
+}
+
+/* active tile highlight when modal is open */
+.gc-pitch-card.gc-pitch-active {
+    border-color: var(--pitch-color);
+    box-shadow: 0 0 0 2px var(--pitch-glow);
+}
+
+/* ── Compact Summary ── */
+.gc-pitch-summary {
+    padding: 1rem 1.15rem;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+}
+
+.gc-pitch-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.3rem;
+}
+
+.gc-pitch-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.gc-pitch-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--pitch-color);
+    flex-shrink: 0;
+    box-shadow: 0 0 6px var(--pitch-glow);
+}
 
 .gc-pitch-name {
+    font-size: 1rem;
+    font-weight: 750;
+    color: var(--fg);
+    letter-spacing: -0.01em;
+}
+
+.gc-pitch-rf-pill {
+    font-size: 0.65rem;
+    font-weight: 700;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 0.15rem 0.5rem;
+    border-radius: 20px;
+    background: var(--pitch-glow);
+    color: var(--pitch-color);
+    border: 1px solid var(--pitch-color);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+.gc-pitch-tagline {
+    font-size: 0.7rem;
+    color: var(--fg-secondary);
+    line-height: 1.45;
+    margin-bottom: 0.65rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* ── DNA Stacked Bar ── */
+.gc-dna-wrap {
+    margin-bottom: 0.6rem;
+}
+
+.gc-dna-bar {
+    display: flex;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+    gap: 1px;
+}
+
+.gc-dna-seg {
+    height: 100%;
+    min-width: 2px;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    position: relative;
+}
+
+.gc-dna-seg:first-child { border-radius: 5px 0 0 5px; }
+.gc-dna-seg:last-child  { border-radius: 0 5px 5px 0; }
+
+.gc-pitch-summary:hover .gc-dna-seg { opacity: 0.8; }
+.gc-pitch-summary:hover .gc-dna-seg:hover {
+    opacity: 1;
+    transform: scaleY(1.4);
+    z-index: 1;
+}
+
+/* DNA segment colors */
+.gc-dna-seg[data-type="Dot"]    { background: #9ca3af; }
+.gc-dna-seg[data-type="Single"] { background: #60a5fa; }
+.gc-dna-seg[data-type="Double"] { background: #38bdf8; }
+.gc-dna-seg[data-type="Three"]  { background: #2dd4bf; }
+.gc-dna-seg[data-type="Four"]   { background: #fbbf24; }
+.gc-dna-seg[data-type="Six"]    { background: #4ade80; }
+.gc-dna-seg[data-type="Wicket"] { background: #f87171; }
+.gc-dna-seg[data-type="Extras"] { background: #c084fc; }
+
+/* ── Quick Stat Pills ── */
+.gc-pitch-stats {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.gc-stat-pill {
+    font-size: 0.6rem;
+    font-weight: 700;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 0.12rem 0.4rem;
+    border-radius: 6px;
+    letter-spacing: 0.02em;
+    border: 1px solid;
+}
+
+.gc-stat-dot {
+    color: #9ca3af;
+    background: rgba(156,163,175,0.08);
+    border-color: rgba(156,163,175,0.25);
+}
+
+.gc-stat-bnd {
+    color: #f59e0b;
+    background: rgba(245,158,11,0.08);
+    border-color: rgba(245,158,11,0.25);
+}
+
+.gc-stat-wkt {
+    color: #ef4444;
+    background: rgba(239,68,68,0.08);
+    border-color: rgba(239,68,68,0.25);
+}
+
+[data-theme="dark"] .gc-stat-dot { color: #cbd5e1; background: rgba(203,213,225,0.1); border-color: rgba(203,213,225,0.2); }
+[data-theme="dark"] .gc-stat-bnd { color: #fbbf24; background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.2); }
+[data-theme="dark"] .gc-stat-wkt { color: #f87171; background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.2); }
+
+/* ── Wicket Factor Pills (summary) ── */
+.gc-pitch-wf-pills {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.gc-wf-pill {
+    font-size: 0.58rem;
+    font-weight: 600;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--fg-secondary);
+    border: 1px solid var(--card-border);
+    white-space: nowrap;
+}
+
+.gc-wf-pill.gc-wf-hot {
+    color: #dc2626;
+    background: rgba(220,38,38,0.06);
+    border-color: rgba(220,38,38,0.2);
+}
+
+.gc-wf-pill.gc-wf-cold {
+    color: #3b82f6;
+    background: rgba(59,130,246,0.06);
+    border-color: rgba(59,130,246,0.2);
+}
+
+[data-theme="dark"] .gc-wf-pill.gc-wf-hot {
+    color: #f87171;
+    background: rgba(248,113,113,0.1);
+    border-color: rgba(248,113,113,0.2);
+}
+
+[data-theme="dark"] .gc-wf-pill.gc-wf-cold {
+    color: #60a5fa;
+    background: rgba(96,165,250,0.1);
+    border-color: rgba(96,165,250,0.2);
+}
+
+/* ── Configure Button ── */
+.gc-pitch-configure-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--fg-secondary);
+    padding: 0.4rem 0;
+    border-top: 1px solid var(--card-border);
+    margin-top: 0.35rem;
+    transition: all 0.2s ease;
+}
+
+.gc-pitch-configure-btn:hover {
+    color: var(--pitch-color);
+}
+
+.gc-pitch-configure-btn i {
+    font-size: 0.65rem;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Pitch Editor Modal
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Pitch Color Tokens (for modal) ── */
+.gc-pitch-modal[data-pitch="Green"] { --pitch-color: #22c55e; --pitch-gradient: linear-gradient(135deg, #16a34a, #22c55e); --pitch-glow: rgba(34,197,94,0.12); }
+.gc-pitch-modal[data-pitch="Dry"]   { --pitch-color: #f59e0b; --pitch-gradient: linear-gradient(135deg, #d97706, #f59e0b); --pitch-glow: rgba(245,158,11,0.12); }
+.gc-pitch-modal[data-pitch="Hard"]  { --pitch-color: #94a3b8; --pitch-gradient: linear-gradient(135deg, #64748b, #94a3b8); --pitch-glow: rgba(148,163,184,0.12); }
+.gc-pitch-modal[data-pitch="Flat"]  { --pitch-color: #a78bfa; --pitch-gradient: linear-gradient(135deg, #8b5cf6, #a78bfa); --pitch-glow: rgba(167,139,250,0.12); }
+.gc-pitch-modal[data-pitch="Dead"]  { --pitch-color: #a8a29e; --pitch-gradient: linear-gradient(135deg, #78716c, #a8a29e); --pitch-glow: rgba(168,162,158,0.12); }
+
+[data-theme="dark"] .gc-pitch-modal[data-pitch="Green"] { --pitch-glow: rgba(34,197,94,0.2); }
+[data-theme="dark"] .gc-pitch-modal[data-pitch="Dry"]   { --pitch-glow: rgba(245,158,11,0.2); }
+[data-theme="dark"] .gc-pitch-modal[data-pitch="Hard"]  { --pitch-glow: rgba(148,163,184,0.2); }
+[data-theme="dark"] .gc-pitch-modal[data-pitch="Flat"]  { --pitch-glow: rgba(167,139,250,0.2); }
+[data-theme="dark"] .gc-pitch-modal[data-pitch="Dead"]  { --pitch-glow: rgba(168,162,158,0.2); }
+
+/* ── Overlay ── */
+.gc-pitch-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 7000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.gc-pitch-modal-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ── Modal Panel ── */
+.gc-pitch-modal {
+    background: var(--card-bg);
+    border: 2px solid var(--pitch-color, var(--card-border));
+    border-radius: 20px;
+    width: 92%;
+    max-width: 700px;
+    max-height: 88vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25), 0 0 40px var(--pitch-glow, transparent);
+    transform: scale(0.92) translateY(10px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+}
+
+.gc-pitch-modal-overlay.show .gc-pitch-modal {
+    transform: scale(1) translateY(0);
+}
+
+/* top accent strip */
+.gc-pitch-modal::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--pitch-gradient);
+    border-radius: 20px 20px 0 0;
+}
+
+/* custom scrollbar for modal */
+.gc-pitch-modal::-webkit-scrollbar { width: 6px; }
+.gc-pitch-modal::-webkit-scrollbar-track { background: transparent; }
+.gc-pitch-modal::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 3px; }
+.gc-pitch-modal::-webkit-scrollbar-thumb:hover { background: var(--fg-secondary); }
+
+/* ── Modal Header ── */
+.gc-pitch-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem 1rem;
+    position: sticky;
+    top: 0;
+    background: var(--card-bg);
+    z-index: 2;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.gc-pitch-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.gc-pitch-modal-title .gc-pitch-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--pitch-color);
+    box-shadow: 0 0 8px var(--pitch-glow);
+}
+
+.gc-pitch-modal-title span:last-child {
     font-size: 1.15rem;
+    font-weight: 750;
+    color: var(--fg);
+    letter-spacing: -0.01em;
+}
+
+.gc-pitch-modal-close {
+    width: 32px;
+    height: 32px;
+    border: 1.5px solid var(--card-border);
+    border-radius: 10px;
+    background: var(--card-bg);
+    color: var(--fg-secondary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.gc-pitch-modal-close:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.06);
+}
+
+/* ── Modal Body ── */
+.gc-pitch-modal-body {
+    padding: 0;
+    position: relative;
+    background: linear-gradient(180deg, var(--card-bg), rgba(0,0,0,0.02));
+}
+
+.gc-pitch-modal-body .gc-pitch-body {
+    display: block !important;
+}
+
+/* ── Editor Container (New Layout) ── */
+.gc-editor-container {
+    padding: 1.5rem 2rem 2.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+}
+
+/* ── Top Row: Run Factor & Meta ── */
+.gc-editor-header-row {
+    display: grid;
+    grid-template-columns: 1fr 280px; /* Run Factor | Meta */
+    gap: 2rem;
+    align-items: center;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.gc-rf-widget {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.gc-label-sm {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--fg-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.gc-rf-control {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--bg-secondary);
+    border: 1.5px solid var(--card-border);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
+}
+
+.gc-rf-control:focus-within {
+    border-color: var(--pitch-color);
+    box-shadow: 0 0 0 3px var(--pitch-glow);
+}
+
+.gc-rf-control i {
+    color: var(--pitch-color);
+    font-size: 1.1rem;
+}
+
+.gc-rf-range {
+    flex: 1;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--card-border);
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.gc-rf-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    background: var(--pitch-color);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    transition: transform 0.2s;
+}
+
+.gc-rf-range::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+.gc-rf-control output {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--fg);
+    width: 3.5rem;
+    text-align: center;
+}
+
+/* Meta side (Normalize + Totals) */
+.gc-editor-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.75rem;
+}
+
+.gc-total-display {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1.2;
+}
+
+.gc-total-display .val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+}
+
+.gc-total-display.valid .val { color: var(--fg); }
+.gc-total-display.invalid .val { color: #ef4444; }
+
+.gc-btn-normalize {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: 8px;
+    border: 1px solid var(--pitch-color);
+    background: var(--pitch-glow);
+    color: var(--pitch-color);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.gc-btn-normalize:hover {
+    background: var(--pitch-color);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+/* ── Sections Titles ── */
+.gc-section-label {
+    font-size: 0.95rem;
     font-weight: 700;
     color: var(--fg);
+    margin-bottom: 1.25rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
 
-.gc-pitch-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    display: inline-block;
+.gc-section-label::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    background: var(--pitch-color);
+    border-radius: 2px;
 }
 
-.gc-pitch-card[data-pitch="Green"] .gc-pitch-dot { background: #22c55e; }
-.gc-pitch-card[data-pitch="Dry"] .gc-pitch-dot { background: #f59e0b; }
-.gc-pitch-card[data-pitch="Hard"] .gc-pitch-dot { background: #9ca3af; }
-.gc-pitch-card[data-pitch="Flat"] .gc-pitch-dot { background: #a78bfa; }
-.gc-pitch-card[data-pitch="Dead"] .gc-pitch-dot { background: #a8a29e; }
-
-.gc-pitch-desc {
-    font-size: 0.78rem;
-    color: var(--fg-secondary);
-    font-style: italic;
+/* ── Matrix Grid (Outcomes) ── */
+.gc-matrix-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
 }
 
-.gc-pitch-body {
-    padding: 0 1.5rem 1.5rem;
+.gc-matrix-tile {
+    background: var(--card-bg); /* slightly higher contrast than bg-secondary */
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 1rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s ease;
 }
 
-/* ── Scoring Matrix Bars ── */
-.gc-matrix-group {
-    margin-bottom: 1.25rem;
+.gc-matrix-tile:hover, .gc-matrix-tile:focus-within {
+    border-color: var(--pitch-color);
+    box-shadow: 0 4px 12px var(--pitch-glow);
+    transform: translateY(-2px);
 }
 
-.gc-matrix-label {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-weight: 700;
-    color: var(--fg-secondary);
+.gc-tile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 0.75rem;
 }
 
-.gc-matrix-row {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
-    height: 32px;
-}
-
-.gc-matrix-name {
-    width: 55px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--fg);
-    text-align: right;
-    flex-shrink: 0;
-}
-
-.gc-bar-track {
-    flex: 1;
-    height: 22px;
-    background: var(--bg-secondary);
-    border-radius: 6px;
-    overflow: hidden;
-    position: relative;
-}
-
-.gc-bar-fill {
-    height: 100%;
-    border-radius: 6px;
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    min-width: 2px;
-}
-
-/* Bar colors by outcome type */
-.gc-bar-fill[data-type="Dot"]    { background: linear-gradient(90deg, #6b7280, #9ca3af); }
-.gc-bar-fill[data-type="Single"] { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-.gc-bar-fill[data-type="Double"] { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
-.gc-bar-fill[data-type="Three"]  { background: linear-gradient(90deg, #14b8a6, #2dd4bf); }
-.gc-bar-fill[data-type="Four"]   { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-.gc-bar-fill[data-type="Six"]    { background: linear-gradient(90deg, #22c55e, #4ade80); }
-.gc-bar-fill[data-type="Wicket"] { background: linear-gradient(90deg, #ef4444, #f87171); }
-.gc-bar-fill[data-type="Extras"] { background: linear-gradient(90deg, #a855f7, #c084fc); }
-
-.gc-matrix-input {
-    width: 68px;
-    padding: 0.3rem 0.5rem;
+.gc-outcome-name {
     font-size: 0.8rem;
-    font-family: 'IBM Plex Mono', monospace;
-    text-align: center;
-    border: 1.5px solid var(--card-border);
-    border-radius: 8px;
-    background: var(--card-bg);
-    color: var(--fg);
-    transition: all 0.2s ease;
-    flex-shrink: 0;
-}
-
-.gc-matrix-input:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-light);
-}
-
-/* ── Matrix Total / Normalize ── */
-.gc-matrix-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px dashed var(--card-border);
-}
-
-.gc-total {
-    font-size: 0.82rem;
-    font-weight: 700;
-    font-family: 'IBM Plex Mono', monospace;
-    transition: color 0.2s ease;
-}
-
-.gc-total.valid { color: #22c55e; }
-.gc-total.invalid { color: #ef4444; }
-
-.gc-btn-normalize {
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 0.3rem 0.75rem;
-    border: 1.5px solid var(--card-border);
-    border-radius: 8px;
-    background: var(--card-bg);
-    color: var(--fg-secondary);
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.gc-btn-normalize:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: var(--accent-light);
-}
-
-/* ── Run Factor & Wicket Factors ── */
-.gc-factors-row {
-    display: flex;
-    gap: 1.5rem;
-    margin-top: 1rem;
-}
-
-.gc-factor-group {
-    flex: 1;
-}
-
-.gc-factor-label {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
     font-weight: 700;
     color: var(--fg-secondary);
-    margin-bottom: 0.5rem;
 }
 
-.gc-factor-input {
-    width: 100%;
-    padding: 0.45rem 0.75rem;
+.gc-outcome-val {
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 0.85rem;
-    font-family: 'IBM Plex Mono', monospace;
-    border: 1.5px solid var(--card-border);
-    border-radius: 8px;
-    background: var(--card-bg);
+    font-weight: 700;
     color: var(--fg);
-    transition: all 0.2s ease;
 }
 
-.gc-factor-input:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-light);
+/* Custom "Fill" Slider for stats */
+.gc-slider-wrapper {
+    position: relative;
+    height: 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    overflow: hidden;
 }
 
-.gc-wicket-factors {
-    margin-top: 1rem;
+.gc-matrix-range {
+    position: absolute;
+    top: -5px; left: -2px; right: -2px; bottom: -5px;
+    width: calc(100% + 4px);
+    height: 20px;
+    opacity: 0; /* invisible but clickable */
+    cursor: ew-resize;
+    z-index: 2;
 }
 
-.gc-wf-row {
+/* The visual fill bar */
+.gc-slider-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: var(--val, 0%);
+    background: linear-gradient(90deg, var(--pitch-color), var(--pitch-glow));
+    border-radius: 4px;
+    pointer-events: none;
+    transition: width 0.1s linear;
+}
+
+/* Make specific outcomes specific colors? Optional, reusing standard pitch color for now for unity, 
+   or we can use data-type for specific colors like the old design.
+*/
+.gc-matrix-tile[data-type="Wicket"] .gc-slider-wrapper::after { background: #ef4444; }
+.gc-matrix-tile[data-type="Six"] .gc-slider-wrapper::after { background: #22c55e; }
+.gc-matrix-tile[data-type="Four"] .gc-slider-wrapper::after { background: #f59e0b; }
+
+/* ── Wicket Factors Grid ── */
+.gc-wf-grid-modern {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.gc-wf-tile {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.4rem;
+    gap: 1rem;
+    padding: 0.8rem 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+}
+
+.gc-wf-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--card-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: var(--fg-secondary);
+    border: 1px solid var(--card-border);
+}
+
+.gc-wf-tile:hover .gc-wf-icon {
+    color: var(--pitch-color);
+    border-color: var(--pitch-color);
+}
+
+.gc-wf-info {
+    flex: 1;
 }
 
 .gc-wf-name {
-    width: 100px;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
+    font-weight: 600;
     color: var(--fg-secondary);
-    text-align: right;
-    flex-shrink: 0;
+    margin-bottom: 0.35rem;
+}
+
+.gc-stepper {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    background: var(--card-bg);
+    overflow: hidden;
+    height: 32px;
+}
+
+.gc-step-btn {
+    width: 30px;
+    height: 100%;
+    border: none;
+    background: none;
+    color: var(--fg-secondary);
+    cursor: pointer;
+    font-weight: 700;
+    transition: background 0.2s;
+}
+
+.gc-step-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--fg);
 }
 
 .gc-wf-input {
-    width: 80px;
-    padding: 0.3rem 0.5rem;
-    font-size: 0.8rem;
-    font-family: 'IBM Plex Mono', monospace;
+    width: 50px;
+    height: 100%;
+    border: none;
     text-align: center;
-    border: 1.5px solid var(--card-border);
-    border-radius: 8px;
-    background: var(--card-bg);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+    background: transparent;
     color: var(--fg);
-    transition: all 0.2s ease;
+    border-left: 1px solid var(--card-border);
+    border-right: 1px solid var(--card-border);
+    -moz-appearance: textfield;
 }
 
-.gc-wf-input:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-light);
+.gc-wf-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.gc-wf-input:focus { outline: none; background: var(--bg-secondary); }
+
+/* Hidden source of truth inputs */
+.hidden-input { display: none !important; }
+
+/* Responsive Adjustments for new layout */
+@media (max-width: 768px) {
+    .gc-editor-container { padding: 1.5rem; gap: 2rem; }
+    .gc-editor-header-row { grid-template-columns: 1fr; gap: 1.5rem; }
+    .gc-editor-meta { align-items: flex-start; flex-direction: row; justify-content: space-between; width: 100%; }
+    .gc-total-display { align-items: flex-start; }
+    .gc-matrix-grid { grid-template-columns: 1fr 1fr; }
 }
 
 /* ── Phase Boosts Section ── */
@@ -886,7 +1357,7 @@
 /* ── Responsive ── */
 @media (max-width: 1024px) {
     .gc-pitch-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     }
 }
 
@@ -905,9 +1376,28 @@
         padding: 1.1rem 1.15rem;
     }
 
-    .gc-factors-row {
-        flex-direction: column;
-        gap: 1rem;
+    .gc-pitch-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .gc-pitch-modal {
+        width: 96%;
+        max-height: 92vh;
+        border-radius: 16px;
+    }
+
+    .gc-edit-columns {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+    }
+
+    .gc-pitch-modal-header {
+        padding: 1rem 1.15rem 0.75rem;
+    }
+
+    .gc-pitch-modal-body {
+        padding: 1rem 1.15rem 1.25rem;
     }
 
     .gc-actions {
