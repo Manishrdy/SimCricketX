@@ -522,6 +522,28 @@
 
 </div>
 
+{% if changelog_entries %}
+<div id="changelog-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;max-width:480px;width:90%;padding:32px;box-shadow:0 8px 32px rgba(0,0,0,0.18);position:relative;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+            <i class="fa-solid fa-rocket" style="color:var(--accent);font-size:1.1rem;"></i>
+            <span style="font-size:0.75rem;font-weight:600;letter-spacing:0.08em;color:var(--fg-secondary);text-transform:uppercase;">What's New</span>
+        </div>
+        <h2 style="margin:0 0 4px;font-size:1.25rem;font-weight:700;color:var(--fg);">Version {{ app_version }}</h2>
+        <p style="margin:0 0 20px;font-size:0.82rem;color:var(--fg-secondary);">Here's what changed in this release.</p>
+        <ul style="list-style:none;padding:0;margin:0 0 24px;display:flex;flex-direction:column;gap:10px;">
+            {% for entry in changelog_entries %}
+            <li style="display:flex;gap:10px;align-items:flex-start;font-size:0.9rem;color:var(--fg);">
+                <i class="fa-solid fa-circle-check" style="color:var(--accent);margin-top:3px;flex-shrink:0;font-size:0.85rem;"></i>
+                <span>{{ entry }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        <button id="changelog-close-btn" style="width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:0.9rem;font-weight:600;cursor:pointer;letter-spacing:0.02em;">Got it</button>
+    </div>
+</div>
+{% endif %}
+
 <script>
     // CLEANUP: If we landed here, it means we successfully created/submitted something.
     // Specifically clear the team draft if it exists.
@@ -530,6 +552,19 @@
             console.log("SimCricketX: Clearing successful team draft.");
             localStorage.removeItem('team_create_draft');
         }
+
+        {% if changelog_entries %}
+        const CURRENT_VERSION = "{{ app_version }}";
+        const SEEN_KEY = "scx_seen_version";
+        if (localStorage.getItem(SEEN_KEY) !== CURRENT_VERSION) {
+            const backdrop = document.getElementById('changelog-backdrop');
+            backdrop.style.display = 'flex';
+            document.getElementById('changelog-close-btn').addEventListener('click', () => {
+                localStorage.setItem(SEEN_KEY, CURRENT_VERSION);
+                backdrop.style.display = 'none';
+            });
+        }
+        {% endif %}
     });
 </script>
 {% endblock %}

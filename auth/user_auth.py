@@ -6,15 +6,14 @@ from datetime import datetime, timezone
 from werkzeug.security import check_password_hash, generate_password_hash
 from database.models import User, AdminAuditLog
 from database import db
-import socket
 import json
 
 # --- Helper Functions ---
 
 def get_ip_address() -> str:
     try:
-        hostname = socket.gethostname()
-        return socket.gethostbyname(hostname)
+        from flask import request
+        return (request.remote_addr or "").strip()
     except Exception:
         return ""
 

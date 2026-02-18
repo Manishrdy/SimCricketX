@@ -5,7 +5,7 @@
     /* === ADMIN PREMIUM LAYOUT === */
     .admin-layout {
         display: grid;
-        grid-template-columns: 280px 1fr;
+        grid-template-columns: 290px 1fr;
         gap: 0;
         min-height: calc(100vh - var(--nav-height));
         margin: -2rem;
@@ -60,8 +60,44 @@
 
     .admin-nav {
         flex: 1;
-        padding: 1rem 0;
+        padding: 0.75rem 0;
         overflow-y: auto;
+    }
+
+    .admin-nav-tools {
+        padding: 0.2rem 1rem 0.8rem;
+        border-bottom: 1px solid var(--card-border);
+        margin-bottom: 0.3rem;
+    }
+
+    .admin-nav-search {
+        position: relative;
+    }
+
+    .admin-nav-search i {
+        position: absolute;
+        left: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.78rem;
+        color: var(--fg-secondary);
+        opacity: 0.9;
+    }
+
+    .admin-nav-search input {
+        width: 100%;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        background: var(--card-bg);
+        color: var(--fg);
+        font-size: 0.8rem;
+        padding: 0.48rem 0.6rem 0.48rem 2rem;
+    }
+
+    .admin-nav-search input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-light);
     }
 
     .admin-nav-section {
@@ -88,26 +124,28 @@
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        padding: 0.6rem 1.5rem;
+        padding: 0.58rem 0.9rem;
+        margin: 0 0.7rem;
+        border-radius: 8px;
         color: var(--fg);
         text-decoration: none;
         font-size: 0.88rem;
         font-weight: 500;
         transition: all 0.15s ease;
-        border-left: 3px solid transparent;
+        border: 1px solid transparent;
         position: relative;
     }
 
     .admin-nav-link:hover {
         background: var(--accent-light);
         color: var(--accent);
-        border-left-color: var(--accent);
+        border-color: var(--accent);
     }
 
     .admin-nav-link.active {
         background: var(--accent-light);
         color: var(--accent);
-        border-left-color: var(--accent);
+        border-color: var(--accent);
         font-weight: 600;
     }
 
@@ -121,6 +159,12 @@
     .admin-nav-link.active i,
     .admin-nav-link:hover i {
         opacity: 1;
+    }
+
+    .admin-nav-link.is-maintenance-on {
+        background: rgba(245, 158, 11, 0.1);
+        border-color: rgba(245, 158, 11, 0.35);
+        color: #d97706;
     }
 
     .admin-nav-badge {
@@ -161,6 +205,8 @@
         overflow-y: auto;
         background: var(--bg);
         min-height: calc(100vh - var(--nav-height));
+        max-width: 1600px;
+        width: 100%;
     }
 
     /* --- Reusable Admin Components --- */
@@ -199,7 +245,7 @@
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        padding: 0.55rem 1.1rem;
+        padding: 0.58rem 1.05rem;
         border-radius: 8px;
         font-size: 0.85rem;
         font-weight: 600;
@@ -456,6 +502,7 @@
     .a-search-input:focus {
         outline: none;
         border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-light);
     }
 
     /* Forms */
@@ -486,6 +533,29 @@
     .a-form-input:focus {
         outline: none;
         border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
+    .admin-nav-link:focus-visible,
+    .a-btn:focus-visible,
+    .a-search-input:focus-visible,
+    .a-form-input:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
+    .admin-menu-toggle {
+        display: none;
+        align-items: center;
+        gap: 0.45rem;
+        margin-bottom: 0.9rem;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        color: var(--fg);
+        border-radius: 8px;
+        padding: 0.48rem 0.75rem;
+        font-size: 0.82rem;
+        font-weight: 600;
     }
 
     /* Alerts */
@@ -615,35 +685,41 @@
     @media (max-width: 900px) {
         .admin-layout {
             grid-template-columns: 1fr;
+            position: relative;
         }
 
         .admin-sidebar {
-            position: static;
-            height: auto;
-            border-right: none;
-            border-bottom: 1px solid var(--card-border);
+            display: none;
+        }
+
+        .admin-layout.nav-open .admin-sidebar {
+            display: flex;
+            position: fixed;
+            top: var(--nav-height);
+            left: 0;
+            height: calc(100vh - var(--nav-height));
+            width: min(320px, 88vw);
+            z-index: 120;
+            border-right: 1px solid var(--card-border);
+            border-bottom: none;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+        }
+
+        .admin-layout.nav-open::after {
+            content: '';
+            position: fixed;
+            inset: var(--nav-height) 0 0 0;
+            background: rgba(0, 0, 0, 0.35);
+            z-index: 110;
         }
 
         .admin-nav {
-            display: flex;
-            flex-wrap: wrap;
-            padding: 0.5rem;
-        }
-
-        .admin-nav-section {
-            width: 100%;
-        }
-
-        .admin-nav-items {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.25rem;
+            display: block;
+            padding: 0.6rem 0;
         }
 
         .admin-nav-link {
-            border-left: none;
-            border-radius: 6px;
-            padding: 0.5rem 0.75rem;
+            margin: 0 0.55rem;
             font-size: 0.8rem;
         }
 
@@ -655,9 +731,8 @@
             padding: 1.25rem;
         }
 
-        .admin-sidebar-header,
-        .admin-sidebar-footer {
-            display: none;
+        .admin-menu-toggle {
+            display: inline-flex;
         }
     }
 </style>
@@ -675,6 +750,12 @@
         </div>
 
         <nav class="admin-nav">
+            <div class="admin-nav-tools">
+                <label class="admin-nav-search">
+                    <i class="fas fa-search"></i>
+                    <input type="search" id="admin-nav-filter" placeholder="Filter menu..." aria-label="Filter menu">
+                </label>
+            </div>
             <div class="admin-nav-section">
                 <div class="admin-nav-label">Overview</div>
                 <ul class="admin-nav-items">
@@ -791,9 +872,9 @@
                 <div class="admin-nav-label">Quick Actions</div>
                 <ul class="admin-nav-items">
                     <li>
-                        <a href="#" onclick="toggleMaintenance(); return false;" class="admin-nav-link"
+                        <a href="#" onclick="toggleMaintenance(); return false;"
                             id="maintenance-toggle-link"
-                            style="{% if maintenance_mode %}background: rgba(245, 158, 11, 0.1); border-left-color: #f59e0b; color: #d97706;{% endif %}">
+                            class="admin-nav-link {% if maintenance_mode %}is-maintenance-on{% endif %}">
                             <i class="fas fa-{% if maintenance_mode %}toggle-on{% else %}toggle-off{% endif %}"
                                 id="maintenance-toggle-icon"></i>
                             <span id="maintenance-toggle-text">{% if maintenance_mode %}Maintenance: ON{% else
@@ -816,6 +897,9 @@
     </aside>
 
     <main class="admin-content">
+        <button type="button" class="admin-menu-toggle" onclick="toggleAdminNav()" aria-label="Toggle menu">
+            <i class="fas fa-bars"></i> Menu
+        </button>
         {% block admin_content %}{% endblock %}
     </main>
 </div>
@@ -823,6 +907,46 @@
 
 {% block extra_js %}
 <script>
+    function toggleAdminNav(force) {
+        const layout = document.querySelector('.admin-layout');
+        if (!layout) return;
+        if (force === false) {
+            layout.classList.remove('nav-open');
+            return;
+        }
+        layout.classList.toggle('nav-open');
+    }
+
+    function setupAdminNavFilter() {
+        const input = document.getElementById('admin-nav-filter');
+        if (!input) return;
+        const links = Array.from(document.querySelectorAll('.admin-nav-link'));
+        input.addEventListener('input', (e) => {
+            const term = e.target.value.trim().toLowerCase();
+            links.forEach((link) => {
+                const text = link.textContent.toLowerCase();
+                const visible = !term || text.includes(term);
+                link.closest('li').style.display = visible ? '' : 'none';
+            });
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        const layout = document.querySelector('.admin-layout');
+        if (!layout || !layout.classList.contains('nav-open')) return;
+        const clickedOverlay = e.target === layout;
+        const insideSidebar = e.target.closest('.admin-sidebar');
+        const isMenuBtn = e.target.closest('.admin-menu-toggle');
+        if (!insideSidebar && !isMenuBtn && !clickedOverlay) {
+            toggleAdminNav(false);
+        }
+        if (e.target.closest('.admin-nav-link')) {
+            toggleAdminNav(false);
+        }
+    });
+
+    setupAdminNavFilter();
+
     async function toggleMaintenance() {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
         try {
@@ -839,15 +963,11 @@
                 const icon = document.getElementById('maintenance-toggle-icon');
                 const text = document.getElementById('maintenance-toggle-text');
                 if (data.maintenance_mode) {
-                    link.style.background = 'rgba(245, 158, 11, 0.1)';
-                    link.style.borderLeftColor = '#f59e0b';
-                    link.style.color = '#d97706';
+                    link.classList.add('is-maintenance-on');
                     icon.className = 'fas fa-toggle-on';
                     text.textContent = 'Maintenance: ON';
                 } else {
-                    link.style.background = '';
-                    link.style.borderLeftColor = 'transparent';
-                    link.style.color = '';
+                    link.classList.remove('is-maintenance-on');
                     icon.className = 'fas fa-toggle-off';
                     text.textContent = 'Maintenance: OFF';
                 }
