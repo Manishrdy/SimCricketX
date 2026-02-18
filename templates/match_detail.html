@@ -520,62 +520,7 @@
             </button>
         </div>
 
-        <!-- Simulation Phase -->
-        <div id="so-simulation" class="so-section" style="display:none;">
-            <!-- Score strip -->
-            <div class="so-score-strip">
-                <div class="so-score-left">
-                    <span id="so-team-name" class="so-team-label"></span>
-                    <span id="so-score-display" class="so-score-big">0/0</span>
-                    <span id="so-balls-display" class="so-balls-label">(0.0)</span>
-                </div>
-                <div class="so-score-right">
-                    <span id="so-target-info" class="so-target-label"></span>
-                </div>
-            </div>
-
-            <!-- Players -->
-            <div class="so-players-strip">
-                <div class="so-player-row" id="so-striker-row">
-                    <span class="so-p-label">BAT</span>
-                    <span class="so-p-name" id="so-striker-name"></span>
-                    <span class="so-p-stat" id="so-striker-stat"></span>
-                </div>
-                <div class="so-player-row" id="so-nonstriker-row">
-                    <span class="so-p-label"></span>
-                    <span class="so-p-name" id="so-nonstriker-name"></span>
-                    <span class="so-p-stat" id="so-nonstriker-stat"></span>
-                </div>
-                <div class="so-player-row so-bowler-row">
-                    <span class="so-p-label">BOWL</span>
-                    <span class="so-p-name" id="so-bowler-name"></span>
-                    <span class="so-p-stat" id="so-bowler-stat"></span>
-                </div>
-            </div>
-
-            <!-- Ball indicators -->
-            <div class="so-this-over" id="so-this-over"></div>
-
-            <!-- Commentary -->
-            <div class="so-commentary-box" id="so-commentary"></div>
-        </div>
-
-        <!-- Mini Scorecard (innings end / match end) -->
-        <div id="so-scorecard" class="so-section" style="display:none;">
-            <div id="so-sc-title" class="so-sc-title"></div>
-            <table class="so-sc-table">
-                <thead>
-                    <tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>
-                </thead>
-                <tbody id="so-sc-batting"></tbody>
-            </table>
-            <div id="so-sc-bowling" class="so-sc-bowling-line"></div>
-            <div id="so-sc-total" class="so-sc-total-line"></div>
-            <div id="so-result-text" class="so-result-text" style="display:none;"></div>
-            <button id="so-continue-btn" class="so-action-btn" onclick="soContinue()">
-                Continue <i class="fas fa-arrow-right"></i>
-            </button>
-        </div>
+        <!-- Simulation & Scorecard removed — commentary now flows in main simulation_log -->
     </div>
 </div>
 

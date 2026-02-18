@@ -636,6 +636,17 @@ def create_app():
                 return {'user_stats': {'teams_count': 0, 'matches_count': 0, 'tournaments_count': 0}}
         return {}
 
+    def _get_app_version():
+        try:
+            with open(os.path.join(app.root_path, "version.txt"), encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            return "0.0.0"
+
+    @app.context_processor
+    def inject_app_version():
+        return {"app_version": _get_app_version()}
+
     @app.before_request
     def check_maintenance_mode():
         """Block non-admin users when maintenance mode is active."""
@@ -3102,13 +3113,6 @@ def create_app():
             return render_template("statistics.html", has_stats=False, user=current_user)
 
     # ????? Routes ?????
-
-    def _get_app_version():
-        try:
-            with open(os.path.join(app.root_path, "version.txt")) as f:
-                return f.read().strip()
-        except Exception:
-            return "0.0.0"
 
     def _get_changelog_for_version(version):
         """Return list of bullet strings for the given version block in changelog.txt."""

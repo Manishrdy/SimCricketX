@@ -749,14 +749,15 @@ function appendLog(message, type = 'normal') {
     // Determine token class based on message content regex or type
     let tokenClass = 'token-string'; // Default orange
     if (message.includes('OUT') || message.includes('Wicket')) tokenClass = 'token-error';
-    else if (message.includes('FOUR') || message.includes('SIX')) tokenClass = 'token-keyword';
-    else if (message.includes('End of Over') || message.includes('Innings')) tokenClass = 'token-comment';
+    else if (message.includes('FOUR') || message.includes('SIX') || message.includes('TARGET REACHED')) tokenClass = 'token-keyword';
+    else if (message.includes('End of Over') || message.includes('Innings') || message.includes('══') || message.includes('──') || message.includes('Target:')) tokenClass = 'token-comment';
 
     div.innerHTML = `
         <span class="${tokenClass}">${message}</span>
     `;
 
     logContainer.appendChild(div);
+    logContainer.scrollTop = logContainer.scrollHeight;
 }
 
 function spinTossAndStartMatch() {
@@ -1357,22 +1358,9 @@ function soOpenModal(teamData, round) {
     document.getElementById('so-round-badge').textContent = `Round ${round}`;
     document.getElementById('so-innings-badge').textContent = 'Innings 1';
 
-    // Show team pick, hide others
+    // Show team pick, hide selection
     document.getElementById('so-team-pick').style.display = '';
     document.getElementById('so-selection').style.display = 'none';
-    document.getElementById('so-simulation').style.display = 'none';
-    document.getElementById('so-scorecard').style.display = 'none';
-
-    // Add round divider to commentary if continuing from a previous round
-    const soComm = document.getElementById('so-commentary');
-    if (round > 1 && soComm.children.length > 0) {
-        const divider = document.createElement('div');
-        divider.className = 'code-line';
-        divider.innerHTML = `<span class="token-comment" style="border-top:2px solid var(--accent-color);display:block;margin:10px 0;padding-top:10px;font-weight:bold;">══ Super Over Round ${round} ══</span>`;
-        soComm.appendChild(divider);
-    } else {
-        soComm.innerHTML = '';
-    }
 
     document.getElementById('so-pick-home').textContent = teamData.home_team;
     document.getElementById('so-pick-away').textContent = teamData.away_team;
@@ -1498,123 +1486,98 @@ function soStartInnings() {
 
         if (data.target) soState.target = data.target;
 
-        // Update header
-        document.getElementById('so-innings-badge').textContent = `Innings ${soState.innings}`;
+        // Close the popup — commentary goes to main simulation_log
+        document.getElementById('super-over-overlay').style.display = 'none';
 
-        // Switch to simulation view
-        document.getElementById('so-selection').style.display = 'none';
-        document.getElementById('so-scorecard').style.display = 'none';
-        document.getElementById('so-simulation').style.display = '';
-
-        // Init simulation UI
+        // Add super over header to main commentary log
         const teamName = data.batting_team_name || (soState.battingTeam === 'home' ? soState.teamData.home_team : soState.teamData.away_team);
-        document.getElementById('so-team-name').textContent = teamName;
-        document.getElementById('so-score-display').textContent = '0/0';
-        document.getElementById('so-balls-display').textContent = '(0.0)';
-        document.getElementById('so-target-info').textContent =
-            soState.target ? `Need ${soState.target} to win` : '';
-
-        document.getElementById('so-striker-name').textContent = data.batsmen[0] + ' *';
-        document.getElementById('so-striker-stat').textContent = '0 (0)';
-        document.getElementById('so-nonstriker-name').textContent = data.batsmen[1];
-        document.getElementById('so-nonstriker-stat').textContent = '0 (0)';
-        document.getElementById('so-bowler-name').textContent = data.bowler;
-        document.getElementById('so-bowler-stat').textContent = '0/0 (0.0)';
-
-        document.getElementById('so-this-over').innerHTML = '';
-        soState.ballResults = [];
-
-        // Preserve innings 1 commentary with a divider instead of clearing
-        const soComm = document.getElementById('so-commentary');
-        if (soState.innings === 2 && soComm.children.length > 0) {
-            const divider = document.createElement('div');
-            divider.className = 'code-line';
-            divider.innerHTML = '<span class="token-comment" style="border-top:1px solid var(--border-color);display:block;margin:8px 0;padding-top:8px;">── Innings 2 ──</span>';
-            soComm.appendChild(divider);
-        } else {
-            soComm.innerHTML = '';
+        const roundInfo = soState.round > 1 ? ` (Round ${soState.round})` : '';
+        appendLog(`══ SUPER OVER${roundInfo} — Innings ${soState.innings} ══`);
+        appendLog(`${teamName} batting | ${data.batsmen[0]}, ${data.batsmen[1]} vs ${data.bowler}`);
+        if (soState.target) {
+            appendLog(`Target: ${soState.target} runs`);
         }
 
-        // Start simulation
+        soState.ballResults = [];
+
+        // Start simulation in main commentary log
         setTimeout(soSimulateBall, 600);
     });
 }
 window.soStartInnings = soStartInnings;
 
-// --- Simulate Ball ---
+// --- Simulate Ball (commentary in main simulation_log) ---
 function soSimulateBall() {
     fetch(`${window.location.pathname}/next-super-over-ball`, { method: 'POST' })
     .then(r => r.json())
     .then(data => {
         if (data.error) { console.error(data.error); return; }
 
-        // Append commentary
-        soAppendLog(data.commentary);
-
-        // Update score
-        document.getElementById('so-score-display').textContent = `${data.score}/${data.wickets}`;
-        document.getElementById('so-balls-display').textContent = `(0.${data.ball})`;
-
-        // Update target info
-        if (soState.target) {
+        // Build commentary line with score info for main log
+        let logLine = data.commentary + `  [${data.score}/${data.wickets}]`;
+        if (soState.innings === 2 && soState.target) {
             const need = soState.target - data.score;
             const ballsLeft = 6 - data.ball;
             if (need > 0 && ballsLeft > 0) {
-                document.getElementById('so-target-info').textContent = `Need ${need} off ${ballsLeft}b`;
+                logLine += ` Need ${need} off ${ballsLeft}b`;
             } else if (need <= 0) {
-                document.getElementById('so-target-info').textContent = 'Target reached!';
+                logLine += ` TARGET REACHED!`;
             }
         }
+        appendLog(logLine);
 
-        // Update players
-        document.getElementById('so-striker-name').textContent = (data.striker || '') + ' *';
-        document.getElementById('so-striker-stat').textContent = `${data.striker_runs ?? 0} (${data.striker_balls ?? 0})`;
-        document.getElementById('so-nonstriker-name').textContent = data.non_striker || '';
-        document.getElementById('so-nonstriker-stat').textContent = `${data.nonstriker_runs ?? 0} (${data.nonstriker_balls ?? 0})`;
-        document.getElementById('so-bowler-stat').textContent =
-            `${data.bowler_wickets ?? 0}/${data.bowler_runs ?? 0} (${data.bowler_overs || '0.0'})`;
-
-        // Add ball indicator
+        // Track ball results
         if (data.ball_data) {
             soState.ballResults.push(data.ball_data);
-            soRenderBalls();
         }
 
         // --- Handle end states ---
 
-        // Innings 1 complete
+        // Innings 1 complete — log scorecard, reopen popup for innings 2 selection
         if (data.super_over_innings_end) {
             soState.innings1Scorecard = data.innings_scorecard;
-            setTimeout(() => {
-                soShowMiniScorecard(data.innings_scorecard,
-                    `Innings 1 — ${data.first_innings_score} runs`,
-                    false, data);
-            }, 800);
+            appendLog(`── End of Innings 1: ${data.first_innings_score} runs ──`);
+            soLogMiniScorecard(data.innings_scorecard);
+            appendLog(`── Target: ${data.target} runs ──`);
+            // Reopen popup for innings 2 player selection
+            setTimeout(() => soSetupInnings2(data), 1500);
             return;
         }
 
-        // Innings complete (2 wickets or 6 balls) — not explicitly innings_end
+        // Innings complete (2 wickets or 6 balls) — next call triggers _end_super_over_innings
         if (data.innings_complete && !data.super_over_complete && !data.super_over_tied_again) {
-            // This is the last ball of an innings; next call will get _end_super_over_innings
             setTimeout(soSimulateBall, 600);
             return;
         }
 
-        // Match decided
+        // Match decided — log result, show main match scorecard
         if (data.super_over_complete) {
-            const result = data.result;
-            appendLog(result); // Also log to main commentary
+            appendLog(`══ ${data.result} ══`);
+            soLogMiniScorecard(data.innings2_scorecard);
+            matchOver = true;
             setTimeout(() => {
-                soShowFinalResult(data);
-            }, 800);
+                if (data.scorecard_data) {
+                    isFinalScoreboard = true;
+                    showScorecard(data.scorecard_data, { innings_number: 2, result: data.result });
+                    const closeBtn = document.querySelector('.close-scorecard');
+                    if (closeBtn) closeBtn.onclick = () => closeScorecard();
+                }
+            }, 1200);
             return;
         }
 
-        // Tied again
+        // Tied again — log, reopen popup for next super over round
         if (data.super_over_tied_again) {
+            appendLog(`TIED! ${data.home_team} ${data.home_score} - ${data.away_team} ${data.away_score}. Another Super Over!`);
+            soLogMiniScorecard(data.innings2_scorecard);
             setTimeout(() => {
-                soShowTiedAgain(data);
-            }, 800);
+                soOpenModal({
+                    home_team: data.home_team,
+                    away_team: data.away_team,
+                    home_players: data.home_players,
+                    away_players: data.away_players,
+                }, soState.round + 1);
+            }, 1500);
             return;
         }
 
@@ -1623,83 +1586,16 @@ function soSimulateBall() {
     });
 }
 
-function soAppendLog(message) {
-    const container = document.getElementById('so-commentary');
-    const div = document.createElement('div');
-    div.className = 'code-line';
-
-    let tokenClass = 'token-string';
-    if (/OUT|WICKET|Wicket/i.test(message)) tokenClass = 'token-error';
-    else if (/FOUR|SIX|BOUNDARY/i.test(message)) tokenClass = 'token-keyword';
-    else if (/End of|Innings|Target/i.test(message)) tokenClass = 'token-comment';
-
-    div.innerHTML = `<span class="${tokenClass}">${escapeHtml(message)}</span>`;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-}
-
-function soRenderBalls() {
-    const container = document.getElementById('so-this-over');
-    container.innerHTML = '';
-    soState.ballResults.forEach(bd => {
-        const span = document.createElement('span');
-        span.className = 'sb-ball-dot';
-        let label, cls;
-        if (bd.batter_out) { label = 'W'; cls = 'ball-w'; }
-        else if (bd.extra_type === 'Wide') { label = 'Wd'; cls = 'ball-wd'; }
-        else if (bd.extra_type === 'No Ball') { label = 'Nb'; cls = 'ball-nb'; }
-        else if (bd.runs === 4) { label = '4'; cls = 'ball-4'; }
-        else if (bd.runs === 6) { label = '6'; cls = 'ball-6'; }
-        else { label = String(bd.runs); cls = `ball-${bd.runs}`; }
-        span.classList.add(cls);
-        span.textContent = label;
-        container.appendChild(span);
-    });
-}
-
-// --- Mini Scorecard ---
-function soShowMiniScorecard(sc, title, isFinal, responseData) {
-    document.getElementById('so-simulation').style.display = 'none';
-    document.getElementById('so-scorecard').style.display = '';
-
-    document.getElementById('so-sc-title').textContent = title;
-
-    // Batting table
-    const tbody = document.getElementById('so-sc-batting');
-    tbody.innerHTML = '';
+// Log mini scorecard as text to the main commentary log
+function soLogMiniScorecard(sc) {
+    if (!sc) return;
     (sc.batting || []).forEach(b => {
-        const tr = document.createElement('tr');
-        if (b.out) tr.className = 'so-out';
-        tr.innerHTML = `
-            <td>${escapeHtml(b.name)} <small style="color:var(--fg-secondary)">${escapeHtml(b.status)}</small></td>
-            <td>${b.runs}</td><td>${b.balls}</td>
-            <td>${b.fours}</td><td>${b.sixes}</td><td>${b.sr}</td>
-        `;
-        tbody.appendChild(tr);
+        const status = b.out ? b.status : 'not out';
+        appendLog(`  ${b.name}: ${b.runs}(${b.balls}) ${b.fours}x4 ${b.sixes}x6 [${status}]`);
     });
-
-    // Bowling line
     const bowl = sc.bowling || {};
-    document.getElementById('so-sc-bowling').textContent =
-        `${bowl.name || '?'}: ${bowl.overs || '0.0'} ov — ${bowl.runs || 0}/${bowl.wickets || 0}`;
-
-    // Total
-    document.getElementById('so-sc-total').textContent =
-        `Total: ${sc.total || 0}/${sc.wickets || 0} (0.${sc.bowling?.balls || 0} ov)`;
-
-    // Result text
-    const resultEl = document.getElementById('so-result-text');
-    resultEl.style.display = 'none';
-
-    // Continue button
-    const btn = document.getElementById('so-continue-btn');
-    if (isFinal) {
-        btn.textContent = 'Close';
-        btn.onclick = () => soCloseModal();
-    } else {
-        btn.textContent = 'Continue to Innings 2 →';
-        btn.onclick = () => soSetupInnings2(responseData);
-    }
+    appendLog(`  ${bowl.name}: ${bowl.overs || '0.0'} ov — ${bowl.runs}/${bowl.wickets}`);
+    appendLog(`  Total: ${sc.total}/${sc.wickets}`);
 }
 
 function soSetupInnings2(data) {
@@ -1709,8 +1605,12 @@ function soSetupInnings2(data) {
     soState.target = data.target;
     soState.ballResults = [];
 
+    // Reopen popup for innings 2 player selection only
+    const overlay = document.getElementById('super-over-overlay');
+    overlay.style.display = 'flex';
+
     document.getElementById('so-innings-badge').textContent = 'Innings 2';
-    document.getElementById('so-scorecard').style.display = 'none';
+    document.getElementById('so-team-pick').style.display = 'none';
     document.getElementById('so-selection').style.display = '';
 
     const battingName = data.batting_team_name || '';
@@ -1721,87 +1621,7 @@ function soSetupInnings2(data) {
     soUpdateSelectionCounts();
 }
 
-// --- Final Result ---
-function soShowFinalResult(data) {
-    document.getElementById('so-simulation').style.display = 'none';
-    document.getElementById('so-scorecard').style.display = '';
-
-    // Show innings 2 scorecard
-    const sc2 = data.innings2_scorecard;
-    if (sc2) {
-        soShowMiniScorecard(sc2, 'Innings 2', true, data);
-    }
-
-    // Show result
-    const resultEl = document.getElementById('so-result-text');
-    resultEl.textContent = data.result || 'Match Complete';
-    resultEl.style.display = '';
-
-    const btn = document.getElementById('so-continue-btn');
-    btn.textContent = 'Close';
-    btn.onclick = () => {
-        soCloseModal();
-        // Show main match scorecard if available
-        if (data.scorecard_data) {
-            isFinalScoreboard = true;
-            showScorecard(data.scorecard_data, { innings_number: 2, result: data.result });
-            // Reset close button to default — prevent stale onclick from re-triggering super over
-            const closeBtn = document.querySelector('.close-scorecard');
-            if (closeBtn) closeBtn.onclick = () => closeScorecard();
-        }
-    };
-}
-
-// --- Tied Again ---
-function soShowTiedAgain(data) {
-    document.getElementById('so-simulation').style.display = 'none';
-    document.getElementById('so-scorecard').style.display = '';
-
-    const sc2 = data.innings2_scorecard;
-    if (sc2) {
-        document.getElementById('so-sc-title').textContent = 'SUPER OVER TIED!';
-        const tbody = document.getElementById('so-sc-batting');
-        tbody.innerHTML = '';
-        (sc2.batting || []).forEach(b => {
-            const tr = document.createElement('tr');
-            if (b.out) tr.className = 'so-out';
-            tr.innerHTML = `
-                <td>${escapeHtml(b.name)} <small style="color:var(--fg-secondary)">${escapeHtml(b.status)}</small></td>
-                <td>${b.runs}</td><td>${b.balls}</td>
-                <td>${b.fours}</td><td>${b.sixes}</td><td>${b.sr}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-        const bowl = sc2.bowling || {};
-        document.getElementById('so-sc-bowling').textContent =
-            `${bowl.name || '?'}: ${bowl.overs || '0.0'} ov — ${bowl.runs || 0}/${bowl.wickets || 0}`;
-        document.getElementById('so-sc-total').textContent =
-            `Total: ${sc2.total || 0}/${sc2.wickets || 0}`;
-    }
-
-    const resultEl = document.getElementById('so-result-text');
-    resultEl.textContent = `TIED! ${data.home_team} ${data.home_score} - ${data.away_team} ${data.away_score}. Another Super Over!`;
-    resultEl.style.display = '';
-
-    const btn = document.getElementById('so-continue-btn');
-    btn.textContent = 'Next Super Over →';
-    btn.onclick = () => {
-        soOpenModal({
-            home_team: data.home_team,
-            away_team: data.away_team,
-            home_players: data.home_players,
-            away_players: data.away_players,
-        }, soState.round + 1);
-    };
-}
-
-function soCloseModal() {
-    document.getElementById('super-over-overlay').style.display = 'none';
-    matchOver = true;
-}
-
 // Expose for inline onclick handlers
 window.soPickBattingTeam = soPickBattingTeam;
 window.soStartInnings = soStartInnings;
-window.soContinue = function() {}; // placeholder, overridden dynamically
 
