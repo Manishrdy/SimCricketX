@@ -1,6 +1,39 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<style>
+    .admin-quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+    }
+
+    .admin-recent-logins {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .admin-recent-login-row {
+        padding: 0.52rem 0;
+        border-bottom: 1px solid var(--card-border);
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.7rem;
+    }
+
+    .admin-recent-login-row:last-child {
+        border-bottom: none;
+    }
+
+    .admin-recent-login-time {
+        color: var(--fg-secondary);
+        font-size: 0.78rem;
+        white-space: nowrap;
+    }
+</style>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Dashboard</h1>
@@ -46,7 +79,7 @@
     <!-- Quick Actions -->
     <div class="a-section">
         <h3 class="a-section-title"><i class="fas fa-bolt"></i> Quick Actions</h3>
-        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+        <div class="admin-quick-actions">
             <a href="/admin/users" class="a-btn a-btn-primary"><i class="fas fa-users"></i> Manage Users</a>
             <a href="/admin/database/stats" class="a-btn a-btn-secondary"><i class="fas fa-database"></i> Database</a>
             <a href="/admin/backups" class="a-btn a-btn-secondary"><i class="fas fa-archive"></i> Backups</a>
@@ -61,12 +94,11 @@
         <h3 class="a-section-title"><i class="fas fa-clock"></i> Recent Logins</h3>
         <div class="a-card-flat">
             {% if recent_activity %}
-            <div style="max-height: 280px; overflow-y: auto;">
+            <div class="admin-recent-logins">
                 {% for activity in recent_activity %}
-                <div
-                    style="padding: 0.5rem 0; border-bottom: 1px solid var(--card-border); font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
+                <div class="admin-recent-login-row">
                     <span><strong>{{ activity.email }}</strong></span>
-                    <span style="color: var(--fg-secondary); font-size: 0.78rem;">{{ activity.time }}</span>
+                    <span class="admin-recent-login-time">{{ activity.time }}</span>
                 </div>
                 {% endfor %}
             </div>
