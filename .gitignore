@@ -5,6 +5,7 @@
 # =============================================================================
 # Auth directory - only ignore private/sensitive key files
 /data/
+!/data/commentary_pack.json
 /logs/
 
 
