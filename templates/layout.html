@@ -154,6 +154,69 @@
             background: var(--accent-light);
         }
 
+        .github-star-btn {
+            position: relative;
+            overflow: visible;
+        }
+
+        .github-star-btn .fa-star {
+            position: absolute;
+            right: 6px;
+            bottom: 6px;
+            font-size: 0.55rem;
+            color: #f59e0b;
+            background: var(--card-bg);
+            border-radius: 50%;
+            padding: 1px;
+            line-height: 1;
+        }
+
+        .github-star-coachmark {
+            position: fixed;
+            z-index: 3000;
+            max-width: 280px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            box-shadow: 0 10px 30px var(--shadow);
+            border-radius: 12px;
+            padding: 0.75rem 0.9rem;
+            color: var(--fg);
+            font-size: 0.85rem;
+            line-height: 1.35;
+            opacity: 0;
+            transform: translateY(-6px);
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .github-star-coachmark.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .github-star-coachmark::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            right: 24px;
+            width: 12px;
+            height: 12px;
+            background: var(--card-bg);
+            border-left: 1px solid var(--card-border);
+            border-top: 1px solid var(--card-border);
+            transform: rotate(45deg);
+        }
+
+        .github-star-coachmark a {
+            color: var(--accent);
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .github-star-coachmark a:hover {
+            text-decoration: underline;
+        }
+
         /* ===== User Profile Dropdown ===== */
         .profile-dropdown-wrapper {
             position: relative;
@@ -1094,6 +1157,12 @@
             {% block navbar_items %}
             {% if current_user.is_authenticated %}
             <a href="{{ url_for('home') }}" class="theme-toggle" title="Home"><i class="fas fa-home"></i></a>
+            <a href="https://github.com/Manishrdy/SimCricketX" id="github-star-nav-btn" class="theme-toggle github-star-btn"
+                title="Star on GitHub" aria-label="Star SimCricketX on GitHub" target="_blank"
+                rel="noopener noreferrer">
+                <i class="fab fa-github" aria-hidden="true"></i>
+                <i class="fas fa-star" aria-hidden="true"></i>
+            </a>
             {% if current_user.is_admin %}
             <a href="{{ url_for('admin_dashboard') }}" class="theme-toggle" title="Admin Panel"
                 style="background: var(--accent-light); color: var(--accent); border-color: var(--accent);">
@@ -1221,6 +1290,13 @@
         {% block content %}{% endblock %}
     </main>
 
+    {% if current_user.is_authenticated and session.pop('show_github_star_prompt', False) %}
+    <div id="github-star-coachmark" class="github-star-coachmark" role="status" aria-live="polite">
+        If you like this project, <a href="https://github.com/Manishrdy/SimCricketX" target="_blank"
+            rel="noopener noreferrer">star this repo</a>.
+    </div>
+    {% endif %}
+
     <!-- Site Footer -->
     <footer
         style="text-align: center; padding: 1.25rem 1rem; font-size: 0.75rem; color: var(--fg-secondary); border-top: 1px solid var(--card-border); opacity: 0.7;">
@@ -1270,6 +1346,34 @@
 
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+
+    <script>
+        // Post-login GitHub star coachmark
+        (function () {
+            const coach = document.getElementById('github-star-coachmark');
+            const target = document.getElementById('github-star-nav-btn');
+            if (!coach || !target) return;
+
+            const placeCoachmark = () => {
+                const rect = target.getBoundingClientRect();
+                const top = Math.min(window.innerHeight - 100, rect.bottom + 10);
+                const left = Math.max(12, Math.min(window.innerWidth - coach.offsetWidth - 12, rect.right - coach.offsetWidth + 16));
+                coach.style.top = `${top}px`;
+                coach.style.left = `${left}px`;
+            };
+
+            requestAnimationFrame(() => {
+                placeCoachmark();
+                coach.classList.add('show');
+                setTimeout(() => {
+                    coach.classList.remove('show');
+                    setTimeout(() => coach.remove(), 220);
+                }, 3000);
+            });
+
+            window.addEventListener('resize', placeCoachmark);
+        })();
+    </script>
 
     <script>
         // Admin Database Backup
