@@ -3253,6 +3253,7 @@ def create_app():
 
                     login_user(user, remember=True, duration=app.config.get("REMEMBER_COOKIE_DURATION"))
                     session.permanent = True
+                    session["show_github_star_prompt"] = True
 
                     # Track active session
                     try:
