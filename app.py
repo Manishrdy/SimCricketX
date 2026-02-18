@@ -3103,6 +3103,35 @@ def create_app():
 
     # ????? Routes ?????
 
+    def _get_app_version():
+        try:
+            with open(os.path.join(app.root_path, "version.txt")) as f:
+                return f.read().strip()
+        except Exception:
+            return "0.0.0"
+
+    def _get_changelog_for_version(version):
+        """Return list of bullet strings for the given version block in changelog.txt."""
+        try:
+            with open(os.path.join(app.root_path, "changelog.txt")) as f:
+                lines = f.readlines()
+        except Exception:
+            return []
+
+        entries = []
+        in_block = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith(f"[{version}]"):
+                in_block = True
+                continue
+            if in_block:
+                if stripped.startswith("["):
+                    break  # next version block started
+                if stripped.startswith("-"):
+                    entries.append(stripped[1:].strip())
+        return entries
+
     @app.route("/")
     @login_required
     def home():
@@ -3114,7 +3143,18 @@ def create_app():
         active_threshold = datetime.now(timezone.utc) - timedelta(minutes=15)
         active_users_count = db.session.query(func.count(func.distinct(ActiveSession.user_id))).filter(ActiveSession.last_active >= active_threshold).scalar() or 0
 
-        return render_template("home.html", user=current_user, total_visits=get_visit_counter(), matches_simulated=get_matches_simulated(), active_users=active_users_count)
+        app_version = _get_app_version()
+        changelog_entries = _get_changelog_for_version(app_version)
+
+        return render_template(
+            "home.html",
+            user=current_user,
+            total_visits=get_visit_counter(),
+            matches_simulated=get_matches_simulated(),
+            active_users=active_users_count,
+            app_version=app_version,
+            changelog_entries=changelog_entries,
+        )
 
     # ───── Ground Conditions ─────
 

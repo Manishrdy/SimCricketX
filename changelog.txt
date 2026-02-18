@@ -1,0 +1,6 @@
+[2.0.1] 2026-02-17
+- Fixed version issue with tuple syntax
+- Added GitHub star button in the navigation bar
+- Removed match animation for cleaner experience
+- Improved match scenario logic
+- Scoring engine fixes and bot defense improvements
