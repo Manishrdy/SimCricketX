@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """SimCricketX Flask Application"""
 
+from __future__ import annotations
+
 # CRITICAL: Fix Windows console encoding BEFORE any other imports
 import sys
 import io
