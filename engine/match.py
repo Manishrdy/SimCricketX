@@ -4312,6 +4312,12 @@ class Match:
         if self.super_over_ball >= 6 or self.super_over_wickets[team_key] >= 2:
             return self._end_super_over_innings()
 
+        # Innings 2: end immediately if target was already reached on a previous ball
+        if self.super_over_innings == 2:
+            other_key = "away" if team_key == "home" else "home"
+            if self.super_over_scores[team_key] >= self.super_over_scores[other_key] + 1:
+                return self._end_super_over_innings()
+
         # Calculate outcome
         outcome = calculate_super_over_outcome(
             batter=self.super_over_current_striker,
