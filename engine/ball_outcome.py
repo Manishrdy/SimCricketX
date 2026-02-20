@@ -7,6 +7,7 @@ from engine.ground_config import (
     get_phase_boosts as _gc_phase_boosts,
     get_blending_weights as _gc_blending_weights,
 )
+from engine.game_state_engine import apply_game_state_to_probs
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +230,72 @@ def _validate_scoring_matrices():
 # Validate matrices on module import (runs once when ball_outcome.py is imported)
 _validate_scoring_matrices()
 
+
+# -----------------------------------------------------------------------------
+# Feature 3: Pitch deterioration function
+# -----------------------------------------------------------------------------
+def _apply_pitch_wear(raw_weights: dict, pitch_type: str, pitch_wear: float) -> dict:
+    """
+    Apply pitch-deterioration effects to raw outcome probability weights.
+
+    pitch_wear is a float in [0.0, 1.0] representing how worn the surface is
+    (0.0 = fresh, 1.0 = fully worn after 120 balls of the innings).
+
+    Effects by pitch type:
+      Dry   – spin deterioration → wickets and dots increase with wear
+      Green – old ball eases seam movement → batting gets slightly easier
+      Flat/Dead – batting-friendly surface gets even more so
+      Hard  – slight deterioration; wickets and dots creep up
+
+    Weights are re-normalised after adjustment so they remain proportional.
+    """
+    if pitch_wear <= 0.0:
+        return raw_weights
+
+    adjusted = dict(raw_weights)
+    w = pitch_wear  # shorthand
+
+    if pitch_type == "Dry":
+        # Spin track worsens for batting: wickets and dots go up
+        adjusted["Wicket"] = adjusted.get("Wicket", 0) * (1.0 + 0.30 * w)
+        adjusted["Dot"]    = adjusted.get("Dot",    0) * (1.0 + 0.15 * w)
+
+    elif pitch_type == "Green":
+        # Seam movement reduces as ball gets older; batting becomes easier
+        adjusted["Four"]   = adjusted.get("Four",   0) * (1.0 + 0.10 * w)
+        adjusted["Six"]    = adjusted.get("Six",    0) * (1.0 + 0.08 * w)
+        adjusted["Wicket"] = adjusted.get("Wicket", 0) * (1.0 - 0.20 * w)
+
+    elif pitch_type in ("Flat", "Dead"):
+        # Already batting-friendly; gets marginally more so with wear
+        adjusted["Four"]   = adjusted.get("Four",   0) * (1.0 + 0.08 * w)
+        adjusted["Six"]    = adjusted.get("Six",    0) * (1.0 + 0.08 * w)
+        adjusted["Wicket"] = adjusted.get("Wicket", 0) * (1.0 - 0.10 * w)
+
+    elif pitch_type == "Hard":
+        # Balanced track deteriorates slightly; wickets and dots increase
+        adjusted["Wicket"] = adjusted.get("Wicket", 0) * (1.0 + 0.10 * w)
+        adjusted["Dot"]    = adjusted.get("Dot",    0) * (1.0 + 0.05 * w)
+
+    # Re-normalise so total weight is preserved (proportional scaling)
+    orig_total = sum(raw_weights.values())
+    new_total  = sum(adjusted.values())
+    if new_total > 0 and orig_total > 0:
+        scale    = orig_total / new_total
+        adjusted = {k: v * scale for k, v in adjusted.items()}
+
+    return adjusted
+
+
+# Batting position context multipliers (Feature 9)
+# Top-order batters have higher baseline impact; tail-enders are penalised.
+_POS_BATTING_MULT: dict = {
+    1: 1.05, 2: 1.05, 3: 1.03, 4: 1.02,
+    5: 1.00, 6: 0.98, 7: 0.95, 8: 0.90,
+    9: 0.85, 10: 0.80, 11: 0.75,
+}
+
+
 # -----------------------------------------------------------------------------
 # 4) Compute blended probability weight for a single outcome
 # -----------------------------------------------------------------------------
@@ -392,7 +459,11 @@ def calculate_outcome(
     pressure_effects: dict = None,
     allow_extras: bool = True,
     free_hit: bool = False,
-    balls_faced: int = 0
+    balls_faced: int = 0,
+    game_state: dict = None,
+    pitch_wear: float = 0.0,
+    batting_position: int = 5,
+    game_mode_override: str = None,
 ) -> dict:
     """
     Determines the outcome of a single delivery.
@@ -418,7 +489,10 @@ def calculate_outcome(
     # print(f"Pitch type: {pitch}, Current Streak: {streak}")
 
     # 1) Unpack numeric ratings & attributes
-    batting = batter["batting_rating"]
+    # Feature 9: batting position context — top-order batters have a higher
+    # effective batting rating; tail-enders face a modest penalty.
+    _pos_mult = _POS_BATTING_MULT.get(batting_position, 1.00)
+    batting = batter["batting_rating"] * _pos_mult
     bowling = bowler["bowling_rating"]
     fielding = bowler["fielding_rating"]
     batting_hand = batter["batting_hand"]
@@ -426,7 +500,8 @@ def calculate_outcome(
     bowling_type = bowler["bowling_type"]
 
     # 2) Get pitch-specific scoring matrix (ground_config with game mode applied, or hardcoded fallback)
-    pitch_matrix = _gc_scoring_matrix(pitch) or PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX)
+    # Feature 13: pass game_mode_override so dynamic game mode selection is respected.
+    pitch_matrix = _gc_scoring_matrix(pitch, mode_override=game_mode_override) or PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX)
     # print(f"[calculate_outcome] Using scoring matrix for pitch: {pitch}")
 
     raw_weights = {}
@@ -542,10 +617,25 @@ def calculate_outcome(
         raw_weights[outcome] = weight
         # print(f"  FinalRawWeight[{outcome}]: {weight:.6f}")
     
-    # 3.5) Calculate total weight first
+    # 3.25) Apply pitch deterioration (Feature 3).
+    # Adjusts raw weights based on how many balls have been bowled this innings.
+    # Must run BEFORE GSME so the momentum engine sees wear-adjusted base weights.
+    if pitch_wear > 0.0:
+        raw_weights = _apply_pitch_wear(raw_weights, pitch, pitch_wear)
+        logger.debug("[PitchWear=%.3f] Applied pitch deterioration to raw_weights.", pitch_wear)
+
+    # 3.5) Apply Game State Momentum Engine (GSME) adjustments.
+    # This layer accounts for ball history (last 18 deliveries), run-rate
+    # pressure, resources remaining, and collapse risk — BEFORE the
+    # pressure-engine and scenario-engine modifiers are applied.
+    if game_state is not None:
+        raw_weights = apply_game_state_to_probs(raw_weights, game_state)
+        logger.debug("[GSME] Applied game-state multipliers to raw_weights.")
+
+    # 3.6) Calculate total weight
     total_weight = sum(raw_weights.values())
 
-    # 3.6) Apply pressure effects if provided
+    # 3.7) Apply pressure effects if provided
     if pressure_effects:
         logger.debug(f"  [PRESSURE] Applying pressure effects: {pressure_effects}")
         

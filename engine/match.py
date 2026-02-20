@@ -7,9 +7,53 @@ from engine.ball_outcome import calculate_outcome
 from engine.super_over_outcome import calculate_super_over_outcome
 from match_archiver import MatchArchiver, find_original_json_file
 from engine.pressure_engine import PressureEngine
+from engine.game_state_engine import (
+    compute_game_state_vector,
+    apply_game_state_to_probs,
+    make_ball_event,
+    BALL_HISTORY_WINDOW,
+)
 
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Feature 1: Phase-specific bowling effectiveness multipliers.
+# Keys are normalised bowling-type groups: 'pace', 'medium', 'spin', 'default'.
+# ---------------------------------------------------------------------------
+_POWERPLAY_BOWLING_MULT: dict = {
+    "pace":    1.12,   # Pacers excel with new ball in powerplay
+    "swing":   1.10,
+    "medium":  1.05,
+    "spin":    0.88,   # Spinners less effective in first 6
+    "default": 1.00,
+}
+_DEATH_BOWLING_MULT: dict = {
+    "pace":    1.10,   # Pacers effective at death with yorkers/bouncers
+    "swing":   1.08,
+    "medium":  1.03,
+    "spin":    0.90,   # Spinners more hittable at death
+    "default": 1.00,
+}
+_MIDDLE_BOWLING_MULT: dict = {
+    "spin":    1.08,   # Middle overs are the spinner's playground
+    "medium":  1.03,
+    "pace":    0.97,
+    "swing":   0.97,
+    "default": 1.00,
+}
+
+# Feature 2: Bowler spell fatigue — diminishing effectiveness over overs bowled.
+_FATIGUE_MULT: dict = {0: 1.00, 1: 1.00, 2: 0.99, 3: 0.97, 4: 0.94}
+
+# Feature 7: Correct toss choice for each pitch type.
+_CORRECT_TOSS_CHOICE: dict = {
+    "Green": "bowl",   # Seam/swing friendly → bowl first
+    "Dry":   "bat",    # Spin worsens with wear → bat first
+    "Hard":  "bat",    # Good batting surface → bat first
+    "Flat":  "bowl",   # Will be a run-fest, dew helps chaser → bowl first
+    "Dead":  "bowl",   # Extreme batting pitch, chaser advantaged → bowl first
+}
 
 # Guard console output on Windows consoles that choke on emoji/unicode.
 from engine.commentary_engine import CommentaryEngine
@@ -70,6 +114,16 @@ class Match:
             else:  # toss_decision == "Bowl"
                 self.batting_team, self.bowling_team = self.home_xi, self.away_xi
 
+        # Feature 7: compute toss × conditions advantage once at match start.
+        _correct_choice = _CORRECT_TOSS_CHOICE.get(self.pitch, "bat")
+        # toss_decision stored as 'Bat' or 'Bowl'; correct_choice is lowercase.
+        self._toss_choice_correct = (self.toss_decision or "").lower() == _correct_choice
+        # Track which XI won the toss (used in next_ball for per-innings check).
+        if self.toss_winner == team_home:
+            self._toss_winner_xi = self.home_xi
+        else:
+            self._toss_winner_xi = self.away_xi
+
         self.bowler_history = {}
         self.overs = 20
         self.current_over = 0
@@ -104,6 +158,17 @@ class Match:
 
         # Streak tracking: consecutive boundaries per batter (activates boundary penalty + wicket boost)
         self.batter_streaks = {}  # {batter_name: {"boundaries": int}}
+
+        # GSME: rolling 18-ball delivery history for game-state momentum engine
+        self.ball_history: list = []  # list of dicts; max BALL_HISTORY_WINDOW entries
+
+        # Feature 3: count of legal + extra deliveries bowled this innings
+        # (used to compute pitch_wear = innings_balls_bowled / 120.0)
+        self.innings_balls_bowled: int = 0
+
+        # Feature 8: runs conceded per over by each bowler (keyed by name)
+        # populated at over completion; read in _get_effective_bowler_dict()
+        self.bowler_prev_over_runs: dict = {}
 
 
         # ===== NEW ARCHIVING VARIABLES =====
@@ -1484,6 +1549,15 @@ class Match:
         # Reset streak tracking for new innings
         self.batter_streaks = {}
 
+        # Reset GSME ball history for new innings
+        self.ball_history = []
+
+        # Feature 3: reset pitch wear counter for new innings
+        self.innings_balls_bowled = 0
+
+        # Feature 8: reset per-over bowler feedback for new innings
+        self.bowler_prev_over_runs = {}
+
         # Reset partnership tracking
         self.current_partnership_balls = 0
         self.current_partnership_runs = 0
@@ -1523,6 +1597,101 @@ class Match:
         else:
             return "traditional"  # Balanced approach
 
+
+    # ------------------------------------------------------------------
+    # Feature 1 + 2 + 8: effective bowler dict with phase/fatigue/feedback
+    # ------------------------------------------------------------------
+    def _get_effective_bowler_dict(self, bowler_dict: dict) -> dict:
+        """
+        Return a shallow copy of bowler_dict with bowling_rating adjusted for:
+          • Phase effectiveness (powerplay / middle / death) [Feature 1]
+          • Spell fatigue (overs already bowled this innings) [Feature 2]
+          • Previous-over performance feedback [Feature 8]
+        """
+        eff = dict(bowler_dict)   # shallow copy — safe for scalar values
+        bowling_type = eff.get("bowling_type", "")
+        bowler_name  = eff.get("name", "")
+
+        # Map bowling_type to the phase-mult key
+        if bowling_type in ("Fast", "Fast-medium"):
+            phase_key = "pace"
+        elif bowling_type == "Medium-fast":
+            phase_key = "medium"
+        elif bowling_type in ("Off spin", "Leg spin", "Finger spin", "Wrist spin"):
+            phase_key = "spin"
+        elif bowling_type == "Swing":
+            phase_key = "swing"
+        else:
+            phase_key = "default"
+
+        # Feature 1: select phase multiplier
+        over = self.current_over
+        if over <= 5:
+            phase_mult = _POWERPLAY_BOWLING_MULT.get(phase_key, 1.00)
+        elif over >= 16:
+            phase_mult = _DEATH_BOWLING_MULT.get(phase_key, 1.00)
+        else:
+            phase_mult = _MIDDLE_BOWLING_MULT.get(phase_key, 1.00)
+
+        # Feature 2: fatigue from overs bowled in this innings
+        overs_bowled = self.bowler_history.get(bowler_name, 0)
+        fatigue = _FATIGUE_MULT.get(min(overs_bowled, 4), 0.94)
+
+        # Feature 8: previous over performance feedback
+        prev_runs = self.bowler_prev_over_runs.get(bowler_name, -1)
+        if prev_runs == 0:           # Maiden — confidence boost
+            feedback_mult = 1.05
+        elif prev_runs >= 20:        # Very expensive — confidence hit
+            feedback_mult = 0.93
+        elif prev_runs >= 15:        # Expensive
+            feedback_mult = 0.97
+        else:
+            feedback_mult = 1.00
+
+        eff["bowling_rating"] = eff["bowling_rating"] * phase_mult * fatigue * feedback_mult
+        logger.debug(
+            "[BowlerEff] %s | phase_key=%s over=%d phase=%.3f fatigue=%.3f feedback=%.3f → rating=%.1f",
+            bowler_name, phase_key, over, phase_mult, fatigue, feedback_mult, eff["bowling_rating"],
+        )
+        return eff
+
+    # ------------------------------------------------------------------
+    # Feature 13: dynamic game mode selection
+    # ------------------------------------------------------------------
+    def _get_dynamic_game_mode(self) -> str:
+        """
+        Dynamically select the most appropriate game mode for the current
+        delivery based on match state (pitch, innings, overs, wickets, RRR).
+
+        Returns a game mode name present in ground_conditions.yaml:
+          natural_game | aggressive | defensive | bowlers_day | flat_track_bully
+        """
+        pitch   = self.pitch
+        over    = self.current_over
+        wickets = self.wickets
+        innings = self.innings
+
+        # Flat/Dead pitch + strong batting position early on → bully mode
+        if pitch in ("Dead", "Flat") and wickets < 3 and over < 10:
+            return "flat_track_bully"
+
+        # Heavy wicket loss in 1st innings → bowlers have the upper hand
+        if innings == 1 and wickets >= 7:
+            return "bowlers_day"
+
+        # 2nd innings: adapt to required run rate
+        if innings == 2 and self.target:
+            balls_remaining = max(1, (self.overs - over) * 6 - self.current_ball)
+            runs_needed     = max(0, self.target - self.score)
+            rrr             = (runs_needed * 6) / balls_remaining
+            if wickets >= 7:
+                return "defensive"
+            if rrr > 12:
+                return "aggressive"
+            if rrr < 6:
+                return "defensive"
+
+        return "natural_game"
 
     def _get_preferred_bowler_type(self, over_number):
         """Get the preferred bowler type for a specific over based on pattern"""
@@ -3140,6 +3309,17 @@ class Match:
                 pressure_effects['wicket_modifier'] *= 1.25
                 logger.info(f"FIRST INNINGS COLLAPSE: 1.25x wicket boost! ({self.wickets} down, {recent_wickets} recent)")
 
+        # Feature 7: Toss × Conditions modifier.
+        # The team that made the correct toss call for the pitch conditions gets
+        # a small boundary advantage when it's their turn to bat; the wrong call
+        # gives the opposition a slight edge.
+        _batting_has_toss_adv = (
+            (self.batting_team is self._toss_winner_xi) == self._toss_choice_correct
+        )
+        _toss_mult = 1.03 if _batting_has_toss_adv else 0.97
+        pressure_effects['boundary_modifier'] = pressure_effects.get('boundary_modifier', 1.0) * _toss_mult
+        logger.debug("[TossAdv] batting_has_adv=%s toss_mult=%.2f", _batting_has_toss_adv, _toss_mult)
+
         # ===== SCENARIO ENGINE HOOK =====
         scenario_override = None
         if self.scenario_engine and self.innings == 2:
@@ -3167,9 +3347,42 @@ class Match:
             striker_name = self.current_striker["name"]
             streak = self.batter_streaks.get(striker_name, {"boundaries": 0})
 
+            # Feature 1+2+8: effective bowler with phase/fatigue/feedback adjustments
+            _effective_bowler = self._get_effective_bowler_dict(self.current_bowler)
+
+            # Feature 6: current partnership run length (balls at the crease together)
+            _partnership_balls = self.current_partnership_balls
+
+            # Feature 9: batting position (1-based index in team batting order)
+            _batting_position = 5   # safe default (middle-order)
+            for _idx, _player in enumerate(self.batting_team):
+                if _player.get("name") == striker_name:
+                    _batting_position = _idx + 1
+                    break
+
+            # Feature 3: pitch wear from balls bowled in this innings
+            _pitch_wear = min(1.0, self.innings_balls_bowled / 120.0)
+
+            # Feature 13: dynamic game mode selection
+            _game_mode_override = self._get_dynamic_game_mode()
+            logger.debug("[DynMode] over=%d wickets=%d mode=%s", self.current_over, self.wickets, _game_mode_override)
+
+            # ── GSME: build the game-state vector from the last 18 deliveries ──
+            _gsme_state = compute_game_state_vector(
+                ball_history=self.ball_history,
+                score=self.score,
+                current_over=self.current_over,
+                current_ball=self.current_ball,
+                wickets=self.wickets,
+                innings=self.innings,
+                target=self.target or 0,
+                pitch=self.pitch,
+                partnership_balls=_partnership_balls,
+            )
+
             outcome = calculate_outcome(
                 batter=self.current_striker,
-                bowler=self.current_bowler,
+                bowler=_effective_bowler,
                 pitch=self.pitch,
                 streak=streak,
                 over_number=self.current_over,
@@ -3177,7 +3390,11 @@ class Match:
                 innings=self.innings,
                 pressure_effects=pressure_effects,
                 free_hit=self.free_hit_active,
-                balls_faced=self.batsman_stats[striker_name]["balls"]
+                balls_faced=self.batsman_stats[striker_name]["balls"],
+                game_state=_gsme_state,
+                pitch_wear=_pitch_wear,
+                batting_position=_batting_position,
+                game_mode_override=_game_mode_override,
             )
 
         # 🎙️ COMMENTARY REVAMP INTEGRATION
@@ -3215,7 +3432,7 @@ class Match:
         if outcome.get("is_extra") and extra_type == "No Ball":
             bat_outcome = calculate_outcome(
                 batter=self.current_striker,
-                bowler=self.current_bowler,
+                bowler=_effective_bowler,
                 pitch=self.pitch,
                 streak=self.batter_streaks.get(self.current_striker["name"], {"boundaries": 0}),
                 over_number=self.current_over,
@@ -3224,7 +3441,11 @@ class Match:
                 pressure_effects=pressure_effects,
                 allow_extras=False,
                 free_hit=False,
-                balls_faced=self.batsman_stats[self.current_striker["name"]]["balls"]
+                balls_faced=self.batsman_stats[self.current_striker["name"]]["balls"],
+                game_state=_gsme_state,
+                pitch_wear=_pitch_wear,
+                batting_position=_batting_position,
+                game_mode_override=_game_mode_override,
             )
 
             bat_runs = bat_outcome.get("runs", 0)
@@ -3288,6 +3509,15 @@ class Match:
         # On dismissal, clear the dismissed batter's streak
         if wicket:
             self.batter_streaks.pop(_bd_striker, None)
+
+        # ── GSME: append this delivery to the rolling 18-ball history ──
+        _ball_event = make_ball_event(outcome)
+        self.ball_history.append(_ball_event)
+        if len(self.ball_history) > BALL_HISTORY_WINDOW:
+            self.ball_history.pop(0)
+
+        # Feature 3: increment pitch wear counter for every delivery
+        self.innings_balls_bowled += 1
 
         self.prev_delivery_was_extra = extra
 
@@ -3945,7 +4175,10 @@ class Match:
             self.bowler_stats[self.current_bowler["name"]]["overs"] += 1
             # D4: Increment bowler_history at over completion, not at selection
             self.bowler_history[self.current_bowler["name"]] = self.bowler_history.get(self.current_bowler["name"], 0) + 1
-            
+
+            # Feature 8: save this over's run total for next-over feedback
+            self.bowler_prev_over_runs[self.current_bowler["name"]] = self.current_over_runs
+
             all_commentary.append("")
             all_commentary.append(self._format_over_summary(f"End of over {self.current_over + 1}"))
 

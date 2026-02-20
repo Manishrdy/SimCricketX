@@ -17,8 +17,8 @@ let impactPlayerState = {
 
 let matchOver = false;
 let currentInningsNumber = null;
-let delay = 300; // default 1x pace
-const MIN_BALL_DELAY_MS = 200; // Enforce 0.2s minimum gap between balls
+let delay = 500; // 0.5s delay between each ball
+const MIN_BALL_DELAY_MS = 500; // Enforce 0.5s minimum gap between balls
 let logLineCount = 1; // Track line numbers for commentary display
 let isFinalScoreboard = false;
 let simTimerId = null; // F4: track simulation timer to prevent overlapping loops
