@@ -63,8 +63,15 @@
     }
 
     @keyframes heroBallFloat {
-        0%, 100% { transform: translateY(0) rotate(0deg); }
-        50%      { transform: translateY(-14px) rotate(180deg); }
+
+        0%,
+        100% {
+            transform: translateY(0) rotate(0deg);
+        }
+
+        50% {
+            transform: translateY(-14px) rotate(180deg);
+        }
     }
 
     .hero-row {
@@ -132,7 +139,9 @@
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
     }
 
-    .stat-pill:hover::before { opacity: 1; }
+    .stat-pill:hover::before {
+        opacity: 1;
+    }
 
     .stat-pill .pill-value {
         font-size: 2rem;
@@ -209,9 +218,13 @@
         white-space: nowrap;
     }
 
-    .tab-item:hover { color: var(--fg); }
+    .tab-item:hover {
+        color: var(--fg);
+    }
 
-    .tab-item.active { color: #fff; }
+    .tab-item.active {
+        color: #fff;
+    }
 
     .tab-badge {
         font-size: 0.68rem;
@@ -284,8 +297,13 @@
         transition: color 0.2s;
     }
 
-    .search-box .clear-search:hover { color: var(--fg); }
-    .search-box.has-query .clear-search { display: block; }
+    .search-box .clear-search:hover {
+        color: var(--fg);
+    }
+
+    .search-box.has-query .clear-search {
+        display: block;
+    }
 
     /* ========== PANELS ========== */
     .panel {
@@ -293,11 +311,20 @@
         animation: panelIn 0.3s ease;
     }
 
-    .panel.active { display: block; }
+    .panel.active {
+        display: block;
+    }
 
     @keyframes panelIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to   { opacity: 1; transform: translateY(0); }
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     /* ========== MATCH CARDS ========== */
@@ -319,7 +346,9 @@
     .match-card::before {
         content: '';
         position: absolute;
-        top: 0; left: 0; right: 0;
+        top: 0;
+        left: 0;
+        right: 0;
         height: 3px;
         background: var(--gradient);
         transform: scaleX(0);
@@ -400,7 +429,7 @@
         transition: background 0.2s ease;
     }
 
-    .score-row + .score-row {
+    .score-row+.score-row {
         border-top: 1px solid var(--card-border);
     }
 
@@ -548,7 +577,9 @@
     .archive-card::after {
         content: '';
         position: absolute;
-        bottom: 0; left: 0; right: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
         height: 3px;
         background: linear-gradient(90deg, var(--accent) 0%, transparent 100%);
         opacity: 0;
@@ -561,7 +592,9 @@
         box-shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
     }
 
-    .archive-card:hover::after { opacity: 1; }
+    .archive-card:hover::after {
+        opacity: 1;
+    }
 
     .archive-icon-row {
         display: flex;
@@ -635,7 +668,9 @@
         justify-content: space-between;
     }
 
-    .expiry-label.expired { color: var(--one-dark-red, #d43b52); }
+    .expiry-label.expired {
+        color: var(--one-dark-red, #d43b52);
+    }
 
     .expiry-track {
         height: 5px;
@@ -754,8 +789,15 @@
     }
 
     @keyframes emptyPulse {
-        0%, 100% { box-shadow: 0 0 0 0 var(--accent-light); }
-        50%      { box-shadow: 0 0 0 14px transparent; }
+
+        0%,
+        100% {
+            box-shadow: 0 0 0 0 var(--accent-light);
+        }
+
+        50% {
+            box-shadow: 0 0 0 14px transparent;
+        }
     }
 
     .empty-state h3 {
@@ -828,8 +870,15 @@
     }
 
     @keyframes modalIn {
-        from { opacity: 0; transform: scale(0.92) translateY(12px); }
-        to   { opacity: 1; transform: scale(1) translateY(0); }
+        from {
+            opacity: 0;
+            transform: scale(0.92) translateY(12px);
+        }
+
+        to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
     }
 
     .modal-icon {
@@ -876,7 +925,9 @@
         color: var(--fg);
     }
 
-    .modal-btn:hover { border-color: var(--accent); }
+    .modal-btn:hover {
+        border-color: var(--accent);
+    }
 
     .modal-btn.confirm-delete {
         background: var(--one-dark-red, #d43b52);
@@ -916,33 +967,202 @@
         max-width: 360px;
     }
 
-    .toast.success { border-color: var(--one-dark-green, #98c379); }
-    .toast.success i { color: var(--one-dark-green, #98c379); }
-    .toast.error { border-color: var(--one-dark-red, #e06c75); }
-    .toast.error i { color: var(--one-dark-red, #e06c75); }
+    .toast.success {
+        border-color: var(--one-dark-green, #98c379);
+    }
+
+    .toast.success i {
+        color: var(--one-dark-green, #98c379);
+    }
+
+    .toast.error {
+        border-color: var(--one-dark-red, #e06c75);
+    }
+
+    .toast.error i {
+        color: var(--one-dark-red, #e06c75);
+    }
 
     .toast.removing {
         animation: toastOut 0.3s ease forwards;
     }
 
     @keyframes toastIn {
-        from { opacity: 0; transform: translateX(40px) scale(0.95); }
-        to   { opacity: 1; transform: translateX(0) scale(1); }
+        from {
+            opacity: 0;
+            transform: translateX(40px) scale(0.95);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+        }
     }
 
     @keyframes toastOut {
-        to { opacity: 0; transform: translateX(40px) scale(0.95); }
+        to {
+            opacity: 0;
+            transform: translateX(40px) scale(0.95);
+        }
     }
 
     /* ========== STAGGER ========== */
-    .match-card, .archive-card {
+    .match-card,
+    .archive-card {
         opacity: 0;
         animation: cardReveal 0.4s ease forwards;
     }
 
     @keyframes cardReveal {
-        from { opacity: 0; transform: translateY(16px); }
-        to   { opacity: 1; transform: translateY(0); }
+        from {
+            opacity: 0;
+            transform: translateY(16px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* ========== MANAGE MODE STYLES ========== */
+    .toolbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .manage-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.55rem 1rem;
+        border: 2px solid var(--card-border);
+        border-radius: 11px;
+        background: var(--card-bg);
+        color: var(--fg-secondary);
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .manage-btn:hover {
+        color: var(--fg);
+        border-color: var(--fg-secondary);
+    }
+
+    .manage-btn.active {
+        background: var(--bg-secondary);
+        color: var(--accent);
+        border-color: var(--accent);
+    }
+
+    /* Checkbox Styles */
+    .match-card .select-checkbox {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 24px;
+        height: 24px;
+        border: 2px solid var(--fg-secondary);
+        border-radius: 6px;
+        background: var(--card-bg);
+        cursor: pointer;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.2s ease;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .match-card.manage-mode .select-checkbox {
+        opacity: 0.4;
+        pointer-events: auto;
+    }
+
+    .match-card.manage-mode:hover .select-checkbox {
+        opacity: 1;
+    }
+
+    .match-card.manage-mode.selected {
+        border-color: var(--accent);
+        background: var(--bg-secondary);
+    }
+
+    .match-card.manage-mode.selected .select-checkbox {
+        opacity: 1;
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+
+    .match-card.manage-mode.selected .select-checkbox::after {
+        content: '\f00c';
+        font-family: 'Font Awesome 6 Free';
+        font-weight: 900;
+        font-size: 0.8rem;
+    }
+
+    /* Tournament Badge */
+    .match-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 6px;
+        margin-bottom: 0.5rem;
+        display: inline-block;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .match-badge.tournament {
+        background: rgba(255, 215, 0, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(251, 191, 36, 0.3);
+    }
+
+    .match-badge.exhibition {
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--accent);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+
+    /* Floating Action Bar */
+    .floating-action-bar {
+        position: fixed;
+        bottom: 2rem;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        padding: 1rem 1.5rem;
+        border-radius: 16px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        z-index: 90;
+        opacity: 0;
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .floating-action-bar.show {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+
+    .fab-count {
+        font-weight: 700;
+        color: var(--fg);
+        font-size: 0.95rem;
+    }
+
+    .fab-actions {
+        display: flex;
+        gap: 0.75rem;
     }
 
     /* ========== RESPONSIVE ========== */
@@ -952,22 +1172,59 @@
             align-items: flex-start;
         }
 
-        .hero-text h1 { font-size: 2rem; }
+        .hero-text h1 {
+            font-size: 2rem;
+        }
 
-        .stat-pills { width: 100%; }
-        .stat-pill { flex: 1; min-width: 0; padding: 0.75rem; }
-        .stat-pill .pill-value { font-size: 1.5rem; }
+        .stat-pills {
+            width: 100%;
+        }
 
-        .toolbar { flex-direction: column; align-items: stretch; }
-        .tab-bar { width: 100%; }
-        .tab-item { flex: 1; justify-content: center; padding: 0.6rem 0.8rem; font-size: 0.82rem; }
-        .search-box { width: 100%; }
+        .stat-pill {
+            flex: 1;
+            min-width: 0;
+            padding: 0.75rem;
+        }
 
-        .match-grid { grid-template-columns: 1fr; }
-        .archive-grid { grid-template-columns: 1fr; }
-        .archive-meta-grid { grid-template-columns: 1fr; }
+        .stat-pill .pill-value {
+            font-size: 1.5rem;
+        }
 
-        .hero-deco-ball { display: none; }
+        .toolbar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .tab-bar {
+            width: 100%;
+        }
+
+        .tab-item {
+            flex: 1;
+            justify-content: center;
+            padding: 0.6rem 0.8rem;
+            font-size: 0.82rem;
+        }
+
+        .search-box {
+            width: 100%;
+        }
+
+        .match-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .archive-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .archive-meta-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .hero-deco-ball {
+            display: none;
+        }
     }
 </style>
 {% endblock %}
@@ -983,7 +1240,7 @@
         </div>
         <div class="stat-pills">
             <div class="stat-pill">
-                <span class="pill-value">{{ (match_history or [])|length }}</span>
+                <span class="pill-value" id="match-count-pill">{{ (match_history or [])|length }}</span>
                 <span class="pill-label">Matches</span>
             </div>
             <div class="stat-pill">
@@ -1001,7 +1258,7 @@
         <button class="tab-item active" type="button" data-target="history" role="tab" aria-selected="true">
             <i class="fa-solid fa-cricket-bat-ball"></i>
             Match History
-            <span class="tab-badge">{{ (match_history or [])|length }}</span>
+            <span class="tab-badge" id="match-count-badge">{{ (match_history or [])|length }}</span>
         </button>
         <button class="tab-item" type="button" data-target="archives" role="tab" aria-selected="false">
             <i class="fa-solid fa-box-archive"></i>
@@ -1009,10 +1266,21 @@
             <span class="tab-badge">{{ (files or [])|length }}</span>
         </button>
     </div>
-    <div class="search-box" id="search-box">
-        <i class="fa-solid fa-magnifying-glass search-icon"></i>
-        <input type="text" id="search-input" placeholder="Search by team name..." autocomplete="off" spellcheck="false">
-        <button class="clear-search" id="clear-search" type="button" title="Clear"><i class="fa-solid fa-xmark"></i></button>
+
+    <div class="toolbar-actions">
+        <!-- Manage Mode Toggle (Only visible nicely on History tab via JS) -->
+        <button class="manage-btn" id="manage-mode-btn" title="Manage Matches">
+            <i class="fa-solid fa-list-check"></i>
+            Manage
+        </button>
+
+        <div class="search-box" id="search-box">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="search-input" placeholder="Search by team name..." autocomplete="off"
+                spellcheck="false">
+            <button class="clear-search" id="clear-search" type="button" title="Clear"><i
+                    class="fa-solid fa-xmark"></i></button>
+        </div>
     </div>
 </div>
 
@@ -1021,9 +1289,26 @@
     {% if match_history and match_history|length > 0 %}
     <div class="match-grid" id="match-grid">
         {% for match in match_history %}
-        <article class="match-card" style="animation-delay: {{ loop.index0 * 0.05 }}s"
-                 data-teams="{{ match.home_team|lower }} {{ match.away_team|lower }}">
+        <article class="match-card" id="match-{{ match.match_id }}" data-delay="{{ loop.index0 * 0.05 }}s"
+            data-teams="{{ match.home_team|lower }} {{ match.away_team|lower }}" data-match-id="{{ match.match_id }}"
+            data-type="{{ 'tournament' if match.is_tournament else 'exhibition' }}">
+
+            <!-- Selection Checkbox (Only for exhibition matches) -->
+            {% if not match.is_tournament %}
+            <div class="select-checkbox" onclick="toggleSelection('match-{{ match.match_id }}')"></div>
+            {% endif %}
+
             <div class="match-card-body">
+                <!-- Badge Row -->
+                <div>
+                    {% if match.is_tournament %}
+                    <span class="match-badge tournament"><i class="fa-solid fa-trophy"></i> {{ match.tournament_name or
+                        'Tournament' }}</span>
+                    {% else %}
+                    <span class="match-badge exhibition"><i class="fa-solid fa-cricket-bat-ball"></i> Exhibition</span>
+                    {% endif %}
+                </div>
+
                 <div class="match-header">
                     <div class="match-teams">
                         {{ match.home_team }}<span class="vs">vs</span>{{ match.away_team }}
@@ -1050,7 +1335,8 @@
                             {{ match.away_team }}
                         </span>
                         <span class="score-figures">
-                            {{ match.scoreline.split(' vs ')[1].replace(match.away_team, '').strip() if ' vs ' in match.scoreline else '' }}
+                            {{ match.scoreline.split(' vs ')[1].replace(match.away_team, '').strip() if ' vs ' in
+                            match.scoreline else '' }}
                         </span>
                     </div>
                 </div>
@@ -1095,7 +1381,8 @@
     {% if files and files|length > 0 %}
     <div id="archive-grid" class="archive-grid">
         {% for file in files %}
-        <article class="archive-card" id="archive-{{ loop.index }}" data-delete-url="{{ file.delete_url }}" style="animation-delay: {{ loop.index0 * 0.05 }}s">
+        <article class="archive-card" id="archive-{{ loop.index }}" data-delete-url="{{ file.delete_url }}"
+            data-delay="{{ loop.index0 * 0.05 }}s">
             <div class="archive-icon-row">
                 <div class="archive-icon">
                     <i class="fa-solid fa-file-zipper"></i>
@@ -1112,11 +1399,11 @@
                     <i class="fa-regular fa-clock"></i>
                     Expires {{ file.expires_at.strftime('%d %b %Y') if file.expires_at else 'Unknown' }}
                 </div>
-                <div class="expiry-bar-wrap"
-                     data-created="{{ file.created_at.isoformat() if file.created_at else '' }}"
-                     data-expire="{{ file.expires_at.isoformat() if file.expires_at else '' }}">
+                <div class="expiry-bar-wrap" data-created="{{ file.created_at.isoformat() if file.created_at else '' }}"
+                    data-expire="{{ file.expires_at.isoformat() if file.expires_at else '' }}">
                     <div class="expiry-label">
-                        <span class="el-left"><i class="fa-solid fa-hourglass-half"></i> <span class="cd-text">--</span></span>
+                        <span class="el-left"><i class="fa-solid fa-hourglass-half"></i> <span
+                                class="cd-text">--</span></span>
                         <span class="el-pct"></span>
                     </div>
                     <div class="expiry-track">
@@ -1149,14 +1436,25 @@
     {% endif %}
 </section>
 
-<!-- Delete Modal -->
+<!-- Floating Action Bar for Deletion -->
+<div class="floating-action-bar" id="floating-bar">
+    <div class="fab-count"><span id="selected-count">0</span> matches selected</div>
+    <div class="fab-actions">
+        <button class="action-btn" onclick="cancelSelection()">Cancel</button>
+        <button class="action-btn danger" onclick="openBulkDeleteModal()">
+            <i class="fa-solid fa-trash-can"></i> Delete
+        </button>
+    </div>
+</div>
+
+<!-- Delete Modal (Shared) -->
 <div id="delete-modal" class="modal-overlay" role="dialog" aria-modal="true">
     <div class="modal-box">
         <div class="modal-icon">
             <i class="fa-solid fa-triangle-exclamation"></i>
         </div>
-        <h3>Delete this archive?</h3>
-        <p>This action is permanent. The archive file will be removed from the server and cannot be recovered.</p>
+        <h3 id="delete-modal-title">Delete this item?</h3>
+        <p id="delete-modal-text">This action is permanent. The item will be removed from the server.</p>
         <div class="modal-btns">
             <button type="button" class="modal-btn" onclick="closeDeleteModal()">Cancel</button>
             <button type="button" class="modal-btn confirm-delete" id="confirm-delete-btn">
@@ -1172,228 +1470,369 @@
 
 {% block extra_js %}
 <script>
-(function () {
-    var deleteModal = document.getElementById('delete-modal');
-    var pendingDeleteCard = null;
+    (function () {
+        var deleteModal = document.getElementById('delete-modal');
+        var pendingDeleteCard = null; // For single archive delete
+        var isBulkDelete = false; // Flag for bulk delete
 
-    // ============ Sliding Tab Indicator ============
-    function positionIndicator() {
-        var active = document.querySelector('.tab-item.active');
-        var indicator = document.getElementById('tab-indicator');
-        if (!active || !indicator) return;
-        indicator.style.width = active.offsetWidth + 'px';
-        indicator.style.left = active.offsetLeft + 'px';
-    }
+        // ============ Stagger Animation Fix ============
+        document.querySelectorAll('.match-card[data-delay], .archive-card[data-delay]').forEach(card => {
+            card.style.animationDelay = card.getAttribute('data-delay');
+        });
 
-    positionIndicator();
-    window.addEventListener('resize', positionIndicator);
+        // ============ Mange Mode Logic ============
+        var manageBtn = document.getElementById('manage-mode-btn');
+        var isManageMode = false;
+        var selectedMatches = new Set();
+        var floatingBar = document.getElementById('floating-bar');
 
-    document.querySelectorAll('.tab-item').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            document.querySelectorAll('.tab-item').forEach(function (b) {
-                b.classList.remove('active');
-                b.setAttribute('aria-selected', 'false');
+        // Toggle Manage Mode
+        if (manageBtn) {
+            manageBtn.addEventListener('click', function () {
+                isManageMode = !isManageMode;
+                this.classList.toggle('active', isManageMode);
+                this.innerHTML = isManageMode
+                    ? '<i class="fa-solid fa-check"></i> Done'
+                    : '<i class="fa-solid fa-list-check"></i> Manage';
+
+                // Toggle class on all exhibition cards
+                document.querySelectorAll('.match-card[data-type="exhibition"]').forEach(card => {
+                    card.classList.toggle('manage-mode', isManageMode);
+                });
+
+                if (!isManageMode) {
+                    cancelSelection();
+                }
             });
-            btn.classList.add('active');
-            btn.setAttribute('aria-selected', 'true');
-            positionIndicator();
-
-            document.querySelectorAll('.panel').forEach(function (p) {
-                p.classList.remove('active');
-            });
-            var target = btn.getAttribute('data-target');
-            document.getElementById('panel-' + target).classList.add('active');
-
-            // Show/hide search box based on tab
-            var searchBox = document.getElementById('search-box');
-            if (searchBox) {
-                searchBox.style.display = target === 'history' ? '' : 'none';
-            }
-        });
-    });
-
-    // ============ Search / Filter ============
-    var searchInput = document.getElementById('search-input');
-    var clearBtn = document.getElementById('clear-search');
-    var searchBox = document.getElementById('search-box');
-
-    if (searchInput) {
-        searchInput.addEventListener('input', function () {
-            var query = this.value.toLowerCase().trim();
-            searchBox.classList.toggle('has-query', query.length > 0);
-            filterCards(query);
-        });
-    }
-
-    if (clearBtn) {
-        clearBtn.addEventListener('click', function () {
-            searchInput.value = '';
-            searchBox.classList.remove('has-query');
-            filterCards('');
-            searchInput.focus();
-        });
-    }
-
-    function filterCards(query) {
-        var cards = document.querySelectorAll('.match-card');
-        var noResults = document.getElementById('no-filter-results');
-        var visibleCount = 0;
-
-        cards.forEach(function (card) {
-            var teams = card.getAttribute('data-teams') || '';
-            var visible = !query || teams.indexOf(query) !== -1;
-            card.style.display = visible ? '' : 'none';
-            if (visible) visibleCount++;
-        });
-
-        if (noResults) {
-            noResults.style.display = (cards.length > 0 && visibleCount === 0) ? 'block' : 'none';
         }
-    }
 
-    // ============ Expiry Bars & Countdown ============
-    function tickExpiry() {
-        var bars = document.querySelectorAll('.expiry-bar-wrap[data-expire]');
-        var now = Date.now();
+        // Toggle Selection of specific card
+        window.toggleSelection = function (cardId) {
+            if (!isManageMode) return;
 
-        bars.forEach(function (wrap) {
-            var createdRaw = wrap.getAttribute('data-created');
-            var expireRaw = wrap.getAttribute('data-expire');
-            var created = createdRaw ? Date.parse(createdRaw) : NaN;
-            var expire = expireRaw ? Date.parse(expireRaw) : NaN;
-            var cdText = wrap.querySelector('.cd-text');
-            var pctSpan = wrap.querySelector('.el-pct');
-            var fill = wrap.querySelector('.expiry-fill');
-            var label = wrap.querySelector('.expiry-label');
+            var card = document.getElementById(cardId);
+            var matchId = card.getAttribute('data-match-id');
 
-            if (isNaN(expire)) {
-                if (cdText) cdText.textContent = 'Unknown';
-                return;
+            if (selectedMatches.has(matchId)) {
+                selectedMatches.delete(matchId);
+                card.classList.remove('selected');
+            } else {
+                selectedMatches.add(matchId);
+                card.classList.add('selected');
             }
 
-            var left = expire - now;
-            var total = isNaN(created) ? 7 * 86400000 : (expire - created);
-            var pct = total > 0 ? Math.max(0, Math.min(100, (left / total) * 100)) : 0;
+            updateFloatingBar();
+        };
 
-            if (cdText) cdText.textContent = left > 0 ? fmtDuration(left) : 'Expired';
-            if (pctSpan) pctSpan.textContent = left > 0 ? Math.round(pct) + '%' : '';
-            if (label) label.classList.toggle('expired', left <= 0);
+        // Update Floating Bar UI
+        function updateFloatingBar() {
+            var count = selectedMatches.size;
+            document.getElementById('selected-count').textContent = count;
 
-            if (fill) {
-                fill.style.width = Math.max(0, pct) + '%';
-                fill.classList.remove('low', 'critical', 'gone');
-                if (left <= 0) fill.classList.add('gone');
-                else if (pct < 15) fill.classList.add('critical');
-                else if (pct < 35) fill.classList.add('low');
+            if (count > 0) {
+                floatingBar.classList.add('show');
+            } else {
+                floatingBar.classList.remove('show');
             }
+        }
+
+        // Cancel Selection
+        window.cancelSelection = function () {
+            selectedMatches.clear();
+            document.querySelectorAll('.match-card.selected').forEach(c => c.classList.remove('selected'));
+            updateFloatingBar();
+
+            // Don't turn off manage mode if just cancelling selection, 
+            // unless called from manage button toggle
+        };
+
+        // Open Bulk Delete Modal
+        window.openBulkDeleteModal = function () {
+            if (selectedMatches.size === 0) return;
+
+            isBulkDelete = true;
+            document.getElementById('delete-modal-title').textContent = `Delete ${selectedMatches.size} Matches?`;
+            document.getElementById('delete-modal-text').innerHTML =
+                `You are about to delete <b>${selectedMatches.size}</b> matches.<br>This will <b>reverse</b> their statistics from player records. This action cannot be undone.`;
+
+            deleteModal.classList.add('show');
+        };
+
+        // ============ Sliding Tab Indicator ============
+        function positionIndicator() {
+            var active = document.querySelector('.tab-item.active');
+            var indicator = document.getElementById('tab-indicator');
+            if (!active || !indicator) return;
+            indicator.style.width = active.offsetWidth + 'px';
+            indicator.style.left = active.offsetLeft + 'px';
+        }
+
+        positionIndicator();
+        window.addEventListener('resize', positionIndicator);
+
+        document.querySelectorAll('.tab-item').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                document.querySelectorAll('.tab-item').forEach(function (b) {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-selected', 'false');
+                });
+                btn.classList.add('active');
+                btn.setAttribute('aria-selected', 'true');
+                positionIndicator();
+
+                document.querySelectorAll('.panel').forEach(function (p) {
+                    p.classList.remove('active');
+                });
+                var target = btn.getAttribute('data-target');
+                document.getElementById('panel-' + target).classList.add('active');
+
+                // Show/hide search box & manage btn based on tab
+                var searchBox = document.getElementById('search-box');
+                var mngBtn = document.getElementById('manage-mode-btn');
+
+                if (target === 'history') {
+                    if (searchBox) searchBox.style.display = '';
+                    if (mngBtn) mngBtn.style.display = '';
+                } else {
+                    if (searchBox) searchBox.style.display = 'none';
+                    if (mngBtn) mngBtn.style.display = 'none';
+                    // Also exit manage mode if switching tabs
+                    if (isManageMode) manageBtn.click();
+                }
+            });
         });
-    }
 
-    function fmtDuration(ms) {
-        if (ms <= 0) return 'Expired';
-        var s = Math.floor(ms / 1000);
-        var d = Math.floor(s / 86400);
-        var h = Math.floor((s % 86400) / 3600);
-        var m = Math.floor((s % 3600) / 60);
-        var sec = s % 60;
-        var parts = [];
-        if (d) parts.push(d + 'd');
-        if (h) parts.push(h + 'h');
-        if (m) parts.push(m + 'm');
-        parts.push(sec + 's');
-        return parts.join(' ');
-    }
+        // ============ Search / Filter ============
+        var searchInput = document.getElementById('search-input');
+        var clearBtn = document.getElementById('clear-search');
+        var searchBox = document.getElementById('search-box');
 
-    tickExpiry();
-    setInterval(tickExpiry, 1000);
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                var query = this.value.toLowerCase().trim();
+                searchBox.classList.toggle('has-query', query.length > 0);
+                filterCards(query);
+            });
+        }
 
-    // ============ Toast Notifications ============
-    function showToast(message, type) {
-        var container = document.getElementById('toast-container');
-        if (!container) return;
-        var icon = type === 'success' ? 'fa-circle-check' : 'fa-circle-xmark';
-        var toast = document.createElement('div');
-        toast.className = 'toast ' + type;
-        toast.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + message;
-        container.appendChild(toast);
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                searchInput.value = '';
+                searchBox.classList.remove('has-query');
+                filterCards('');
+                searchInput.focus();
+            });
+        }
 
-        setTimeout(function () {
-            toast.classList.add('removing');
-            setTimeout(function () { toast.remove(); }, 300);
-        }, 3500);
-    }
+        function filterCards(query) {
+            var cards = document.querySelectorAll('.match-card');
+            var noResults = document.getElementById('no-filter-results');
+            var visibleCount = 0;
 
-    // ============ Delete Modal ============
-    window.openDeleteModal = function (cardId) {
-        pendingDeleteCard = document.getElementById(cardId);
-        deleteModal.classList.add('show');
-    };
-
-    window.closeDeleteModal = function () {
-        pendingDeleteCard = null;
-        deleteModal.classList.remove('show');
-    };
-
-    document.getElementById('confirm-delete-btn').addEventListener('click', async function () {
-        if (!pendingDeleteCard) return;
-        var deleteUrl = pendingDeleteCard.getAttribute('data-delete-url');
-        var btn = this;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
-
-        try {
-            var response = await fetch(deleteUrl, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' }
+            cards.forEach(function (card) {
+                var teams = card.getAttribute('data-teams') || '';
+                var visible = !query || teams.indexOf(query) !== -1;
+                card.style.display = visible ? '' : 'none';
+                if (visible) visibleCount++;
             });
 
-            if (!response.ok) {
-                var errData = await response.json().catch(function () { return {}; });
-                showToast('Failed to delete: ' + (errData.error || response.statusText), 'error');
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Delete';
-                closeDeleteModal();
-                return;
+            if (noResults) {
+                noResults.style.display = (cards.length > 0 && visibleCount === 0) ? 'block' : 'none';
             }
+        }
 
-            pendingDeleteCard.style.transition = 'all 0.35s ease';
-            pendingDeleteCard.style.opacity = '0';
-            pendingDeleteCard.style.transform = 'scale(0.92) translateY(8px)';
+        // ============ Expiry Bars & Countdown ============
+        function tickExpiry() {
+            var bars = document.querySelectorAll('.expiry-bar-wrap[data-expire]');
+            var now = Date.now();
+
+            bars.forEach(function (wrap) {
+                var createdRaw = wrap.getAttribute('data-created');
+                var expireRaw = wrap.getAttribute('data-expire');
+                var created = createdRaw ? Date.parse(createdRaw) : NaN;
+                var expire = expireRaw ? Date.parse(expireRaw) : NaN;
+                var cdText = wrap.querySelector('.cd-text');
+                var pctSpan = wrap.querySelector('.el-pct');
+                var fill = wrap.querySelector('.expiry-fill');
+                var label = wrap.querySelector('.expiry-label');
+
+                if (isNaN(expire)) {
+                    if (cdText) cdText.textContent = 'Unknown';
+                    return;
+                }
+
+                var left = expire - now;
+                var total = isNaN(created) ? 7 * 86400000 : (expire - created);
+                var pct = total > 0 ? Math.max(0, Math.min(100, (left / total) * 100)) : 0;
+
+                if (cdText) cdText.textContent = left > 0 ? fmtDuration(left) : 'Expired';
+                if (pctSpan) pctSpan.textContent = left > 0 ? Math.round(pct) + '%' : '';
+                if (label) label.classList.toggle('expired', left <= 0);
+
+                if (fill) {
+                    fill.style.width = Math.max(0, pct) + '%';
+                    fill.classList.remove('low', 'critical', 'gone');
+                    if (left <= 0) fill.classList.add('gone');
+                    else if (pct < 15) fill.classList.add('critical');
+                    else if (pct < 35) fill.classList.add('low');
+                }
+            });
+        }
+
+        function fmtDuration(ms) {
+            if (ms <= 0) return 'Expired';
+            var s = Math.floor(ms / 1000);
+            var d = Math.floor(s / 86400);
+            var h = Math.floor((s % 86400) / 3600);
+            var m = Math.floor((s % 3600) / 60);
+            var sec = s % 60;
+            var parts = [];
+            if (d) parts.push(d + 'd');
+            if (h) parts.push(h + 'h');
+            if (m) parts.push(m + 'm');
+            parts.push(sec + 's');
+            return parts.join(' ');
+        }
+
+        tickExpiry();
+        setInterval(tickExpiry, 1000);
+
+        // ============ Toast Notifications ============
+        function showToast(message, type) {
+            var container = document.getElementById('toast-container');
+            if (!container) return;
+            var icon = type === 'success' ? 'fa-circle-check' : 'fa-circle-xmark';
+            var toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + message;
+            container.appendChild(toast);
 
             setTimeout(function () {
-                pendingDeleteCard.remove();
-                if (!document.querySelector('.archive-card')) {
-                    var grid = document.getElementById('archive-grid');
-                    if (grid) {
-                        grid.outerHTML =
-                            '<div class="empty-state">' +
-                                '<div class="empty-icon"><i class="fa-solid fa-box-archive"></i></div>' +
-                                '<h3>No archives available</h3>' +
-                                '<p>Archives are kept for 7 days after creation.</p>' +
-                            '</div>';
+                toast.classList.add('removing');
+                setTimeout(function () { toast.remove(); }, 300);
+            }, 3500);
+        }
+
+        // ============ Delete Archive Modal ============
+        window.openDeleteModal = function (cardId) {
+            isBulkDelete = false;
+            pendingDeleteCard = document.getElementById(cardId);
+            document.getElementById('delete-modal-title').textContent = "Delete this archive?";
+            document.getElementById('delete-modal-text').textContent = "This action is permanent. The archive file will be removed from the server.";
+            deleteModal.classList.add('show');
+        };
+
+        window.closeDeleteModal = function () {
+            pendingDeleteCard = null;
+            deleteModal.classList.remove('show');
+        };
+
+        document.getElementById('confirm-delete-btn').addEventListener('click', async function () {
+            var btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
+
+            try {
+                if (isBulkDelete) {
+                    // BULK DELETE FLOW
+                    var matchIds = Array.from(selectedMatches);
+                    var response = await fetch('/matches/delete-multiple', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ match_ids: matchIds })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Failed to delete matches");
+                    }
+
+                    var result = await response.json();
+
+                    // Remove deleted cards from DOM
+                    matchIds.forEach(id => {
+                        var card = document.getElementById('match-' + id);
+                        if (card) {
+                            card.style.transition = 'all 0.3s ease';
+                            card.style.transform = 'scale(0.9) translateY(10px)';
+                            card.style.opacity = '0';
+                            setTimeout(() => card.remove(), 300);
+                        }
+                    });
+
+                    showToast(`Successfully deleted ${result.deleted_count} matches`, 'success');
+
+                    // Update Badge Counts
+                    setTimeout(() => {
+                        var currentCount = parseInt(document.getElementById('match-count-pill').innerText) || 0;
+                        var newCount = Math.max(0, currentCount - result.deleted_count);
+                        document.getElementById('match-count-pill').innerText = newCount;
+                        document.getElementById('match-count-badge').innerText = newCount;
+
+                        // Check for empty state
+                        if (newCount === 0) {
+                            location.reload();
+                        }
+                    }, 350);
+
+                    cancelSelection();
+                    closeDeleteModal();
+
+                    // Exit manage mode
+                    manageBtn.click();
+
+                } else {
+                    // ARCHIVE DELETE FLOW (Existing)
+                    if (!pendingDeleteCard) return;
+                    var deleteUrl = pendingDeleteCard.getAttribute('data-delete-url');
+
+                    var response = await fetch(deleteUrl, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    if (!response.ok) {
+                        var errData = await response.json().catch(function () { return {}; });
+                        showToast('Failed to delete: ' + (errData.error || response.statusText), 'error');
+                        closeDeleteModal();
+                    } else {
+                        pendingDeleteCard.style.transition = 'all 0.35s ease';
+                        pendingDeleteCard.style.opacity = '0';
+                        pendingDeleteCard.style.transform = 'scale(0.92) translateY(8px)';
+
+                        setTimeout(function () {
+                            pendingDeleteCard.remove();
+                            if (!document.querySelector('.archive-card')) {
+                                var grid = document.getElementById('archive-grid');
+                                if (grid) {
+                                    grid.outerHTML =
+                                        '<div class="empty-state">' +
+                                        '<div class="empty-icon"><i class="fa-solid fa-box-archive"></i></div>' +
+                                        '<h3>No archives available</h3>' +
+                                        '<p>Archives are kept for 7 days after creation.</p>' +
+                                        '</div>';
+                                }
+                            }
+                            showToast('Archive deleted successfully', 'success');
+                            closeDeleteModal();
+                        }, 350);
                     }
                 }
+            } catch (err) {
+                console.error("Delete operation failed:", err);
+                showToast('Unexpected error while deleting. Check console for details.', 'error');
+            } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Delete';
-                closeDeleteModal();
-                showToast('Archive deleted successfully', 'success');
-            }, 350);
+            }
+        });
 
-        } catch (err) {
-            showToast('Unexpected error while deleting archive.', 'error');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Delete';
-            closeDeleteModal();
-        }
-    });
+        deleteModal.addEventListener('click', function (e) {
+            if (e.target === deleteModal) closeDeleteModal();
+        });
 
-    deleteModal.addEventListener('click', function (e) {
-        if (e.target === deleteModal) closeDeleteModal();
-    });
-
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeDeleteModal();
-    });
-})();
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeDeleteModal();
+        });
+    })();
 </script>
 {% endblock %}

@@ -4880,18 +4880,18 @@ def create_app():
             app.logger.error(f"Error listing archives in '{files_dir}' for '{username}': {e}", exc_info=True)
 
         try:
-            non_tournament_matches = (
-                DBMatch.query
-                .filter(
-                    DBMatch.user_id == current_user.id,
-                    DBMatch.tournament_id.is_(None)
-                )
+            # Fetch ALL matches for the user, joined with Tournament to get names
+            all_matches = (
+                db.session.query(DBMatch, Tournament.name)
+                .outerjoin(Tournament, DBMatch.tournament_id == Tournament.id)
+                .filter(DBMatch.user_id == current_user.id)
                 .order_by(DBMatch.date.desc())
                 .all()
             )
 
+            # Collect team IDs for bulk fetching names
             team_ids = set()
-            for m in non_tournament_matches:
+            for m, _ in all_matches:
                 if m.home_team_id:
                     team_ids.add(m.home_team_id)
                 if m.away_team_id:
@@ -4903,9 +4903,10 @@ def create_app():
                     t.id: t for t in DBTeam.query.filter(DBTeam.id.in_(team_ids)).all()
                 }
 
-            for m in non_tournament_matches:
+            for m, tour_name in all_matches:
                 home_name = teams_by_id.get(m.home_team_id).name if m.home_team_id in teams_by_id else "Home"
                 away_name = teams_by_id.get(m.away_team_id).name if m.away_team_id in teams_by_id else "Away"
+                
                 match_history.append({
                     "match_id": m.id,
                     "home_team": home_name,
@@ -4919,9 +4920,11 @@ def create_app():
                         f"({m.away_team_overs or '0.0'})"
                     ),
                     "scoreboard_url": url_for("view_scoreboard", match_id=m.id),
+                    "is_tournament": m.tournament_id is not None,
+                    "tournament_name": tour_name if tour_name else None
                 })
         except Exception as e:
-            app.logger.error(f"Error loading non-tournament match history for '{username}': {e}", exc_info=True)
+            app.logger.error(f"Error loading match history for '{username}': {e}", exc_info=True)
 
         return render_template("my_matches.html", files=valid_files, match_history=match_history)
 
@@ -4964,6 +4967,105 @@ def create_app():
         except Exception as e:
             app.logger.error(f"Error sending archive {zip_path}: {e}", exc_info=True)
             return jsonify({"error": "Failed to send file"}), 500
+
+
+
+    @app.route("/matches/delete-multiple", methods=["POST"])
+    @login_required
+    def delete_multiple_matches():
+        """
+        Delete multiple non-tournament matches and reverse their stats.
+        """
+        try:
+            data = request.get_json()
+            match_ids = data.get('match_ids', [])
+            app.logger.info(f"Bulk delete requested for matches: {match_ids} by user {current_user.id}")
+            
+            if not match_ids:
+                return jsonify({'error': 'No matches selected'}), 400
+                
+            deleted_count = 0
+            
+            for match_id in match_ids:
+                try:
+                    # Find the match and verify ownership
+                    match = DBMatch.query.get(match_id)
+                    if not match:
+                        app.logger.warning(f"Match {match_id} not found during bulk delete")
+                        continue
+                        
+                    if match.user_id != current_user.id:
+                        app.logger.warning(f"Unauthorized delete attempt by {current_user.id} for match {match_id}")
+                        continue
+                        
+                    # Only allow deleting non-tournament matches here to be safe
+                    if match.tournament_id is not None:
+                        app.logger.warning(f"Attempt to delete tournament match {match_id} via loose match deletion")
+                        continue
+
+                    # 1. Get scorecards to reverse stats
+                    scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
+                    
+                    # 2. Reverse aggregates
+                    if scorecards:
+                        try:
+                            # Import here or rely on global scope? assuming global scope based on view_file earlier
+                            reverse_player_aggregates(scorecards, logger=app.logger)
+                        except Exception as rev_err:
+                            app.logger.error(f"Error reversing stats for match {match_id}: {rev_err}", exc_info=True)
+                    
+                    # 3. Delete dependent records explicitly
+                    MatchPartnership.query.filter_by(match_id=match_id).delete()
+                    MatchScorecard.query.filter_by(match_id=match_id).delete()
+                    
+                    # 4. Remove from in-memory cache if present
+                    with MATCH_INSTANCES_LOCK:
+                        MATCH_INSTANCES.pop(match_id, None)
+
+                    # 5. Delete the match record
+                    db.session.delete(match)
+                    deleted_count += 1
+                    
+                    # 6. Try to delete the JSON file if it exists
+                    match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+                    json_path = None
+                    if match.match_json_path:
+                        # Handle both absolute and relative paths
+                        json_path = match.match_json_path
+                        if not os.path.isabs(json_path):
+                             json_path = os.path.join(match_dir, json_path)
+                    
+                    # Try explicit path first
+                    if json_path and os.path.isfile(json_path):
+                        try:
+                            os.remove(json_path)
+                        except Exception as e:
+                            app.logger.warning(f"Failed to delete JSON file {json_path}: {e}")
+                    else:
+                        # Fallback search if path wasn't stored or file wasn't found
+                        if os.path.isdir(match_dir):
+                            # Look for files containing the match ID
+                            for fn in os.listdir(match_dir):
+                                if fn.endswith(".json") and match_id in fn:
+                                    try:
+                                        full_path = os.path.join(match_dir, fn)
+                                        if os.path.isfile(full_path):
+                                            os.remove(full_path)
+                                    except Exception as e:
+                                        app.logger.warning(f"Failed to delete fallback JSON {fn}: {e}")
+
+                except Exception as inner_e:
+                    app.logger.error(f"Error deleting individual match {match_id}: {inner_e}", exc_info=True)
+                    continue
+            
+            db.session.commit()
+            app.logger.info(f"Bulk delete completed. Deleted {deleted_count} matches.")
+            return jsonify({'success': True, 'deleted_count': deleted_count}), 200
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error deleting matches: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
 
 
     @app.route('/archives/<path:archive_name>', methods=['DELETE'])
