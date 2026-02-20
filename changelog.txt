@@ -4,6 +4,7 @@
 - Added visual badges to distinguish Tournament vs Exhibition matches
 - Improved UI with new floating action bar for match management
 - Fixed various UI glitches and improved error handling
+- Improved UI in statistics page, added filters for individual team stats
 
 [2.0.3] 2026-02-18
 - Fixed commentary engine not working in cloud deployment (commentary_pack.json was excluded by .gitignore)
