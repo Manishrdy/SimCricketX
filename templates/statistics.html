@@ -549,6 +549,12 @@
         box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
     }
 
+    .view-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
     /* Tournament Selector */
     .tournament-selector-wrapper {
         display: flex;
@@ -1617,7 +1623,8 @@
                 <span>Overall Statistics</span>
             </button>
             <button class="view-btn {% if view_type == 'tournament' %}active{% endif %}"
-                onclick="switchView('tournament')">
+                onclick="switchView('tournament')"
+                {% if not tournaments %}disabled title="Create a tournament first to use this view"{% endif %}>
                 <i class="fas fa-trophy"></i>
                 <span>Tournament Stats</span>
             </button>
@@ -2326,9 +2333,8 @@
     // ======= VIEW SWITCHING =======
     function switchView(view) {
         if (view === 'tournament') {
-            const selector = document.getElementById('tournament-selector');
-            if (selector) selector.classList.remove('hidden');
-            document.querySelectorAll('.stats-controls .view-btn').forEach(btn => {
+            document.getElementById('tournament-selector').classList.remove('hidden');
+            document.querySelectorAll('.view-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.textContent.includes('Tournament'));
             });
         } else {
