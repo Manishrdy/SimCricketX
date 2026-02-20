@@ -3032,7 +3032,34 @@ class Match:
                         decision,
                         commentary=f"<em>Select bowler for over {self.current_over + 1}</em>"
                     )
-                self.current_bowler = self.pick_bowler()
+                try:
+                    self.current_bowler = self.pick_bowler()
+                except Exception as e:
+                    logger.exception("Bowler selection failed at over %s.%s: %s", self.current_over, self.current_ball, e)
+
+                    eligible = [p for p in self.bowling_team if p.get("will_bowl", False)]
+                    if not eligible:
+                        return {
+                            "error": "Bowler selection failed and no eligible bowlers are available.",
+                            "match_over": True,
+                            "result": "Match aborted: No eligible bowler available."
+                        }
+
+                    previous_name = self.current_bowler["name"] if self.current_bowler else None
+                    quota_non_consecutive = [
+                        b for b in eligible
+                        if b["name"] != previous_name and self.bowler_history.get(b["name"], 0) < 4
+                    ]
+                    non_consecutive = [b for b in eligible if b["name"] != previous_name]
+                    quota_any = [b for b in eligible if self.bowler_history.get(b["name"], 0) < 4]
+
+                    fallback_pool = quota_non_consecutive or non_consecutive or quota_any or eligible
+                    fallback_pool.sort(key=lambda b: (-b.get("bowling_rating", 0), b.get("name", "")))
+                    self.current_bowler = fallback_pool[0]
+                    logger.warning(
+                        "Using fallback bowler '%s' after selection failure",
+                        self.current_bowler.get("name", "Unknown")
+                    )
                 self.bowler_selected_for_over = self.current_over
             if self.current_over == 0:
                 batting_team_name = self._get_team_name(self.batting_team)

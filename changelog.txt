@@ -1,3 +1,10 @@
+[2.1.0] 2026-02-19
+- Added "Manage Matches" feature to bulk delete non-tournament matches
+- Implemented stats invalidation: deleting matches now reverses player career statistics
+- Added visual badges to distinguish Tournament vs Exhibition matches
+- Improved UI with new floating action bar for match management
+- Fixed various UI glitches and improved error handling
+
 [2.0.3] 2026-02-18
 - Fixed commentary engine not working in cloud deployment (commentary_pack.json was excluded by .gitignore)
 

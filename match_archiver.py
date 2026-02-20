@@ -295,7 +295,9 @@ class MatchArchiver:
                 self._cleanup_temporary_files()
             
             # Save to Database
-            self._save_to_database()
+            db_saved = self._save_to_database()
+            if not db_saved:
+                raise MatchArchiverError(f"Failed to save match {self.match_id} to database")
             self.logger.info(f"Match {self.match_id} saved to database")
 
             archive_size = os.path.getsize(zip_path)
@@ -490,7 +492,7 @@ class MatchArchiver:
                 db.session.add(fielding_card)
                 self.logger.debug(f"Created fielding record for {fielder_name}: {contributions}")
 
-    def _save_to_database(self) -> None:
+    def _save_to_database(self) -> bool:
         """Save match results and stats to SQLite database"""
         try:
             home_team = None
@@ -522,7 +524,7 @@ class MatchArchiver:
 
             if not home_team or not away_team:
                 self.logger.error(f"Could not resolve teams for DB save. Match ID: {self.match_id}")
-                return
+                return False
 
             # Determine Winner — match result format is "{short_code} won by ..."
             winner_team = None
@@ -784,10 +786,12 @@ class MatchArchiver:
             self._save_partnerships_to_db(self.match.second_innings_partnerships, 2, second_bat_team_id)
 
             db.session.commit()
+            return True
             
         except Exception as e:
             self.logger.error(f"DB Save Error: {e}", exc_info=True)
             db.session.rollback()
+            return False
 
     def _save_partnerships_to_db(self, partnerships: List[Dict], innings_number: int, batting_team_id: int) -> None:
         """
