@@ -4451,7 +4451,7 @@ def create_app():
         
     @app.route("/match/<match_id>/next-ball", methods=["POST"])
     @login_required
-    @rate_limit(max_requests=30, window_seconds=10)  # C3: Rate limit to prevent DoS
+    @rate_limit(max_requests=60, window_seconds=10)  # C3: Rate limit to prevent DoS
     def next_ball(match_id):
         try:
             with MATCH_INSTANCES_LOCK:  # Bug Fix B2: Thread-safe match creation

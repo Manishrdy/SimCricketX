@@ -99,18 +99,30 @@ def get_active_game_mode():
     return None
 
 
-def get_scoring_matrix(pitch_type):
+def get_scoring_matrix(pitch_type, mode_override: str = None):
     """
     Return the scoring matrix for a pitch type with game mode modifiers applied.
     Probabilities are re-normalized to sum to 1.0.
     Returns None if config unavailable (caller should use hardcoded fallback).
+
+    Parameters
+    ----------
+    pitch_type    : str  – e.g. 'Green', 'Flat', 'Hard', 'Dry', 'Dead'
+    mode_override : str  – optional; if provided, uses this game mode instead
+                          of the statically configured active_game_mode.
+                          Supports Feature 13 (Dynamic Game Mode).
     """
     profile = get_pitch_profile(pitch_type)
     if not profile or "scoring_matrix" not in profile:
         return None
 
     base_matrix = dict(profile["scoring_matrix"])
-    mode = get_active_game_mode()
+    cfg = get_config()
+
+    if mode_override and cfg:
+        mode = cfg.get("game_modes", {}).get(mode_override)
+    else:
+        mode = get_active_game_mode()
 
     if mode:
         modifiers = mode.get("modifiers", {})
