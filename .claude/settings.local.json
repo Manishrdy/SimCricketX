@@ -5,7 +5,9 @@
       "Bash(git -C \"d:\\\\SimCricketX\" rm --cached data/visit_counter.txt)",
       "Bash(git checkout:*)",
       "Bash(python:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(sqlite3:*)",
+      "Bash(python3:*)"
     ]
   }
 }
