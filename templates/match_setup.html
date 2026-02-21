@@ -851,7 +851,7 @@
     <div class="wizard-step" id="step-3">
         <h2 style="text-align:center; margin-bottom: 0.5rem;">Finalize Playing XIs</h2>
         <p style="text-align:center; color:var(--fg-secondary); margin-bottom:1.5rem;">
-            Drag players to organize the lineup, or press Enter to cycle between zones. Ensure 5 bowlers + 1 Keeper per side.
+            Drag players to organize the lineup, double-click to add to Playing XI, double right-click to send to Bench, or press Enter to cycle zones. Ensure 5 bowlers + 1 Keeper per side.
         </p>
 
         <div class="squad-layout" role="region" aria-label="Squad selection">
@@ -941,6 +941,8 @@
     let currentStep = 1;
     let selectedTeamIndices = [];
     const LINEUP_STORAGE_VERSION = 1;
+    const RIGHT_CLICK_DOUBLE_MS = 350;
+    let lastRightClick = { pill: null, at: 0 };
     const _setupConfig = JSON.parse(document.getElementById('setup-config').textContent);
     const tournamentId = _setupConfig.tournamentId;
     const fixtureId = _setupConfig.fixtureId;
@@ -1252,18 +1254,21 @@
         // Add drag listeners to zones
         [xiContainer, subContainer, resContainer].forEach(zone => {
             zone.ondragover = e => {
+                const dragged = document.querySelector('.player-pill.dragging');
+                if (!dragged || dragged.dataset.side !== side) {
+                    zone.classList.remove('active');
+                    return;
+                }
+
                 e.preventDefault();
                 zone.classList.add('active');
 
                 // Allow reordering visual feedback (optional, but good for UX)
                 const afterElement = getDragAfterElement(zone, e.clientY);
-                const dragged = document.querySelector('.player-pill.dragging');
-                if (dragged) {
-                    if (afterElement == null) {
-                        zone.appendChild(dragged);
-                    } else {
-                        zone.insertBefore(dragged, afterElement);
-                    }
+                if (afterElement == null) {
+                    zone.appendChild(dragged);
+                } else {
+                    zone.insertBefore(dragged, afterElement);
                 }
             };
             zone.ondragleave = e => {
@@ -1314,6 +1319,22 @@
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 cyclePlayerZone(div, side);
+            }
+        };
+        div.ondblclick = e => {
+            if (e.target.closest('.bowl-check')) return;
+            movePlayerToZone(div, side, 'selected', 'Playing XI');
+        };
+        div.oncontextmenu = e => {
+            e.preventDefault();
+            if (e.target.closest('.bowl-check')) return;
+
+            const now = Date.now();
+            const isDoubleRightClick = lastRightClick.pill === div && (now - lastRightClick.at) <= RIGHT_CLICK_DOUBLE_MS;
+            lastRightClick = { pill: div, at: now };
+
+            if (isDoubleRightClick) {
+                movePlayerToZone(div, side, 'substitutes', 'Bench');
             }
         };
 
@@ -1402,6 +1423,22 @@
         }
     }
 
+    function movePlayerToZone(pill, side, zoneSuffix, zoneLabel) {
+        if (!pill || pill.dataset.side !== side) return;
+
+        const targetZone = document.getElementById(`${side}-${zoneSuffix}`);
+        if (!targetZone || pill.parentElement === targetZone) return;
+
+        targetZone.appendChild(pill);
+        updateCounts(side);
+        validateSquads();
+
+        const announce = document.getElementById('squad-announce');
+        if (announce) {
+            announce.textContent = `${pill.dataset.name} moved to ${zoneLabel}`;
+        }
+    }
+
     function handleDrop(e, zone, side) {
         e.preventDefault();
         zone.classList.remove('active'); // Remove active state on drop
@@ -1409,7 +1446,7 @@
         if (!dragged) return;
 
         // Prevent cross-team drops
-        if (!zone.closest(`#${side}-pane`).contains(dragged) && !dragged.parentElement.closest(`#${side}-pane`)) {
+        if (dragged.dataset.side !== side) {
             return; // Logic handled in dragover mostly, but safety check
         }
 
