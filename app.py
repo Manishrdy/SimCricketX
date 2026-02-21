@@ -663,7 +663,7 @@ def create_app():
         if request.path.startswith('/static'):
             return None
         # Allow login/logout so admin can authenticate
-        if request.endpoint in ('login', 'logout', 'static', 'auth_challenge'):
+        if request.endpoint in ('login', 'logout', 'static', 'auth_challenge', 'admin_stop_impersonation'):
             return None
         # Allow admin users through
         if current_user.is_authenticated and getattr(current_user, 'is_admin', False):
@@ -691,7 +691,7 @@ def create_app():
             return None
         if request.path.startswith('/static'):
             return None
-        if request.endpoint in ('force_change_password', 'logout', 'static'):
+        if request.endpoint in ('force_change_password', 'logout', 'static', 'admin_stop_impersonation'):
             return None
         if getattr(current_user, 'force_password_reset', False):
             session['force_password_reset'] = True
@@ -719,6 +719,7 @@ def create_app():
                 'register',
                 'static',
                 'force_change_password',
+                'admin_stop_impersonation',
             ):
                 return None
 
