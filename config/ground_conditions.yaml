@@ -142,8 +142,8 @@ pitch_profiles:
       low scoring
     run_factor: 0.85
     scoring_matrix:
-      Dot: 0.3483
-      Single: 0.3632
+      Dot: 0.3482
+      Single: 0.3631
       Double: 0.0846
       Three: 0.005
       Four: 0.0697

@@ -453,11 +453,11 @@ Match Scorecard - SimCricketX
                 </tbody>
             </table>
 
-            <!-- A12: Extras summary row -->
+            <!-- Extras summary row -->
             {% if innings.extras %}
             <div class="extras-row">
                 <strong>Extras:</strong> {{ innings.extras.total }}
-                (w {{ innings.extras.wides }}, nb {{ innings.extras.noballs }})
+                (w {{ innings.extras.wides }}, nb {{ innings.extras.noballs }}{% if innings.extras.byes_legbyes > 0 %}, b+lb {{ innings.extras.byes_legbyes }}{% endif %})
             </div>
             {% endif %}
         </div>

@@ -2582,6 +2582,19 @@
     let currentComparisonRole = 'batsman';
     let allPlayers = [];
 
+    function formatOrdinal(n) {
+        const num = parseInt(n, 10);
+        if (Number.isNaN(num)) return n;
+        const mod100 = num % 100;
+        if (mod100 >= 11 && mod100 <= 13) return num + 'th';
+        switch (num % 10) {
+            case 1: return num + 'st';
+            case 2: return num + 'nd';
+            case 3: return num + 'rd';
+            default: return num + 'th';
+        }
+    }
+
     // Load partnerships
     function loadPartnerships() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -2608,7 +2621,7 @@
                         html += '<td class="player-name">' + p.batsman1.split(' ').pop() + ' & ' + p.batsman2.split(' ').pop() + '</td>';
                         html += '<td class="stat-value">' + p.runs + '</td>';
                         html += '<td>' + p.balls + '</td>';
-                        html += '<td>' + p.wicket + 'th</td>';
+                        html += '<td>' + formatOrdinal(p.wicket) + '</td>';
                         if (view === 'overall') html += '<td>' + (p.tournament || 'N/A') + '</td>';
                         html += '</tr>';
                     });
@@ -2753,8 +2766,8 @@
 
             const battingStats = ['matches', 'innings', 'runs', 'average', 'strike_rate', 'fifties', 'hundreds'];
             battingStats.forEach(stat => {
-                const v1 = (p1.batting && p1.batting[stat]) || 0;
-                const v2 = (p2.batting && p2.batting[stat]) || 0;
+                const v1 = stat === 'matches' ? (p1.matches || 0) : ((p1.batting && p1.batting[stat]) || 0);
+                const v2 = stat === 'matches' ? (p2.matches || 0) : ((p2.batting && p2.batting[stat]) || 0);
                 const maxVal = Math.max(v1, v2, 1);
                 html += '<tr><td>' + stat.replace('_', ' ').toUpperCase() + '</td>';
                 html += '<td><div class="compare-cell">';
@@ -2778,8 +2791,8 @@
 
             const bowlingStats = ['matches', 'innings', 'wickets', 'average', 'economy', 'four_wickets', 'five_wickets'];
             bowlingStats.forEach(stat => {
-                const v1 = (p1.bowling && p1.bowling[stat]) || 0;
-                const v2 = (p2.bowling && p2.bowling[stat]) || 0;
+                const v1 = stat === 'matches' ? (p1.matches || 0) : ((p1.bowling && p1.bowling[stat]) || 0);
+                const v2 = stat === 'matches' ? (p2.matches || 0) : ((p2.bowling && p2.bowling[stat]) || 0);
                 const maxVal = Math.max(v1, v2, 1);
                 const better = stat === 'average' || stat === 'economy' ? (v1 > 0 && (v2 === 0 || v1 < v2)) : v1 > v2;
                 html += '<tr><td>' + stat.replace('_', ' ').toUpperCase() + '</td>';
