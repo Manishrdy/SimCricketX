@@ -1,0 +1,63 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Create User</h1>
+        <p class="admin-page-subtitle">Create a new user account directly from admin</p>
+    </div>
+    <div class="admin-page-actions">
+        <a href="{{ url_for('admin_users') }}" class="a-btn a-btn-ghost"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+<div class="a-card-flat" style="max-width: 520px;">
+    <form id="createUserForm" onsubmit="createUser(event)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="a-form-group">
+            <label class="a-form-label">Email Address <span style="color:#dc2626;">*</span></label>
+            <input type="email" name="email" class="a-form-input" placeholder="user@example.com" required style="max-width:100%;">
+        </div>
+        <div class="a-form-group">
+            <label class="a-form-label">Display Name</label>
+            <input type="text" name="display_name" class="a-form-input" placeholder="Optional display name" style="max-width:100%;">
+        </div>
+        <div class="a-form-group">
+            <label class="a-form-label">Password <span style="color:#dc2626;">*</span></label>
+            <input type="password" name="password" class="a-form-input" placeholder="Min 8 chars, upper/lower/digit" required minlength="8" style="max-width:100%;">
+            <div style="font-size:0.78rem; color:var(--fg-secondary); margin-top:0.3rem;">Min 8 characters, must include uppercase, lowercase, and a digit.</div>
+        </div>
+        <div class="a-form-group">
+            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.88rem; font-weight:600; color:var(--fg);">
+                <input type="checkbox" name="make_admin" value="1" style="width:16px;height:16px;">
+                Grant Administrator Role
+            </label>
+            <div style="font-size:0.78rem; color:var(--fg-secondary); margin-top:0.3rem;">The user will have full admin access from creation.</div>
+        </div>
+        <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-user-plus"></i> Create User</button>
+    </form>
+</div>
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
+    setTimeout(() => c.innerHTML = '', 5000);
+}
+async function createUser(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const res = await fetch('/admin/users/create', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (res.ok) {
+        showAlert(data.message, 'success');
+        e.target.reset();
+        setTimeout(() => window.location.href = '/admin/users', 2000);
+    } else {
+        showAlert(data.error || 'Failed to create user', 'error');
+    }
+}
+</script>
+{% endblock %}

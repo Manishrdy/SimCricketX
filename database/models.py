@@ -459,3 +459,32 @@ class SiteCounter(db.Model):
 
     key = db.Column(db.String(50), primary_key=True)
     value = db.Column(db.Integer, default=0, nullable=False)
+
+
+class LoginHistory(db.Model):
+    """Persistent log of every successful login and logout event"""
+    __tablename__ = 'login_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    ip_address = db.Column(db.String(50), nullable=True)
+    user_agent = db.Column(db.String(300), nullable=True)
+    event = db.Column(db.String(10), default='login', nullable=False)  # 'login' or 'logout'
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship('User', backref=db.backref('login_history', cascade='all, delete-orphan', passive_deletes=True))
+
+    __table_args__ = (
+        db.Index('ix_login_history_user_ts', 'user_id', 'timestamp'),
+    )
+
+
+class IPWhitelistEntry(db.Model):
+    """IP addresses allowed when whitelist mode is enabled"""
+    __tablename__ = 'ip_whitelist'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(50), nullable=False, unique=True)
+    label = db.Column(db.String(100), nullable=True)
+    added_by = db.Column(db.String(120), nullable=False)
+    added_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

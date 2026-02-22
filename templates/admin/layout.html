@@ -199,6 +199,55 @@
         opacity: 0.8;
     }
 
+    /* Timezone switcher */
+    .tz-widget {
+        padding: 0.6rem 1.5rem 0.75rem;
+        border-top: 1px solid var(--card-border);
+    }
+
+    .tz-widget-label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--fg-secondary);
+        opacity: 0.7;
+        margin-bottom: 0.45rem;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .tz-btns {
+        display: flex;
+        gap: 0.35rem;
+    }
+
+    .tz-btn {
+        flex: 1;
+        padding: 0.3rem 0;
+        font-size: 0.75rem;
+        font-weight: 700;
+        border: 1px solid var(--card-border);
+        border-radius: 6px;
+        background: var(--card-bg);
+        color: var(--fg-secondary);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        letter-spacing: 0.03em;
+    }
+
+    .tz-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .tz-btn.tz-active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+
     /* --- Main Content Area --- */
     .admin-content {
         padding: 2rem 2.5rem;
@@ -815,6 +864,10 @@
                             class="admin-nav-link {% if request.endpoint == 'admin_ip_blocklist' %}active{% endif %}">
                             <i class="fas fa-ban"></i> IP Blocklist
                         </a></li>
+                    <li><a href="/admin/ip-whitelist"
+                            class="admin-nav-link {% if request.endpoint == 'admin_ip_whitelist' %}active{% endif %}">
+                            <i class="fas fa-lock"></i> IP Whitelist
+                        </a></li>
                     <li><a href="/admin/rate-limits"
                             class="admin-nav-link {% if request.endpoint == 'admin_rate_limits' %}active{% endif %}">
                             <i class="fas fa-tachometer-alt"></i> Rate Limits
@@ -865,6 +918,24 @@
                             class="admin-nav-link {% if request.endpoint == 'admin_audit_log' %}active{% endif %}">
                             <i class="fas fa-scroll"></i> Audit Log
                         </a></li>
+                    <li><a href="/admin/sql"
+                            class="admin-nav-link {% if request.endpoint == 'admin_sql_runner' %}active{% endif %}">
+                            <i class="fas fa-code"></i> SQL Runner
+                        </a></li>
+                    <li><a href="/admin/retention"
+                            class="admin-nav-link {% if request.endpoint == 'admin_retention' %}active{% endif %}">
+                            <i class="fas fa-chart-line"></i> Retention
+                        </a></li>
+                </ul>
+            </div>
+
+            <div class="admin-nav-section">
+                <div class="admin-nav-label">Users</div>
+                <ul class="admin-nav-items">
+                    <li><a href="/admin/users/create"
+                            class="admin-nav-link {% if request.endpoint == 'admin_create_user' %}active{% endif %}">
+                            <i class="fas fa-user-plus"></i> Create User
+                        </a></li>
                 </ul>
             </div>
 
@@ -890,6 +961,15 @@
                 </ul>
             </div>
         </nav>
+
+        <div class="tz-widget">
+            <div class="tz-widget-label"><i class="fas fa-globe"></i> Timezone</div>
+            <div class="tz-btns">
+                <button class="tz-btn" data-tz="IST" title="India Standard Time (UTC+5:30)">IST</button>
+                <button class="tz-btn" data-tz="PST" title="US Pacific Time (UTC−8/−7)">PST</button>
+                <button class="tz-btn" data-tz="auto" title="Use your browser's local timezone">Auto</button>
+            </div>
+        </div>
 
         <div class="admin-sidebar-footer">
             <a href="{{ url_for('home') }}"><i class="fas fa-arrow-left"></i> Return to App</a>
@@ -946,6 +1026,60 @@
     });
 
     setupAdminNavFilter();
+
+    // ── Timezone conversion ───────────────────────────────────────────────────
+    const TZ_MAP = {
+        IST:  'Asia/Kolkata',
+        PST:  'America/Los_Angeles',
+        auto: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+    const TZ_LABEL = { IST: ' IST', PST: ' PT', auto: '' };
+
+    function formatUtcTime(isoStr, tzKey) {
+        try {
+            const tz = TZ_MAP[tzKey] || TZ_MAP.auto;
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return isoStr;
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: tz,
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: false,
+            }).formatToParts(d);
+            const p = {};
+            parts.forEach(({ type, value }) => p[type] = value);
+            const label = TZ_LABEL[tzKey] ?? '';
+            // Always compute both, show seconds only when data-seconds attr present
+            return { full: `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}${label}`,
+                     short: `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}${label}` };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function applyAdminTz(tzKey) {
+        document.querySelectorAll('time.utc-time').forEach(el => {
+            const iso = el.getAttribute('datetime');
+            if (!iso) return;
+            const formatted = formatUtcTime(iso, tzKey);
+            if (!formatted) return;
+            el.textContent = el.hasAttribute('data-seconds') ? formatted.full : formatted.short;
+        });
+        document.querySelectorAll('.tz-btn').forEach(btn => {
+            btn.classList.toggle('tz-active', btn.dataset.tz === tzKey);
+        });
+        try { localStorage.setItem('adminTzPref', tzKey); } catch (e) {}
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        let saved = 'auto';
+        try { saved = localStorage.getItem('adminTzPref') || 'auto'; } catch (e) {}
+        applyAdminTz(saved);
+        document.querySelectorAll('.tz-btn').forEach(btn => {
+            btn.addEventListener('click', () => applyAdminTz(btn.dataset.tz));
+        });
+    });
+    // ─────────────────────────────────────────────────────────────────────────
 
     async function toggleMaintenance() {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;

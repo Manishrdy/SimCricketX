@@ -37,7 +37,7 @@
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Dashboard</h1>
-        <p class="admin-page-subtitle">System overview and quick actions</p>
+        <p class="admin-page-subtitle">System overview and quick actions &mdash; <span id="liveIndicator" style="font-size:0.78rem;color:var(--fg-secondary);">connecting...</span></p>
     </div>
 </div>
 
@@ -45,33 +45,43 @@
     <div class="a-stat-card">
         <div class="a-stat-icon"><i class="fas fa-users"></i></div>
         <div class="a-stat-label">Total Users</div>
-        <div class="a-stat-value">{{ stats.total_users }}</div>
+        <div class="a-stat-value" id="live-total_users">{{ stats.total_users }}</div>
     </div>
     <div class="a-stat-card">
         <div class="a-stat-icon"><i class="fas fa-layer-group"></i></div>
         <div class="a-stat-label">Teams</div>
-        <div class="a-stat-value">{{ stats.total_teams }}</div>
+        <div class="a-stat-value" id="live-total_teams">{{ stats.total_teams }}</div>
     </div>
     <div class="a-stat-card">
         <div class="a-stat-icon"><i class="fas fa-baseball-ball"></i></div>
         <div class="a-stat-label">Matches</div>
-        <div class="a-stat-value">{{ stats.total_matches }}</div>
+        <div class="a-stat-value" id="live-total_matches">{{ stats.total_matches }}</div>
     </div>
     <div class="a-stat-card">
         <div class="a-stat-icon"><i class="fas fa-trophy"></i></div>
         <div class="a-stat-label">Tournaments</div>
-        <div class="a-stat-value">{{ stats.total_tournaments }}</div>
+        <div class="a-stat-value" id="live-total_tournaments">{{ stats.total_tournaments }}</div>
     </div>
     <div class="a-stat-card">
         <div class="a-stat-icon"><i class="fas fa-database"></i></div>
         <div class="a-stat-label">Database</div>
-        <div class="a-stat-value">{{ stats.db_size_mb }}</div>
+        <div class="a-stat-value" id="live-db_size_mb">{{ stats.db_size_mb }}</div>
         <div class="a-stat-sub">MB</div>
     </div>
     <div class="a-stat-card">
         <div class="a-stat-icon"><i class="fas fa-signal"></i></div>
         <div class="a-stat-label">Active (7d)</div>
-        <div class="a-stat-value">{{ stats.active_users_7d }}</div>
+        <div class="a-stat-value" id="live-active_users_7d">{{ stats.active_users_7d }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-desktop"></i></div>
+        <div class="a-stat-label">Live Sessions</div>
+        <div class="a-stat-value" id="live-active_sessions">{{ stats.active_sessions }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-gamepad"></i></div>
+        <div class="a-stat-label">Live Matches</div>
+        <div class="a-stat-value" id="live-live_matches">{{ stats.live_matches }}</div>
     </div>
 </div>
 
@@ -149,4 +159,38 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+// Real-time dashboard via Server-Sent Events
+(function() {
+    const indicator = document.getElementById('liveIndicator');
+    const LIVE_FIELDS = ['total_users','total_teams','total_matches','total_tournaments','db_size_mb','active_users_7d','active_sessions','live_matches'];
+
+    function connect() {
+        if (!window.EventSource) {
+            if (indicator) indicator.textContent = 'Live updates not supported in this browser.';
+            return;
+        }
+        const es = new EventSource('/admin/dashboard/stream');
+        es.onopen = () => {
+            if (indicator) { indicator.textContent = 'live'; indicator.style.color = '#22c55e'; }
+        };
+        es.onmessage = (e) => {
+            try {
+                const d = JSON.parse(e.data);
+                LIVE_FIELDS.forEach(key => {
+                    const el = document.getElementById('live-' + key);
+                    if (el && d[key] !== undefined) el.textContent = d[key];
+                });
+            } catch {}
+        };
+        es.onerror = () => {
+            if (indicator) { indicator.textContent = 'reconnecting...'; indicator.style.color = 'var(--fg-secondary)'; }
+            es.close();
+            setTimeout(connect, 15000);
+        };
+    }
+    connect();
+})();
+</script>
 {% endblock %}

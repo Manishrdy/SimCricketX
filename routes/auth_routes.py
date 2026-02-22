@@ -20,6 +20,7 @@ def register_auth_routes(
     DBUser,
     FailedLoginAttempt,
     ActiveSession,
+    LoginHistory,
     get_client_ip,
 ):
     @app.route("/register", methods=["GET", "POST"])
@@ -147,6 +148,12 @@ def register_auth_routes(
                             else None,
                         )
                         db.session.add(active)
+                        db.session.add(LoginHistory(
+                            user_id=email,
+                            ip_address=get_client_ip(),
+                            user_agent=request.user_agent.string[:300] if request.user_agent.string else None,
+                            event='login',
+                        ))
                         db.session.commit()
                     except Exception as e:
                         db.session.rollback()

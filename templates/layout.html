@@ -1232,6 +1232,14 @@
                             <i class="fas fa-trophy"></i>
                             <span>Tournaments</span>
                         </a>
+                        <a href="{{ url_for('my_analytics') }}" class="profile-action-item">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>My Analytics</span>
+                        </a>
+                        <a href="{{ url_for('export_my_data') }}" class="profile-action-item">
+                            <i class="fas fa-download"></i>
+                            <span>Export My Data</span>
+                        </a>
                         <button class="profile-action-item" onclick="toggleThemeFromDropdown()">
                             <i class="fas fa-moon" id="dropdownThemeIcon"></i>
                             <span>Toggle Theme</span>

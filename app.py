@@ -104,7 +104,7 @@ except ImportError:
 from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, Tournament, TournamentTeam, TournamentFixture
 from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership, AdminAuditLog  # Distinct from engine.match.Match
-from database.models import FailedLoginAttempt, BlockedIP, ActiveSession
+from database.models import FailedLoginAttempt, BlockedIP, ActiveSession, LoginHistory, IPWhitelistEntry
 from engine.tournament_engine import TournamentEngine
 from sqlalchemy import func, text  # For aggregate functions
 
@@ -121,6 +121,7 @@ logger = logging.getLogger("SimCricketX")
 # Maintenance mode: when True, only admins can access the app
 MAINTENANCE_MODE = False
 MAINTENANCE_MODE_LOCK = threading.Lock()
+IP_WHITELIST_MODE = False
 
 # D3: Per-match file locks to prevent JSON read/write races
 _match_file_locks = {}
@@ -654,6 +655,23 @@ def create_app():
     def inject_app_version():
         return {"app_version": _get_app_version()}
 
+    # --- Admin timezone filter ---
+    # Wraps a UTC datetime as a <time class="utc-time"> element so client-side JS
+    # can convert it to the admin's preferred timezone (IST / PST / browser auto).
+    from markupsafe import Markup
+
+    def _admin_localtime(dt, seconds=False):
+        """Jinja2 filter: render a UTC datetime as a timezone-convertible <time> element."""
+        if not dt:
+            return '-'
+        iso = dt.strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
+        fmt = '%Y-%m-%d %H:%M:%S' if seconds else '%Y-%m-%d %H:%M'
+        fallback = dt.strftime(fmt) + ' UTC'
+        sec_attr = ' data-seconds="1"' if seconds else ''
+        return Markup(f'<time class="utc-time"{sec_attr} datetime="{iso}">{fallback}</time>')
+
+    app.jinja_env.filters['localtime'] = _admin_localtime
+
     @app.before_request
     def check_maintenance_mode():
         """Block non-admin users when maintenance mode is active."""
@@ -680,6 +698,30 @@ def create_app():
             client_ip = get_client_ip()
             if is_ip_blocked(client_ip):
                 return jsonify({"error": "Access denied"}), 403
+        except Exception:
+            pass
+        return None
+
+    @app.before_request
+    def check_ip_whitelist():
+        """When whitelist mode is on, only allow IPs on the whitelist (admins always pass)."""
+        global IP_WHITELIST_MODE
+        if not IP_WHITELIST_MODE:
+            return None
+        if request.path.startswith('/static'):
+            return None
+        # Admins bypass whitelist
+        if current_user.is_authenticated and getattr(current_user, 'is_admin', False):
+            return None
+        # Login/logout/register always allowed so users can authenticate
+        if request.endpoint in ('login', 'logout', 'register', 'static'):
+            return None
+        try:
+            client_ip = get_client_ip()
+            allowed = IPWhitelistEntry.query.filter_by(ip_address=client_ip).first()
+            if not allowed:
+                return render_template('maintenance.html',
+                                       reason='Access restricted to whitelisted IPs only.'), 403
         except Exception:
             pass
         return None
@@ -1152,10 +1194,13 @@ def create_app():
         update_user_email=update_user_email,
         update_user_password=update_user_password,
         delete_user=delete_user,
+        register_user=register_user,
         BLOCKED_IP_MODEL=BlockedIP,
         FAILED_LOGIN_MODEL=FailedLoginAttempt,
         ACTIVE_SESSION_MODEL=ActiveSession,
         AUDIT_MODEL=AdminAuditLog,
+        LOGIN_HISTORY_MODEL=LoginHistory,
+        IP_WHITELIST_MODEL=IPWhitelistEntry,
         DBUser=DBUser,
         DBTeam=DBTeam,
         DBPlayer=DBPlayer,
@@ -1170,6 +1215,7 @@ def create_app():
         MATCH_INSTANCES=MATCH_INSTANCES,
         MATCH_INSTANCES_LOCK=MATCH_INSTANCES_LOCK,
         text=text,
+        get_whitelist_mode=lambda: IP_WHITELIST_MODE,
     )
 
     # --- Request logging ---
@@ -1740,6 +1786,7 @@ def create_app():
         DBUser=DBUser,
         FailedLoginAttempt=FailedLoginAttempt,
         ActiveSession=ActiveSession,
+        LoginHistory=LoginHistory,
         get_client_ip=get_client_ip,
     )
 

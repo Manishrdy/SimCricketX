@@ -1,0 +1,140 @@
+{% extends "layout.html" %}
+
+{% block title %}My Analytics | SimCricketX{% endblock %}
+
+{% block content %}
+<div style="max-width:1100px;margin:0 auto;padding:2rem 1.5rem;">
+
+    <div style="margin-bottom:2rem;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+        <div>
+            <h1 style="font-size:1.75rem;font-weight:700;color:var(--fg);margin:0;letter-spacing:-0.03em;">My Analytics</h1>
+            <p style="color:var(--fg-secondary);margin:0.25rem 0 0;">{{ current_user.display_name or current_user.id }} &mdash; personal performance overview</p>
+        </div>
+        <a href="{{ url_for('export_my_data') }}" style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.58rem 1.05rem;border-radius:8px;font-size:0.85rem;font-weight:600;background:var(--card-bg);border:1px solid var(--card-border);color:var(--fg);text-decoration:none;">
+            <i class="fas fa-download"></i> Export My Data
+        </a>
+    </div>
+
+    <!-- Summary Cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:2rem;">
+        {% for label, value, icon in [
+            ('Teams', analytics.teams_count, 'fas fa-shield-alt'),
+            ('Players', analytics.players_count, 'fas fa-users'),
+            ('Matches', analytics.matches_count, 'fas fa-cricket-bat-ball'),
+            ('Tournaments', analytics.tournaments_count, 'fas fa-trophy'),
+            ('Wins', analytics.wins, 'fas fa-check-circle'),
+        ] %}
+        <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:1.25rem;position:relative;">
+            <div style="position:absolute;top:1rem;right:1rem;font-size:1.5rem;opacity:0.08;color:var(--fg);"><i class="{{ icon }}"></i></div>
+            <div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-secondary);margin-bottom:0.5rem;">{{ label }}</div>
+            <div style="font-size:2rem;font-weight:700;color:var(--fg);line-height:1;">{{ value }}</div>
+        </div>
+        {% endfor %}
+        <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:1.25rem;position:relative;">
+            <div style="position:absolute;top:1rem;right:1rem;font-size:1.5rem;opacity:0.08;color:var(--fg);"><i class="fas fa-percentage"></i></div>
+            <div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-secondary);margin-bottom:0.5rem;">Win Rate</div>
+            <div style="font-size:2rem;font-weight:700;color:var(--fg);line-height:1;">{{ analytics.win_rate }}%</div>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;margin-bottom:2rem;">
+        <!-- Format Breakdown -->
+        <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:1.5rem;">
+            <h3 style="font-size:1rem;font-weight:700;color:var(--fg);margin:0 0 1rem;display:flex;align-items:center;gap:0.5rem;">
+                <i class="fas fa-chart-pie" style="opacity:0.5;font-size:0.9rem;"></i> Match Formats
+            </h3>
+            {% if analytics.format_breakdown %}
+            <div style="display:flex;flex-direction:column;gap:0.6rem;">
+                {% for fb in analytics.format_breakdown %}
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <span style="font-size:0.85rem;font-weight:600;min-width:55px;color:var(--fg);">{{ fb.format }}</span>
+                    <div style="flex:1;height:10px;background:var(--bg-secondary);border-radius:5px;overflow:hidden;">
+                        {% set pct = (fb.count / analytics.matches_count * 100)|round(0)|int if analytics.matches_count else 0 %}
+                        <div style="width:{{ pct }}%;height:100%;background:var(--gradient);border-radius:5px;"></div>
+                    </div>
+                    <span style="font-size:0.82rem;color:var(--fg-secondary);min-width:35px;text-align:right;">{{ fb.count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p style="color:var(--fg-secondary);font-size:0.88rem;">No match data yet.</p>
+            {% endif %}
+        </div>
+
+        <!-- Top Players -->
+        <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:1.5rem;">
+            <h3 style="font-size:1rem;font-weight:700;color:var(--fg);margin:0 0 1rem;display:flex;align-items:center;gap:0.5rem;">
+                <i class="fas fa-star" style="opacity:0.5;font-size:0.9rem;"></i> Top Players
+            </h3>
+            {% if analytics.top_batsman %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0;border-bottom:1px solid var(--card-border);">
+                <div>
+                    <div style="font-weight:600;font-size:0.9rem;color:var(--fg);">{{ analytics.top_batsman.name }}</div>
+                    <div style="font-size:0.75rem;color:var(--fg-secondary);">Top Batsman &middot; {{ analytics.top_batsman.total_runs }} runs</div>
+                </div>
+                <span style="background:rgba(34,197,94,0.12);color:#16a34a;padding:0.2rem 0.6rem;border-radius:20px;font-size:0.7rem;font-weight:700;">BAT {{ analytics.top_batsman.batting_rating }}</span>
+            </div>
+            {% endif %}
+            {% if analytics.top_bowler %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0;">
+                <div>
+                    <div style="font-weight:600;font-size:0.9rem;color:var(--fg);">{{ analytics.top_bowler.name }}</div>
+                    <div style="font-size:0.75rem;color:var(--fg-secondary);">Top Bowler &middot; {{ analytics.top_bowler.total_wickets }} wickets</div>
+                </div>
+                <span style="background:rgba(245,158,11,0.12);color:#d97706;padding:0.2rem 0.6rem;border-radius:20px;font-size:0.7rem;font-weight:700;">BOWL {{ analytics.top_bowler.bowling_rating }}</span>
+            </div>
+            {% endif %}
+            {% if not analytics.top_batsman and not analytics.top_bowler %}
+            <p style="color:var(--fg-secondary);font-size:0.88rem;">No players yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Monthly Chart -->
+    <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:1.5rem;margin-bottom:2rem;">
+        <h3 style="font-size:1rem;font-weight:700;color:var(--fg);margin:0 0 1rem;display:flex;align-items:center;gap:0.5rem;">
+            <i class="fas fa-chart-bar" style="opacity:0.5;font-size:0.9rem;"></i> Monthly Activity (last 6 months)
+        </h3>
+        {% if analytics.monthly_matches %}
+        <div style="display:flex;align-items:flex-end;gap:0.6rem;height:100px;">
+            {% set max_count = analytics.monthly_matches|map(attribute='count')|max %}
+            {% for m in analytics.monthly_matches %}
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.3rem;">
+                <div style="font-size:0.72rem;color:var(--fg-secondary);">{{ m.count }}</div>
+                {% set bar_pct = (m.count / max_count * 100)|int if max_count else 0 %}
+                <div style="width:100%;background:var(--gradient);border-radius:4px 4px 0 0;height:{{ [bar_pct, 4]|max }}px;"></div>
+                <div style="font-size:0.65rem;color:var(--fg-secondary);text-align:center;white-space:nowrap;">{{ m.month }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:var(--fg-secondary);font-size:0.88rem;">No match data in the last 6 months.</p>
+        {% endif %}
+    </div>
+
+    <!-- Recent Logins -->
+    <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:1.5rem;">
+        <h3 style="font-size:1rem;font-weight:700;color:var(--fg);margin:0 0 1rem;display:flex;align-items:center;gap:0.5rem;">
+            <i class="fas fa-sign-in-alt" style="opacity:0.5;font-size:0.9rem;"></i> Recent Login Activity
+        </h3>
+        {% if analytics.login_history %}
+        <div style="display:flex;flex-direction:column;gap:0;border:1px solid var(--card-border);border-radius:8px;overflow:hidden;">
+            {% for lh in analytics.login_history[:8] %}
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 1rem;border-bottom:1px solid var(--card-border);font-size:0.85rem;{% if loop.last %}border-bottom:none;{% endif %}">
+                <span style="color:var(--fg);">
+                    <i class="fas fa-sign-in-alt" style="color:#22c55e;margin-right:0.4rem;"></i>
+                    <code style="font-size:0.78rem;color:var(--fg-secondary);">{{ lh.ip_address or 'Unknown IP' }}</code>
+                </span>
+                <span style="color:var(--fg-secondary);font-size:0.78rem;">
+                    {% if lh.timestamp %}{{ lh.timestamp.strftime('%Y-%m-%d %H:%M') }} UTC{% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:var(--fg-secondary);font-size:0.88rem;">No login history recorded yet. Your next login will be recorded.</p>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
