@@ -716,6 +716,7 @@
     <form id="team-form" method="POST"
       action="{{ url_for('edit_team', short_code=team.short_code) if edit else url_for('create_team') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="players_payload" id="players_payload" value="[]">
 
       <!-- Team Details Section -->
       <div class="glass-card">
@@ -1431,6 +1432,23 @@ Please generate the full JSON array only, no other text.`;
     const form = document.getElementById('team-form');
     form.addEventListener('input', () => { setTimeout(updateSubmitButtons, 0); }); // Debounce slightly
     form.addEventListener('change', () => { setTimeout(updateSubmitButtons, 0); });
+
+    // Always submit a row-accurate payload so disabled fields cannot break server-side indexing.
+    const playersPayloadInput = document.getElementById('players_payload');
+    function syncPlayersPayload() {
+      const players = [...container.children].map(card => ({
+        name: card.querySelector('[name=player_name]').value.trim(),
+        role: card.querySelector('[name=player_role]').value,
+        batting_rating: card.querySelector('[name=batting_rating]').value,
+        bowling_rating: card.querySelector('[name=bowling_rating]').value,
+        fielding_rating: card.querySelector('[name=fielding_rating]').value,
+        batting_hand: card.querySelector('[name=batting_hand]').value,
+        bowling_type: card.querySelector('[name=bowling_type]').value,
+        bowling_hand: card.querySelector('[name=bowling_hand]').value
+      }));
+      playersPayloadInput.value = JSON.stringify(players);
+    }
+    form.addEventListener('submit', syncPlayersPayload);
 
     if (!EDIT_MODE) {
       document.getElementById('select-captain').addEventListener('change', saveDraft);
