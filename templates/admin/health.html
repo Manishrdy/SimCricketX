@@ -110,7 +110,7 @@
                 <tr>
                     <td style="font-size: 0.82rem; font-family: monospace;">{{ b.name }}</td>
                     <td><span class="a-badge a-badge-info">{{ b.size_mb }} MB</span></td>
-                    <td style="color: var(--fg-secondary); font-size: 0.82rem;">{{ b.date }}</td>
+                    <td style="color: var(--fg-secondary); font-size: 0.82rem;">{{ b.date_dt | localtime }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

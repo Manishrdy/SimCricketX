@@ -1,0 +1,109 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">IP Whitelist</h1>
+        <p class="admin-page-subtitle">{{ entries|length }} allowed IP{{ 's' if entries|length != 1 }} &mdash; Whitelist mode is currently <strong>{% if whitelist_on %}ON{% else %}OFF{% endif %}</strong></p>
+    </div>
+    <div class="admin-page-actions">
+        <button onclick="toggleWhitelist()" class="a-btn {% if whitelist_on %}a-btn-danger{% else %}a-btn-secondary{% endif %}" id="toggleBtn">
+            <i class="fas fa-{% if whitelist_on %}lock{% else %}lock-open{% endif %}"></i>
+            {% if whitelist_on %}Disable Whitelist Mode{% else %}Enable Whitelist Mode{% endif %}
+        </button>
+    </div>
+</div>
+
+{% if whitelist_on %}
+<div class="a-alert a-alert-error" style="display:block;margin-bottom:1rem;">
+    <i class="fas fa-exclamation-triangle"></i>
+    <strong>Whitelist mode is ACTIVE.</strong> Only IPs listed below (and admins) can access the site.
+</div>
+{% endif %}
+
+<div id="alertContainer"></div>
+
+<div class="a-grid-2" style="margin-bottom:1.5rem;">
+    <div class="a-card-flat">
+        <h3 class="a-section-title"><i class="fas fa-plus-circle"></i> Add IP to Whitelist</h3>
+        <form onsubmit="addIP(event)">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="a-form-group">
+                <label class="a-form-label">IP Address</label>
+                <input type="text" id="addIp" class="a-form-input" placeholder="e.g. 203.0.113.10" required style="max-width:100%;">
+            </div>
+            <div class="a-form-group">
+                <label class="a-form-label">Label (optional)</label>
+                <input type="text" id="addLabel" class="a-form-input" placeholder="e.g. Office, Home India" style="max-width:100%;">
+            </div>
+            <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-plus"></i> Add IP</button>
+        </form>
+    </div>
+    <div class="a-card-flat">
+        <h3 class="a-section-title"><i class="fas fa-info-circle"></i> How It Works</h3>
+        <ul style="font-size:0.88rem;color:var(--fg);line-height:1.8;padding-left:1.2rem;">
+            <li>When whitelist mode is <strong>ON</strong>, only IPs in this list can access the site.</li>
+            <li>Admin accounts always bypass the whitelist.</li>
+            <li>Login/register pages are always accessible so users can authenticate.</li>
+            <li>Whitelist mode resets when the server restarts.</li>
+            <li>Add both your IST (India) and PST (California) IPs here.</li>
+        </ul>
+    </div>
+</div>
+
+<div class="a-table-wrap">
+    <table class="a-table">
+        <thead>
+            <tr><th>IP Address</th><th>Label</th><th>Added By</th><th>Added At</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+            {% for e in entries %}
+            <tr id="wl-{{ e.id }}">
+                <td><code style="font-size:0.85rem;">{{ e.ip_address }}</code></td>
+                <td style="color:var(--fg-secondary);">{{ e.label or '-' }}</td>
+                <td style="font-size:0.82rem;">{{ e.added_by }}</td>
+                <td>{% if e.added_at %}{{ e.added_at | localtime }}{% else %}-{% endif %}</td>
+                <td>
+                    <button onclick="removeIP({{ e.id }}, '{{ e.ip_address }}')" class="a-btn a-btn-danger a-btn-sm">
+                        <i class="fas fa-times"></i> Remove
+                    </button>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5"><div class="a-empty"><p>No IPs in whitelist yet.</p></div></td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
+    setTimeout(() => c.innerHTML = '', 5000);
+}
+async function toggleWhitelist() {
+    const res = await fetch('/admin/ip-whitelist/toggle', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1200); }
+    else showAlert(data.error || 'Failed', 'error');
+}
+async function addIP(e) {
+    e.preventDefault();
+    const fd = new FormData();
+    fd.append('ip_address', document.getElementById('addIp').value);
+    fd.append('label', document.getElementById('addLabel').value);
+    const res = await fetch('/admin/ip-whitelist/add', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (res.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1200); }
+    else showAlert(data.error || 'Failed', 'error');
+}
+async function removeIP(id, ip) {
+    if (!confirm(`Remove ${ip} from whitelist?`)) return;
+    const res = await fetch(`/admin/ip-whitelist/${id}/remove`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) { document.getElementById('wl-' + id)?.remove(); showAlert(data.message, 'success'); }
+    else showAlert(data.error || 'Failed', 'error');
+}
+</script>
+{% endblock %}

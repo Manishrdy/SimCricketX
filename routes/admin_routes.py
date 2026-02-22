@@ -2,13 +2,14 @@
 
 import json
 import os
+import re
 import shutil
 import time
 from datetime import datetime, timedelta
 
 import yaml
-from flask import Response, flash, jsonify, redirect, render_template, request, send_file, url_for
-from flask_login import current_user
+from flask import Response, after_this_request, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask_login import current_user, login_user
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
@@ -40,10 +41,13 @@ def register_admin_routes(
     update_user_email,
     update_user_password,
     delete_user,
+    register_user,
     BLOCKED_IP_MODEL,
     FAILED_LOGIN_MODEL,
     ACTIVE_SESSION_MODEL,
     AUDIT_MODEL,
+    LOGIN_HISTORY_MODEL,
+    IP_WHITELIST_MODEL,
     DBUser,
     DBTeam,
     DBPlayer,
@@ -58,11 +62,15 @@ def register_admin_routes(
     MATCH_INSTANCES,
     MATCH_INSTANCES_LOCK,
     text,
+    get_whitelist_mode,
 ):
     AdminAuditLog = AUDIT_MODEL
     FailedLoginAttempt = FAILED_LOGIN_MODEL
     BlockedIP = BLOCKED_IP_MODEL
     ActiveSession = ACTIVE_SESSION_MODEL
+    LoginHistory = LOGIN_HISTORY_MODEL
+    IPWhitelistEntry = IP_WHITELIST_MODEL
+    BACKUP_DIR = os.path.join(PROJECT_ROOT, "data", "backups")
 
     @app.route('/admin/backup-database', methods=['POST'])
     @login_required
@@ -107,6 +115,11 @@ def register_admin_routes(
             app.logger.info(f"[Admin] Database backup downloaded by {current_user.id}")
             log_admin_action(current_user.id, 'backup_database', None, 'Database backup downloaded', request.remote_addr)
 
+            @after_this_request
+            def _cleanup_backup_tmp(response, _dir=tmp_dir):
+                shutil.rmtree(_dir, ignore_errors=True)
+                return response
+
             return send_file(
                 tmp_path,
                 as_attachment=True,
@@ -144,6 +157,10 @@ def register_admin_routes(
             # Active match instances
             with MATCH_INSTANCES_LOCK:
                 stats['active_matches'] = len(MATCH_INSTANCES)
+                stats['live_matches'] = stats['active_matches']
+
+            # Active sessions count
+            stats['active_sessions'] = ActiveSession.query.count()
 
             # Recent activity from audit log
             recent_audit = db.session.query(AdminAuditLog).order_by(AdminAuditLog.timestamp.desc()).limit(10).all()
@@ -576,7 +593,7 @@ def register_admin_routes(
                         backups.append({
                             'name': fn,
                             'size_mb': round(os.path.getsize(path) / (1024 * 1024), 2),
-                            'date': datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y-%m-%d %H:%M')
+                            'date_dt': datetime.utcfromtimestamp(os.path.getmtime(path)),
                         })
             health['backups'] = backups[:10]
             health['backup_count'] = len(backups)
@@ -728,6 +745,7 @@ def register_admin_routes(
             path = os.path.join(BACKUP_DIR, safe_name)
             if not os.path.exists(path):
                 return jsonify({"error": "Backup not found"}), 404
+            log_admin_action(current_user.id, 'download_backup', safe_name, 'Backup file downloaded', request.remote_addr)
             return send_file(path, as_attachment=True, download_name=safe_name, mimetype='application/x-sqlite3')
         except Exception as e:
             return jsonify({"error": "Download failed"}), 500
@@ -1223,15 +1241,24 @@ def register_admin_routes(
     @admin_required
     def admin_update_rate_limits():
         try:
+            try:
+                max_requests = int(request.form.get('max_requests', 30))
+                window_seconds = int(request.form.get('window_seconds', 10))
+                admin_multiplier = int(request.form.get('admin_multiplier', 3))
+            except (ValueError, TypeError):
+                return jsonify({"error": "max_requests, window_seconds, and admin_multiplier must be integers"}), 400
+            if max_requests < 1 or window_seconds < 1 or admin_multiplier < 1:
+                return jsonify({"error": "Rate limit values must be greater than zero"}), 400
+
             config_path = os.getenv("SIMCRICKETX_CONFIG_PATH") or os.path.join(basedir, "config", "config.yaml")
             cfg = {}
             if os.path.exists(config_path):
                 with open(config_path, "r") as f:
                     cfg = yaml.safe_load(f) or {}
             cfg['rate_limits'] = {
-                'max_requests': int(request.form.get('max_requests', 30)),
-                'window_seconds': int(request.form.get('window_seconds', 10)),
-                'admin_multiplier': int(request.form.get('admin_multiplier', 3)),
+                'max_requests': max_requests,
+                'window_seconds': window_seconds,
+                'admin_multiplier': admin_multiplier,
                 'login_limit': request.form.get('login_limit', '10 per minute')
             }
             with open(config_path, "w") as f:
@@ -1609,6 +1636,529 @@ def register_admin_routes(
             app.logger.error(f"[FileExplorer] Error deleting file {file_path}: {e}")
             return jsonify({'error': str(e)}), 500
 
+
+    # =========================================================================
+    # NEW FEATURES (13 additions)
+    # =========================================================================
+
+    # --- 1. Promote / Demote Admin ---
+    @app.route('/admin/users/<user_email>/toggle-admin', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_toggle_admin(user_email):
+        """Promote a regular user to admin or demote an admin to user."""
+        user = db.session.get(DBUser, user_email)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        if user.id == current_user.id:
+            return jsonify({"error": "Cannot change your own admin status"}), 400
+        user.is_admin = not user.is_admin
+        db.session.commit()
+        action = 'promote_admin' if user.is_admin else 'demote_admin'
+        log_admin_action(current_user.id, action, user_email, f'Admin status set to {user.is_admin}', get_client_ip())
+        status = 'promoted to admin' if user.is_admin else 'demoted to user'
+        return jsonify({"message": f"{user_email} {status}", "is_admin": user.is_admin}), 200
+
+    # --- 2. Create User (admin only) ---
+    @app.route('/admin/users/create', methods=['GET', 'POST'])
+    @login_required
+    @admin_required
+    def admin_create_user():
+        """Admin creates a new user account."""
+        if request.method == 'GET':
+            return render_template('admin/create_user.html')
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '').strip()
+        display_name = request.form.get('display_name', '').strip()
+        make_admin = request.form.get('make_admin') == '1'
+        if not email or not password:
+            return jsonify({"error": "Email and password are required"}), 400
+        ok = register_user(email, password, display_name or None)
+        if not ok:
+            return jsonify({"error": "Failed to create user. Email may already be in use or password too weak."}), 400
+        if make_admin:
+            new_user = db.session.get(DBUser, email)
+            if new_user:
+                new_user.is_admin = True
+                db.session.commit()
+        log_admin_action(current_user.id, 'create_user', email, f'Admin-created user, admin={make_admin}', get_client_ip())
+        return jsonify({"message": f"User {email} created successfully"}), 200
+
+    # --- 3a. Export user data as JSON (admin for any user) ---
+    @app.route('/admin/users/<user_email>/export')
+    @login_required
+    @admin_required
+    def admin_export_user(user_email):
+        """Export a single user's complete data as JSON."""
+        user = db.session.get(DBUser, user_email)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        data = _build_user_export(user)
+        log_admin_action(current_user.id, 'export_user', user_email, 'Full user data exported as JSON', get_client_ip())
+        return Response(
+            json.dumps(data, indent=2, default=str),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment; filename=user_{user_email}_export.json'}
+        )
+
+    # --- 3b. Self-service data export ---
+    @app.route('/export/my-data')
+    @login_required
+    def export_my_data():
+        """Authenticated user exports their own data."""
+        user = db.session.get(DBUser, current_user.id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        data = _build_user_export(user)
+        return Response(
+            json.dumps(data, indent=2, default=str),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment; filename=my_data_export.json'}
+        )
+
+    def _build_user_export(user):
+        """Build a complete JSON-serialisable dict of a user's data."""
+        teams = DBTeam.query.filter_by(user_id=user.id).all()
+        team_data = []
+        for t in teams:
+            players = DBPlayer.query.filter_by(team_id=t.id).all()
+            team_data.append({
+                'id': t.id,
+                'name': t.name,
+                'short_code': t.short_code,
+                'home_ground': t.home_ground,
+                'created_at': t.created_at.isoformat() if t.created_at else None,
+                'players': [{'id': p.id, 'name': p.name, 'role': p.role,
+                             'batting_rating': p.batting_rating, 'bowling_rating': p.bowling_rating} for p in players],
+            })
+        matches = DBMatch.query.filter_by(user_id=user.id).order_by(DBMatch.date.desc()).limit(200).all()
+        tournaments = Tournament.query.filter_by(user_id=user.id).all()
+        login_hist = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.timestamp.desc()).limit(100).all()
+        return {
+            'exported_at': datetime.utcnow().isoformat() + 'Z',
+            'user': {
+                'email': user.id,
+                'display_name': user.display_name,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'last_login': user.last_login.isoformat() if user.last_login else None,
+                'is_admin': user.is_admin,
+            },
+            'teams': team_data,
+            'matches': [{
+                'id': m.id, 'date': m.date.isoformat() if m.date else None,
+                'result': m.result_description, 'venue': m.venue,
+            } for m in matches],
+            'tournaments': [{'id': t.id, 'name': t.name, 'status': t.status} for t in tournaments],
+            'login_history': [{'timestamp': lh.timestamp.isoformat(), 'ip': lh.ip_address, 'event': lh.event} for lh in login_hist],
+        }
+
+    # --- 4. Per-user data wipe (admin only) ---
+    @app.route('/admin/users/<user_email>/wipe-data', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_wipe_user_data(user_email):
+        """Delete all teams, players, matches, and tournaments for a user without deleting the account."""
+        user = db.session.get(DBUser, user_email)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        if user.is_admin:
+            return jsonify({"error": "Cannot wipe data for an admin account"}), 400
+        try:
+            # Delete matches (cascades scorecards/partnerships)
+            match_count = DBMatch.query.filter_by(user_id=user_email).delete()
+            # Delete tournaments (cascades fixtures/teams/stats)
+            tourn_count = Tournament.query.filter_by(user_id=user_email).delete()
+            # Delete teams (cascades players)
+            team_count = DBTeam.query.filter_by(user_id=user_email).delete()
+            db.session.commit()
+            log_admin_action(current_user.id, 'wipe_user_data', user_email,
+                             f'Wiped {match_count} matches, {tourn_count} tournaments, {team_count} teams', get_client_ip())
+            return jsonify({"message": f"Wiped data for {user_email}: {team_count} teams, {match_count} matches, {tourn_count} tournaments"}), 200
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Admin] Wipe data error for {user_email}: {e}", exc_info=True)
+            return jsonify({"error": "Failed to wipe data"}), 500
+
+    # --- 5. Delete DB match ---
+    @app.route('/admin/matches/<match_id>/delete-db', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_delete_db_match(match_id):
+        """Permanently delete a match record from the database."""
+        match = db.session.get(DBMatch, match_id)
+        if not match:
+            return jsonify({"error": "Match not found"}), 404
+        owner = match.user_id
+        db.session.delete(match)
+        db.session.commit()
+        log_admin_action(current_user.id, 'delete_match', match_id, f'Owned by {owner}', get_client_ip())
+        return jsonify({"message": f"Match {match_id[:8]}... deleted from database"}), 200
+
+    # --- 6a. Delete team ---
+    @app.route('/admin/teams/<int:team_id>/delete', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_delete_team(team_id):
+        """Delete a team and all its players."""
+        team = db.session.get(DBTeam, team_id)
+        if not team:
+            return jsonify({"error": "Team not found"}), 404
+        name = team.name
+        owner = team.user_id
+        db.session.delete(team)
+        db.session.commit()
+        log_admin_action(current_user.id, 'delete_team', f'{name} (id={team_id})', f'Owner: {owner}', get_client_ip())
+        return jsonify({"message": f"Team '{name}' deleted"}), 200
+
+    # --- 6b. Delete player ---
+    @app.route('/admin/players/<int:player_id>/delete', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_delete_player(player_id):
+        """Delete a single player."""
+        player = db.session.get(DBPlayer, player_id)
+        if not player:
+            return jsonify({"error": "Player not found"}), 404
+        name = player.name
+        team_id = player.team_id
+        db.session.delete(player)
+        db.session.commit()
+        log_admin_action(current_user.id, 'delete_player', f'{name} (id={player_id})', f'Team id: {team_id}', get_client_ip())
+        return jsonify({"message": f"Player '{name}' deleted"}), 200
+
+    # --- 7a. Delete tournament ---
+    @app.route('/admin/tournaments/<int:tournament_id>/delete', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_delete_tournament(tournament_id):
+        """Permanently delete a tournament and all its data."""
+        tourn = db.session.get(Tournament, tournament_id)
+        if not tourn:
+            return jsonify({"error": "Tournament not found"}), 404
+        name = tourn.name
+        owner = tourn.user_id
+        db.session.delete(tourn)
+        db.session.commit()
+        log_admin_action(current_user.id, 'delete_tournament', f'{name} (id={tournament_id})', f'Owner: {owner}', get_client_ip())
+        return jsonify({"message": f"Tournament '{name}' deleted"}), 200
+
+    # --- 7b. Reset tournament (clear fixtures/results, set back to Active/league stage) ---
+    @app.route('/admin/tournaments/<int:tournament_id>/reset', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_reset_tournament(tournament_id):
+        """Reset a tournament: delete all fixtures and reset standings to zero."""
+        tourn = db.session.get(Tournament, tournament_id)
+        if not tourn:
+            return jsonify({"error": "Tournament not found"}), 404
+        try:
+            TournamentFixture.query.filter_by(tournament_id=tournament_id).delete()
+            TournamentPlayerStatsCache.query.filter_by(tournament_id=tournament_id).delete()
+            # Reset team standings
+            TournamentTeam.query.filter_by(tournament_id=tournament_id).update({
+                'played': 0, 'won': 0, 'lost': 0, 'tied': 0, 'no_result': 0,
+                'points': 0, 'runs_scored': 0, 'runs_conceded': 0,
+                'overs_faced': '0.0', 'overs_bowled': '0.0', 'net_run_rate': 0.0
+            })
+            tourn.status = 'Active'
+            tourn.current_stage = 'league'
+            db.session.commit()
+            log_admin_action(current_user.id, 'reset_tournament', tourn.name, 'All fixtures and standings cleared', get_client_ip())
+            return jsonify({"message": f"Tournament '{tourn.name}' reset to initial state"}), 200
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Admin] Reset tournament error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to reset tournament"}), 500
+
+    # --- 8. Real-time dashboard SSE stream ---
+    @app.route('/admin/dashboard/stream')
+    @login_required
+    @admin_required
+    def admin_dashboard_stream():
+        """Server-Sent Events stream for live dashboard stats."""
+        def generate():
+            import time as time_mod
+            while True:
+                try:
+                    with app.app_context():
+                        total_users = DBUser.query.count()
+                        total_teams = DBTeam.query.count()
+                        total_matches = DBMatch.query.count()
+                        total_tournaments = Tournament.query.count()
+                        active_sessions = ActiveSession.query.count()
+                        with MATCH_INSTANCES_LOCK:
+                            live_matches = len(MATCH_INSTANCES)
+                        cutoff_7d = datetime.utcnow() - timedelta(days=7)
+                        active_users_7d = db.session.query(func.count(ActiveSession.user_id.distinct())).filter(
+                            ActiveSession.last_active >= cutoff_7d
+                        ).scalar() or 0
+                        db_path = os.path.join(basedir, 'cricket_sim.db')
+                        db_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 2) if os.path.exists(db_path) else 0
+                        payload = json.dumps({
+                            'total_users': total_users,
+                            'total_teams': total_teams,
+                            'total_matches': total_matches,
+                            'total_tournaments': total_tournaments,
+                            'active_sessions': active_sessions,
+                            'live_matches': live_matches,
+                            'active_users_7d': active_users_7d,
+                            'db_size_mb': db_size_mb,
+                        })
+                        yield f"data: {payload}\n\n"
+                except Exception:
+                    yield "data: {}\n\n"
+                time_mod.sleep(10)
+        return Response(generate(), mimetype='text/event-stream',
+                        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+    # --- 9. IP Whitelist Mode ---
+    @app.route('/admin/ip-whitelist')
+    @login_required
+    @admin_required
+    def admin_ip_whitelist():
+        """Manage IP whitelist entries."""
+        entries = IPWhitelistEntry.query.order_by(IPWhitelistEntry.added_at.desc()).all()
+        whitelist_on = bool(get_whitelist_mode())
+        return render_template('admin/ip_whitelist.html', entries=entries, whitelist_on=whitelist_on)
+
+    @app.route('/admin/ip-whitelist/toggle', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_toggle_whitelist_mode():
+        """Toggle IP whitelist mode on/off (stored in-process via the getter/setter closure)."""
+        import sys
+        current_state = bool(get_whitelist_mode())
+        new_state = not current_state
+        # Update the global in whatever module owns IP_WHITELIST_MODE
+        for mod_name in ('app', '__main__'):
+            mod = sys.modules.get(mod_name)
+            if mod and hasattr(mod, 'IP_WHITELIST_MODE'):
+                mod.IP_WHITELIST_MODE = new_state
+                break
+        state_str = 'enabled' if new_state else 'disabled'
+        log_admin_action(current_user.id, 'toggle_ip_whitelist', state_str, f'IP whitelist mode {state_str}', get_client_ip())
+        return jsonify({"whitelist_mode": new_state, "message": f"IP whitelist mode {state_str}"}), 200
+
+    @app.route('/admin/ip-whitelist/add', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_add_whitelist_ip():
+        """Add an IP to the whitelist."""
+        ip = request.form.get('ip_address', '').strip()
+        label = request.form.get('label', '').strip()
+        if not ip:
+            return jsonify({"error": "IP address required"}), 400
+        ip_obj = parse_ip(ip)
+        if not ip_obj:
+            return jsonify({"error": "Invalid IP address format"}), 400
+        normalized = str(ip_obj)
+        if IPWhitelistEntry.query.filter_by(ip_address=normalized).first():
+            return jsonify({"error": "IP already in whitelist"}), 400
+        db.session.add(IPWhitelistEntry(ip_address=normalized, label=label or None, added_by=current_user.id))
+        db.session.commit()
+        log_admin_action(current_user.id, 'add_whitelist_ip', normalized, label or 'no label', get_client_ip())
+        return jsonify({"message": f"IP {normalized} added to whitelist"}), 200
+
+    @app.route('/admin/ip-whitelist/<int:entry_id>/remove', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_remove_whitelist_ip(entry_id):
+        """Remove an IP from the whitelist."""
+        entry = db.session.get(IPWhitelistEntry, entry_id)
+        if not entry:
+            return jsonify({"error": "Entry not found"}), 404
+        ip = entry.ip_address
+        db.session.delete(entry)
+        db.session.commit()
+        log_admin_action(current_user.id, 'remove_whitelist_ip', ip, 'Removed from whitelist', get_client_ip())
+        return jsonify({"message": f"IP {ip} removed from whitelist"}), 200
+
+    # --- 10. User Login History ---
+    @app.route('/admin/users/<user_email>/login-history')
+    @login_required
+    @admin_required
+    def admin_user_login_history(user_email):
+        """View full login history for a user."""
+        user = db.session.get(DBUser, user_email)
+        if not user:
+            return "User not found", 404
+        page = request.args.get('page', 1, type=int)
+        per_page = 30
+        total = LoginHistory.query.filter_by(user_id=user_email).count()
+        history = LoginHistory.query.filter_by(user_id=user_email).order_by(
+            LoginHistory.timestamp.desc()
+        ).offset((page - 1) * per_page).limit(per_page).all()
+        total_pages = (total + per_page - 1) // per_page
+        return render_template('admin/user_login_history.html',
+                               user=user, history=history,
+                               page=page, total_pages=total_pages, total=total)
+
+    # --- 11. Read-only SQL Runner ---
+    @app.route('/admin/sql', methods=['GET', 'POST'])
+    @login_required
+    @admin_required
+    def admin_sql_runner():
+        """Execute read-only SQL queries against the database."""
+        result_cols = []
+        result_rows = []
+        error = None
+        query_sql = ''
+        if request.method == 'POST':
+            query_sql = request.form.get('query', '').strip()
+            # Enforce read-only: only allow SELECT statements
+            normalized = query_sql.upper().lstrip()
+            if not normalized.startswith('SELECT'):
+                error = "Only SELECT statements are allowed."
+            else:
+                try:
+                    from sqlalchemy import text as sa_text
+                    with db.engine.connect() as conn:
+                        result = conn.execute(sa_text(query_sql))
+                        result_cols = list(result.keys())
+                        result_rows = [list(row) for row in result.fetchmany(500)]
+                    log_admin_action(current_user.id, 'sql_query', None, query_sql[:200], get_client_ip())
+                except Exception as e:
+                    error = str(e)
+        return render_template('admin/sql_runner.html',
+                               query=query_sql, result_cols=result_cols,
+                               result_rows=result_rows, error=error)
+
+    # --- 12a. Per-user analytics (admin view) ---
+    @app.route('/admin/users/<user_email>/analytics')
+    @login_required
+    @admin_required
+    def admin_user_analytics(user_email):
+        """Detailed analytics for a single user."""
+        user = db.session.get(DBUser, user_email)
+        if not user:
+            return "User not found", 404
+        analytics = _build_user_analytics(user_email)
+        return render_template('admin/user_analytics.html', user=user, analytics=analytics)
+
+    # --- 12b. Self-service analytics ---
+    @app.route('/my-analytics')
+    @login_required
+    def my_analytics():
+        """User views their own analytics dashboard."""
+        user = db.session.get(DBUser, current_user.id)
+        analytics = _build_user_analytics(current_user.id)
+        return render_template('my_analytics.html', user=user, analytics=analytics)
+
+    def _build_user_analytics(user_id):
+        """Build analytics dict for a user."""
+        teams = DBTeam.query.filter_by(user_id=user_id).all()
+        team_ids = [t.id for t in teams]
+        total_players = DBPlayer.query.filter(DBPlayer.team_id.in_(team_ids)).count() if team_ids else 0
+        total_matches = DBMatch.query.filter_by(user_id=user_id).count()
+        total_tournaments = Tournament.query.filter_by(user_id=user_id).count()
+        # Win rate
+        wins = DBMatch.query.filter(
+            DBMatch.user_id == user_id,
+            DBMatch.winner_team_id.in_(team_ids)
+        ).count() if team_ids else 0
+        win_rate = round(wins / total_matches * 100, 1) if total_matches else 0
+        # Match format breakdown
+        format_counts = db.session.query(DBMatch.match_format, func.count(DBMatch.id)).filter_by(
+            user_id=user_id
+        ).group_by(DBMatch.match_format).all()
+        # Monthly matches (last 6 months)
+        six_months_ago = datetime.utcnow() - timedelta(days=180)
+        monthly = db.session.query(
+            func.strftime('%Y-%m', DBMatch.date).label('month'),
+            func.count(DBMatch.id).label('count')
+        ).filter(DBMatch.user_id == user_id, DBMatch.date >= six_months_ago).group_by('month').order_by('month').all()
+        # Login activity (last 30 logins)
+        login_hist = LoginHistory.query.filter_by(user_id=user_id).order_by(
+            LoginHistory.timestamp.desc()
+        ).limit(30).all()
+        # Top scoring player (by total_runs)
+        top_batsman = None
+        top_bowler = None
+        if team_ids:
+            top_batsman = DBPlayer.query.filter(DBPlayer.team_id.in_(team_ids)).order_by(
+                DBPlayer.total_runs.desc()
+            ).first()
+            top_bowler = DBPlayer.query.filter(DBPlayer.team_id.in_(team_ids)).order_by(
+                DBPlayer.total_wickets.desc()
+            ).first()
+        return {
+            'teams_count': len(teams),
+            'players_count': total_players,
+            'matches_count': total_matches,
+            'tournaments_count': total_tournaments,
+            'wins': wins,
+            'win_rate': win_rate,
+            'format_breakdown': [{'format': f or 'Unknown', 'count': c} for f, c in format_counts],
+            'monthly_matches': [{'month': m, 'count': c} for m, c in monthly],
+            'login_history': login_hist,
+            'top_batsman': top_batsman,
+            'top_bowler': top_bowler,
+        }
+
+    # --- 13. Retention Cohorts ---
+    @app.route('/admin/retention')
+    @login_required
+    @admin_required
+    def admin_retention():
+        """Retention cohort analysis by signup month."""
+        # Group users by signup month
+        cohorts_raw = db.session.query(
+            func.strftime('%Y-%m', DBUser.created_at).label('cohort'),
+            func.count(DBUser.id).label('signups')
+        ).group_by('cohort').order_by('cohort').all()
+
+        cutoff_30d = datetime.utcnow() - timedelta(days=30)
+        cutoff_7d = datetime.utcnow() - timedelta(days=7)
+
+        cohorts = []
+        for cohort_month, signups in cohorts_raw:
+            if not cohort_month:
+                continue
+            # Users in this cohort
+            cohort_users = db.session.query(DBUser.id).filter(
+                func.strftime('%Y-%m', DBUser.created_at) == cohort_month
+            ).subquery()
+            # Active in last 30 days (had a login in last 30d via login_history)
+            active_30d = db.session.query(func.count(LoginHistory.user_id.distinct())).filter(
+                LoginHistory.user_id.in_(cohort_users),
+                LoginHistory.timestamp >= cutoff_30d,
+                LoginHistory.event == 'login'
+            ).scalar() or 0
+            # Active in last 7 days
+            active_7d = db.session.query(func.count(LoginHistory.user_id.distinct())).filter(
+                LoginHistory.user_id.in_(cohort_users),
+                LoginHistory.timestamp >= cutoff_7d,
+                LoginHistory.event == 'login'
+            ).scalar() or 0
+            # Users who have played at least one match
+            played = db.session.query(func.count(DBMatch.user_id.distinct())).filter(
+                DBMatch.user_id.in_(cohort_users)
+            ).scalar() or 0
+            cohorts.append({
+                'month': cohort_month,
+                'signups': signups,
+                'active_30d': active_30d,
+                'active_7d': active_7d,
+                'played_match': played,
+                'retention_30d': round(active_30d / signups * 100, 1) if signups else 0,
+                'retention_7d': round(active_7d / signups * 100, 1) if signups else 0,
+                'activation_rate': round(played / signups * 100, 1) if signups else 0,
+            })
+
+        # Overall stats
+        total_users = DBUser.query.count()
+        active_users_30d = db.session.query(func.count(LoginHistory.user_id.distinct())).filter(
+            LoginHistory.timestamp >= cutoff_30d, LoginHistory.event == 'login'
+        ).scalar() or 0
+
+        return render_template('admin/retention.html',
+                               cohorts=cohorts,
+                               total_users=total_users,
+                               active_users_30d=active_users_30d)
+
+    # =========================================================================
+    # END NEW FEATURES
+    # =========================================================================
 
     # Register minimal fallback admin routes if any expected endpoints are missing.
     # This prevents template/url build failures when a partial app initialization occurs.

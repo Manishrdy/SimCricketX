@@ -1,0 +1,61 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Login History</h1>
+        <p class="admin-page-subtitle">{{ user.id }} &mdash; {{ total }} total event{{ 's' if total != 1 }}</p>
+    </div>
+    <div class="admin-page-actions">
+        <a href="{{ url_for('admin_user_detail', user_email=user.id) }}" class="a-btn a-btn-ghost"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="{{ url_for('admin_user_360', user_email=user.id) }}" class="a-btn a-btn-secondary"><i class="fas fa-eye"></i> 360 View</a>
+    </div>
+</div>
+
+<div class="a-table-wrap">
+    <table class="a-table">
+        <thead>
+            <tr>
+                <th>Event</th>
+                <th>IP Address</th>
+                <th>Timestamp</th>
+                <th>User Agent</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in history %}
+            <tr>
+                <td>
+                    {% if h.event == 'login' %}
+                    <span class="a-badge a-badge-success"><i class="fas fa-sign-in-alt"></i> Login</span>
+                    {% else %}
+                    <span class="a-badge a-badge-info"><i class="fas fa-sign-out-alt"></i> {{ h.event|title }}</span>
+                    {% endif %}
+                </td>
+                <td><code style="font-size:0.8rem;">{{ h.ip_address or '-' }}</code></td>
+                <td>{% if h.timestamp %}{{ h.timestamp | localtime(True) }}{% else %}-{% endif %}</td>
+                <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.78rem;color:var(--fg-secondary);" title="{{ h.user_agent or '' }}">
+                    {{ h.user_agent or '-' }}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4"><div class="a-empty"><p>No login history recorded yet.</p></div></td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="a-pagination">
+    {% if page > 1 %}<a href="?page={{ page - 1 }}"><i class="fas fa-chevron-left"></i></a>{% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}<span class="active">{{ p }}</span>
+        {% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}<a href="?page={{ p }}">{{ p }}</a>
+        {% elif p == 4 and page > 5 %}<span style="border:none;background:none;color:var(--fg-secondary);">...</span>
+        {% elif p == total_pages - 2 and page < total_pages - 4 %}<span style="border:none;background:none;color:var(--fg-secondary);">...</span>
+        {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}<a href="?page={{ page + 1 }}"><i class="fas fa-chevron-right"></i></a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

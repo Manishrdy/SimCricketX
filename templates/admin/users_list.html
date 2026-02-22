@@ -41,7 +41,7 @@
                 <td>{{ user.teams_count }}</td>
                 <td>{{ user.matches_count }}</td>
                 <td style="color: var(--fg-secondary); font-size: 0.82rem;">
-                    {% if user.last_login %}{{ user.last_login.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}
+                    {% if user.last_login %}{{ user.last_login | localtime }}{% else %}Never{% endif %}
                 </td>
                 <td style="text-align: right;">
                     <a href="{{ url_for('admin_user_360', user_email=user.email) }}" class="a-btn a-btn-secondary a-btn-sm">

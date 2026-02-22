@@ -1,0 +1,77 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">SQL Runner</h1>
+        <p class="admin-page-subtitle">Read-only SQL queries &mdash; SELECT statements only</p>
+    </div>
+</div>
+
+<div class="a-card-flat" style="margin-bottom:1.5rem;">
+    <form method="POST" action="{{ url_for('admin_sql_runner') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="a-form-group" style="margin-bottom:0.75rem;">
+            <label class="a-form-label"><i class="fas fa-code"></i> SQL Query</label>
+            <textarea name="query" rows="5"
+                style="width:100%; max-width:100%; padding:0.6rem 0.85rem; border:1px solid var(--card-border); border-radius:8px; background:var(--bg); color:var(--fg); font-family:'IBM Plex Mono',monospace; font-size:0.85rem; resize:vertical;"
+                placeholder="SELECT * FROM users LIMIT 10;"
+                required>{{ query }}</textarea>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+            <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-play"></i> Run Query</button>
+            <span style="font-size:0.78rem;color:var(--fg-secondary);">Max 500 rows returned &middot; SELECT only</span>
+        </div>
+    </form>
+</div>
+
+{% if error %}
+<div class="a-alert a-alert-error" style="display:block; margin-bottom:1rem;"><i class="fas fa-exclamation-triangle"></i> {{ error }}</div>
+{% endif %}
+
+{% if result_cols %}
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-table"></i> Results &mdash; {{ result_rows|length }} row{{ 's' if result_rows|length != 1 }}</h3>
+    <div class="a-table-wrap" style="overflow-x:auto;">
+        <table class="a-table" style="font-size:0.82rem;">
+            <thead>
+                <tr>
+                    {% for col in result_cols %}
+                    <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in result_rows %}
+                <tr>
+                    {% for cell in row %}
+                    <td style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ cell }}">{{ cell if cell is not none else 'NULL' }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% elif query and not error %}
+<div class="a-card-flat"><div class="a-empty"><i class="fas fa-inbox"></i><p>Query returned no rows.</p></div></div>
+{% endif %}
+
+<div class="a-card-flat" style="margin-top:1.5rem;">
+    <h3 class="a-section-title" style="font-size:0.9rem;"><i class="fas fa-info-circle"></i> Available Tables</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem;">
+        {% for tbl in ['users','teams','players','matches','tournaments','match_scorecards','tournament_teams','tournament_fixtures','admin_audit_log','failed_login_attempts','blocked_ips','active_sessions','login_history','ip_whitelist','site_counters'] %}
+        <code style="font-size:0.78rem;background:var(--bg-secondary);padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;"
+              onclick="appendTable('{{ tbl }}')">{{ tbl }}</code>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+function appendTable(tbl) {
+    const ta = document.querySelector('textarea[name=query]');
+    ta.value = `SELECT * FROM ${tbl} LIMIT 20;`;
+    ta.focus();
+}
+</script>
+{% endblock %}

@@ -8,6 +8,9 @@
     </div>
     <div class="admin-page-actions">
         <a href="{{ url_for('admin_users') }}" class="a-btn a-btn-ghost"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="{{ url_for('admin_user_analytics', user_email=user.id) }}" class="a-btn a-btn-secondary"><i class="fas fa-chart-bar"></i> Analytics</a>
+        <a href="{{ url_for('admin_user_login_history', user_email=user.id) }}" class="a-btn a-btn-secondary"><i class="fas fa-history"></i> Login History</a>
+        <a href="{{ url_for('admin_export_user', user_email=user.id) }}" class="a-btn a-btn-secondary"><i class="fas fa-download"></i> Export JSON</a>
         {% if not user.is_admin %}
         <form method="POST" action="{{ url_for('admin_impersonate', user_email=user.id) }}" style="display:inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -52,7 +55,7 @@
     <div class="a-stat-card">
         <div class="a-stat-label">Last Login</div>
         <div style="font-size: 0.88rem; font-weight: 600; color: var(--fg);">
-            {% if user.last_login %}{{ user.last_login.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}
+            {% if user.last_login %}{{ user.last_login | localtime }}{% else %}Never{% endif %}
         </div>
     </div>
 </div>
@@ -77,10 +80,10 @@
                 <tr>
                     <td style="font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem;">{{ s.ip_address or '-' }}</td>
                     <td style="font-size: 0.78rem; color: var(--fg-secondary); white-space: nowrap;">
-                        {% if s.login_at %}{{ s.login_at.strftime('%Y-%m-%d %H:%M:%S') }}{% endif %}
+                        {% if s.login_at %}{{ s.login_at | localtime(True) }}{% endif %}
                     </td>
                     <td style="font-size: 0.78rem; color: var(--fg-secondary); white-space: nowrap;">
-                        {% if s.last_active %}{{ s.last_active.strftime('%Y-%m-%d %H:%M:%S') }}{% endif %}
+                        {% if s.last_active %}{{ s.last_active | localtime(True) }}{% endif %}
                     </td>
                     <td style="font-size: 0.75rem; color: var(--fg-secondary); word-break: break-word;" title="{{ s.user_agent or '' }}">
                         {{ s.user_agent[:80] if s.user_agent else '-' }}{{ '...' if s.user_agent and s.user_agent|length > 80 }}
@@ -145,6 +148,9 @@
         <i class="fas fa-key"></i> Force Password Reset
     </button>
     {% endif %}
+    <button onclick="wipeData()" class="a-btn a-btn-danger a-btn-sm">
+        <i class="fas fa-eraser"></i> Wipe All Data
+    </button>
 </div>
 
 <!-- Ban Modal -->
@@ -201,14 +207,31 @@
     <p style="color: var(--fg-secondary); font-size: 0.88rem; margin-bottom: 1rem;">
         Deleting this user will permanently remove all their teams, matches, and tournaments.
     </p>
-    <button onclick="deleteUser()" class="a-btn a-btn-danger"><i class="fas fa-trash"></i> Delete User Account</button>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button onclick="deleteUser()" class="a-btn a-btn-danger"><i class="fas fa-trash"></i> Delete User Account</button>
+    </div>
 </div>
 {% else %}
-<div class="a-card-flat" style="border-color: var(--accent); border-left: 4px solid var(--accent);">
-    <p style="color: var(--fg); font-size: 0.9rem;">
+<!-- Admin account: show promote/demote only -->
+<div class="a-card-flat" style="border-color: var(--accent); border-left: 4px solid var(--accent); margin-top:1rem;">
+    <p style="color: var(--fg); font-size: 0.9rem; margin-bottom:1rem;">
         <i class="fas fa-info-circle" style="color: var(--accent);"></i>
-        This is the admin account. Admin accounts cannot be modified or deleted from this panel for security.
+        This is an admin account. Destructive actions are restricted.
     </p>
+    <button onclick="toggleAdmin()" class="a-btn a-btn-secondary a-btn-sm">
+        <i class="fas fa-user-shield"></i> Demote to Regular User
+    </button>
+</div>
+{% endif %}
+
+<!-- Promote / Demote admin (shown for non-admin users at bottom too) -->
+{% if not user.is_admin %}
+<div class="a-card-flat" style="margin-top:1rem;">
+    <h3 class="a-section-title"><i class="fas fa-user-shield"></i> Admin Role</h3>
+    <p style="font-size:0.88rem;color:var(--fg-secondary);margin-bottom:0.75rem;">Promote this user to administrator. Admins have full access to all admin panel features.</p>
+    <button onclick="toggleAdmin()" class="a-btn a-btn-secondary a-btn-sm">
+        <i class="fas fa-shield-alt"></i> Promote to Admin
+    </button>
 </div>
 {% endif %}
 
@@ -302,6 +325,29 @@ async function blockIPFromHistory(ip) {
         const data = await resp.json();
         if (resp.ok) { showAlert(`IP ${ip} blocked`, 'success'); }
         else showAlert(data.error || 'Failed to block IP', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+
+async function toggleAdmin() {
+    const isAdmin = {{ 'true' if user.is_admin else 'false' }};
+    const action = isAdmin ? 'demote to regular user' : 'promote to admin';
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${userEmail}?`)) return;
+    try {
+        const resp = await fetch(`/admin/users/${encodeURIComponent(userEmail)}/toggle-admin`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+        else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+
+async function wipeData() {
+    if (!confirm(`Wipe ALL data for ${userEmail}? This deletes all their teams, players, matches and tournaments but keeps the account.`)) return;
+    if (!confirm('Final confirmation: permanently delete all user data?')) return;
+    try {
+        const resp = await fetch(`/admin/users/${encodeURIComponent(userEmail)}/wipe-data`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+        else showAlert(data.error || 'Failed', 'error');
     } catch { showAlert('Network error', 'error'); }
 }
 </script>

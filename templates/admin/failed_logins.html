@@ -45,7 +45,7 @@
             <tr>
                 <td style="font-weight: 600;">{{ e.email }}</td>
                 <td><code style="font-size: 0.8rem;">{{ e.ip_address or 'Unknown' }}</code></td>
-                <td>{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') if e.timestamp else 'N/A' }}</td>
+                <td>{{ e.timestamp | localtime(True) if e.timestamp else 'N/A' }}</td>
                 <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem;">
                     {{ e.user_agent or 'Unknown' }}
                 </td>
