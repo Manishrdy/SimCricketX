@@ -36,12 +36,32 @@ def backup_database():
     return True
 
 
+def _import_all_models():
+    """Explicitly import every model so SQLAlchemy metadata is fully populated.
+
+    This is the single source of truth for migrate.py — add new models here
+    as they are created so db.create_all() never misses a table.
+    """
+    from database.models import (  # noqa: F401
+        Team, Player, Match, MatchScorecard,
+        Tournament, TournamentTeam, TournamentFixture,
+        MatchPartnership, TournamentPlayerStatsCache,
+        AdminAuditLog, FailedLoginAttempt, BlockedIP,
+        ActiveSession, SiteCounter, LoginHistory, IPWhitelistEntry,
+    )
+
+
 def run_schema_migration(app, db):
     """Run ensure_schema to add missing columns and tables."""
     from sqlalchemy import inspect
     from scripts.fix_db_schema import ensure_schema
 
     with app.app_context():
+        # Ensure every model is registered with SQLAlchemy metadata before
+        # calling create_all — prevents "no such table" errors when new models
+        # are added but the DB hasn't been migrated yet.
+        _import_all_models()
+
         inspector = inspect(db.engine)
         tables_before = set(inspector.get_table_names())
         cols_before = {}
@@ -73,6 +93,17 @@ def run_schema_migration(app, db):
                     print(f"  [NEW COLUMNS] {t}: {', '.join(sorted(added))}")
         if not new_cols_found:
             print("  [OK] No new columns needed.")
+
+        # Final safety check: warn if any registered model table is still missing
+        all_model_tables = {
+            mapper.persist_selectable.name
+            for mapper in db.Model.registry.mappers
+        }
+        still_missing = sorted(all_model_tables - tables_after)
+        if still_missing:
+            print(f"  [WARN] Tables still missing after migration: {', '.join(still_missing)}")
+        else:
+            print("  [OK] All model tables verified present.")
 
 
 def migrate_counters(app, db):
@@ -208,6 +239,7 @@ def main():
         run_schema_migration(app, db)
     else:
         with app.app_context():
+            _import_all_models()
             db.create_all()
         print("  [OK] Fresh database created with all tables.")
 

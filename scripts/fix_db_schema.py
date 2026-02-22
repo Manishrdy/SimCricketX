@@ -102,6 +102,7 @@ def ensure_schema(engine, db_obj=None):
         "tournament_player_stats_cache", "admin_audit_log",
         "match_partnerships", "failed_login_attempts",
         "blocked_ips", "active_sessions", "site_counters",
+        "login_history", "ip_whitelist",
     )
     missing = [t for t in all_required_tables if t not in tables]
     if missing and db_obj is not None:
@@ -109,6 +110,7 @@ def ensure_schema(engine, db_obj=None):
         from database.models import (  # noqa: F401
             TournamentPlayerStatsCache, AdminAuditLog, MatchPartnership,
             FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter,
+            LoginHistory, IPWhitelistEntry,
         )
         db_obj.create_all()
 
