@@ -1,0 +1,146 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">{{ user.display_name or user.id }}</h1>
+        <p class="admin-page-subtitle">User analytics &mdash; {{ user.id }}</p>
+    </div>
+    <div class="admin-page-actions">
+        <a href="{{ url_for('admin_user_detail', user_email=user.id) }}" class="a-btn a-btn-ghost"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="{{ url_for('admin_user_360', user_email=user.id) }}" class="a-btn a-btn-secondary"><i class="fas fa-eye"></i> 360 View</a>
+        <a href="{{ url_for('admin_export_user', user_email=user.id) }}" class="a-btn a-btn-secondary"><i class="fas fa-download"></i> Export JSON</a>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="a-stats-grid">
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-shield-alt"></i></div>
+        <div class="a-stat-label">Teams</div>
+        <div class="a-stat-value">{{ analytics.teams_count }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-users"></i></div>
+        <div class="a-stat-label">Players</div>
+        <div class="a-stat-value">{{ analytics.players_count }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-cricket-bat-ball"></i></div>
+        <div class="a-stat-label">Matches</div>
+        <div class="a-stat-value">{{ analytics.matches_count }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-trophy"></i></div>
+        <div class="a-stat-label">Tournaments</div>
+        <div class="a-stat-value">{{ analytics.tournaments_count }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-check-circle"></i></div>
+        <div class="a-stat-label">Wins</div>
+        <div class="a-stat-value">{{ analytics.wins }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-percentage"></i></div>
+        <div class="a-stat-label">Win Rate</div>
+        <div class="a-stat-value">{{ analytics.win_rate }}%</div>
+    </div>
+</div>
+
+<div class="a-grid-2">
+    <!-- Format Breakdown -->
+    <div class="a-card-flat">
+        <h3 class="a-section-title"><i class="fas fa-chart-pie"></i> Match Format Breakdown</h3>
+        {% if analytics.format_breakdown %}
+        <div style="display:flex;flex-direction:column;gap:0.6rem;">
+            {% for fb in analytics.format_breakdown %}
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+                <span style="font-size:0.85rem;font-weight:600;min-width:60px;">{{ fb.format }}</span>
+                <div style="flex:1;height:12px;background:var(--bg-secondary);border-radius:6px;overflow:hidden;">
+                    {% set pct = (fb.count / analytics.matches_count * 100)|round(0)|int if analytics.matches_count else 0 %}
+                    <div style="width:{{ pct }}%;height:100%;background:var(--gradient);border-radius:6px;"></div>
+                </div>
+                <span style="font-size:0.82rem;color:var(--fg-secondary);min-width:40px;">{{ fb.count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="a-empty"><p>No matches yet.</p></div>
+        {% endif %}
+    </div>
+
+    <!-- Top Players -->
+    <div class="a-card-flat">
+        <h3 class="a-section-title"><i class="fas fa-star"></i> Top Players</h3>
+        {% if analytics.top_batsman %}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--card-border);">
+            <div>
+                <div style="font-weight:600;font-size:0.88rem;">{{ analytics.top_batsman.name }}</div>
+                <div style="font-size:0.75rem;color:var(--fg-secondary);">Top Batsman &mdash; {{ analytics.top_batsman.total_runs }} runs</div>
+            </div>
+            <span class="a-badge a-badge-success">{{ analytics.top_batsman.batting_rating }} BAT</span>
+        </div>
+        {% endif %}
+        {% if analytics.top_bowler %}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;">
+            <div>
+                <div style="font-weight:600;font-size:0.88rem;">{{ analytics.top_bowler.name }}</div>
+                <div style="font-size:0.75rem;color:var(--fg-secondary);">Top Bowler &mdash; {{ analytics.top_bowler.total_wickets }} wickets</div>
+            </div>
+            <span class="a-badge a-badge-warning">{{ analytics.top_bowler.bowling_rating }} BOWL</span>
+        </div>
+        {% endif %}
+        {% if not analytics.top_batsman and not analytics.top_bowler %}
+        <div class="a-empty"><p>No players yet.</p></div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Monthly Activity -->
+<div class="a-card-flat" style="margin-top:1.5rem;">
+    <h3 class="a-section-title"><i class="fas fa-chart-bar"></i> Monthly Matches (last 6 months)</h3>
+    {% if analytics.monthly_matches %}
+    <div style="display:flex;align-items:flex-end;gap:0.5rem;height:120px;margin-top:0.5rem;">
+        {% set max_count = analytics.monthly_matches|map(attribute='count')|max %}
+        {% for m in analytics.monthly_matches %}
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.3rem;">
+            <div style="font-size:0.7rem;color:var(--fg-secondary);">{{ m.count }}</div>
+            {% set bar_pct = (m.count / max_count * 100)|int if max_count else 0 %}
+            <div style="width:100%;background:var(--gradient);border-radius:4px 4px 0 0;height:{{ bar_pct }}px;min-height:4px;"></div>
+            <div style="font-size:0.65rem;color:var(--fg-secondary);text-align:center;">{{ m.month }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="a-empty"><p>No match data in the last 6 months.</p></div>
+    {% endif %}
+</div>
+
+<!-- Recent Login Activity -->
+<div class="a-card-flat" style="margin-top:1.5rem;">
+    <h3 class="a-section-title"><i class="fas fa-sign-in-alt"></i> Recent Login Activity</h3>
+    {% if analytics.login_history %}
+    <div class="a-table-wrap" style="margin-top:0.75rem;">
+        <table class="a-table">
+            <thead><tr><th>Event</th><th>IP</th><th>When</th></tr></thead>
+            <tbody>
+                {% for lh in analytics.login_history[:10] %}
+                <tr>
+                    <td><span class="a-badge a-badge-success"><i class="fas fa-sign-in-alt"></i> {{ lh.event|title }}</span></td>
+                    <td><code style="font-size:0.8rem;">{{ lh.ip_address or '-' }}</code></td>
+                    <td>{% if lh.timestamp %}{{ lh.timestamp | localtime(True) }}{% else %}-{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div style="margin-top:0.75rem;">
+        <a href="{{ url_for('admin_user_login_history', user_email=user.id) }}" class="a-btn a-btn-ghost a-btn-sm">
+            View Full History <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+    {% else %}
+    <div class="a-empty"><p>No login history recorded yet.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

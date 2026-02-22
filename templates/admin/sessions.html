@@ -29,8 +29,8 @@
             <tr id="session-{{ s.id }}">
                 <td style="font-weight: 600;">{{ s.user_id }}</td>
                 <td><code style="font-size: 0.8rem;">{{ s.ip_address or 'Unknown' }}</code></td>
-                <td>{{ s.login_at.strftime('%Y-%m-%d %H:%M') if s.login_at else 'N/A' }}</td>
-                <td>{{ s.last_active.strftime('%Y-%m-%d %H:%M') if s.last_active else 'N/A' }}</td>
+                <td>{{ s.login_at | localtime if s.login_at else 'N/A' }}</td>
+                <td>{{ s.last_active | localtime if s.last_active else 'N/A' }}</td>
                 <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem;">
                     {{ s.user_agent or 'Unknown' }}
                 </td>

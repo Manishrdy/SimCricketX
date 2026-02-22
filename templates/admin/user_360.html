@@ -41,7 +41,7 @@
     </div>
     <div class="a-stat-card">
         <div class="a-stat-label">Last Login</div>
-        <div style="font-size: 0.9rem; font-weight: 600;">{% if user.last_login %}{{ user.last_login.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}</div>
+        <div style="font-size: 0.9rem; font-weight: 600;">{% if user.last_login %}{{ user.last_login | localtime }}{% else %}Never{% endif %}</div>
     </div>
 </div>
 
@@ -83,7 +83,7 @@
                     {% for s in sessions %}
                     <tr>
                         <td><code>{{ s.ip_address or '-' }}</code></td>
-                        <td>{% if s.last_active %}{{ s.last_active.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}-{% endif %}</td>
+                        <td>{% if s.last_active %}{{ s.last_active | localtime(True) }}{% else %}-{% endif %}</td>
                         <td style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.user_agent or '-' }}</td>
                     </tr>
                     {% else %}
@@ -103,7 +103,7 @@
                     {% for f in failed_logins %}
                     <tr>
                         <td><code>{{ f.ip_address or '-' }}</code></td>
-                        <td>{% if f.timestamp %}{{ f.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}-{% endif %}</td>
+                        <td>{% if f.timestamp %}{{ f.timestamp | localtime(True) }}{% else %}-{% endif %}</td>
                         <td style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ f.user_agent or '-' }}</td>
                     </tr>
                     {% else %}
@@ -126,7 +126,7 @@
                     <tr>
                         <td>{{ t.name }}</td>
                         <td><span class="a-badge a-badge-info">{{ t.short_code }}</span></td>
-                        <td>{% if t.created_at %}{{ t.created_at.strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td>
+                        <td>{% if t.created_at %}{{ t.created_at | localtime }}{% else %}-{% endif %}</td>
                     </tr>
                     {% else %}
                     <tr><td colspan="3"><div class="a-empty"><p>No teams</p></div></td></tr>
@@ -144,7 +144,7 @@
                 <tbody>
                     {% for m in recent_matches %}
                     <tr>
-                        <td>{% if m.date %}{{ m.date.strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td>
+                        <td>{% if m.date %}{{ m.date | localtime }}{% else %}-{% endif %}</td>
                         <td>{{ m.result_description or '-' }}</td>
                         <td>{{ m.venue or '-' }}</td>
                     </tr>
@@ -168,7 +168,7 @@
                     <tr>
                         <td>{{ t.name }}</td>
                         <td><span class="a-badge a-badge-info">{{ t.status or '-' }}</span></td>
-                        <td>{% if t.created_at %}{{ t.created_at.strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td>
+                        <td>{% if t.created_at %}{{ t.created_at | localtime }}{% else %}-{% endif %}</td>
                     </tr>
                     {% else %}
                     <tr><td colspan="3"><div class="a-empty"><p>No tournaments</p></div></td></tr>
@@ -188,14 +188,14 @@
                     <tr>
                         <td><span class="a-badge a-badge-warning">By User</span></td>
                         <td>{{ e.action }}</td>
-                        <td>{% if e.timestamp %}{{ e.timestamp.strftime('%Y-%m-%d %H:%M') }}{% else %}-{% endif %}</td>
+                        <td>{% if e.timestamp %}{{ e.timestamp | localtime }}{% else %}-{% endif %}</td>
                     </tr>
                     {% endfor %}
                     {% for e in actions_targeting_user %}
                     <tr>
                         <td><span class="a-badge a-badge-danger">Targeting User</span></td>
                         <td>{{ e.action }}</td>
-                        <td>{% if e.timestamp %}{{ e.timestamp.strftime('%Y-%m-%d %H:%M') }}{% else %}-{% endif %}</td>
+                        <td>{% if e.timestamp %}{{ e.timestamp | localtime }}{% else %}-{% endif %}</td>
                     </tr>
                     {% endfor %}
                     {% if not admin_actions_by_user and not actions_targeting_user %}
