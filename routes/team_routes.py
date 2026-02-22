@@ -1,5 +1,7 @@
 """Team management route registration."""
 
+import json
+
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
@@ -12,6 +14,91 @@ def register_team_routes(
     DBTeam,
     DBPlayer,
 ):
+    def _extract_player_form_lists(form):
+        """Return aligned per-player form lists from JSON payload or legacy list fields."""
+        payload_raw = (form.get("players_payload") or "").strip()
+        if payload_raw:
+            try:
+                payload = json.loads(payload_raw)
+            except Exception:
+                return None, "Invalid player payload format."
+
+            if not isinstance(payload, list):
+                return None, "Invalid player payload format."
+
+            names, roles, bats, bowls, fields = [], [], [], [], []
+            bhands, btypes, bhand2s = [], [], []
+
+            for idx, item in enumerate(payload, start=1):
+                if not isinstance(item, dict):
+                    return None, f"Invalid player payload item at position {idx}."
+
+                name = str(item.get("name", "")).strip()
+                role = str(item.get("role", "")).strip()
+                batting_hand = str(item.get("batting_hand", "")).strip()
+                bowling_type = str(item.get("bowling_type", "")).strip()
+                bowling_hand = str(item.get("bowling_hand", "")).strip()
+
+                try:
+                    bat = int(item.get("batting_rating", ""))
+                    bowl = int(item.get("bowling_rating", ""))
+                    field = int(item.get("fielding_rating", ""))
+                except Exception:
+                    return None, f"Player {idx}: Ratings must be valid integers."
+
+                names.append(name)
+                roles.append(role)
+                bats.append(str(bat))
+                bowls.append(str(bowl))
+                fields.append(str(field))
+                bhands.append(batting_hand)
+                btypes.append(bowling_type)
+                bhand2s.append(bowling_hand)
+
+            return (names, roles, bats, bowls, fields, bhands, btypes, bhand2s), None
+
+        names = form.getlist("player_name")
+        roles = form.getlist("player_role")
+        bats = form.getlist("batting_rating")
+        bowls = form.getlist("bowling_rating")
+        fields = form.getlist("fielding_rating")
+        bhands = form.getlist("batting_hand")
+        raw_btypes = form.getlist("bowling_type")
+        raw_bhand2s = form.getlist("bowling_hand")
+
+        expected_len = len(names)
+        for label, values in (
+            ("player_role", roles),
+            ("batting_rating", bats),
+            ("bowling_rating", bowls),
+            ("fielding_rating", fields),
+            ("batting_hand", bhands),
+        ):
+            if len(values) != expected_len:
+                return None, f"Malformed team form data: '{label}' count mismatch."
+
+        # Defensive alignment for older payload behavior where WK bowling fields are disabled
+        # and omitted from submission.
+        if len(raw_btypes) == expected_len and len(raw_bhand2s) == expected_len:
+            btypes = raw_btypes
+            bhand2s = raw_bhand2s
+        else:
+            btypes = []
+            bhand2s = []
+            type_idx = 0
+            hand_idx = 0
+            for role in roles:
+                if role == "Wicketkeeper":
+                    btypes.append("")
+                    bhand2s.append("")
+                    continue
+                btypes.append(raw_btypes[type_idx] if type_idx < len(raw_btypes) else "")
+                bhand2s.append(raw_bhand2s[hand_idx] if hand_idx < len(raw_bhand2s) else "")
+                type_idx += 1
+                hand_idx += 1
+
+        return (names, roles, bats, bowls, fields, bhands, btypes, bhand2s), None
+
     @app.route("/team/create", methods=["GET", "POST"])
     @login_required
     def create_team():
@@ -40,14 +127,19 @@ def register_team_routes(
                         ),
                     )
 
-                player_names = request.form.getlist("player_name")
-                roles = request.form.getlist("player_role")
-                bat_ratings = request.form.getlist("batting_rating")
-                bowl_ratings = request.form.getlist("bowling_rating")
-                field_ratings = request.form.getlist("fielding_rating")
-                bat_hands = request.form.getlist("batting_hand")
-                bowl_types = request.form.getlist("bowling_type")
-                bowl_hands = request.form.getlist("bowling_hand")
+                extracted, form_err = _extract_player_form_lists(request.form)
+                if form_err:
+                    return render_template("team_create.html", error=form_err)
+                (
+                    player_names,
+                    roles,
+                    bat_ratings,
+                    bowl_ratings,
+                    field_ratings,
+                    bat_hands,
+                    bowl_types,
+                    bowl_hands,
+                ) = extracted
 
                 players = []
                 for i in range(len(player_names)):
@@ -293,14 +385,25 @@ def register_team_routes(
                     action = request.form.get("action", "publish")
                     is_draft = action == "save_draft"
 
-                    names = request.form.getlist("player_name")
-                    roles = request.form.getlist("player_role")
-                    bats = request.form.getlist("batting_rating")
-                    bowls = request.form.getlist("bowling_rating")
-                    fields = request.form.getlist("fielding_rating")
-                    bhands = request.form.getlist("batting_hand")
-                    btypes = request.form.getlist("bowling_type")
-                    bhand2s = request.form.getlist("bowling_hand")
+                    extracted, form_err = _extract_player_form_lists(request.form)
+                    if form_err:
+                        return render_template(
+                            "team_create.html",
+                            team={
+                                "team_name": team.name,
+                                "short_code": new_short_code,
+                                "home_ground": team.home_ground,
+                                "pitch_preference": team.pitch_preference,
+                                "team_color": team.team_color,
+                                "created_by_email": team.user_id,
+                                "captain": "",
+                                "wicketkeeper": "",
+                                "players": [],
+                            },
+                            edit=True,
+                            error=form_err,
+                        )
+                    names, roles, bats, bowls, fields, bhands, btypes, bhand2s = extracted
 
                     captain_name = request.form.get("captain")
                     wk_name = request.form.get("wicketkeeper")
