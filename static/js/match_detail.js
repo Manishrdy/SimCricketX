@@ -1062,11 +1062,13 @@ function startMatch() {
                     isFinalScoreboard = true;
                     showScorecard(data.scorecard_data, data);
                 }
+                // Append final commentary BEFORE saving the archive so the
+                // Full Snapshot + both scorecard blocks are captured in the HTML
+                appendLog(data.commentary || "Match Concluded.", 'comment');
                 if (!archiveSaved) {
                     archiveSaved = true;
                     saveMatchArchive();
                 }
-                appendLog(data.commentary || "Match Concluded.", 'comment');
                 matchOver = true;
                 return;
             }
@@ -1077,11 +1079,12 @@ function startMatch() {
                     isFinalScoreboard = true;
                     showScorecard(data.scorecard_data, data);
                 }
+                // Same: append before archiving
+                appendLog(data.commentary || "Match Concluded.", 'comment');
                 if (!archiveSaved) {
                     archiveSaved = true;
                     saveMatchArchive();
                 }
-                appendLog(data.commentary || "Match Concluded.", 'comment');
                 matchOver = true;
                 return;
             }

@@ -2383,24 +2383,46 @@ class Match:
         
         # Get ALL fast bowlers from all tiers, not just stars
         all_bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
+        # _is_powerplay_eligible already enforces the no-consecutive rule internally,
+        # so fast_bowlers here will NEVER contain the previous over's bowler.
         fast_bowlers = [
-            b for b in all_bowlers 
+            b for b in all_bowlers
             if self._is_fast_bowler(b) and self._is_powerplay_eligible(b, quota_analysis)
         ]
-        
+
         if not fast_bowlers:
-            print(f"  ❌ No fast bowlers available for early overs")
-            return None
-        
+            # No eligible fast bowler — either no fast bowlers in squad, or the only one
+            # just bowled the previous over (consecutive conflict).
+            # Fallback: try any bowling type that is quota-eligible AND non-consecutive,
+            # so the early-overs override doesn’t silently vanish when the top pacer
+            # is unavailable.
+            print(f"  ⚠️  No eligible non-consecutive fast bowler for early overs — trying any-type fallback")
+            any_type_bowlers = [
+                b for b in all_bowlers
+                if self._is_powerplay_eligible(b, quota_analysis)
+            ]
+            if not any_type_bowlers:
+                print(f"  ❌ No eligible bowler of any type for early-overs override — handing off to main pipeline")
+                return None
+            any_type_bowlers.sort(key=lambda b: (
+                b['bowling_rating'],
+                0 if b['role'] == 'Bowler' else 1
+            ), reverse=True)
+            selected = any_type_bowlers[0]
+            overs_bowled = quota_analysis[selected['name']]['overs_bowled']
+            print(f"  ✅ EARLY OVERS FALLBACK ({selected['bowling_type']}): {selected['name']} "
+                  f"(Rating: {selected['bowling_rating']}, Overs: {overs_bowled}/4)")
+            return selected
+
         # Sort by rating first (highest to lowest), then by role (pure bowlers > all-rounders)
         fast_bowlers.sort(key=lambda b: (
-            b['bowling_rating'], 
+            b['bowling_rating'],
             0 if b['role'] == 'Bowler' else 1
         ), reverse=True)
-        
+
         selected = fast_bowlers[0]
         overs_bowled = quota_analysis[selected['name']]['overs_bowled']
-        
+
         print(f"  ✅ EARLY OVERS FAST: {selected['name']} (Rating: {selected['bowling_rating']}, Overs: {overs_bowled}/4)")
         return selected
 
@@ -2446,6 +2468,16 @@ class Match:
         """Check if bowler is fast/fast-medium type"""
         return bowler['bowling_type'] in ['Fast', 'Fast-medium', 'Medium-fast']
 
+    def _is_consecutive_bowler(self, bowler):
+        """
+        Centralised consecutive-bowling guard — single source of truth.
+        Returns True if `bowler` is the exact same person who bowled the previous over.
+        Used as an explicit second-layer check in every early-return path inside
+        pick_bowler(), even when the helper functions already call _is_powerplay_eligible
+        (which also enforces this rule internally) — defence-in-depth approach.
+        """
+        return bool(self.current_bowler and bowler["name"] == self.current_bowler["name"])
+
     def _is_powerplay_eligible(self, bowler, quota_analysis):
         """Check if bowler is eligible for powerplay selection"""
         bowler_data = quota_analysis[bowler['name']]
@@ -2461,8 +2493,17 @@ class Match:
         return True
 
     def _is_constraint_eligible(self, bowler, quota_analysis):
-        """Check if bowler meets basic constraint requirements"""
-        return self._is_powerplay_eligible(bowler, quota_analysis)  # Same logic for now
+        """
+        Check if bowler satisfies ALL hard constraints:
+          1. Quota  — has at least 1 over remaining (< 4 overs bowled)
+          2. Non-consecutive — is NOT the same bowler who bowled the previous over
+        Both conditions must hold; failure in either returns False.
+        """
+        if not self._is_powerplay_eligible(bowler, quota_analysis):
+            return False
+        if self._is_consecutive_bowler(bowler):
+            return False
+        return True
 
     def _try_low_rated_bowler_usage(self, bowler_tiers, quota_analysis):
         """
@@ -2679,26 +2720,41 @@ class Match:
         # ================ NEW: EARLY OVERS FAST BOWLER OVERRIDE ================
         if self.current_over < 4:  # Early overs 1-4 only
             early_overs_result = self._try_early_overs_fast_selection(bowler_tiers, quota_analysis)
-            if early_overs_result:
+            # STRICT CONSECUTIVE GUARD — even if the helper somehow returns the previous
+            # bowler (e.g. due to an internal bug), we refuse to use that result.
+            if early_overs_result and not self._is_consecutive_bowler(early_overs_result):
                 print(f"🚀 EARLY OVERS FAST OVERRIDE: Selected {early_overs_result['name']}")
                 self._update_bowler_tracking(early_overs_result)
                 return early_overs_result
+            elif early_overs_result:
+                print(f"🚫 EARLY OVERS FAST OVERRIDE BLOCKED: {early_overs_result['name']} would bowl "
+                      f"consecutive overs — falling through to main pipeline")
 
-        # ================ NEW: STAR NEGLECT PREVENTION ================  
+        # ================ NEW: STAR NEGLECT PREVENTION ================
         if self.current_over >= 10:  # After over 10
             neglect_result = self._prevent_star_neglect(bowler_tiers, quota_analysis)
-            if neglect_result:
+            # _prevent_star_neglect already calls _is_constraint_eligible (which now checks
+            # consecutive), but we add an explicit outer guard as a second layer of defence.
+            if neglect_result and not self._is_consecutive_bowler(neglect_result):
                 print(f"⚡ STAR NEGLECT PREVENTION: Selected {neglect_result['name']}")
                 self._update_bowler_tracking(neglect_result)
                 return neglect_result
+            elif neglect_result:
+                print(f"🚫 STAR NEGLECT PREVENTION BLOCKED: {neglect_result['name']} would bowl "
+                      f"consecutive overs — falling through to main pipeline")
 
         # ================ NEW: LOW-RATED BOWLER STRATEGIC USAGE ================
         if self.current_over >= 5:  # After early overs
             low_rated_result = self._try_low_rated_bowler_usage(bowler_tiers, quota_analysis)
-            if low_rated_result:
+            # _try_low_rated_bowler_usage already calls _is_constraint_eligible (which now checks
+            # consecutive), but we add an explicit outer guard as a second layer of defence.
+            if low_rated_result and not self._is_consecutive_bowler(low_rated_result):
                 print(f"🎯 LOW-RATED STRATEGIC: Selected {low_rated_result['name']}")
                 self._update_bowler_tracking(low_rated_result)
                 return low_rated_result
+            elif low_rated_result:
+                print(f"🚫 LOW-RATED STRATEGIC BLOCKED: {low_rated_result['name']} would bowl "
+                      f"consecutive overs — falling through to main pipeline")
 
         # ================ RISK ASSESSMENT ================
         risk_assessment = self._assess_constraint_risk(all_bowlers, quota_analysis)

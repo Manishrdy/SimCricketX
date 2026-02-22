@@ -822,17 +822,16 @@ def register_match_routes(
                 if match_instance.data.get("created_by") != current_user.id:
                     return jsonify({"error": "Unauthorized"}), 403
                 
-                # Convert HTML to clean text list for archiving
+                # Store the raw innerHTML so the HTML archive can clone it exactly
+                match_instance.frontend_commentary_html = commentary_html
+
+                # Convert HTML to clean text list (used for TXT file generation)
                 frontend_commentary = html_to_commentary_list(commentary_html)
                 print(f"DEBUG: Converted to {len(frontend_commentary)} commentary items")
-                
+
                 # Replace the backend commentary with frontend commentary
                 match_instance.frontend_commentary_captured = frontend_commentary
-                
-                # DON'T trigger archive creation here - it already happened
-                # Just store the commentary for next time
-                print(f"DEBUG: Stored frontend commentary for future use")
-                
+
                 app.logger.info(f"[Commentary] Captured {len(frontend_commentary)} items for match {match_id}")
                 return jsonify({"message": "Commentary captured successfully"}), 200
             else:
@@ -845,22 +844,24 @@ def register_match_routes(
             return jsonify({"error": "Failed to save commentary"}), 500
 
     def html_to_commentary_list(html_content):
-        """Convert HTML commentary to clean text list"""
+        """Convert commentary-log HTML to a list of div strings, preserving token classes."""
         from bs4 import BeautifulSoup
-        import re
-        
-        # Parse HTML
+
         soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Extract all paragraph texts
-        paragraphs = soup.find_all('p')
         commentary_items = []
-        
-        for p in paragraphs:
-            text = p.get_text().strip()
-            if text and text != "Match starts soon...":  # Skip placeholder text
-                commentary_items.append(str(p))  # Keep HTML structure for archiver
-        
+
+        for div in soup.find_all('div', class_='code-line'):
+            span = div.find('span')
+            if not span:
+                continue
+            text = span.get_text().strip()
+            # Skip empty entries and the initial placeholder
+            if not text or text in ('// Match simulation ready. Waiting for toss...',
+                                    '// Match simulation ready...'):
+                continue
+            # Store the full div HTML so the archiver can read the token class
+            commentary_items.append(str(div))
+
         return commentary_items
 
 
@@ -879,15 +880,13 @@ def register_match_routes(
             app.logger.info(f"[DownloadArchive] Starting archive creation for match '{match_id}'")
 
             # ??? A) Extract HTML content from request ???????????????????????????
+            # html_content is accepted for backwards-compatibility but is no longer
+            # used to build the archive HTML file. The HTML report is now generated
+            # entirely from commentary_log + match metadata on the backend.
             payload = request.get_json() or {}
             html_content = payload.get("html_content")
-            if not html_content:
-                app.logger.error("[DownloadArchive] No HTML content provided in request payload")
-                return jsonify({"error": "HTML content is required"}), 400
-
-            app.logger.debug(f"[DownloadArchive] Received HTML content length: {len(html_content):,} characters")
-            if len(html_content) < 1000:
-                app.logger.warning("[DownloadArchive] HTML content seems unusually short (< 1,000 chars)")
+            if html_content:
+                app.logger.debug(f"[DownloadArchive] html_content received ({len(html_content):,} chars) — not used for HTML generation")
 
             # ??? B) Load match metadata ?????????????????????????????????????????
             match_meta = load_match_metadata(match_id)
@@ -931,7 +930,13 @@ def register_match_routes(
 
             app.logger.debug(f"[DownloadArchive] Using JSON at '{original_json_path}'")
 
-            # ??? E) Extract commentary log ???????????????????????????????????????
+            # ??? E) Extract commentary log + raw HTML ????????????????????????????????????
+            # Raw HTML: used to clone the commentary box exactly in the HTML archive file
+            commentary_raw_html = getattr(match_instance, "frontend_commentary_html", None)
+            if commentary_raw_html:
+                app.logger.info(f"[DownloadArchive] Raw commentary HTML captured ({len(commentary_raw_html):,} chars)")
+
+            # Text list: used for TXT file generation
             if getattr(match_instance, "frontend_commentary_captured", None):
                 commentary_log = match_instance.frontend_commentary_captured
                 app.logger.info(f"[DownloadArchive] Using frontend commentary (items={len(commentary_log)})")
@@ -953,7 +958,7 @@ def register_match_routes(
                 success = archiver.create_archive(
                     original_json_path=original_json_path,
                     commentary_log=commentary_log,
-                    html_content=html_content
+                    commentary_raw_html=commentary_raw_html
                 )
                 if not success:
                     app.logger.error(f"[DownloadArchive] MatchArchiver reported failure for '{match_id}'")

@@ -248,20 +248,22 @@ class MatchArchiver:
             'zip': f"{self.folder_name}.zip"
         }
 
-    def create_archive(self, 
-                  original_json_path: str, 
-                  commentary_log: List[str], 
+    def create_archive(self,
+                  original_json_path: str,
+                  commentary_log: List[str],
                   html_content: Optional[str] = None,
+                  commentary_raw_html: Optional[str] = None,
                   cleanup_temp: bool = True) -> bool:
         """
         Create complete match archive with all formats and ZIP packaging.
-        
+
         Args:
             original_json_path: Path to original match JSON file
-            commentary_log: List of commentary entries
-            html_content: Complete HTML webpage content (optional)
+            commentary_log: List of commentary entries (used for TXT file)
+            html_content: Unused legacy parameter, kept for compatibility
+            commentary_raw_html: Raw innerHTML of #commentary-log (used for HTML file)
             cleanup_temp: Whether to clean up temporary files (default: True)
-            
+
         Returns:
             bool: True if archive creation successful, False otherwise
         """
@@ -280,8 +282,7 @@ class MatchArchiver:
             
             self._include_scorecard_images()
             
-            if html_content:
-                self._create_html_file(html_content)
+            self._create_html_file(commentary_log, commentary_raw_html)
             
             # Create ZIP archive
             zip_path = self._create_zip_archive()
@@ -1309,160 +1310,237 @@ class MatchArchiver:
         except Exception as e:
             raise MatchArchiverError(f"Failed to create bowling CSV {filename}: {e}")
 
-    def _create_html_file(self, html_content: str) -> None:
-        """Create HTML file with enhanced archival features"""
-        if not self._validate_html_content(html_content):
-            raise MatchArchiverError("Invalid HTML content provided")
-        
+    def _create_html_file(self, commentary_log: List[str], commentary_raw_html: Optional[str] = None) -> None:
+        """Create a self-contained HTML commentary report for archival"""
         html_path = self.archive_path / self.filenames['html']
-        
         try:
-            cleaned_html = self._clean_html_for_archive(html_content)
-            
+            html_content = self._build_commentary_html(commentary_log, commentary_raw_html)
             with open(html_path, 'w', encoding='utf-8') as f:
-                f.write(cleaned_html)
-            
+                f.write(html_content)
             self.created_files.append(html_path)
             self.logger.debug(f"HTML file created: {self.filenames['html']}")
-            
         except Exception as e:
             raise MatchArchiverError(f"Failed to create HTML file: {e}")
 
-    def _validate_html_content(self, html_content: str) -> bool:
-        """Comprehensive HTML content validation"""
-        if not html_content or not isinstance(html_content, str):
-            self.logger.warning("HTML content is empty or not a string")
-            return False
-        
-        if len(html_content) < self.MIN_HTML_SIZE:
-            self.logger.warning(f"HTML content too small: {len(html_content)} < {self.MIN_HTML_SIZE}")
-            return False
-        
-        if len(html_content) > self.MAX_FILE_SIZE:
-            self.logger.warning(f"HTML content too large: {len(html_content)} > {self.MAX_FILE_SIZE}")
-            return False
-        
-        # Check for essential HTML elements
-        required_patterns = [
-            r'<html[^>]*>',
-            r'<head[^>]*>',
-            r'<body[^>]*>',
-            self.team_home.lower(),
-            self.team_away.lower()
-        ]
-        
-        missing_patterns = []
-        for pattern in required_patterns:
-            if not re.search(pattern, html_content, re.IGNORECASE):
-                missing_patterns.append(pattern)
-        
-        if missing_patterns:
-            self.logger.warning(f"HTML missing expected patterns: {missing_patterns}")
-        
-        return True
+    def _classify_commentary_entry(self, entry: str) -> str:
+        """Return a CSS class name based on the type of commentary entry"""
+        lower = entry.lower()
+        if any(k in lower for k in ('wicket', ' out ', 'bowled', 'caught', 'lbw', 'stumped', 'run out', 'retired')):
+            return 'ev-wicket'
+        if 'six' in lower or ' 6 ' in lower:
+            return 'ev-six'
+        if 'four' in lower or ' 4 ' in lower:
+            return 'ev-four'
+        if 'end of over' in lower or lower.startswith('over '):
+            return 'ev-over'
+        return 'ev-ball'
 
-    def _clean_html_for_archive(self, html_content: str) -> str:
-        """Clean and enhance HTML for archival storage"""
-        
-        # Add archive metadata header
-        archive_metadata = f"""
-<!--
-═══════════════════════════════════════════════════════════════════════════════
-CRICKET MATCH ARCHIVE - OFFICIAL HTML RECORD
-═══════════════════════════════════════════════════════════════════════════════
-Match: {self.team_home} vs {self.team_away}
-Match ID: {self.match_id}
-Date: {self.timestamp}
-Created by: {self.username}
-Stadium: {self.match_data.get('stadium', 'N/A')}
-Pitch: {self.match_data.get('pitch', 'N/A')}
-Rain Probability: {(self.match_data.get('rain_probability', 0) * 100):.1f}%
+    def _build_commentary_html(self, commentary_log: List[str], commentary_raw_html: Optional[str] = None) -> str:
+        """
+        Build a self-contained HTML archive file.
 
-Archive Details:
-- Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-- Archive Version: 1.0.0
-- File Type: Complete Interactive Match Report
-- Offline Compatible: Yes
+        When commentary_raw_html is available (frontend capture), the exact
+        #commentary-log innerHTML is embedded with the same CSS from the live
+        match page — every line, colour, spacing and separator preserved.
 
-Note: This is an archived version of the live match simulation.
-All functionality preserved for offline viewing.
-═══════════════════════════════════════════════════════════════════════════════
--->
+        Falls back to building from commentary_log (text list) when raw HTML
+        is unavailable (e.g. server-side only archiving).
+        """
+        import html as html_mod
 
-"""
-        
-        # Insert metadata after DOCTYPE
-        if html_content.startswith('<!DOCTYPE html>'):
-            html_content = html_content.replace('<!DOCTYPE html>', f'<!DOCTYPE html>{archive_metadata}')
+        generated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # ── Match result ────────────────────────────────────────────────────────
+        result_text = ''
+        if hasattr(self.match, 'result') and self.match.result:
+            result_text = str(self.match.result)
+
+        # ── Toss ────────────────────────────────────────────────────────────────
+        toss = self.match_data.get('toss', {})
+        if isinstance(toss, dict):
+            toss_winner   = toss.get('winner', 'N/A')
+            toss_decision = toss.get('decision', 'N/A')
+            toss_line     = f"{toss_winner} won the toss and elected to {toss_decision}"
         else:
-            html_content = archive_metadata + html_content
-        
-        # Add archive banner
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        archive_banner = f'''
-<div id="archive-banner" style="
-    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-    color: white;
-    padding: 0.8rem;
-    text-align: center;
-    font-weight: bold;
-    font-family: 'Segoe UI', sans-serif;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 10000;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-    border-bottom: 3px solid #c23616;
-">
-    📁 ARCHIVED MATCH REPORT
-    <span style="margin: 0 1rem; opacity: 0.8;">•</span>
-    {self.team_home} vs {self.team_away}
-    <span style="margin: 0 1rem; opacity: 0.8;">•</span>
-    Saved: {current_time}
-    <span style="margin-left: 1rem; font-size: 0.9em; opacity: 0.9;">
-        (Match ID: {self.match_id})
-    </span>
-</div>
-<div style="height: 60px; margin-bottom: 1rem;"></div>
-'''
-        
-        # Insert banner after body tag
-        body_pattern = r'(<body[^>]*>)'
-        if re.search(body_pattern, html_content, re.IGNORECASE):
-            html_content = re.sub(body_pattern, r'\1' + archive_banner, html_content, flags=re.IGNORECASE)
-        
-        # Add archive-specific CSS for better offline experience
-        archive_css = '''
-<style id="archive-enhancements">
-/* Archive-specific enhancements */
-@media print {
-    #archive-banner { display: none !important; }
-    .toggle-theme { display: none !important; }
-}
+            toss_line = 'N/A'
 
-/* Ensure good contrast for archived version */
-:root {
-    --archive-text: #2c3e50;
-    --archive-bg: #ecf0f1;
-}
+        rain_pct = f"{(self.match_data.get('rain_probability', 0) * 100):.0f}%"
+        stadium  = html_mod.escape(self.match_data.get('stadium', 'N/A'))
+        pitch    = html_mod.escape(self.match_data.get('pitch', 'N/A'))
 
-/* Add timestamp to printed versions */
-@page {
-    @bottom-right {
-        content: "Archived: ''' + current_time + '''";
-        font-size: 10px;
-        color: #7f8c8d;
-    }
-}
-</style>
-'''
-        
-        # Insert CSS before closing head tag
-        if '</head>' in html_content:
-            html_content = html_content.replace('</head>', archive_css + '</head>')
-        
-        return html_content
+        # ── Commentary section ────────────────────────────────────────────────
+        if commentary_raw_html:
+            # Exact clone path: embed raw innerHTML directly inside the styled box
+            commentary_section = f'<div class="commentary-box">\n{commentary_raw_html}\n</div>'
+        else:
+            # Fallback path: build from text list with keyword-based classification
+            TOKEN_TO_CSS = {
+                'token-string':  'ev-ball',
+                'token-error':   'ev-wicket',
+                'token-keyword': 'ev-boundary',
+                'token-comment': 'ev-system',
+            }
+            _SPAN_RE = re.compile(r'<span[^>]*class="([^"]*)"[^>]*>(.*?)</span>', re.DOTALL)
+            entry_lines = []
+            for raw in commentary_log:
+                m = _SPAN_RE.search(raw)
+                if m:
+                    token_class = m.group(1).strip().split()[0]
+                    text = re.sub(r'<[^>]+>', '', m.group(2)).strip()
+                    css_cls = TOKEN_TO_CSS.get(token_class, 'ev-ball')
+                else:
+                    text    = self._clean_html_for_text(raw).strip()
+                    css_cls = self._classify_commentary_entry(text)
+                if not text:
+                    continue
+                entry_lines.append(f'<div class="code-line"><span class="{css_cls}">{html_mod.escape(text)}</span></div>')
+            if not entry_lines:
+                entry_lines.append('<div class="code-line"><span class="token-string">No commentary available.</span></div>')
+            commentary_section = '<div class="commentary-box">\n' + '\n'.join(entry_lines) + '\n</div>'
+
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{html_mod.escape(self.team_home)} vs {html_mod.escape(self.team_away)} — Match Commentary</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
+    /* ── Page wrapper ── */
+    body {{
+      background: #f0f0ec;
+      color: #1a1a2e;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1.25rem 3rem;
+      line-height: 1.6;
+    }}
+
+    /* ── Match header ── */
+    .match-header {{
+      background: #fff;
+      border: 1px solid #d8d8e0;
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+    }}
+    .match-title {{
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #111;
+      letter-spacing: 0.02em;
+    }}
+    .match-result {{
+      margin-top: 0.35rem;
+      font-size: 0.95rem;
+      color: #0055cc;
+      font-weight: 500;
+    }}
+
+    /* ── Meta grid ── */
+    .meta-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+      gap: 0.4rem 1.5rem;
+      background: #fff;
+      border: 1px solid #d8d8e0;
+      border-radius: 8px;
+      padding: 0.85rem 1.5rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.82rem;
+      color: #666;
+    }}
+    .meta-item span {{ color: #111; font-weight: 600; }}
+
+    /* ── Section label ── */
+    .section-label {{
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      color: #999;
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid #ddd;
+    }}
+
+    /* ══════════════════════════════════════════════════════════════
+       Commentary box — exact copy of the live match CSS
+       (VS Code dark editor look, identical to the live match page)
+    ══════════════════════════════════════════════════════════════ */
+    .commentary-box {{
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 1rem;
+      color: #d4d4d4;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code',
+                   'Consolas', 'Courier New', monospace;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      overflow-x: auto;
+    }}
+
+    /* code-line — one entry row */
+    .commentary-box .code-line {{
+      display: flex;
+      gap: 1rem;
+      padding: 0.1rem 0;
+    }}
+
+    /* Token colours — identical to match_detail.html */
+    .commentary-box .token-comment  {{ color: #6a9955; }}  /* green  — over-end, innings, separators */
+    .commentary-box .token-keyword  {{ color: #569cd6; }}  /* blue   — FOUR / SIX / TARGET REACHED   */
+    .commentary-box .token-string   {{ color: #ce9178; }}  /* orange — normal ball commentary         */
+    .commentary-box .token-error    {{ color: #f48771; }}  /* red    — wickets / OUT                  */
+
+    /* Fallback classes used when raw HTML is unavailable */
+    .commentary-box .ev-ball     {{ color: #ce9178; }}
+    .commentary-box .ev-boundary {{ color: #569cd6; }}
+    .commentary-box .ev-wicket   {{ color: #f48771; }}
+    .commentary-box .ev-system   {{ color: #6a9955; }}
+
+    /* ── Footer ── */
+    footer {{
+      margin-top: 2rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #ddd;
+      font-size: 0.75rem;
+      color: #bbb;
+      text-align: center;
+    }}
+
+    @media print {{
+      body {{ background: #fff; max-width: 100%; }}
+      .commentary-box {{ border-color: #ccc; }}
+    }}
+  </style>
+</head>
+<body>
+
+  <div class="match-header">
+    <div class="match-title">{html_mod.escape(self.team_home)} vs {html_mod.escape(self.team_away)}</div>
+    {f'<div class="match-result">{html_mod.escape(result_text)}</div>' if result_text else ''}
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-item">Stadium: <span>{stadium}</span></div>
+    <div class="meta-item">Pitch: <span>{pitch}</span></div>
+    <div class="meta-item">Rain: <span>{rain_pct}</span></div>
+    <div class="meta-item">Toss: <span>{html_mod.escape(toss_line)}</span></div>
+    <div class="meta-item">Date: <span>{html_mod.escape(self.timestamp)}</span></div>
+    <div class="meta-item">Simulated by: <span>{html_mod.escape(self.username)}</span></div>
+  </div>
+
+  <div class="section-label">Ball-by-ball commentary</div>
+
+  {commentary_section}
+
+  <footer>SimCricketX &mdash; Match ID: {html_mod.escape(self.match_id)} &mdash; Generated: {generated_at}</footer>
+
+</body>
+</html>"""
 
     def _clean_html_for_text(self, html_string: str) -> str:
         """Clean HTML for text output with improved formatting"""
