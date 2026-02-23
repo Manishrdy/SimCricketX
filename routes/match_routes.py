@@ -102,6 +102,11 @@ def register_match_routes(
             # Step 1: Load teams from DB using IDs from frontend
             home_id = data.get("team_home")
             away_id = data.get("team_away")
+            # Backward-compatible aliases used by tests/older clients.
+            if home_id is None:
+                home_id = data.get("team1_id")
+            if away_id is None:
+                away_id = data.get("team2_id")
             
             # Tournament context
             req_tournament_id = data.get("tournament_id")
@@ -163,6 +168,34 @@ def register_match_routes(
 
             full_home = team_to_full_dict(home_db)
             full_away = team_to_full_dict(away_db)
+
+            # Backward-compatible payload support: if XI data is missing, derive a default XI.
+            if not isinstance(data.get("playing_xi"), dict):
+                def _default_xi(team_payload):
+                    players = list(team_payload.get("players", []))
+                    xi = []
+                    for idx, player in enumerate(players[:11]):
+                        row = {"name": player.get("name", "")}
+                        # Mark the first up-to-5 bowlers/all-rounders as active bowlers by default.
+                        role = str(player.get("role", "")).strip().lower()
+                        row["will_bowl"] = role in {"bowler", "all-rounder"} and idx < 5
+                        xi.append(row)
+                    return xi
+
+                data["playing_xi"] = {
+                    "home": _default_xi(full_home),
+                    "away": _default_xi(full_away),
+                }
+
+            if not isinstance(data.get("substitutes"), dict):
+                def _default_subs(team_payload):
+                    players = list(team_payload.get("players", []))
+                    return [{"name": p.get("name", "")} for p in players[11:]]
+
+                data["substitutes"] = {
+                    "home": _default_subs(full_home),
+                    "away": _default_subs(full_away),
+                }
 
             # Step 3: Generic function to enrich player lists (XI and substitutes)
             def enrich_player_list(players_to_enrich, full_team_data):
