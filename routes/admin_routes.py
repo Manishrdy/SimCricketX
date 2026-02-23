@@ -1552,7 +1552,7 @@ def register_admin_routes(
     @admin_required
     def admin_api_files():
         base_dir = os.path.abspath(PROJECT_ROOT)
-        req_path = request.args.get('path', '')
+        req_path = request.args.get('path', '').replace('\\', '/')
         # Resolve target path securely
         target_path = os.path.abspath(os.path.join(base_dir, req_path))
         
