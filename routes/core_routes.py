@@ -91,7 +91,8 @@ def register_core_routes(
     def ground_conditions_set_mode():
         import yaml as _yaml
         from engine.ground_config import reload as reload_gc
-        mode = request.json.get("mode", "natural_game")
+        data = request.get_json(silent=True) or {}
+        mode = data.get("mode", "natural_game")
         gc_path = os.path.join(basedir, "config", "ground_conditions.yaml")
         try:
             with open(gc_path, "r", encoding="utf-8") as f:
