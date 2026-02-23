@@ -3424,6 +3424,13 @@ class Match:
             logger.debug("[DynMode] over=%d wickets=%d mode=%s", self.current_over, self.wickets, _game_mode_override)
 
             # ── GSME: build the game-state vector from the last 18 deliveries ──
+            # Pass the scenario phase so GSME can dampen collapse layers during
+            # convergence (overs 15–17) and let the scenario engine steer freely.
+            _scenario_phase = (
+                self.scenario_engine.get_phase()
+                if (self.scenario_engine and self.innings == 2)
+                else "inactive"
+            )
             _gsme_state = compute_game_state_vector(
                 ball_history=self.ball_history,
                 score=self.score,
@@ -3434,6 +3441,7 @@ class Match:
                 target=self.target or 0,
                 pitch=self.pitch,
                 partnership_balls=_partnership_balls,
+                scenario_phase=_scenario_phase,
             )
 
             outcome = calculate_outcome(

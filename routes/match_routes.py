@@ -74,7 +74,9 @@ def register_match_routes(
             clean_old_archives(PROD_MAX_AGE)
             cleanup_temp_scorecard_images()
 
-            data = request.get_json()
+            data = request.get_json(silent=True) or {}
+            if not data:
+                return jsonify({"error": "Invalid or missing JSON body"}), 400
             simulation_mode = str(data.get("simulation_mode", "auto")).lower()
             if simulation_mode not in {"auto", "manual"}:
                 simulation_mode = "auto"
@@ -111,6 +113,8 @@ def register_match_routes(
             
             if not home_db or not away_db:
                 return jsonify({"error": "Invalid team selection"}), 400
+            if home_db.user_id != current_user.id or away_db.user_id != current_user.id:
+                return jsonify({"error": "Unauthorized team selection"}), 403
 
             if req_fixture_id:
                 fixture = db.session.get(TournamentFixture, req_fixture_id)
@@ -751,13 +755,14 @@ def register_match_routes(
     @app.route("/match/<match_id>/start-super-over", methods=["POST"])
     @login_required
     def start_super_over(match_id):
-        if match_id not in MATCH_INSTANCES:
-            return jsonify({"error": "Match not found"}), 404
+        with MATCH_INSTANCES_LOCK:
+            if match_id not in MATCH_INSTANCES:
+                return jsonify({"error": "Match not found"}), 404
+            match = MATCH_INSTANCES[match_id]
+            if match.data.get("created_by") != current_user.id:
+                return jsonify({"error": "Unauthorized"}), 403
 
-        match = MATCH_INSTANCES[match_id]
-        if match.data.get("created_by") != current_user.id:
-            return jsonify({"error": "Unauthorized"}), 403
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         first_batting_team = data.get("first_batting_team")
         batsmen_names = data.get("batsmen")  # list of 2 names
         bowler_name = data.get("bowler")      # single name
@@ -768,13 +773,14 @@ def register_match_routes(
     @app.route("/match/<match_id>/start-super-over-innings2", methods=["POST"])
     @login_required
     def start_super_over_innings2(match_id):
-        if match_id not in MATCH_INSTANCES:
-            return jsonify({"error": "Match not found"}), 404
+        with MATCH_INSTANCES_LOCK:
+            if match_id not in MATCH_INSTANCES:
+                return jsonify({"error": "Match not found"}), 404
+            match = MATCH_INSTANCES[match_id]
+            if match.data.get("created_by") != current_user.id:
+                return jsonify({"error": "Unauthorized"}), 403
 
-        match = MATCH_INSTANCES[match_id]
-        if match.data.get("created_by") != current_user.id:
-            return jsonify({"error": "Unauthorized"}), 403
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         batsmen_names = data.get("batsmen")
         bowler_name = data.get("bowler")
 
@@ -784,12 +790,12 @@ def register_match_routes(
     @app.route("/match/<match_id>/next-super-over-ball", methods=["POST"])
     @login_required
     def next_super_over_ball(match_id):
-        if match_id not in MATCH_INSTANCES:
-            return jsonify({"error": "Match not found"}), 404
-
-        match = MATCH_INSTANCES[match_id]
-        if match.data.get("created_by") != current_user.id:
-            return jsonify({"error": "Unauthorized"}), 403
+        with MATCH_INSTANCES_LOCK:
+            if match_id not in MATCH_INSTANCES:
+                return jsonify({"error": "Match not found"}), 404
+            match = MATCH_INSTANCES[match_id]
+            if match.data.get("created_by") != current_user.id:
+                return jsonify({"error": "Unauthorized"}), 403
         try:
             result = match.next_super_over_ball()
             return jsonify(result)
@@ -806,7 +812,7 @@ def register_match_routes(
         try:
             print(f"DEBUG: Received commentary request for match {match_id}")
             
-            data = request.get_json()
+            data = request.get_json(silent=True) or {}
             commentary_html = data.get('commentary_html', '')
             
             print(f"DEBUG: Commentary HTML length: {len(commentary_html)}")
@@ -1160,7 +1166,7 @@ def register_match_routes(
         Delete multiple non-tournament matches and reverse their stats.
         """
         try:
-            data = request.get_json()
+            data = request.get_json(silent=True) or {}
             match_ids = data.get('match_ids', [])
             app.logger.info(f"Bulk delete requested for matches: {match_ids} by user {current_user.id}")
             

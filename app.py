@@ -824,15 +824,6 @@ def create_app():
             db.session.rollback()
         return None
 
-    @app.before_request
-    def configure_session_cookie():
-        is_secure = request.is_secure or (request.headers.get('X-Forwarded-Proto') == 'https')
-        app.config["SESSION_COOKIE_SECURE"] = is_secure
-        app.logger.info(
-            f"[Session:{RUNTIME_FINGERPRINT}] Setting SESSION_COOKIE_SECURE to {is_secure} "
-            f"(HTTPS: {request.scheme}, X-Forwarded-Proto: {request.headers.get('X-Forwarded-Proto')})"
-        )
-
     @app.after_request
     def add_runtime_fingerprint_header(response):
         response.headers["X-SimCricketX-Build"] = RUNTIME_FINGERPRINT
@@ -871,6 +862,14 @@ def create_app():
                 print("[WARN] Using random Flask SECRET_KEY--sessions won't persist across restarts")
 
     app.config["SECRET_KEY"] = secret
+    env_name = str(os.getenv("ENV", "dev")).lower()
+    secure_cookie_default = str(os.getenv("SESSION_COOKIE_SECURE", "")).strip().lower()
+    if secure_cookie_default in {"1", "true", "yes", "on"}:
+        app.config["SESSION_COOKIE_SECURE"] = True
+    elif secure_cookie_default in {"0", "false", "no", "off"}:
+        app.config["SESSION_COOKIE_SECURE"] = False
+    else:
+        app.config["SESSION_COOKIE_SECURE"] = (env_name == "prod")
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
@@ -1237,6 +1236,8 @@ def create_app():
                 )
 
     @app.route('/__codex_probe')
+    @login_required
+    @admin_required
     def codex_probe():
         admin_routes = sorted([r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/admin')])
         return jsonify({
@@ -1249,6 +1250,8 @@ def create_app():
         }), 200
 
     @app.route('/__codex_probe.')
+    @login_required
+    @admin_required
     def codex_probe_dot():
         return codex_probe()
 
