@@ -953,173 +953,207 @@ function renderThisOverBalls() {
     });
 }
 
+// ---- WebSocket Setup ----
+// Connects once; falls back to HTTP fetch transparently if socket is
+// unavailable or disconnected. Zero changes to simulation logic.
+let _wsSocket = null;
+let _wsReady = false;
+
+(function _initWebSocket() {
+    if (typeof io === 'undefined') return; // socket.io CDN not loaded
+    try {
+        _wsSocket = io({ transports: ['websocket', 'polling'] });
+        _wsSocket.on('connect',       () => { _wsReady = true; });
+        _wsSocket.on('disconnect',    () => { _wsReady = false; });
+        _wsSocket.on('connect_error', () => { _wsReady = false; });
+        _wsSocket.on('ball_result',   (data) => _processBallResult(data));
+        _wsSocket.on('ws_error',      (data) => {
+            appendLog(`[system_error] ${data.message || 'WebSocket error'}`, 'error');
+        });
+    } catch (e) {
+        _wsSocket = null;
+        _wsReady = false;
+    }
+}());
+
+// All ball-result processing lives here — called by both the WS listener
+// above AND the HTTP fetch path below. Zero logic change vs the original.
+function _processBallResult(data) {
+    if (data.error) {
+        appendLog(`[ERROR] ${data.error}`, 'error');
+        return;
+    }
+
+    // Update broadcast score banner
+    if (data.score !== undefined) {
+        updateScoreBanner(data);
+    }
+
+    // Dashboard: process ball_data for every ball (runs in background regardless of view)
+    if (data.ball_data) {
+        ballHistory.push(data.ball_data);
+        updateCurrentOverBalls(data.ball_data);
+        if (typeof updateDashboard === 'function') {
+            updateDashboard(data.ball_data, ballHistory, overRuns, innings1Data);
+        }
+        if (typeof updateMatchAnimation === 'function') {
+            updateMatchAnimation(data.ball_data, {
+                commentary: data.commentary || '',
+                inningsNumber: data.innings_number,
+                score: data.score,
+                wickets: data.wickets
+            });
+        }
+    }
+
+    if (data.decision_required) {
+        if (data.commentary) appendLog(data.commentary, 'comment');
+        showDecisionModal(data);
+        return;
+    }
+
+    // End of First Innings
+    if (data.innings_end && data.innings_number === 1) {
+        // Dashboard: save 1st innings data and reset for 2nd
+        innings1Data = { ballHistory: [...ballHistory], overRuns: [...overRuns] };
+        ballHistory = [];
+        overRuns = [];
+        currentOverBalls = [];
+        thisOverBallResults = [];
+        completedOverTotals = [];
+        currentOverRunsAccum = 0;
+        if (typeof resetDashboardForNewInnings === 'function') {
+            resetDashboardForNewInnings();
+        }
+        if (typeof resetMatchAnimationForNewInnings === 'function') {
+            resetMatchAnimationForNewInnings();
+        }
+
+        // Swap batting team name in banner for 2nd innings
+        const batNameEl = document.getElementById('sb-bat-name');
+        if (batNameEl) {
+            const homeTeam = matchData.team_home.split('_')[0];
+            const awayTeam = matchData.team_away.split('_')[0];
+            batNameEl.textContent = batNameEl.textContent === homeTeam ? awayTeam : homeTeam;
+        }
+        // Reset score display
+        // Reset banner displays for 2nd innings
+        const sbScoreEl = document.getElementById('sb-score');
+        if (sbScoreEl) sbScoreEl.textContent = '0/0';
+        const sbOversEl = document.getElementById('sb-overs');
+        if (sbOversEl) sbOversEl.textContent = '0.0 ov';
+        const rrrWrap = document.getElementById('sb-rrr-wrap');
+        if (rrrWrap) rrrWrap.style.display = '';
+        const phaseEl = document.getElementById('sb-phase');
+        if (phaseEl) phaseEl.textContent = '';
+        const overFlowEl = document.getElementById('sb-over-flow');
+        if (overFlowEl) overFlowEl.innerHTML = '<span class="sb-strip-label">OVERS</span>';
+        const thisOverEl = document.getElementById('sb-this-over');
+        if (thisOverEl) thisOverEl.innerHTML = '';
+
+        if (data.commentary) appendLog(data.commentary, 'comment');
+
+        if (data.scorecard_data) {
+            showScorecard(data.scorecard_data, data);
+
+            const closeBtn = document.querySelector('.close-scorecard');
+            // One-time listener for closing 1st innings scorecard
+            closeBtn.onclick = async () => {
+                await captureCurrentScorecardImage(); // Save 1st innings image
+
+                if (!matchData.impact_players_swapped) {
+                    document.getElementById('scorecard-overlay').style.display = 'none';
+                    showImpactPlayerModal(); // Trigger Impact Player Phase
+                    return;
+                }
+
+                // Just close and continue if already swapped or some other state
+                document.getElementById('scorecard-overlay').style.display = 'none';
+                scheduleNextBall(delay);
+            };
+            return; // Pause simulation
+        }
+    }
+
+    // End of Match (Generic Catch-all)
+    if (data.match_over) {
+        if (data.scorecard_data) {
+            isFinalScoreboard = true;
+            showScorecard(data.scorecard_data, data);
+        }
+        // Append final commentary BEFORE saving the archive so the
+        // Full Snapshot + both scorecard blocks are captured in the HTML
+        appendLog(data.commentary || "Match Concluded.", 'comment');
+        if (!archiveSaved) {
+            archiveSaved = true;
+            saveMatchArchive();
+        }
+        matchOver = true;
+        return;
+    }
+
+    // End of Match (2nd Innings) - legacy fallback
+    if (data.innings_end && data.innings_number === 2) {
+        if (data.scorecard_data) {
+            isFinalScoreboard = true;
+            showScorecard(data.scorecard_data, data);
+        }
+        // Same: append before archiving
+        appendLog(data.commentary || "Match Concluded.", 'comment');
+        if (!archiveSaved) {
+            archiveSaved = true;
+            saveMatchArchive();
+        }
+        matchOver = true;
+        return;
+    }
+
+    // Match Tied / Super Over
+    if (data.match_tied) {
+        appendLog("MATCH TIED! Super Over Required!");
+        if (data.scorecard_data) {
+            setTimeout(() => {
+                showScorecard(data.scorecard_data, data);
+                const closeBtn = document.querySelector('.close-scorecard');
+                const oldOnClick = closeBtn.onclick;
+                closeBtn.onclick = async () => {
+                    if (oldOnClick) await oldOnClick();
+                    else document.getElementById('scorecard-overlay').style.display = 'none';
+                    // Launch super over modal
+                    setTimeout(() => {
+                        soOpenModal({
+                            home_team: data.home_team,
+                            away_team: data.away_team,
+                            home_players: data.home_players,
+                            away_players: data.away_players,
+                        }, 1);
+                    }, 400);
+                };
+            }, 1500);
+        }
+        matchOver = true;
+        return;
+    }
+
+    // Normal Ball
+    appendLog(data.commentary);
+    scheduleNextBall(delay);
+}
+
 function startMatch() {
     simTimerId = null;
     if (matchOver) return;
 
+    // WebSocket path — emit event, _processBallResult handles the response
+    if (_wsReady && _wsSocket) {
+        _wsSocket.emit('next_ball', { match_id: matchData.match_id });
+        return;
+    }
+
+    // HTTP fallback — original fetch path, unchanged
     fetch(window.location.pathname + "/next-ball", { method: 'POST' })
         .then(res => res.json())
-        .then(data => {
-            if (data.error) {
-                appendLog(`[ERROR] ${data.error}`, 'error');
-                return;
-            }
-
-            // Update broadcast score banner
-            if (data.score !== undefined) {
-                updateScoreBanner(data);
-            }
-
-            // Dashboard: process ball_data for every ball (runs in background regardless of view)
-            if (data.ball_data) {
-                ballHistory.push(data.ball_data);
-                updateCurrentOverBalls(data.ball_data);
-                if (typeof updateDashboard === 'function') {
-                    updateDashboard(data.ball_data, ballHistory, overRuns, innings1Data);
-                }
-                if (typeof updateMatchAnimation === 'function') {
-                    updateMatchAnimation(data.ball_data, {
-                        commentary: data.commentary || '',
-                        inningsNumber: data.innings_number,
-                        score: data.score,
-                        wickets: data.wickets
-                    });
-                }
-            }
-
-            if (data.decision_required) {
-                if (data.commentary) appendLog(data.commentary, 'comment');
-                showDecisionModal(data);
-                return;
-            }
-
-            // End of First Innings
-            if (data.innings_end && data.innings_number === 1) {
-                // Dashboard: save 1st innings data and reset for 2nd
-                innings1Data = { ballHistory: [...ballHistory], overRuns: [...overRuns] };
-                ballHistory = [];
-                overRuns = [];
-                currentOverBalls = [];
-                thisOverBallResults = [];
-                completedOverTotals = [];
-                currentOverRunsAccum = 0;
-                if (typeof resetDashboardForNewInnings === 'function') {
-                    resetDashboardForNewInnings();
-                }
-                if (typeof resetMatchAnimationForNewInnings === 'function') {
-                    resetMatchAnimationForNewInnings();
-                }
-
-                // Swap batting team name in banner for 2nd innings
-                const batNameEl = document.getElementById('sb-bat-name');
-                if (batNameEl) {
-                    const homeTeam = matchData.team_home.split('_')[0];
-                    const awayTeam = matchData.team_away.split('_')[0];
-                    batNameEl.textContent = batNameEl.textContent === homeTeam ? awayTeam : homeTeam;
-                }
-                // Reset score display
-                // Reset banner displays for 2nd innings
-                const sbScoreEl = document.getElementById('sb-score');
-                if (sbScoreEl) sbScoreEl.textContent = '0/0';
-                const sbOversEl = document.getElementById('sb-overs');
-                if (sbOversEl) sbOversEl.textContent = '0.0 ov';
-                const rrrWrap = document.getElementById('sb-rrr-wrap');
-                if (rrrWrap) rrrWrap.style.display = '';
-                const phaseEl = document.getElementById('sb-phase');
-                if (phaseEl) phaseEl.textContent = '';
-                const overFlowEl = document.getElementById('sb-over-flow');
-                if (overFlowEl) overFlowEl.innerHTML = '<span class="sb-strip-label">OVERS</span>';
-                const thisOverEl = document.getElementById('sb-this-over');
-                if (thisOverEl) thisOverEl.innerHTML = '';
-
-                if (data.commentary) appendLog(data.commentary, 'comment');
-
-                if (data.scorecard_data) {
-                    showScorecard(data.scorecard_data, data);
-
-                    const closeBtn = document.querySelector('.close-scorecard');
-                    // One-time listener for closing 1st innings scorecard
-                    closeBtn.onclick = async () => {
-                        await captureCurrentScorecardImage(); // Save 1st innings image
-
-                        if (!matchData.impact_players_swapped) {
-                            document.getElementById('scorecard-overlay').style.display = 'none';
-                            showImpactPlayerModal(); // Trigger Impact Player Phase
-                            return;
-                        }
-
-                        // Just close and continue if already swapped or some other state
-                        document.getElementById('scorecard-overlay').style.display = 'none';
-                        scheduleNextBall(delay);
-                    };
-                    return; // Pause simulation
-                }
-            }
-
-            // End of Match (Generic Catch-all)
-            if (data.match_over) {
-                if (data.scorecard_data) {
-                    isFinalScoreboard = true;
-                    showScorecard(data.scorecard_data, data);
-                }
-                // Append final commentary BEFORE saving the archive so the
-                // Full Snapshot + both scorecard blocks are captured in the HTML
-                appendLog(data.commentary || "Match Concluded.", 'comment');
-                if (!archiveSaved) {
-                    archiveSaved = true;
-                    saveMatchArchive();
-                }
-                matchOver = true;
-                return;
-            }
-
-            // End of Match (2nd Innings) - legacy fallback
-            if (data.innings_end && data.innings_number === 2) {
-                if (data.scorecard_data) {
-                    isFinalScoreboard = true;
-                    showScorecard(data.scorecard_data, data);
-                }
-                // Same: append before archiving
-                appendLog(data.commentary || "Match Concluded.", 'comment');
-                if (!archiveSaved) {
-                    archiveSaved = true;
-                    saveMatchArchive();
-                }
-                matchOver = true;
-                return;
-            }
-
-            // Match Tied / Super Over
-            if (data.match_tied) {
-                appendLog("MATCH TIED! Super Over Required!");
-                if (data.scorecard_data) {
-                    setTimeout(() => {
-                        showScorecard(data.scorecard_data, data);
-                        const closeBtn = document.querySelector('.close-scorecard');
-                        const oldOnClick = closeBtn.onclick;
-                        closeBtn.onclick = async () => {
-                            if (oldOnClick) await oldOnClick();
-                            else document.getElementById('scorecard-overlay').style.display = 'none';
-                            // Launch super over modal
-                            setTimeout(() => {
-                                soOpenModal({
-                                    home_team: data.home_team,
-                                    away_team: data.away_team,
-                                    home_players: data.home_players,
-                                    away_players: data.away_players,
-                                }, 1);
-                            }, 400);
-                        };
-                    }, 1500);
-                }
-                matchOver = true;
-                return;
-            }
-
-            // Normal Ball
-            appendLog(data.commentary);
-            scheduleNextBall(delay);
-        })
+        .then(data => _processBallResult(data))
         .catch(err => appendLog(`[system_error] ${err}`, 'error'));
 }
 

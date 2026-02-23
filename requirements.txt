@@ -16,3 +16,5 @@ sqlalchemy
 requests
 flask-wtf
 flask-limiter
+flask-socketio>=5.3
+simple-websocket>=0.9

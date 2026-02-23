@@ -6,5 +6,6 @@
 
 bind = "127.0.0.1:5000"
 workers = 1
+worker_class = "gthread"
 threads = 4
 timeout = 600
