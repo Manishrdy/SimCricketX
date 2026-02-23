@@ -213,6 +213,7 @@ def compute_game_state_vector(
     target:           int  = 0,
     pitch:            str  = "Hard",
     partnership_balls: int = 0,
+    scenario_phase:   str  = "inactive",
 ) -> dict:
     """
     Compute the full game-state descriptor for the CURRENT delivery.
@@ -254,7 +255,7 @@ def compute_game_state_vector(
 
     # ── 4. Collapse risk from the 18-ball window ─────────────────────────────
     recent_wickets_18  = _count_in_window(history, {"Wicket"}, BALL_HISTORY_WINDOW)
-    _collapse_table    = {0: 1.00, 1: 1.15, 2: 1.35, 3: 1.55, 4: 1.70, 5: 1.85}
+    _collapse_table    = {0: 1.00, 1: 1.135, 2: 1.315, 3: 1.495, 4: 1.630, 5: 1.765}
     collapse_multiplier = _collapse_table.get(min(recent_wickets_18, 5), 1.85)
 
     # ── 5. Tail-pattern detectors (run on the full 18-ball window) ────────────
@@ -297,6 +298,9 @@ def compute_game_state_vector(
 
         # Feature 6: current partnership length (balls batted together)
         "partnership_balls":      partnership_balls,
+
+        # Scenario steering phase — used to dampen collapse layers during convergence
+        "scenario_phase":         scenario_phase,
     }
 
     logger.debug(
@@ -352,6 +356,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     innings               = state.get("innings",               1)
     wickets_in_hand       = state.get("wickets_in_hand",       10)
     rrr                   = state.get("rrr",                   0.0)
+    scenario_phase        = state.get("scenario_phase",        "inactive")
 
     # ── A. MOMENTUM ──────────────────────────────────────────────────────────
     mom = momentum / 100.0       # [-1.0, +1.0]
@@ -372,9 +377,14 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         mults["Dot"]    *= 1.0 - mom * 0.16      # mom<0 → increase
 
     # ── B. COLLAPSE RISK ─────────────────────────────────────────────────────
-    if collapse_multiplier > 1.0:
-        excess = collapse_multiplier - 1.0       # 0.0 → 0.85 range
-        mults["Wicket"] *= collapse_multiplier
+    # During scenario convergence (overs 15–17), cap the collapse multiplier so
+    # the scenario engine's wicket steering can operate without being overwhelmed.
+    _effective_cm = collapse_multiplier
+    if scenario_phase == "convergence":
+        _effective_cm = min(collapse_multiplier, 1.20)
+    if _effective_cm > 1.0:
+        excess = _effective_cm - 1.0             # 0.0 → 0.85 range
+        mults["Wicket"] *= _effective_cm
         mults["Dot"]    *= 1.0 + excess * 0.40
         mults["Four"]   *= _clamp(1.0 - excess * 0.32, 0.50, 1.0)
         mults["Six"]    *= _clamp(1.0 - excess * 0.38, 0.45, 1.0)
@@ -507,25 +517,28 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         mults["Dot"]    *= 1.12
 
     # E3. Consecutive wickets — psychological collapse amplifier
+    # During scenario convergence, halve the excess so scenario steering can steer
+    # wicket count without being overwhelmed by the cascade.
+    _cw_dampen = 0.5 if scenario_phase == "convergence" else 1.0
     if consecutive_wickets >= 4:
-        mults["Wicket"] *= 1.55
+        mults["Wicket"] *= 1.0 + 0.495 * _cw_dampen   # normal: 1.495 | convergence: 1.248
         mults["Dot"]    *= 1.32
         mults["Four"]   *= 0.68
         mults["Six"]    *= 0.62
     elif consecutive_wickets >= 3:
-        mults["Wicket"] *= 1.45
+        mults["Wicket"] *= 1.0 + 0.405 * _cw_dampen   # normal: 1.405 | convergence: 1.203
         mults["Dot"]    *= 1.25
         mults["Four"]   *= 0.74
         mults["Six"]    *= 0.70
     elif consecutive_wickets >= 2:
-        mults["Wicket"] *= 1.30
+        mults["Wicket"] *= 1.0 + 0.270 * _cw_dampen   # normal: 1.270 | convergence: 1.135
         mults["Dot"]    *= 1.16
         mults["Four"]   *= 0.82
         mults["Six"]    *= 0.78
     elif consecutive_wickets == 1:
         # New batsman just in — small additional collapse-fear on top of
         # the new-batter vulnerability already in compute_weighted_prob()
-        mults["Wicket"] *= 1.12
+        mults["Wicket"] *= 1.0 + 0.108 * _cw_dampen   # normal: 1.108 | convergence: 1.054
 
     # ── F. RESOURCE CONSERVATISM ─────────────────────────────────────────────
     # When resources are very thin (tail in, or near the end), protect wickets
