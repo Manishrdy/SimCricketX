@@ -1,3 +1,12 @@
+[2.2.0] 2026-02-22
+- Added WebSocket support (flask-socketio, threading mode) for ball-by-ball live updates
+- Ball delivery now uses a persistent WebSocket connection instead of per-ball HTTP requests
+- Extracted _processBallResult() in match_detail.js — shared by both WS and HTTP paths
+- HTTP POST /next-ball route unchanged; fetch fallback activates automatically if socket disconnects
+- Added socket.io 4.x CDN script to match_detail.html only (no impact on other pages)
+- Updated gunicorn config to use gthread worker class for WebSocket upgrade support
+- Added flask-socketio>=5.3 and simple-websocket>=0.9 to requirements.txt
+
 [2.1.0] 2026-02-19
 - Added "Manage Matches" feature to bulk delete non-tournament matches
 - Implemented stats invalidation: deleting matches now reverses player career statistics
