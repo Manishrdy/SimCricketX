@@ -8,7 +8,9 @@
       "Bash(git stash:*)",
       "Bash(sqlite3:*)",
       "Bash(python3:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)"
     ]
   }
 }
