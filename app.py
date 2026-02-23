@@ -95,6 +95,15 @@ from routes.core_routes import register_core_routes
 from routes.match_routes import register_match_routes
 from routes.admin_routes import register_admin_routes
 
+# SocketIO optional dependency — app works normally via HTTP if not installed
+_SOCKETIO_AVAILABLE = False
+try:
+    from flask_socketio import SocketIO
+    socketio = SocketIO()
+    _SOCKETIO_AVAILABLE = True
+except ImportError:
+    socketio = None
+
 # Add this import for system monitoring
 try:
     import psutil
@@ -1904,6 +1913,68 @@ def create_app():
     )
 
 
+    # ======================================================================
+    # SocketIO Event Handlers
+    # Additive: the HTTP POST /next-ball route above is completely unchanged.
+    # These handlers mirror that route's logic using closures over the local
+    # helper functions (_load_match_file_for_user, etc.) defined above.
+    # ======================================================================
+    if _SOCKETIO_AVAILABLE and socketio:
+        socketio.init_app(app, async_mode='threading',
+                          cors_allowed_origins="*",
+                          logger=False, engineio_logger=False)
+
+        @socketio.on('next_ball')
+        def _ws_next_ball(data):
+            from flask_socketio import emit as ws_emit
+            from flask_login import current_user
+
+            if not current_user.is_authenticated:
+                ws_emit('ws_error', {'message': 'Not authenticated'})
+                return
+
+            match_id = (data or {}).get('match_id', '')
+            if not match_id:
+                ws_emit('ws_error', {'message': 'match_id required'})
+                return
+
+            try:
+                with MATCH_INSTANCES_LOCK:
+                    if match_id not in MATCH_INSTANCES:
+                        match_data_ws, _path_ws, _err_ws = _load_match_file_for_user(match_id)
+                        if match_data_ws:
+                            if 'rain_probability' not in match_data_ws:
+                                match_data_ws['rain_probability'] = load_config().get('rain_probability', 0.0)
+                            MATCH_INSTANCES[match_id] = Match(match_data_ws)
+                        else:
+                            ws_emit('ws_error', {'message': 'Match not found'})
+                            return
+                    match = MATCH_INSTANCES[match_id]
+
+                if match.data.get('created_by') != current_user.id:
+                    ws_emit('ws_error', {'message': 'Unauthorized'})
+                    return
+
+                outcome = match.next_ball()
+
+                if outcome.get('match_over'):
+                    first_completion = match.data.get('current_state') != 'completed'
+                    if first_completion:
+                        increment_matches_simulated()
+                        if match.data.get('tournament_id'):
+                            _handle_tournament_match_completion(match, match_id, outcome, app.logger)
+                        else:
+                            _persist_non_tournament_match_completion(match, match_id, outcome, app.logger)
+                    ws_emit('ball_result', {**outcome, 'match_over': True})
+                else:
+                    ws_emit('ball_result', outcome)
+
+            except Exception as exc:
+                app.logger.error(f'[WS next_ball] match={match_id}: {exc}', exc_info=True)
+                ws_emit('ws_error', {'message': 'Internal error', 'details': str(exc)})
+
+        app.logger.info('[SocketIO] WebSocket support enabled (threading mode).')
+
     return app
 
 
@@ -1960,9 +2031,13 @@ if __name__ == "__main__":
         if is_local:
             webbrowser.open_new_tab(url)
 
-        # Run Flask app
+        # Run Flask app (SocketIO-aware when available, plain Flask otherwise)
         # C6: Use computed HOST (127.0.0.1 for local/dev, 0.0.0.0 for prod)
-        app.run(host=HOST, port=PORT, debug=is_local, use_reloader=False)
+        if _SOCKETIO_AVAILABLE and socketio:
+            socketio.run(app, host=HOST, port=PORT, debug=is_local,
+                         use_reloader=False, allow_unsafe_werkzeug=True)
+        else:
+            app.run(host=HOST, port=PORT, debug=is_local, use_reloader=False)
 
     except Exception as e:
         print("[ERROR] Failed to start SimCricketX:")
