@@ -1,0 +1,131 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ['3.8']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run tests with pytest
+      run: |
+        # Override --maxfail=5 from pytest.ini so CI always shows all failures,
+        # not just the first 5. Coverage flags are kept from addopts.
+        pytest --maxfail=0
+
+    - name: Upload coverage to Codecov
+      if: contains(matrix.os, 'ubuntu') && matrix.python-version == '3.8'
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Archive test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}-${{ matrix.python-version }}
+        path: |
+          htmlcov/
+          coverage.xml
+          .coverage
+
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.8'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run flake8
+      continue-on-error: true
+      run: |
+        # Exclude venv and cache directories to avoid linting third-party code
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics \
+          --exclude=venv,.venv,env,__pycache__,*.egg-info
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics \
+          --exclude=venv,.venv,env,__pycache__,*.egg-info
+
+    - name: Check formatting with black
+      continue-on-error: true
+      run: |
+        black --check --diff .
+
+    - name: Check import order with isort
+      continue-on-error: true
+      run: |
+        isort --check-only --diff .
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.8'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run safety check
+      continue-on-error: true
+      run: |
+        safety check --json
+
+    - name: Run bandit security check
+      continue-on-error: true
+      run: |
+        bandit -r . -f json -o bandit-report.json || true
+
+    - name: Upload security reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
