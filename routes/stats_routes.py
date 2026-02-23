@@ -144,8 +144,7 @@ def register_stats_routes(
             elif tournament_id:
                 stats_data = stats_service.get_tournament_stats(current_user.id, tournament_id)
             else:
-                flash("Please select a tournament", "warning")
-                return redirect(url_for("statistics"))
+                return jsonify({"error": "Please select a tournament"}), 400
 
             if stat_type == "batting":
                 data = stats_data["batting"]
@@ -154,12 +153,10 @@ def register_stats_routes(
             elif stat_type == "fielding":
                 data = stats_data["fielding"]
             else:
-                flash("Invalid stat type", "danger")
-                return redirect(url_for("statistics"))
+                return jsonify({"error": "Invalid stat type"}), 400
 
             if not data:
-                flash(f"No {stat_type} data available", "warning")
-                return redirect(url_for("statistics"))
+                return jsonify({"error": f"No {stat_type} data available"}), 404
 
             view_label = f"tournament_{tournament_id}" if view_type == "tournament" else "overall"
             filename = f"{view_label}_{stat_type}_stats.{format_type}"
@@ -171,8 +168,7 @@ def register_stats_routes(
                 content = stats_service.export_to_txt(data, stat_type)
                 mimetype = "text/plain"
             else:
-                flash("Invalid format type", "danger")
-                return redirect(url_for("statistics"))
+                return jsonify({"error": "Invalid format type"}), 400
 
             return Response(
                 content,
@@ -181,15 +177,14 @@ def register_stats_routes(
             )
         except Exception as e:
             app.logger.error(f"Error exporting statistics: {e}", exc_info=True)
-            flash("Error exporting statistics", "danger")
-            return redirect(url_for("statistics"))
+            return jsonify({"error": "Error exporting statistics"}), 500
 
     @app.route("/compare-players")
     @login_required
     def compare_players_page():
         """Render player comparison page."""
         try:
-            teams = Team.query.filter_by(user_id=current_user.id).filter(Team.is_placeholder != True).all()
+            teams = DBTeam.query.filter_by(user_id=current_user.id).filter(DBTeam.is_placeholder != True).all()
             tournaments = Tournament.query.filter_by(user_id=current_user.id).all()
 
             return render_template(
@@ -342,7 +337,9 @@ def register_stats_routes(
             )
 
             if "error" in partnership_stats:
-                return jsonify(partnership_stats), 400
+                err_text = str(partnership_stats.get("error", "")).lower()
+                status = 404 if "not found" in err_text else 400
+                return jsonify(partnership_stats), status
 
             return jsonify({"success": True, "data": partnership_stats})
         except Exception as e:

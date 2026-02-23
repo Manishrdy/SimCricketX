@@ -1,3 +1,4 @@
+# ── Runtime ──────────────────────────────────────────────────────────────────
 Flask>=2.0
 Flask-Login>=0.6
 PyYAML>=5.4
@@ -5,8 +6,7 @@ cryptography>=3.4
 psutil
 beautifulsoup4
 gunicorn
-pyinstaller  # Tool for bundling
-waitress     # Windows-compatible production server
+waitress
 cffi
 werkzeug
 pandas
@@ -18,3 +18,22 @@ flask-wtf
 flask-limiter
 flask-socketio>=5.3
 simple-websocket>=0.9
+pyinstaller
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-flask>=1.2.0
+pytest-mock>=3.11.1
+faker>=19.2.0
+factory-boy>=3.2.1
+coverage[toml]>=7.2.7
+
+# ── Code quality ──────────────────────────────────────────────────────────────
+flake8>=6.0.0
+black>=23.7.0
+isort>=5.12.0
+
+# ── Security scanning ─────────────────────────────────────────────────────────
+safety>=2.3.5
+bandit>=1.7.5

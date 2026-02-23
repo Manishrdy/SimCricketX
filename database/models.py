@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from flask_login import UserMixin
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 from database import db
 import uuid
 
@@ -14,6 +14,7 @@ class User(UserMixin, db.Model):
     __tablename__ = 'users'
 
     id = db.Column(db.String(120), primary_key=True)  # Email as ID (legacy)
+    email = synonym('id')  # Backward compatibility for tests/code using User.email
     stable_id = db.Column(db.String(36), unique=True, default=lambda: str(uuid.uuid4()))
     password_hash = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -434,7 +435,7 @@ class BlockedIP(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     ip_address = db.Column(db.String(50), nullable=False, unique=True)
     reason = db.Column(db.String(300), nullable=True)
-    blocked_by = db.Column(db.String(120), nullable=False)
+    blocked_by = db.Column(db.String(120), nullable=False, default='system')
     blocked_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
 

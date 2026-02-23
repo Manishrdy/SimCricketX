@@ -34,6 +34,7 @@ def register_auth_routes(
             display_name = request.form.get("display_name", "").strip()
             email = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
+            confirm_password = request.form.get("confirm_password", "")
             challenge_id = request.form.get("challenge_id", "")
             challenge_counter = request.form.get("challenge_counter", "")
             challenge_digest = request.form.get("challenge_digest", "")
@@ -60,6 +61,8 @@ def register_auth_routes(
                 )
             if not password:
                 return render_template("register.html", error="Password required")
+            if password != confirm_password:
+                return render_template("register.html", error="Passwords do not match")
 
             ok, policy_error = validate_password_policy(password)
             if not ok:

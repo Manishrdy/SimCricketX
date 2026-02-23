@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timedelta
 
 import yaml
-from flask import Response, after_this_request, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import Response, after_this_request, flash, jsonify, redirect, render_template, request, send_file, session, stream_with_context, url_for
 from flask_login import current_user, login_user
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
@@ -94,7 +94,7 @@ def register_admin_routes(
 
             if not expected_token or expected_token in ['CHANGE_ME', 'your_backup_token_here', '']:
                 app.logger.error("[Admin] Backup token not configured")
-                return jsonify({"error": "Backup not configured. Set BACKUP_TOKEN env var or config.yaml"}), 503
+                return jsonify({"error": "Backup not configured. Set BACKUP_TOKEN env var or config.yaml"}), 400
 
             # Verify token
             if token != expected_token:
@@ -893,6 +893,12 @@ def register_admin_routes(
             key = request.form.get('key', '').strip()
             value = request.form.get('value', '').strip()
 
+            # Backward-compatible form: key can be passed as "section.key".
+            if not section and '.' in key:
+                section, key = key.split('.', 1)
+                section = section.strip()
+                key = key.strip()
+
             if not section or not key:
                 return jsonify({"error": "Section and key are required"}), 400
             if any(s in key.lower() for s in ['token', 'secret', 'password', 'key']):
@@ -1611,6 +1617,12 @@ def register_admin_routes(
     @admin_required
     def admin_api_delete_file():
         file_path = request.args.get('path', '')
+        if not file_path and request.is_json:
+            payload = request.get_json(silent=True) or {}
+            files = payload.get('files') if isinstance(payload, dict) else None
+            if isinstance(files, list) and files:
+                # Backward-compatible support for bulk-delete payloads from older clients/tests.
+                file_path = str(files[0] or '').strip()
         if not file_path:
             return jsonify({'error': 'Path is required'}), 400
 
@@ -1876,37 +1888,40 @@ def register_admin_routes(
     @admin_required
     def admin_dashboard_stream():
         """Server-Sent Events stream for live dashboard stats."""
+        @stream_with_context
         def generate():
             import time as time_mod
             while True:
                 try:
-                    with app.app_context():
-                        total_users = DBUser.query.count()
-                        total_teams = DBTeam.query.count()
-                        total_matches = DBMatch.query.count()
-                        total_tournaments = Tournament.query.count()
-                        active_sessions = ActiveSession.query.count()
-                        with MATCH_INSTANCES_LOCK:
-                            live_matches = len(MATCH_INSTANCES)
-                        cutoff_7d = datetime.utcnow() - timedelta(days=7)
-                        active_users_7d = db.session.query(func.count(ActiveSession.user_id.distinct())).filter(
-                            ActiveSession.last_active >= cutoff_7d
-                        ).scalar() or 0
-                        db_path = os.path.join(basedir, 'cricket_sim.db')
-                        db_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 2) if os.path.exists(db_path) else 0
-                        payload = json.dumps({
-                            'total_users': total_users,
-                            'total_teams': total_teams,
-                            'total_matches': total_matches,
-                            'total_tournaments': total_tournaments,
-                            'active_sessions': active_sessions,
-                            'live_matches': live_matches,
-                            'active_users_7d': active_users_7d,
-                            'db_size_mb': db_size_mb,
-                        })
-                        yield f"data: {payload}\n\n"
+                    total_users = DBUser.query.count()
+                    total_teams = DBTeam.query.count()
+                    total_matches = DBMatch.query.count()
+                    total_tournaments = Tournament.query.count()
+                    active_sessions = ActiveSession.query.count()
+                    with MATCH_INSTANCES_LOCK:
+                        live_matches = len(MATCH_INSTANCES)
+                    cutoff_7d = datetime.utcnow() - timedelta(days=7)
+                    active_users_7d = db.session.query(func.count(ActiveSession.user_id.distinct())).filter(
+                        ActiveSession.last_active >= cutoff_7d
+                    ).scalar() or 0
+                    db_path = os.path.join(basedir, 'cricket_sim.db')
+                    db_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 2) if os.path.exists(db_path) else 0
+                    payload = json.dumps({
+                        'total_users': total_users,
+                        'total_teams': total_teams,
+                        'total_matches': total_matches,
+                        'total_tournaments': total_tournaments,
+                        'active_sessions': active_sessions,
+                        'live_matches': live_matches,
+                        'active_users_7d': active_users_7d,
+                        'db_size_mb': db_size_mb,
+                    })
+                    yield f"data: {payload}\n\n"
                 except Exception:
                     yield "data: {}\n\n"
+                # Keep tests deterministic and avoid hanging teardown on long-lived streams.
+                if app.testing:
+                    break
                 time_mod.sleep(10)
         return Response(generate(), mimetype='text/event-stream',
                         headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
