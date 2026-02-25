@@ -213,6 +213,7 @@ def compute_game_state_vector(
     target:           int  = 0,
     pitch:            str  = "Hard",
     partnership_balls: int = 0,
+    partnership_runs:  int = 0,
     scenario_phase:   str  = "inactive",
 ) -> dict:
     """
@@ -296,8 +297,9 @@ def compute_game_state_vector(
         "innings":                innings,
         "pitch":                  pitch,
 
-        # Feature 6: current partnership length (balls batted together)
+        # Feature 6: current partnership length (balls and runs together)
         "partnership_balls":      partnership_balls,
+        "partnership_runs":       partnership_runs,
 
         # Scenario steering phase — used to dampen collapse layers during convergence
         "scenario_phase":         scenario_phase,
@@ -557,23 +559,52 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
             mults["Wicket"] *= 0.86
             mults["Single"] *= 1.10
 
-    # ── G. PARTNERSHIP BONUS (Feature 6) ─────────────────────────────────────
-    # A well-set partnership gives batsmen confidence: they know each other's
-    # running, read the bowling better, and are more willing to play strokes.
-    pb = state.get("partnership_balls", 0)
-    if pb >= 80:
-        _p_bonus = 1.10
-    elif pb >= 50:
-        _p_bonus = 1.07
-    elif pb >= 30:
-        _p_bonus = 1.04
-    else:
-        _p_bonus = 1.00
+    # ── G. PARTNERSHIP DYNAMICS ───────────────────────────────────────────────
+    # Partnership runs (not just balls) drive confidence more accurately.
+    # Real cricket: new partnerships are dangerous; established ones flow.
+    p_runs  = state.get("partnership_runs", 0)
+    p_balls = state.get("partnership_balls", 0)
 
-    if _p_bonus > 1.0:
-        for _o in ("Four", "Six", "Double", "Three"):
-            if _o in mults:
-                mults[_o] *= _p_bonus
+    if p_balls <= 3 and p_runs < 4:
+        # NEW PARTNERSHIP — danger zone: both batters still reading conditions,
+        # one uncertain end, increased wicket risk and cautious shot selection.
+        mults["Wicket"] *= 1.12
+        mults["Four"]   *= 0.90
+        mults["Six"]    *= 0.88
+        mults["Dot"]    *= 1.08
+
+    elif p_runs >= 100:
+        # DOMINANT PARTNERSHIP — batters completely in control, reading every
+        # ball, running well, and attacking with full confidence.
+        mults["Four"]   *= 1.20
+        mults["Six"]    *= 1.22
+        mults["Double"] *= 1.12
+        mults["Wicket"] *= 0.85
+
+    elif p_runs >= 75:
+        # STRONG PARTNERSHIP — batters well-set, bowling under pressure.
+        mults["Four"]   *= 1.15
+        mults["Six"]    *= 1.16
+        mults["Double"] *= 1.08
+        mults["Wicket"] *= 0.88
+
+    elif p_runs >= 50:
+        # WELL-ESTABLISHED PARTNERSHIP — bowlers struggling to break through.
+        mults["Four"]   *= 1.10
+        mults["Six"]    *= 1.10
+        mults["Double"] *= 1.05
+        mults["Wicket"] *= 0.92
+
+    elif p_runs >= 25:
+        # GROWING PARTNERSHIP — batters settling, modest boundary boost.
+        mults["Four"]   *= 1.05
+        mults["Six"]    *= 1.05
+        mults["Wicket"] *= 0.96
+
+    elif p_balls >= 30:
+        # Settled by time at the crease even without many runs (slow pitch/tight bowling).
+        mults["Four"]   *= 1.04
+        mults["Wicket"] *= 0.97
 
     # ── SAFETY: hard-clamp every multiplier ───────────────────────────────────
     for key in mults:

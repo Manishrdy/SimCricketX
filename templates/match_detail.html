@@ -172,7 +172,26 @@
                     <div id="bowler-card" class="player-card bowler-card"></div>
                     <div id="partnership-bar"></div>
                     <div class="panel-divider"></div>
-                    <div id="win-prob-display"></div>
+                    <div id="win-prob-display">
+                        <!-- Populated by JS during 2nd innings only -->
+                        <div id="win-prob-container" style="display:none;">
+                            <div class="panel-subheader" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted,#888);margin-bottom:6px;">Win Probability</div>
+                            <div class="win-prob-bar-wrap" style="position:relative;height:18px;border-radius:9px;overflow:hidden;background:var(--surface-2,#1e2430);">
+                                <div id="win-prob-chasing-bar" style="position:absolute;left:0;top:0;height:100%;width:50%;background:linear-gradient(90deg,#22c55e,#16a34a);transition:width 0.6s ease;border-radius:9px 0 0 9px;"></div>
+                                <div id="win-prob-defending-bar" style="position:absolute;right:0;top:0;height:100%;width:50%;background:linear-gradient(270deg,#ef4444,#dc2626);transition:width 0.6s ease;border-radius:0 9px 9px 0;"></div>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;font-size:0.72rem;">
+                                <div style="text-align:left;">
+                                    <span id="wp-chasing-name" style="color:var(--text-muted,#888);font-size:0.65rem;display:block;">Chasing</span>
+                                    <strong id="wp-chasing-pct" style="color:#22c55e;font-size:0.95rem;">50%</strong>
+                                </div>
+                                <div style="text-align:right;">
+                                    <span id="wp-defending-name" style="color:var(--text-muted,#888);font-size:0.65rem;display:block;">Defending</span>
+                                    <strong id="wp-defending-pct" style="color:#ef4444;font-size:0.95rem;">50%</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Row 2: Timeline strip + Ticker (full width) -->
