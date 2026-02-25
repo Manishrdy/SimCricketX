@@ -487,7 +487,7 @@ class ScenarioEngine:
         self.finale_ball_index = 0
         self.active = True
         self._convergence_logged = False
-        self._endgame_checked = False
+        self._endgame_checked_overs = set()  # tracks which overs have been checked
 
         logger.info(f"[Scenario] Initialized: {scenario_type}")
 
@@ -496,7 +496,7 @@ class ScenarioEngine:
         self.finale_script = None
         self.finale_ball_index = 0
         self._convergence_logged = False
-        self._endgame_checked = False
+        self._endgame_checked_overs = set()
         logger.info(f"[Scenario] Innings transition — ready for 2nd innings steering")
 
     def _is_endgame_scenario_feasible(self, runs_needed, wickets_remaining, balls_left):
@@ -539,29 +539,40 @@ class ScenarioEngine:
 
     def _evaluate_endgame_feasibility_if_needed(self):
         """
-        One-time feasibility check at start of last 3 overs (or first access
-        after that). Disables scenario mode when forcing the scripted path would
-        look unnatural.
+        Per-over feasibility check at the start of each of the last 3 overs
+        (overs 17, 18, 19 in 0-indexed terms). Disables scenario mode when
+        forcing the scripted path would look unnatural.
+
+        Runs once per over so it catches situations that become too easy *during*
+        the finale (e.g. batting team needed 15 at the start of over 17 but only
+        4 at the start of over 18 because the scenario steered them there).
         """
-        if self._endgame_checked or not self.active or self.match.innings != 2:
+        if not self.active or self.match.innings != 2:
             return
         if self.match.target is None:
             return
-        if self.match.current_over < 17:
+
+        current_over = self.match.current_over
+        if current_over < 17:
+            return
+
+        # Only check once per over (not on every ball)
+        if current_over in self._endgame_checked_overs:
             return
 
         runs_needed = self.match.target - self.match.score
         wickets_remaining = 10 - self.match.wickets
-        balls_left = (20 - self.match.current_over) * 6 - self.match.current_ball
+        balls_left = (20 - current_over) * 6 - self.match.current_ball
 
-        self._endgame_checked = True
+        self._endgame_checked_overs.add(current_over)
         if not self._is_endgame_scenario_feasible(runs_needed, wickets_remaining, balls_left):
             self.active = False
             self.finale_script = None
             self.finale_ball_index = 0
             logger.info(
-                "[Scenario] Disabled at %s.%s due to infeasible endgame: need=%s, wkts=%s, balls=%s",
-                self.match.current_over,
+                "[Scenario] Disabled at over %s.%s — infeasible endgame: "
+                "need=%s, wkts=%s, balls=%s",
+                current_over,
                 self.match.current_ball,
                 runs_needed,
                 wickets_remaining,
@@ -577,7 +588,7 @@ class ScenarioEngine:
         if self.match.innings == 1:
             return "first_innings"
 
-        # Run one-time realism gate at the start of last 3 overs.
+        # Per-over realism gate: re-evaluates at the start of each of overs 17/18/19.
         self._evaluate_endgame_feasibility_if_needed()
 
         if not self.active:
@@ -738,14 +749,16 @@ class ScenarioEngine:
         """Last-Ball Six: hit 6 on the very last ball to win."""
         # We need runs_needed >= 6 for this to work
         if runs_needed < 6:
-            # Team is too close — still do a big finish, just adjust
-            # Make them need exactly 6: add dots to burn balls
-            dots_needed = balls_left - 1
-            script = [{"runs": 0, "is_wicket": False}] * dots_needed
-            # If they already passed target minus 6, we need a wicket or two
-            # to make it tense. But for simplicity, let them cruise and hit a 6
-            script.append({"runs": min(runs_needed, 6), "is_wicket": False})
-            self.finale_script = script
+            # Already too close — a last-ball six is impossible/meaningless.
+            # The per-over feasibility check should have caught this; if we
+            # still land here, abort cleanly rather than padding with dots.
+            logger.warning(
+                "[Scenario] Last-ball-six aborted at script generation: "
+                "only %s needed off %s balls — disabling scenario",
+                runs_needed, balls_left,
+            )
+            self.active = False
+            self.finale_script = None
             return
 
         if runs_needed > balls_left * 5:

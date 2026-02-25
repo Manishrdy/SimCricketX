@@ -146,7 +146,7 @@ game_modes:
       three_mult: 0.90
       four_mult: 1.17
       six_mult: 1.26
-      wicket_mult: 1.25
+      wicket_mult: 1.375
       extras_mult: 0.99
 
   defensive:
@@ -174,7 +174,7 @@ game_modes:
       three_mult: 0.90
       four_mult: 1.22
       six_mult: 1.35
-      wicket_mult: 0.60
+      wicket_mult: 0.69
       extras_mult: 0.81
 
   bowlers_day:
