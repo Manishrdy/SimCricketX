@@ -134,7 +134,7 @@ class Match:
         self.commentary = []
 
         # Initialize comprehensive stats
-        self.batsman_stats = {p["name"]: {"runs":0,"balls":0,"fours":0,"sixes":0,"ones":0,"twos":0,"threes":0,"dots":0,"wicket_type":"","bowler_out":"","fielder_out":""} for p in self.batting_team}
+        self.batsman_stats = {p["name"]: {"runs":0,"balls":0,"fours":0,"sixes":0,"ones":0,"twos":0,"threes":0,"dots":0,"wicket_type":"","bowler_out":"","fielder_out":"","form":1.0} for p in self.batting_team}
         self.current_over_runs = 0
         self.current_over_outcomes = []
         self.bowler_stats = {p["name"]: {"runs":0,"fours":0,"sixes":0,"wickets":0,"overs":0,"maidens":0,"balls_bowled":0,"wides":0,"noballs":0,"byes":0,"legbyes":0} for p in self.bowling_team if p["will_bowl"]}
@@ -547,7 +547,7 @@ class Match:
         """Calculate current match state for pressure calculation"""
         total_balls = self.current_over * 6 + self.current_ball
         current_rr = (self.score * 6) / total_balls if total_balls > 0 else 0
-        
+
         state = {
             'innings': self.innings,
             'current_over': self.current_over,
@@ -555,22 +555,142 @@ class Match:
             'wickets': self.wickets,
             'score': self.score,
             'pitch': self.pitch,
-            'current_partnership_balls': self.current_partnership_balls
+            'current_partnership_balls': self.current_partnership_balls,
+            'current_partnership_runs': self.current_partnership_runs,
         }
-        
+
         if self.innings == 2:
             overs_played = self.current_over + (self.current_ball / 6)
             overs_remaining = self.overs - overs_played
             runs_needed = self.target - self.score
             required_rr = (runs_needed * 6) / (overs_remaining * 6) if overs_remaining > 0 else 0
-            
+
             state.update({
                 'overs_remaining': overs_remaining,
                 'runs_needed': runs_needed,
                 'required_run_rate': required_rr
             })
-        
+
         return state
+
+    # ── WIN PROBABILITY (2nd innings only) ────────────────────────────────────
+    # DLS-inspired resource model: wickets-in-hand × balls remaining determine
+    # how many runs can realistically be scored. A normal CDF approximation
+    # converts the gap between expected and required runs into a probability.
+
+    _WIN_PROB_WICKET_CAPACITY = {
+        10: 1.00, 9: 0.95, 8: 0.89, 7: 0.81,
+        6:  0.71, 5: 0.59, 4: 0.45, 3: 0.31,
+        2:  0.17, 1: 0.08, 0: 0.00,
+    }
+    _WIN_PROB_PITCH_RPB = {
+        "Green": 1.22, "Dry": 1.27, "Hard": 1.38,
+        "Flat":  1.53, "Dead": 1.67,
+    }
+
+    @staticmethod
+    def _normal_cdf(z: float) -> float:
+        """Abramowitz & Stegun rational approximation of the standard normal CDF."""
+        import math
+        if z < -6.0:
+            return 0.0
+        if z > 6.0:
+            return 1.0
+        sign = 1 if z >= 0 else -1
+        z = abs(z)
+        t = 1.0 / (1.0 + 0.2316419 * z)
+        poly = t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))))
+        cdf = 1.0 - (1.0 / math.sqrt(2 * math.pi)) * math.exp(-0.5 * z * z) * poly
+        return 0.5 + sign * (cdf - 0.5)
+
+    def _calculate_win_probability(self) -> float:
+        """
+        Return the chasing team's win probability (0–100) for the current ball.
+        Only meaningful during innings 2; returns None for innings 1.
+        """
+        if self.innings != 2:
+            return None
+
+        runs_needed = self.target - self.score
+        if runs_needed <= 0:
+            return 100.0
+
+        wickets_in_hand = 10 - self.wickets
+        if wickets_in_hand <= 0:
+            return 0.0
+
+        balls_remaining = (self.overs - self.current_over) * 6 - self.current_ball
+        if balls_remaining <= 0:
+            return 0.0
+
+        typical_rpb = self._WIN_PROB_PITCH_RPB.get(self.pitch, 1.38)
+        capacity = self._WIN_PROB_WICKET_CAPACITY.get(wickets_in_hand, 0.50)
+
+        expected_achievable = balls_remaining * typical_rpb * capacity
+        std_dev = max(6.0, (balls_remaining ** 0.5) * 2.8 * (capacity ** 0.4))
+
+        z = (expected_achievable - runs_needed) / std_dev
+        win_prob = self._normal_cdf(z) * 100.0
+        return round(max(2.0, min(98.0, win_prob)), 1)
+
+    # ── PLAYER FORM SYSTEM ─────────────────────────────────────────────────────
+    # In-match batter form: hot/cold streaks affect batting_rating per ball.
+    # Updated after each delivery; stored in batsman_stats["form"].
+
+    _FORM_DELTA = {
+        "Six":    0.07,  "Four":   0.04,  "Three":  0.02,
+        "Double": 0.01,  "Single": 0.005, "Dot":   -0.02,
+    }
+    _FORM_MILESTONE_25 = 1.15   # form floor after scoring 25 runs
+    _FORM_MILESTONE_50 = 1.22   # form floor after scoring 50 runs
+    _FORM_MIN, _FORM_MAX = 0.72, 1.30
+
+    def _update_batter_form(self, striker_name: str, outcome: dict) -> None:
+        """Update the in-match form multiplier for the batter after each delivery."""
+        stats = self.batsman_stats.get(striker_name)
+        if stats is None:
+            return
+
+        current_form = stats.get("form", 1.0)
+
+        if outcome.get("batter_out"):
+            # Wicket — form doesn't matter for this batter anymore
+            stats["form"] = 1.0
+            return
+
+        outcome_label = outcome.get("label") or outcome.get("type", "")
+        # Derive label from runs if not set (outcome dict may vary)
+        if not outcome_label or outcome_label in ("run", "extra", "wicket"):
+            runs = outcome.get("runs", 0)
+            is_extra = outcome.get("is_extra", False)
+            if is_extra:
+                outcome_label = "Dot"
+            elif runs == 0:
+                outcome_label = "Dot"
+            elif runs == 1:
+                outcome_label = "Single"
+            elif runs == 2:
+                outcome_label = "Double"
+            elif runs == 3:
+                outcome_label = "Three"
+            elif runs == 4:
+                outcome_label = "Four"
+            elif runs >= 6:
+                outcome_label = "Six"
+            else:
+                outcome_label = "Dot"
+
+        delta = self._FORM_DELTA.get(outcome_label, 0.0)
+        new_form = current_form + delta
+
+        # Milestone bonuses: ensure form doesn't dip below milestone floor
+        batter_runs = stats.get("runs", 0)
+        if batter_runs >= 50:
+            new_form = max(new_form, self._FORM_MILESTONE_50)
+        elif batter_runs >= 25:
+            new_form = max(new_form, self._FORM_MILESTONE_25)
+
+        stats["form"] = max(self._FORM_MIN, min(self._FORM_MAX, new_form))
 
     def _update_partnership_tracking(self, outcome):
         """Update partnership tracking for pressure calculation (simpler version)"""
@@ -3123,7 +3243,7 @@ class Match:
                 for i, player in enumerate(self.batting_team):
                     print(f"   {i+1}. {player['name']}")
 
-                self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": ""} for p in self.batting_team}
+                self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": "", "form": 1.0} for p in self.batting_team}
                 self.bowler_history = {}
                 self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p.get("will_bowl")}
                 self._reset_innings_state()
@@ -3309,6 +3429,9 @@ class Match:
         match_state = self._calculate_current_match_state()
         pressure_score = self.pressure_engine.calculate_pressure(match_state)
 
+        # Win probability (2nd innings only; None during 1st innings)
+        _win_prob = self._calculate_win_probability()
+
 
         # Get base pressure effects (now fair)
         pressure_effects = self.pressure_engine.get_pressure_effects(
@@ -3406,8 +3529,9 @@ class Match:
             # Feature 1+2+8: effective bowler with phase/fatigue/feedback adjustments
             _effective_bowler = self._get_effective_bowler_dict(self.current_bowler)
 
-            # Feature 6: current partnership run length (balls at the crease together)
+            # Feature 6: current partnership (balls and runs at the crease together)
             _partnership_balls = self.current_partnership_balls
+            _partnership_runs  = self.current_partnership_runs
 
             # Feature 9: batting position (1-based index in team batting order)
             _batting_position = 5   # safe default (middle-order)
@@ -3422,6 +3546,25 @@ class Match:
             # Feature 13: dynamic game mode selection
             _game_mode_override = self._get_dynamic_game_mode()
             logger.debug("[DynMode] over=%d wickets=%d mode=%s", self.current_over, self.wickets, _game_mode_override)
+
+            # Fielding quality: team average fielding of the bowling team.
+            # Used by ball_outcome for catch-drop and misfield mechanics.
+            _bowling_team_fielding = [
+                p.get("fielding_rating", 60) for p in self.bowling_team
+            ]
+            _team_fielding_avg = (
+                sum(_bowling_team_fielding) / len(_bowling_team_fielding)
+                if _bowling_team_fielding else 60.0
+            )
+
+            # Player form: scale batter's rating by in-match form multiplier.
+            # The existing balls-faced vulnerability in compute_weighted_prob()
+            # handles physical settling-in; form captures hot/cold streaks.
+            _form = self.batsman_stats.get(striker_name, {}).get("form", 1.0)
+            _batter_with_form = dict(self.current_striker)
+            _batter_with_form["batting_rating"] = (
+                self.current_striker["batting_rating"] * _form
+            )
 
             # ── GSME: build the game-state vector from the last 18 deliveries ──
             # Pass the scenario phase so GSME can dampen collapse layers during
@@ -3441,11 +3584,12 @@ class Match:
                 target=self.target or 0,
                 pitch=self.pitch,
                 partnership_balls=_partnership_balls,
+                partnership_runs=_partnership_runs,
                 scenario_phase=_scenario_phase,
             )
 
             outcome = calculate_outcome(
-                batter=self.current_striker,
+                batter=_batter_with_form,
                 bowler=_effective_bowler,
                 pitch=self.pitch,
                 streak=streak,
@@ -3459,6 +3603,7 @@ class Match:
                 pitch_wear=_pitch_wear,
                 batting_position=_batting_position,
                 game_mode_override=_game_mode_override,
+                fielding_quality=_team_fielding_avg,
             )
 
         # 🎙️ COMMENTARY REVAMP INTEGRATION
@@ -3532,6 +3677,9 @@ class Match:
         
         # 🤝 PARTNERSHIP TRACKING UPDATE
         self._update_partnership_tracking(outcome)
+
+        # 📈 PLAYER FORM UPDATE — update batter's in-match form multiplier
+        self._update_batter_form(self.current_striker["name"], outcome)
 
         # Debug wicket outcomes to catch future issues
         if outcome.get("batter_out", False):
@@ -3771,7 +3919,7 @@ class Match:
                     self.batter_idx = [0, 1]
                     self.current_striker = self.batting_team[0]
                     self.current_non_striker = self.batting_team[1]
-                    self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": ""} for p in self.batting_team}
+                    self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": "", "form": 1.0} for p in self.batting_team}
                     self.bowler_history = {}
                     self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p["will_bowl"]}
                     self._reset_innings_state()
@@ -4152,6 +4300,7 @@ class Match:
                     "wickets": self.wickets,
                     "result": self.result,
                     "commentary": final_commentary,
+                    "win_probability": 100.0,
                     "ball_data": {
                         "runs": self.score - _bd_score_before,
                         "batter_out": wicket,
@@ -4328,6 +4477,7 @@ class Match:
             "total_overs": self.overs,
             "partnership_runs": self.current_partnership_runs,
             "partnership_balls": self.current_partnership_balls,
+            "win_probability": _win_prob,
             "ball_data": ball_data_payload
         }
 

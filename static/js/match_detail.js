@@ -803,6 +803,58 @@ function scheduleNextBall(delayMs) {
 let completedOverTotals = [];   // [{over: 0, runs: 8}, {over: 1, runs: 12}, ...]
 let currentOverRunsAccum = 0;   // runs accumulated in the current (incomplete) over
 
+// ── WIN PROBABILITY METER ─────────────────────────────────────────────────
+// Shown only during 2nd innings. Uses the server-computed win_probability
+// field (chasing team's probability, 0-100) from the DLS-inspired model.
+function updateWinProbability(data) {
+    const container = document.getElementById('win-prob-container');
+    if (!container) return;
+
+    const inningsNumber = data.innings_number;
+    const matchOver = data.match_over;
+
+    // Only show during 2nd innings
+    if (inningsNumber !== 2 || matchOver) {
+        container.style.display = 'none';
+        return;
+    }
+
+    const winProb = data.win_probability;
+    if (winProb === undefined || winProb === null) return;
+
+    container.style.display = 'block';
+
+    const chasingPct = Math.round(winProb);
+    const defendingPct = 100 - chasingPct;
+
+    // Update bar widths
+    const chasingBar   = document.getElementById('win-prob-chasing-bar');
+    const defendingBar = document.getElementById('win-prob-defending-bar');
+    if (chasingBar)   chasingBar.style.width   = `${chasingPct}%`;
+    if (defendingBar) defendingBar.style.width = `${defendingPct}%`;
+
+    // Update percentage labels
+    const chasingPctEl   = document.getElementById('wp-chasing-pct');
+    const defendingPctEl = document.getElementById('wp-defending-pct');
+    if (chasingPctEl)   chasingPctEl.textContent   = `${chasingPct}%`;
+    if (defendingPctEl) defendingPctEl.textContent = `${defendingPct}%`;
+
+    // Update team names from matchData if available
+    if (typeof matchData !== 'undefined') {
+        const chasingNameEl   = document.getElementById('wp-chasing-name');
+        const defendingNameEl = document.getElementById('wp-defending-name');
+        const homeTeam = matchData.team_home ? matchData.team_home.split('_')[0] : 'Chasing';
+        const awayTeam = matchData.team_away ? matchData.team_away.split('_')[0] : 'Defending';
+        // In 2nd innings: away team bats first by default; swap based on innings_number === 2
+        // We use the batting team name shown in the score banner as the chasing team
+        const batNameEl = document.getElementById('sb-bat-name');
+        const chasingTeam  = batNameEl ? batNameEl.textContent : homeTeam;
+        const defendingTeam = chasingTeam === homeTeam ? awayTeam : homeTeam;
+        if (chasingNameEl)   chasingNameEl.textContent   = chasingTeam;
+        if (defendingNameEl) defendingNameEl.textContent = defendingTeam;
+    }
+}
+
 function updateScoreBanner(data) {
     // Main score
     const scoreEl = document.getElementById('sb-score');
@@ -988,6 +1040,9 @@ function _processBallResult(data) {
     if (data.score !== undefined) {
         updateScoreBanner(data);
     }
+
+    // Win probability meter (2nd innings only)
+    updateWinProbability(data);
 
     // Dashboard: process ball_data for every ball (runs in background regardless of view)
     if (data.ball_data) {

@@ -360,15 +360,13 @@ def compute_weighted_prob(
             skill_frac = 0.5
 
     elif outcome_type == "Wicket":
-        # Wicket taking: defined by Bowling vs Batting (and Fielding)
+        # Wicket taking: bowling vs batting contest only.
+        # Fielding is handled separately in calculate_outcome() via the
+        # catch-drop mechanic — it must NOT reduce chance-creation probability here.
         if (effective_batting + bowling) > 0:
-            # Base contest
-            # Normal: Prob ~ Bowling / (Bat + Bowl)
             contest_frac = bowling / (effective_batting + bowling)
-            
-            # Adjust regarding fielding
-            skill_frac = contest_frac * (fielding / 100.0)
-            
+            skill_frac = contest_frac
+
             # Hard pitch: wickets harder to come by but not impossible
             if pitch == "Hard":
                 skill_frac *= 0.75  # 25% reduction in wicket-taking ability
@@ -464,6 +462,7 @@ def calculate_outcome(
     pitch_wear: float = 0.0,
     batting_position: int = 5,
     game_mode_override: str = None,
+    fielding_quality: float = None,
 ) -> dict:
     """
     Determines the outcome of a single delivery.
@@ -748,6 +747,22 @@ def calculate_outcome(
         if wicket_choice == "Run Out":
             result["runs"] = 1
 
+        # FIELDING: Catch-drop check for Caught and Stumped dismissals.
+        # High fielding team rarely drops; poor fielding team drops more often.
+        # fielding=90 → ~3% drop  |  fielding=60 → ~10% drop  |  fielding=30 → ~19% drop
+        if wicket_choice in ("Caught", "Stumped") and fielding_quality is not None:
+            drop_prob = max(0.02, 0.22 - (fielding_quality / 100.0) * 0.19)
+            if random.random() < drop_prob:
+                # Dropped! Convert wicket into runs
+                result["batter_out"] = False
+                result["wicket_type"] = None
+                result["type"] = "run"
+                result["runs"] = random.choices([1, 2, 4], weights=[35, 35, 30])[0]
+                result["dropped_catch"] = True
+                result["description"] = "DROPPED! The chance goes begging — a costly miss in the field!"
+                logger.debug("[Fielding] Catch dropped (quality=%.1f, drop_prob=%.3f)", fielding_quality, drop_prob)
+                return result
+
         # Use guaranteed wicket commentary templates
         wicket_descriptions = [
         "He's out! Brilliant delivery!",
@@ -818,6 +833,17 @@ def calculate_outcome(
         # Use commentary template for run outcomes
         template = random.choice(commentary_templates[chosen])
         result["description"] = f"{template}"
+
+        # FIELDING: Misfield mechanic — poor fielding teams give away extra runs.
+        # Only on dot balls and singles (not boundaries or multiple-run shots).
+        # fielding=90 → ~1.5%  |  fielding=60 → ~5%  |  fielding=30 → ~10%
+        if result["runs"] in (0, 1) and fielding_quality is not None:
+            misfield_prob = max(0.01, 0.115 - (fielding_quality / 100.0) * 0.105)
+            if random.random() < misfield_prob:
+                result["runs"] += 1
+                result["misfield"] = True
+                result["description"] += " — misfield, they steal an extra!"
+                logger.debug("[Fielding] Misfield! extra run granted (quality=%.1f, prob=%.3f)", fielding_quality, misfield_prob)
 
         # logger.debug(f"[calculate_outcome] RUN! Outcome: {chosen}, Runs: {result['runs']}, Description: {template}")
 
