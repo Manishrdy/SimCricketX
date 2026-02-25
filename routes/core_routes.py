@@ -70,18 +70,18 @@ def register_core_routes(
     @app.route("/ground-conditions")
     @login_required
     def ground_conditions():
-        from engine.ground_config import get_config
-        config = get_config() or {}
+        from engine.ground_config import get_effective_config
+        config = get_effective_config(current_user.id)
         return render_template("ground_conditions.html", config=config)
 
     @app.route("/ground-conditions/save", methods=["POST"])
     @login_required
     def ground_conditions_save():
-        from engine.ground_config import save_config
+        from engine.ground_config import save_user_config
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
-        ok, err = save_config(data)
+        ok, err = save_user_config(current_user.id, data)
         if ok:
             return jsonify({"message": "Ground conditions saved successfully"}), 200
         return jsonify({"error": err}), 400
@@ -89,27 +89,20 @@ def register_core_routes(
     @app.route("/ground-conditions/mode", methods=["POST"])
     @login_required
     def ground_conditions_set_mode():
-        import yaml as _yaml
-        from engine.ground_config import reload as reload_gc
-        data = request.get_json(silent=True) or {}
-        mode = data.get("mode", "natural_game")
-        gc_path = os.path.join(basedir, "config", "ground_conditions.yaml")
-        try:
-            with open(gc_path, "r", encoding="utf-8") as f:
-                cfg = _yaml.safe_load(f) or {}
-            cfg["active_game_mode"] = mode
-            with open(gc_path, "w", encoding="utf-8") as f:
-                _yaml.dump(cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-            reload_gc()
+        from engine.ground_config import get_effective_config, save_user_config
+        mode = (request.get_json(silent=True) or {}).get("mode", "natural_game")
+        cfg = get_effective_config(current_user.id)
+        cfg["active_game_mode"] = mode
+        ok, err = save_user_config(current_user.id, cfg)
+        if ok:
             return jsonify({"message": f"Game mode set to {mode}"}), 200
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+        return jsonify({"error": err}), 500
 
     @app.route("/ground-conditions/reset", methods=["POST"])
     @login_required
     def ground_conditions_reset():
-        from engine.ground_config import reset_to_defaults
-        ok, err = reset_to_defaults()
+        from engine.ground_config import reset_user_config
+        ok, err = reset_user_config(current_user.id)
         if ok:
             return jsonify({"message": "Reset to defaults"}), 200
         return jsonify({"error": err}), 500
