@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 EXTRA_ERROR_FLOOR = 0.30
 EXTRA_WEIGHT_MULTIPLIER = 2.2
 
-# Free hit boundary share (combined Four+Six probability share).
-FREE_HIT_BOUNDARY_SHARE = 0.40
+# Free hit boundary boost applied independently to Four and Six weights.
+FREE_HIT_BOUNDARY_BOOST = 1.10
 
 # -----------------------------------------------------------------------------
 # ball_outcome.py
@@ -146,7 +146,7 @@ def get_pitch_wicket_multiplier(pitch: str, bowling_type: str, config=None) -> f
 PITCH_SCORING_MATRIX = {
     "Green": {
         "Dot":     0.42,   # High dot ball % (difficult to score)
-        "Single":  0.345,
+        "Single":  0.335,
         "Double":  0.065,
         "Three":   0.005,  # ~0.6 threes per innings (very rare)
         "Four":    0.05,   # Low boundaries
@@ -156,7 +156,7 @@ PITCH_SCORING_MATRIX = {
     },
     "Dry": {
         "Dot":     0.38,   # Spin friendly = difficult scoring
-        "Single":  0.355,
+        "Single":  0.352,
         "Double":  0.08,
         "Three":   0.008,  # ~1 three per innings
         "Four":    0.06,
@@ -167,7 +167,7 @@ PITCH_SCORING_MATRIX = {
     "Hard": {
         # 65/35 Batting/Bowling split — batters favored but bowlers compete
         "Dot":     0.30,
-        "Single":  0.34,
+        "Single":  0.342,
         "Double":  0.11,
         "Three":   0.008,  # ~1 three per innings
         "Four":    0.09,
@@ -178,7 +178,7 @@ PITCH_SCORING_MATRIX = {
     "Flat": {
         # Pure batting paradise
         "Dot":     0.20,   # Very low dot %
-        "Single":  0.305,
+        "Single":  0.302,
         "Double":  0.14,
         "Three":   0.008,  # ~1 three per innings
         "Four":    0.18,   # High boundaries
@@ -189,7 +189,7 @@ PITCH_SCORING_MATRIX = {
     "Dead": {
         # Batting paradise (200+ average, ~4-5 wickets)
         "Dot":     0.18,
-        "Single":  0.325,
+        "Single":  0.320,
         "Double":  0.145,
         "Three":   0.005,  # ~0.6 threes per innings (very rare)
         "Four":    0.19,
@@ -202,7 +202,7 @@ PITCH_SCORING_MATRIX = {
 # Fallback matrix for unknown pitch types (CORRECTED)
 DEFAULT_SCORING_MATRIX = {
     "Dot":     0.27,   # Increased from 0.25
-    "Single":  0.34,   # Absorbed most of Three reduction
+    "Single":  0.352,   # Absorbed most of Three reduction
     "Double":  0.13,   # Absorbed some of Three reduction
     "Three":   0.008,  # ~1 three per innings (was 0.06 — far too high)
     "Four":    0.09,   # Increased from 0.08
@@ -699,21 +699,11 @@ def calculate_outcome(
         # Recalculate total weight after pressure modifications
         total_weight = sum(raw_weights.values())
     
-    # 4) Free hit: enforce combined Four+Six share (default 40%)
+    # 4) Free hit: slight boundary boost (+10%) for both Four and Six.
     if free_hit and "Four" in raw_weights and "Six" in raw_weights:
+        raw_weights["Four"] *= FREE_HIT_BOUNDARY_BOOST
+        raw_weights["Six"] *= FREE_HIT_BOUNDARY_BOOST
         total_weight = sum(raw_weights.values())
-        if total_weight > 0:
-            boundary_weight = raw_weights["Four"] + raw_weights["Six"]
-            target_boundary = FREE_HIT_BOUNDARY_SHARE * total_weight
-            if boundary_weight > 0 and total_weight > boundary_weight:
-                boundary_scale = target_boundary / boundary_weight
-                other_scale = (total_weight - target_boundary) / (total_weight - boundary_weight)
-                for key in raw_weights:
-                    if key in ("Four", "Six"):
-                        raw_weights[key] *= boundary_scale
-                    else:
-                        raw_weights[key] *= other_scale
-                total_weight = sum(raw_weights.values())
 
     # 5) Normalize weights into probabilities
     # print(f"\n[calculate_outcome] Total raw weight sum: {total_weight:.6f}")
@@ -857,5 +847,4 @@ def calculate_outcome(
 
     logger.debug("=======================================================\n")
     return result
-
 
