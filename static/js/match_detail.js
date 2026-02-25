@@ -806,7 +806,8 @@ let currentOverRunsAccum = 0;   // runs accumulated in the current (incomplete) 
 // ── WIN PROBABILITY METER ─────────────────────────────────────────────────
 // Shown only during 2nd innings. Uses the server-computed win_probability
 // field (chasing team's probability, 0-100) from the DLS-inspired model.
-function updateWinProbability(data) {
+// Named distinctly to avoid collision with match_dashboard.js's updateWinProbability(history).
+function updateWinProbBanner(data) {
     const container = document.getElementById('win-prob-container');
     if (!container) return;
 
@@ -1042,7 +1043,7 @@ function _processBallResult(data) {
     }
 
     // Win probability meter (2nd innings only)
-    updateWinProbability(data);
+    updateWinProbBanner(data);
 
     // Dashboard: process ball_data for every ball (runs in background regardless of view)
     if (data.ball_data) {
