@@ -1,3 +1,9 @@
+[2.2.1] 2026-02-25
+- Fixed fallback pitch scoring matrices in ball_outcome.py so Green/Dry/Hard/Flat/Dead and DEFAULT all sum to 1.0 (removed startup matrix-sum warnings)
+- Tuned game mode wicket risk: aggressive wicket_mult increased from 1.25 to 1.375 (+10%)
+- Tuned game mode wicket risk: flat_track_bully wicket_mult increased from 0.60 to 0.69 (+15%)
+- Updated free-hit behavior to apply a slight +10% boost to Four and Six outcome weights only on free-hit deliveries
+
 [2.2.0] 2026-02-22
 - Added WebSocket support (flask-socketio, threading mode) for ball-by-ball live updates
 - Ball delivery now uses a persistent WebSocket connection instead of per-ball HTTP requests
