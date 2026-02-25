@@ -89,6 +89,7 @@ class Match:
         self.pending_decision = None
         self.pitch = match_data["pitch"]
         self.stadium = match_data["stadium"]
+        self.ground_config = match_data.get("ground_config")  # per-user snapshot; None for legacy matches
         self.home_xi = match_data["playing_xi"]["home"]
         self.away_xi = match_data["playing_xi"]["away"]
 
@@ -3604,6 +3605,7 @@ class Match:
                 batting_position=_batting_position,
                 game_mode_override=_game_mode_override,
                 fielding_quality=_team_fielding_avg,
+                ground_config_override=self.ground_config,
             )
 
         # 🎙️ COMMENTARY REVAMP INTEGRATION
@@ -3655,6 +3657,7 @@ class Match:
                 pitch_wear=_pitch_wear,
                 batting_position=_batting_position,
                 game_mode_override=_game_mode_override,
+                ground_config_override=self.ground_config,
             )
 
             bat_runs = bat_outcome.get("runs", 0)

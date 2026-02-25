@@ -489,3 +489,22 @@ class IPWhitelistEntry(db.Model):
     label = db.Column(db.String(100), nullable=True)
     added_by = db.Column(db.String(120), nullable=False)
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class UserGroundConfig(db.Model):
+    """Per-user ground conditions configuration.
+
+    One row per user. When absent, the engine falls back to the factory
+    defaults in config/ground_conditions_defaults.yaml.
+    """
+    __tablename__ = 'user_ground_configs'
+
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.String(120), db.ForeignKey('users.id'),
+                           unique=True, nullable=False, index=True)
+    config_json = db.Column(db.JSON, nullable=False)
+    updated_at  = db.Column(db.DateTime, default=datetime.utcnow,
+                            onupdate=datetime.utcnow)
+
+    user = relationship('User', backref=db.backref(
+        'ground_config', uselist=False, cascade='all, delete-orphan'))

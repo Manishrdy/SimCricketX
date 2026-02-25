@@ -114,22 +114,24 @@ PITCH_WICKET_FACTOR = {
     }
 }
 
-def get_pitch_run_multiplier(pitch: str) -> float:
+def get_pitch_run_multiplier(pitch: str, config=None) -> float:
     """
     Returns the run-friendly multiplier for the given pitch.
     Uses ground_conditions.yaml if available, falls back to hardcoded constants.
+    Pass *config* to use a user-specific snapshot instead of the global config.
     """
-    factor = _gc_run_factor(pitch)
+    factor = _gc_run_factor(pitch, config=config)
     if factor is None:
         factor = PITCH_RUN_FACTOR.get(pitch, 1.0)
     return factor
 
-def get_pitch_wicket_multiplier(pitch: str, bowling_type: str) -> float:
+def get_pitch_wicket_multiplier(pitch: str, bowling_type: str, config=None) -> float:
     """
     Returns the wicket-friendly multiplier for the given pitch and bowling type.
     Uses ground_conditions.yaml if available, falls back to hardcoded constants.
+    Pass *config* to use a user-specific snapshot instead of the global config.
     """
-    wf = _gc_wicket_factors(pitch)
+    wf = _gc_wicket_factors(pitch, config=config)
     if wf:
         return wf.get(bowling_type, wf.get("default", 1.0))
     slot = PITCH_WICKET_FACTOR.get(pitch, {})
@@ -309,7 +311,8 @@ def compute_weighted_prob(
     bowling_type: str,
     streak: dict,
     batter_runs: int = 0,
-    balls_faced: int = 0
+    balls_faced: int = 0,
+    config=None,
 ) -> float:
     """
     Returns a raw weight for one outcome (Dot/Single/Double/Three/Four/Six/Wicket/Extras),
@@ -376,18 +379,18 @@ def compute_weighted_prob(
     # 2) Pitch-influence fraction
     pitch_frac = 1.0
     if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
-        pitch_frac = get_pitch_run_multiplier(pitch)
+        pitch_frac = get_pitch_run_multiplier(pitch, config=config)
     elif outcome_type == "Wicket":
-        pitch_frac = get_pitch_wicket_multiplier(pitch, bowling_type)
+        pitch_frac = get_pitch_wicket_multiplier(pitch, bowling_type, config=config)
 
     # 3) Blend Pitch & Skill
-    # Default is 60% Pitch, 40% Skill. 
+    # Default is 60% Pitch, 40% Skill.
     # But for "Hard", we want to emphasize the skew we just calculated.
-    
+
     # 🔧 USER REQUEST: "If flat, batsman will have advantage over bowlers"
     # Logic: Boosting the skill component if favorable to bat
-    
-    _weights = _gc_blending_weights()
+
+    _weights = _gc_blending_weights(config=config)
     alpha = _weights[0] if _weights else 0.6  # Pitch weight
     beta = _weights[1] if _weights else 0.4   # Skill weight
 
@@ -463,6 +466,7 @@ def calculate_outcome(
     batting_position: int = 5,
     game_mode_override: str = None,
     fielding_quality: float = None,
+    ground_config_override: dict = None,
 ) -> dict:
     """
     Determines the outcome of a single delivery.
@@ -498,9 +502,10 @@ def calculate_outcome(
     bowling_hand = bowler["bowling_hand"]
     bowling_type = bowler["bowling_type"]
 
-    # 2) Get pitch-specific scoring matrix (ground_config with game mode applied, or hardcoded fallback)
+    # 2) Get pitch-specific scoring matrix (user config snapshot → global config → hardcoded fallback)
     # Feature 13: pass game_mode_override so dynamic game mode selection is respected.
-    pitch_matrix = _gc_scoring_matrix(pitch, mode_override=game_mode_override) or PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX)
+    _gc = ground_config_override  # shorthand; None for legacy matches → falls back to global cache
+    pitch_matrix = _gc_scoring_matrix(pitch, mode_override=game_mode_override, config=_gc) or PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX)
     # print(f"[calculate_outcome] Using scoring matrix for pitch: {pitch}")
 
     raw_weights = {}
@@ -547,7 +552,8 @@ def calculate_outcome(
             weight = compute_weighted_prob(
                 outcome, base,
                 batting, bowling, fielding,
-                pitch, bowling_type, streak, batter_runs, balls_faced
+                pitch, bowling_type, streak, batter_runs, balls_faced,
+                config=_gc,
             )
             # Apply boundary suppression when bowler has favorable matchup
             if outcome in ("Four", "Six") and boundary_suppression < 1.0:
@@ -557,18 +563,20 @@ def calculate_outcome(
             weight = compute_weighted_prob(
                 outcome, base,
                 batting, bowling, fielding,
-                pitch, bowling_type, streak, batter_runs, balls_faced
+                pitch, bowling_type, streak, batter_runs, balls_faced,
+                config=_gc,
             ) * matchup_boost
         else:  # "Extras"
             weight = compute_weighted_prob(
                 outcome, base,
                 batting, bowling, fielding,
-                pitch, bowling_type, streak
+                pitch, bowling_type, streak,
+                config=_gc,
             )
 
         # --- Phase boosts (apply to ALL outcome types, not just Extras) ---
         # Load configurable phase boosts with hardcoded fallbacks
-        _phase = _gc_phase_boosts() or {}
+        _phase = _gc_phase_boosts(config=_gc) or {}
         _pp_cfg = _phase.get("powerplay", {})
         _death_cfg = _phase.get("death_overs", {})
         _inn2_cfg = _phase.get("second_innings_death", {})
