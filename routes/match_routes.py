@@ -234,6 +234,7 @@ def register_match_routes(
             os.makedirs(match_dir, exist_ok=True)
             path = os.path.join(match_dir, fname)
 
+            from engine.ground_config import get_effective_config as _get_gc
             data.update({
                 "match_id": match_id,
                 "created_by": user,
@@ -241,6 +242,7 @@ def register_match_routes(
                 "fixture_id": req_fixture_id,
                 "created_at": time.time(),
                 "timestamp": ts,
+                "ground_config": _get_gc(current_user.id),
             })
             # Transient setup flag: do not persist beyond match creation.
             data.pop("make_match_interesting", None)
@@ -251,9 +253,11 @@ def register_match_routes(
             app.logger.info(f"[MatchSetup] Saved {fname} for {user}")
             return jsonify(match_id=match_id), 200
 
-        from engine.ground_config import get_active_game_mode
-        active_mode = get_active_game_mode() or {}
-        active_mode_label = active_mode.get("label", "Natural Game")
+        from engine.ground_config import get_effective_config as _get_gc_for_setup
+        _setup_cfg = _get_gc_for_setup(current_user.id)
+        _mode_name = _setup_cfg.get("active_game_mode", "natural_game")
+        _modes = _setup_cfg.get("game_modes", {})
+        active_mode_label = _modes.get(_mode_name, {}).get("label", "Natural Game")
 
         return render_template("match_setup.html",
                                teams=teams,
