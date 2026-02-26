@@ -545,13 +545,22 @@
 {% endif %}
 
 <script>
-    // CLEANUP: If we landed here, it means we successfully created/submitted something.
-    // Specifically clear the team draft if it exists.
+    const shouldClearTeamDraft = {{ 'true' if request.args.get('clear_team_draft') == '1' else 'false' }};
+
+    function clearTeamCreateDraftIfNeeded() {
+        if (!shouldClearTeamDraft) return;
+        localStorage.removeItem('team_create_draft_v2');
+        localStorage.removeItem('team_create_draft'); // Legacy key cleanup.
+
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has('clear_team_draft')) return;
+        url.searchParams.delete('clear_team_draft');
+        const next = `${url.pathname}${url.searchParams.toString() ? `?${url.searchParams.toString()}` : ''}${url.hash}`;
+        window.history.replaceState({}, document.title, next);
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
-        if (localStorage.getItem('team_create_draft')) {
-            console.log("SimCricketX: Clearing successful team draft.");
-            localStorage.removeItem('team_create_draft');
-        }
+        clearTeamCreateDraftIfNeeded();
 
         {% if changelog_entries %}
         const CURRENT_VERSION = "{{ app_version }}";

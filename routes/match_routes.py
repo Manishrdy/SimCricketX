@@ -43,10 +43,13 @@ def register_match_routes(
     _is_valid_match_id,
     reverse_player_aggregates,
 ):
+    MATCH_SETUP_FORMATS = {"T20", "ListA"}
+
     @app.route("/match/setup", methods=["GET", "POST"])
     @login_required
     def match_setup():
-        teams = load_user_teams(current_user.id)
+        # Default to T20 for the GET view; POST will reload with the correct format
+        teams = load_user_teams(current_user.id, match_format="T20")
         
         # Check for tournament fixture execution
         fixture_id = request.args.get('fixture_id')
@@ -82,9 +85,15 @@ def register_match_routes(
                 simulation_mode = "auto"
             data["simulation_mode"] = simulation_mode
 
-            # Validate and normalise match format (T20 default for backward compat)
-            _raw_fmt = str(data.get("match_format", "T20")).strip()
-            data["match_format"] = _raw_fmt if _raw_fmt in {"T20", "ListA"} else "T20"
+            # Validate and normalise match format (T20 default when omitted).
+            _raw_fmt = data.get("match_format")
+            if _raw_fmt is None or str(_raw_fmt).strip() == "":
+                data["match_format"] = "T20"
+            else:
+                _fmt = str(_raw_fmt).strip()
+                if _fmt not in MATCH_SETUP_FORMATS:
+                    return jsonify({"error": "Invalid or unsupported match format"}), 400
+                data["match_format"] = _fmt
 
             # Normalise is_day_night to bool
             _dn_raw = data.get("is_day_night", False)
@@ -155,14 +164,33 @@ def register_match_routes(
             data["team_home"] = f"{home_code}_{home_db.user_id}"
             data["team_away"] = f"{away_code}_{away_db.user_id}"
 
-            # Helper to convert DB team to Full Dict (mimicking JSON file structure)
-            def team_to_full_dict(t):
+            _fmt = data.get("match_format", "T20")
+
+            # ── Strict format-profile existence check (no fallback) ───────────
+            # Reject immediately if either team has no squad for the chosen format.
+            home_profile = next((p for p in home_db.profiles if p.format_type == _fmt), None)
+            away_profile = next((p for p in away_db.profiles if p.format_type == _fmt), None)
+
+            if not home_profile or not home_profile.players:
+                return jsonify({
+                    "error": f"{home_db.name} has no {_fmt} squad. "
+                             "Please create a squad for this format first."
+                }), 400
+            if not away_profile or not away_profile.players:
+                return jsonify({
+                    "error": f"{away_db.name} has no {_fmt} squad. "
+                             "Please create a squad for this format first."
+                }), 400
+
+            # Helper to convert DB team to Full Dict (mimicking JSON file structure).
+            # Strictly uses the format-specific profile — no fallback.
+            def team_to_full_dict(t, profile):
                 d = {
                     "team_name": t.name,
                     "short_code": t.short_code,
-                    "players": []
+                    "players": [],
                 }
-                for p in t.players:
+                for p in profile.players:
                     d["players"].append({
                         "name": p.name,
                         "role": p.role,
@@ -172,13 +200,13 @@ def register_match_routes(
                         "batting_hand": p.batting_hand,
                         "bowling_type": p.bowling_type,
                         "bowling_hand": p.bowling_hand,
-                        "is_captain": p.is_captain,  # Captain flag for toss logic
-                        "will_bowl": False # Default
+                        "is_captain": p.is_captain,
+                        "will_bowl": False,
                     })
                 return d
 
-            full_home = team_to_full_dict(home_db)
-            full_away = team_to_full_dict(away_db)
+            full_home = team_to_full_dict(home_db, home_profile)
+            full_away = team_to_full_dict(away_db, away_profile)
 
             # Backward-compatible payload support: if XI data is missing, derive a default XI.
             if not isinstance(data.get("playing_xi"), dict):
@@ -226,6 +254,30 @@ def register_match_routes(
             # Enrich both playing XI and substitutes
             data["playing_xi"]["home"] = enrich_player_list(data["playing_xi"]["home"], full_home)
             data["playing_xi"]["away"] = enrich_player_list(data["playing_xi"]["away"], full_away)
+
+            # ── Source-of-truth validation ────────────────────────────────────
+            # After enrichment, every player name must be found in the DB profile
+            # for the selected format.  If any player was sent from a wrong format
+            # squad they will have been silently dropped by enrich_player_list().
+            # Reject the request here so a stale/tampered payload never starts a match.
+            home_xi_count = len(data["playing_xi"]["home"])
+            away_xi_count = len(data["playing_xi"]["away"])
+            if home_xi_count != 11:
+                return jsonify({
+                    "error": (
+                        f"Home XI has {home_xi_count}/11 valid players for the {_fmt} format. "
+                        "Ensure the correct format squad is selected and all 11 players belong "
+                        "to that profile."
+                    )
+                }), 400
+            if away_xi_count != 11:
+                return jsonify({
+                    "error": (
+                        f"Away XI has {away_xi_count}/11 valid players for the {_fmt} format. "
+                        "Ensure the correct format squad is selected and all 11 players belong "
+                        "to that profile."
+                    )
+                }), 400
 
             if "substitutes" in data:
                 data["substitutes"]["home"] = enrich_player_list(data["substitutes"]["home"], full_home)
@@ -277,6 +329,58 @@ def register_match_routes(
                                tournament_id=tournament_id,
                                fixture_id=fixture_id,
                                active_game_mode_label=active_mode_label)
+
+    @app.route("/api/match/verify-lineups", methods=["POST"])
+    @login_required
+    def verify_match_lineups():
+        """Pre-simulate DB verification: confirm all named XI players exist in
+        the team's format-specific squad in the database.  Called by the
+        frontend just before POSTing to /match/setup so the user sees a clear
+        error before the match starts rather than a cryptic 400 from enrichment.
+        """
+        data = request.get_json(silent=True) or {}
+        _raw_fmt = data.get("match_format")
+        if _raw_fmt is None or str(_raw_fmt).strip() == "":
+            fmt = "T20"
+        else:
+            fmt = str(_raw_fmt).strip()
+            if fmt not in MATCH_SETUP_FORMATS:
+                return jsonify({"error": "Invalid or unsupported match format"}), 400
+
+        home_id = data.get("home_team_id")
+        away_id = data.get("away_team_id")
+        home_xi_names = data.get("home_xi", [])
+        away_xi_names = data.get("away_xi", [])
+
+        home_db = db.session.get(DBTeam, home_id)
+        away_db = db.session.get(DBTeam, away_id)
+
+        if not home_db or not away_db:
+            return jsonify({"error": "Invalid team IDs"}), 400
+        if home_db.user_id != current_user.id or away_db.user_id != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
+
+        def _check(team_db, xi_names):
+            profile = next(
+                (p for p in team_db.profiles if p.format_type == fmt), None
+            )
+            if not profile:
+                # Team has no profile for this format — all names are invalid.
+                return [], list(xi_names)
+            squad_names = {p.name for p in profile.players}
+            valid   = [n for n in xi_names if n in squad_names]
+            invalid = [n for n in xi_names if n not in squad_names]
+            return valid, invalid
+
+        home_valid, home_invalid = _check(home_db, home_xi_names)
+        away_valid, away_invalid = _check(away_db, away_xi_names)
+        all_valid = not home_invalid and not away_invalid
+
+        return jsonify({
+            "valid": all_valid,
+            "home": {"valid": home_valid, "invalid": home_invalid},
+            "away": {"valid": away_valid, "invalid": away_invalid},
+        }), 200
 
     @app.route("/match/<match_id>")
     @login_required
@@ -528,6 +632,10 @@ def register_match_routes(
                 match_data, match_path, err = _load_match_file_for_user(match_id)
                 if err:
                     return err
+
+                match_format = str(match_data.get("match_format", "T20")).strip().upper()
+                if match_format != "T20":
+                    return jsonify({"error": "Impact player is supported only for T20 format"}), 400
 
                 impact_swaps = {}
 
@@ -1432,4 +1540,3 @@ def register_match_routes(
         except Exception as e:
             app.logger.error(f"Error saving scorecard images: {e}", exc_info=True)
             return jsonify({"error": "An error occurred while saving images"}), 500
-

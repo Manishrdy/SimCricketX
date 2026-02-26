@@ -675,6 +675,59 @@
         transform: translateY(0);
       }
     }
+
+    /* ─── Format Profile Tabs ─── */
+    .profile-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.25rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      top: 2px;
+    }
+
+    .profile-tab:hover {
+      color: var(--brand-primary);
+    }
+
+    .profile-tab.active {
+      color: var(--brand-primary);
+      border-bottom-color: var(--brand-primary);
+    }
+
+    .profile-count-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 5px;
+      border-radius: var(--radius-full);
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: var(--border-light);
+      color: var(--text-muted);
+      transition: all 0.2s ease;
+    }
+
+    .profile-tab.active .profile-count-badge,
+    .profile-tab.has-players .profile-count-badge {
+      background: var(--brand-primary);
+      color: white;
+    }
+
+    .profile-tab.complete .profile-count-badge {
+      background: var(--success);
+      color: white;
+    }
   </style>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
 </head>
@@ -716,7 +769,7 @@
     <form id="team-form" method="POST"
       action="{{ url_for('edit_team', short_code=team.short_code) if edit else url_for('create_team') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="players_payload" id="players_payload" value="[]">
+      <input type="hidden" name="profiles_payload" id="profiles_payload" value="{}">
 
       <!-- Team Details Section -->
       <div class="glass-card">
@@ -768,89 +821,161 @@
         </div>
       </div>
 
-      <!-- Player Management Section -->
+      <!-- Format Profiles Section -->
       <div class="glass-card">
         <div class="section-header">
           <div class="section-icon">
-            <i class="fa-solid fa-users-line"></i>
+            <i class="fa-solid fa-layer-group"></i>
           </div>
-          <div class="section-title">Squad Roster</div>
+          <div>
+            <div class="section-title">Format Profiles</div>
+            <p style="color:var(--text-muted);font-size:0.85rem;margin-top:0.25rem;">
+              Each format has its own independent squad. At least one profile is required.
+            </p>
+          </div>
         </div>
 
         <div class="section-body">
-          <!-- Toolbar -->
-          <div class="squad-toolbar">
-            <div class="squad-stats">
-              <div class="stat-badge">Squad: <span class="player-counter" id="player-count">0/25</span></div>
-              <!-- Future: Add role counts here -->
-            </div>
+          <!-- Profile Tabs -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;border-bottom:2px solid var(--border-light);padding-bottom:0;">
+            <button type="button" class="profile-tab active" data-fmt="T20" id="tab-T20">
+              <i class="fa-solid fa-bolt"></i> T20
+              <span class="profile-count-badge" id="badge-T20">0</span>
+            </button>
+            <button type="button" class="profile-tab" data-fmt="ListA" id="tab-ListA">
+              <i class="fa-solid fa-cricket-bat-ball"></i> List A / ODI
+              <span class="profile-count-badge" id="badge-ListA">0</span>
+            </button>
+            <button type="button" class="profile-tab" data-fmt="FirstClass" id="tab-FirstClass">
+              <i class="fa-solid fa-trophy"></i> First Class
+              <span class="profile-count-badge" id="badge-FirstClass">0</span>
+            </button>
+          </div>
 
-            <div class="btn-group">
-              <button type="button" class="btn btn-secondary" id="import-json-btn">
-                <i class="fa-solid fa-file-import"></i> Import
-              </button>
-
-              <div class="template-dropdown">
-                <button type="button" class="btn btn-secondary" id="template-helper-btn">
-                  <i class="fa-solid fa-wand-magic-sparkles"></i> AI Prompt
-                </button>
-                <div class="template-card">
-                  <div
-                    style="display:flex; justify-content:space-between; margin-bottom:0.5rem; color:var(--text-muted); font-size:0.8rem; text-transform:uppercase; font-weight:700;">
-                    <span>JSON Format</span>
-                    <span id="copy-feedback" style="color:var(--success);"></span>
+          <!-- Profile Panels -->
+          <div id="profile-panels">
+            <!-- T20 Panel -->
+            <div class="profile-panel" id="panel-T20" data-fmt="T20">
+              <div class="squad-toolbar">
+                <div class="squad-stats">
+                  <div class="stat-badge">Squad: <span class="player-counter" id="count-T20">0/25</span></div>
+                </div>
+                <div class="btn-group">
+                  <button type="button" class="btn btn-secondary import-btn" data-fmt="T20">
+                    <i class="fa-solid fa-file-import"></i> Import
+                  </button>
+                  <div class="template-dropdown">
+                    <button type="button" class="btn btn-secondary">
+                      <i class="fa-solid fa-wand-magic-sparkles"></i> AI Prompt
+                    </button>
+                    <div class="template-card">
+                      <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;color:var(--text-muted);font-size:0.8rem;text-transform:uppercase;font-weight:700;">
+                        <span>JSON Format</span>
+                      </div>
+                      <div class="code-block" id="json-template-preview">[
+  {
+    "name": "Player Name",
+    "role": "Batsman",
+    "bat": 85, "bowl": 20, "field": 80,
+    "bhand": "Right", "btype": "", "bhand2": ""
+  }
+]</div>
+                      <button type="button" class="btn btn-primary copy-prompt-btn" data-fmt="T20" style="width:100%;font-size:0.8rem;padding:0.5rem;">
+                        <i class="fa-regular fa-copy"></i> Copy AI Prompt
+                      </button>
+                    </div>
                   </div>
-                  <div class="code-block" id="json-template-preview">[
-                    {
-                    "name": "Player Name",
-                    "role": "Batsman",
-                    "bat": 85,
-                    "bowl": 20,
-                    "field": 80,
-                    "bhand": "Right",
-                    "btype": "",
-                    "bhand2": ""
-                    }
-                    ]</div>
-                  <button type="button" class="btn btn-primary" style="width:100%; font-size:0.8rem; padding:0.5rem;"
-                    id="copy-template-btn">
-                    <i class="fa-regular fa-copy"></i> Copy Prompt for AI
+                  <button type="button" class="btn btn-primary add-player-btn" data-fmt="T20">
+                    <i class="fa-solid fa-plus"></i> Add Player
                   </button>
                 </div>
               </div>
-
-              <button type="button" class="btn btn-primary" id="add-player">
-                <i class="fa-solid fa-plus"></i> Add Player
-              </button>
+              <div class="players-list profile-players" id="players-T20"></div>
+              <!-- Leadership -->
+              <div style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+                <div class="form-group">
+                  <label class="form-label">Captain (T20)</label>
+                  <select class="form-select profile-captain" data-fmt="T20" id="captain-T20">
+                    <option value="">Select Captain</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Wicketkeeper (T20)</label>
+                  <select class="form-select profile-wk" data-fmt="T20" id="wk-T20">
+                    <option value="">Select Wicketkeeper</option>
+                  </select>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <!-- Players Grid -->
-          <div class="players-list" id="players-container"></div>
-        </div>
-      </div>
-
-      <!-- Leadership Section -->
-      <div class="glass-card">
-        <div class="section-header">
-          <div class="section-icon">
-            <i class="fa-solid fa-chess-king"></i>
-          </div>
-          <div class="section-title">Leadership Core</div>
-        </div>
-        <div class="section-body">
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
-            <div class="form-group">
-              <label class="form-label" for="select-captain">Captain</label>
-              <select name="captain" id="select-captain" class="form-select" required>
-                <option value="">Select Captain</option>
-              </select>
+            <!-- List A Panel -->
+            <div class="profile-panel" id="panel-ListA" data-fmt="ListA" style="display:none;">
+              <div class="squad-toolbar">
+                <div class="squad-stats">
+                  <div class="stat-badge">Squad: <span class="player-counter" id="count-ListA">0/25</span></div>
+                </div>
+                <div class="btn-group">
+                  <button type="button" class="btn btn-secondary copy-from-t20-btn" data-fmt="ListA">
+                    <i class="fa-solid fa-copy"></i> Copy from T20
+                  </button>
+                  <button type="button" class="btn btn-secondary import-btn" data-fmt="ListA">
+                    <i class="fa-solid fa-file-import"></i> Import
+                  </button>
+                  <button type="button" class="btn btn-primary add-player-btn" data-fmt="ListA">
+                    <i class="fa-solid fa-plus"></i> Add Player
+                  </button>
+                </div>
+              </div>
+              <div class="players-list profile-players" id="players-ListA"></div>
+              <div style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+                <div class="form-group">
+                  <label class="form-label">Captain (List A)</label>
+                  <select class="form-select profile-captain" data-fmt="ListA" id="captain-ListA">
+                    <option value="">Select Captain</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Wicketkeeper (List A)</label>
+                  <select class="form-select profile-wk" data-fmt="ListA" id="wk-ListA">
+                    <option value="">Select Wicketkeeper</option>
+                  </select>
+                </div>
+              </div>
             </div>
-            <div class="form-group">
-              <label class="form-label" for="select-wk">Wicketkeeper</label>
-              <select name="wicketkeeper" id="select-wk" class="form-select" required>
-                <option value="">Select Wicketkeeper</option>
-              </select>
+
+            <!-- First Class Panel -->
+            <div class="profile-panel" id="panel-FirstClass" data-fmt="FirstClass" style="display:none;">
+              <div class="squad-toolbar">
+                <div class="squad-stats">
+                  <div class="stat-badge">Squad: <span class="player-counter" id="count-FirstClass">0/25</span></div>
+                </div>
+                <div class="btn-group">
+                  <button type="button" class="btn btn-secondary copy-from-t20-btn" data-fmt="FirstClass">
+                    <i class="fa-solid fa-copy"></i> Copy from T20
+                  </button>
+                  <button type="button" class="btn btn-secondary import-btn" data-fmt="FirstClass">
+                    <i class="fa-solid fa-file-import"></i> Import
+                  </button>
+                  <button type="button" class="btn btn-primary add-player-btn" data-fmt="FirstClass">
+                    <i class="fa-solid fa-plus"></i> Add Player
+                  </button>
+                </div>
+              </div>
+              <div class="players-list profile-players" id="players-FirstClass"></div>
+              <div style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+                <div class="form-group">
+                  <label class="form-label">Captain (First Class)</label>
+                  <select class="form-select profile-captain" data-fmt="FirstClass" id="captain-FirstClass">
+                    <option value="">Select Captain</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Wicketkeeper (First Class)</label>
+                  <select class="form-select profile-wk" data-fmt="FirstClass" id="wk-FirstClass">
+                    <option value="">Select Wicketkeeper</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -907,20 +1032,14 @@
         <option>All-rounder</option>
         <option>Wicketkeeper</option>
       </select>
-
-      <input type="number" name="batting_rating" class="form-input" placeholder="Bat" min="0" max="100"
-        title="Batting Rating" required>
-      <input type="number" name="bowling_rating" class="form-input" placeholder="Bowl" min="0" max="100"
-        title="Bowling Rating" required>
-      <input type="number" name="fielding_rating" class="form-input" placeholder="Fld" min="0" max="100"
-        title="Fielding Rating" required>
-
+      <input type="number" name="batting_rating" class="form-input" placeholder="Bat" min="0" max="100" title="Batting Rating" required>
+      <input type="number" name="bowling_rating" class="form-input" placeholder="Bowl" min="0" max="100" title="Bowling Rating" required>
+      <input type="number" name="fielding_rating" class="form-input" placeholder="Fld" min="0" max="100" title="Fielding Rating" required>
       <select name="batting_hand" class="form-select" required>
         <option value="">Bat Hand</option>
         <option>Left</option>
         <option>Right</option>
       </select>
-
       <select name="bowling_type" class="form-select">
         <option value="">Bowl Type</option>
         <option>Fast</option>
@@ -932,13 +1051,11 @@
         <option>Finger spin</option>
         <option>Wrist spin</option>
       </select>
-
       <select name="bowling_hand" class="form-select">
         <option value="">Bowl Hand</option>
         <option>Left</option>
         <option>Right</option>
       </select>
-
       <button type="button" class="btn-remove player-remove" title="Remove Player">
         <i class="fa-solid fa-xmark"></i>
       </button>
@@ -946,656 +1063,498 @@
   </template>
 
   <!-- Data Injection -->
-  <script id="edit-mode-data" type="application/json">
-      {{ 'true' if edit else 'false' }}
-  </script>
-  <script id="team-data-json" type="application/json">
-      {{ team | tojson | safe if edit else 'null' }}
-    </script>
+  <script id="edit-mode-data" type="application/json">{{ 'true' if edit else 'false' }}</script>
+  <script id="team-data-json" type="application/json">{{ team | tojson | safe if edit else 'null' }}</script>
 
   <script>
+    // ─── Constants & State ────────────────────────────────────────
     const EDIT_MODE = JSON.parse(document.getElementById('edit-mode-data').textContent);
     let TEAM_DATA = null;
-    try {
-      TEAM_DATA = JSON.parse(document.getElementById('team-data-json').textContent);
-    } catch (e) {
-      console.error("Failed to parse team data", e);
-    }
-  </script>
+    try { TEAM_DATA = JSON.parse(document.getElementById('team-data-json').textContent); }
+    catch (e) { console.error("Failed to parse team data", e); }
 
-  <script>
-    // Dynamic Title
-    const teamInput = document.getElementById('team_name');
-    const titleEl = document.getElementById('dynamic-title');
-    teamInput.oninput = () => {
-      titleEl.textContent = teamInput.value || 'Team Creation';
-      if (!EDIT_MODE) saveDraft();
-    };
+    const FORMATS = ['T20', 'ListA', 'FirstClass'];
+    const MAX = 25, MIN = 12;
+    const DRAFT_KEY = 'team_create_draft_v2';
 
-    // Player Logic
-    const container = document.getElementById('players-container');
-    const countEl = document.getElementById('player-count');
-    const MAX = 25, MIN = 12; // Updated Limits
-
-    // Helpers
-    const rand = arr => arr[Math.floor(Math.random() * arr.length)];
-    const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-
-    // Validation function
-    function checkValidity() {
-      const errors = [];
-      const playerCount = container.children.length;
-      const cards = [...document.querySelectorAll('.player-row')];
-
-      // 1. Basic Team Info
-      const teamName = document.getElementById('team_name').value.trim();
-      const shortCode = document.querySelector('[name=short_code]').value.trim();
-      const homeGround = document.querySelector('[name=home_ground]').value.trim();
-      const pitchPref = document.querySelector('[name=pitch_preference]').value;
-
-      if (!teamName) errors.push("Team Name required");
-      if (!shortCode) errors.push("Short Code required");
-      if (!homeGround) errors.push("Home Ground required");
-      if (!pitchPref) errors.push("Pitch Preference required");
-
-      // 2. Count check (Strict: 12-25)
-      if (playerCount < MIN) errors.push(`Need at least ${MIN} players (Current: ${playerCount})`);
-      if (playerCount > MAX) errors.push(`Max ${MAX} players allowed`);
-
-      // 3. Field checks
-      let missingFields = false;
-      let invalidBowlingForWk = false;
-
-      for (let card of cards) {
-        const name = card.querySelector('[name=player_name]').value.trim();
-        const role = card.querySelector('[name=player_role]').value;
-        const bhand = card.querySelector('[name=batting_hand]').value;
-        const btype = card.querySelector('[name=bowling_type]').value;
-        const bhand2 = card.querySelector('[name=bowling_hand]').value;
-
-        if (!name || !role || !bhand) {
-          missingFields = true;
-          break;
-        }
-
-        // Validation: If Bowling Type set, Bowling Hand must be set
-        if (btype && !bhand2) {
-          errors.push(`Set Bowling Hand for ${name}`);
-        }
-      }
-      if (missingFields) errors.push("Complete all player fields (Name, Role, Hand)");
-
-      // 4. Role checks
-      const wicketkeepers = cards.filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper');
-      const bowlers = cards.filter(c => ['Bowler', 'All-rounder'].includes(c.querySelector('[name=player_role]').value));
-
-      if (wicketkeepers.length < 1) errors.push("Need 1+ Wicketkeeper");
-      if (bowlers.length < 6) errors.push("Need 6+ Bowlers/All-rounders");
-
-      // 5. Captain/WK selected
-      const captain = document.getElementById('select-captain').value;
-      const wk = document.getElementById('select-wk').value;
-
-      if (!captain) errors.push("Select a Captain");
-      if (!wk) errors.push("Select a Wicketkeeper");
-
-      return {
-        valid: errors.length === 0,
-        errors: errors
-      };
-    }
-
-    function updateSubmitButtons() {
-      const { valid, errors } = checkValidity();
-      const btnPublish = document.getElementById('btn-publish');
-      const feedbackEl = document.getElementById('validation-feedback');
-
-      // Update Feedback UI
-      if (feedbackEl) {
-        if (!valid) {
-          // Show top 1-2 errors to save space
-          const displayErrors = errors.slice(0, 2);
-          const more = errors.length > 2 ? `(+${errors.length - 2} more)` : '';
-          feedbackEl.innerHTML = displayErrors.map(e => `<span><i class="fa-solid fa-circle-exclamation"></i> ${e}</span>`).join('') + (more ? `<span>${more}</span>` : '');
-          feedbackEl.style.color = 'var(--warning)';
-        } else {
-          feedbackEl.innerHTML = '<span style="color: var(--success);"><i class="fa-solid fa-check"></i> Ready to Publish</span>';
-        }
-      }
-
-      // Publish Button
-      if (btnPublish) {
-        btnPublish.disabled = !valid;
-        btnPublish.style.opacity = valid ? '1' : '0.5';
-        btnPublish.style.cursor = valid ? 'pointer' : 'not-allowed';
-      }
-    }
-
-    // Sample data
-    const NAMES = ["Virat", "Rohit", "Dhoni", "Smith", "Warner", "Anderson", "Bumrah", "Jadeja", "Stokes", "Root", "Travis Head", "H Klaasen", "M Starc", "S Iyer", "Spidy Pant"];
-    const ROLES = ["Batsman", "Bowler", "All-rounder", "Wicketkeeper"];
-    const HANDS = ["Left", "Right"];
-    const TYPES = ["Fast", "Fast-medium", "Medium-fast", "Medium", "Off spin", "Leg spin", "Finger spin", "Wrist spin"];
-
-    // Update count
-    function updateCount() {
-      const current = container.children.length;
-      countEl.textContent = `${current} / ${MAX}`;
-
-      // Add color coding
-      if (current < MIN) {
-        countEl.style.color = '#dc3545'; // red
-        countEl.style.background = 'rgba(239, 68, 68, 0.1)';
-      } else if (current <= MAX) {
-        countEl.style.color = '#10b981'; // green
-        countEl.style.background = 'rgba(16, 185, 129, 0.1)';
-      } else {
-        countEl.style.color = '#f59e0b'; // yellow
-        countEl.style.background = 'rgba(245, 158, 11, 0.1)';
-      }
-
-      refreshRoleSelectors();
-      updateSubmitButtons();
-      if (!EDIT_MODE) saveDraft();
-    }
-
-    function refreshRoleSelectors() {
-      // Fix: Selector updated to .player-row
-      const cards = [...document.querySelectorAll('.player-row')];
-      const cap = document.getElementById('select-captain');
-      const wk = document.getElementById('select-wk');
-
-      // Preserve selection if possible
-      const currentCap = cap.value;
-      const currentWk = wk.value;
-
-      // rebuild captain list from *all* player names
-      cap.innerHTML = '<option value="">Select Captain</option>';
-      cards.forEach(c => {
-        const name = c.querySelector('[name=player_name]').value;
-        if (name) {
-          const opt = document.createElement('option');
-          opt.value = name;
-          opt.textContent = name;
-          if (name === currentCap) opt.selected = true;
-          cap.appendChild(opt);
-        }
+    // ─── Tab switching ────────────────────────────────────────────
+    document.querySelectorAll('.profile-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const fmt = tab.dataset.fmt;
+        document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.profile-panel').forEach(p => p.style.display = 'none');
+        tab.classList.add('active');
+        document.getElementById('panel-' + fmt).style.display = 'block';
       });
+    });
 
-      // rebuild wicketkeeper list *only* from keeper-role cards
-      wk.innerHTML = '<option value="">Select Wicketkeeper</option>';
-      cards
-        .filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper')
-        .forEach(c => {
-          const name = c.querySelector('[name=player_name]').value;
-          if (name) {
-            const opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            if (name === currentWk) opt.selected = true;
-            wk.appendChild(opt);
-          }
-        });
-    }
-  </script>
+    // ─── Per-profile player management ────────────────────────────
 
-  <script>
-    // Add one player card
-    function addPlayer(data, autoUpdate = true) {
-      if (container.children.length >= MAX) return;
+    function getContainer(fmt) { return document.getElementById('players-' + fmt); }
+    function getCountEl(fmt)  { return document.getElementById('count-' + fmt); }
+    function getBadge(fmt)    { return document.getElementById('badge-' + fmt); }
+    function getCaptainSel(fmt) { return document.getElementById('captain-' + fmt); }
+    function getWkSel(fmt)      { return document.getElementById('wk-' + fmt); }
+
+    function createPlayerCard(data) {
       const tpl = document.getElementById('player-template').content.cloneNode(true);
-      // Correction: Template root class is now 'player-row', not 'player-card'
       const card = tpl.querySelector('.player-row');
-
-      // Fill if data passed (used in generate/edit)
       if (data) {
-        card.querySelector('[name=player_name]').value = data.name;
-        // Ensure role matches strict Select values
-        const validRoles = ["Batsman", "Bowler", "All-rounder", "Wicketkeeper"];
-        const role = validRoles.includes(data.role) ? data.role : "Batsman";
-        card.querySelector('[name=player_role]').value = role;
-
-        card.querySelector('[name=batting_rating]').value = data.bat;
-        card.querySelector('[name=bowling_rating]').value = data.bowl;
-        card.querySelector('[name=fielding_rating]').value = data.field;
-        card.querySelector('[name=batting_hand]').value = data.bhand;
-        card.querySelector('[name=bowling_type]').value = data.btype;
-        card.querySelector('[name=bowling_hand]').value = data.bhand2;
+        card.querySelector('[name=player_name]').value = data.name || '';
+        const validRoles = ['Batsman','Bowler','All-rounder','Wicketkeeper'];
+        card.querySelector('[name=player_role]').value = validRoles.includes(data.role) ? data.role : 'Batsman';
+        card.querySelector('[name=batting_rating]').value  = data.bat  ?? data.batting_rating  ?? '';
+        card.querySelector('[name=bowling_rating]').value  = data.bowl ?? data.bowling_rating  ?? '';
+        card.querySelector('[name=fielding_rating]').value = data.field?? data.fielding_rating ?? '';
+        card.querySelector('[name=batting_hand]').value    = data.bhand || data.batting_hand  || '';
+        card.querySelector('[name=bowling_type]').value    = data.btype || data.bowling_type  || '';
+        card.querySelector('[name=bowling_hand]').value    = data.bhand2|| data.bowling_hand  || '';
       }
+      return card;
+    }
 
-      // Hook into name or role changes → refresh captain/WK selectors
-      ["player_name"].forEach(field => {
-        card.querySelector(`[name=${field}]`).addEventListener('input', refreshRoleSelectors);
-      });
-
-      // Special Handler for Role Change: Wicketkeeper Rule
-      const roleSelect = card.querySelector('[name=player_role]');
+    function wireCard(card, fmt) {
+      const roleSelect  = card.querySelector('[name=player_role]');
       const btypeSelect = card.querySelector('[name=bowling_type]');
-      const bhand2Select = card.querySelector('[name=bowling_hand]');
+      const bhand2Select= card.querySelector('[name=bowling_hand]');
 
-      function updateRoleConstraints() {
-        const role = roleSelect.value;
-        if (role === "Wicketkeeper") {
-          // Rule: WK cannot bowl -> Clear and Disable
-          btypeSelect.value = "";
-          bhand2Select.value = "";
-          btypeSelect.disabled = true;
-          bhand2Select.disabled = true;
-          btypeSelect.style.opacity = "0.5";
-          bhand2Select.style.opacity = "0.5";
+      function applyRoleConstraints() {
+        if (roleSelect.value === 'Wicketkeeper') {
+          btypeSelect.value = ''; bhand2Select.value = '';
+          btypeSelect.disabled = bhand2Select.disabled = true;
+          btypeSelect.style.opacity = bhand2Select.style.opacity = '0.5';
         } else {
-          // Enable
-          btypeSelect.disabled = false;
-          bhand2Select.disabled = false;
-          btypeSelect.style.opacity = "1";
-          bhand2Select.style.opacity = "1";
+          btypeSelect.disabled = bhand2Select.disabled = false;
+          btypeSelect.style.opacity = bhand2Select.style.opacity = '1';
         }
-        refreshRoleSelectors();
+        refreshProfileSelectors(fmt);
         updateSubmitButtons();
       }
+      roleSelect.addEventListener('change', applyRoleConstraints);
+      applyRoleConstraints();
 
-      roleSelect.addEventListener('change', updateRoleConstraints);
-      // Run once on init
-      updateRoleConstraints();
-
-      // Add validation and auto-save listeners to ALL fields in the card
-      const inputs = card.querySelectorAll('input, select');
-      inputs.forEach(input => {
-        input.addEventListener('input', updateSubmitButtons);
-        input.addEventListener('change', updateSubmitButtons);
-        if (!EDIT_MODE) {
-          input.addEventListener('input', saveDraft);
-          input.addEventListener('change', saveDraft);
-        }
+      card.querySelector('[name=player_name]').addEventListener('input', () => {
+        refreshProfileSelectors(fmt); updateSubmitButtons();
       });
-
-      if (!EDIT_MODE) saveDraft(); // Save immediately on add
+      card.querySelectorAll('input, select').forEach(el => {
+        el.addEventListener('input',  () => { updateSubmitButtons(); if (!EDIT_MODE) saveDraft(); });
+        el.addEventListener('change', () => { updateSubmitButtons(); if (!EDIT_MODE) saveDraft(); });
+      });
 
       card.querySelector('.player-remove').onclick = () => {
         card.style.transform = 'translateX(20px)';
         card.style.opacity = '0';
-        setTimeout(() => {
-          card.remove();
-          updateCount();
-          refreshRoleSelectors(); // Ensure deleted players are removed from dropdowns
-          updateSubmitButtons();  // Re-run validation
-        }, 300);
+        setTimeout(() => { card.remove(); updateProfileCount(fmt); updateSubmitButtons(); }, 300);
       };
-
-      container.appendChild(card);
-      if (autoUpdate) {
-        updateCount();
-        refreshRoleSelectors(); // Important: Update selector options!
-        updateSubmitButtons();  // Trigger global validation
-      }
     }
 
-    // Manual add
-    document.getElementById('add-player').onclick = () => addPlayer();
+    function addPlayerToProfile(fmt, data, autoUpdate = true) {
+      const cont = getContainer(fmt);
+      if (cont.children.length >= MAX) return;
+      const card = createPlayerCard(data);
+      wireCard(card, fmt);
+      cont.appendChild(card);
+      if (autoUpdate) { updateProfileCount(fmt); refreshProfileSelectors(fmt); updateSubmitButtons(); }
+    }
 
-    // Import JSON Handler
-    document.getElementById('import-json-btn').onclick = () => {
-      const jsonStr = prompt("Paste your Team JSON object here:");
-      if (!jsonStr) return;
+    function updateProfileCount(fmt) {
+      const cont  = getContainer(fmt);
+      const count = cont.children.length;
+      const countEl = getCountEl(fmt);
+      const badge   = getBadge(fmt);
 
-      try {
-        const data = JSON.parse(jsonStr);
-        if (!Array.isArray(data)) throw new Error("JSON must be an array of player objects");
+      countEl.textContent = `${count} / ${MAX}`;
+      badge.textContent = count;
 
-        if (container.children.length > 0) {
-          if (!confirm("This will replace current players. Continue?")) return;
-        }
+      const tab = document.getElementById('tab-' + fmt);
+      tab.classList.toggle('has-players', count > 0);
+      tab.classList.toggle('complete', count >= MIN);
 
-        container.innerHTML = "";
-
-        // Add all players without triggering updateCount 15-20 times
-        data.forEach(p => {
-          addPlayer({
-            name: p.name || "Player",
-            role: p.role || "Batsman",
-            bat: p.bat || p.batting_rating || 50,
-            bowl: p.bowl || p.bowling_rating || 50,
-            field: p.field || p.fielding_rating || 50,
-            bhand: p.bhand || p.batting_hand || "Right",
-            btype: p.btype || p.bowling_type || "",
-            bhand2: p.bhand2 || p.bowling_hand || ""
-          }, false); // Pass false to skip updateCount inside loop
-        });
-
-        // Major fix: Refresh Role Selectors FIRST, then update count and buttons
-        refreshRoleSelectors();
-        updateCount();
-
-        // Timeout to let DOM settle before final validation check
-        setTimeout(() => {
-          updateSubmitButtons();
-          const { valid } = checkValidity();
-          if (valid) {
-            alert("Team imported! Select Captain & Wicketkeeper.");
-          } else {
-            // The visual feedback is now updated by updateSubmitButtons()
-          }
-        }, 100);
-        if (valid) {
-          alert("Team imported successfully! Please select your Captain and Wicketkeeper.");
-        } else {
-          // Even if not fully valid (e.g. Captain missing), we imported. 
-          // The realtime UI will show what is missing.
-          // Trigger a UI update to ensure errors are shown.
-          updateSubmitButtons();
-        }
-
-      } catch (e) {
-        alert("Invalid JSON: " + e.message);
+      if (count < MIN && count > 0) {
+        countEl.style.color = '#dc3545';
+      } else if (count >= MIN) {
+        countEl.style.color = '#10b981';
+      } else {
+        countEl.style.color = '';
       }
-    };
 
-    // Copy Template Handler
-    document.getElementById('copy-template-btn').onclick = () => {
-      // 1. Gather Current Context
-      const teamName = document.getElementById('team_name').value || "[Team Name]";
-      const shortCode = document.querySelector('[name=short_code]').value || "[Short Code]";
-      const homeGround = document.querySelector('[name=home_ground]').value || "[Venue Name]";
-      const pitchPref = document.querySelector('[name=pitch_preference]').value || "Balanced";
-      const teamColor = document.getElementById('team_color').value || "Blue";
+      refreshProfileSelectors(fmt);
+      if (!EDIT_MODE) saveDraft();
+    }
 
-      // 2. Construct the Rich Prompt
-      const templateText = document.getElementById('json-template-preview').innerText;
+    function refreshProfileSelectors(fmt) {
+      const cont    = getContainer(fmt);
+      const capSel  = getCaptainSel(fmt);
+      const wkSel   = getWkSel(fmt);
+      const curCap  = capSel.value;
+      const curWk   = wkSel.value;
+      const cards   = [...cont.querySelectorAll('.player-row')];
 
-      const promptText = `I need you to generate a JSON dataset for a Cricket Team named "${teamName}" (${shortCode}).
-      
-**Context:**
-- **Home Ground:** ${homeGround}
-- **Pitch Type:** ${pitchPref}
-- **Team Color:** ${teamColor}
-
-**Constraints:**
-1. The JSON must be a STRICT array of player objects.
-2. Total Players: 12-25.
-3. Roles Distribution:
-   - At least 5 Batsmen
-   - At least 1 Wicketkeeper
-   - At least 6 Bowlers/All-rounders separate from batsmen
-4. Ratings (0-100):
-   - Star players: 85-95
-   - Regulars: 75-84
-   - Youngsters: 60-70
-5. Bowling Types (Must match exactly):
-   - Fast
-   - Fast-medium
-   - Medium-fast
-   - Medium
-   - Off spin
-   - Leg spin
-   - Finger spin
-   - Wrist spin
-
-**Required JSON Format:**
-${templateText}
-
-Please generate the full JSON array only, no other text.`;
-
-      navigator.clipboard.writeText(promptText).then(() => {
-        const btn = document.getElementById('copy-template-btn');
-        const originalContent = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied AI Prompt!';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-secondary'); // Visual feedback
-
-        setTimeout(() => {
-          btn.innerHTML = originalContent;
-          btn.classList.add('btn-primary');
-          btn.classList.remove('btn-secondary');
-        }, 2000);
-      }).catch(err => {
-        console.error('Failed to copy: ', err);
-        alert("Failed to copy to clipboard");
+      capSel.innerHTML = '<option value="">Select Captain</option>';
+      cards.forEach(c => {
+        const n = c.querySelector('[name=player_name]').value.trim();
+        if (n) {
+          const o = document.createElement('option');
+          o.value = o.textContent = n;
+          if (n === curCap) o.selected = true;
+          capSel.appendChild(o);
+        }
       });
-    };
 
-    // ─── Prefill on Edit Mode ───────────────────────────────────
-    if (EDIT_MODE) {
-      // 1. Basic fields
-      document.getElementById('team_name').value = TEAM_DATA.team_name;
-      document.querySelector('[name=short_code]').value = TEAM_DATA.short_code;
-      document.querySelector('[name=home_ground]').value = TEAM_DATA.home_ground;
-      document.querySelector('[name=pitch_preference]').value = TEAM_DATA.pitch_preference;
-
-      // 2. Color swatch
-      document.getElementById('team_color').value = TEAM_DATA.team_color;
-      document.getElementById('color-swatch').style.background = TEAM_DATA.team_color;
-
-      // 3. Clear container, then add each player
-      container.innerHTML = "";
-      TEAM_DATA.players.forEach(p => addPlayer({
-        name: p.name,
-        role: p.role,
-        bat: p.batting_rating,
-        bowl: p.bowling_rating,
-        field: p.fielding_rating,
-        bhand: p.batting_hand,
-        btype: p.bowling_type,
-        bhand2: p.bowling_hand
-      }));
-
-      // ⭐ Step 4: initialize count & selectors
-      updateCount();
-
-      // 5. Populate captain & wicketkeeper selects
-      // Timeout to allow DOM update
-      setTimeout(() => {
-        document.getElementById('select-captain').value = TEAM_DATA.captain;
-        document.getElementById('select-wk').value = TEAM_DATA.wicketkeeper;
-        updateSubmitButtons();
-      }, 0);
+      wkSel.innerHTML = '<option value="">Select Wicketkeeper</option>';
+      cards.filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper')
+        .forEach(c => {
+          const n = c.querySelector('[name=player_name]').value.trim();
+          if (n) {
+            const o = document.createElement('option');
+            o.value = o.textContent = n;
+            if (n === curWk) o.selected = true;
+            wkSel.appendChild(o);
+          }
+        });
     }
-    // ──────────────────────────────────────────────────────────
 
-    // Color swatch wiring
-    const swatch = document.getElementById('color-swatch');
-    const colorInput = document.getElementById('team_color');
-
-    // initialize swatch to current value
-    swatch.style.background = colorInput.value;
-
-    // open picker when swatch clicked
-    swatch.onclick = () => colorInput.click();
-
-    // update on both input and change events
-    colorInput.addEventListener('input', e => {
-      swatch.style.background = e.target.value;
-      if (!EDIT_MODE) saveDraft();
-    });
-    colorInput.addEventListener('change', e => {
-      swatch.style.background = e.target.value;
-      if (!EDIT_MODE) saveDraft();
+    // ─── "Add Player" buttons ─────────────────────────────────────
+    document.querySelectorAll('.add-player-btn').forEach(btn => {
+      btn.addEventListener('click', () => addPlayerToProfile(btn.dataset.fmt));
     });
 
-    // Add validation listeners to team info fields
-    ['team_name', 'short_code', 'home_ground', 'pitch_preference'].forEach(name => {
-      const field = document.querySelector(`[name="${name}"], #${name}`);
-      if (field) {
-        field.addEventListener('input', updateSubmitButtons);
-        field.addEventListener('change', updateSubmitButtons);
-        if (!EDIT_MODE) {
-          field.addEventListener('input', saveDraft);
-          field.addEventListener('change', saveDraft);
+    // ─── Import JSON ──────────────────────────────────────────────
+    document.querySelectorAll('.import-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const fmt = btn.dataset.fmt;
+        const jsonStr = prompt(`Paste JSON array for ${fmt} squad:`);
+        if (!jsonStr) return;
+        try {
+          const data = JSON.parse(jsonStr);
+          if (!Array.isArray(data)) throw new Error("Must be a JSON array");
+          const cont = getContainer(fmt);
+          if (cont.children.length > 0 && !confirm("Replace current squad?")) return;
+          cont.innerHTML = '';
+          data.forEach(p => addPlayerToProfile(fmt, p, false));
+          updateProfileCount(fmt);
+          refreshProfileSelectors(fmt);
+          setTimeout(updateSubmitButtons, 100);
+        } catch (e) { alert("Invalid JSON: " + e.message); }
+      });
+    });
+
+    // ─── Copy from T20 ────────────────────────────────────────────
+    document.querySelectorAll('.copy-from-t20-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetFmt = btn.dataset.fmt;
+        const t20Cont = getContainer('T20');
+        const cards = [...t20Cont.querySelectorAll('.player-row')];
+        if (cards.length === 0) { alert('T20 profile is empty. Add players to T20 first.'); return; }
+        const targetCont = getContainer(targetFmt);
+        if (targetCont.children.length > 0 && !confirm(`Replace ${targetFmt} squad with T20 squad?`)) return;
+        targetCont.innerHTML = '';
+        cards.forEach(card => {
+          const p = {
+            name:   card.querySelector('[name=player_name]').value,
+            role:   card.querySelector('[name=player_role]').value,
+            bat:    card.querySelector('[name=batting_rating]').value,
+            bowl:   card.querySelector('[name=bowling_rating]').value,
+            field:  card.querySelector('[name=fielding_rating]').value,
+            bhand:  card.querySelector('[name=batting_hand]').value,
+            btype:  card.querySelector('[name=bowling_type]').value,
+            bhand2: card.querySelector('[name=bowling_hand]').value,
+          };
+          addPlayerToProfile(targetFmt, p, false);
+        });
+        updateProfileCount(targetFmt);
+        refreshProfileSelectors(targetFmt);
+        // Copy captain/wk selections too
+        const t20Cap = getCaptainSel('T20').value;
+        const t20Wk  = getWkSel('T20').value;
+        setTimeout(() => {
+          if (t20Cap) getCaptainSel(targetFmt).value = t20Cap;
+          if (t20Wk)  getWkSel(targetFmt).value = t20Wk;
+          updateSubmitButtons();
+        }, 50);
+      });
+    });
+
+    // ─── AI Prompt copy ───────────────────────────────────────────
+    document.querySelectorAll('.copy-prompt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const fmt = btn.dataset.fmt;
+        const teamName   = document.getElementById('team_name').value || '[Team Name]';
+        const shortCode  = document.querySelector('[name=short_code]').value || '[Code]';
+        const homeGround = document.querySelector('[name=home_ground]').value || '[Ground]';
+        const pitchPref  = document.querySelector('[name=pitch_preference]').value || 'Flat';
+        const templateTxt= document.getElementById('json-template-preview').innerText;
+        const promptText = `Generate a JSON squad for ${fmt} cricket for team "${teamName}" (${shortCode}).
+Home ground: ${homeGround}, pitch: ${pitchPref}.
+Requirements:
+- JSON array, 12–25 players
+- At least 5 Batsmen, 1 Wicketkeeper, 6 Bowlers/All-rounders
+- Ratings 0–100 (stars 85–95, regulars 70–84)
+- Bowling types: Fast, Fast-medium, Medium-fast, Medium, Off spin, Leg spin, Finger spin, Wrist spin
+Format:\n${templateTxt}\nReturn ONLY the JSON array.`;
+        navigator.clipboard.writeText(promptText).then(() => {
+          const orig = btn.innerHTML;
+          btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+          setTimeout(() => { btn.innerHTML = orig; }, 2000);
+        }).catch(() => alert('Clipboard access denied'));
+      });
+    });
+
+    // ─── Validation ───────────────────────────────────────────────
+    function checkValidity() {
+      const errors = [];
+      if (!document.getElementById('team_name').value.trim()) errors.push('Team Name required');
+      if (!document.querySelector('[name=short_code]').value.trim()) errors.push('Short Code required');
+      if (!document.querySelector('[name=home_ground]').value.trim()) errors.push('Home Ground required');
+      if (!document.querySelector('[name=pitch_preference]').value) errors.push('Pitch Preference required');
+
+      let anyComplete = false;
+      for (const fmt of FORMATS) {
+        const cont  = getContainer(fmt);
+        const cards = [...cont.querySelectorAll('.player-row')];
+        if (cards.length === 0) continue; // empty profile — skip
+
+        // Field completeness
+        let missingFields = false;
+        for (const c of cards) {
+          const n  = c.querySelector('[name=player_name]').value.trim();
+          const r  = c.querySelector('[name=player_role]').value;
+          const bh = c.querySelector('[name=batting_hand]').value;
+          const bt = c.querySelector('[name=bowling_type]').value;
+          const bh2= c.querySelector('[name=bowling_hand]').value;
+          if (!n || !r || !bh) { missingFields = true; break; }
+          if (bt && !bh2) errors.push(`${fmt}: set Bowling Hand for ${n}`);
         }
+        if (missingFields) { errors.push(`${fmt}: complete all player fields`); continue; }
+
+        if (cards.length < MIN) { errors.push(`${fmt}: need at least ${MIN} players (have ${cards.length})`); continue; }
+        if (cards.length > MAX) { errors.push(`${fmt}: max ${MAX} players`); continue; }
+
+        const wkCount   = cards.filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper').length;
+        const bowlCount = cards.filter(c => ['Bowler','All-rounder'].includes(c.querySelector('[name=player_role]').value)).length;
+        if (wkCount < 1)   errors.push(`${fmt}: need 1+ Wicketkeeper`);
+        if (bowlCount < 6) errors.push(`${fmt}: need 6+ Bowlers/All-rounders`);
+
+        if (!getCaptainSel(fmt).value) errors.push(`${fmt}: select a Captain`);
+        if (!getWkSel(fmt).value)      errors.push(`${fmt}: select a Wicketkeeper`);
+
+        if (wkCount >= 1 && bowlCount >= 6 && cards.length >= MIN && getCaptainSel(fmt).value && getWkSel(fmt).value) {
+          anyComplete = true;
+        }
+      }
+      if (!anyComplete && errors.filter(e => e.includes('required')).length === 0) {
+        errors.push('At least one complete profile (T20, List A, or First Class) is required');
+      }
+      return { valid: errors.length === 0, errors };
+    }
+
+    function updateSubmitButtons() {
+      const { valid, errors } = checkValidity();
+      const btn = document.getElementById('btn-publish');
+      const feed= document.getElementById('validation-feedback');
+      if (feed) {
+        if (!valid) {
+          const show = errors.slice(0, 2);
+          const more = errors.length > 2 ? ` (+${errors.length-2} more)` : '';
+          feed.innerHTML = show.map(e => `<span><i class="fa-solid fa-circle-exclamation"></i> ${e}</span>`).join('') + (more ? `<span>${more}</span>` : '');
+          feed.style.color = 'var(--warning)';
+        } else {
+          feed.innerHTML = '<span style="color:var(--success)"><i class="fa-solid fa-check"></i> Ready to Publish</span>';
+        }
+      }
+      if (btn) {
+        btn.disabled = !valid;
+        btn.style.opacity = valid ? '1' : '0.5';
+        btn.style.cursor  = valid ? 'pointer' : 'not-allowed';
+      }
+    }
+
+    // ─── Serialize profiles on submit ─────────────────────────────
+    const profilesPayloadInput = document.getElementById('profiles_payload');
+
+    function syncProfilesPayload() {
+      const payload = {};
+      for (const fmt of FORMATS) {
+        const cont  = getContainer(fmt);
+        const cards = [...cont.querySelectorAll('.player-row')];
+        if (cards.length === 0) continue;
+        payload[fmt] = {
+          captain:     getCaptainSel(fmt).value,
+          wicketkeeper:getWkSel(fmt).value,
+          players: cards.map(c => ({
+            name:            c.querySelector('[name=player_name]').value.trim(),
+            role:            c.querySelector('[name=player_role]').value,
+            batting_rating:  parseInt(c.querySelector('[name=batting_rating]').value) || 0,
+            bowling_rating:  parseInt(c.querySelector('[name=bowling_rating]').value) || 0,
+            fielding_rating: parseInt(c.querySelector('[name=fielding_rating]').value) || 0,
+            batting_hand:    c.querySelector('[name=batting_hand]').value,
+            bowling_type:    c.querySelector('[name=bowling_type]').value,
+            bowling_hand:    c.querySelector('[name=bowling_hand]').value,
+          }))
+        };
+      }
+      profilesPayloadInput.value = JSON.stringify(payload);
+    }
+
+    document.getElementById('team-form').addEventListener('submit', syncProfilesPayload);
+
+    // ─── Edit-mode prefill ────────────────────────────────────────
+    if (EDIT_MODE && TEAM_DATA) {
+      document.getElementById('team_name').value = TEAM_DATA.team_name || '';
+      document.querySelector('[name=short_code]').value    = TEAM_DATA.short_code || '';
+      document.querySelector('[name=home_ground]').value   = TEAM_DATA.home_ground || '';
+      document.querySelector('[name=pitch_preference]').value = TEAM_DATA.pitch_preference || '';
+      document.getElementById('team_color').value = TEAM_DATA.team_color || '#4f46e5';
+      document.getElementById('color-swatch').style.background = TEAM_DATA.team_color || '#4f46e5';
+
+      const profiles = TEAM_DATA.profiles || {};
+      for (const fmt of FORMATS) {
+        const pdata = profiles[fmt];
+        if (!pdata) continue;
+        const container = getContainer(fmt);
+        container.innerHTML = '';
+        (pdata.players || []).forEach(p => addPlayerToProfile(fmt, p, false));
+        updateProfileCount(fmt);
+        refreshProfileSelectors(fmt);
+        setTimeout(() => {
+          if (pdata.captain)     getCaptainSel(fmt).value = pdata.captain;
+          if (pdata.wicketkeeper)getWkSel(fmt).value      = pdata.wicketkeeper;
+          updateSubmitButtons();
+        }, 50);
+      }
+      updateSubmitButtons();
+    }
+
+    // ─── Color swatch ─────────────────────────────────────────────
+    const colorInput = document.getElementById('team_color');
+    const swatch     = document.getElementById('color-swatch');
+    swatch.style.background = colorInput.value;
+    swatch.onclick = () => colorInput.click();
+    colorInput.addEventListener('input',  e => { swatch.style.background = e.target.value; if (!EDIT_MODE) saveDraft(); });
+    colorInput.addEventListener('change', e => { swatch.style.background = e.target.value; if (!EDIT_MODE) saveDraft(); });
+
+    // ─── Team-info field listeners ────────────────────────────────
+    ['team_name','short_code','home_ground','pitch_preference'].forEach(n => {
+      const el = document.querySelector(`[name="${n}"], #${n}`);
+      if (el) {
+        el.addEventListener('input',  () => { updateSubmitButtons(); if (!EDIT_MODE) saveDraft(); });
+        el.addEventListener('change', () => { updateSubmitButtons(); if (!EDIT_MODE) saveDraft(); });
       }
     });
 
-    // Add listeners to captain/wicketkeeper selects
-    document.getElementById('select-captain').addEventListener('change', updateSubmitButtons);
-    document.getElementById('select-wk').addEventListener('change', updateSubmitButtons);
+    // Dynamic title
+    const teamInput = document.getElementById('team_name');
+    const titleEl   = document.getElementById('dynamic-title');
+    teamInput.addEventListener('input', () => { titleEl.textContent = teamInput.value || 'Team Creation'; });
 
-    // Global Form Listener for Realtime Validation
-    const form = document.getElementById('team-form');
-    form.addEventListener('input', () => { setTimeout(updateSubmitButtons, 0); }); // Debounce slightly
-    form.addEventListener('change', () => { setTimeout(updateSubmitButtons, 0); });
-
-    // Always submit a row-accurate payload so disabled fields cannot break server-side indexing.
-    const playersPayloadInput = document.getElementById('players_payload');
-    function syncPlayersPayload() {
-      const players = [...container.children].map(card => ({
-        name: card.querySelector('[name=player_name]').value.trim(),
-        role: card.querySelector('[name=player_role]').value,
-        batting_rating: card.querySelector('[name=batting_rating]').value,
-        bowling_rating: card.querySelector('[name=bowling_rating]').value,
-        fielding_rating: card.querySelector('[name=fielding_rating]').value,
-        batting_hand: card.querySelector('[name=batting_hand]').value,
-        bowling_type: card.querySelector('[name=bowling_type]').value,
-        bowling_hand: card.querySelector('[name=bowling_hand]').value
-      }));
-      playersPayloadInput.value = JSON.stringify(players);
-    }
-    form.addEventListener('submit', syncPlayersPayload);
-
-    if (!EDIT_MODE) {
-      document.getElementById('select-captain').addEventListener('change', saveDraft);
-      document.getElementById('select-wk').addEventListener('change', saveDraft);
-    }
-
-    // Initial validation check
     updateSubmitButtons();
   </script>
+
   <script>
+    // ─── Theme toggle ─────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
       const root = document.documentElement;
-      const toggleBtn = document.getElementById('theme-toggle');
-      const icon = toggleBtn.querySelector('i');
-
-      // 1. Initialize
-      const savedTheme = localStorage.getItem('theme') || 'light';
-      root.setAttribute('data-theme', savedTheme);
-      updateIcon(savedTheme);
-
-      // 2. Toggle Handler
-      toggleBtn.addEventListener('click', () => {
-        const current = root.getAttribute('data-theme');
-        const next = current === 'dark' ? 'light' : 'dark';
-
+      const btn  = document.getElementById('theme-toggle');
+      const icon = btn.querySelector('i');
+      const saved = localStorage.getItem('theme') || 'light';
+      root.setAttribute('data-theme', saved);
+      function updateIcon(t) {
+        icon.classList.toggle('fa-sun',  t === 'dark');
+        icon.classList.toggle('fa-moon', t !== 'dark');
+      }
+      updateIcon(saved);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
         root.setAttribute('data-theme', next);
         localStorage.setItem('theme', next);
         updateIcon(next);
       });
-
-      function updateIcon(theme) {
-        if (theme === 'dark') {
-          icon.classList.remove('fa-moon');
-          icon.classList.add('fa-sun');
-        } else {
-          icon.classList.remove('fa-sun');
-          icon.classList.add('fa-moon');
-        }
-      }
     });
 
-    // ─── Draft Management (LocalStorage) ────────────────────────
-    const DRAFT_KEY = 'team_create_draft';
+    // ─── Draft (localStorage) ─────────────────────────────────────
     const clearDraftBtn = document.getElementById('clear-draft');
 
-    // Save Draft
     function saveDraft() {
-      if (EDIT_MODE) return; // Don't overwrite drafts with edit data or interfere
-
-      const players = [...container.children].map(card => ({
-        name: card.querySelector('[name=player_name]').value,
-        role: card.querySelector('[name=player_role]').value,
-        bat: card.querySelector('[name=batting_rating]').value,
-        bowl: card.querySelector('[name=bowling_rating]').value,
-        field: card.querySelector('[name=fielding_rating]').value,
-        bhand: card.querySelector('[name=batting_hand]').value,
-        btype: card.querySelector('[name=bowling_type]').value,
-        bhand2: card.querySelector('[name=bowling_hand]').value
-      }));
-
+      if (EDIT_MODE) return;
       const draft = {
-        team_name: document.getElementById('team_name').value,
-        short_code: document.querySelector('[name=short_code]').value,
-        home_ground: document.querySelector('[name=home_ground]').value,
+        team_name:        document.getElementById('team_name').value,
+        short_code:       document.querySelector('[name=short_code]').value,
+        home_ground:      document.querySelector('[name=home_ground]').value,
         pitch_preference: document.querySelector('[name=pitch_preference]').value,
-        team_color: document.getElementById('team_color').value,
-        captain: document.getElementById('select-captain').value,
-        wicketkeeper: document.getElementById('select-wk').value,
-        players: players,
-        timestamp: Date.now()
+        team_color:       document.getElementById('team_color').value,
+        profiles: {},
+        timestamp: Date.now(),
       };
-
+      for (const fmt of FORMATS) {
+        const cont  = getContainer(fmt);
+        const cards = [...cont.querySelectorAll('.player-row')];
+        if (cards.length === 0) continue;
+        draft.profiles[fmt] = {
+          captain:      getCaptainSel(fmt).value,
+          wicketkeeper: getWkSel(fmt).value,
+          players: cards.map(c => ({
+            name:   c.querySelector('[name=player_name]').value,
+            role:   c.querySelector('[name=player_role]').value,
+            bat:    c.querySelector('[name=batting_rating]').value,
+            bowl:   c.querySelector('[name=bowling_rating]').value,
+            field:  c.querySelector('[name=fielding_rating]').value,
+            bhand:  c.querySelector('[name=batting_hand]').value,
+            btype:  c.querySelector('[name=bowling_type]').value,
+            bhand2: c.querySelector('[name=bowling_hand]').value,
+          }))
+        };
+      }
       localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-
-      // Show auto-save indicator
       const status = document.getElementById('auto-save-status');
       if (status) {
         status.style.opacity = '1';
-        clearTimeout(window.saveTimeout);
-        window.saveTimeout = setTimeout(() => {
-          status.style.opacity = '0';
-        }, 2000);
+        clearTimeout(window._saveTimeout);
+        window._saveTimeout = setTimeout(() => { status.style.opacity = '0'; }, 2000);
       }
     }
 
-    // Load Draft
     function loadDraft() {
       if (EDIT_MODE) return;
-
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
-
       try {
         const draft = JSON.parse(raw);
-
-        document.getElementById('team_name').value = draft.team_name || "";
-        document.querySelector('[name=short_code]').value = draft.short_code || "";
-        document.querySelector('[name=home_ground]').value = draft.home_ground || "";
-        document.querySelector('[name=pitch_preference]').value = draft.pitch_preference || "";
-
+        document.getElementById('team_name').value = draft.team_name || '';
+        document.querySelector('[name=short_code]').value      = draft.short_code || '';
+        document.querySelector('[name=home_ground]').value     = draft.home_ground || '';
+        document.querySelector('[name=pitch_preference]').value= draft.pitch_preference || '';
         if (draft.team_color) {
           document.getElementById('team_color').value = draft.team_color;
           document.getElementById('color-swatch').style.background = draft.team_color;
         }
-
-        // Players
-        container.innerHTML = "";
-        if (draft.players && draft.players.length > 0) {
-          draft.players.forEach(p => addPlayer(p));
+        const profiles = draft.profiles || {};
+        for (const fmt of FORMATS) {
+          if (!profiles[fmt]) continue;
+          const cont = getContainer(fmt);
+          cont.innerHTML = '';
+          (profiles[fmt].players || []).forEach(p => addPlayerToProfile(fmt, p, false));
+          updateProfileCount(fmt);
+          refreshProfileSelectors(fmt);
+          setTimeout(() => {
+            if (profiles[fmt].captain)      getCaptainSel(fmt).value = profiles[fmt].captain;
+            if (profiles[fmt].wicketkeeper) getWkSel(fmt).value      = profiles[fmt].wicketkeeper;
+            updateSubmitButtons();
+          }, 100);
         }
-
-        updateCount();
-
-        // Leadership
-        setTimeout(() => {
-          if (draft.captain) document.getElementById('select-captain').value = draft.captain;
-          if (draft.wicketkeeper) document.getElementById('select-wk').value = draft.wicketkeeper;
-          updateSubmitButtons();
-        }, 100);
-
-      } catch (e) {
-        console.error("Error loading draft", e);
-      }
+        updateSubmitButtons();
+      } catch (e) { console.error('Error loading draft', e); }
     }
 
-    // Clear Draft
     if (clearDraftBtn) {
       clearDraftBtn.onclick = () => {
-        if (confirm("Are you sure you want to clear the form? This cannot be undone.")) {
+        if (confirm('Clear the form? This cannot be undone.')) {
           localStorage.removeItem(DRAFT_KEY);
           location.reload();
         }
       };
     }
 
-    // Attach Draft Listeners (Load & Clear on Submit)
-    if (!EDIT_MODE) {
-      document.getElementById('team-form').addEventListener('submit', () => {
-        // Fix: DO NOT clear draft on submit. 
-        // We only clear if explicity requested or perhaps handled by success page.
-        // This prevents data loss if backend validation fails.
-        // localStorage.removeItem(DRAFT_KEY); 
-      });
-
-      // Load on startup
-      loadDraft();
-    }
+    if (!EDIT_MODE) loadDraft();
   </script>
 
 </body>
