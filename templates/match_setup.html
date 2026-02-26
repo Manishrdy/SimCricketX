@@ -413,6 +413,119 @@
         transform: translateX(24px);
     }
 
+    /* Team card format availability badges */
+    .team-format-badges {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        margin-top: 5px;
+    }
+
+    .fmt-badge {
+        font-size: 0.62rem;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+
+    .fmt-badge.fmt-t20        { background: rgba(16, 185, 129, 0.18); color: #10b981; }
+    .fmt-badge.fmt-lista      { background: rgba(59, 130, 246, 0.18); color: #3b82f6; }
+    .fmt-badge.fmt-firstclass { background: rgba(139, 92, 246, 0.18); color: #8b5cf6; }
+
+    /* Highlight the badge for the currently selected format */
+    .fmt-badge.fmt-active { opacity: 1; box-shadow: 0 0 0 1px currentColor; }
+
+    /* Disabled team card — has no squad for the selected format */
+    .team-card.no-squad-for-format {
+        opacity: 0.45;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    .team-card.no-squad-for-format::after {
+        content: 'No ' attr(data-no-squad-label) ' squad';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(239, 68, 68, 0.88);
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: 20px;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    /* Match format segmented control */
+    .format-selector {
+        display: flex;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        overflow: hidden;
+        margin: 0.4rem 0 0.2rem;
+    }
+
+    .format-option {
+        flex: 1;
+        cursor: pointer;
+        margin: 0;
+    }
+
+    .format-option input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+        pointer-events: none;
+    }
+
+    .format-option span {
+        display: block;
+        padding: 0.38rem 0.4rem;
+        text-align: center;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--fg-secondary);
+        background: var(--card-bg);
+        border-right: 1px solid var(--card-border);
+        transition: background 0.18s, color 0.18s;
+        white-space: nowrap;
+        user-select: none;
+    }
+
+    .format-option:last-child span {
+        border-right: none;
+    }
+
+    .format-option input[type="radio"]:checked + span {
+        background: var(--accent);
+        color: #fff;
+    }
+
+    .format-option input[type="radio"]:disabled + span {
+        opacity: 0.45;
+        cursor: not-allowed;
+        background: var(--bg-secondary);
+        color: var(--fg-secondary);
+    }
+
+    .format-option:hover span {
+        background: var(--accent-light);
+        color: var(--accent);
+    }
+
+    .format-option input[type="radio"]:disabled + span:hover {
+        background: var(--bg-secondary);
+        color: var(--fg-secondary);
+    }
+
     .conditions-summary {
         background: linear-gradient(155deg, rgba(15, 118, 110, 0.13), rgba(15, 118, 110, 0.02) 55%);
         border: 1px solid rgba(15, 118, 110, 0.25);
@@ -702,6 +815,16 @@
                         <i class="fas fa-map-marker-alt"></i>
                         {{ team.home_ground }}
                     </div>
+                    <div class="team-format-badges">
+                        {% for fmt in team.available_formats %}
+                        <span class="fmt-badge fmt-{{ fmt | lower }}" data-fmt="{{ fmt }}">
+                            {%- if fmt == 'ListA' -%}List A
+                            {%- elif fmt == 'FirstClass' -%}FC
+                            {%- else -%}{{ fmt }}
+                            {%- endif -%}
+                        </span>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
             {% endfor %}
@@ -824,13 +947,15 @@
                             <span class="condition-tag">Format</span>
                         </div>
                         <label class="form-label">Match Format</label>
-                        <div class="mode-toggle-row">
-                            <span class="mode-pill">T20</span>
-                            <label class="mode-toggle-switch" title="Toggle match format">
-                                <input type="checkbox" id="format-toggle">
-                                <span class="mode-toggle-slider"></span>
+                        <div class="format-selector" role="group" aria-label="Match format">
+                            <label class="format-option">
+                                <input type="radio" name="match-format-radio" value="T20" checked>
+                                <span>T20</span>
                             </label>
-                            <span class="mode-pill">List A (50-ov)</span>
+                            <label class="format-option">
+                                <input type="radio" name="match-format-radio" value="ListA">
+                                <span>List A</span>
+                            </label>
                         </div>
                         <input type="hidden" id="match-format-value" value="T20">
                         <p class="helper-text"><span id="format-help">20 overs per side. Max 4 overs per bowler.</span></p>
@@ -984,7 +1109,9 @@
     let TEAMS = [];
     let currentStep = 1;
     let selectedTeamIndices = [];
-    const LINEUP_STORAGE_VERSION = 1;
+    // v2: lineups are keyed per-format — T20 lineups never bleed into ListA slots.
+    const LINEUP_STORAGE_VERSION = 2;
+    const MATCH_FORMATS = ['T20', 'ListA'];
     const RIGHT_CLICK_DOUBLE_MS = 350;
     let lastRightClick = { pill: null, at: 0 };
     const _setupConfig = JSON.parse(document.getElementById('setup-config').textContent);
@@ -1012,6 +1139,10 @@
                 toggleTeam(index, this);
             });
         });
+
+        // Apply initial format-availability state on team cards (default T20).
+        updateTeamCardFormats('T20');
+        refreshMatchFormatOptions();
 
         // AUTO-SELECT TEAMS FOR TOURNAMENT FIXTURES
         const preselectHome = _setupConfig.preselectHome;
@@ -1090,8 +1221,42 @@
             return;
         }
 
+        if (currentStep === 1) {
+            const sharedFormats = getSharedSupportedFormats();
+            if (sharedFormats.length === 0) {
+                Toast.show(
+                    "Selected teams have no common playable format. Configure overlapping T20/List A squads first.",
+                    "error"
+                );
+                return;
+            }
+        }
+
         if (currentStep === 1) initializeStep2();
-        if (currentStep === 2) initializeStep3();
+
+        if (currentStep === 2) {
+            // Hard guard: both teams must have a squad for the selected format.
+            // No fallback — a team without the right format squad cannot play.
+            const fmt = getCurrentFormat();
+            const h = TEAMS[selectedTeamIndices[0]];
+            const a = TEAMS[selectedTeamIndices[1]];
+            const hOk = h && (h.profile_squads || {})[fmt]?.length > 0;
+            const aOk = a && (a.profile_squads || {})[fmt]?.length > 0;
+
+            if (!hOk || !aOk) {
+                const missing = [
+                    !hOk ? h?.team_name : null,
+                    !aOk ? a?.team_name : null,
+                ].filter(Boolean).join(' and ');
+                Toast.show(
+                    `Cannot proceed: ${missing} has no ${fmt} squad. ` +
+                    `Go to Manage Teams and add a ${fmt} profile first.`,
+                    "error"
+                );
+                return;
+            }
+            initializeStep3();
+        }
 
         if (currentStep < 3) {
             currentStep++;
@@ -1108,6 +1273,18 @@
 
     // --- STEP 1: SELECTION ---
     function toggleTeam(index, cardEl) {
+        // Block selection of teams that have no squad for the current format.
+        if (cardEl.classList.contains('no-squad-for-format')) {
+            const fmt = getCurrentFormat();
+            const team = TEAMS[index];
+            Toast.show(
+                `${team?.team_name || 'This team'} has no ${fmt} squad. ` +
+                `Add a ${fmt} profile in Manage Teams first.`,
+                "error"
+            );
+            return;
+        }
+
         if (selectedTeamIndices.includes(index)) {
             selectedTeamIndices = selectedTeamIndices.filter(i => i !== index);
             cardEl.classList.remove('selected');
@@ -1123,6 +1300,90 @@
 
         const nextBtn = document.getElementById('next-btn');
         nextBtn.disabled = selectedTeamIndices.length !== 2;
+        refreshMatchFormatOptions();
+    }
+
+    /**
+     * Update team card states based on whether each team has a squad for
+     * the given format.  Called on page load (T20 default) and on every
+     * format change.
+     *
+     * @param {string} format  - 'T20' | 'ListA'
+     */
+    function updateTeamCardFormats(format) {
+        const formatLabel = { T20: 'T20', ListA: 'List A' };
+        const label = formatLabel[format] || format;
+
+        document.querySelectorAll('.team-card').forEach((card, idx) => {
+            const team = TEAMS[idx];
+            if (!team) return;
+
+            const squads = team.profile_squads || {};
+            const hasSquad = squads[format] && squads[format].length > 0;
+
+            if (hasSquad) {
+                card.classList.remove('no-squad-for-format');
+                delete card.dataset.noSquadLabel;
+            } else {
+                card.classList.add('no-squad-for-format');
+                card.dataset.noSquadLabel = label;
+                // Deselect this team if it is currently selected.
+                if (selectedTeamIndices.includes(idx)) {
+                    selectedTeamIndices = selectedTeamIndices.filter(i => i !== idx);
+                    card.classList.remove('selected');
+                    const nextBtn = document.getElementById('next-btn');
+                    if (nextBtn) nextBtn.disabled = selectedTeamIndices.length !== 2;
+                    Toast.show(
+                        `${team.team_name} was deselected — no ${label} squad configured.`,
+                        "warning"
+                    );
+                }
+            }
+
+            // Highlight the badge that matches the active format.
+            card.querySelectorAll('.fmt-badge').forEach(badge => {
+                badge.classList.toggle('fmt-active', badge.dataset.fmt === format);
+            });
+        });
+    }
+
+    function getTeamSupportedFormats(team) {
+        if (!team) return [];
+        const squads = team.profile_squads || {};
+        return MATCH_FORMATS.filter(fmt => Array.isArray(squads[fmt]) && squads[fmt].length > 0);
+    }
+
+    function getSharedSupportedFormats() {
+        if (selectedTeamIndices.length !== 2) {
+            return [...MATCH_FORMATS];
+        }
+        const home = TEAMS[selectedTeamIndices[0]];
+        const away = TEAMS[selectedTeamIndices[1]];
+        const homeFormats = new Set(getTeamSupportedFormats(home));
+        return getTeamSupportedFormats(away).filter(fmt => homeFormats.has(fmt));
+    }
+
+    function refreshMatchFormatOptions() {
+        const sharedFormats = getSharedSupportedFormats();
+        const radios = Array.from(document.querySelectorAll('input[name="match-format-radio"]'));
+
+        radios.forEach(radio => {
+            radio.disabled = !sharedFormats.includes(radio.value);
+        });
+
+        let checked = radios.find(r => r.checked && !r.disabled);
+        if (!checked) {
+            checked = radios.find(r => !r.disabled) || null;
+            if (checked) checked.checked = true;
+        }
+
+        if (!checked) {
+            const hidden = document.getElementById('match-format-value');
+            if (hidden) hidden.value = 'T20';
+            return false;
+        }
+
+        return true;
     }
 
     // --- STEP 2: CONDITIONS ---
@@ -1171,14 +1432,13 @@
                 updateConditionsSummary();
             };
         }
-        const formatToggle = document.getElementById('format-toggle');
-        if (formatToggle) {
-            formatToggle.checked = false;
-            formatToggle.onchange = () => {
+        // Wire up format radio group.
+        document.querySelectorAll('input[name="match-format-radio"]').forEach(radio => {
+            radio.onchange = () => {
                 syncFormatControl();
                 updateConditionsSummary();
             };
-        }
+        });
         const dayNightToggle = document.getElementById('day-night-toggle');
         if (dayNightToggle) {
             dayNightToggle.checked = false;
@@ -1190,6 +1450,7 @@
 
         syncSimulationModeControl();
         syncInterestingMatchControl();
+        refreshMatchFormatOptions();
         syncFormatControl();
         syncDayNightControl();
         updateConditionsSummary();
@@ -1223,15 +1484,32 @@
     }
 
     function syncFormatControl() {
-        const formatToggle = document.getElementById('format-toggle');
+        const selected = document.querySelector('input[name="match-format-radio"]:checked');
+        const newFormat = selected ? selected.value : 'T20';
         const formatHidden = document.getElementById('match-format-value');
         const formatHelp = document.getElementById('format-help');
-        const isListA = !!(formatToggle && formatToggle.checked);
-        if (formatHidden) formatHidden.value = isListA ? 'ListA' : 'T20';
-        if (formatHelp) {
-            formatHelp.textContent = isListA
-                ? '50 overs per side. Max 10 overs per bowler.'
-                : '20 overs per side. Max 4 overs per bowler.';
+
+        if (formatHidden) formatHidden.value = newFormat;
+
+        const helpText = {
+            'T20':   '20 overs per side. Max 4 overs per bowler.',
+            'ListA': '50 overs per side. Max 10 overs per bowler.',
+        };
+        if (formatHelp) formatHelp.textContent = helpText[newFormat] || helpText['T20'];
+
+        // Swap every team's active player list to the correct format squad.
+        // No fallback — if the format has no squad, players becomes [].
+        TEAMS.forEach(team => {
+            const squads = team.profile_squads || {};
+            team.players = squads[newFormat] || [];
+        });
+
+        // Update team card availability badges + disabled state.
+        updateTeamCardFormats(newFormat);
+
+        // If already on Step 3, re-render squads for the new format.
+        if (currentStep === 3 && selectedTeamIndices.length === 2) {
+            initializeStep3();
         }
     }
 
@@ -1268,7 +1546,8 @@
         setText('summary-toss', toss);
         setText('summary-mode', mode === 'manual' ? 'Manual' : 'Auto');
         setText('summary-scenario', interesting ? 'Enabled' : 'Disabled');
-        setText('summary-format', format === 'ListA' ? 'List A (50-ov)' : 'T20');
+        const formatLabels = { 'T20': 'T20', 'ListA': 'List A (50-ov)' };
+        setText('summary-format', formatLabels[format] || format);
         setText('summary-day-night', isDayNight ? 'Day/Night' : 'Day');
     }
 
@@ -1294,51 +1573,60 @@
         subContainer.innerHTML = '';
         resContainer.innerHTML = '';
 
-        const savedLineup = loadSavedLineup(team);
+        // Format-strict: only load the saved lineup that matches the active format.
+        const currentFormat = getCurrentFormat();
+        const savedLineup = loadSavedLineup(team, currentFormat);
+
         if (savedLineup) {
-            const validation = validateSavedLineup(savedLineup, team);
-            if (validation.valid) {
-                const savedXiNames = savedLineup.xi.map(p => p.name);
-                const savedSubsNames = (savedLineup.subs || []).map(p => p.name);
-                const assigned = new Set([...savedXiNames, ...savedSubsNames]);
+            const squadNames  = new Set(team.players.map(p => p.name));
+            const playerByName = new Map(team.players.map(p => [p.name, p]));
 
-                savedLineup.xi.forEach(savedPlayer => {
-                    const fullPlayer = team.players.find(p => p.name === savedPlayer.name);
-                    if (!fullPlayer) return;
-                    const el = createPlayerPill(fullPlayer, side, savedPlayer.will_bowl);
-                    xiContainer.appendChild(el);
-                });
+            const savedXi   = Array.isArray(savedLineup.xi)   ? savedLineup.xi   : [];
+            const savedSubs = Array.isArray(savedLineup.subs) ? savedLineup.subs : [];
 
-                (savedLineup.subs || []).forEach(savedPlayer => {
-                    const fullPlayer = team.players.find(p => p.name === savedPlayer.name);
-                    if (!fullPlayer) return;
-                    const el = createPlayerPill(fullPlayer, side, savedPlayer.will_bowl);
-                    subContainer.appendChild(el);
-                });
+            // Partition saved players into still-valid and stale (removed from squad).
+            const validXi   = savedXi.filter(p =>   squadNames.has(p.name));
+            const removedXi = savedXi.filter(p =>  !squadNames.has(p.name)).map(p => p.name);
+            const validSubs = savedSubs.filter(p =>  squadNames.has(p.name));
+            const removedSubs = savedSubs.filter(p => !squadNames.has(p.name)).map(p => p.name);
+            const removedAll  = [...removedXi, ...removedSubs];
 
-                team.players
-                    .filter(p => !assigned.has(p.name))
-                    .forEach(p => {
-                        const el = createPlayerPill(p, side);
-                        resContainer.appendChild(el);
-                    });
+            const assignedNames = new Set([
+                ...validXi.map(p => p.name),
+                ...validSubs.map(p => p.name),
+            ]);
 
-                Toast.show(`Loaded previous lineup for ${team.team_name}.`, "success");
+            // Restore valid XI players to Playing XI zone.
+            validXi.forEach(saved => {
+                const full = playerByName.get(saved.name);
+                if (full) xiContainer.appendChild(createPlayerPill(full, side, saved.will_bowl));
+            });
+
+            // Restore valid subs to Bench zone.
+            validSubs.forEach(saved => {
+                const full = playerByName.get(saved.name);
+                if (full) subContainer.appendChild(createPlayerPill(full, side, saved.will_bowl));
+            });
+
+            // All remaining squad members go to Reserve.
+            team.players
+                .filter(p => !assignedNames.has(p.name))
+                .forEach(p => resContainer.appendChild(createPlayerPill(p, side)));
+
+            if (removedAll.length > 0) {
+                // Squad changed since last save — some players were dropped.
+                Toast.show(
+                    `${team.team_name} squad changed. Removed from lineup: ${removedAll.join(', ')}. ` +
+                    `Please fill the gap${removedAll.length > 1 ? 's' : ''}.`,
+                    "warning"
+                );
             } else {
-                // Saved lineup exists but no longer matches the current squad; require manual selection.
-                team.players.forEach(p => {
-                    const el = createPlayerPill(p, side);
-                    resContainer.appendChild(el);
-                });
-                Toast.show(`Previous lineup for ${team.team_name} is invalid (${validation.reason}). Select lineup manually.`, "warning");
+                Toast.show(`Restored ${currentFormat} lineup for ${team.team_name}.`, "success");
             }
         } else {
-            // No previous lineup available; require manual selection.
-            team.players.forEach(p => {
-                const el = createPlayerPill(p, side);
-                resContainer.appendChild(el);
-            });
-            Toast.show(`No previous lineup for ${team.team_name}. Select lineup manually.`, "info");
+            // No saved lineup for this format — fresh manual selection required.
+            team.players.forEach(p => resContainer.appendChild(createPlayerPill(p, side)));
+            Toast.show(`No saved ${currentFormat} lineup for ${team.team_name}. Select manually.`, "info");
         }
 
         // Update counts
@@ -1434,17 +1722,31 @@
         return div;
     }
 
-    function getLineupStorageKey(team) {
+    /**
+     * Storage key includes format so T20/ListA lineups never share slots.
+     * Key format: simcx:last_xi:v2:{userEmail}:{teamId}:{format}
+     */
+    function getLineupStorageKey(team, format) {
         const userKey = team.created_by_email || 'anon';
-        return `simcx:last_xi:${userKey}:${team.id}`;
+        return `simcx:last_xi:v2:${userKey}:${team.id}:${format}`;
     }
 
-    function loadSavedLineup(team) {
+    function getCurrentFormat() {
+        return document.getElementById('match-format-value')?.value || 'T20';
+    }
+
+    /**
+     * Load the saved lineup for this team+format combination only.
+     * Returns null if no saved lineup, wrong schema version, or format mismatch.
+     */
+    function loadSavedLineup(team, format) {
         try {
-            const raw = localStorage.getItem(getLineupStorageKey(team));
+            const raw = localStorage.getItem(getLineupStorageKey(team, format));
             if (!raw) return null;
             const parsed = JSON.parse(raw);
+            // Strict checks: correct schema version AND stored format must match exactly.
             if (!parsed || parsed.schema_version !== LINEUP_STORAGE_VERSION) return null;
+            if (parsed.format !== format) return null;
             return parsed;
         } catch (err) {
             console.error("Failed to load saved lineup", err);
@@ -1452,21 +1754,35 @@
         }
     }
 
-    function saveLineup(team, xiPlayers, subPlayers) {
+    /**
+     * Save the lineup tagged with the current format.
+     * Each format is stored independently — saving ListA never touches T20 storage.
+     */
+    function saveLineup(team, format, xiPlayers, subPlayers) {
         try {
             const payload = {
                 schema_version: LINEUP_STORAGE_VERSION,
+                format: format,
                 saved_at: new Date().toISOString(),
                 xi: xiPlayers.map(p => ({ name: p.name, will_bowl: !!p.will_bowl })),
                 subs: subPlayers.map(p => ({ name: p.name, will_bowl: !!p.will_bowl }))
             };
-            localStorage.setItem(getLineupStorageKey(team), JSON.stringify(payload));
+            localStorage.setItem(getLineupStorageKey(team, format), JSON.stringify(payload));
         } catch (err) {
             console.error("Failed to save lineup", err);
         }
     }
 
-    function validateSavedLineup(saved, team) {
+    /**
+     * Validate a saved lineup against the team's current format squad.
+     * All player names must exist in team.players (already switched to the correct format).
+     */
+    function validateSavedLineup(saved, team, format) {
+        // Belt-and-suspenders: reject if the stored format tag doesn't match current format.
+        if (saved.format !== format) {
+            return { valid: false, reason: `Lineup was saved for ${saved.format}, not ${format}` };
+        }
+
         const squadNames = new Set(team.players.map(p => p.name));
         const playerByName = new Map(team.players.map(p => [p.name, p]));
         const xi = Array.isArray(saved.xi) ? saved.xi : [];
@@ -1478,8 +1794,10 @@
         const uniqueCount = new Set(allNames).size;
         if (uniqueCount !== allNames.length) return { valid: false, reason: 'Duplicate players in saved lineup' };
 
-        if (!allNames.every(name => squadNames.has(name))) {
-            return { valid: false, reason: 'Saved players not found in current squad' };
+        // Every saved player must exist in the current format's squad.
+        const missing = allNames.filter(name => !squadNames.has(name));
+        if (missing.length > 0) {
+            return { valid: false, reason: `Players not in ${format} squad: ${missing.join(', ')}` };
         }
 
         const xiTeamPlayers = xi.map(p => playerByName.get(p.name)).filter(Boolean);
@@ -1615,6 +1933,16 @@
         }
     }
 
+    /**
+     * Pre-flight check: every player in the XI must exist in the team's current
+     * format squad (team.players is already switched to the right format).
+     * Returns an array of unknown player names, or empty array if all OK.
+     */
+    function verifyXIAgainstSquad(xiPlayers, team) {
+        const squadNames = new Set(team.players.map(p => p.name));
+        return xiPlayers.filter(p => !squadNames.has(p.name)).map(p => p.name);
+    }
+
     // --- SIMULATE ---
     async function simulateMatch() {
         const btn = document.getElementById('next-btn');
@@ -1624,6 +1952,7 @@
         try {
             const h = TEAMS[selectedTeamIndices[0]];
             const a = TEAMS[selectedTeamIndices[1]];
+            const currentFormat = getCurrentFormat();
 
             const getPlayers = (zoneId) => {
                 return Array.from(document.getElementById(zoneId).querySelectorAll('.player-pill')).map(el => ({
@@ -1633,6 +1962,79 @@
                 }));
             };
 
+            const homeXI   = getPlayers('home-selected');
+            const awayXI   = getPlayers('away-selected');
+            const homeSubs = getPlayers('home-substitutes');
+            const awaySubs = getPlayers('away-substitutes');
+
+            // ── Layer 1: client-side pre-flight ──────────────────────────────
+            // Every player in the XI must be in team.players (the in-memory
+            // format squad).  Catches stale UI state before we hit the network.
+            const homeMismatches = verifyXIAgainstSquad(homeXI, h);
+            const awayMismatches = verifyXIAgainstSquad(awayXI, a);
+
+            if (homeMismatches.length > 0 || awayMismatches.length > 0) {
+                const badHome = homeMismatches.length > 0
+                    ? `${h.team_name}: ${homeMismatches.join(', ')}` : '';
+                const badAway = awayMismatches.length > 0
+                    ? `${a.team_name}: ${awayMismatches.join(', ')}` : '';
+                const detail = [badHome, badAway].filter(Boolean).join(' | ');
+                Toast.show(
+                    `Cannot simulate: players not in ${currentFormat} squad — ${detail}`,
+                    "error"
+                );
+                btn.innerHTML = '<i class="fas fa-rocket"></i> Simulate';
+                btn.disabled = false;
+                return;
+            }
+
+            // ── Layer 2: server DB verification ──────────────────────────────
+            // Confirm every XI player still exists in the database for this
+            // format.  Catches the case where the squad was edited after the
+            // page was loaded (stale in-memory state vs. current DB state).
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying squad...';
+            let verifyOk = true;
+            try {
+                const verifyRes = await fetch("/api/match/verify-lineups", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        home_team_id: h.id,
+                        away_team_id: a.id,
+                        match_format: currentFormat,
+                        home_xi: homeXI.map(p => p.name),
+                        away_xi: awayXI.map(p => p.name),
+                    }),
+                });
+                const verifyData = await verifyRes.json();
+                if (!verifyData.valid) {
+                    const hInv = (verifyData.home?.invalid || []);
+                    const aInv = (verifyData.away?.invalid || []);
+                    const lines = [
+                        hInv.length ? `${h.team_name}: ${hInv.join(', ')}` : '',
+                        aInv.length ? `${a.team_name}: ${aInv.join(', ')}` : '',
+                    ].filter(Boolean).join(' | ');
+                    Toast.show(
+                        `DB verification failed — players not in ${currentFormat} squad in database: ${lines}. ` +
+                        `Reload the page to get the latest squad.`,
+                        "error"
+                    );
+                    verifyOk = false;
+                }
+            } catch (verifyErr) {
+                console.error("Squad verification request failed", verifyErr);
+                Toast.show("Could not verify squad with server. Check your connection.", "error");
+                verifyOk = false;
+            }
+
+            if (!verifyOk) {
+                btn.innerHTML = '<i class="fas fa-rocket"></i> Simulate';
+                btn.disabled = false;
+                return;
+            }
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Simulating...';
+
             const payload = {
                 team_home: h.id,
                 team_away: a.id,
@@ -1641,15 +2043,15 @@
                 toss: document.querySelector('input[name="toss"]:checked').value,
                 simulation_mode: document.getElementById('simulation-mode-select').value,
                 make_match_interesting: document.getElementById('interesting-match-flag').value === 'true',
-                match_format: document.getElementById('match-format-value').value,
+                match_format: currentFormat,
                 is_day_night: document.getElementById('day-night-value').value === 'true',
                 playing_xi: {
-                    home: getPlayers('home-selected'),
-                    away: getPlayers('away-selected')
+                    home: homeXI,
+                    away: awayXI
                 },
                 substitutes: {
-                    home: getPlayers('home-substitutes'),
-                    away: getPlayers('away-substitutes')
+                    home: homeSubs,
+                    away: awaySubs
                 },
                 tournament_id: tournamentId,
                 fixture_id: fixtureId
@@ -1662,17 +2064,22 @@
             });
 
             if (res.ok) {
-                // Save current selections to browser storage for next match defaults.
-                saveLineup(h, payload.playing_xi.home, payload.substitutes.home);
-                saveLineup(a, payload.playing_xi.away, payload.substitutes.away);
+                // Persist format-tagged lineups so future visits auto-restore the
+                // correct squad for each format independently.
+                saveLineup(h, currentFormat, homeXI, homeSubs);
+                saveLineup(a, currentFormat, awayXI, awaySubs);
 
                 const data = await res.json();
                 window.location.href = `/match/${data.match_id}`;
             } else {
-                throw new Error("Simulation failed");
+                const errData = await res.json().catch(() => ({}));
+                const msg = errData.error || 'Simulation failed';
+                Toast.show(`Server rejected the match: ${msg}`, "error");
+                btn.innerHTML = '<i class="fas fa-rocket"></i> Simulate';
+                btn.disabled = false;
             }
         } catch (e) {
-            Toast.show("Error starting simulation. Check logic.", "error");
+            Toast.show("Error starting simulation. Check network or squad.", "error");
             btn.innerHTML = '<i class="fas fa-rocket"></i> Simulate';
             btn.disabled = false;
         }

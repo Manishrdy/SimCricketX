@@ -33,7 +33,7 @@ from typing import Dict, List, Any, Optional, Union
 import zipfile
 
 from database import db
-from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, Tournament, MatchPartnership
+from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, MatchPartnership
 
 # ─── Define PROJECT_ROOT so that we can write to /<project_root>/data/… ─────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -460,9 +460,21 @@ class MatchArchiver:
                 fielding_contributions[fielder_name]['run_outs'] += 1
         
         # Save to database - update existing batting/bowling records or create new fielding records
+        _fmt = self.match_data.get('match_format', 'T20')
         for fielder_name, contributions in fielding_contributions.items():
-            # Find the fielder in the fielding team
-            fielder = DBPlayer.query.filter_by(name=fielder_name, team_id=fielding_team_id).first()
+            # Find the fielder via format profile; fall back to team-wide lookup
+            fielder = None
+            _fld_profile = DBTeamProfile.query.filter_by(
+                team_id=fielding_team_id, format_type=_fmt
+            ).first()
+            if _fld_profile:
+                fielder = DBPlayer.query.filter_by(
+                    name=fielder_name, profile_id=_fld_profile.id
+                ).first()
+            if not fielder:
+                fielder = DBPlayer.query.filter_by(
+                    name=fielder_name, team_id=fielding_team_id
+                ).first()
             if not fielder:
                 self.logger.warning(f"Fielder {fielder_name} not found in team {fielding_team_id}")
                 continue
@@ -652,12 +664,28 @@ class MatchArchiver:
                     db_match.tournament_id = tournament_id
 
             # 4. Save Scorecards
+            _match_format = self.match_data.get('match_format', 'T20')
+
+            def _lookup_player(p_name, team_id):
+                """Resolve player via format profile first; fall back to team-wide lookup."""
+                profile = DBTeamProfile.query.filter_by(
+                    team_id=team_id, format_type=_match_format
+                ).first()
+                if profile:
+                    player = DBPlayer.query.filter_by(
+                        name=p_name, profile_id=profile.id
+                    ).first()
+                    if player:
+                        return player
+                # Fallback for legacy / pre-migration data
+                return DBPlayer.query.filter_by(name=p_name, team_id=team_id).first()
+
             def save_stats(stats_dict, team_id, innings_number, record_type, batting_stats=None):
                 if not stats_dict:
                     return
                 for position, (p_name, s) in enumerate(stats_dict.items(), start=1):
-                    # Find player ID
-                    player = DBPlayer.query.filter_by(name=p_name, team_id=team_id).first()
+                    # Find player ID (profile-aware)
+                    player = _lookup_player(p_name, team_id)
                     if not player:
                         continue
                     
@@ -808,11 +836,25 @@ class MatchArchiver:
         if not partnerships:
             return
 
+        _pfmt = self.match_data.get('match_format', 'T20')
+        _bat_profile = DBTeamProfile.query.filter_by(
+            team_id=batting_team_id, format_type=_pfmt
+        ).first()
+
+        def _lookup_batsman(name):
+            if _bat_profile:
+                p = DBPlayer.query.filter_by(
+                    name=name, profile_id=_bat_profile.id
+                ).first()
+                if p:
+                    return p
+            return DBPlayer.query.filter_by(name=name, team_id=batting_team_id).first()
+
         for p_data in partnerships:
-             # Resolve player IDs 
-             b1 = DBPlayer.query.filter_by(name=p_data['batsman1_name'], team_id=batting_team_id).first()
-             b2 = DBPlayer.query.filter_by(name=p_data['batsman2_name'], team_id=batting_team_id).first()
-             
+             # Resolve player IDs (profile-aware)
+             b1 = _lookup_batsman(p_data['batsman1_name'])
+             b2 = _lookup_batsman(p_data['batsman2_name'])
+
              # Bug Fix B5: Validate players exist before creating partnership
              if not b1 or not b2:
                  self.logger.warning(

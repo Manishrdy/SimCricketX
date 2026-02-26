@@ -45,7 +45,7 @@ class User(UserMixin, db.Model):
 class Team(db.Model):
     """Cricket Team"""
     __tablename__ = 'teams'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
@@ -63,36 +63,67 @@ class Team(db.Model):
     )
 
     # Relationships
-    players = relationship('Player', backref='team', cascade="all, delete-orphan")
-    
+    profiles = relationship('TeamProfile', back_populates='team', cascade='all, delete-orphan')
+    # Read-only convenience accessor — cascade is managed through profiles
+    players = relationship('Player', viewonly=True)
+
     # Matches where this team played
     home_matches = relationship('Match', foreign_keys='Match.home_team_id', backref='home_team')
     away_matches = relationship('Match', foreign_keys='Match.away_team_id', backref='away_team')
 
+
+class TeamProfile(db.Model):
+    """Format-specific squad profile for a team (T20, ListA, FirstClass)."""
+    __tablename__ = 'team_profiles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    team_id = db.Column(
+        db.Integer,
+        db.ForeignKey('teams.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    format_type = db.Column(db.String(20), nullable=False)  # 'T20', 'ListA', 'FirstClass'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('team_id', 'format_type', name='uq_team_profile_format'),
+    )
+
+    team = relationship('Team', back_populates='profiles')
+    players = relationship('Player', back_populates='profile', cascade='all, delete-orphan')
+
 class Player(db.Model):
     """Player Identity & Career Stats"""
     __tablename__ = 'players'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False, index=True)
+    # Profile this player belongs to (format-specific squad)
+    profile_id = db.Column(
+        db.Integer,
+        db.ForeignKey('team_profiles.id', ondelete='CASCADE'),
+        nullable=True,
+        index=True,
+    )
     name = db.Column(db.String(100), nullable=False)
     role = db.Column(db.String(50))  # Batsman, Bowler, All-rounder, Wicketkeeper
-    
+
     # Skill Ratings (snapshot from last update)
     batting_rating = db.Column(db.Integer, default=0)
     bowling_rating = db.Column(db.Integer, default=0)
     fielding_rating = db.Column(db.Integer, default=0)
-    
+
     # Technical Attributes
     batting_hand = db.Column(db.String(20))
     bowling_type = db.Column(db.String(50))
     bowling_hand = db.Column(db.String(20))
-    
+
     # Identity flags
     is_captain = db.Column(db.Boolean, default=False)
     is_wicketkeeper = db.Column(db.Boolean, default=False)
-    
-    # Aggregate Career Stats (Updated after every match)
+
+    # Aggregate Career Stats (Updated after every match; tracked per profile = per format)
     matches_played = db.Column(db.Integer, default=0)
     total_runs = db.Column(db.Integer, default=0)
     total_balls_faced = db.Column(db.Integer, default=0)
@@ -102,7 +133,7 @@ class Player(db.Model):
     total_centuries = db.Column(db.Integer, default=0)
     highest_score = db.Column(db.Integer, default=0)
     not_outs = db.Column(db.Integer, default=0)
-    
+
     total_balls_bowled = db.Column(db.Integer, default=0)
     total_runs_conceded = db.Column(db.Integer, default=0)
     total_wickets = db.Column(db.Integer, default=0)
@@ -110,13 +141,15 @@ class Player(db.Model):
     five_wicket_hauls = db.Column(db.Integer, default=0)
     best_bowling_wickets = db.Column(db.Integer, default=0)
     best_bowling_runs = db.Column(db.Integer, default=0)
-    
-    # Unique constraint: one player name per team
+
+    # Unique constraint: one player name per profile (format squad)
+    # NOTE: uq_player_team_name is replaced by uq_player_profile_name via migration
     __table_args__ = (
-        db.UniqueConstraint('team_id', 'name', name='uq_player_team_name'),
+        db.UniqueConstraint('profile_id', 'name', name='uq_player_profile_name'),
     )
 
     # Relationships
+    profile = relationship('TeamProfile', back_populates='players')
     scorecard_entries = relationship('MatchScorecard', backref='player_ref', passive_deletes=True)
 
 class Match(db.Model):

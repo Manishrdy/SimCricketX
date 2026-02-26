@@ -106,11 +106,11 @@ def _mute_match_print(monkeypatch):
 @pytest.mark.parametrize(
     "pitch,run_low,run_high,min_avg_balls",
     [
-        ("Dead", 320, 390, 285),
-        ("Flat", 295, 355, 270),
-        ("Hard", 265, 315, 260),
-        ("Green", 180, 255, 220),
-        ("Dry", 180, 255, 230),
+        ("Hard", 280, 320, 270),
+        ("Flat", 320, 360, 285),
+        ("Dead", 150, 250, 215),
+        ("Green", 150, 250, 230),
+        ("Dry", 150, 250, 230),
     ],
 )
 def test_lista_pitch_scoring_bands_and_innings_depth(pitch, run_low, run_high, min_avg_balls):
@@ -137,10 +137,81 @@ def test_lista_pitch_boundary_profile_relative_order():
         for pitch, innings in grouped.items()
     }
 
-    assert avg_boundaries["Dead"] > avg_boundaries["Hard"]
     assert avg_boundaries["Flat"] > avg_boundaries["Hard"]
+    assert avg_boundaries["Dead"] < avg_boundaries["Hard"]
     assert avg_boundaries["Green"] < avg_boundaries["Hard"]
     assert avg_boundaries["Dry"] < avg_boundaries["Hard"]
+
+
+def _build_deep_bowling_team(prefix: str):
+    players = _build_team_players(prefix)
+    # Create 7 bowling options: 4 pure bowlers + 3 all-rounders.
+    for idx, p in enumerate(players):
+        if idx in (4, 5, 6):
+            p["role"] = "All Rounder"
+            p["will_bowl"] = True
+            p["bowling_rating"] = 62 - (idx - 4) * 2
+            p["bowling_type"] = "Medium-fast"
+        elif idx in (7, 8, 9, 10):
+            p["role"] = "Bowler"
+            p["will_bowl"] = True
+            p["bowling_rating"] = 84 - (idx - 7) * 4
+            p["bowling_type"] = ["Fast", "Fast-medium", "Leg spin", "Off spin"][idx - 7]
+        else:
+            p["will_bowl"] = False
+    return players
+
+
+def test_lista_bowler_priority_prefers_high_rated_pure_bowlers():
+    random.seed(8181)
+    match_data = {
+        "match_id": "lista_priority_case",
+        "created_by": "pytest_lista",
+        "team_home": "HOM_pytest",
+        "team_away": "AWY_pytest",
+        "stadium": "Pytest Ground",
+        "pitch": "Hard",
+        "toss": "Heads",
+        "toss_winner": "HOM",
+        "toss_decision": "Bat",
+        "simulation_mode": "auto",
+        "match_format": "ListA",
+        "playing_xi": {
+            "home": _build_deep_bowling_team("H"),
+            "away": _build_deep_bowling_team("A"),
+        },
+        "substitutes": {"home": [], "away": []},
+        "is_day_night": False,
+    }
+
+    match = match_module.Match(match_data)
+    for _ in range(1200):
+        response = match.next_ball()
+        if response.get("innings_end") and response.get("innings_number") == 1:
+            break
+    else:
+        raise AssertionError("First innings did not complete in expected delivery budget")
+
+    away_bowling = [p for p in match_data["playing_xi"]["away"] if p.get("will_bowl")]
+    pure = sorted(
+        [p for p in away_bowling if p.get("role") == "Bowler"],
+        key=lambda p: p.get("bowling_rating", 0),
+        reverse=True,
+    )
+    all_rounders = [p for p in away_bowling if p.get("role") == "All Rounder"]
+    assert len(pure) >= 2 and all_rounders
+
+    stats = match.first_innings_bowling_stats
+    pure_top2_balls = [
+        (stats.get(p["name"], {}).get("balls_bowled") or 0)
+        for p in pure[:2]
+    ]
+    all_rounder_balls = [
+        (stats.get(p["name"], {}).get("balls_bowled") or 0)
+        for p in all_rounders
+    ]
+
+    assert min(pure_top2_balls) > max(all_rounder_balls)
 
 
 def test_lista_manual_bowler_decision_uses_ten_over_quota():

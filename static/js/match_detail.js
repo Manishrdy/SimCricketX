@@ -205,7 +205,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- Impact Player Logic ---
 
+function getMatchFormat() {
+    return String(matchData?.match_format || 'T20').trim().toUpperCase();
+}
+
+function isImpactPlayerEnabled() {
+    return getMatchFormat() === 'T20';
+}
+
 function showImpactPlayerModal() {
+    if (!isImpactPlayerEnabled()) return;
+
     const modal = document.getElementById('impact-modal');
     if (!modal) return;
 
@@ -1135,7 +1145,7 @@ function _processBallResult(data) {
             closeBtn.onclick = async () => {
                 await captureCurrentScorecardImage(); // Save 1st innings image
 
-                if (!matchData.impact_players_swapped) {
+                if (isImpactPlayerEnabled() && !matchData.impact_players_swapped) {
                     document.getElementById('scorecard-overlay').style.display = 'none';
                     showImpactPlayerModal(); // Trigger Impact Player Phase
                     return;
@@ -1735,4 +1745,3 @@ function soSetupInnings2(data) {
 // Expose for inline onclick handlers
 window.soPickBattingTeam = soPickBattingTeam;
 window.soStartInnings = soStartInnings;
-

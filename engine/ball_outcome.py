@@ -269,23 +269,29 @@ LISTA_DEATH_MATRIX = {
 # Per-pitch run scaling for ListA (applied on top of phase matrices)
 # These reflect how pitch character shifts scoring across 50 overs.
 LISTA_RUN_FACTORS = {
-    "Green": 0.70,   # Strong seam/swing suppression
-    "Dry":   0.55,   # Spin-heavy strangulation through middle overs
-    "Hard":  0.93,   # Balanced 270-300 range
-    "Flat":  1.04,   # Consistent 300+ platform
-    "Dead":  1.08,   # 330+ batting-friendly ceiling
+    "Green": 0.68,   # Strong bowler-friendly suppression
+    "Dry":   0.72,   # Spin-friendly
+    "Hard":  0.98,   # Baseline 280-320 target band
+    "Flat":  1.21,   # High-scoring 320-360 target band
+    "Dead":  0.68,   # User-calibrated low-scoring dead track behavior
 }
 
 # ListA pitch-specific nudges for strike rotation profile.
 # Applied before final normalization of raw weights.
 LISTA_DOT_SINGLE_FACTORS = {
-    "Green": {"Dot": 1.20, "Single": 1.15},
-    "Dry":   {"Dot": 1.20, "Single": 1.15},
+    "Green": {"Dot": 1.22, "Single": 1.06},
+    "Dry":   {"Dot": 1.20, "Single": 1.08},
+    "Dead":  {"Dot": 1.12, "Single": 1.04},
 }
 
-# ListA wicket factor per pitch type (same keys as T20 — applied identically)
-# Pitch wear in ListA means spin gets progressively more dangerous (see below).
-LISTA_WICKET_FACTORS = PITCH_WICKET_FACTOR   # reuse existing table
+# ListA-only wicket pressure by pitch (applied as a final scaling layer).
+LISTA_WICKET_PITCH_MULT = {
+    "Green": 1.18,
+    "Dry":   1.12,
+    "Hard":  1.00,
+    "Flat":  0.70,
+    "Dead":  1.20,
+}
 
 
 def _get_lista_matrix(over: int, fmt) -> dict:
@@ -319,17 +325,20 @@ def _apply_lista_phase_boosts(weights: dict, over: int, pitch: str,
 
     if fmt.is_powerplay(over):
         # New-ball edges through gully; pace on batting pitches = more boundaries
-        if pitch in ("Flat", "Dead", "Hard"):
-            w["Four"]   = w.get("Four", 0) * 1.10
-            w["Six"]    = w.get("Six",  0) * 1.08
+        if pitch == "Flat":
+            w["Four"] = w.get("Four", 0) * 1.14
+            w["Six"] = w.get("Six", 0) * 1.12
+        elif pitch == "Hard":
+            w["Four"] = w.get("Four", 0) * 1.10
+            w["Six"] = w.get("Six", 0) * 1.08
         w["Wicket"] = w.get("Wicket", 0) * 1.05
 
     elif fmt.is_death(over):
         # Death matrix already encodes the slog aggression.
         # Only a small pitch-sensitive wicket nudge and 2nd-innings urgency.
-        if pitch in ("Flat", "Dead"):
-            w["Four"] = w.get("Four", 0) * 1.05   # Barely; matrix does the work
-            w["Six"]  = w.get("Six",  0) * 1.08
+        if pitch == "Flat":
+            w["Four"] = w.get("Four", 0) * 1.10
+            w["Six"]  = w.get("Six",  0) * 1.15
         w["Wicket"] = w.get("Wicket", 0) * 1.05   # Mild risk-taking spike
 
         # 2nd-innings ListA pressure:
@@ -342,6 +351,11 @@ def _apply_lista_phase_boosts(weights: dict, over: int, pitch: str,
     else:
         # Middle overs: spin grip and tight fielding = slightly more dots
         w["Dot"] = w.get("Dot", 0) * 1.05
+
+    # User-calibrated ListA Dead behavior: suppress free scoring and lift wicket risk.
+    if pitch == "Dead":
+        w["Dot"] = w.get("Dot", 0) * 1.06
+        w["Wicket"] = w.get("Wicket", 0) * 1.10
 
     return w
 
@@ -555,6 +569,7 @@ def compute_weighted_prob(
     streak: dict,
     batter_runs: int = 0,
     balls_faced: int = 0,
+    format_name: str | None = None,
     config=None,
 ) -> float:
     """
@@ -566,27 +581,31 @@ def compute_weighted_prob(
     # 0) Batter innings phase modifiers
     effective_batting = batting
 
-    # New batter vulnerability: first 5 balls are dangerous
+    _is_lista = (format_name == "ListA")
+
+    # New batter vulnerability: first 5 balls are dangerous.
+    # ListA uses softer penalties than T20 to avoid middle-order wipeouts.
     if balls_faced <= 2:
-        effective_batting *= 0.82  # 18% penalty — very vulnerable, adjusting to conditions
+        effective_batting *= 0.88 if _is_lista else 0.82
     elif balls_faced <= 5:
-        effective_batting *= 0.90  # 10% penalty — still settling in
+        effective_batting *= 0.94 if _is_lista else 0.90
 
-    # Graduated confidence based on runs scored
+    # Graduated confidence based on runs scored.
+    # ListA keeps this curve flatter to reduce opener snowballing.
     if batter_runs >= 50:
-        effective_batting *= 1.20   # Dominant — on top of the bowling
+        effective_batting *= 1.10 if _is_lista else 1.20
     elif batter_runs >= 35:
-        effective_batting *= 1.15   # Dangerous — timing everything
+        effective_batting *= 1.07 if _is_lista else 1.15
     elif batter_runs >= 20:
-        effective_batting *= 1.10   # Set — comfortable at the crease
+        effective_batting *= 1.05 if _is_lista else 1.10
     elif batter_runs >= 10:
-        effective_batting *= 1.05   # Getting eye in — starting to find gaps
+        effective_batting *= 1.02 if _is_lista else 1.05
 
-    # Balls-faced confidence layer (independent of runs, kicks in after vulnerability window)
+    # Balls-faced confidence layer (independent of runs).
     if balls_faced >= 20:
-        effective_batting *= 1.05   # Well settled — extra familiarity bonus
+        effective_batting *= 1.02 if _is_lista else 1.05
     elif balls_faced >= 12:
-        effective_batting *= 1.03   # Reading the bowler now
+        effective_batting *= 1.01 if _is_lista else 1.03
 
     # 1) Player-skill fraction
     skill_frac = 0.5
@@ -615,16 +634,21 @@ def compute_weighted_prob(
 
             # Hard pitch: wickets harder to come by but not impossible
             if pitch == "Hard":
-                skill_frac *= 0.75  # 25% reduction in wicket-taking ability
+                skill_frac *= 0.85 if _is_lista else 0.75
         else:
             skill_frac = 0.5
 
     # 2) Pitch-influence fraction
     pitch_frac = 1.0
-    if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
-        pitch_frac = get_pitch_run_multiplier(pitch, config=config)
-    elif outcome_type == "Wicket":
-        pitch_frac = get_pitch_wicket_multiplier(pitch, bowling_type, config=config)
+    if _is_lista:
+        # ListA has its own phase matrix + run/wicket scaling layers.
+        # Avoid reusing T20 pitch multipliers here (prevents double-counting).
+        pitch_frac = 1.0
+    else:
+        if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
+            pitch_frac = get_pitch_run_multiplier(pitch, config=config)
+        elif outcome_type == "Wicket":
+            pitch_frac = get_pitch_wicket_multiplier(pitch, bowling_type, config=config)
 
     # 3) Blend Pitch & Skill
     # Default is 60% Pitch, 40% Skill.
@@ -739,7 +763,15 @@ def calculate_outcome(
     # 1) Unpack numeric ratings & attributes
     # Feature 9: batting position context — top-order batters have a higher
     # effective batting rating; tail-enders face a modest penalty.
-    _pos_mult = _POS_BATTING_MULT.get(batting_position, 1.00)
+    _lista_pos_mult = {
+        1: 1.02, 2: 1.02, 3: 1.01, 4: 1.00, 5: 1.00,
+        6: 0.99, 7: 0.97, 8: 0.94, 9: 0.90, 10: 0.86, 11: 0.82,
+    }
+    _pos_mult = (
+        _lista_pos_mult.get(batting_position, 1.00)
+        if (format_config is not None and format_config.name == "ListA")
+        else _POS_BATTING_MULT.get(batting_position, 1.00)
+    )
     batting = batter["batting_rating"] * _pos_mult
     bowling = bowler["bowling_rating"]
     fielding = bowler["fielding_rating"]
@@ -824,6 +856,7 @@ def calculate_outcome(
                 outcome, base,
                 batting, bowling, fielding,
                 pitch, bowling_type, streak, batter_runs, balls_faced,
+                format_name=(format_config.name if format_config is not None else None),
                 config=_gc,
             )
             # Apply boundary suppression when bowler has favorable matchup
@@ -835,6 +868,7 @@ def calculate_outcome(
                 outcome, base,
                 batting, bowling, fielding,
                 pitch, bowling_type, streak, batter_runs, balls_faced,
+                format_name=(format_config.name if format_config is not None else None),
                 config=_gc,
             ) * matchup_boost
         else:  # "Extras"
@@ -842,6 +876,7 @@ def calculate_outcome(
                 outcome, base,
                 batting, bowling, fielding,
                 pitch, bowling_type, streak,
+                format_name=(format_config.name if format_config is not None else None),
                 config=_gc,
             )
 
@@ -912,21 +947,24 @@ def calculate_outcome(
         raw_weights = _apply_dew_factor(raw_weights, innings, over_number,
                                         is_day_night, format_config)
         # Hard pitch retune (user-requested):
-        # - Wicket frequency down 5%
-        # - Singles up slightly
-        # - Boundary scoring up 5%
+        # Keep Hard as scoring-friendly but avoid excessive wicket suppression.
         if pitch == "Hard":
-            raw_weights["Wicket"] = raw_weights.get("Wicket", 0.0) * 0.95
-            raw_weights["Single"] = raw_weights.get("Single", 0.0) * 1.05
-            raw_weights["Four"] = raw_weights.get("Four", 0.0) * 1.05
-            raw_weights["Six"] = raw_weights.get("Six", 0.0) * 1.05
+            raw_weights["Single"] = raw_weights.get("Single", 0.0) * 1.03
+            raw_weights["Four"] = raw_weights.get("Four", 0.0) * 1.03
+            raw_weights["Six"] = raw_weights.get("Six", 0.0) * 1.03
+        elif pitch == "Flat":
+            raw_weights["Wicket"] = raw_weights.get("Wicket", 0.0) * 0.85
+            raw_weights["Dot"] = raw_weights.get("Dot", 0.0) * 0.94
+            raw_weights["Four"] = raw_weights.get("Four", 0.0) * 1.06
+            raw_weights["Six"] = raw_weights.get("Six", 0.0) * 1.10
 
-        # Green/Dry ListA tuning:
-        # raise dot balls by 20% and singles by 15% as requested.
+        # Pitch-specific ListA rotation profile.
         pitch_dot_single = LISTA_DOT_SINGLE_FACTORS.get(pitch)
         if pitch_dot_single:
             raw_weights["Dot"] = raw_weights.get("Dot", 0.0) * pitch_dot_single["Dot"]
             raw_weights["Single"] = raw_weights.get("Single", 0.0) * pitch_dot_single["Single"]
+
+        raw_weights["Wicket"] = raw_weights.get("Wicket", 0.0) * LISTA_WICKET_PITCH_MULT.get(pitch, 1.0)
     else:
         # T20 / legacy path — existing pitch wear model unchanged
         if pitch_wear > 0.0:
