@@ -5,7 +5,7 @@ Tests routes defined in routes/team_routes.py
 
 import pytest
 from app import db
-from database.models import Team as DBTeam, Player as DBPlayer
+from database.models import Team as DBTeam, TeamProfile as DBTeamProfile, Player as DBPlayer
 
 
 # ==================== Helpers ====================
@@ -82,6 +82,23 @@ class TestTeamCreationRoute:
         assert response.status_code == 200
         assert b"short code" in response.data.lower() or b"already" in response.data.lower()
 
+    def test_create_team_duplicate_name_same_user(self, authenticated_client, test_team):
+        """Test creating a team with duplicate name for the same user is rejected."""
+        form = _valid_team_form(
+            name=test_team.name.lower(),  # Case-insensitive conflict
+            short_code="NEW",
+        )
+        response = authenticated_client.post(
+            "/team/create",
+            data=form,
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert (
+            b"already have a team named" in response.data.lower()
+            or b"different team name" in response.data.lower()
+        )
+
     def test_create_team_insufficient_players(self, authenticated_client):
         """Test creating a team with fewer than 12 players shows a validation error."""
         form = _valid_team_form(num_players=5)
@@ -128,6 +145,12 @@ class TestTeamDeletionRoute:
         """Test successful team deletion using short_code (the route's lookup key)."""
         team_id = test_team.id
         short_code = test_team.short_code
+        profile = DBTeamProfile(team_id=team_id, format_type="T20")
+        db.session.add(profile)
+        db.session.flush()
+        profiled_player = DBPlayer.query.filter_by(team_id=team_id).first()
+        profiled_player.profile_id = profile.id
+        db.session.commit()
 
         response = authenticated_client.post(
             "/team/delete",
@@ -140,6 +163,8 @@ class TestTeamDeletionRoute:
         # Verify the team is removed from the database
         team = db.session.get(DBTeam, team_id)
         assert team is None
+        assert DBTeamProfile.query.filter_by(team_id=team_id).count() == 0
+        assert DBPlayer.query.filter_by(team_id=team_id).count() == 0
 
     def test_delete_team_unauthenticated(self, client, test_team):
         """Test team deletion without authentication redirects."""
@@ -204,6 +229,36 @@ class TestTeamEditRoute:
             follow_redirects=True,
         )
         assert response.status_code == 200
+
+    def test_edit_team_duplicate_name_same_user(self, authenticated_client, test_team):
+        """Test editing a team to another team's name for same user is rejected."""
+        conflict_team = DBTeam(
+            user_id=test_team.user_id,
+            name="Name Clash",
+            short_code="NCL",
+            home_ground="Some Ground",
+            pitch_preference="flat",
+            team_color="#00ff00",
+            is_draft=False,
+            is_placeholder=False,
+        )
+        db.session.add(conflict_team)
+        db.session.commit()
+
+        form = _valid_team_form(
+            name=conflict_team.name.lower(),  # Case-insensitive conflict
+            short_code=test_team.short_code,
+        )
+        response = authenticated_client.post(
+            f"/team/{test_team.short_code}/edit",
+            data=form,
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert (
+            b"already have a team named" in response.data.lower()
+            or b"different team name" in response.data.lower()
+        )
 
     def test_edit_nonexistent_team(self, authenticated_client):
         """Test editing a non-existent team redirects (no such team for this user)."""

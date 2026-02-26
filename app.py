@@ -111,7 +111,7 @@ except ImportError:
     psutil = None
 
 from database import db
-from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, Tournament, TournamentTeam, TournamentFixture
+from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, TournamentTeam, TournamentFixture
 from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership, AdminAuditLog  # Distinct from engine.match.Match
 from database.models import FailedLoginAttempt, BlockedIP, ActiveSession, LoginHistory, IPWhitelistEntry
 from engine.tournament_engine import TournamentEngine
@@ -953,6 +953,14 @@ def create_app():
         except Exception as e:
             print(f"[WARN] Schema check skipped: {e}")
 
+    # Team format-profiles migration (idempotent — safe to run on every startup)
+    if not test_mode:
+        try:
+            from migrations.add_team_profiles import run_migration as _run_profiles_migration
+            _run_profiles_migration(db, app)
+        except Exception as e:
+            print(f"[WARN] Team profiles migration skipped: {e}")
+
     # --- Logging setup (logs to file + terminal) ---
     base_dir = os.path.abspath(os.path.dirname(__file__))
     log_dir = os.path.join(base_dir, "logs")
@@ -1253,6 +1261,7 @@ def create_app():
         IP_WHITELIST_MODEL=IPWhitelistEntry,
         DBUser=DBUser,
         DBTeam=DBTeam,
+        DBTeamProfile=DBTeamProfile,
         DBPlayer=DBPlayer,
         DBMatch=DBMatch,
         Tournament=Tournament,
@@ -1844,15 +1853,39 @@ def create_app():
         get_client_ip=get_client_ip,
     )
 
-    def load_user_teams(user_email):
-        """Return list of team dicts created by this user from DB."""
+    def load_user_teams(user_email, match_format="T20"):
+        """Return list of team dicts for this user.
+
+        ``players`` is intentionally empty at load time.  The frontend
+        populates it from ``profile_squads[selected_format]`` when the user
+        picks a format.  There is NO fallback: if a team has no squad for the
+        chosen format, its key will be absent from ``profile_squads`` and the
+        frontend/server will block the match.
+        """
         teams = []
         try:
             db_teams = DBTeam.query.filter_by(user_id=user_email).filter(
                 DBTeam.is_placeholder != True
             ).all()
             for t in db_teams:
-                # Construct dict with full player data for frontend JS
+                def _player_dict(p):
+                    return {
+                        "name": p.name,
+                        "role": p.role,
+                        "batting_rating": p.batting_rating,
+                        "bowling_rating": p.bowling_rating,
+                        "fielding_rating": p.fielding_rating,
+                        "batting_hand": p.batting_hand,
+                        "bowling_type": p.bowling_type,
+                        "bowling_hand": p.bowling_hand,
+                    }
+
+                # Only include formats that have players — no fallback.
+                profile_squads = {}
+                for prof in t.profiles:
+                    if prof.players:
+                        profile_squads[prof.format_type] = [_player_dict(p) for p in prof.players]
+
                 team_dict = {
                     "id": t.id,
                     "team_name": t.name,
@@ -1861,19 +1894,12 @@ def create_app():
                     "pitch_preference": t.pitch_preference,
                     "team_color": t.team_color,
                     "created_by_email": t.user_id,
-                    "players": []
+                    # Populated by the frontend from profile_squads[format].
+                    "players": [],
+                    "profile_squads": profile_squads,
+                    # Convenience list for badge rendering in the template.
+                    "available_formats": list(profile_squads.keys()),
                 }
-                for p in t.players:
-                    team_dict["players"].append({
-                        "name": p.name,
-                        "role": p.role,
-                        "batting_rating": p.batting_rating,
-                        "bowling_rating": p.bowling_rating,
-                        "fielding_rating": p.fielding_rating,
-                        "batting_hand": p.batting_hand,
-                        "bowling_type": p.bowling_type,
-                        "bowling_hand": p.bowling_hand
-                    })
                 teams.append(team_dict)
         except Exception as e:
             app.logger.error(f"Error loading teams from DB: {e}", exc_info=True)
@@ -1887,6 +1913,7 @@ def create_app():
         Player=Player,
         DBTeam=DBTeam,
         DBPlayer=DBPlayer,
+        DBTeamProfile=DBTeamProfile,
     )
 
     # --- Match & Archive Routes (Phase 4 extraction) ---

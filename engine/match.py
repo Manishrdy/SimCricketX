@@ -159,6 +159,10 @@ class Match:
         self.bowling_pattern = self._detect_bowling_pattern()
 
         self.over_bowler_log = {}
+        # ListA-only bowling distribution plan (recomputed per innings/roster)
+        self.lista_bowler_plan = {}
+        self.lista_plan_innings = None
+        self.lista_plan_roster = ()
         self.prev_delivery_was_extra = False
         self.current_over_maiden_invalid = False  # A2: only bat-runs, wides, no-balls invalidate maidens
         self.free_hit_active = False  # A5: free hit after no-ball
@@ -694,12 +698,15 @@ class Match:
         delta = self._FORM_DELTA.get(outcome_label, 0.0)
         new_form = current_form + delta
 
-        # Milestone bonuses: ensure form doesn't dip below milestone floor
+        # Milestone bonuses: ensure form doesn't dip below milestone floor.
+        # ListA uses softer floors to prevent excessive set-batter snowballing.
         batter_runs = stats.get("runs", 0)
+        floor_25 = 1.08 if self.fmt.name == "ListA" else self._FORM_MILESTONE_25
+        floor_50 = 1.12 if self.fmt.name == "ListA" else self._FORM_MILESTONE_50
         if batter_runs >= 50:
-            new_form = max(new_form, self._FORM_MILESTONE_50)
+            new_form = max(new_form, floor_50)
         elif batter_runs >= 25:
-            new_form = max(new_form, self._FORM_MILESTONE_25)
+            new_form = max(new_form, floor_25)
 
         stats["form"] = max(self._FORM_MIN, min(self._FORM_MAX, new_form))
 
@@ -1495,12 +1502,205 @@ class Match:
 
     def _get_match_phase(self):
         """Determine current match phase for context"""
-        if self.current_over < 6:
+        if self.fmt.is_powerplay(self.current_over):
             return "POWERPLAY"
-        elif self.current_over < 16:
-            return "MIDDLE_OVERS"
-        else:
+        if self.fmt.is_death(self.current_over):
             return "DEATH_OVERS"
+        return "MIDDLE_OVERS"
+
+    def _is_lista_pure_bowler(self, bowler: dict) -> bool:
+        """
+        ListA classifier for "pure bowler" prioritization.
+        Role labels vary by data source, so we treat any explicit Bowler role
+        as pure and everyone else (all-rounders/batting options) as support.
+        """
+        role = str(bowler.get("role", "")).strip().lower()
+        return role == "bowler"
+
+    def _build_lista_bowler_plan(self) -> dict:
+        """
+        Build per-bowler target overs for ListA.
+        Priority: high-rated pure bowlers > all-rounders, while respecting
+        max 10 overs and keeping enough total quota to cover 50 overs.
+        """
+        bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
+        if not bowlers:
+            return {}
+
+        pure = [b for b in bowlers if self._is_lista_pure_bowler(b)]
+        support = [b for b in bowlers if not self._is_lista_pure_bowler(b)]
+
+        # If we have exactly 5 bowlers, all will end up near quota by necessity.
+        # With 6+ options, this plan aggressively biases pure bowlers.
+        weights = {}
+        for b in bowlers:
+            name = b["name"]
+            rating = float(b.get("bowling_rating", 0))
+            role_mult = 1.45 if self._is_lista_pure_bowler(b) else 0.90
+            weights[name] = rating * role_mult
+
+        allocation = {b["name"]: 0 for b in bowlers}
+        caps = {b["name"]: (10 if self._is_lista_pure_bowler(b) else 7) for b in bowlers}
+        overs_to_assign = self.fmt.overs
+
+        # Greedy weighted allocation with diminishing returns.
+        while overs_to_assign > 0:
+            candidates = [b for b in bowlers if allocation[b["name"]] < caps[b["name"]]]
+            if not candidates:
+                break
+            pick = max(
+                candidates,
+                key=lambda b: (
+                    weights[b["name"]] - (allocation[b["name"]] * 3.0),
+                    b.get("bowling_rating", 0),
+                ),
+            )
+            allocation[pick["name"]] += 1
+            overs_to_assign -= 1
+
+        # If all-rounder caps were too strict to reach 50, relax to full quota.
+        while overs_to_assign > 0:
+            candidates = [b for b in bowlers if allocation[b["name"]] < 10]
+            if not candidates:
+                break
+            pick = max(
+                candidates,
+                key=lambda b: (
+                    weights[b["name"]] - (allocation[b["name"]] * 2.0),
+                    b.get("bowling_rating", 0),
+                ),
+            )
+            allocation[pick["name"]] += 1
+            overs_to_assign -= 1
+
+        # Enforce "high-rated pure > all-rounders" when mathematically possible.
+        if pure and support:
+            top_pure = sorted(
+                pure,
+                key=lambda b: b.get("bowling_rating", 0),
+                reverse=True,
+            )[: min(2, len(pure))]
+
+            for p in top_pure:
+                p_name = p["name"]
+                while allocation[p_name] < 10:
+                    support_max = max(allocation[s["name"]] for s in support)
+                    if allocation[p_name] > support_max:
+                        break
+                    donor = max(support, key=lambda s: allocation[s["name"]])
+                    donor_name = donor["name"]
+                    if allocation[donor_name] <= 0:
+                        break
+                    allocation[donor_name] -= 1
+                    allocation[p_name] += 1
+
+        return allocation
+
+    def _ensure_lista_bowler_plan(self) -> None:
+        """Rebuild ListA bowler plan when innings or bowling roster changes."""
+        if self.fmt.name != "ListA":
+            return
+
+        roster = tuple(
+            sorted(p["name"] for p in self.bowling_team if p.get("will_bowl", False))
+        )
+        if (
+            not self.lista_bowler_plan
+            or self.lista_plan_innings != self.innings
+            or self.lista_plan_roster != roster
+        ):
+            self.lista_bowler_plan = self._build_lista_bowler_plan()
+            self.lista_plan_innings = self.innings
+            self.lista_plan_roster = roster
+
+    def _pick_bowler_lista(self):
+        """
+        ListA-only bowler selection:
+        - quota and non-consecutive eligibility from BowlerManager
+        - overs driven by target plan that favors high-rated pure bowlers
+        - phase-aware nudge (PP/death) without T20 hardcoded over windows
+        """
+        self._ensure_lista_bowler_plan()
+
+        overs_remaining = self.fmt.overs - self.current_over
+        eligible = self.bowler_manager.get_eligible_bowlers(
+            self.current_over,
+            overs_remaining,
+        )
+        if not eligible:
+            eligible = [p for p in self.bowling_team if p.get("will_bowl", False)]
+
+        pure_bowlers = [b for b in self.bowling_team if self._is_lista_pure_bowler(b)]
+        pure_need_overs = any(
+            self.lista_bowler_plan.get(p["name"], 0) > self.bowler_history.get(p["name"], 0)
+            for p in pure_bowlers
+        )
+
+        def _score(bowler):
+            name = bowler["name"]
+            bowled = self.bowler_history.get(name, 0)
+            rating = float(bowler.get("bowling_rating", 0))
+            target = self.lista_bowler_plan.get(name, 0)
+            deficit = target - bowled
+            is_pure = self._is_lista_pure_bowler(bowler)
+            btype = bowler.get("bowling_type", "")
+
+            score = rating * 0.25
+            score += deficit * 8.0
+            score += 8.0 if is_pure else 0.0
+
+            if not is_pure and pure_need_overs:
+                score -= 6.0
+
+            if self.fmt.is_powerplay(self.current_over):
+                if btype in ("Fast", "Fast-medium", "Medium-fast"):
+                    score += 6.0
+                if is_pure:
+                    score += 3.0
+            elif self.fmt.is_death(self.current_over):
+                if is_pure:
+                    score += 8.0
+                if btype in ("Fast", "Fast-medium", "Medium-fast"):
+                    score += 5.0
+            else:
+                if not is_pure and deficit <= 0:
+                    score -= 4.0
+
+            # Avoid front-loading one bowler too early unless they are behind plan.
+            if self.current_over < 20 and bowled >= 4 and deficit <= 0:
+                score -= 4.0
+
+            # Look-ahead guard: avoid creating a next-over dead-end where the
+            # same bowler must bowl again because everyone else is at quota.
+            if self.current_over < (self.fmt.overs - 1):
+                future_available = 0
+                for p in self.bowling_team:
+                    if not p.get("will_bowl", False):
+                        continue
+                    p_name = p["name"]
+                    future_bowled = self.bowler_history.get(p_name, 0)
+                    if p_name == name:
+                        future_bowled += 1
+                    if future_bowled < self.fmt.max_bowler_overs and p_name != name:
+                        future_available += 1
+                if future_available == 0:
+                    score -= 100.0
+                elif future_available == 1:
+                    score -= 12.0
+
+            return score
+
+        selected_bowler = max(
+            eligible,
+            key=lambda b: (
+                _score(b),
+                b.get("bowling_rating", 0),
+                1 if self._is_lista_pure_bowler(b) else 0,
+            ),
+        )
+
+        self._update_bowler_tracking(selected_bowler)
+        return selected_bowler
 
     def _select_optimal_bowler(self, eligible_bowlers, risk_assessment):
         """Select optimal bowler from eligible pool with smart selection logic"""
@@ -1677,6 +1877,9 @@ class Match:
         self.current_over_outcomes = []
         self.bowler_selected_for_over = -1
         self.remaining_batter_indices = set(range(2, len(self.batting_team)))
+        self.lista_bowler_plan = {}
+        self.lista_plan_innings = None
+        self.lista_plan_roster = ()
         # Restore any modified bowler ratings
         self._restore_bowler_ratings()
         
@@ -2821,6 +3024,8 @@ class Match:
         Priority 1D: Star bowler utilization tracking (NEW)
         Priority 2: Strategy optimization (pattern, approach 1, etc.)
         """
+        if self.fmt.name == "ListA":
+            return self._pick_bowler_lista()
 
         print(f"\n🐛 PICK_BOWLER DEBUG: Over {self.current_over + 1}")
         print(f"🐛 Current over >= 17? {self.current_over >= 17}")
