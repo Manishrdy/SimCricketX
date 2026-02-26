@@ -276,6 +276,13 @@ LISTA_RUN_FACTORS = {
     "Dead":  1.08,   # 330+ batting-friendly ceiling
 }
 
+# ListA pitch-specific nudges for strike rotation profile.
+# Applied before final normalization of raw weights.
+LISTA_DOT_SINGLE_FACTORS = {
+    "Green": {"Dot": 1.20, "Single": 1.15},
+    "Dry":   {"Dot": 1.20, "Single": 1.15},
+}
+
 # ListA wicket factor per pitch type (same keys as T20 — applied identically)
 # Pitch wear in ListA means spin gets progressively more dangerous (see below).
 LISTA_WICKET_FACTORS = PITCH_WICKET_FACTOR   # reuse existing table
@@ -913,6 +920,13 @@ def calculate_outcome(
             raw_weights["Single"] = raw_weights.get("Single", 0.0) * 1.05
             raw_weights["Four"] = raw_weights.get("Four", 0.0) * 1.05
             raw_weights["Six"] = raw_weights.get("Six", 0.0) * 1.05
+
+        # Green/Dry ListA tuning:
+        # raise dot balls by 20% and singles by 15% as requested.
+        pitch_dot_single = LISTA_DOT_SINGLE_FACTORS.get(pitch)
+        if pitch_dot_single:
+            raw_weights["Dot"] = raw_weights.get("Dot", 0.0) * pitch_dot_single["Dot"]
+            raw_weights["Single"] = raw_weights.get("Single", 0.0) * pitch_dot_single["Single"]
     else:
         # T20 / legacy path — existing pitch wear model unchanged
         if pitch_wear > 0.0:
