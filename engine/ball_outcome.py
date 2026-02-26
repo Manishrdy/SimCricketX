@@ -8,6 +8,7 @@ from engine.ground_config import (
     get_blending_weights as _gc_blending_weights,
 )
 from engine.game_state_engine import apply_game_state_to_probs
+from engine.format_config import FormatConfig
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +214,231 @@ DEFAULT_SCORING_MATRIX = {
 }
 
 
+# =============================================================================
+# LIST A (50-OVER) SCORING MATRICES
+# =============================================================================
+# Three phase-specific matrices replace the single T20 matrix.
+# Phase selection is driven by FormatConfig.get_phase(over).
+#
+# Target scoring profile (Hard pitch, 1st innings, neutral conditions):
+#   PP1    (overs  0- 9): ~62 runs  — 6.2 RPO  [new ball, field restrictions]
+#   Middle (overs 10-39): ~126 runs — 5.0 RPO  [consolidation, spin, dots]
+#   Death  (overs 40-49): ~102 runs — 8.5 RPO  [slog, 5 outside 30-yard]
+#   Total expected:       ~290 runs
+# =============================================================================
+
+# PP1 — overs 0-9 (Mandatory Powerplay: 2 fielders outside 30-yard circle)
+# New ball, measured aggression. Strike rotation and 2s dominate over big hitting.
+LISTA_PP1_MATRIX = {
+    "Dot":    0.338,
+    "Single": 0.413,
+    "Double": 0.118,
+    "Three":  0.004,
+    "Four":   0.068,
+    "Six":    0.018,
+    "Wicket": 0.024,
+    "Extras": 0.017,
+}
+
+# Middle — overs 10-39 (4 fielders permitted outside 30-yard circle)
+# Consolidation phase. Dot/single pressure with steady doubles and very few boundaries.
+LISTA_MIDDLE_MATRIX = {
+    "Dot":    0.392,
+    "Single": 0.443,
+    "Double": 0.117,
+    "Three":  0.004,
+    "Four":   0.024,
+    "Six":    0.006,
+    "Wicket": 0.012,
+    "Extras": 0.002,
+}
+
+# Death — overs 40-49 (5 fielders permitted outside 30-yard circle)
+# Acceleration phase. Boundaries rise, but singles/doubles still matter.
+LISTA_DEATH_MATRIX = {
+    "Dot":    0.250,
+    "Single": 0.354,
+    "Double": 0.123,
+    "Three":  0.006,
+    "Four":   0.098,
+    "Six":    0.052,
+    "Wicket": 0.069,
+    "Extras": 0.048,
+}
+
+# Per-pitch run scaling for ListA (applied on top of phase matrices)
+# These reflect how pitch character shifts scoring across 50 overs.
+LISTA_RUN_FACTORS = {
+    "Green": 0.70,   # Strong seam/swing suppression
+    "Dry":   0.55,   # Spin-heavy strangulation through middle overs
+    "Hard":  0.93,   # Balanced 270-300 range
+    "Flat":  1.04,   # Consistent 300+ platform
+    "Dead":  1.08,   # 330+ batting-friendly ceiling
+}
+
+# ListA wicket factor per pitch type (same keys as T20 — applied identically)
+# Pitch wear in ListA means spin gets progressively more dangerous (see below).
+LISTA_WICKET_FACTORS = PITCH_WICKET_FACTOR   # reuse existing table
+
+
+def _get_lista_matrix(over: int, fmt) -> dict:
+    """
+    Return the appropriate ListA scoring matrix for the given over.
+
+    Uses FormatConfig phase detection so the logic is driven by the
+    format definition, not hardcoded over ranges.
+    """
+    if fmt.is_death(over):
+        return LISTA_DEATH_MATRIX
+    if fmt.is_powerplay(over):
+        return LISTA_PP1_MATRIX
+    return LISTA_MIDDLE_MATRIX
+
+
+def _apply_lista_phase_boosts(weights: dict, over: int, pitch: str,
+                               innings: int, fmt) -> dict:
+    """
+    Apply mild ListA phase nudges to raw outcome weights.
+
+    The phase character is already embedded in the three ListA matrices
+    (PP1 / Middle / Death).  These boosts are small pitch-sensitive adjustments
+    on top, not primary scoring drivers.
+
+    PP1   : Slight boundary edge from new ball on friendly pitches.
+    Middle: Tiny dot-ball nudge (spinners tightening).
+    Death : Modest boundary/wicket uplift; 2nd-innings pressure handling.
+    """
+    w = dict(weights)
+
+    if fmt.is_powerplay(over):
+        # New-ball edges through gully; pace on batting pitches = more boundaries
+        if pitch in ("Flat", "Dead", "Hard"):
+            w["Four"]   = w.get("Four", 0) * 1.10
+            w["Six"]    = w.get("Six",  0) * 1.08
+        w["Wicket"] = w.get("Wicket", 0) * 1.05
+
+    elif fmt.is_death(over):
+        # Death matrix already encodes the slog aggression.
+        # Only a small pitch-sensitive wicket nudge and 2nd-innings urgency.
+        if pitch in ("Flat", "Dead"):
+            w["Four"] = w.get("Four", 0) * 1.05   # Barely; matrix does the work
+            w["Six"]  = w.get("Six",  0) * 1.08
+        w["Wicket"] = w.get("Wicket", 0) * 1.05   # Mild risk-taking spike
+
+        # 2nd-innings ListA pressure:
+        # avoid a blanket scoring boost while chasing; scoreboard pressure
+        # in long chases typically raises dot/wicket risk.
+        if innings == 2:
+            w["Dot"] = w.get("Dot", 0) * 1.03
+            w["Wicket"] = w.get("Wicket", 0) * 1.08
+
+    else:
+        # Middle overs: spin grip and tight fielding = slightly more dots
+        w["Dot"] = w.get("Dot", 0) * 1.05
+
+    return w
+
+
+def _apply_lista_pitch_wear(weights: dict, pitch: str,
+                             pitch_wear: float) -> dict:
+    """
+    Progressive pitch wear for ListA (0-300 balls, normalised to [0,1]).
+
+    Unlike T20 (where wear is mild), ListA wear has a pronounced late phase:
+      - Green : seam fades after over 20 (wear ~0.40). Batting improves.
+      - Dry   : spin gets genuinely unplayable by over 30+ (wear ~0.60).
+                Wickets and dots escalate sharply.
+      - Hard  : modest steady deterioration across the innings.
+      - Flat/Dead: minor wear; pitch remains batting-friendly throughout.
+
+    pitch_wear is the fraction of total balls already bowled (0=fresh, 1=done).
+    """
+    if pitch_wear <= 0.0:
+        return weights
+
+    w = dict(weights)
+    pw = pitch_wear
+
+    if pitch == "Dry":
+        # Spin track becomes brutal in second half of innings
+        # Wickets  : up to +45% by over 50
+        # Dots     : up to +20% by over 50
+        # Sixes    : down up to -25% (near-impossible to score freely)
+        w["Wicket"] = w.get("Wicket", 0) * (1.0 + 0.45 * pw)
+        w["Dot"]    = w.get("Dot",    0) * (1.0 + 0.20 * pw)
+        w["Six"]    = w.get("Six",    0) * (1.0 - 0.25 * pw)
+        w["Four"]   = w.get("Four",   0) * (1.0 - 0.12 * pw)
+
+    elif pitch == "Green":
+        # Old ball: seam fades, batting gets easier in overs 25+
+        # Meaningful only from wear ~0.40 onwards (over 20 of 50)
+        if pw > 0.30:
+            late_wear = (pw - 0.30) / 0.70   # 0→1 over overs 15-50
+            w["Wicket"] = w.get("Wicket", 0) * (1.0 - 0.18 * late_wear)
+            w["Four"]   = w.get("Four",   0) * (1.0 + 0.10 * late_wear)
+            w["Six"]    = w.get("Six",    0) * (1.0 + 0.08 * late_wear)
+
+    elif pitch == "Hard":
+        # True track deteriorates gently; reversal may assist pace later
+        w["Wicket"] = w.get("Wicket", 0) * (1.0 + 0.12 * pw)
+        w["Dot"]    = w.get("Dot",    0) * (1.0 + 0.05 * pw)
+
+    elif pitch in ("Flat", "Dead"):
+        # Batting-friendly pitches barely deteriorate
+        w["Wicket"] = w.get("Wicket", 0) * (1.0 - 0.08 * pw)
+        w["Four"]   = w.get("Four",   0) * (1.0 + 0.05 * pw)
+
+    # Re-normalise to preserve total weight
+    orig_total = sum(weights.values())
+    new_total  = sum(w.values())
+    if new_total > 0 and orig_total > 0:
+        scale = orig_total / new_total
+        w = {k: v * scale for k, v in w.items()}
+
+    return w
+
+
+def _apply_dew_factor(weights: dict, innings: int, over: int,
+                      is_day_night: bool, fmt) -> dict:
+    """
+    Dew factor for Day-Night ListA matches (floodlit evening conditions).
+
+    Physics: surface moisture makes the ball slippery after ~25 overs of the
+    2nd innings. Spin grips less, pace loses control (more wides), batting
+    becomes easier — classic ODI D/N swing to the chasing side.
+
+    Effect kicks in from over 25 of the 2nd innings in D/N matches.
+    Intensity scales linearly up to full effect at over 45.
+
+    Changes:
+      Extras  : +40% (wides from wet ball)
+      Wicket  : -15% (harder for spinners to grip)
+      Four    : +10% (easier to time on damp outfield)
+    """
+    if not is_day_night or innings != 2:
+        return weights
+
+    dew_start = 24   # 0-based over index (= over 25)
+    dew_peak  = 44   # full effect by over 45
+    if over < dew_start:
+        return weights
+
+    intensity = min((over - dew_start) / max(dew_peak - dew_start, 1), 1.0)
+    w = dict(weights)
+    w["Extras"] = w.get("Extras", 0) * (1.0 + 0.40 * intensity)
+    w["Wicket"] = w.get("Wicket", 0) * (1.0 - 0.15 * intensity)
+    w["Four"]   = w.get("Four",   0) * (1.0 + 0.10 * intensity)
+
+    # Re-normalise
+    orig_total = sum(weights.values())
+    new_total  = sum(w.values())
+    if new_total > 0 and orig_total > 0:
+        scale = orig_total / new_total
+        w = {k: v * scale for k, v in w.items()}
+
+    return w
+
+
 def _validate_scoring_matrices():
     """Validate that all pitch scoring matrices sum to 1.0"""
     logger.info("Validating pitch scoring matrices:")
@@ -224,10 +450,20 @@ def _validate_scoring_matrices():
 
         if abs(total - 1.0) >= 0.001:
             logger.warning(f"    Warning: {pitch_type} matrix doesn't sum to 1.0!")
-    
+
+    # Validate ListA phase matrices
+    for label, matrix in [("ListA-PP1", LISTA_PP1_MATRIX),
+                           ("ListA-Middle", LISTA_MIDDLE_MATRIX),
+                           ("ListA-Death", LISTA_DEATH_MATRIX)]:
+        total = sum(matrix.values())
+        status = "OK" if abs(total - 1.0) < 0.001 else "FAIL"
+        logger.info(f"  {label}: {total:.3f} [{status}]")
+        if abs(total - 1.0) >= 0.001:
+            logger.warning(f"    Warning: {label} matrix doesn't sum to 1.0!")
+
     # Validate default matrix too
     default_total = sum(DEFAULT_SCORING_MATRIX.values())
-    # print(f"  DEFAULT: {default_total:.3f} {'✅' if abs(default_total - 1.0) < 0.1 else '❌'}")
+    # print(f"  DEFAULT: {default_total:.3f} {'OK' if abs(default_total - 1.0) < 0.1 else 'FAIL'}")
 
 # Validate matrices on module import (runs once when ball_outcome.py is imported)
 _validate_scoring_matrices()
@@ -467,6 +703,8 @@ def calculate_outcome(
     game_mode_override: str = None,
     fielding_quality: float = None,
     ground_config_override: dict = None,
+    format_config: "FormatConfig | None" = None,
+    is_day_night: bool = False,
 ) -> dict:
     """
     Determines the outcome of a single delivery.
@@ -502,11 +740,37 @@ def calculate_outcome(
     bowling_hand = bowler["bowling_hand"]
     bowling_type = bowler["bowling_type"]
 
-    # 2) Get pitch-specific scoring matrix (user config snapshot → global config → hardcoded fallback)
-    # Feature 13: pass game_mode_override so dynamic game mode selection is respected.
-    _gc = ground_config_override  # shorthand; None for legacy matches → falls back to global cache
-    pitch_matrix = _gc_scoring_matrix(pitch, mode_override=game_mode_override, config=_gc) or PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX)
-    # print(f"[calculate_outcome] Using scoring matrix for pitch: {pitch}")
+    # 2) Select scoring matrix — format-aware.
+    #    ListA: phase-specific matrix (PP1 / Middle / Death) scaled by pitch run factor.
+    #    T20 / legacy: ground_conditions.yaml → hardcoded matrix (existing path).
+    _gc = ground_config_override  # shorthand; None → global config cache
+    _is_lista = (format_config is not None and format_config.name == "ListA")
+
+    if _is_lista:
+        # Pick the phase matrix then scale every outcome by the pitch run factor.
+        # We do NOT apply game_mode_override here — ListA uses its own phase boosts
+        # instead of T20 game-mode multipliers.
+        _base_matrix = _get_lista_matrix(over_number, format_config)
+        _run_factor  = LISTA_RUN_FACTORS.get(pitch, 1.0)
+        # Boundary and Wicket rows are pitch-modulated differently from run rows.
+        # Scale run outcomes by run_factor; keep Wicket/Extras at original proportions.
+        _RUN_OUTCOMES = {"Dot", "Single", "Double", "Three", "Four", "Six"}
+        pitch_matrix = {}
+        for _k, _v in _base_matrix.items():
+            if _k in _RUN_OUTCOMES:
+                pitch_matrix[_k] = _v * _run_factor
+            else:
+                pitch_matrix[_k] = _v
+        # Renormalise so weights still sum to 1.0
+        _pm_total = sum(pitch_matrix.values())
+        if _pm_total > 0:
+            pitch_matrix = {k: v / _pm_total for k, v in pitch_matrix.items()}
+        logger.debug("[ListA] phase=%s pitch=%s run_factor=%.2f",
+                     format_config.get_phase(over_number).name, pitch, _run_factor)
+    else:
+        # Existing T20 / legacy path
+        pitch_matrix = (_gc_scoring_matrix(pitch, mode_override=game_mode_override, config=_gc)
+                        or PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX))
 
     raw_weights = {}
     for outcome in pitch_matrix:
@@ -574,62 +838,86 @@ def calculate_outcome(
                 config=_gc,
             )
 
-        # --- Phase boosts (apply to ALL outcome types, not just Extras) ---
-        # Load configurable phase boosts with hardcoded fallbacks
-        _phase = _gc_phase_boosts(config=_gc) or {}
-        _pp_cfg = _phase.get("powerplay", {})
-        _death_cfg = _phase.get("death_overs", {})
-        _inn2_cfg = _phase.get("second_innings_death", {})
+        # --- T20 phase boosts (skipped for ListA — handled via _apply_lista_phase_boosts) ---
+        if not _is_lista:
+            # Load configurable phase boosts with hardcoded fallbacks
+            _phase = _gc_phase_boosts(config=_gc) or {}
+            _pp_cfg = _phase.get("powerplay", {})
+            _death_cfg = _phase.get("death_overs", {})
+            _inn2_cfg = _phase.get("second_innings_death", {})
 
-        # Powerplay boosts
-        pp_start = _pp_cfg.get("overs_start", 0)
-        pp_end = _pp_cfg.get("overs_end", 5)
-        if pp_start <= over_number <= pp_end:
-            if outcome in ("Four", "Six"):
-                pp_boost = _pp_cfg.get("boundary_multiplier", 1.25)
-                logger.debug(f"  [Powerplay] Boosting {outcome} by {pp_boost}x")
-                weight *= pp_boost
+            # Powerplay boosts
+            pp_start = _pp_cfg.get("overs_start", 0)
+            pp_end = _pp_cfg.get("overs_end", 5)
+            if pp_start <= over_number <= pp_end:
+                if outcome in ("Four", "Six"):
+                    pp_boost = _pp_cfg.get("boundary_multiplier", 1.25)
+                    logger.debug(f"  [Powerplay] Boosting {outcome} by {pp_boost}x")
+                    weight *= pp_boost
 
-        # Death-over boosts (last 4 overs: 17-20)
-        death_start = _death_cfg.get("overs_start", 16)
-        death_end = _death_cfg.get("overs_end", 19)
-        in_death = death_start <= over_number <= death_end
+            # Death-over boosts (last 4 overs: 17-20)
+            death_start = _death_cfg.get("overs_start", 16)
+            death_end = _death_cfg.get("overs_end", 19)
+            in_death = death_start <= over_number <= death_end
 
-        if in_death:
-            if outcome in ("Four", "Six"):
-                if pitch in ("Flat", "Dead", "Hard"):
-                    boundary_boost = _death_cfg.get("boundary_boost_batting_pitch", 2.2)
-                else:  # Green or Dry
-                    boundary_boost = _death_cfg.get("boundary_boost_bowling_pitch", 1.8)
-                logger.debug(f"  DeathOver: BOUNDARY ({outcome}) on {pitch} by factor {boundary_boost}")
-                weight *= boundary_boost
+            if in_death:
+                if outcome in ("Four", "Six"):
+                    if pitch in ("Flat", "Dead", "Hard"):
+                        boundary_boost = _death_cfg.get("boundary_boost_batting_pitch", 2.2)
+                    else:  # Green or Dry
+                        boundary_boost = _death_cfg.get("boundary_boost_bowling_pitch", 1.8)
+                    logger.debug(f"  DeathOver: BOUNDARY ({outcome}) on {pitch} by factor {boundary_boost}")
+                    weight *= boundary_boost
 
-            if outcome == "Wicket":
-                wicket_boost = _death_cfg.get("wicket_boost", 1.6)
-                logger.debug(f"  DeathOver: WICKET on {pitch} by factor {wicket_boost}")
-                weight *= wicket_boost
+                if outcome == "Wicket":
+                    wicket_boost = _death_cfg.get("wicket_boost", 1.6)
+                    logger.debug(f"  DeathOver: WICKET on {pitch} by factor {wicket_boost}")
+                    weight *= wicket_boost
 
-        # Second innings death-over boosts (mild — chasing advantage already helps)
-        if innings == 2 and in_death:
-            if outcome in ("Single", "Double", "Three", "Four", "Six"):
-                scoring_boost = _inn2_cfg.get("scoring_boost", 1.05)
-                weight *= scoring_boost
+            # Second innings death-over boosts (mild — chasing advantage already helps)
+            if innings == 2 and in_death:
+                if outcome in ("Single", "Double", "Three", "Four", "Six"):
+                    scoring_boost = _inn2_cfg.get("scoring_boost", 1.05)
+                    weight *= scoring_boost
 
-            if outcome == "Wicket":
-                wicket_boost_2nd = _inn2_cfg.get("wicket_boost", 1.15)
-                weight *= wicket_boost_2nd
+                if outcome == "Wicket":
+                    wicket_boost_2nd = _inn2_cfg.get("wicket_boost", 1.15)
+                    weight *= wicket_boost_2nd
 
         # Ensure no negative weights
         weight = max(weight, 0.0)
         raw_weights[outcome] = weight
         # print(f"  FinalRawWeight[{outcome}]: {weight:.6f}")
     
-    # 3.25) Apply pitch deterioration (Feature 3).
-    # Adjusts raw weights based on how many balls have been bowled this innings.
-    # Must run BEFORE GSME so the momentum engine sees wear-adjusted base weights.
-    if pitch_wear > 0.0:
-        raw_weights = _apply_pitch_wear(raw_weights, pitch, pitch_wear)
-        logger.debug("[PitchWear=%.3f] Applied pitch deterioration to raw_weights.", pitch_wear)
+    # 3.25) Apply phase boosts and pitch deterioration.
+    # ListA uses its own phase boost table and progressive wear model.
+    # T20 uses the existing _apply_pitch_wear (unchanged).
+    # All wear layers run BEFORE GSME so the momentum engine sees adjusted weights.
+    if _is_lista:
+        # ListA phase boosts (PP1 / Middle / Death boundary/wicket modifiers)
+        raw_weights = _apply_lista_phase_boosts(raw_weights, over_number, pitch,
+                                                innings, format_config)
+        # ListA progressive pitch wear (more pronounced on Dry/Hard over 50 overs)
+        if pitch_wear > 0.0:
+            raw_weights = _apply_lista_pitch_wear(raw_weights, pitch, pitch_wear)
+            logger.debug("[ListA PitchWear=%.3f] Applied ListA wear model.", pitch_wear)
+        # Dew factor for Day/Night matches (2nd innings evening)
+        raw_weights = _apply_dew_factor(raw_weights, innings, over_number,
+                                        is_day_night, format_config)
+        # Hard pitch retune (user-requested):
+        # - Wicket frequency down 5%
+        # - Singles up slightly
+        # - Boundary scoring up 5%
+        if pitch == "Hard":
+            raw_weights["Wicket"] = raw_weights.get("Wicket", 0.0) * 0.95
+            raw_weights["Single"] = raw_weights.get("Single", 0.0) * 1.05
+            raw_weights["Four"] = raw_weights.get("Four", 0.0) * 1.05
+            raw_weights["Six"] = raw_weights.get("Six", 0.0) * 1.05
+    else:
+        # T20 / legacy path — existing pitch wear model unchanged
+        if pitch_wear > 0.0:
+            raw_weights = _apply_pitch_wear(raw_weights, pitch, pitch_wear)
+            logger.debug("[PitchWear=%.3f] Applied T20 pitch deterioration.", pitch_wear)
 
     # 3.5) Apply Game State Momentum Engine (GSME) adjustments.
     # This layer accounts for ball history (last 18 deliveries), run-rate
@@ -847,4 +1135,3 @@ def calculate_outcome(
 
     logger.debug("=======================================================\n")
     return result
-

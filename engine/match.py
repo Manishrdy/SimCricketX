@@ -11,8 +11,11 @@ from engine.game_state_engine import (
     compute_game_state_vector,
     apply_game_state_to_probs,
     make_ball_event,
+    get_par_score,
     BALL_HISTORY_WINDOW,
 )
+from engine.format_config import get_format
+from engine.bowler_manager import BowlerManager
 
 
 logger = logging.getLogger(__name__)
@@ -115,8 +118,11 @@ class Match:
             else:  # toss_decision == "Bowl"
                 self.batting_team, self.bowling_team = self.home_xi, self.away_xi
 
+        # Load format config (T20 by default for backward compatibility)
+        self.fmt = get_format(match_data.get("match_format", "T20"))
+
         # Feature 7: compute toss × conditions advantage once at match start.
-        _correct_choice = _CORRECT_TOSS_CHOICE.get(self.pitch, "bat")
+        _correct_choice = self.fmt.correct_toss_choice.get(self.pitch, "bat")
         # toss_decision stored as 'Bat' or 'Bowl'; correct_choice is lowercase.
         self._toss_choice_correct = (self.toss_decision or "").lower() == _correct_choice
         # Track which XI won the toss (used in next_ball for per-innings check).
@@ -125,8 +131,12 @@ class Match:
         else:
             self._toss_winner_xi = self.away_xi
 
-        self.bowler_history = {}
-        self.overs = 20
+        # BowlerManager owns quota + consecutive-over enforcement for this format
+        self.bowler_manager = BowlerManager(self.bowling_team, self.fmt)
+        # Keep bowler_history as a live alias into BowlerManager's quota dict
+        # so existing read-only usages remain valid without a large refactor.
+        self.bowler_history = self.bowler_manager._quota
+        self.overs = self.fmt.overs
         self.current_over = 0
         self.current_ball = 0
         self.batter_idx = [0, 1]
@@ -196,8 +206,8 @@ class Match:
         self.super_over_round = 0  # Track which super over we're on
         self.super_over_history = []  # Track scores from each super over
 
-        # Initialize pressure engine
-        self.pressure_engine = PressureEngine()
+        # Initialize pressure engine (format_config wires phase thresholds + RRs)
+        self.pressure_engine = PressureEngine(format_config=self.fmt)
 
         # Track partnership for pressure calculation AND archiving
         self.current_partnership_balls = 0
@@ -315,12 +325,12 @@ class Match:
         previous_bowler = self.current_bowler["name"] if self.current_bowler else None
         strict = [
             (i, p) for i, p in all_bowlers
-            if self.bowler_history.get(p["name"], 0) < 4 and p["name"] != previous_bowler
+            if self.bowler_history.get(p["name"], 0) < self.fmt.max_bowler_overs and p["name"] != previous_bowler
         ]
         if strict:
             return strict
 
-        quota_only = [(i, p) for i, p in all_bowlers if self.bowler_history.get(p["name"], 0) < 4]
+        quota_only = [(i, p) for i, p in all_bowlers if self.bowler_history.get(p["name"], 0) < self.fmt.max_bowler_overs]
         if quota_only:
             return quota_only
         return all_bowlers
@@ -337,7 +347,7 @@ class Match:
                 "bowling_type": bowler.get("bowling_type", ""),
                 "bowling_rating": bowler.get("bowling_rating", 0),
                 "overs_bowled": overs_done,
-                "overs_remaining": max(0, 4 - overs_done)
+                "overs_remaining": max(0, self.fmt.max_bowler_overs - overs_done)
             })
 
         options.sort(key=lambda b: (b["overs_remaining"], b["bowling_rating"]), reverse=True)
@@ -1217,7 +1227,7 @@ class Match:
             overs_bowled = self.bowler_history.get(bowler["name"], 0)
             is_consecutive = self.current_bowler and bowler["name"] == self.current_bowler["name"]
             
-            if overs_bowled < 4 and not is_consecutive:
+            if overs_bowled < self.fmt.max_bowler_overs and not is_consecutive:
                 print(f"🆘 Emergency selection: {bowler['name']}")
                 return bowler
         
@@ -1251,14 +1261,14 @@ class Match:
             bowler_quota = {}
             for bowler in all_bowlers:
                 overs_bowled = self.bowler_history.get(bowler["name"], 0)
-                overs_remaining = max(0, 4 - overs_bowled)
+                overs_remaining = max(0, self.fmt.max_bowler_overs - overs_bowled)
                 if overs_remaining > 0:
                     bowler_quota[bowler["name"]] = {
                         'bowler': bowler,
                         'overs_remaining': overs_remaining,
                         'overs_bowled': overs_bowled
                     }
-                    print(f"  {bowler['name']}: {overs_bowled}/4 bowled, {overs_remaining} remaining")
+                    print(f"  {bowler['name']}: {overs_bowled}/{self.fmt.max_bowler_overs} bowled, {overs_remaining} remaining")
             
             # Calculate complete death plan for all 3 overs
             self.death_overs_plan = self._calculate_death_overs_plan_safe(bowler_quota)
@@ -1302,7 +1312,7 @@ class Match:
             return self._emergency_single_bowler_selection()
         
         # D4: bowler_history increment moved to over completion
-        print(f"📝 {selected_bowler['name']} current quota: {self.bowler_history.get(selected_bowler['name'], 0)}/4")
+        print(f"📝 {selected_bowler['name']} current quota: {self.bowler_history.get(selected_bowler['name'], 0)}/{self.fmt.max_bowler_overs}")
 
         # Initialize bowler stats if needed
         if selected_bowler["name"] not in self.bowler_stats:
@@ -1522,39 +1532,42 @@ class Match:
         bowler_data = quota_analysis[selected_bowler["name"]]
         overs_bowled = bowler_data['overs_bowled']
         
-        # ABSOLUTE CHECK 1: 4-overs policy (STRICT)
-        if overs_bowled >= 4:
-            print(f"  🚨 ABSOLUTE VIOLATION: {selected_bowler['name']} has {overs_bowled} overs (limit: 4)")
+        # ABSOLUTE CHECK 1: bowling quota policy (STRICT)
+        max_q = self.fmt.max_bowler_overs
+        if overs_bowled >= max_q:
+            print(f"  🚨 ABSOLUTE VIOLATION: {selected_bowler['name']} has {overs_bowled} overs (limit: {max_q})")
             return {
                 'valid': False,
-                'reason': f"ABSOLUTE 4-overs violation: {selected_bowler['name']} has {overs_bowled}/4 overs",
+                'reason': f"ABSOLUTE quota violation: {selected_bowler['name']} has {overs_bowled}/{max_q} overs",
                 'critical': True
             }
-        
-        # ABSOLUTE CHECK 2: Consecutive policy (STRICT)
-        if self.current_bowler and selected_bowler["name"] == self.current_bowler["name"]:
+
+        # ABSOLUTE CHECK 2: Consecutive policy (STRICT — ListA only; T20 allows it)
+        if (not self.fmt.allow_consecutive_overs
+                and self.current_bowler and selected_bowler["name"] == self.current_bowler["name"]):
             print(f"  🚨 ABSOLUTE VIOLATION: {selected_bowler['name']} bowled previous over")
             return {
                 'valid': False,
                 'reason': f"ABSOLUTE consecutive violation: {selected_bowler['name']} bowled previous over",
                 'critical': True
             }
-        
-        print(f"  ✅ ABSOLUTE VALIDATION PASSED: {selected_bowler['name']} ({overs_bowled}/4 overs)")
+
+        print(f"  ✅ ABSOLUTE VALIDATION PASSED: {selected_bowler['name']} ({overs_bowled}/{max_q} overs)")
         return {'valid': True, 'reason': 'All constraints met', 'critical': False}
 
     def _force_valid_selection(self, all_bowlers, quota_analysis):
         """Force valid selection with ABSOLUTE constraints - NO compromises"""
         print(f"  🔧 ABSOLUTE FORCE VALID SELECTION:")
         
-        # ABSOLUTE RULE: Find ANY bowler with < 4 overs who didn't bowl previous over
+        # ABSOLUTE RULE: Find ANY bowler within quota who didn't bowl previous over
+        max_q = self.fmt.max_bowler_overs
         for bowler in all_bowlers:
             bowler_data = quota_analysis[bowler["name"]]
             is_consecutive = self.current_bowler and bowler["name"] == self.current_bowler["name"]
             overs_bowled = bowler_data['overs_bowled']
-            
-            if overs_bowled < 4 and not is_consecutive:
-                print(f"  ✅ ABSOLUTE VALID: {bowler['name']} ({overs_bowled}/4 overs, not consecutive)")
+
+            if overs_bowled < max_q and not is_consecutive:
+                print(f"  ✅ ABSOLUTE VALID: {bowler['name']} ({overs_bowled}/{max_q} overs, not consecutive)")
                 return bowler
         
         # If we reach here, there's a systematic error in constraint management
@@ -1577,7 +1590,7 @@ class Match:
 
         # D4: bowler_history is now incremented at over completion, not at selection
         # This prevents over-counting when an innings ends mid-over
-        print(f"    {selected_bowler['name']} current quota: {self.bowler_history.get(selected_bowler['name'], 0)}/4")
+        print(f"    {selected_bowler['name']} current quota: {self.bowler_history.get(selected_bowler['name'], 0)}/{self.fmt.max_bowler_overs}")
         
         # Initialize/update bowler stats
         if selected_bowler["name"] not in self.bowler_stats:
@@ -1593,8 +1606,8 @@ class Match:
 
     def _project_future_constraints(self, selected_bowler, all_bowlers):
         """Project future constraint implications"""
-        remaining_overs = 20 - (self.current_over + 1)
-        
+        remaining_overs = self.fmt.overs - (self.current_over + 1)
+
         # Calculate post-selection availability
         available_next_over = 0
         for bowler in all_bowlers:
@@ -1602,7 +1615,7 @@ class Match:
             if bowler["name"] == selected_bowler["name"]:
                 future_overs += 1
             
-            if future_overs < 4 and bowler["name"] != selected_bowler["name"]:
+            if future_overs < self.fmt.max_bowler_overs and bowler["name"] != selected_bowler["name"]:
                 available_next_over += 1
         
         # Assess next over risk
@@ -1629,7 +1642,7 @@ class Match:
         # In emergency mode, only apply critical strategy elements
         
         # 1. Death overs specialization (if in death overs and specialists available)
-        if self.current_over >= 16:
+        if self.fmt.is_death(self.current_over):
             death_specialists = [b for b in constraint_eligible if self._is_death_specialist(b)]
             if death_specialists:
                 print(f"  💀 Death overs: Using specialists {[b['name'] for b in death_specialists]}")
@@ -1678,6 +1691,10 @@ class Match:
 
         # Feature 8: reset per-over bowler feedback for new innings
         self.bowler_prev_over_runs = {}
+        # Reset BowlerManager for the new innings bowling side
+        self.bowler_manager.reset(self.bowling_team)
+        # Re-point alias so existing bowler_history reads remain valid
+        self.bowler_history = self.bowler_manager._quota
 
         # Reset partnership tracking
         self.current_partnership_balls = 0
@@ -1745,21 +1762,20 @@ class Match:
         else:
             phase_key = "default"
 
-        # Feature 1: select phase multiplier
+        # Feature 1: select phase multiplier via format-aware phase detection
         over = self.current_over
-        if over <= 5:
+        if self.fmt.is_powerplay(over):
             phase_mult = _POWERPLAY_BOWLING_MULT.get(phase_key, 1.00)
-        elif over >= 16:
+        elif self.fmt.is_death(over):
             phase_mult = _DEATH_BOWLING_MULT.get(phase_key, 1.00)
         else:
             phase_mult = _MIDDLE_BOWLING_MULT.get(phase_key, 1.00)
 
-        # Feature 2: fatigue from overs bowled in this innings
-        overs_bowled = self.bowler_history.get(bowler_name, 0)
-        fatigue = _FATIGUE_MULT.get(min(overs_bowled, 4), 0.94)
+        # Feature 2: fatigue via BowlerManager (supports up to 10-over spells)
+        fatigue = self.bowler_manager.get_fatigue_mult(bowler_name)
 
-        # Feature 8: previous over performance feedback
-        prev_runs = self.bowler_prev_over_runs.get(bowler_name, -1)
+        # Feature 8: previous over performance feedback via BowlerManager
+        prev_runs = self.bowler_manager.prev_over_runs(bowler_name)
         if prev_runs == 0:           # Maiden — confidence boost
             feedback_mult = 1.05
         elif prev_runs >= 20:        # Very expensive — confidence hit
@@ -2169,11 +2185,12 @@ class Match:
         
         for bowler in all_bowlers:
             overs_bowled = self.bowler_history.get(bowler["name"], 0)
-            overs_remaining = max(0, 4 - overs_bowled)  # Never negative
-            percentage = (overs_bowled / 4) * 100
-            
+            max_q = self.fmt.max_bowler_overs
+            overs_remaining = max(0, max_q - overs_bowled)  # Never negative
+            percentage = (overs_bowled / max_q) * 100
+
             # STRICT STATUS DETERMINATION
-            if overs_bowled >= 4:
+            if overs_bowled >= max_q:
                 status = "EXHAUSTED"
                 exhausted = True
             elif overs_bowled >= 3:
@@ -2195,7 +2212,7 @@ class Match:
                 'exhausted': exhausted  # STRICT: True only if >= 4 overs
             }
             
-            print(f"    {bowler['name']}: {overs_bowled}/4 ({percentage:.1f}%) - {status}")
+            print(f"    {bowler['name']}: {overs_bowled}/{self.fmt.max_bowler_overs} ({percentage:.1f}%) - {status}")
         
         return quota_analysis
 
@@ -2204,7 +2221,7 @@ class Match:
         print(f"  🔍 Constraint Risk Assessment:")
         
         # Calculate key metrics
-        total_overs_remaining = 20 - (self.current_over + 1)
+        total_overs_remaining = self.fmt.overs - (self.current_over + 1)
         exhausted_bowlers = sum(1 for data in quota_analysis.values() if data['exhausted'])
         critical_bowlers = sum(1 for data in quota_analysis.values() if data['overs_bowled'] >= 3)
         available_bowlers = len(all_bowlers) - exhausted_bowlers
@@ -2230,7 +2247,7 @@ class Match:
         elif critical_bowlers >= 3:
             risk_factors.append("HIGH_QUOTA_PRESSURE")
         
-        if self.current_over >= 16 and available_bowlers <= 3:
+        if self.fmt.is_death(self.current_over) and available_bowlers <= 3:
             risk_factors.append("DEATH_OVERS_CONSTRAINT")
         
         # Determine risk level
@@ -2349,7 +2366,7 @@ class Match:
                 quota_eligible.append(bowler)
                 print(f"    ✅ {bowler['name']}: {bowler_data['overs_remaining']} overs remaining")
             else:
-                print(f"    ❌ {bowler['name']}: EXHAUSTED (4/4 overs)")
+                print(f"    ❌ {bowler['name']}: EXHAUSTED ({self.fmt.max_bowler_overs}/{self.fmt.max_bowler_overs} overs)")
         
         print(f"  Quota-eligible bowlers: {len(quota_eligible)}/{len(all_bowlers)}")
         return quota_eligible
@@ -2443,13 +2460,14 @@ class Match:
         
         for bowler in non_consecutive_bowlers:
             bowler_data = quota_analysis[bowler["name"]]
-            if bowler_data['overs_bowled'] < 4:
+            if bowler_data['overs_bowled'] < self.fmt.max_bowler_overs:
                 preferred_bowlers.append(bowler)
             else:
                 fallback_bowlers.append(bowler)
-        
-        print(f" Preferred (< 4 overs): {[b['name'] for b in preferred_bowlers]}")
-        print(f" Fallback (4+ overs): {[b['name'] for b in fallback_bowlers]}")
+
+        max_q = self.fmt.max_bowler_overs
+        print(f" Preferred (< {max_q} overs): {[b['name'] for b in preferred_bowlers]}")
+        print(f" Fallback ({max_q}+ overs): {[b['name'] for b in fallback_bowlers]}")
         
         # Step 3: Return preferred bowlers if available, otherwise use fallback
         if preferred_bowlers:
@@ -2515,7 +2533,7 @@ class Match:
             # No eligible fast bowler — either no fast bowlers in squad, or the only one
             # just bowled the previous over (consecutive conflict).
             # Fallback: try any bowling type that is quota-eligible AND non-consecutive,
-            # so the early-overs override doesn’t silently vanish when the top pacer
+            # so the early-overs override doesn't silently vanish when the top pacer
             # is unavailable.
             print(f"  ⚠️  No eligible non-consecutive fast bowler for early overs — trying any-type fallback")
             any_type_bowlers = [
@@ -2532,7 +2550,7 @@ class Match:
             selected = any_type_bowlers[0]
             overs_bowled = quota_analysis[selected['name']]['overs_bowled']
             print(f"  ✅ EARLY OVERS FALLBACK ({selected['bowling_type']}): {selected['name']} "
-                  f"(Rating: {selected['bowling_rating']}, Overs: {overs_bowled}/4)")
+                  f"(Rating: {selected['bowling_rating']}, Overs: {overs_bowled}/{self.fmt.max_bowler_overs})")
             return selected
 
         # Sort by rating first (highest to lowest), then by role (pure bowlers > all-rounders)
@@ -2544,7 +2562,7 @@ class Match:
         selected = fast_bowlers[0]
         overs_bowled = quota_analysis[selected['name']]['overs_bowled']
 
-        print(f"  ✅ EARLY OVERS FAST: {selected['name']} (Rating: {selected['bowling_rating']}, Overs: {overs_bowled}/4)")
+        print(f"  ✅ EARLY OVERS FAST: {selected['name']} (Rating: {selected['bowling_rating']}, Overs: {overs_bowled}/{self.fmt.max_bowler_overs})")
         return selected
 
     def _prevent_star_neglect(self, bowler_tiers, quota_analysis):
@@ -2604,7 +2622,7 @@ class Match:
         bowler_data = quota_analysis[bowler['name']]
         
         # Must have overs remaining
-        if bowler_data['overs_bowled'] >= 4:
+        if bowler_data['overs_bowled'] >= self.fmt.max_bowler_overs:
             return False
         
         # Must not have bowled previous over (consecutive check)
@@ -2725,7 +2743,7 @@ class Match:
         print(f" Available bowlers: {available_bowlers}")
         
         # Check if exactly 2 bowlers remain with total overs = remaining match overs
-        remaining_match_overs = 20 - (self.current_over + 1)
+        remaining_match_overs = self.fmt.overs - (self.current_over + 1)
         total_available_overs = sum(available_bowlers.values())
         
         print(f" Remaining match overs: {remaining_match_overs}")
@@ -2890,7 +2908,7 @@ class Match:
 
         # Sub-phase 1A: 4-Overs Policy Enforcement
         quota_eligible = self._apply_strict_quota_policy(all_bowlers, quota_analysis)
-        print(f"After 4-overs filter: {[b['name'] for b in quota_eligible]}")
+        print(f"After {self.fmt.max_bowler_overs}-overs filter: {[b['name'] for b in quota_eligible]}")
 
         # Sub-phase 1B: No Consecutive Policy Enforcement
         constraint_eligible = self._apply_strict_consecutive_policy(quota_eligible, risk_assessment)
@@ -2909,7 +2927,7 @@ class Match:
                 # 2. Replace constraint_eligible with that filtered list
                 constraint_eligible = filtered
 
-                # 3. Temporarily boost each bowler’s bowling_rating by 10% (capped at 100)
+                # 3. Temporarily boost each bowler's bowling_rating by 10% (capped at 100)
                 for bowler in constraint_eligible:
                     if bowler.get("_orig_bowling_rating") is None:  # Fix D6: Correct typo
                         bowler["_orig_bowling_rating"] = bowler["bowling_rating"]
@@ -2919,11 +2937,11 @@ class Match:
         # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
         # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
-        # NEW: Ensure every ‘will_bowl=True’ bowler bowls at least 1 over.
+        # NEW: Ensure every 'will_bowl=True' bowler bowls at least 1 over.
         # If the number of remaining overs equals the count of fresh bowlers,
-        # force selection from those who haven’t yet bowled.
-        remaining_overs = 20 - (self.current_over + 1)
-        # “Fresh” means: marked will_bowl AND overs_bowled == 0
+        # force selection from those who haven't yet bowled.
+        remaining_overs = self.fmt.overs - (self.current_over + 1)
+        # Fresh means: marked will_bowl AND overs_bowled == 0
         fresh_bowlers = [
             b for b in constraint_eligible
             if b.get("will_bowl", False)
@@ -2996,7 +3014,7 @@ class Match:
         # Project future implications
         future_projection = self._project_future_constraints(selected_bowler, all_bowlers)
         print(f"📈 FUTURE PROJECTION:")
-        print(f"  Remaining overs: {20 - (self.current_over + 1)}")
+        print(f"  Remaining overs: {self.fmt.overs - (self.current_over + 1)}")
         print(f"  Available bowlers after this over: {future_projection['available_count']}")
         print(f"  Potential risk next over: {future_projection['next_over_risk']}")
 
@@ -3245,7 +3263,7 @@ class Match:
                     print(f"   {i+1}. {player['name']}")
 
                 self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": "", "form": 1.0} for p in self.batting_team}
-                self.bowler_history = {}
+                # bowler_history reset is handled inside _reset_innings_state() via BowlerManager
                 self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p.get("will_bowl")}
                 self._reset_innings_state()
 
@@ -3392,12 +3410,13 @@ class Match:
                         }
 
                     previous_name = self.current_bowler["name"] if self.current_bowler else None
+                    max_q = self.fmt.max_bowler_overs
                     quota_non_consecutive = [
                         b for b in eligible
-                        if b["name"] != previous_name and self.bowler_history.get(b["name"], 0) < 4
+                        if b["name"] != previous_name and self.bowler_history.get(b["name"], 0) < max_q
                     ]
                     non_consecutive = [b for b in eligible if b["name"] != previous_name]
-                    quota_any = [b for b in eligible if self.bowler_history.get(b["name"], 0) < 4]
+                    quota_any = [b for b in eligible if self.bowler_history.get(b["name"], 0) < max_q]
 
                     fallback_pool = quota_non_consecutive or non_consecutive or quota_any or eligible
                     fallback_pool.sort(key=lambda b: (-b.get("bowling_rating", 0), b.get("name", "")))
@@ -3541,8 +3560,11 @@ class Match:
                     _batting_position = _idx + 1
                     break
 
-            # Feature 3: pitch wear from balls bowled in this innings
-            _pitch_wear = min(1.0, self.innings_balls_bowled / 120.0)
+            # Feature 3: pitch wear from balls bowled this innings.
+            # Normalised to the total ball capacity of the format
+            # (T20=120, ListA=300) so wear progresses at the right pace.
+            _total_balls = self.fmt.overs * 6
+            _pitch_wear = min(1.0, self.innings_balls_bowled / _total_balls)
 
             # Feature 13: dynamic game mode selection
             _game_mode_override = self._get_dynamic_game_mode()
@@ -3587,6 +3609,7 @@ class Match:
                 partnership_balls=_partnership_balls,
                 partnership_runs=_partnership_runs,
                 scenario_phase=_scenario_phase,
+                format_config=self.fmt,
             )
 
             outcome = calculate_outcome(
@@ -3606,6 +3629,8 @@ class Match:
                 game_mode_override=_game_mode_override,
                 fielding_quality=_team_fielding_avg,
                 ground_config_override=self.ground_config,
+                format_config=self.fmt,
+                is_day_night=self.data.get("is_day_night", False),
             )
 
         # 🎙️ COMMENTARY REVAMP INTEGRATION
@@ -3658,6 +3683,8 @@ class Match:
                 batting_position=_batting_position,
                 game_mode_override=_game_mode_override,
                 ground_config_override=self.ground_config,
+                format_config=self.fmt,
+                is_day_night=self.data.get("is_day_night", False),
             )
 
             bat_runs = bat_outcome.get("runs", 0)
@@ -3923,7 +3950,7 @@ class Match:
                     self.current_striker = self.batting_team[0]
                     self.current_non_striker = self.batting_team[1]
                     self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": "", "form": 1.0} for p in self.batting_team}
-                    self.bowler_history = {}
+                    # bowler_history reset is handled inside _reset_innings_state() via BowlerManager
                     self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p["will_bowl"]}
                     self._reset_innings_state()
 
@@ -4389,10 +4416,13 @@ class Match:
             if not self.current_over_maiden_invalid:
                 self.bowler_stats[self.current_bowler["name"]]["maidens"] += 1
             self.bowler_stats[self.current_bowler["name"]]["overs"] += 1
-            # D4: Increment bowler_history at over completion, not at selection
-            self.bowler_history[self.current_bowler["name"]] = self.bowler_history.get(self.current_bowler["name"], 0) + 1
-
-            # Feature 8: save this over's run total for next-over feedback
+            # BowlerManager records quota + last_bowler + prev-over-runs atomically
+            self.bowler_manager.record_over_completion(
+                self.current_bowler["name"], self.current_over_runs
+            )
+            # Keep legacy alias in sync (bowler_history points to _quota via alias,
+            # so it is already updated; this line is intentionally left as comment)
+            # self.bowler_prev_over_runs is kept for legacy reads; sync it too:
             self.bowler_prev_over_runs[self.current_bowler["name"]] = self.current_over_runs
 
             all_commentary.append("")
@@ -4478,6 +4508,10 @@ class Match:
             "innings_number": self.innings,
             "target": getattr(self, "target", None),
             "total_overs": self.overs,
+            "match_format": self.fmt.name,
+            "phase_name": self.fmt.get_phase(self.current_over).name,
+            "bowler_overs_remaining": self.bowler_manager.overs_remaining(_bowler_name),
+            "bowler_max_overs": self.fmt.max_bowler_overs,
             "partnership_runs": self.current_partnership_runs,
             "partnership_balls": self.current_partnership_balls,
             "win_probability": _win_prob,

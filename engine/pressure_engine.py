@@ -1,17 +1,25 @@
 import random
 import logging
 
+from engine.format_config import get_format
+
 logger = logging.getLogger(__name__)
 
 class PressureEngine:
-    def __init__(self):
-        # Expected run rates by phase
+    def __init__(self, format_config=None):
+        # Resolve format — defaults to T20 for backward compatibility
+        self.fmt = format_config if format_config is not None else get_format("T20")
+
+        # Build expected run rates from FormatConfig so both T20 and ListA
+        # phase keys map to the three canonical pressure slots.
+        _pp_key = (self.fmt.powerplay_phases[0].name
+                   if self.fmt.powerplay_phases else "Powerplay")
         self.expected_rr_first_innings = {
-            'powerplay': 7.5,      # Overs 1-6
-            'middle': 8.0,         # Overs 7-15  
-            'death': 10.5          # Overs 16-20
+            'powerplay': self.fmt.expected_rr.get(_pp_key, 7.5),
+            'middle':    self.fmt.expected_rr.get("Middle", 8.0),
+            'death':     self.fmt.expected_rr.get("Death", 10.5),
         }
-        
+
         # Recent events for momentum (last 3 balls)
         self.recent_events = []
     
@@ -28,20 +36,20 @@ class PressureEngine:
         risk_factor = 1.0
         risk_components = []
         
-        # 1. Death overs base risk (overs 17-20)
-        if current_over >= 16:  # Overs 17, 18, 19, 20
-            death_risk = 0.3 + (current_over - 16) * 0.1  # Increases each over
+        # 1. Death overs base risk
+        if self.fmt.is_death(current_over):
+            death_risk = 0.3 + (current_over - self.fmt.death_phase.start) * 0.1
             risk_factor += death_risk
             risk_components.append(f"Death overs: +{death_risk:.1f}")
-        
+
         # 2. High required rate risk (throughout 2nd innings)
         if required_rr > 12:
             rr_risk = min((required_rr - 12) * 0.15, 0.8)  # Max +0.8 for very high RR
             risk_factor += rr_risk
             risk_components.append(f"High RRR ({required_rr:.1f}): +{rr_risk:.1f}")
-        
-        # 3. Final overs desperation (overs 19-20 only)
-        if current_over >= 18 and overs_remaining <= 2:
+
+        # 3. Final overs desperation (last 2 overs of any format)
+        if current_over >= self.fmt.overs - 2 and overs_remaining <= 2:
             final_desperation = 0.4
             risk_factor += final_desperation
             risk_components.append(f"Final desperation: +{final_desperation:.1f}")
@@ -55,37 +63,57 @@ class PressureEngine:
 
 
     def _calculate_first_innings_risk(self, match_state):
-        """First innings acceleration — teams push harder in death overs"""
+        """First innings acceleration — teams push harder in death/pre-death overs."""
         current_over = match_state.get('current_over', 0)
-        wickets = match_state.get('wickets', 0)
-        score = match_state.get('score', 0)
+        wickets      = match_state.get('wickets', 0)
+        score        = match_state.get('score', 0)
 
-        # Only accelerate in overs 15-19 (death overs)
-        if current_over < 15:
+        _death_start = self.fmt.death_phase.start   # T20: 16, ListA: 40
+        _pre_death   = _death_start - 1             # T20: 15, ListA: 39
+
+        # ListA: gradual slog-overs window before death (overs 35–39)
+        if self.fmt.name == "ListA" and 35 <= current_over < _death_start:
+            slog_boost = 0.05 + (current_over - 35) * 0.02  # 0.05 → 0.13
+            return min(1.0 + slog_boost, 1.25)
+
+        # Only accelerate from the over before death onwards
+        if current_over < _pre_death:
             return 1.0
 
-        risk_factor = 1.0
+        risk_factor     = 1.0
         wickets_in_hand = 10 - wickets
 
-        # Death overs base acceleration (all teams push in overs 16-20)
-        death_boost = 0.1 + (current_over - 15) * 0.05  # 0.10 → 0.30
+        # Death/pre-death base acceleration
+        death_boost  = 0.1 + (current_over - _pre_death) * 0.05
         risk_factor += death_boost
 
         # Wickets-in-hand multiplier
         if wickets_in_hand >= 7:
-            risk_factor += 0.15  # Plenty of batting — go big
+            risk_factor += 0.15   # Plenty of batting — go big
         elif wickets_in_hand >= 5:
-            risk_factor += 0.08  # Comfortable — can afford risks
+            risk_factor += 0.08   # Comfortable — can afford risks
         elif wickets_in_hand <= 2:
-            risk_factor -= 0.15  # Protect wickets, reduce aggression
+            risk_factor -= 0.15   # Protect wickets, reduce aggression
 
-        # Score-based urgency: behind par → push harder
-        par_score_at_over = {15: 115, 16: 130, 17: 148, 18: 165, 19: 180}
-        par = par_score_at_over.get(current_over, 115)
-        if score < par - 15:
-            risk_factor += 0.15  # Well behind par — desperate
-        elif score < par:
-            risk_factor += 0.08  # Slightly behind — need to push
+        # Score-based urgency: use format par scores instead of T20 lookup
+        par = self.fmt.par_scores.get(
+            current_over,
+            self.fmt.par_scores.get(self.fmt.overs, 0)
+        )
+        if par > 0:
+            if score < par - 15:
+                risk_factor += 0.15   # Well behind par — desperate
+            elif score < par:
+                risk_factor += 0.08   # Slightly behind — need to push
+
+        # ListA: dot-ball cluster pressure (3 consecutive dots → forced aggression)
+        if self.fmt.name == "ListA":
+            recent_dots = sum(
+                1 for e in self.recent_events[-3:]
+                if e.get('runs') == 0 and not e.get('extra')
+            )
+            if recent_dots >= 3:
+                risk_factor += 0.10   # Break-free pressure after dot cluster
 
         return max(1.0, min(risk_factor, 1.8))  # Cap at 1.8
 
@@ -98,8 +126,8 @@ class PressureEngine:
         wickets_fallen = match_state.get('wickets', 0)
         overs_remaining = match_state.get('overs_remaining', 0)
         
-        # Defensive mode only in death overs (17-20) with many wickets down
-        if current_over >= 16 and wickets_fallen >= 6:
+        # Defensive mode only in death overs with many wickets down
+        if self.fmt.is_death(current_over) and wickets_fallen >= 6:
             
             # More wickets fallen = more defensive
             if wickets_fallen >= 8:
@@ -156,7 +184,7 @@ class PressureEngine:
         required_rr = match_state.get('required_run_rate', 0)
 
         # Second innings: death overs with extreme required rate
-        if current_over >= 16 and required_rr >= 14:
+        if self.fmt.is_death(current_over) and required_rr >= 14:
             
             # Higher chance if already under pressure
             if wickets_fallen >= 5:
@@ -266,24 +294,26 @@ class PressureEngine:
         wickets = state['wickets']
         
         # Phase-specific pressure
-        if current_over < 6:  # Powerplay - slow start pressure
+        if self.fmt.is_powerplay(current_over):
             expected_rr = self.expected_rr_first_innings['powerplay']
-            if current_rr < expected_rr - 1.5:  # Significantly behind
+            if current_rr < expected_rr - 1.5:   # Significantly behind
                 pressure += 25
             elif current_rr < expected_rr - 0.5:  # Slightly behind
                 pressure += 15
-        
-        elif current_over >= 15:  # Death overs - acceleration pressure
+
+        elif self.fmt.is_death(current_over):     # Death overs - acceleration pressure
             expected_rr = self.expected_rr_first_innings['death']
-            if current_rr < expected_rr - 2.0:  # Well behind acceleration
+            if current_rr < expected_rr - 2.0:   # Well behind acceleration
                 pressure += 30
             elif current_rr < expected_rr - 1.0:  # Behind acceleration
                 pressure += 20
-        
-        # Wickets pressure (early collapse)
-        if current_over < 10 and wickets >= 4:
+
+        # Wickets pressure (early collapse — first half and first 3/4 of match)
+        _early_cutoff = self.fmt.overs // 2        # T20: 10, ListA: 25
+        _mid_cutoff   = self.fmt.overs * 3 // 4   # T20: 15, ListA: 37
+        if current_over < _early_cutoff and wickets >= 4:
             pressure += 25
-        elif current_over < 15 and wickets >= 6:
+        elif current_over < _mid_cutoff and wickets >= 6:
             pressure += 20
         
         # Add momentum pressure
@@ -388,6 +418,15 @@ class PressureEngine:
         
         current_over = match_state.get('current_over', 0)
         wickets_remaining = 10 - match_state.get('wickets', 0)
+
+        # ListA: remove blanket chase buff. Long chases carry scoreboard pressure,
+        # so keep boundaries neutral and add a slight wicket-pressure bias.
+        if self.fmt.name == "ListA":
+            return {
+                'boundary_boost': 1.00,
+                'wicket_reduction': 1.02,  # >1.0 means slightly higher wicket risk
+                'strike_rotation_boost': 1.00
+            }
         
         # Chasing teams have slight advantage knowing the target
         # But pressure of the chase should balance this out
@@ -397,8 +436,8 @@ class PressureEngine:
             'strike_rotation_boost': 1.05  # 5% better strike rotation
         }
 
-        # Additional advantage in death overs with wickets in hand
-        if current_over >= 15 and wickets_remaining >= 6:
+        # Additional advantage in pre-death/death overs with wickets in hand
+        if current_over >= self.fmt.death_phase.start - 1 and wickets_remaining >= 6:
             base_advantage.update({
                 'boundary_boost': 1.07,  # 7% more boundaries
                 'wicket_reduction': 0.95,  # 5% fewer wickets

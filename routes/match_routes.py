@@ -82,6 +82,17 @@ def register_match_routes(
                 simulation_mode = "auto"
             data["simulation_mode"] = simulation_mode
 
+            # Validate and normalise match format (T20 default for backward compat)
+            _raw_fmt = str(data.get("match_format", "T20")).strip()
+            data["match_format"] = _raw_fmt if _raw_fmt in {"T20", "ListA"} else "T20"
+
+            # Normalise is_day_night to bool
+            _dn_raw = data.get("is_day_night", False)
+            if isinstance(_dn_raw, str):
+                data["is_day_night"] = _dn_raw.strip().lower() in {"true", "1", "yes", "on"}
+            else:
+                data["is_day_night"] = bool(_dn_raw)
+
             scenario_options = ("last_ball_six", "win_by_1_run", "super_over_thriller")
             interesting_raw = data.get("make_match_interesting", False)
             if isinstance(interesting_raw, str):
