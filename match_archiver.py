@@ -569,8 +569,9 @@ class MatchArchiver:
                 db_match.toss_decision = self.match_data.get('toss_decision')
                 
                 # NEW: Match format
-                db_match.match_format = self.match_data.get('format', 'T20')
+                db_match.match_format = self.match_data.get('match_format', 'T20')
                 db_match.overs_per_side = self.match_data.get('overs', 20)
+                db_match.is_day_night = bool(self.match_data.get('is_day_night', False))
                 
                 # Bug Fix B4: Reverse old aggregate stats before deletion to prevent double-counting
                 old_scorecards = MatchScorecard.query.filter_by(match_id=self.match_id).all()
@@ -601,8 +602,9 @@ class MatchArchiver:
                     toss_winner_team_id=toss_winner_id,
                     toss_decision=self.match_data.get('toss_decision'),
                     # NEW: Match format
-                    match_format=self.match_data.get('format', 'T20'),
-                    overs_per_side=self.match_data.get('overs', 20)
+                    match_format=self.match_data.get('match_format', 'T20'),
+                    overs_per_side=self.match_data.get('overs', 20),
+                    is_day_night=bool(self.match_data.get('is_day_night', False))
                 )
                 db.session.add(db_match)
             

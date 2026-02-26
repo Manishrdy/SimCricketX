@@ -158,6 +158,7 @@ class Match(db.Model):
     # Match Format
     match_format = db.Column(db.String(20), default='T20')
     overs_per_side = db.Column(db.Integer, default=20)
+    is_day_night = db.Column(db.Boolean, default=False)
     
     # Technical
     match_json_path = db.Column(db.String(255)) # Path to legacy full JSON

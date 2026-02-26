@@ -817,6 +817,42 @@
                         <input type="hidden" id="interesting-match-flag" value="false">
                         <p class="helper-text"><span id="interesting-match-help">Regular match flow.</span></p>
                     </div>
+
+                    <div class="form-group">
+                        <div class="condition-header">
+                            <div class="condition-icon"><i class="fas fa-cricket-bat-ball"></i></div>
+                            <span class="condition-tag">Format</span>
+                        </div>
+                        <label class="form-label">Match Format</label>
+                        <div class="mode-toggle-row">
+                            <span class="mode-pill">T20</span>
+                            <label class="mode-toggle-switch" title="Toggle match format">
+                                <input type="checkbox" id="format-toggle">
+                                <span class="mode-toggle-slider"></span>
+                            </label>
+                            <span class="mode-pill">List A (50-ov)</span>
+                        </div>
+                        <input type="hidden" id="match-format-value" value="T20">
+                        <p class="helper-text"><span id="format-help">20 overs per side. Max 4 overs per bowler.</span></p>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="condition-header">
+                            <div class="condition-icon"><i class="fas fa-moon"></i></div>
+                            <span class="condition-tag">D/N</span>
+                        </div>
+                        <label class="form-label">Day / Night Match</label>
+                        <div class="mode-toggle-row">
+                            <span class="mode-pill">Day</span>
+                            <label class="mode-toggle-switch" title="Toggle day/night">
+                                <input type="checkbox" id="day-night-toggle">
+                                <span class="mode-toggle-slider"></span>
+                            </label>
+                            <span class="mode-pill">D/N</span>
+                        </div>
+                        <input type="hidden" id="day-night-value" value="false">
+                        <p class="helper-text"><span id="day-night-help">Day match — no dew effect.</span></p>
+                    </div>
                 </div>
 
                 <aside class="conditions-summary" aria-label="Match Summary">
@@ -841,6 +877,14 @@
                     <div class="summary-row">
                         <span class="summary-label">Scenario</span>
                         <span class="summary-value" id="summary-scenario">Disabled</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Format</span>
+                        <span class="summary-value" id="summary-format">T20</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">D/N</span>
+                        <span class="summary-value" id="summary-day-night">Day</span>
                     </div>
                 </aside>
             </div>
@@ -1127,9 +1171,27 @@
                 updateConditionsSummary();
             };
         }
+        const formatToggle = document.getElementById('format-toggle');
+        if (formatToggle) {
+            formatToggle.checked = false;
+            formatToggle.onchange = () => {
+                syncFormatControl();
+                updateConditionsSummary();
+            };
+        }
+        const dayNightToggle = document.getElementById('day-night-toggle');
+        if (dayNightToggle) {
+            dayNightToggle.checked = false;
+            dayNightToggle.onchange = () => {
+                syncDayNightControl();
+                updateConditionsSummary();
+            };
+        }
 
         syncSimulationModeControl();
         syncInterestingMatchControl();
+        syncFormatControl();
+        syncDayNightControl();
         updateConditionsSummary();
     }
 
@@ -1160,6 +1222,32 @@
         }
     }
 
+    function syncFormatControl() {
+        const formatToggle = document.getElementById('format-toggle');
+        const formatHidden = document.getElementById('match-format-value');
+        const formatHelp = document.getElementById('format-help');
+        const isListA = !!(formatToggle && formatToggle.checked);
+        if (formatHidden) formatHidden.value = isListA ? 'ListA' : 'T20';
+        if (formatHelp) {
+            formatHelp.textContent = isListA
+                ? '50 overs per side. Max 10 overs per bowler.'
+                : '20 overs per side. Max 4 overs per bowler.';
+        }
+    }
+
+    function syncDayNightControl() {
+        const dayNightToggle = document.getElementById('day-night-toggle');
+        const dayNightHidden = document.getElementById('day-night-value');
+        const dayNightHelp = document.getElementById('day-night-help');
+        const isDayNight = !!(dayNightToggle && dayNightToggle.checked);
+        if (dayNightHidden) dayNightHidden.value = isDayNight ? 'true' : 'false';
+        if (dayNightHelp) {
+            dayNightHelp.textContent = isDayNight
+                ? 'Day/Night match — dew may assist batting late.'
+                : 'Day match — no dew effect.';
+        }
+    }
+
     function updateConditionsSummary() {
         const venue = document.getElementById('venue-display')?.value || '-';
         const pitch = document.getElementById('pitch-select')?.value || '-';
@@ -1172,11 +1260,16 @@
             if (node) node.textContent = value;
         };
 
+        const format = document.getElementById('match-format-value')?.value || 'T20';
+        const isDayNight = document.getElementById('day-night-value')?.value === 'true';
+
         setText('summary-venue', venue);
         setText('summary-pitch', `${pitch} Pitch`);
         setText('summary-toss', toss);
         setText('summary-mode', mode === 'manual' ? 'Manual' : 'Auto');
         setText('summary-scenario', interesting ? 'Enabled' : 'Disabled');
+        setText('summary-format', format === 'ListA' ? 'List A (50-ov)' : 'T20');
+        setText('summary-day-night', isDayNight ? 'Day/Night' : 'Day');
     }
 
     // --- STEP 3: SQUADS ---
@@ -1548,6 +1641,8 @@
                 toss: document.querySelector('input[name="toss"]:checked').value,
                 simulation_mode: document.getElementById('simulation-mode-select').value,
                 make_match_interesting: document.getElementById('interesting-match-flag').value === 'true',
+                match_format: document.getElementById('match-format-value').value,
+                is_day_night: document.getElementById('day-night-value').value === 'true',
                 playing_xi: {
                     home: getPlayers('home-selected'),
                     away: getPlayers('away-selected')
