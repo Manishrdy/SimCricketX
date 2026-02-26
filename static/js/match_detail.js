@@ -885,13 +885,24 @@ function updateScoreBanner(data) {
         }
     }
 
-    // Match phase
+    // Match phase — use server-provided phase_name when available (format-aware)
     const phaseEl = document.getElementById('sb-phase');
     if (phaseEl) {
-        const totalOvers = data.total_overs || 20;
-        if (data.over < 6) phaseEl.textContent = 'POWERPLAY';
-        else if (data.over >= totalOvers - 4) phaseEl.textContent = 'DEATH OVERS';
-        else phaseEl.textContent = '';
+        const phaseLabelMap = {
+            'Powerplay': 'POWERPLAY',
+            'PP1':       'POWERPLAY (PP1)',
+            'Middle':    '',
+            'Death':     'DEATH OVERS',
+        };
+        if (data.phase_name !== undefined) {
+            phaseEl.textContent = phaseLabelMap[data.phase_name] ?? '';
+        } else {
+            // Fallback for older response shapes (T20 hardcoded)
+            const totalOvers = data.total_overs || 20;
+            if (data.over < 6) phaseEl.textContent = 'POWERPLAY';
+            else if (data.over >= totalOvers - 4) phaseEl.textContent = 'DEATH OVERS';
+            else phaseEl.textContent = '';
+        }
     }
 
     // Target info
@@ -926,13 +937,20 @@ function updateScoreBanner(data) {
         `;
     }
 
-    // --- Strip: Bowler ---
+    // --- Strip: Bowler + quota badge ---
     const bowlerEl = document.getElementById('sb-bowler');
     if (bowlerEl && data.bowler) {
+        const maxOv  = data.bowler_max_overs ?? 4;
+        const remOv  = data.bowler_overs_remaining;
+        const usedOv = (remOv !== undefined) ? (maxOv - remOv) : null;
+        const quotaHtml = (usedOv !== null)
+            ? `<span class="sb-quota-badge" title="Overs bowled / quota">${usedOv}/${maxOv}</span>`
+            : '';
         bowlerEl.innerHTML = `
             <span class="sb-strip-label">BOWL</span>
             <span class="sb-player-name">${escapeHtml(data.bowler)}</span>
             <span class="sb-player-stat">${data.bowler_wickets ?? 0}/${data.bowler_runs ?? 0} (${data.bowler_overs ?? '0.0'})</span>
+            ${quotaHtml}
         `;
     }
 
