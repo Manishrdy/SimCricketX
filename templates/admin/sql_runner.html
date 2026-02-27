@@ -60,7 +60,7 @@
 <div class="a-card-flat" style="margin-top:1.5rem;">
     <h3 class="a-section-title" style="font-size:0.9rem;"><i class="fas fa-info-circle"></i> Available Tables</h3>
     <div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem;">
-        {% for tbl in ['users','teams','players','matches','tournaments','match_scorecards','tournament_teams','tournament_fixtures','admin_audit_log','failed_login_attempts','blocked_ips','active_sessions','login_history','ip_whitelist','site_counters'] %}
+        {% for tbl in ['users','teams','players','matches','tournaments','match_scorecards','tournament_teams','tournament_fixtures','admin_audit_log','failed_login_attempts','blocked_ips','active_sessions','login_history','ip_whitelist','site_counters','announcement_banner','user_banner_dismissals'] %}
         <code style="font-size:0.78rem;background:var(--bg-secondary);padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;"
               onclick="appendTable('{{ tbl }}')">{{ tbl }}</code>
         {% endfor %}

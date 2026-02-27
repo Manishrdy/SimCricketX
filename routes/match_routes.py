@@ -5,6 +5,7 @@ import os
 import random
 import time
 import uuid
+import zipfile
 from datetime import datetime, timedelta
 
 from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
@@ -1188,6 +1189,43 @@ def register_match_routes(
         Display all ZIP archives in data/files/ matching current_user.id,
         regardless of subfolders. Only show files up to 7 days old.
         """
+        def _normalize_match_format(raw_format):
+            normalized = (
+                str(raw_format or "")
+                .strip()
+                .lower()
+                .replace(" ", "")
+                .replace("_", "")
+                .replace("-", "")
+            )
+            format_map = {
+                "t20": ("T20", "T20"),
+                "lista": ("ListA", "List A"),
+                "odi": ("ListA", "List A"),
+                "firstclass": ("FirstClass", "FC"),
+                "fc": ("FirstClass", "FC"),
+                "test": ("FirstClass", "FC"),
+            }
+            return format_map.get(normalized, ("T20", "T20"))
+
+        def _get_archive_format(zip_path):
+            try:
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    json_members = [name for name in zf.namelist() if name.lower().endswith(".json")]
+                    for member in json_members:
+                        try:
+                            with zf.open(member, "r") as raw_json:
+                                payload = json.load(raw_json)
+                        except Exception:
+                            continue
+                        if isinstance(payload, dict):
+                            raw_format = payload.get("match_format")
+                            if raw_format is not None and str(raw_format).strip():
+                                return _normalize_match_format(raw_format)
+            except Exception as exc:
+                app.logger.debug(f"Could not infer format for archive '{zip_path}': {exc}")
+            return ("T20", "T20")
+
         username    = current_user.id
         files_dir   = os.path.join(PROJECT_ROOT, "data")
         valid_files = []
@@ -1224,12 +1262,15 @@ def register_match_routes(
                     # Build URLs for download & delete
                     download_url = f"/archives/{username}/{fn}"
                     delete_url   = f"/archives/{username}/{fn}"
+                    format_code, format_label = _get_archive_format(full_path)
                     valid_files.append({
                         "filename":     fn,
                         "download_url": download_url,
                         "delete_url":   delete_url,
                         "created_at":   created_at,
-                        "expires_at":   expires_at
+                        "expires_at":   expires_at,
+                        "format_code":  format_code,
+                        "format_label": format_label,
                     })
 
                 app.logger.info(f"User '{username}' has {len(valid_files)} valid archives")
@@ -1265,6 +1306,7 @@ def register_match_routes(
             for m, tour_name in all_matches:
                 home_name = teams_by_id.get(m.home_team_id).name if m.home_team_id in teams_by_id else "Home"
                 away_name = teams_by_id.get(m.away_team_id).name if m.away_team_id in teams_by_id else "Away"
+                format_code, format_label = _normalize_match_format(getattr(m, "match_format", None))
                 
                 match_history.append({
                     "match_id": m.id,
@@ -1280,7 +1322,9 @@ def register_match_routes(
                     ),
                     "scoreboard_url": url_for("view_scoreboard", match_id=m.id),
                     "is_tournament": m.tournament_id is not None,
-                    "tournament_name": tour_name if tour_name else None
+                    "tournament_name": tour_name if tour_name else None,
+                    "format_code": format_code,
+                    "format_label": format_label,
                 })
         except Exception as e:
             app.logger.error(f"Error loading match history for '{username}': {e}", exc_info=True)

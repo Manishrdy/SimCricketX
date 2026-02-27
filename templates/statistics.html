@@ -569,27 +569,108 @@
         gap: 0.3rem;
         padding: 0.3rem 0.85rem;
         border-radius: 999px;
-        border: 1.5px solid rgba(255,255,255,0.15);
-        background: rgba(255,255,255,0.05);
-        color: rgba(255,255,255,0.65);
+        border: 1.5px solid var(--card-border);
+        background: var(--card-bg);
+        color: var(--fg-secondary);
         font-size: 0.78rem;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
         transition: all 0.18s ease;
         white-space: nowrap;
     }
 
     .fmt-btn:hover {
-        background: rgba(99,102,241,0.18);
-        border-color: rgba(99,102,241,0.5);
-        color: #fff;
+        transform: translateY(-1px);
+        color: var(--fg);
     }
 
     .fmt-btn.active {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        border-color: transparent;
         color: #fff;
-        box-shadow: 0 2px 10px rgba(99,102,241,0.4);
+        border-color: transparent;
+    }
+
+    .fmt-btn.format-all {
+        border-color: rgba(99, 102, 241, 0.35);
+        color: #4f46e5;
+        background: rgba(99, 102, 241, 0.12);
+    }
+
+    .fmt-btn.format-all:hover {
+        border-color: rgba(99, 102, 241, 0.55);
+        background: rgba(99, 102, 241, 0.2);
+    }
+
+    .fmt-btn.format-all.active {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        box-shadow: 0 2px 10px rgba(99, 102, 241, 0.45);
+    }
+
+    .fmt-btn.format-t20 {
+        border-color: rgba(2, 132, 199, 0.38);
+        color: #0369a1;
+        background: rgba(14, 165, 233, 0.14);
+    }
+
+    .fmt-btn.format-t20:hover {
+        border-color: rgba(2, 132, 199, 0.6);
+        background: rgba(14, 165, 233, 0.24);
+    }
+
+    .fmt-btn.format-t20.active {
+        background: linear-gradient(135deg, #0284c7, #0ea5e9);
+        box-shadow: 0 2px 10px rgba(2, 132, 199, 0.45);
+    }
+
+    .fmt-btn.format-lista {
+        border-color: rgba(202, 138, 4, 0.4);
+        color: #a16207;
+        background: rgba(234, 179, 8, 0.16);
+    }
+
+    .fmt-btn.format-lista:hover {
+        border-color: rgba(202, 138, 4, 0.62);
+        background: rgba(234, 179, 8, 0.24);
+    }
+
+    .fmt-btn.format-lista.active {
+        background: linear-gradient(135deg, #ca8a04, #f59e0b);
+        box-shadow: 0 2px 10px rgba(202, 138, 4, 0.45);
+    }
+
+    .fmt-btn.format-fc {
+        border-color: rgba(124, 58, 237, 0.38);
+        color: #6d28d9;
+        background: rgba(167, 139, 250, 0.16);
+    }
+
+    .fmt-btn.format-fc:hover {
+        border-color: rgba(124, 58, 237, 0.58);
+        background: rgba(167, 139, 250, 0.26);
+    }
+
+    .fmt-btn.format-fc.active {
+        background: linear-gradient(135deg, #7c3aed, #a855f7);
+        box-shadow: 0 2px 10px rgba(124, 58, 237, 0.45);
+    }
+
+    [data-theme="dark"] .fmt-btn.format-all {
+        color: #a5b4fc;
+        background: rgba(99, 102, 241, 0.22);
+    }
+
+    [data-theme="dark"] .fmt-btn.format-t20 {
+        color: #7dd3fc;
+        background: rgba(14, 165, 233, 0.24);
+    }
+
+    [data-theme="dark"] .fmt-btn.format-lista {
+        color: #facc15;
+        background: rgba(234, 179, 8, 0.26);
+    }
+
+    [data-theme="dark"] .fmt-btn.format-fc {
+        color: #c4b5fd;
+        background: rgba(124, 58, 237, 0.26);
     }
 
     /* Tournament Selector */
@@ -1669,19 +1750,19 @@
 
         <!-- Format Selector -->
         <div class="format-toggle">
-            <button class="fmt-btn {% if not match_format %}active{% endif %}"
+            <button class="fmt-btn format-all {% if not match_format %}active{% endif %}"
                 onclick="selectFormat('')">
                 <i class="fas fa-layer-group"></i><span>All</span>
             </button>
-            <button class="fmt-btn {% if match_format == 'T20' %}active{% endif %}"
+            <button class="fmt-btn format-t20 {% if match_format == 'T20' %}active{% endif %}"
                 onclick="selectFormat('T20')">
                 <span>T20</span>
             </button>
-            <button class="fmt-btn {% if match_format == 'ListA' %}active{% endif %}"
+            <button class="fmt-btn format-lista {% if match_format == 'ListA' %}active{% endif %}"
                 onclick="selectFormat('ListA')">
                 <span>List A</span>
             </button>
-            <button class="fmt-btn {% if match_format == 'FirstClass' %}active{% endif %}"
+            <button class="fmt-btn format-fc {% if match_format == 'FirstClass' %}active{% endif %}"
                 onclick="selectFormat('FirstClass')">
                 <span>FC</span>
             </button>

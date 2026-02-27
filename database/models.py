@@ -496,6 +496,39 @@ class SiteCounter(db.Model):
     value = db.Column(db.Integer, default=0, nullable=False)
 
 
+class AnnouncementBanner(db.Model):
+    """Single global announcement banner configured by admins."""
+    __tablename__ = 'announcement_banner'
+
+    id = db.Column(db.Integer, primary_key=True)
+    message = db.Column(db.Text, nullable=False, default="")
+    is_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    color_preset = db.Column(db.String(20), nullable=False, default="urgent")
+    position = db.Column(db.String(10), nullable=False, default="bottom")
+    version = db.Column(db.Integer, nullable=False, default=1)
+    updated_by = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    admin_user = relationship('User', foreign_keys=[updated_by])
+
+
+class UserBannerDismissal(db.Model):
+    """Per-user dismissal state keyed by banner version."""
+    __tablename__ = 'user_banner_dismissals'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    banner_version = db.Column(db.Integer, nullable=False)
+    dismissed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship('User', backref=db.backref('banner_dismissals', cascade='all, delete-orphan', passive_deletes=True))
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'banner_version', name='uq_user_banner_dismissal'),
+        db.Index('ix_user_banner_dismissal_user_ver', 'user_id', 'banner_version'),
+    )
+
+
 class LoginHistory(db.Model):
     """Persistent log of every successful login and logout event"""
     __tablename__ = 'login_history'

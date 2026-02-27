@@ -1106,13 +1106,21 @@
         font-size: 0.8rem;
     }
 
-    /* Tournament Badge */
+    /* Badge Row */
+    .match-badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.4rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Match Badges */
     .match-badge {
         font-size: 0.7rem;
         font-weight: 700;
         padding: 2px 8px;
         border-radius: 6px;
-        margin-bottom: 0.5rem;
         display: inline-block;
         text-transform: uppercase;
         letter-spacing: 0.05em;
@@ -1128,6 +1136,24 @@
         background: rgba(99, 102, 241, 0.1);
         color: var(--accent);
         border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+
+    .match-badge.format {
+        background: rgba(16, 185, 129, 0.1);
+        color: #059669;
+        border: 1px solid rgba(5, 150, 105, 0.2);
+    }
+
+    .match-badge.format.lista {
+        background: rgba(245, 158, 11, 0.12);
+        color: #b45309;
+        border-color: rgba(180, 83, 9, 0.25);
+    }
+
+    .match-badge.format.firstclass {
+        background: rgba(168, 85, 247, 0.12);
+        color: #7c3aed;
+        border-color: rgba(124, 58, 237, 0.24);
     }
 
     /* Floating Action Bar */
@@ -1300,13 +1326,14 @@
 
             <div class="match-card-body">
                 <!-- Badge Row -->
-                <div>
+                <div class="match-badge-row">
                     {% if match.is_tournament %}
                     <span class="match-badge tournament"><i class="fa-solid fa-trophy"></i> {{ match.tournament_name or
                         'Tournament' }}</span>
                     {% else %}
                     <span class="match-badge exhibition"><i class="fa-solid fa-cricket-bat-ball"></i> Exhibition</span>
                     {% endif %}
+                    <span class="match-badge format {{ match.format_code|lower }}">{{ match.format_label }}</span>
                 </div>
 
                 <div class="match-header">
@@ -1388,6 +1415,10 @@
                     <i class="fa-solid fa-file-zipper"></i>
                 </div>
                 <div class="archive-filename">{{ file.filename }}</div>
+            </div>
+
+            <div class="match-badge-row">
+                <span class="match-badge format {{ file.format_code|lower }}">{{ file.format_label }}</span>
             </div>
 
             <div class="archive-meta-grid">
