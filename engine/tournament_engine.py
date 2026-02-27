@@ -152,7 +152,7 @@ class TournamentEngine:
 
     def create_tournament(self, name: str, user_id: str, team_ids: list,
                           mode: str = MODE_ROUND_ROBIN, playoff_teams: int = 4,
-                          series_config: dict = None) -> Tournament:
+                          series_config: dict = None, format_type: str = 'T20') -> Tournament:
         """
         Creates a new tournament with specified mode.
 
@@ -163,6 +163,7 @@ class TournamentEngine:
             mode: Tournament mode (default: round_robin)
             playoff_teams: Number of teams qualifying for playoffs (for modes with knockouts)
             series_config: Configuration for custom series mode
+            format_type: Cricket format for all matches ('T20' or 'ListA', default: 'T20')
 
         Returns:
             Tournament: The created tournament object
@@ -194,6 +195,7 @@ class TournamentEngine:
                 user_id=user_id,
                 status='Active',
                 mode=mode,
+                format_type=format_type,
                 current_stage=self.STAGE_LEAGUE if mode != self.MODE_KNOCKOUT else self._get_knockout_round_name(self._next_power_of_two(len(team_ids)), 1),
                 playoff_teams=min(playoff_teams, len(team_ids)),
                 series_config=json.dumps(series_config) if series_config else None

@@ -969,6 +969,14 @@ def create_app():
         except Exception as e:
             print(f"[WARN] Team profiles migration skipped: {e}")
 
+    # Tournament format migration (idempotent — adds format_type to tournaments)
+    if not test_mode:
+        try:
+            from migrations.add_tournament_format import run_migration as _run_tournament_fmt_migration
+            _run_tournament_fmt_migration(db, app)
+        except Exception as e:
+            print(f"[WARN] Tournament format migration skipped: {e}")
+
     # --- Logging setup (logs to file + terminal) ---
     base_dir = os.path.abspath(os.path.dirname(__file__))
     log_dir = os.path.join(base_dir, "logs")

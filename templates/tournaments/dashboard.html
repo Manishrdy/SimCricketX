@@ -17,6 +17,11 @@
                             <i class="fas fa-circle"></i> {{ tournament.status }}
                         </span>
                         <span class="meta-divider">•</span>
+                        <span class="format-badge-hero">
+                            <i class="fas fa-bolt"></i>
+                            {{ 'T20' if tournament.format_type == 'T20' else 'List A' }}
+                        </span>
+                        <span class="meta-divider">•</span>
                         <span class="meta-detail">
                             <i class="fas fa-calendar"></i>
                             {{ tournament.created_at.strftime('%b %d, %Y') }}
@@ -475,6 +480,19 @@
             background: rgba(97, 175, 239, 0.15);
             color: var(--info);
             border: 1px solid rgba(97, 175, 239, 0.3);
+        }
+
+        .format-badge-hero {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(229, 192, 123, 0.15);
+            color: var(--warning);
+            border: 1px solid rgba(229, 192, 123, 0.3);
         }
 
         .hero-actions {

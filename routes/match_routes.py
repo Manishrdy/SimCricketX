@@ -49,15 +49,13 @@ def register_match_routes(
     @app.route("/match/setup", methods=["GET", "POST"])
     @login_required
     def match_setup():
-        # Default to T20 for the GET view; POST will reload with the correct format
-        teams = load_user_teams(current_user.id, match_format="T20")
-        
         # Check for tournament fixture execution
         fixture_id = request.args.get('fixture_id')
         preselect_home = None
         preselect_away = None
         tournament_id = None
-        
+        tournament_format = None  # None means free format selection (non-tournament match)
+
         if fixture_id:
             fixture = db.session.get(TournamentFixture, fixture_id)
             if fixture and fixture.tournament.user_id == current_user.id:
@@ -65,7 +63,7 @@ def register_match_routes(
                 if fixture.status == 'Locked':
                     flash("Cannot start a locked match. Wait for previous rounds to complete.", "error")
                     return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament.id))
-                
+
                 if fixture.status == 'Completed':
                     flash("This match is already completed.", "info")
                     return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament.id))
@@ -73,6 +71,10 @@ def register_match_routes(
                 preselect_home = fixture.home_team_id
                 preselect_away = fixture.away_team_id
                 tournament_id = fixture.tournament_id
+                tournament_format = fixture.tournament.format_type  # Lock format to tournament's setting
+
+        # Load teams using the appropriate format (locked for tournament, T20 default otherwise)
+        teams = load_user_teams(current_user.id, match_format=tournament_format or "T20")
 
         if request.method == "POST":
             clean_old_archives(PROD_MAX_AGE)
@@ -163,6 +165,13 @@ def register_match_routes(
                 tournament = db.session.get(Tournament, int(req_tournament_id))
                 if not tournament or tournament.user_id != current_user.id:
                     return jsonify({"error": "Invalid tournament"}), 403
+
+            # Enforce tournament format: override any client-supplied format with the
+            # tournament's locked format to prevent inconsistency across fixtures.
+            if req_tournament_id:
+                _tournament = db.session.get(Tournament, int(req_tournament_id))
+                if _tournament and _tournament.format_type:
+                    data["match_format"] = _tournament.format_type
 
             # Fix: Define codes for filename generation later
             home_code = home_db.short_code
@@ -343,6 +352,7 @@ def register_match_routes(
                                preselect_away=preselect_away,
                                tournament_id=tournament_id,
                                fixture_id=fixture_id,
+                               tournament_format=tournament_format,
                                active_game_mode_label=active_mode_label)
 
     @app.route("/api/match/verify-lineups", methods=["POST"])

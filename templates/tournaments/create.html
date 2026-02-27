@@ -34,6 +34,35 @@
                     placeholder="e.g. IPL 2026, World Cup, Ashes Series..." required>
                 <span class="input-hint">Give your tournament a memorable name</span>
             </div>
+
+            <div class="form-group" style="margin-top: 1.25rem;">
+                <label>Match Format</label>
+                <span class="input-hint">All matches in this tournament will use this format.</span>
+                <div class="match-format-selector">
+                    <label class="match-format-card selected" id="fmt-card-T20">
+                        <input type="radio" name="match_format_radio" value="T20" checked>
+                        <div class="match-format-icon" style="background: rgba(97,175,239,0.15); color: #61afef;">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <div class="match-format-info">
+                            <span class="match-format-name">T20</span>
+                            <span class="match-format-desc">20 overs &middot; Max 4 per bowler</span>
+                        </div>
+                        <div class="match-format-check"><i class="fas fa-check-circle"></i></div>
+                    </label>
+                    <label class="match-format-card" id="fmt-card-ListA">
+                        <input type="radio" name="match_format_radio" value="ListA">
+                        <div class="match-format-icon" style="background: rgba(152,195,121,0.15); color: #98c379;">
+                            <i class="fas fa-circle-dot"></i>
+                        </div>
+                        <div class="match-format-info">
+                            <span class="match-format-name">List A</span>
+                            <span class="match-format-desc">50 overs &middot; Max 10 per bowler</span>
+                        </div>
+                        <div class="match-format-check"><i class="fas fa-check-circle"></i></div>
+                    </label>
+                </div>
+            </div>
         </div>
 
         <!-- Team Selection -->
@@ -43,13 +72,13 @@
                 <h2>Select Teams</h2>
                 <span class="team-counter" id="teamCounter">0 selected</span>
             </div>
-            <p class="section-desc">Select teams to participate. Available modes will update based on your selection.
-            </p>
+            <p class="section-desc">Only teams with a squad for the selected format are shown.</p>
 
             {% if teams %}
-            <div class="teams-selection-grid">
+            <div class="teams-selection-grid" id="teamsGrid">
                 {% for team in teams %}
-                <label class="team-select-card">
+                <label class="team-select-card"
+                       data-formats="{{ team.profiles | map(attribute='format_type') | list | join(',') }}">
                     <input type="checkbox" name="team_ids" value="{{ team.id }}" onchange="updateTeamSelection()">
                     <div class="card-inner">
                         <div class="team-avatar" data-team-color="{{ team.team_color }}">
@@ -65,6 +94,17 @@
                     </div>
                 </label>
                 {% endfor %}
+            </div>
+            <!-- Shown when no teams have a squad for the selected format -->
+            <div id="noTeamsForFormat" class="no-teams-state" style="display:none;">
+                <div class="empty-icon">
+                    <i class="fas fa-users-slash"></i>
+                </div>
+                <h3>No Teams Available for <span id="noTeamsFormatLabel">T20</span></h3>
+                <p>None of your teams have a squad set up for this format yet.</p>
+                <a href="{{ url_for('manage_teams') }}" class="create-teams-btn">
+                    <i class="fas fa-edit"></i> Set Up Squads
+                </a>
             </div>
             {% else %}
             <div class="no-teams-state">
@@ -127,10 +167,14 @@
         {% endif %}
 
         <input type="hidden" name="mode" id="selectedMode" value="">
+        <input type="hidden" name="match_format" id="selectedMatchFormat" value="T20">
     </form>
 </div>
 
 <script>
+    // Team format availability map: {teamId: ["T20", "ListA", ...]}
+    const teamFormats = {{ team_formats_json | safe }};
+
     // Mode definitions with icons and colors
     const modeConfig = {
         'round_robin': {
@@ -171,9 +215,53 @@
     };
 
     let selectedMode = null;
+    let selectedFormat = 'T20';
+
+    function filterTeamsByFormat(format) {
+        selectedFormat = format;
+        document.getElementById('selectedMatchFormat').value = format;
+
+        const formatLabel = format === 'T20' ? 'T20' : 'List A';
+        const noTeamsDiv = document.getElementById('noTeamsForFormat');
+        const noTeamsLabel = document.getElementById('noTeamsFormatLabel');
+        if (noTeamsLabel) noTeamsLabel.textContent = formatLabel;
+
+        let visibleCount = 0;
+        document.querySelectorAll('.team-select-card').forEach(card => {
+            const formats = (card.dataset.formats || '').split(',').filter(Boolean);
+            const hasFormat = formats.includes(format);
+            if (hasFormat) {
+                card.style.display = '';
+                card.querySelector('input[type="checkbox"]').disabled = false;
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+                const cb = card.querySelector('input[type="checkbox"]');
+                cb.checked = false;
+                cb.disabled = true;
+            }
+        });
+
+        // Show/hide the no-teams-for-format message
+        if (noTeamsDiv) {
+            noTeamsDiv.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+        const grid = document.getElementById('teamsGrid');
+        if (grid) {
+            grid.style.display = visibleCount === 0 ? 'none' : '';
+        }
+
+        // Update format card visuals
+        document.querySelectorAll('.match-format-card').forEach(card => {
+            const radio = card.querySelector('input[type="radio"]');
+            card.classList.toggle('selected', radio && radio.value === format);
+        });
+
+        updateTeamSelection();
+    }
 
     function updateTeamSelection() {
-        const checked = document.querySelectorAll('input[name="team_ids"]:checked');
+        const checked = document.querySelectorAll('input[name="team_ids"]:checked:not(:disabled)');
         const count = checked.length;
         const counter = document.getElementById('teamCounter');
         counter.textContent = `${count} selected`;
@@ -398,13 +486,23 @@
 
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function () {
-        updateTeamSelection();
-
         // Apply team colors from data attributes (to avoid linting errors)
         document.querySelectorAll('.team-avatar').forEach(function (el) {
             var color = el.getAttribute('data-team-color');
             if (color) el.style.background = color;
         });
+
+        // Wire up format radio buttons
+        document.querySelectorAll('input[name="match_format_radio"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                if (this.checked) {
+                    filterTeamsByFormat(this.value);
+                }
+            });
+        });
+
+        // Initial filter based on default format (T20)
+        filterTeamsByFormat('T20');
     });
 </script>
 
@@ -918,6 +1016,83 @@
         opacity: 0.5;
         cursor: not-allowed;
         transform: none;
+    }
+
+    /* --- Match Format Selector (in Tournament Details) --- */
+    .match-format-selector {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        margin-top: 0.5rem;
+    }
+
+    .match-format-card {
+        background: var(--bg);
+        border: 2px solid var(--card-border);
+        border-radius: 12px;
+        padding: 0.875rem 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+    }
+
+    .match-format-card input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .match-format-card:hover {
+        border-color: var(--accent);
+        background: var(--accent-light);
+    }
+
+    .match-format-card.selected {
+        border-color: var(--accent);
+        background: var(--accent-light);
+    }
+
+    .match-format-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .match-format-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .match-format-name {
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: var(--fg);
+    }
+
+    .match-format-desc {
+        font-size: 0.78rem;
+        color: var(--fg-secondary);
+    }
+
+    .match-format-check {
+        font-size: 1rem;
+        color: transparent;
+        transition: color 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .match-format-card.selected .match-format-check {
+        color: var(--accent);
     }
 
     /* --- Responsive --- */
