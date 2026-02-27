@@ -29,19 +29,20 @@ def register_stats_routes(
 
             view_type = request.args.get("view", "overall")
             tournament_id = request.args.get("tournament_id", type=int)
+            match_format = request.args.get("match_format") or None
             tournaments = Tournament.query.filter_by(user_id=current_user.id).all()
 
             stats_data = None
             has_stats = False
 
             if view_type == "overall":
-                app.logger.info(f"Fetching overall stats for user {current_user.id}")
-                stats_data = stats_service.get_overall_stats(current_user.id)
+                app.logger.info(f"Fetching overall stats for user {current_user.id}, format={match_format}")
+                stats_data = stats_service.get_overall_stats(current_user.id, match_format)
             elif view_type == "tournament" and tournament_id:
                 app.logger.info(
-                    f"Fetching tournament stats for user {current_user.id}, tournament {tournament_id}"
+                    f"Fetching tournament stats for user {current_user.id}, tournament {tournament_id}, format={match_format}"
                 )
-                stats_data = stats_service.get_tournament_stats(current_user.id, tournament_id)
+                stats_data = stats_service.get_tournament_stats(current_user.id, tournament_id, match_format)
 
             if stats_data and (
                 stats_data["batting"] or stats_data["bowling"] or stats_data["fielding"]
@@ -95,6 +96,7 @@ def register_stats_routes(
                     current_user.id,
                     figures_tournament,
                     limit=5,
+                    match_format=match_format,
                 )
                 stats_data.setdefault("leaderboards", {})
                 stats_data["leaderboards"]["best_bowling_figures"] = best_figures
@@ -103,6 +105,7 @@ def register_stats_routes(
                 stats_service.get_insights(
                     current_user.id,
                     tournament_id if view_type == "tournament" else None,
+                    match_format=match_format,
                 )
                 if stats_data
                 else {}
@@ -112,6 +115,7 @@ def register_stats_routes(
                 "statistics.html",
                 view_type=view_type,
                 tournament_id=tournament_id,
+                match_format=match_format,
                 tournaments=tournaments,
                 has_stats=has_stats,
                 batting_stats=stats_data["batting"] if stats_data else [],
@@ -138,11 +142,12 @@ def register_stats_routes(
 
             view_type = request.args.get("view", "overall")
             tournament_id = request.args.get("tournament_id", type=int)
+            match_format = request.args.get("match_format") or None
 
             if view_type == "overall":
-                stats_data = stats_service.get_overall_stats(current_user.id)
+                stats_data = stats_service.get_overall_stats(current_user.id, match_format)
             elif tournament_id:
-                stats_data = stats_service.get_tournament_stats(current_user.id, tournament_id)
+                stats_data = stats_service.get_tournament_stats(current_user.id, tournament_id, match_format)
             else:
                 return jsonify({"error": "Please select a tournament"}), 400
 
@@ -205,6 +210,7 @@ def register_stats_routes(
         try:
             tournament_id = request.args.get("tournament_id", type=int)
             limit = request.args.get("limit", 10, type=int)
+            match_format = request.args.get("match_format") or None
 
             if limit < 1 or limit > 100:
                 return jsonify({"error": "Limit must be between 1 and 100"}), 400
@@ -214,6 +220,7 @@ def register_stats_routes(
                 current_user.id,
                 tournament_id,
                 limit,
+                match_format=match_format,
             )
 
             return jsonify(
@@ -236,6 +243,7 @@ def register_stats_routes(
             player_ids_str = request.args.get("player_ids", "")
             player_ids = [int(x.strip()) for x in player_ids_str.split(",") if x.strip().isdigit()]
             tournament_id = request.args.get("tournament_id", type=int)
+            match_format = request.args.get("match_format") or None
 
             if not player_ids:
                 stats_service = StatsService(app.logger)
@@ -292,7 +300,7 @@ def register_stats_routes(
                 return jsonify({"error": "Maximum 6 players can be compared at once"}), 400
 
             stats_service = StatsService(app.logger)
-            comparison = stats_service.compare_players(current_user.id, player_ids, tournament_id)
+            comparison = stats_service.compare_players(current_user.id, player_ids, tournament_id, match_format)
 
             if "error" in comparison:
                 return jsonify(comparison), 400
@@ -329,11 +337,13 @@ def register_stats_routes(
         """API endpoint for player partnership statistics."""
         try:
             tournament_id = request.args.get("tournament_id", type=int)
+            match_format = request.args.get("match_format") or None
             stats_service = StatsService(app.logger)
             partnership_stats = stats_service.get_player_partnership_stats(
                 player_id,
                 current_user.id,
                 tournament_id,
+                match_format,
             )
 
             if "error" in partnership_stats:
@@ -353,6 +363,7 @@ def register_stats_routes(
         """API endpoint for tournament partnership leaderboard."""
         try:
             limit = request.args.get("limit", 10, type=int)
+            match_format = request.args.get("match_format") or None
 
             if limit < 1 or limit > 50:
                 return jsonify({"error": "Limit must be between 1 and 50"}), 400
@@ -362,6 +373,7 @@ def register_stats_routes(
                 current_user.id,
                 tournament_id,
                 limit,
+                match_format=match_format,
             )
 
             return jsonify(
@@ -382,13 +394,14 @@ def register_stats_routes(
         """API endpoint for overall partnership leaderboard."""
         try:
             limit = request.args.get("limit", 10, type=int)
+            match_format = request.args.get("match_format") or None
             if limit < 1 or limit > 50:
                 return jsonify({"error": "Limit must be between 1 and 50"}), 400
 
             batsman_1 = aliased(DBPlayer, name="batsman1")
             batsman_2 = aliased(DBPlayer, name="batsman2")
 
-            partnerships = (
+            partnerships_q = (
                 db.session.query(
                     MatchPartnership,
                     batsman_1.name.label("batsman1_name"),
@@ -400,6 +413,11 @@ def register_stats_routes(
                 .join(batsman_2, MatchPartnership.batsman2_id == batsman_2.id)
                 .outerjoin(Tournament, DBMatch.tournament_id == Tournament.id)
                 .filter(DBMatch.user_id == current_user.id)
+            )
+            if match_format:
+                partnerships_q = partnerships_q.filter(DBMatch.match_format == match_format)
+            partnerships = (
+                partnerships_q
                 .order_by(MatchPartnership.runs.desc())
                 .limit(limit)
                 .all()

@@ -13,7 +13,15 @@ This file tests admin-only routes including:
 
 import pytest
 from datetime import datetime
-from database.models import User, AdminAuditLog, BlockedIP, FailedLoginAttempt
+from database.models import (
+    User,
+    Team as DBTeam,
+    TeamProfile as DBTeamProfile,
+    Player as DBPlayer,
+    AdminAuditLog,
+    BlockedIP,
+    FailedLoginAttempt,
+)
 from app import db
 
 
@@ -393,6 +401,32 @@ class TestDataManagement:
         """Test deleting non-existent team as admin returns 404 or redirects."""
         response = admin_client.post("/admin/teams/99999/delete")
         assert response.status_code in [200, 302, 404]
+
+    def test_admin_delete_team_removes_profiles_and_players(self, admin_client, regular_user):
+        """Test admin team deletion also removes all team profiles and players."""
+        team = DBTeam(
+            name="Admin Delete Test Team",
+            short_code="ADT",
+            user_id=regular_user.id,
+            is_placeholder=False,
+            is_draft=False,
+        )
+        db.session.add(team)
+        db.session.flush()
+
+        profile = DBTeamProfile(team_id=team.id, format_type="T20")
+        db.session.add(profile)
+        db.session.flush()
+
+        db.session.add(DBPlayer(team_id=team.id, profile_id=profile.id, name="Profile Player"))
+        db.session.add(DBPlayer(team_id=team.id, profile_id=None, name="Legacy Player"))
+        db.session.commit()
+
+        response = admin_client.post(f"/admin/teams/{team.id}/delete")
+        assert response.status_code == 200
+        assert db.session.get(DBTeam, team.id) is None
+        assert DBTeamProfile.query.filter_by(team_id=team.id).count() == 0
+        assert DBPlayer.query.filter_by(team_id=team.id).count() == 0
 
     def test_admin_delete_player(self, admin_client):
         """Test deleting non-existent player as admin returns 404 or redirects."""

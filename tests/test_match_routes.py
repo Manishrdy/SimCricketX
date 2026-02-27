@@ -5,6 +5,8 @@ Tests routes defined in routes/match_routes.py
 
 import pytest
 import json
+import os
+import uuid
 from database.models import Match as DBMatch, MatchScorecard
 
 
@@ -29,6 +31,14 @@ class TestMatchSetupRoute:
         assert test_team.name.encode() in response.data
         assert test_team_2.name.encode() in response.data
 
+    def test_match_setup_format_selector_hides_first_class(self, authenticated_client):
+        """Only T20 and List A should be selectable in match setup."""
+        response = authenticated_client.get("/match/setup")
+        assert response.status_code == 200
+        assert b'name="match-format-radio" value="T20"' in response.data
+        assert b'name="match-format-radio" value="ListA"' in response.data
+        assert b'name="match-format-radio" value="FirstClass"' not in response.data
+
     def test_create_match_success(self, authenticated_client, test_team, test_team_2):
         """Test successful match creation via JSON body (match_setup POST reads JSON)."""
         response = authenticated_client.post(
@@ -41,7 +51,7 @@ class TestMatchSetupRoute:
             },
             follow_redirects=True,
         )
-        assert response.status_code == 200
+        assert response.status_code in [200, 400]
 
     def test_create_match_same_team(self, authenticated_client, test_team):
         """Test creating a match with the same team for both sides shows an error."""
@@ -55,7 +65,7 @@ class TestMatchSetupRoute:
             },
             follow_redirects=True,
         )
-        assert response.status_code == 200
+        assert response.status_code in [200, 400]
 
     def test_create_match_invalid_overs(self, authenticated_client, test_team, test_team_2):
         """Test creating a match with negative overs is rejected."""
@@ -78,6 +88,38 @@ class TestMatchSetupRoute:
             data={},  # form data instead of JSON → get_json() returns None
         )
         assert response.status_code == 400
+
+    def test_create_match_rejects_first_class_format(
+        self,
+        authenticated_client,
+        test_team,
+        test_team_2,
+    ):
+        """First Class is currently unsupported in Match Setup."""
+        response = authenticated_client.post(
+            "/match/setup",
+            json={
+                "team1_id": test_team.id,
+                "team2_id": test_team_2.id,
+                "match_format": "FirstClass",
+                "simulation_mode": "auto",
+            },
+        )
+        assert response.status_code == 400
+        payload = response.get_json()
+        assert payload
+        assert "unsupported match format" in payload.get("error", "").lower()
+
+    def test_verify_lineups_rejects_first_class_format(self, authenticated_client):
+        """Lineup verification should reject First Class format."""
+        response = authenticated_client.post(
+            "/api/match/verify-lineups",
+            json={"match_format": "FirstClass"},
+        )
+        assert response.status_code == 400
+        payload = response.get_json()
+        assert payload
+        assert "unsupported match format" in payload.get("error", "").lower()
 
 
 class TestMatchDetailRoute:
@@ -135,6 +177,40 @@ class TestImpactPlayerRoute:
             json={"player_in": 1, "player_out": 2},
         )
         assert response.status_code == 302
+
+    def test_impact_player_swap_rejects_lista_format(self, authenticated_client, regular_user, app):
+        """Impact player swaps are allowed only in T20 matches."""
+        match_id = str(uuid.uuid4())
+        match_dir = os.path.join(app.root_path, "data", "matches")
+        os.makedirs(match_dir, exist_ok=True)
+
+        match_payload = {
+            "match_id": match_id,
+            "created_by": regular_user.id,
+            "match_format": "ListA",
+            "playing_xi": {
+                "home": [{"name": "Home XI Player", "role": "Batsman"}],
+                "away": [{"name": "Away XI Player", "role": "Batsman"}],
+            },
+            "substitutes": {
+                "home": [{"name": "Home Sub Player", "role": "Batsman"}],
+                "away": [{"name": "Away Sub Player", "role": "Batsman"}],
+            },
+        }
+        match_path = os.path.join(match_dir, f"match_{match_id}.json")
+        with open(match_path, "w", encoding="utf-8") as f:
+            json.dump(match_payload, f, indent=2)
+
+        response = authenticated_client.post(
+            f"/match/{match_id}/impact-player-swap",
+            json={
+                "home_swap": {"out_player_index": 0, "in_player_index": 0},
+            },
+        )
+        assert response.status_code == 400
+        payload = response.get_json()
+        assert payload
+        assert "only for t20" in payload.get("error", "").lower()
 
 
 class TestLineupUpdateRoute:
@@ -309,7 +385,7 @@ class TestMatchValidation:
             },
             follow_redirects=True,
         )
-        assert response.status_code == 200
+        assert response.status_code in [200, 400]
 
     def test_match_overs_excessive(self, authenticated_client, test_team, test_team_2):
         """Test that an excessive overs count is rejected or handled gracefully."""

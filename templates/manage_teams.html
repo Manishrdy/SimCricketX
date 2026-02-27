@@ -765,6 +765,28 @@
                 </div>
 
                 <div class="card-body">
+                    <!-- Profile badges -->
+                    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1rem;">
+                        {% for prof in t.profiles %}
+                            {% if prof.format_type == 'T20' %}
+                                <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(16,185,129,0.12);color:#059669;border:1px solid rgba(16,185,129,0.3);">
+                                    <i class="fa-solid fa-bolt" style="font-size:0.65rem;"></i> T20 &middot; {{ prof.player_count }}
+                                </span>
+                            {% elif prof.format_type == 'ListA' %}
+                                <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(59,130,246,0.12);color:#2563eb;border:1px solid rgba(59,130,246,0.3);">
+                                    <i class="fa-solid fa-cricket-bat-ball" style="font-size:0.65rem;"></i> List A &middot; {{ prof.player_count }}
+                                </span>
+                            {% elif prof.format_type == 'FirstClass' %}
+                                <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(139,92,246,0.12);color:#7c3aed;border:1px solid rgba(139,92,246,0.3);">
+                                    <i class="fa-solid fa-trophy" style="font-size:0.65rem;"></i> FC &middot; {{ prof.player_count }}
+                                </span>
+                            {% endif %}
+                        {% endfor %}
+                        {% if not t.profiles %}
+                            <span style="font-size:0.8rem;color:var(--text-muted);">No profiles yet</span>
+                        {% endif %}
+                    </div>
+
                     <div class="info-grid">
                         <div class="info-item">
                             <span class="info-label">Captain</span>
@@ -775,8 +797,8 @@
                             <span class="info-value">{{ t.home_ground }}</span>
                         </div>
                         <div class="info-item">
-                            <span class="info-label">Squad Size</span>
-                            <span class="info-value">{{ t.players|length }} Players</span>
+                            <span class="info-label">Formats</span>
+                            <span class="info-value">{{ t.profiles | length }} Profile{{ 's' if t.profiles | length != 1 else '' }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Pitch</span>
@@ -839,6 +861,20 @@
     </div>
 
     <script>
+        const shouldClearTeamDraft = {{ 'true' if request.args.get('clear_team_draft') == '1' else 'false' }};
+
+        function clearTeamCreateDraftIfNeeded() {
+            if (!shouldClearTeamDraft) return;
+            localStorage.removeItem('team_create_draft_v2');
+            localStorage.removeItem('team_create_draft'); // Legacy key cleanup.
+
+            const url = new URL(window.location.href);
+            if (!url.searchParams.has('clear_team_draft')) return;
+            url.searchParams.delete('clear_team_draft');
+            const next = `${url.pathname}${url.searchParams.toString() ? `?${url.searchParams.toString()}` : ''}${url.hash}`;
+            window.history.replaceState({}, document.title, next);
+        }
+
         const toggle = document.getElementById('theme-toggle');
         const docRoot = document.documentElement;
         const icon = toggle.querySelector('i');
@@ -858,9 +894,7 @@
             icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
         }
 
-        if (localStorage.getItem('team_create_draft')) {
-            localStorage.removeItem('team_create_draft');
-        }
+        clearTeamCreateDraftIfNeeded();
 
         function editTeam(code) {
             const card = document.querySelector(`[data-code="${code}"]`);

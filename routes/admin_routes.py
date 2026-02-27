@@ -50,6 +50,7 @@ def register_admin_routes(
     IP_WHITELIST_MODEL,
     DBUser,
     DBTeam,
+    DBTeamProfile,
     DBPlayer,
     DBMatch,
     Tournament,
@@ -1811,12 +1812,15 @@ def register_admin_routes(
     @login_required
     @admin_required
     def admin_delete_team(team_id):
-        """Delete a team and all its players."""
+        """Delete a team and all its profiles/players."""
         team = db.session.get(DBTeam, team_id)
         if not team:
             return jsonify({"error": "Team not found"}), 404
         name = team.name
         owner = team.user_id
+        # Defensive cleanup for legacy data that may not be profile-linked.
+        db.session.query(DBPlayer).filter_by(team_id=team.id).delete(synchronize_session=False)
+        db.session.query(DBTeamProfile).filter_by(team_id=team.id).delete(synchronize_session=False)
         db.session.delete(team)
         db.session.commit()
         log_admin_action(current_user.id, 'delete_team', f'{name} (id={team_id})', f'Owner: {owner}', get_client_ip())
@@ -2233,4 +2237,3 @@ def register_admin_routes(
             503,
             {"Content-Type": "text/plain; charset=utf-8"},
         )
-
