@@ -48,6 +48,10 @@
                         <i class="fas fa-users"></i>
                         <span>{{ t.participating_teams|length }} Teams</span>
                     </div>
+                    <div class="meta-item format-meta-badge">
+                        <i class="fas fa-bolt"></i>
+                        <span>{{ 'T20' if t.format_type == 'T20' else 'List A' }}</span>
+                    </div>
                 </div>
 
                 <div class="t-progress">
@@ -313,6 +317,16 @@
         text-align: center;
         color: var(--accent);
         opacity: 0.7;
+    }
+
+    .format-meta-badge {
+        color: var(--warning);
+        font-weight: 600;
+    }
+
+    .format-meta-badge i {
+        color: var(--warning);
+        opacity: 1;
     }
 
     /* --- Progress Bar --- */

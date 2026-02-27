@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <script>
+        const root = document.documentElement;
+        const saved = localStorage.getItem('theme');
+        if (saved) root.setAttribute('data-theme', saved);
+    </script>
+
+    <meta charset="UTF-8">
+    <title>Manage Teams &ndash; SimCricketX</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Modern CSS Reset -->
+    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/shared.css') }}">
+
+    <style>
+        :root {
+            --font-sans: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+            --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+                "Courier New", monospace;
+
+            --bg-body: #f6f2ea;
+            --bg-surface: #fff9f2;
+            --bg-raised: #ffffff;
+            --bg-glass: rgba(255, 249, 242, 0.7);
+
+            --text-main: #1f2933;
+            --text-muted: #667085;
+            --text-on-accent: #0b1412;
+
+            --border-light: #e7ded2;
+            --border-focused: #0f766e;
+
+            --brand-primary: #0f766e;
+            --brand-secondary: #f59e0b;
+            --brand-gradient: linear-gradient(135deg, #0f766e 0%, #f0b24c 100%);
+
+            --success: #16a34a;
+            --warning: #d97706;
+            --danger: #dc2626;
+
+            --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+            --shadow-sm: 0 10px 20px -12px rgba(15, 23, 42, 0.4);
+            --shadow-md: 0 14px 28px -18px rgba(15, 23, 42, 0.4);
+            --shadow-lg: 0 30px 50px -30px rgba(15, 23, 42, 0.5);
+            --shadow-glow: 0 0 26px rgba(15, 118, 110, 0.25);
+
+            --radius-lg: 18px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --radius-full: 9999px;
+
+            --ease-elastic: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-theme="dark"] {
+            --bg-body: #0d1416;
+            --bg-surface: #111b1e;
+            --bg-raised: #162326;
+            --bg-glass: rgba(17, 27, 30, 0.86);
+
+            --text-main: #e6edf0;
+            --text-muted: #9aa5b1;
+            --text-on-accent: #081211;
+
+            --border-light: #213036;
+            --border-focused: #3fb6a8;
+
+            --brand-primary: #3fb6a8;
+            --brand-secondary: #f1b84b;
+            --brand-gradient: linear-gradient(135deg, #3fb6a8 0%, #f1b84b 100%);
+
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #f87171;
+
+            --shadow-xs: 0 2px 6px rgba(0, 0, 0, 0.35);
+            --shadow-sm: 0 12px 22px rgba(0, 0, 0, 0.45);
+            --shadow-md: 0 18px 30px rgba(0, 0, 0, 0.55);
+            --shadow-lg: 0 32px 50px rgba(0, 0, 0, 0.6);
+            --shadow-glow: 0 0 26px rgba(63, 182, 168, 0.2);
+        }
+
+        * {
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: -20vmax;
+            background: radial-gradient(circle at 10% 20%, rgba(15, 118, 110, 0.18), transparent 45%),
+                radial-gradient(circle at 90% 10%, rgba(245, 158, 11, 0.15), transparent 40%),
+                radial-gradient(circle at 20% 80%, rgba(15, 118, 110, 0.12), transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(245, 158, 11, 0.12), transparent 45%);
+            opacity: 0.7;
+            z-index: -1;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4 {
+            margin: 0;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+        }
+
+        p {
+            margin: 0;
+        }
+
+        a {
+            color: inherit;
+        }
+
+        .flash {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .flash-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .flash-error {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .main-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 120px 2rem 100px;
+        }
+
+        .nav-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 72px;
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-light);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-weight: 700;
+            color: var(--text-main);
+            font-size: 1.2rem;
+        }
+
+        .brand-mark {
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+
+        .brand-mark span {
+            color: var(--brand-primary);
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .home-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-full);
+            background: transparent;
+            border: 1px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: all 0.2s var(--ease-elastic);
+        }
+
+        .home-btn:hover {
+            background: var(--bg-raised);
+            color: var(--brand-primary);
+            border-color: var(--brand-primary);
+            transform: translateY(-1px) scale(1.05);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .theme-toggle {
+            background: transparent;
+            border: 1px solid transparent;
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 8px;
+            color: var(--text-muted);
+            transition: transform 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+            border-radius: var(--radius-full);
+        }
+
+        .theme-toggle:hover {
+            color: var(--text-main);
+            transform: rotate(12deg) scale(1.05);
+            border-color: var(--border-light);
+            background: var(--bg-raised);
+        }
+
+        .create-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--brand-gradient);
+            color: var(--text-on-accent);
+            padding: 0.6rem 1.4rem;
+            border-radius: var(--radius-full);
+            font-weight: 600;
+            text-decoration: none;
+            font-size: 0.95rem;
+            box-shadow: var(--shadow-glow);
+            transition: all 0.2s var(--ease-elastic);
+            border: none;
+        }
+
+        .create-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 24px -6px rgba(15, 118, 110, 0.35);
+        }
+
+        .page-header {
+            margin-bottom: 3rem;
+            animation: fadeUp 0.6s ease-out;
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+        }
+
+        .dynamic-title {
+            font-size: clamp(2.4rem, 4vw, 3.4rem);
+            line-height: 1.1;
+            font-weight: 800;
+            background: var(--brand-gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.04em;
+        }
+
+        .page-subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin-top: 0.5rem;
+            max-width: 560px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 4rem;
+        }
+
+        .stat-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: 1.6rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::after {
+            content: "";
+            position: absolute;
+            inset: auto 0 0 0;
+            height: 4px;
+            background: var(--brand-gradient);
+            opacity: 0.4;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: rgba(15, 118, 110, 0.4);
+        }
+
+        .stat-value {
+            font-size: 2.4rem;
+            font-weight: 800;
+            color: var(--text-main);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+        }
+
+        .stat-icon {
+            position: absolute;
+            right: -12px;
+            bottom: -12px;
+            font-size: 5rem;
+            color: var(--border-light);
+            opacity: 0.5;
+            transform: rotate(-15deg);
+            z-index: 0;
+        }
+
+        .teams-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 2rem;
+        }
+
+        .glass-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            transition: all 0.3s var(--ease-elastic);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-xs);
+            animation: floatIn 0.5s ease-out both;
+            animation-delay: calc(var(--i, 0) * 70ms);
+        }
+
+        .glass-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, rgba(15, 118, 110, 0.08), transparent 45%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-lg);
+            border-color: rgba(15, 118, 110, 0.5);
+        }
+
+        .glass-card:hover::before {
+            opacity: 1;
+        }
+
+        .card-header {
+            padding: 1.5rem;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.06), transparent);
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .team-badge {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .team-color-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--border-light);
+        }
+
+        .team-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .team-code {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            opacity: 0.7;
+            padding: 0.25rem 0.6rem;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-full);
+            background: var(--bg-raised);
+            font-size: 0.85rem;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+            flex-grow: 1;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem 1rem;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .info-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.06em;
+        }
+
+        .info-value {
+            font-size: 0.96rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .info-accent {
+            color: var(--brand-primary);
+        }
+
+        .card-footer {
+            padding: 1rem 1.5rem;
+            background: var(--bg-body);
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .card-meta {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            align-items: center;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .action-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: var(--radius-full);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-light);
+            background: var(--bg-raised);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .action-btn.edit:hover {
+            color: var(--brand-primary);
+            border-color: var(--brand-primary);
+            background: var(--bg-body);
+        }
+
+        .action-btn.delete:hover {
+            color: var(--danger);
+            border-color: var(--danger);
+            background: rgba(220, 38, 38, 0.12);
+        }
+
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 6rem 2rem;
+            background: var(--bg-surface);
+            border: 2px dashed var(--border-light);
+            border-radius: var(--radius-lg);
+            color: var(--text-muted);
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            color: var(--border-light);
+            margin-bottom: 1.5rem;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(6, 10, 11, 0.66);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: var(--bg-raised);
+            border: 1px solid var(--border-light);
+            padding: 2.5rem;
+            border-radius: var(--radius-lg);
+            max-width: 420px;
+            width: 90%;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.95);
+            transition: transform 0.3s var(--ease-elastic);
+        }
+
+        .modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-icon {
+            font-size: 3rem;
+            color: var(--danger);
+            margin-bottom: 1rem;
+        }
+
+        .modal-title {
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-text {
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .btn {
+            border-radius: var(--radius-full);
+            padding: 0.55rem 1.6rem;
+            border: 1px solid transparent;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: var(--font-sans);
+        }
+
+        .btn-ghost {
+            background: var(--bg-raised);
+            color: var(--text-main);
+            border-color: var(--border-light);
+        }
+
+        .btn-ghost:hover {
+            border-color: var(--brand-primary);
+            color: var(--brand-primary);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+            box-shadow: none;
+        }
+
+        .btn-danger:hover {
+            filter: brightness(0.95);
+        }
+
+        .desktop-only {
+            display: inline;
+        }
+
+        :focus-visible {
+            outline: 2px solid var(--border-focused);
+            outline-offset: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .page-header {
+                flex-direction: column;
+                align-items: start;
+                gap: 1rem;
+            }
+
+            .nav-header {
+                padding: 0 1rem;
+            }
+
+            .main-content {
+                padding: 100px 1rem 4rem;
+            }
+
+            .desktop-only {
+                display: none;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .card-footer {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes floatIn {
+            from {
+                opacity: 0;
+                transform: translateY(18px) scale(0.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="nav-header">
+        <div class="nav-brand">
+            <a href="{{ url_for('home') }}" class="home-btn" title="Home">
+                <i class="fa-solid fa-house"></i>
+            </a>
+            <span class="brand-mark">SimCricket<span>X</span></span>
+        </div>
+
+        <div class="nav-actions">
+            <a href="/team/create" class="create-btn">
+                <i class="fa-solid fa-plus"></i>
+                <span class="desktop-only">New Team</span>
+            </a>
+            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+                <i class="fa-solid fa-moon"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="page-header">
+            <div>
+                <h1 class="dynamic-title">Manage Teams</h1>
+                <p class="page-subtitle">Oversee your franchise, analyze squad depth, and fine-tune your lineup.</p>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div style="margin-bottom: 1rem;">
+            {% for category, message in messages %}
+            <div class="flash {% if category == 'success' %}flash-success{% else %}flash-error{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <i class="fa-solid fa-layer-group stat-icon"></i>
+                <span class="stat-value">{{ teams|length if teams else 0 }}</span>
+                <span class="stat-label">Total Franchises</span>
+            </div>
+            <div class="stat-card">
+                <i class="fa-solid fa-users stat-icon"></i>
+                <span class="stat-value">
+                    {% if teams %}
+                    {{ (teams|map(attribute='players')|map('length')|sum // teams|length) }}
+                    {% else %}
+                    0
+                    {% endif %}
+                </span>
+                <span class="stat-label">Avg Squad Size</span>
+            </div>
+            <div class="stat-card">
+                <i class="fa-solid fa-trophy stat-icon"></i>
+                <span class="stat-value">Rank #1</span>
+                <span class="stat-label">Global Standing</span>
+            </div>
+        </div>
+
+        <div class="teams-grid teams-section">
+            {% if teams %}
+            {% for t in teams %}
+            <div class="glass-card" data-code="{{ t.short_code }}">
+                <div class="card-header">
+                    <div class="team-badge">
+                        <div class="team-color-dot" data-bg="{{ t.team_color }}"></div>
+                        <div class="team-name">{{ t.team_name }}</div>
+                    </div>
+                    <div class="team-code">{{ t.short_code }}</div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Profile badges -->
+                    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1rem;">
+                        {% for prof in t.profiles %}
+                            {% if prof.format_type == 'T20' %}
+                                <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(16,185,129,0.12);color:#059669;border:1px solid rgba(16,185,129,0.3);">
+                                    <i class="fa-solid fa-bolt" style="font-size:0.65rem;"></i> T20 &middot; {{ prof.player_count }}
+                                </span>
+                            {% elif prof.format_type == 'ListA' %}
+                                <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(59,130,246,0.12);color:#2563eb;border:1px solid rgba(59,130,246,0.3);">
+                                    <i class="fa-solid fa-cricket-bat-ball" style="font-size:0.65rem;"></i> List A &middot; {{ prof.player_count }}
+                                </span>
+                            {% elif prof.format_type == 'FirstClass' %}
+                                <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(139,92,246,0.12);color:#7c3aed;border:1px solid rgba(139,92,246,0.3);">
+                                    <i class="fa-solid fa-trophy" style="font-size:0.65rem;"></i> FC &middot; {{ prof.player_count }}
+                                </span>
+                            {% endif %}
+                        {% endfor %}
+                        {% if not t.profiles %}
+                            <span style="font-size:0.8rem;color:var(--text-muted);">No profiles yet</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Captain</span>
+                            <span class="info-value info-accent">{{ t.captain }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Home Ground</span>
+                            <span class="info-value">{{ t.home_ground }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Formats</span>
+                            <span class="info-value">{{ t.profiles | length }} Profile{{ 's' if t.profiles | length != 1 else '' }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Pitch</span>
+                            <span class="info-value">{{ t.pitch_preference }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    <div class="card-meta">
+                        <i class="fa-solid fa-clock"></i>
+                        <span>Updated just now</span>
+                    </div>
+                    <div class="card-actions">
+                        <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button class="action-btn delete" onclick="confirmDelete('{{ t.short_code }}')"
+                            title="Delete Team">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
+                <h2>No Teams Found</h2>
+                <p>It looks like you haven't created any teams yet. Start your journey by creating your first squad.</p>
+                <br>
+                <a href="/team/create" class="create-btn">Create First Team</a>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+
+    <div class="modal" id="confirmModal">
+        <div class="modal-content">
+            <div class="modal-icon">
+                <i class="fa-solid fa-circle-exclamation"></i>
+            </div>
+            <h2 class="modal-title">Delete Team?</h2>
+            <p class="modal-text">
+                This will permanently delete the team and all its players. This action cannot be undone.
+            </p>
+            <form method="POST" action="/team/delete">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="short_code" id="delete-code">
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal()">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-danger">
+                        Delete Forever
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const shouldClearTeamDraft = {{ 'true' if request.args.get('clear_team_draft') == '1' else 'false' }};
+
+        function clearTeamCreateDraftIfNeeded() {
+            if (!shouldClearTeamDraft) return;
+            localStorage.removeItem('team_create_draft_v2');
+            localStorage.removeItem('team_create_draft'); // Legacy key cleanup.
+
+            const url = new URL(window.location.href);
+            if (!url.searchParams.has('clear_team_draft')) return;
+            url.searchParams.delete('clear_team_draft');
+            const next = `${url.pathname}${url.searchParams.toString() ? `?${url.searchParams.toString()}` : ''}${url.hash}`;
+            window.history.replaceState({}, document.title, next);
+        }
+
+        const toggle = document.getElementById('theme-toggle');
+        const docRoot = document.documentElement;
+        const icon = toggle.querySelector('i');
+
+        const savedTheme = localStorage.theme || 'light';
+        docRoot.setAttribute('data-theme', savedTheme);
+        updateIcon(savedTheme);
+
+        toggle.onclick = () => {
+            const next = docRoot.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            docRoot.setAttribute('data-theme', next);
+            localStorage.theme = next;
+            updateIcon(next);
+        };
+
+        function updateIcon(theme) {
+            icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        }
+
+        clearTeamCreateDraftIfNeeded();
+
+        function editTeam(code) {
+            const card = document.querySelector(`[data-code="${code}"]`);
+            card.style.opacity = '0.7';
+            card.style.pointerEvents = 'none';
+            window.location.href = `/team/${code}/edit`;
+        }
+
+        function confirmDelete(code) {
+            document.getElementById('delete-code').value = code;
+            const modal = document.getElementById('confirmModal');
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('confirmModal');
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        document.getElementById('confirmModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                closeModal();
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.team-color-swatch, .team-color-dot').forEach(swatch => {
+                swatch.style.background = swatch.getAttribute('data-bg');
+            });
+
+            document.querySelectorAll('.glass-card').forEach((card, index) => {
+                card.style.setProperty('--i', index);
+            });
+
+            setTimeout(() => {
+                document.querySelectorAll('.flash').forEach(el => {
+                    el.classList.add('fade-out');
+                    setTimeout(() => el.remove(), 300);
+                });
+            }, 4000);
+        });
+
+        document.querySelectorAll('.glass-card[data-code]').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.action-btn')) return;
+                const code = card.getAttribute('data-code');
+                editTeam(code);
+            });
+        });
+
+        document.querySelectorAll('.glass-card[data-code]').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.cursor = 'pointer';
+            });
+
+            card.addEventListener('mouseleave', () => {
+                card.style.cursor = 'default';
+            });
+        });
+
+        document.querySelectorAll('.action-btn').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+
+                const rect = this.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                const ripple = document.createElement('div');
+                ripple.style.cssText = `
+                    position: absolute;
+                    border-radius: 50%;
+                    background: rgba(255, 255, 255, 0.6);
+                    pointer-events: none;
+                    transform: scale(0);
+                    animation: ripple 0.4s ease-out;
+                    left: ${x}px;
+                    top: ${y}px;
+                    width: 12px;
+                    height: 12px;
+                    margin-left: -6px;
+                    margin-top: -6px;
+                `;
+
+                this.appendChild(ripple);
+
+                setTimeout(() => {
+                    ripple.remove();
+                }, 400);
+            });
+        });
+
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: scale(4);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        if (window.location.hash === '#teams') {
+            document.querySelector('.teams-section').scrollIntoView({
+                behavior: 'smooth'
+            });
+        }
+
+        document.querySelectorAll('a[href]').forEach(link => {
+            link.addEventListener('click', function () {
+                if (this.href && !this.href.includes('#')) {
+                    this.style.opacity = '0.7';
+                    this.style.pointerEvents = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

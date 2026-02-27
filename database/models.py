@@ -269,6 +269,9 @@ class Tournament(db.Model):
     #        'round_robin_knockout', 'double_round_robin_knockout', 'ipl_style', 'custom_series'
     mode = db.Column(db.String(50), default='round_robin', nullable=False)
 
+    # Cricket format for all matches in this tournament (T20, ListA)
+    format_type = db.Column(db.String(20), default='T20', nullable=False)
+
     # Current stage for multi-stage tournaments
     # Stages: 'league', 'qualifier', 'eliminator', 'semifinal', 'final', 'completed'
     current_stage = db.Column(db.String(30), default='league', nullable=False)
