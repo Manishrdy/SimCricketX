@@ -463,6 +463,34 @@
         z-index: 2;
     }
 
+    /* Locked format display for tournament matches */
+    .format-locked-display {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.38rem 0.75rem;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        margin: 0.4rem 0 0.2rem;
+        font-size: 0.78rem;
+    }
+
+    .format-locked-display i {
+        color: var(--fg-secondary);
+        font-size: 0.7rem;
+    }
+
+    .format-locked-name {
+        font-weight: 700;
+        color: var(--accent);
+    }
+
+    .format-locked-hint {
+        color: var(--fg-secondary);
+        font-size: 0.72rem;
+    }
+
     /* Match format segmented control */
     .format-selector {
         display: flex;
@@ -947,6 +975,17 @@
                             <span class="condition-tag">Format</span>
                         </div>
                         <label class="form-label">Match Format</label>
+                        {% if tournament_format %}
+                        {# Format is locked to the tournament's setting — cannot be changed #}
+                        <div class="format-locked-display">
+                            <i class="fas fa-lock"></i>
+                            <span class="format-locked-name">{{ 'T20' if tournament_format == 'T20' else 'List A (50-ov)' }}</span>
+                            <span class="format-locked-hint">Set by tournament</span>
+                        </div>
+                        {# Hidden radio keeps existing JS working without modification #}
+                        <input type="radio" name="match-format-radio" value="{{ tournament_format }}" checked style="display:none">
+                        <input type="hidden" id="match-format-value" value="{{ tournament_format }}">
+                        {% else %}
                         <div class="format-selector" role="group" aria-label="Match format">
                             <label class="format-option">
                                 <input type="radio" name="match-format-radio" value="T20" checked>
@@ -958,6 +997,7 @@
                             </label>
                         </div>
                         <input type="hidden" id="match-format-value" value="T20">
+                        {% endif %}
                         <p class="helper-text"><span id="format-help">20 overs per side. Max 4 overs per bowler.</span></p>
                     </div>
 

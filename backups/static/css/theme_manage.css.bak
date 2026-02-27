@@ -1,0 +1,115 @@
+:root {
+    --font-sans: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+        "Courier New", monospace;
+
+    --bg-body: #f6f2ea;
+    --bg-surface: #fff9f2;
+    --bg-raised: #ffffff;
+    --bg-glass: rgba(255, 249, 242, 0.7);
+
+    --text-main: #1f2933;
+    --text-muted: #667085;
+    --text-on-accent: #0b1412;
+
+    --border-light: #e7ded2;
+    --border-focused: #0f766e;
+
+    --brand-primary: #0f766e;
+    --brand-secondary: #f59e0b;
+    --brand-gradient: linear-gradient(135deg, #0f766e 0%, #f0b24c 100%);
+
+    --success: #16a34a;
+    --warning: #d97706;
+    --danger: #dc2626;
+
+    --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow-sm: 0 10px 20px -12px rgba(15, 23, 42, 0.4);
+    --shadow-md: 0 14px 28px -18px rgba(15, 23, 42, 0.4);
+    --shadow-lg: 0 30px 50px -30px rgba(15, 23, 42, 0.5);
+    --shadow-glow: 0 0 26px rgba(15, 118, 110, 0.25);
+
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+    --radius-full: 9999px;
+
+    --ease-elastic: cubic-bezier(0.4, 0, 0.2, 1);
+    --overlay-bg: rgba(15, 23, 42, 0.55);
+    --modal-bg: var(--overlay-bg);
+
+    /* Compatibility aliases for existing layouts */
+    --bg: var(--bg-body);
+    --bg-secondary: var(--bg-surface);
+    --fg: var(--text-main);
+    --fg-secondary: var(--text-muted);
+    --card-bg: var(--bg-raised);
+    --card-border: var(--border-light);
+    --accent: var(--brand-primary);
+    --accent-hover: #0b5f58;
+    --accent-light: rgba(15, 118, 110, 0.12);
+    --shadow: rgba(15, 23, 42, 0.08);
+    --gradient: var(--brand-gradient);
+    --border-radius: var(--radius-md);
+    --nav-height: 72px;
+    --transition: all 0.2s ease;
+}
+
+[data-theme="dark"] {
+    --bg-body: #0d1416;
+    --bg-surface: #111b1e;
+    --bg-raised: #162326;
+    --bg-glass: rgba(17, 27, 30, 0.86);
+
+    --text-main: #e6edf0;
+    --text-muted: #9aa5b1;
+    --text-on-accent: #081211;
+
+    --border-light: #213036;
+    --border-focused: #3fb6a8;
+
+    --brand-primary: #3fb6a8;
+    --brand-secondary: #f1b84b;
+    --brand-gradient: linear-gradient(135deg, #3fb6a8 0%, #f1b84b 100%);
+
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #f87171;
+
+    --shadow-xs: 0 2px 6px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 12px 22px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 18px 30px rgba(0, 0, 0, 0.55);
+    --shadow-lg: 0 32px 50px rgba(0, 0, 0, 0.6);
+    --shadow-glow: 0 0 26px rgba(63, 182, 168, 0.2);
+
+    --overlay-bg: rgba(3, 8, 10, 0.7);
+    --modal-bg: var(--overlay-bg);
+
+    --accent-hover: #2c9f92;
+    --accent-light: rgba(63, 182, 168, 0.16);
+    --shadow: rgba(0, 0, 0, 0.35);
+}
+
+body {
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: -20vmax;
+    background: radial-gradient(circle at 10% 20%, rgba(15, 118, 110, 0.18), transparent 45%),
+        radial-gradient(circle at 90% 10%, rgba(245, 158, 11, 0.15), transparent 40%),
+        radial-gradient(circle at 20% 80%, rgba(15, 118, 110, 0.12), transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(245, 158, 11, 0.12), transparent 45%);
+    opacity: 0.7;
+    z-index: -1;
+}
+
+[data-theme="dark"] body::before {
+    opacity: 0.35;
+}

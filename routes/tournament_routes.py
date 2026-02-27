@@ -36,10 +36,17 @@ def register_tournament_routes(
     @app.route("/tournaments/create", methods=["GET", "POST"])
     @login_required
     def create_tournament_route():
+        VALID_TOURNAMENT_FORMATS = {"T20", "ListA"}
+
         if request.method == "POST":
             name = request.form.get("name")
             team_ids = request.form.getlist("team_ids")
             mode = request.form.get("mode", "round_robin")
+            match_format = request.form.get("match_format", "T20").strip()
+
+            if match_format not in VALID_TOURNAMENT_FORMATS:
+                flash("Invalid match format selected.", "error")
+                return redirect(url_for("create_tournament_route"))
 
             if not name or len(team_ids) < 2:
                 flash("Please provide a tournament name and select at least 2 teams.", "error")
@@ -92,6 +99,7 @@ def register_tournament_routes(
                     team_ids=team_ids,
                     mode=mode,
                     series_config=series_config,
+                    format_type=match_format,
                 )
                 flash(f"Tournament '{name}' created successfully!", "success")
                 return redirect(url_for("tournament_dashboard", tournament_id=t.id))
@@ -107,7 +115,19 @@ def register_tournament_routes(
         num_teams = len(teams)
         available_modes = tournament_engine.get_available_modes(num_teams) if num_teams >= 2 else []
 
-        return render_template("tournaments/create.html", teams=teams, available_modes=available_modes)
+        # Build a map of {team_id: [format_types]} so the template JS can filter
+        # teams based on the selected match format.
+        team_formats = {
+            t.id: [p.format_type for p in t.profiles]
+            for t in teams
+        }
+
+        return render_template(
+            "tournaments/create.html",
+            teams=teams,
+            available_modes=available_modes,
+            team_formats_json=json.dumps(team_formats),
+        )
 
     @app.route("/tournaments/<int:tournament_id>")
     @login_required
