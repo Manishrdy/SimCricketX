@@ -46,6 +46,8 @@ Design principles
 
 import logging
 
+from engine.format_config import FormatConfig  # noqa: F401 — used in type hints
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -85,11 +87,11 @@ _PITCH_PAR_FACTOR: dict = {
     "Dead":  1.22,
 }
 
-# Pitch-aware RRR baseline (Feature 15).
-# Divides the required run-rate to produce a normalised aggression index.
-# Low-scoring pitches (Green/Dry) need fewer runs/over to be "neutral",
-# so a smaller baseline makes moderate RRRs feel more urgent.
-# High-scoring pitches (Flat/Dead) need more runs/over to pressure batters.
+# Pitch-aware RRR baseline (Feature 15) — T20 fallback only.
+# The authoritative baselines now live in FormatConfig.rrr_baseline so that
+# each format uses correctly calibrated values.  This dict is only consulted
+# when no FormatConfig is provided (legacy / unit-test paths).
+# T20 values: Hard ≈ 8.5 RPO is neutral on a good pitch.
 _PITCH_RRR_BASELINE: dict = {
     "Green": 7.5,
     "Dry":   7.5,
@@ -129,14 +131,41 @@ MULT_MAX = 3.00
 # Private helpers
 # ---------------------------------------------------------------------------
 
-def _par_score_at(over: int, ball: int, pitch: str = "Hard") -> float:
-    """Interpolate pitch-adjusted expected score at an exact over.ball point."""
-    base_at    = _PAR_SCORES.get(over,     _PAR_SCORES[20])
-    base_next  = _PAR_SCORES.get(over + 1, _PAR_SCORES[20])
+def _par_score_at(over: int, ball: int, pitch: str = "Hard", fmt=None) -> float:
+    """
+    Interpolate pitch-adjusted expected score at an exact over.ball point.
+
+    When *fmt* is a FormatConfig instance its own par_scores and
+    pitch_par_factors are used (supports both T20 and ListA curves).
+    Passing fmt=None falls back to the built-in T20 tables above.
+    """
+    if fmt is not None and fmt.name != "T20":
+        par_table    = fmt.par_scores
+        pitch_table  = fmt.pitch_par_factors
+        _max_over    = fmt.overs
+    else:
+        par_table    = _PAR_SCORES
+        pitch_table  = _PITCH_PAR_FACTOR
+        _max_over    = 20
+
+    base_at    = par_table.get(over,         par_table[_max_over])
+    base_next  = par_table.get(over + 1,     par_table[_max_over])
     fraction   = ball / 6.0
     base_score = base_at + fraction * (base_next - base_at)
-    factor     = _PITCH_PAR_FACTOR.get(pitch, 1.0)
+    factor     = pitch_table.get(pitch, 1.0)
     return base_score * factor
+
+
+def get_par_score(over: int, fmt, pitch: str = "Hard") -> float:
+    """
+    Public helper: pitch-adjusted expected cumulative score at the start of
+    *over* (ball 0).  Dispatches to T20 or ListA par curve via FormatConfig.
+
+    Usage in match.py or templates:
+        from engine.game_state_engine import get_par_score
+        par = get_par_score(self.current_over, self.fmt, self.pitch)
+    """
+    return _par_score_at(over, 0, pitch, fmt)
 
 
 def _compute_momentum(history: list) -> float:
@@ -215,6 +244,7 @@ def compute_game_state_vector(
     partnership_balls: int = 0,
     partnership_runs:  int = 0,
     scenario_phase:   str  = "inactive",
+    format_config            = None,   # FormatConfig | None — defaults to T20
 ) -> dict:
     """
     Compute the full game-state descriptor for the CURRENT delivery.
@@ -224,17 +254,22 @@ def compute_game_state_vector(
     """
     history = ball_history or []
 
+    # Resolve format — used for par-curve selection and resource denominator.
+    _fmt        = format_config           # FormatConfig | None
+    _total_overs = _fmt.overs if _fmt is not None else 20
+    _total_balls = _total_overs * 6       # 120 for T20, 300 for ListA
+
     # ── 1. Momentum ──────────────────────────────────────────────────────────
     momentum = _compute_momentum(history)
 
     # ── 2. Run-rate context ──────────────────────────────────────────────────
-    par = _par_score_at(current_over, current_ball, pitch)
+    par = _par_score_at(current_over, current_ball, pitch, _fmt)
 
     # First innings: how the team is doing relative to par
     rr_ratio = (score / par) if par > 0.0 else 1.0   # >1 ahead, <1 behind
 
     # Second innings: required-run-rate based aggression index
-    balls_remaining = (20 - current_over) * 6 - current_ball
+    balls_remaining = (_total_overs - current_over) * 6 - current_ball
     if innings == 2 and balls_remaining > 0 and target > 0:
         runs_needed        = max(0, target - score)
         overs_left         = balls_remaining / 6.0
@@ -242,7 +277,12 @@ def compute_game_state_vector(
         # Feature 15: pitch-aware RRR baseline — different pitches have
         # different "neutral" run rates, so we scale the aggression index
         # relative to what's achievable on that surface.
-        rrr_baseline        = _PITCH_RRR_BASELINE.get(pitch, 9.0)
+        # FormatConfig.rrr_baseline is the authoritative source; the module-level
+        # _PITCH_RRR_BASELINE is a T20-only fallback for legacy / no-format paths.
+        if _fmt is not None and hasattr(_fmt, "rrr_baseline"):
+            rrr_baseline = _fmt.rrr_baseline.get(pitch, 9.0)
+        else:
+            rrr_baseline = _PITCH_RRR_BASELINE.get(pitch, 9.0)
         required_aggression = rrr / rrr_baseline
     else:
         rrr                 = 0.0
@@ -252,7 +292,8 @@ def compute_game_state_vector(
     balls_remaining_clamped = max(0, balls_remaining)
     wickets_in_hand         = max(0, 10 - wickets)
     # resource_index ≈ 1.0 at match start, → 0 as wickets/balls exhaust
-    resource_index = (balls_remaining_clamped / 120.0) * (wickets_in_hand / 10.0)
+    # _total_balls is 120 (T20) or 300 (ListA) — set above from format_config
+    resource_index = (balls_remaining_clamped / _total_balls) * (wickets_in_hand / 10.0)
 
     # ── 4. Collapse risk from the 18-ball window ─────────────────────────────
     recent_wickets_18  = _count_in_window(history, {"Wicket"}, BALL_HISTORY_WINDOW)
@@ -268,6 +309,8 @@ def compute_game_state_vector(
     window_size  = len(history[-BALL_HISTORY_WINDOW:]) if history else 1
     dot_count    = _count_in_window(history, {"Dot"}, BALL_HISTORY_WINDOW)
     dot_ratio    = dot_count / window_size if window_size > 0 else 0.0
+
+    _is_lista = (_fmt is not None and _fmt.name == "ListA")
 
     state = {
         # Core momentum
@@ -303,6 +346,9 @@ def compute_game_state_vector(
 
         # Scenario steering phase — used to dampen collapse layers during convergence
         "scenario_phase":         scenario_phase,
+
+        # Format flag — drives ListA-specific thresholds in apply_game_state_to_probs
+        "_is_lista":              _is_lista,
     }
 
     logger.debug(
@@ -359,6 +405,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     wickets_in_hand       = state.get("wickets_in_hand",       10)
     rrr                   = state.get("rrr",                   0.0)
     scenario_phase        = state.get("scenario_phase",        "inactive")
+    _is_lista             = state.get("_is_lista",             False)
 
     # ── A. MOMENTUM ──────────────────────────────────────────────────────────
     mom = momentum / 100.0       # [-1.0, +1.0]
@@ -476,24 +523,34 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
 
     # ── E. PATTERN OVERRIDES ─────────────────────────────────────────────────
 
-    # E1. Frustration dots — batsman tempted to break free
-    if consecutive_dots >= 8:
+    # E1. Frustration dots — batsman tempted to break free.
+    # ListA middle-over bowling routinely produces 4+ dot-ball runs; the
+    # thresholds are therefore higher so that normal tight spells don't
+    # trigger unrealistic "desperate slog" behaviour.
+    # T20 tiers : 2 / 4 / 6 / 8  consecutive dots
+    # ListA tiers: 4 / 7 / 10 / 14 consecutive dots
+    if _is_lista:
+        _dot_t1, _dot_t2, _dot_t3, _dot_t4 = 4, 7, 10, 14
+    else:
+        _dot_t1, _dot_t2, _dot_t3, _dot_t4 = 2, 4,  6,  8
+
+    if consecutive_dots >= _dot_t4:
         # Extended dot-ball siege → desperate wild swing
         mults["Six"]    *= 1.60
         mults["Four"]   *= 1.35
         mults["Wicket"] *= 1.35
         mults["Dot"]    *= 0.72
-    elif consecutive_dots >= 6:
+    elif consecutive_dots >= _dot_t3:
         mults["Six"]    *= 1.40
         mults["Four"]   *= 1.24
         mults["Wicket"] *= 1.24
         mults["Dot"]    *= 0.80
-    elif consecutive_dots >= 4:
+    elif consecutive_dots >= _dot_t2:
         mults["Four"]   *= 1.14
         mults["Six"]    *= 1.20
         mults["Wicket"] *= 1.14
         mults["Dot"]    *= 0.88
-    elif consecutive_dots >= 2:
+    elif consecutive_dots >= _dot_t1:
         mults["Four"]   *= 1.06
         mults["Six"]    *= 1.08
         mults["Wicket"] *= 1.04
@@ -562,8 +619,19 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     # ── G. PARTNERSHIP DYNAMICS ───────────────────────────────────────────────
     # Partnership runs (not just balls) drive confidence more accurately.
     # Real cricket: new partnerships are dangerous; established ones flow.
+    #
+    # ListA openers routinely build 80-120 run partnerships; a 50-run stand is
+    # "settling in", not "dominant". T20 thresholds (25/50/75/100) are halved
+    # in terms of significance relative to a 300-ball innings.
+    # ListA tiers : 50 / 100 / 150 / 200 runs
+    # T20 tiers   : 25 /  50 /  75 / 100 runs
     p_runs  = state.get("partnership_runs", 0)
     p_balls = state.get("partnership_balls", 0)
+
+    if _is_lista:
+        _p_growing, _p_established, _p_strong, _p_dominant = 50, 100, 150, 200
+    else:
+        _p_growing, _p_established, _p_strong, _p_dominant = 25,  50,  75, 100
 
     if p_balls <= 3 and p_runs < 4:
         # NEW PARTNERSHIP — danger zone: both batters still reading conditions,
@@ -573,7 +641,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         mults["Six"]    *= 0.88
         mults["Dot"]    *= 1.08
 
-    elif p_runs >= 100:
+    elif p_runs >= _p_dominant:
         # DOMINANT PARTNERSHIP — batters completely in control, reading every
         # ball, running well, and attacking with full confidence.
         mults["Four"]   *= 1.20
@@ -581,21 +649,21 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         mults["Double"] *= 1.12
         mults["Wicket"] *= 0.85
 
-    elif p_runs >= 75:
+    elif p_runs >= _p_strong:
         # STRONG PARTNERSHIP — batters well-set, bowling under pressure.
         mults["Four"]   *= 1.15
         mults["Six"]    *= 1.16
         mults["Double"] *= 1.08
         mults["Wicket"] *= 0.88
 
-    elif p_runs >= 50:
+    elif p_runs >= _p_established:
         # WELL-ESTABLISHED PARTNERSHIP — bowlers struggling to break through.
         mults["Four"]   *= 1.10
         mults["Six"]    *= 1.10
         mults["Double"] *= 1.05
         mults["Wicket"] *= 0.92
 
-    elif p_runs >= 25:
+    elif p_runs >= _p_growing:
         # GROWING PARTNERSHIP — batters settling, modest boundary boost.
         mults["Four"]   *= 1.05
         mults["Six"]    *= 1.05
