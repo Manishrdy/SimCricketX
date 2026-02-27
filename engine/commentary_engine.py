@@ -202,8 +202,10 @@ class CommentaryEngine:
                                                      team=batting_team,
                                                      fielding_team=bowling_team))
 
-        # --- 8. Last over drama (over 19, 2nd innings, close match) ---
-        if innings == 2 and current_over == 19 and current_ball == 0:
+        # --- 8. Last over drama (format-aware last over, 2nd innings, close match) ---
+        # Uses _fmt_last_over from match state (49 for ListA, 19 for T20).
+        _last_over = state.get("_fmt_last_over", 19)
+        if innings == 2 and current_over == _last_over and current_ball == 0:
             runs_needed = state.get("runs_needed", 999)
             if 1 <= runs_needed <= 20:
                 triggers.extend(self._format_narratives("last_over_drama",
@@ -211,8 +213,10 @@ class CommentaryEngine:
                                                          team=batting_team,
                                                          fielding_team=bowling_team))
 
-        # --- 9. Death overs entry (over 16, first ball) ---
-        if current_over == 16 and current_ball == 0:
+        # --- 9. Death overs entry (format-aware death start, first ball) ---
+        # Uses _fmt_death_start from match state (40 for ListA, 16 for T20).
+        _death_start = state.get("_fmt_death_start", 16)
+        if current_over == _death_start and current_ball == 0:
             triggers.extend(self._format_narratives("death_overs",
                                                      batter=batter, bowler=bowler,
                                                      team=batting_team,

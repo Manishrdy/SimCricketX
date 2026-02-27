@@ -4,6 +4,9 @@ import json
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import func
+
+VALID_FORMATS = ("T20", "ListA", "FirstClass")
 
 
 def register_team_routes(
@@ -13,91 +16,160 @@ def register_team_routes(
     Player,
     DBTeam,
     DBPlayer,
+    DBTeamProfile,
 ):
-    def _extract_player_form_lists(form):
-        """Return aligned per-player form lists from JSON payload or legacy list fields."""
-        payload_raw = (form.get("players_payload") or "").strip()
-        if payload_raw:
+    # ── Internal helpers ──────────────────────────────────────────────────────
+
+    def _extract_player_list(raw_list):
+        """
+        Parse a list of player dicts from the profiles_payload JSON.
+        Returns (list[dict], error_str|None).
+        """
+        players = []
+        for idx, item in enumerate(raw_list, start=1):
+            if not isinstance(item, dict):
+                return None, f"Invalid player item at position {idx}."
+            name = str(item.get("name", "")).strip()
+            role = str(item.get("role", "")).strip()
+            batting_hand = str(item.get("batting_hand", "")).strip()
+            bowling_type = str(item.get("bowling_type", "")).strip()
+            bowling_hand = str(item.get("bowling_hand", "")).strip()
             try:
-                payload = json.loads(payload_raw)
-            except Exception:
-                return None, "Invalid player payload format."
+                bat = int(item.get("batting_rating", 0))
+                bowl = int(item.get("bowling_rating", 0))
+                field = int(item.get("fielding_rating", 0))
+            except (TypeError, ValueError):
+                return None, f"Player {idx}: ratings must be valid integers."
+            if not (0 <= bat <= 100 and 0 <= bowl <= 100 and 0 <= field <= 100):
+                return None, f"Player {idx}: ratings must be between 0 and 100."
+            players.append({
+                "name": name,
+                "role": role,
+                "batting_rating": bat,
+                "bowling_rating": bowl,
+                "fielding_rating": field,
+                "batting_hand": batting_hand,
+                "bowling_type": bowling_type,
+                "bowling_hand": bowling_hand,
+            })
+        return players, None
 
-            if not isinstance(payload, list):
-                return None, "Invalid player payload format."
+    def _validate_profile(fmt, profile_data, is_draft):
+        """
+        Validate a single profile dict {captain, wicketkeeper, players: [...]}.
+        Returns error string or None.
+        """
+        players = profile_data.get("players", [])
+        captain = (profile_data.get("captain") or "").strip()
+        wk_name = (profile_data.get("wicketkeeper") or "").strip()
 
-            names, roles, bats, bowls, fields = [], [], [], [], []
-            bhands, btypes, bhand2s = [], [], []
+        if is_draft:
+            if len(players) < 1:
+                return f"{fmt} profile: draft must have at least 1 player."
+            return None
 
-            for idx, item in enumerate(payload, start=1):
-                if not isinstance(item, dict):
-                    return None, f"Invalid player payload item at position {idx}."
+        if not (12 <= len(players) <= 25):
+            return f"{fmt} profile: must have between 12 and 25 players."
 
-                name = str(item.get("name", "")).strip()
-                role = str(item.get("role", "")).strip()
-                batting_hand = str(item.get("batting_hand", "")).strip()
-                bowling_type = str(item.get("bowling_type", "")).strip()
-                bowling_hand = str(item.get("bowling_hand", "")).strip()
+        wk_count = sum(1 for p in players if p["role"] == "Wicketkeeper")
+        if wk_count < 1:
+            return f"{fmt} profile: needs at least one Wicketkeeper."
 
-                try:
-                    bat = int(item.get("batting_rating", ""))
-                    bowl = int(item.get("bowling_rating", ""))
-                    field = int(item.get("fielding_rating", ""))
-                except Exception:
-                    return None, f"Player {idx}: Ratings must be valid integers."
+        bowl_count = sum(1 for p in players if p["role"] in ("Bowler", "All-rounder"))
+        if bowl_count < 6:
+            return f"{fmt} profile: needs at least six Bowlers/All-rounders."
 
-                names.append(name)
-                roles.append(role)
-                bats.append(str(bat))
-                bowls.append(str(bowl))
-                fields.append(str(field))
-                bhands.append(batting_hand)
-                btypes.append(bowling_type)
-                bhand2s.append(bowling_hand)
+        if not captain:
+            return f"{fmt} profile: captain must be selected."
+        if not wk_name:
+            return f"{fmt} profile: wicketkeeper must be selected."
 
-            return (names, roles, bats, bowls, fields, bhands, btypes, bhand2s), None
+        return None
 
-        names = form.getlist("player_name")
-        roles = form.getlist("player_role")
-        bats = form.getlist("batting_rating")
-        bowls = form.getlist("bowling_rating")
-        fields = form.getlist("fielding_rating")
-        bhands = form.getlist("batting_hand")
-        raw_btypes = form.getlist("bowling_type")
-        raw_bhand2s = form.getlist("bowling_hand")
+    def _parse_profiles_payload(form):
+        """
+        Parse the 'profiles_payload' hidden field.
+        Returns (profiles_dict, error_str|None).
+        profiles_dict maps format_type → {captain, wicketkeeper, players: [...]}.
+        """
+        raw = (form.get("profiles_payload") or "").strip()
+        if not raw:
+            return None, "No profile data submitted."
+        try:
+            payload = json.loads(raw)
+        except Exception:
+            return None, "Invalid profiles payload format."
 
-        expected_len = len(names)
-        for label, values in (
-            ("player_role", roles),
-            ("batting_rating", bats),
-            ("bowling_rating", bowls),
-            ("fielding_rating", fields),
-            ("batting_hand", bhands),
-        ):
-            if len(values) != expected_len:
-                return None, f"Malformed team form data: '{label}' count mismatch."
+        if not isinstance(payload, dict):
+            return None, "Profiles payload must be a JSON object."
 
-        # Defensive alignment for older payload behavior where WK bowling fields are disabled
-        # and omitted from submission.
-        if len(raw_btypes) == expected_len and len(raw_bhand2s) == expected_len:
-            btypes = raw_btypes
-            bhand2s = raw_bhand2s
-        else:
-            btypes = []
-            bhand2s = []
-            type_idx = 0
-            hand_idx = 0
-            for role in roles:
-                if role == "Wicketkeeper":
-                    btypes.append("")
-                    bhand2s.append("")
-                    continue
-                btypes.append(raw_btypes[type_idx] if type_idx < len(raw_btypes) else "")
-                bhand2s.append(raw_bhand2s[hand_idx] if hand_idx < len(raw_bhand2s) else "")
-                type_idx += 1
-                hand_idx += 1
+        result = {}
+        for fmt, pdata in payload.items():
+            if fmt not in VALID_FORMATS:
+                return None, f"Unknown format type: '{fmt}'."
+            if not isinstance(pdata, dict):
+                return None, f"{fmt} profile data must be an object."
+            raw_players = pdata.get("players", [])
+            players, err = _extract_player_list(raw_players)
+            if err:
+                return None, f"{fmt} profile — {err}"
+            result[fmt] = {
+                "captain": (pdata.get("captain") or "").strip(),
+                "wicketkeeper": (pdata.get("wicketkeeper") or "").strip(),
+                "players": players,
+            }
+        return result, None
 
-        return (names, roles, bats, bowls, fields, bhands, btypes, bhand2s), None
+    def _save_profiles(team_id, profiles_dict, is_draft):
+        """
+        Create TeamProfile + DBPlayer rows for each format in profiles_dict.
+        Caller must commit the session after calling this.
+        Returns error string or None.
+        """
+        for fmt, pdata in profiles_dict.items():
+            if not pdata["players"]:
+                continue  # Skip empty profiles
+            profile = DBTeamProfile(team_id=team_id, format_type=fmt)
+            db.session.add(profile)
+            db.session.flush()  # get profile.id
+
+            captain = pdata["captain"]
+            wk_name = pdata["wicketkeeper"]
+            for p in pdata["players"]:
+                db_player = DBPlayer(
+                    team_id=team_id,
+                    profile_id=profile.id,
+                    name=p["name"],
+                    role=p["role"],
+                    batting_rating=p["batting_rating"],
+                    bowling_rating=p["bowling_rating"],
+                    fielding_rating=p["fielding_rating"],
+                    batting_hand=p["batting_hand"],
+                    bowling_type=p["bowling_type"],
+                    bowling_hand=p["bowling_hand"],
+                    is_captain=(p["name"] == captain) if captain else False,
+                    is_wicketkeeper=(p["name"] == wk_name) if wk_name else False,
+                )
+                db.session.add(db_player)
+        return None
+
+    def _find_name_conflict(user_id, team_name, *, exclude_team_id=None):
+        """
+        Return an existing team for the user whose name matches case-insensitively.
+        Optionally exclude one team id (used during edit).
+        """
+        normalized = (team_name or "").strip().lower()
+        if not normalized:
+            return None
+        query = DBTeam.query.filter(
+            DBTeam.user_id == user_id,
+            func.lower(func.trim(DBTeam.name)) == normalized,
+        )
+        if exclude_team_id is not None:
+            query = query.filter(DBTeam.id != exclude_team_id)
+        return query.first()
+
+    # ── Routes ────────────────────────────────────────────────────────────────
 
     @app.route("/team/create", methods=["GET", "POST"])
     @login_required
@@ -112,7 +184,10 @@ def register_team_routes(
                 is_draft = action == "save_draft"
 
                 if not (name and short_code and home_ground and pitch):
-                    return render_template("team_create.html", error="All team fields are required.")
+                    return render_template(
+                        "team_create.html",
+                        error="All team fields are required.",
+                    )
 
                 existing = DBTeam.query.filter_by(
                     user_id=current_user.id,
@@ -127,89 +202,37 @@ def register_team_routes(
                         ),
                     )
 
-                extracted, form_err = _extract_player_form_lists(request.form)
-                if form_err:
-                    return render_template("team_create.html", error=form_err)
-                (
-                    player_names,
-                    roles,
-                    bat_ratings,
-                    bowl_ratings,
-                    field_ratings,
-                    bat_hands,
-                    bowl_types,
-                    bowl_hands,
-                ) = extracted
+                name_conflict = _find_name_conflict(current_user.id, name)
+                if name_conflict:
+                    return render_template(
+                        "team_create.html",
+                        error=(
+                            f"You already have a team named '{name_conflict.name}'. "
+                            "Please use a different team name."
+                        ),
+                    )
 
-                players = []
-                for i in range(len(player_names)):
-                    try:
-                        b_type = bowl_types[i] if i < len(bowl_types) else ""
-                        b_hand = bowl_hands[i] if i < len(bowl_hands) else ""
+                profiles, parse_err = _parse_profiles_payload(request.form)
+                if parse_err:
+                    return render_template("team_create.html", error=parse_err)
 
-                        bat_r = int(bat_ratings[i])
-                        bowl_r = int(bowl_ratings[i])
-                        field_r = int(field_ratings[i])
+                # At least one profile must have players
+                non_empty = {
+                    fmt: pd for fmt, pd in profiles.items() if pd["players"]
+                }
+                if not non_empty:
+                    return render_template(
+                        "team_create.html",
+                        error="At least one format profile with players is required.",
+                    )
 
-                        if not (0 <= bat_r <= 100 and 0 <= bowl_r <= 100 and 0 <= field_r <= 100):
-                            return render_template(
-                                "team_create.html",
-                                error=f"Player {i+1}: All ratings must be between 0 and 100.",
-                            )
+                # Validate each non-empty profile
+                for fmt, pdata in non_empty.items():
+                    err = _validate_profile(fmt, pdata, is_draft)
+                    if err:
+                        return render_template("team_create.html", error=err)
 
-                        player = Player(
-                            name=player_names[i],
-                            role=roles[i],
-                            batting_rating=bat_r,
-                            bowling_rating=bowl_r,
-                            fielding_rating=field_r,
-                            batting_hand=bat_hands[i],
-                            bowling_type=b_type if b_type else "",
-                            bowling_hand=b_hand if b_hand else "",
-                        )
-                        players.append(player)
-                    except Exception as e:
-                        app.logger.error(f"Error in player creation: {e}", exc_info=True)
-                        return render_template("team_create.html", error=f"Error in player {i+1}: {e}")
-
-                if not is_draft:
-                    if len(players) < 12 or len(players) > 25:
-                        return render_template(
-                            "team_create.html",
-                            error="You must enter between 12 and 25 players.",
-                        )
-
-                    wk_count = sum(1 for p in players if p.role == "Wicketkeeper")
-                    if wk_count < 1:
-                        return render_template(
-                            "team_create.html",
-                            error="You need at least one Wicketkeeper.",
-                        )
-
-                    bowl_count = sum(1 for p in players if p.role in ["Bowler", "All-rounder"])
-                    if bowl_count < 6:
-                        return render_template(
-                            "team_create.html",
-                            error="You need at least six Bowler/All-rounder roles.",
-                        )
-
-                    captain_name = request.form.get("captain")
-                    wk_name = request.form.get("wicketkeeper")
-                    if not captain_name or not wk_name:
-                        return render_template(
-                            "team_create.html",
-                            error="Captain and Wicketkeeper selection required.",
-                        )
-                else:
-                    if len(players) < 1:
-                        return render_template(
-                            "team_create.html",
-                            error="Draft must have at least 1 player.",
-                        )
-                    captain_name = request.form.get("captain")
-                    wk_name = request.form.get("wicketkeeper")
-
-                color = request.form["team_color"]
+                color = request.form.get("team_color", "#4f46e5")
 
                 try:
                     new_team = DBTeam(
@@ -224,42 +247,37 @@ def register_team_routes(
                     db.session.add(new_team)
                     db.session.flush()
 
-                    for p in players:
-                        is_captain = (p.name == captain_name) if captain_name else False
-                        is_wk = (p.name == wk_name) if wk_name else False
-
-                        db_player = DBPlayer(
-                            team_id=new_team.id,
-                            name=p.name,
-                            role=p.role,
-                            batting_rating=p.batting_rating,
-                            bowling_rating=p.bowling_rating,
-                            fielding_rating=p.fielding_rating,
-                            batting_hand=p.batting_hand,
-                            bowling_type=p.bowling_type,
-                            bowling_hand=p.bowling_hand,
-                            is_captain=is_captain,
-                            is_wicketkeeper=is_wk,
-                        )
-                        db.session.add(db_player)
+                    save_err = _save_profiles(new_team.id, non_empty, is_draft)
+                    if save_err:
+                        db.session.rollback()
+                        return render_template("team_create.html", error=save_err)
 
                     db.session.commit()
                     status_msg = "Draft" if is_draft else "Active"
                     app.logger.info(
-                        f"Team '{new_team.name}' (ID: {new_team.id}) created as {status_msg} by {current_user.id}"
+                        f"Team '{new_team.name}' (ID: {new_team.id}) created as "
+                        f"{status_msg} by {current_user.id}"
                     )
                     if is_draft:
                         flash("Team saved as draft.", "success")
-                        return redirect(url_for("manage_teams"))
-                    return redirect(url_for("home"))
+                        return redirect(
+                            url_for("manage_teams", clear_team_draft=1)
+                        )
+                    return redirect(url_for("home", clear_team_draft=1))
 
                 except Exception as db_err:
                     db.session.rollback()
-                    app.logger.error(f"Database error saving team: {db_err}", exc_info=True)
-                    return render_template("team_create.html", error="Database error saving team.")
+                    app.logger.error(
+                        f"Database error saving team: {db_err}", exc_info=True
+                    )
+                    return render_template(
+                        "team_create.html", error="Database error saving team."
+                    )
 
             except Exception as e:
-                app.logger.error(f"Unexpected error saving team: {e}", exc_info=True)
+                app.logger.error(
+                    f"Unexpected error saving team: {e}", exc_info=True
+                )
                 return render_template(
                     "team_create.html",
                     error="An unexpected error occurred. Please try again.",
@@ -276,31 +294,34 @@ def register_team_routes(
                 DBTeam.is_placeholder != True
             ).all()
             for t in db_teams:
-                players_list = []
-                for p in t.players:
-                    players_list.append(
-                        {
-                            "role": p.role,
-                            "name": p.name,
-                            "is_captain": p.is_captain,
-                            "is_wicketkeeper": p.is_wicketkeeper,
-                        }
+                profiles_info = []
+                for prof in t.profiles:
+                    captain = next(
+                        (p.name for p in prof.players if p.is_captain), ""
                     )
+                    profiles_info.append({
+                        "format_type": prof.format_type,
+                        "player_count": len(prof.players),
+                        "captain": captain,
+                    })
 
-                captain_name = next((p.name for p in t.players if p.is_captain), "Unknown")
-                teams.append(
-                    {
-                        "id": t.id,
-                        "team_name": t.name,
-                        "short_code": t.short_code,
-                        "home_ground": t.home_ground,
-                        "pitch_preference": t.pitch_preference,
-                        "team_color": t.team_color,
-                        "captain": captain_name,
-                        "players": players_list,
-                        "is_draft": getattr(t, "is_draft", False),
-                    }
+                # Primary display: prefer T20, else first profile
+                primary = next(
+                    (pi for pi in profiles_info if pi["format_type"] == "T20"),
+                    profiles_info[0] if profiles_info else None,
                 )
+
+                teams.append({
+                    "id": t.id,
+                    "team_name": t.name,
+                    "short_code": t.short_code,
+                    "home_ground": t.home_ground,
+                    "pitch_preference": t.pitch_preference,
+                    "team_color": t.team_color,
+                    "captain": primary["captain"] if primary else "—",
+                    "profiles": profiles_info,
+                    "is_draft": getattr(t, "is_draft", False),
+                })
         except Exception as e:
             app.logger.error(f"Error loading teams from DB: {e}", exc_info=True)
 
@@ -322,16 +343,23 @@ def register_team_routes(
 
             if not team:
                 app.logger.warning(
-                    f"Delete failed: Team '{short_code}' not found or unauthorized for {current_user.id}"
+                    f"Delete failed: Team '{short_code}' not found or "
+                    f"unauthorized for {current_user.id}"
                 )
                 flash("Team not found or you don't have permission to delete it.", "danger")
                 return redirect(url_for("manage_teams"))
 
             team_name = team.name
+            # Defensive cleanup: remove all players/profiles for this team explicitly.
+            # This covers legacy rows that may not be profile-linked.
+            db.session.query(DBPlayer).filter_by(team_id=team.id).delete(synchronize_session=False)
+            db.session.query(DBTeamProfile).filter_by(team_id=team.id).delete(synchronize_session=False)
             db.session.delete(team)
             db.session.commit()
 
-            app.logger.info(f"Team '{short_code}' (ID: {team.id}) deleted by {current_user.id}")
+            app.logger.info(
+                f"Team '{short_code}' (ID: {team.id}) deleted by {current_user.id}"
+            )
             flash(f"Team '{team_name}' has been deleted.", "success")
         except Exception as e:
             db.session.rollback()
@@ -346,10 +374,13 @@ def register_team_routes(
         user_id = current_user.id
 
         try:
-            team = DBTeam.query.filter_by(short_code=short_code, user_id=user_id).first()
+            team = DBTeam.query.filter_by(
+                short_code=short_code, user_id=user_id
+            ).first()
             if not team:
                 app.logger.warning(
-                    f"Edit failed: Team '{short_code}' not found or unauthorized for {user_id}"
+                    f"Edit failed: Team '{short_code}' not found or "
+                    f"unauthorized for {user_id}"
                 )
                 return redirect(url_for("manage_teams"))
 
@@ -361,187 +392,137 @@ def register_team_routes(
                     team.pitch_preference = request.form["pitch_preference"]
                     team.team_color = request.form["team_color"]
 
+                    name_conflict = _find_name_conflict(
+                        user_id,
+                        team.name,
+                        exclude_team_id=team.id,
+                    )
+                    if name_conflict:
+                        team_data = _build_team_data_for_edit(team)
+                        return render_template(
+                            "team_create.html",
+                            team=team_data,
+                            edit=True,
+                            error=(
+                                f"You already have a team named '{name_conflict.name}'. "
+                                "Please use a different team name."
+                            ),
+                        )
+
                     if new_short_code != team.short_code:
                         conflict = DBTeam.query.filter_by(
                             user_id=user_id,
                             short_code=new_short_code,
                         ).first()
                         if conflict:
+                            team_data = _build_team_data_for_edit(team)
                             return render_template(
                                 "team_create.html",
-                                team={
-                                    "team_name": team.name,
-                                    "short_code": new_short_code,
-                                    "home_ground": team.home_ground,
-                                    "pitch_preference": team.pitch_preference,
-                                    "team_color": team.team_color,
-                                },
+                                team=team_data,
                                 edit=True,
                                 error=(
-                                    f"You already have a team with short code '{new_short_code}'."
+                                    f"You already have a team with short code "
+                                    f"'{new_short_code}'."
                                 ),
                             )
 
                     action = request.form.get("action", "publish")
                     is_draft = action == "save_draft"
 
-                    extracted, form_err = _extract_player_form_lists(request.form)
-                    if form_err:
+                    profiles, parse_err = _parse_profiles_payload(request.form)
+                    if parse_err:
+                        team_data = _build_team_data_for_edit(team)
                         return render_template(
                             "team_create.html",
-                            team={
-                                "team_name": team.name,
-                                "short_code": new_short_code,
-                                "home_ground": team.home_ground,
-                                "pitch_preference": team.pitch_preference,
-                                "team_color": team.team_color,
-                                "created_by_email": team.user_id,
-                                "captain": "",
-                                "wicketkeeper": "",
-                                "players": [],
-                            },
+                            team=team_data,
                             edit=True,
-                            error=form_err,
+                            error=parse_err,
                         )
-                    names, roles, bats, bowls, fields, bhands, btypes, bhand2s = extracted
 
-                    captain_name = request.form.get("captain")
-                    wk_name = request.form.get("wicketkeeper")
-
-                    team_form_data = {
-                        "team_name": team.name,
-                        "short_code": new_short_code,
-                        "home_ground": team.home_ground,
-                        "pitch_preference": team.pitch_preference,
-                        "team_color": team.team_color,
-                        "created_by_email": team.user_id,
-                        "captain": captain_name or "",
-                        "wicketkeeper": wk_name or "",
-                        "players": [],
+                    non_empty = {
+                        fmt: pd for fmt, pd in profiles.items() if pd["players"]
                     }
-                    for i in range(len(names)):
-                        safe_btype = btypes[i] if i < len(btypes) else ""
-                        safe_bhand2 = bhand2s[i] if i < len(bhand2s) else ""
-                        team_form_data["players"].append(
-                            {
-                                "name": names[i],
-                                "role": roles[i],
-                                "batting_rating": bats[i],
-                                "bowling_rating": bowls[i],
-                                "fielding_rating": fields[i],
-                                "batting_hand": bhands[i],
-                                "bowling_type": safe_btype or "",
-                                "bowling_hand": safe_bhand2 or "",
-                            }
+                    if not non_empty:
+                        team_data = _build_team_data_for_edit(team)
+                        return render_template(
+                            "team_create.html",
+                            team=team_data,
+                            edit=True,
+                            error="At least one format profile with players is required.",
                         )
 
-                    if not is_draft:
-                        if len(names) < 12 or len(names) > 25:
+                    for fmt, pdata in non_empty.items():
+                        err = _validate_profile(fmt, pdata, is_draft)
+                        if err:
+                            team_data = _build_team_data_for_edit(team)
                             return render_template(
                                 "team_create.html",
-                                team=team_form_data,
+                                team=team_data,
                                 edit=True,
-                                error="Active teams must have 12-25 players.",
+                                error=err,
                             )
 
-                        wk_count = roles.count("Wicketkeeper")
-                        bowl_count = sum(1 for r in roles if r in ["Bowler", "All-rounder"])
-
-                        if wk_count < 1:
-                            return render_template(
-                                "team_create.html",
-                                team=team_form_data,
-                                edit=True,
-                                error="Active teams need at least one Wicketkeeper.",
-                            )
-                        if bowl_count < 6:
-                            return render_template(
-                                "team_create.html",
-                                team=team_form_data,
-                                edit=True,
-                                error="Active teams need at least six Bowler/All-rounder roles.",
-                            )
-                        if not captain_name or not wk_name:
-                            return render_template(
-                                "team_create.html",
-                                team=team_form_data,
-                                edit=True,
-                                error="Active teams require a Captain and Wicketkeeper.",
-                            )
-                    else:
-                        if len(names) < 1:
-                            return render_template(
-                                "team_create.html",
-                                team=team_form_data,
-                                edit=True,
-                                error="Drafts must have at least 1 player.",
-                            )
-
-                    for i in range(len(names)):
-                        bat_r = int(bats[i])
-                        bowl_r = int(bowls[i])
-                        field_r = int(fields[i])
-                        if not (
-                            0 <= bat_r <= 100
-                            and 0 <= bowl_r <= 100
-                            and 0 <= field_r <= 100
-                        ):
-                            return render_template(
-                                "team_create.html",
-                                team=team_form_data,
-                                edit=True,
-                                error=f"Player {i+1}: All ratings must be between 0 and 100.",
-                            )
+                    # Replace all profiles: delete existing, recreate
+                    for prof in list(team.profiles):
+                        db.session.delete(prof)
+                    db.session.flush()
 
                     team.is_draft = is_draft
                     team.short_code = new_short_code
-                    DBPlayer.query.filter_by(team_id=team.id).delete()
 
-                    for i in range(len(names)):
-                        p_name = names[i]
-                        safe_btype = btypes[i] if i < len(btypes) else ""
-                        safe_bhand2 = bhand2s[i] if i < len(bhand2s) else ""
-                        db_player = DBPlayer(
-                            team_id=team.id,
-                            name=p_name,
-                            role=roles[i],
-                            batting_rating=int(bats[i]),
-                            bowling_rating=int(bowls[i]),
-                            fielding_rating=int(fields[i]),
-                            batting_hand=bhands[i],
-                            bowling_type=safe_btype or "",
-                            bowling_hand=safe_bhand2 or "",
-                            is_captain=(p_name == captain_name) if captain_name else False,
-                            is_wicketkeeper=(p_name == wk_name) if wk_name else False,
+                    save_err = _save_profiles(team.id, non_empty, is_draft)
+                    if save_err:
+                        db.session.rollback()
+                        team_data = _build_team_data_for_edit(team)
+                        return render_template(
+                            "team_create.html",
+                            team=team_data,
+                            edit=True,
+                            error=save_err,
                         )
-                        db.session.add(db_player)
 
                     db.session.commit()
                     status_msg = "Draft" if is_draft else "Active"
                     app.logger.info(
-                        f"Team '{team.short_code}' (ID: {team.id}) updated as {status_msg} by {user_id}"
+                        f"Team '{team.short_code}' (ID: {team.id}) updated as "
+                        f"{status_msg} by {user_id}"
                     )
                     flash(f"Team updated as {status_msg}.", "success")
                     return redirect(url_for("manage_teams"))
+
                 except Exception as e:
                     db.session.rollback()
                     app.logger.error(f"Error updating team: {e}", exc_info=True)
-                    flash("An error occurred while updating the team. Please try again.", "danger")
+                    flash(
+                        "An error occurred while updating the team. Please try again.",
+                        "danger",
+                    )
                     return redirect(url_for("edit_team", short_code=short_code))
 
-            team_data = {
-                "team_name": team.name,
-                "short_code": team.short_code,
-                "home_ground": team.home_ground,
-                "pitch_preference": team.pitch_preference,
-                "team_color": team.team_color,
-                "created_by_email": team.user_id,
-                "captain": next((p.name for p in team.players if p.is_captain), ""),
-                "wicketkeeper": next((p.name for p in team.players if p.is_wicketkeeper), ""),
-                "players": [],
-            }
-            for p in team.players:
-                team_data["players"].append(
+            # GET — build data dict for template
+            team_data = _build_team_data_for_edit(team)
+            return render_template("team_create.html", team=team_data, edit=True)
+
+        except Exception as e:
+            app.logger.error(f"Error in edit_team: {e}", exc_info=True)
+            return redirect(url_for("manage_teams"))
+
+    # ── Edit helper ───────────────────────────────────────────────────────────
+
+    def _build_team_data_for_edit(team):
+        """Return a dict consumed by team_create.html in edit mode."""
+        profiles_dict = {}
+        for prof in team.profiles:
+            captain = next(
+                (p.name for p in prof.players if p.is_captain), ""
+            )
+            wk = next(
+                (p.name for p in prof.players if p.is_wicketkeeper), ""
+            )
+            profiles_dict[prof.format_type] = {
+                "captain": captain,
+                "wicketkeeper": wk,
+                "players": [
                     {
                         "name": p.name,
                         "role": p.role,
@@ -549,17 +530,19 @@ def register_team_routes(
                         "bowling_rating": p.bowling_rating,
                         "fielding_rating": p.fielding_rating,
                         "batting_hand": p.batting_hand,
-                        "bowling_type": p.bowling_type,
-                        "bowling_hand": p.bowling_hand,
+                        "bowling_type": p.bowling_type or "",
+                        "bowling_hand": p.bowling_hand or "",
                     }
-                )
-            team_data["captain"] = next((p.name for p in team.players if p.is_captain), "")
-            team_data["wicketkeeper"] = next(
-                (p.name for p in team.players if p.is_wicketkeeper),
-                "",
-            )
+                    for p in prof.players
+                ],
+            }
 
-            return render_template("team_create.html", team=team_data, edit=True)
-        except Exception as e:
-            app.logger.error(f"Error in edit_team: {e}", exc_info=True)
-            return redirect(url_for("manage_teams"))
+        return {
+            "team_name": team.name,
+            "short_code": team.short_code,
+            "home_ground": team.home_ground,
+            "pitch_preference": team.pitch_preference,
+            "team_color": team.team_color,
+            "created_by_email": team.user_id,
+            "profiles": profiles_dict,
+        }

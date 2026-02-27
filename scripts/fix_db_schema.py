@@ -54,6 +54,7 @@ def ensure_schema(engine, db_obj=None):
         "toss_decision":      "VARCHAR(10)",
         "match_format":       "VARCHAR(20) DEFAULT 'T20'",
         "overs_per_side":     "INTEGER DEFAULT 20",
+        "is_day_night":       "BOOLEAN DEFAULT 0",
         "match_json_path":    "VARCHAR(255)",
     })
 

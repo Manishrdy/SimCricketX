@@ -413,6 +413,19 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* Bowler quota badge — shows overs used / max (e.g. 6/10 for ListA) */
+.sb-quota-badge {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.08rem 0.35rem;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.7);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
 .sb-divider {
     width: 1px;
     height: 14px;

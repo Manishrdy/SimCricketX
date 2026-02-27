@@ -31,18 +31,19 @@ class StatsService:
             else:
                 self.logger.info(message)
     
-    def get_overall_stats(self, user_id):
+    def get_overall_stats(self, user_id, match_format=None):
         """
         Get overall statistics for a user (all tournaments + individual matches).
-        
+
         Args:
             user_id (str): User ID
-            
+            match_format (str, optional): Filter by format — 'T20', 'ListA', 'FirstClass'
+
         Returns:
             dict: Statistics dictionary with batting, bowling, fielding, and leaderboards
         """
-        self._log(f"Fetching overall stats for user {user_id}")
-        
+        self._log(f"Fetching overall stats for user {user_id}, format={match_format}")
+
         # Query all match scorecards for this user's teams
         query = (
             db.session.query(MatchScorecard, Match, Player, Team)
@@ -51,7 +52,10 @@ class StatsService:
             .join(Team, Player.team_id == Team.id)
             .filter(Team.user_id == user_id)
         )
-        
+
+        if match_format:
+            query = query.filter(Match.match_format == match_format)
+
         records = query.all()
         self._log(f"Found {len(records)} scorecard records for user {user_id}")
         
@@ -60,19 +64,20 @@ class StatsService:
         
         return self._calculate_stats_from_records(records)
     
-    def get_tournament_stats(self, user_id, tournament_id):
+    def get_tournament_stats(self, user_id, tournament_id, match_format=None):
         """
         Get statistics for a specific tournament.
-        
+
         Args:
             user_id (str): User ID
             tournament_id (int): Tournament ID
-            
+            match_format (str, optional): Filter by format — 'T20', 'ListA', 'FirstClass'
+
         Returns:
             dict: Statistics dictionary with batting, bowling, fielding, and leaderboards
         """
-        self._log(f"Fetching tournament stats for user {user_id}, tournament {tournament_id}")
-        
+        self._log(f"Fetching tournament stats for user {user_id}, tournament {tournament_id}, format={match_format}")
+
         # Query scorecards for specific tournament
         query = (
             db.session.query(MatchScorecard, Match, Player, Team)
@@ -82,7 +87,10 @@ class StatsService:
             .filter(Match.tournament_id == tournament_id)
             .filter(Team.user_id == user_id)
         )
-        
+
+        if match_format:
+            query = query.filter(Match.match_format == match_format)
+
         records = query.all()
         self._log(f"Found {len(records)} scorecard records for tournament {tournament_id}")
         
@@ -91,7 +99,7 @@ class StatsService:
         
         return self._calculate_stats_from_records(records)
 
-    def get_insights(self, user_id, tournament_id=None):
+    def get_insights(self, user_id, tournament_id=None, match_format=None):
         """
         Build advanced insights for the Statistics Hub.
 
@@ -113,6 +121,8 @@ class StatsService:
         match_query = Match.query.filter(Match.user_id == user_id)
         if tournament_id:
             match_query = match_query.filter(Match.tournament_id == tournament_id)
+        if match_format:
+            match_query = match_query.filter(Match.match_format == match_format)
 
         venue_agg = {}
         pitch_agg = {}
@@ -161,6 +171,8 @@ class StatsService:
         )
         if tournament_id:
             record_query = record_query.filter(Match.tournament_id == tournament_id)
+        if match_format:
+            record_query = record_query.filter(Match.match_format == match_format)
 
         impact = {}
         batting_forms = {}
@@ -636,7 +648,7 @@ class StatsService:
     # NEW FEATURE: Best Bowling Figures Tracking
     # ============================================================================
     
-    def get_bowling_figures_leaderboard(self, user_id, tournament_id=None, limit=10):
+    def get_bowling_figures_leaderboard(self, user_id, tournament_id=None, limit=10, match_format=None):
         """
         Get best bowling figures (wickets/runs) leaderboard.
         
@@ -665,7 +677,9 @@ class StatsService:
             # Apply tournament filter if specified
             if tournament_id:
                 query = query.filter(Match.tournament_id == tournament_id)
-            
+            if match_format:
+                query = query.filter(Match.match_format == match_format)
+
             records = query.all()
             self._log(f"Found {len(records)} bowling records with wickets")
             
@@ -735,7 +749,7 @@ class StatsService:
     # NEW FEATURE: Player Comparison Tool
     # ============================================================================
     
-    def compare_players(self, user_id, player_ids, tournament_id=None):
+    def compare_players(self, user_id, player_ids, tournament_id=None, match_format=None):
         """
         Compare multiple players across all metrics.
         
@@ -763,7 +777,7 @@ class StatsService:
         
         try:
             for player_id in player_ids:
-                player_stats = self._get_player_detailed_stats(player_id, user_id, tournament_id)
+                player_stats = self._get_player_detailed_stats(player_id, user_id, tournament_id, match_format)
                 if player_stats:
                     comparison['players'].append(player_stats)
             
@@ -779,7 +793,7 @@ class StatsService:
             self._log(f"Error in player comparison: {e}", level='error')
             return {'error': str(e)}
     
-    def _get_player_detailed_stats(self, player_id, user_id, tournament_id=None):
+    def _get_player_detailed_stats(self, player_id, user_id, tournament_id=None, match_format=None):
         """
         Get comprehensive stats for a single player.
         
@@ -811,9 +825,11 @@ class StatsService:
             
             if tournament_id:
                 query = query.filter(Match.tournament_id == tournament_id)
-            
+            if match_format:
+                query = query.filter(Match.match_format == match_format)
+
             records = query.all()
-            
+
             # Aggregate stats
             batting_data = []
             bowling_data = []
@@ -962,7 +978,7 @@ class StatsService:
     # NEW FEATURE: Partnership Statistics
     # ============================================================================
     
-    def get_player_partnership_stats(self, player_id, user_id, tournament_id=None):
+    def get_player_partnership_stats(self, player_id, user_id, tournament_id=None, match_format=None):
         """
         Get comprehensive partnership statistics for a specific player.
         
@@ -1000,7 +1016,9 @@ class StatsService:
             
             if tournament_id:
                 query = query.filter(Match.tournament_id == tournament_id)
-            
+            if match_format:
+                query = query.filter(Match.match_format == match_format)
+
             partnerships = query.all()
             
             if not partnerships:
@@ -1132,7 +1150,7 @@ class StatsService:
         
         return stats
     
-    def get_tournament_partnership_leaderboard(self, user_id, tournament_id, limit=10):
+    def get_tournament_partnership_leaderboard(self, user_id, tournament_id, limit=10, match_format=None):
         """
         Get best partnerships in a tournament.
         
@@ -1159,6 +1177,11 @@ class StatsService:
                 .join(Team, Player.team_id == Team.id)
                 .filter(Match.tournament_id == tournament_id)
                 .filter(Team.user_id == user_id)
+            )
+            if match_format:
+                partnerships = partnerships.filter(Match.match_format == match_format)
+            partnerships = (
+                partnerships
                 .order_by(MatchPartnership.runs.desc())
                 .limit(limit)
                 .all()
