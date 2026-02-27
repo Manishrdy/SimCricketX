@@ -87,11 +87,11 @@ _PITCH_PAR_FACTOR: dict = {
     "Dead":  1.22,
 }
 
-# Pitch-aware RRR baseline (Feature 15).
-# Divides the required run-rate to produce a normalised aggression index.
-# Low-scoring pitches (Green/Dry) need fewer runs/over to be "neutral",
-# so a smaller baseline makes moderate RRRs feel more urgent.
-# High-scoring pitches (Flat/Dead) need more runs/over to pressure batters.
+# Pitch-aware RRR baseline (Feature 15) — T20 fallback only.
+# The authoritative baselines now live in FormatConfig.rrr_baseline so that
+# each format uses correctly calibrated values.  This dict is only consulted
+# when no FormatConfig is provided (legacy / unit-test paths).
+# T20 values: Hard ≈ 8.5 RPO is neutral on a good pitch.
 _PITCH_RRR_BASELINE: dict = {
     "Green": 7.5,
     "Dry":   7.5,
@@ -277,7 +277,12 @@ def compute_game_state_vector(
         # Feature 15: pitch-aware RRR baseline — different pitches have
         # different "neutral" run rates, so we scale the aggression index
         # relative to what's achievable on that surface.
-        rrr_baseline        = _PITCH_RRR_BASELINE.get(pitch, 9.0)
+        # FormatConfig.rrr_baseline is the authoritative source; the module-level
+        # _PITCH_RRR_BASELINE is a T20-only fallback for legacy / no-format paths.
+        if _fmt is not None and hasattr(_fmt, "rrr_baseline"):
+            rrr_baseline = _fmt.rrr_baseline.get(pitch, 9.0)
+        else:
+            rrr_baseline = _PITCH_RRR_BASELINE.get(pitch, 9.0)
         required_aggression = rrr / rrr_baseline
     else:
         rrr                 = 0.0
@@ -304,6 +309,8 @@ def compute_game_state_vector(
     window_size  = len(history[-BALL_HISTORY_WINDOW:]) if history else 1
     dot_count    = _count_in_window(history, {"Dot"}, BALL_HISTORY_WINDOW)
     dot_ratio    = dot_count / window_size if window_size > 0 else 0.0
+
+    _is_lista = (_fmt is not None and _fmt.name == "ListA")
 
     state = {
         # Core momentum
@@ -339,6 +346,9 @@ def compute_game_state_vector(
 
         # Scenario steering phase — used to dampen collapse layers during convergence
         "scenario_phase":         scenario_phase,
+
+        # Format flag — drives ListA-specific thresholds in apply_game_state_to_probs
+        "_is_lista":              _is_lista,
     }
 
     logger.debug(
@@ -395,6 +405,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     wickets_in_hand       = state.get("wickets_in_hand",       10)
     rrr                   = state.get("rrr",                   0.0)
     scenario_phase        = state.get("scenario_phase",        "inactive")
+    _is_lista             = state.get("_is_lista",             False)
 
     # ── A. MOMENTUM ──────────────────────────────────────────────────────────
     mom = momentum / 100.0       # [-1.0, +1.0]
@@ -512,24 +523,34 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
 
     # ── E. PATTERN OVERRIDES ─────────────────────────────────────────────────
 
-    # E1. Frustration dots — batsman tempted to break free
-    if consecutive_dots >= 8:
+    # E1. Frustration dots — batsman tempted to break free.
+    # ListA middle-over bowling routinely produces 4+ dot-ball runs; the
+    # thresholds are therefore higher so that normal tight spells don't
+    # trigger unrealistic "desperate slog" behaviour.
+    # T20 tiers : 2 / 4 / 6 / 8  consecutive dots
+    # ListA tiers: 4 / 7 / 10 / 14 consecutive dots
+    if _is_lista:
+        _dot_t1, _dot_t2, _dot_t3, _dot_t4 = 4, 7, 10, 14
+    else:
+        _dot_t1, _dot_t2, _dot_t3, _dot_t4 = 2, 4,  6,  8
+
+    if consecutive_dots >= _dot_t4:
         # Extended dot-ball siege → desperate wild swing
         mults["Six"]    *= 1.60
         mults["Four"]   *= 1.35
         mults["Wicket"] *= 1.35
         mults["Dot"]    *= 0.72
-    elif consecutive_dots >= 6:
+    elif consecutive_dots >= _dot_t3:
         mults["Six"]    *= 1.40
         mults["Four"]   *= 1.24
         mults["Wicket"] *= 1.24
         mults["Dot"]    *= 0.80
-    elif consecutive_dots >= 4:
+    elif consecutive_dots >= _dot_t2:
         mults["Four"]   *= 1.14
         mults["Six"]    *= 1.20
         mults["Wicket"] *= 1.14
         mults["Dot"]    *= 0.88
-    elif consecutive_dots >= 2:
+    elif consecutive_dots >= _dot_t1:
         mults["Four"]   *= 1.06
         mults["Six"]    *= 1.08
         mults["Wicket"] *= 1.04
@@ -598,8 +619,19 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     # ── G. PARTNERSHIP DYNAMICS ───────────────────────────────────────────────
     # Partnership runs (not just balls) drive confidence more accurately.
     # Real cricket: new partnerships are dangerous; established ones flow.
+    #
+    # ListA openers routinely build 80-120 run partnerships; a 50-run stand is
+    # "settling in", not "dominant". T20 thresholds (25/50/75/100) are halved
+    # in terms of significance relative to a 300-ball innings.
+    # ListA tiers : 50 / 100 / 150 / 200 runs
+    # T20 tiers   : 25 /  50 /  75 / 100 runs
     p_runs  = state.get("partnership_runs", 0)
     p_balls = state.get("partnership_balls", 0)
+
+    if _is_lista:
+        _p_growing, _p_established, _p_strong, _p_dominant = 50, 100, 150, 200
+    else:
+        _p_growing, _p_established, _p_strong, _p_dominant = 25,  50,  75, 100
 
     if p_balls <= 3 and p_runs < 4:
         # NEW PARTNERSHIP — danger zone: both batters still reading conditions,
@@ -609,7 +641,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         mults["Six"]    *= 0.88
         mults["Dot"]    *= 1.08
 
-    elif p_runs >= 100:
+    elif p_runs >= _p_dominant:
         # DOMINANT PARTNERSHIP — batters completely in control, reading every
         # ball, running well, and attacking with full confidence.
         mults["Four"]   *= 1.20
@@ -617,21 +649,21 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         mults["Double"] *= 1.12
         mults["Wicket"] *= 0.85
 
-    elif p_runs >= 75:
+    elif p_runs >= _p_strong:
         # STRONG PARTNERSHIP — batters well-set, bowling under pressure.
         mults["Four"]   *= 1.15
         mults["Six"]    *= 1.16
         mults["Double"] *= 1.08
         mults["Wicket"] *= 0.88
 
-    elif p_runs >= 50:
+    elif p_runs >= _p_established:
         # WELL-ESTABLISHED PARTNERSHIP — bowlers struggling to break through.
         mults["Four"]   *= 1.10
         mults["Six"]    *= 1.10
         mults["Double"] *= 1.05
         mults["Wicket"] *= 0.92
 
-    elif p_runs >= 25:
+    elif p_runs >= _p_growing:
         # GROWING PARTNERSHIP — batters settling, modest boundary boost.
         mults["Four"]   *= 1.05
         mults["Six"]    *= 1.05

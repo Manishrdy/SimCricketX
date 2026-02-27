@@ -268,29 +268,38 @@ LISTA_DEATH_MATRIX = {
 
 # Per-pitch run scaling for ListA (applied on top of phase matrices)
 # These reflect how pitch character shifts scoring across 50 overs.
+# Must be consistent with _LISTA_PITCH_PAR_FACTORS in format_config.py:
+#   Hard ≈ 0.98 → ~285 runs  (par factor 1.00)
+#   Flat ≈ 1.21 → ~320 runs  (par factor 1.10)
+#   Dead ≈ 1.18 → ~340 runs  (par factor 1.18) ← was 0.68 (contradicted par)
+#   Green ≈ 0.68 → ~220 runs (par factor 0.76)
+#   Dry   ≈ 0.72 → ~230 runs (par factor 0.80)
 LISTA_RUN_FACTORS = {
     "Green": 0.68,   # Strong bowler-friendly suppression
     "Dry":   0.72,   # Spin-friendly
     "Hard":  0.98,   # Baseline 280-320 target band
     "Flat":  1.21,   # High-scoring 320-360 target band
-    "Dead":  0.68,   # User-calibrated low-scoring dead track behavior
+    "Dead":  1.18,   # Batting festival — aligns with par factor 1.18 (~340 runs)
 }
 
 # ListA pitch-specific nudges for strike rotation profile.
 # Applied before final normalization of raw weights.
+# Dead removed: it is now a batting paradise (run_factor 1.18) — dots must NOT
+# be boosted. Green/Dry remain: tight bowling on seam/spin surfaces is realistic.
 LISTA_DOT_SINGLE_FACTORS = {
     "Green": {"Dot": 1.22, "Single": 1.06},
     "Dry":   {"Dot": 1.20, "Single": 1.08},
-    "Dead":  {"Dot": 1.12, "Single": 1.04},
 }
 
-# ListA-only wicket pressure by pitch (applied as a final scaling layer).
+# ListA-only wicket scaling by pitch (applied as a final scaling layer).
+# Dead corrected: batting paradise → very low wicket rate (like Flat, even lower).
+# Green/Dry: bowling-friendly → higher wicket rate.
 LISTA_WICKET_PITCH_MULT = {
     "Green": 1.18,
     "Dry":   1.12,
     "Hard":  1.00,
     "Flat":  0.70,
-    "Dead":  1.20,
+    "Dead":  0.58,   # Batting festival: wickets rarer than Flat
 }
 
 
@@ -352,10 +361,9 @@ def _apply_lista_phase_boosts(weights: dict, over: int, pitch: str,
         # Middle overs: spin grip and tight fielding = slightly more dots
         w["Dot"] = w.get("Dot", 0) * 1.05
 
-    # User-calibrated ListA Dead behavior: suppress free scoring and lift wicket risk.
-    if pitch == "Dead":
-        w["Dot"] = w.get("Dot", 0) * 1.06
-        w["Wicket"] = w.get("Wicket", 0) * 1.10
+    # Dead is a batting paradise (run_factor 1.18, wicket_mult 0.58).
+    # No further suppression applied here; the phase matrices and scaling
+    # layers already produce the correct low-dot, low-wicket, high-boundary profile.
 
     return w
 
@@ -946,9 +954,9 @@ def calculate_outcome(
         # Dew factor for Day/Night matches (2nd innings evening)
         raw_weights = _apply_dew_factor(raw_weights, innings, over_number,
                                         is_day_night, format_config)
-        # Hard pitch retune (user-requested):
-        # Keep Hard as scoring-friendly but avoid excessive wicket suppression.
+        # Pitch-specific fine-tuning after wear and dew layers.
         if pitch == "Hard":
+            # Keep Hard as scoring-friendly but avoid excessive wicket suppression.
             raw_weights["Single"] = raw_weights.get("Single", 0.0) * 1.03
             raw_weights["Four"] = raw_weights.get("Four", 0.0) * 1.03
             raw_weights["Six"] = raw_weights.get("Six", 0.0) * 1.03
@@ -957,6 +965,13 @@ def calculate_outcome(
             raw_weights["Dot"] = raw_weights.get("Dot", 0.0) * 0.94
             raw_weights["Four"] = raw_weights.get("Four", 0.0) * 1.06
             raw_weights["Six"] = raw_weights.get("Six", 0.0) * 1.10
+        elif pitch == "Dead":
+            # Batting festival: reinforce low-dot, high-boundary profile.
+            # run_factor (1.18) and wicket_mult (0.58) do the heavy lifting;
+            # this nudge removes residual dot excess from the phase matrices.
+            raw_weights["Dot"] = raw_weights.get("Dot", 0.0) * 0.88
+            raw_weights["Four"] = raw_weights.get("Four", 0.0) * 1.08
+            raw_weights["Six"] = raw_weights.get("Six", 0.0) * 1.12
 
         # Pitch-specific ListA rotation profile.
         pitch_dot_single = LISTA_DOT_SINGLE_FACTORS.get(pitch)
@@ -1135,9 +1150,17 @@ def calculate_outcome(
         result["type"] = "extra"
         result["is_extra"] = True
 
-        # A4: Weighted extra type selection (realistic T20 distribution)
-        extra_types   = ["Wide", "No Ball", "Leg Bye", "Byes"]
-        extra_weights = [0.40,   0.25,      0.20,      0.15]
+        # A4: Weighted extra type selection — format-aware distribution.
+        # ListA: more wides (slower pace/spin in 30-over middle overs bowl
+        #        wider lines; spinner drifts are common); fewer no-balls
+        #        (less aggressive short-ball pace attack than T20).
+        # T20:   higher no-ball rate from aggressive pace bowling.
+        if _is_lista:
+            extra_types   = ["Wide", "No Ball", "Leg Bye", "Byes"]
+            extra_weights = [0.52,   0.13,      0.22,      0.13]
+        else:
+            extra_types   = ["Wide", "No Ball", "Leg Bye", "Byes"]
+            extra_weights = [0.40,   0.25,      0.20,      0.15]
         extra_choice  = random.choices(extra_types, weights=extra_weights)[0]
 
         # A4: Variable runs per extra type
