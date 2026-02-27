@@ -239,8 +239,11 @@ class PressureEngine:
         # Second innings: full boom-or-bust
         wicket_multiplier = 1.0 + (risk_multiplier * 1.5)
         
-        # Extreme scaling only for impossible chases (RRR 16+)
-        if current_over >= 16 and required_rr > 16:
+        # Extreme scaling only for impossible chases (RRR 16+) AND only once
+        # the format's death phase has begun.  Using self.fmt.death_phase.start
+        # instead of a hardcoded 16 ensures ListA death (over 40) is used rather
+        # than T20 death (over 16) — previously this fired 24 overs too early.
+        if current_over >= self.fmt.death_phase.start and required_rr > 16:
             if required_rr >= 20:
                 extreme_boost = 2.5  # Only for truly impossible
                 chaos_level = "ABSOLUTE_CHAOS"
@@ -250,7 +253,7 @@ class PressureEngine:
             else:  # 16-18 RRR
                 extreme_boost = 1.5
                 chaos_level = "DESPERATE_SWINGING"
-            
+
             wicket_multiplier *= extreme_boost
             logger.info(f"{chaos_level}: RRR {required_rr:.1f} = {extreme_boost:.1f}x wicket boost!")
         
@@ -412,7 +415,7 @@ class PressureEngine:
     
 
     def get_chasing_advantage(self, match_state):
-        """Apply realistic chasing advantage in T20 cricket"""
+        """Apply realistic chasing advantage (format-aware: T20 or ListA)."""
         if match_state['innings'] != 2:
             return None
         
