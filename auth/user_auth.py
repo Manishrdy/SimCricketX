@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import Optional
 from datetime import datetime, timezone
 from werkzeug.security import check_password_hash, generate_password_hash
 from database.models import User, AdminAuditLog
@@ -53,7 +54,7 @@ def log_admin_action(admin_email: str, action: str, target: str = None, details:
 
 # --- Core Auth Functions ---
 
-def register_user(email: str, password: str, display_name: str | None = None) -> bool:
+def register_user(email: str, password: str, display_name: Optional[str] = None) -> bool:
     """Register a new user in the database."""
     if not email or not password:
         return False
