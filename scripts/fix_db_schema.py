@@ -58,6 +58,12 @@ def ensure_schema(engine, db_obj=None):
         "match_json_path":    "VARCHAR(255)",
     })
 
+    # ── announcement_banner ──
+    _add_missing_cols("announcement_banner", {
+        "color_preset": "VARCHAR(20) DEFAULT 'urgent'",
+        "position": "VARCHAR(10) DEFAULT 'bottom'",
+    })
+
     # ── match_scorecards ──
     _add_missing_cols("match_scorecards", {
         "innings_number":     "INTEGER NOT NULL DEFAULT 1",
@@ -153,7 +159,8 @@ def ensure_schema(engine, db_obj=None):
         "tournament_player_stats_cache", "admin_audit_log",
         "match_partnerships", "failed_login_attempts",
         "blocked_ips", "active_sessions", "site_counters",
-        "login_history", "ip_whitelist",
+        "login_history", "ip_whitelist", "announcement_banner",
+        "user_banner_dismissals",
     )
     missing = [t for t in all_required_tables if t not in tables]
     if missing and db_obj is not None:
@@ -161,7 +168,8 @@ def ensure_schema(engine, db_obj=None):
         from database.models import (  # noqa: F401
             TournamentPlayerStatsCache, AdminAuditLog, MatchPartnership,
             FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter,
-            LoginHistory, IPWhitelistEntry,
+            LoginHistory, IPWhitelistEntry, AnnouncementBanner,
+            UserBannerDismissal,
         )
         db_obj.create_all()
 

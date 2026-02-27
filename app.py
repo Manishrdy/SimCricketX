@@ -113,7 +113,15 @@ except ImportError:
 from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, TournamentTeam, TournamentFixture
 from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership, AdminAuditLog  # Distinct from engine.match.Match
-from database.models import FailedLoginAttempt, BlockedIP, ActiveSession, LoginHistory, IPWhitelistEntry
+from database.models import (
+    FailedLoginAttempt,
+    BlockedIP,
+    ActiveSession,
+    LoginHistory,
+    IPWhitelistEntry,
+    AnnouncementBanner,
+    UserBannerDismissal,
+)
 from engine.tournament_engine import TournamentEngine
 from sqlalchemy import func, text  # For aggregate functions
 
@@ -1259,6 +1267,7 @@ def create_app():
         AUDIT_MODEL=AdminAuditLog,
         LOGIN_HISTORY_MODEL=LoginHistory,
         IP_WHITELIST_MODEL=IPWhitelistEntry,
+        ANNOUNCEMENT_BANNER_MODEL=AnnouncementBanner,
         DBUser=DBUser,
         DBTeam=DBTeam,
         DBTeamProfile=DBTeamProfile,
@@ -1828,6 +1837,8 @@ def create_app():
         db=db,
         func=func,
         ActiveSession=ActiveSession,
+        AnnouncementBanner=AnnouncementBanner,
+        UserBannerDismissal=UserBannerDismissal,
         _get_app_version=_get_app_version,
         get_visit_counter=get_visit_counter,
         get_matches_simulated=get_matches_simulated,

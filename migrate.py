@@ -48,7 +48,7 @@ def _import_all_models():
         MatchPartnership, TournamentPlayerStatsCache,
         AdminAuditLog, FailedLoginAttempt, BlockedIP,
         ActiveSession, SiteCounter, LoginHistory, IPWhitelistEntry,
-        UserGroundConfig,
+        UserGroundConfig, AnnouncementBanner, UserBannerDismissal,
     )
 
 

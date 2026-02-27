@@ -5,6 +5,8 @@ Tests routes defined in routes/core_routes.py
 
 import pytest
 from flask import session
+from app import db
+from database.models import AnnouncementBanner, UserBannerDismissal
 
 
 class TestHomeRoute:
@@ -29,6 +31,48 @@ class TestHomeRoute:
         """Test accessing home page as admin renders the dashboard."""
         response = admin_client.get("/")
         assert response.status_code == 200
+
+    def test_home_page_shows_active_announcement_banner(self, authenticated_client, app):
+        """Active announcement banner should render on home page for users who did not dismiss it."""
+        with app.app_context():
+            db.session.add(
+                AnnouncementBanner(
+                    message="Server maintenance tonight at 10 PM.",
+                    is_enabled=True,
+                    version=1,
+                )
+            )
+            db.session.commit()
+
+        response = authenticated_client.get("/")
+        assert response.status_code == 200
+        assert "Server maintenance tonight at 10 PM." in response.get_data(as_text=True)
+
+    def test_home_page_hides_banner_after_dismiss(self, authenticated_client, regular_user, app):
+        """After dismissing the active banner, it should not render again for that user/version."""
+        with app.app_context():
+            db.session.add(
+                AnnouncementBanner(
+                    message="Important platform notice",
+                    is_enabled=True,
+                    version=1,
+                )
+            )
+            db.session.commit()
+
+        dismiss_resp = authenticated_client.post("/announcement-banner/dismiss")
+        assert dismiss_resp.status_code == 200
+
+        with app.app_context():
+            dismissal = UserBannerDismissal.query.filter_by(
+                user_id=regular_user.id,
+                banner_version=1,
+            ).first()
+            assert dismissal is not None
+
+        home_resp = authenticated_client.get("/")
+        assert home_resp.status_code == 200
+        assert "Important platform notice" not in home_resp.get_data(as_text=True)
 
 
 class TestGroundConditionsRoutes:

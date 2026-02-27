@@ -13,6 +13,8 @@ def register_core_routes(
     db,
     func,
     ActiveSession,
+    AnnouncementBanner,
+    UserBannerDismissal,
     _get_app_version,
     get_visit_counter,
     get_matches_simulated,
@@ -54,6 +56,28 @@ def register_core_routes(
 
         app_version = _get_app_version()
         changelog_entries = _get_changelog_for_version(app_version)
+        announcement_banner = None
+
+        banner = AnnouncementBanner.query.first()
+        if banner and banner.is_enabled and str(banner.message or "").strip():
+            dismissed = (
+                db.session.query(UserBannerDismissal.id)
+                .filter_by(user_id=current_user.id, banner_version=banner.version)
+                .first()
+            )
+            if not dismissed:
+                color_preset = str(getattr(banner, "color_preset", "urgent") or "urgent").strip().lower()
+                if color_preset not in {"urgent", "spotlight", "calm"}:
+                    color_preset = "urgent"
+                position = str(getattr(banner, "position", "bottom") or "bottom").strip().lower()
+                if position not in {"top", "bottom"}:
+                    position = "bottom"
+                announcement_banner = {
+                    "message": str(banner.message),
+                    "version": int(banner.version or 1),
+                    "color_preset": color_preset,
+                    "position": position,
+                }
 
         return render_template(
             "home.html",
@@ -63,7 +87,35 @@ def register_core_routes(
             active_users=active_users_count,
             app_version=app_version,
             changelog_entries=changelog_entries,
+            announcement_banner=announcement_banner,
         )
+
+    @app.route("/announcement-banner/dismiss", methods=["POST"])
+    @login_required
+    def dismiss_announcement_banner():
+        try:
+            banner = AnnouncementBanner.query.first()
+            if not banner or not banner.is_enabled or not str(banner.message or "").strip():
+                return jsonify({"message": "No active announcement banner"}), 200
+
+            existing = UserBannerDismissal.query.filter_by(
+                user_id=current_user.id,
+                banner_version=banner.version,
+            ).first()
+            if not existing:
+                db.session.add(
+                    UserBannerDismissal(
+                        user_id=current_user.id,
+                        banner_version=banner.version,
+                    )
+                )
+                db.session.commit()
+
+            return jsonify({"message": "Announcement banner dismissed"}), 200
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Failed to dismiss announcement banner: {e}", exc_info=True)
+            return jsonify({"error": "Failed to dismiss announcement banner"}), 500
 
     # ───── Ground Conditions ─────
 
@@ -110,4 +162,3 @@ def register_core_routes(
     @app.route("/ground-conditions/guide")
     def ground_conditions_guide():
         return render_template("ground_conditions_guide.html")
-

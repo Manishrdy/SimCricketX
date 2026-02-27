@@ -1,0 +1,97 @@
+{% extends "admin/layout.html" %}
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Announcement Banner</h1>
+        <p class="admin-page-subtitle">Configure a global banner shown on the home dashboard.</p>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+<div class="a-card-flat" style="max-width: 900px;">
+    <form id="bannerForm" onsubmit="saveBanner(event)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="a-form-group">
+            <label class="a-form-label" for="is_enabled">Banner Status</label>
+            <select id="is_enabled" name="is_enabled" class="a-form-input">
+                <option value="true" {% if banner and banner.is_enabled %}selected{% endif %}>Enabled</option>
+                <option value="false" {% if not banner or not banner.is_enabled %}selected{% endif %}>Disabled</option>
+            </select>
+        </div>
+
+        <div class="a-grid-2">
+            <div class="a-form-group">
+                <label class="a-form-label" for="color_preset">Color Combination</label>
+                <select id="color_preset" name="color_preset" class="a-form-input">
+                    {% for preset_key, preset_label in preset_choices.items() %}
+                    <option value="{{ preset_key }}" {% if banner and banner.color_preset == preset_key %}selected{% endif %}>
+                        {{ preset_label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="a-form-group">
+                <label class="a-form-label" for="position">Banner Position</label>
+                <select id="position" name="position" class="a-form-input">
+                    {% for pos_key, pos_label in position_choices.items() %}
+                    <option value="{{ pos_key }}" {% if banner and banner.position == pos_key %}selected{% endif %}>
+                        {{ pos_label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="a-form-group">
+            <label class="a-form-label" for="message">Banner Text</label>
+            <textarea
+                id="message"
+                name="message"
+                class="a-form-input"
+                rows="5"
+                maxlength="2000"
+                style="max-width: 100%;"
+                placeholder="Write the announcement users should see..."
+            >{{ banner.message if banner else '' }}</textarea>
+            <p style="font-size:0.78rem;color:var(--fg-secondary);margin-top:0.45rem;">
+                Current version: <strong id="banner-version">{{ banner.version if banner else 1 }}</strong>.
+                Updating text creates a new version and users will see it again unless they dismiss that new version.
+            </p>
+            <p style="font-size:0.78rem;color:var(--fg-secondary);margin-top:0.3rem;">
+                Changing color/position does not bump version, so dismissed users stay dismissed while you experiment.
+            </p>
+        </div>
+
+        <button type="submit" class="a-btn a-btn-primary">
+            <i class="fas fa-save"></i> Save Banner
+        </button>
+    </form>
+</div>
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
+    setTimeout(() => { c.innerHTML = ''; }, 4500);
+}
+
+async function saveBanner(e) {
+    e.preventDefault();
+    const res = await fetch('/admin/banner/update', {
+        method: 'POST',
+        body: new FormData(e.target),
+    });
+    const data = await res.json();
+    if (res.ok) {
+        if (typeof data.version !== 'undefined') {
+            document.getElementById('banner-version').textContent = String(data.version);
+        }
+        showAlert(data.message || 'Banner updated', 'success');
+    } else {
+        showAlert(data.error || 'Failed to update banner', 'error');
+    }
+}
+</script>
+{% endblock %}
