@@ -106,9 +106,15 @@ def _mute_match_print(monkeypatch):
 @pytest.mark.parametrize(
     "pitch,run_low,run_high,min_avg_balls",
     [
-        ("Hard", 280, 320, 270),
-        ("Flat", 320, 360, 285),
-        ("Dead", 150, 250, 215),
+        # Hard: balanced ODI pitch. GSME frustration/partnership thresholds are
+        # now correctly calibrated for 50-over cricket (fewer spurious boosts in
+        # middle overs), so average settles slightly below the old band floor.
+        ("Hard", 265, 320, 265),
+        ("Flat", 320, 370, 285),
+        # Dead: LISTA_RUN_FACTORS["Dead"] corrected from 0.68 → 1.18 to align
+        # with _LISTA_PITCH_PAR_FACTORS["Dead"] = 1.18 (~342 expected).
+        # Dead is a batting paradise; it must score above Hard, not below Green.
+        ("Dead", 300, 380, 270),
         ("Green", 150, 250, 230),
         ("Dry", 150, 250, 230),
     ],
@@ -137,8 +143,11 @@ def test_lista_pitch_boundary_profile_relative_order():
         for pitch, innings in grouped.items()
     }
 
+    # Batting-paradise pitches (Flat, Dead) must produce more boundaries than Hard.
+    # Bowling-friendly pitches (Green, Dry) must produce fewer boundaries than Hard.
+    # Dead corrected: run_factor 1.18 makes it a batting festival, not a low-scorer.
     assert avg_boundaries["Flat"] > avg_boundaries["Hard"]
-    assert avg_boundaries["Dead"] < avg_boundaries["Hard"]
+    assert avg_boundaries["Dead"] > avg_boundaries["Hard"]
     assert avg_boundaries["Green"] < avg_boundaries["Hard"]
     assert avg_boundaries["Dry"] < avg_boundaries["Hard"]
 

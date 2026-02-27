@@ -166,24 +166,10 @@ def register_match_routes(
 
             _fmt = data.get("match_format", "T20")
 
-            # ── Strict format-profile existence check (no fallback) ───────────
-            # Reject immediately if either team has no squad for the chosen format.
             home_profile = next((p for p in home_db.profiles if p.format_type == _fmt), None)
             away_profile = next((p for p in away_db.profiles if p.format_type == _fmt), None)
 
-            if not home_profile or not home_profile.players:
-                return jsonify({
-                    "error": f"{home_db.name} has no {_fmt} squad. "
-                             "Please create a squad for this format first."
-                }), 400
-            if not away_profile or not away_profile.players:
-                return jsonify({
-                    "error": f"{away_db.name} has no {_fmt} squad. "
-                             "Please create a squad for this format first."
-                }), 400
-
             # Helper to convert DB team to Full Dict (mimicking JSON file structure).
-            # Strictly uses the format-specific profile — no fallback.
             def team_to_full_dict(t, profile):
                 d = {
                     "team_name": t.name,

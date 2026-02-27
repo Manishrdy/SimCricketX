@@ -122,7 +122,15 @@ class Match:
         self.fmt = get_format(match_data.get("match_format", "T20"))
 
         # Feature 7: compute toss × conditions advantage once at match start.
-        _correct_choice = self.fmt.correct_toss_choice.get(self.pitch, "bat")
+        # D/N matches: dew in the 2nd innings tilts the optimal choice towards
+        # bowling first on almost every pitch.  Use the D/N override dict when
+        # available; fall back to the standard pitch-only dict for day games.
+        _is_dn = bool(match_data.get("is_day_night", False))
+        _dn_choices = getattr(self.fmt, "correct_toss_choice_dn", None)
+        if _is_dn and _dn_choices:
+            _correct_choice = _dn_choices.get(self.pitch, "bowl")
+        else:
+            _correct_choice = self.fmt.correct_toss_choice.get(self.pitch, "bat")
         # toss_decision stored as 'Bat' or 'Bowl'; correct_choice is lowercase.
         self._toss_choice_correct = (self.toss_decision or "").lower() == _correct_choice
         # Track which XI won the toss (used in next_ball for per-innings check).
@@ -3856,6 +3864,9 @@ class Match:
             comm_state['partnership_runs'] = self.current_partnership_runs
             comm_state['current_over_runs'] = self.current_over_runs
             comm_state['current_ball'] = self.current_ball
+            # Format-aware over landmarks for commentary triggers
+            comm_state['_fmt_last_over'] = self.fmt.overs - 1       # 19 for T20, 49 for ListA
+            comm_state['_fmt_death_start'] = self.fmt.death_phase.start  # 16 for T20, 40 for ListA
 
             # Maiden over detection: last legal ball of over, no runs all over, this ball also a dot
             is_legal = not outcome.get('is_extra') or outcome.get('extra_type', '') in ('Byes', 'Leg Bye')

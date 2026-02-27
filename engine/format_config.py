@@ -76,6 +76,13 @@ class FormatConfig:
     extras_per_innings: int
     target_scores: Dict[str, int]
     correct_toss_choice: Dict[str, str]
+    # D/N override: in floodlit matches dew in the 2nd innings almost always
+    # makes bowling first correct.  None = fall back to correct_toss_choice.
+    correct_toss_choice_dn: Optional[Dict[str, str]]
+    # Per-pitch "neutral" run-rate used by GSME to normalise required_aggression.
+    # T20:   Hard pitch neutral ≈ 8.5 RPO (IPL / international averages)
+    # ListA: Hard pitch neutral ≈ 6.0 RPO (ODI first-innings scoring rate)
+    rrr_baseline: Dict[str, float]
 
     # ------------------------------------------------------------------ #
     # Phase helpers                                                        #
@@ -184,6 +191,24 @@ _T20 = FormatConfig(
         "Flat":  "bowl",  # Run-fest; dew helps chaser → bowl first
         "Dead":  "bowl",  # Extreme batting; chaser advantaged → bowl first
     },
+    correct_toss_choice_dn={
+        # D/N T20: shorter game but dew still tilts towards chasing.
+        # Bowling first = your team bats second under lights with dew.
+        "Green": "bowl",   # Already bowl; unchanged
+        "Dry":   "bowl",   # Dew neutralises spin in 2nd innings → bowl first
+        "Hard":  "bowl",   # Chase with dew advantage → bowl first
+        "Flat":  "bowl",   # Already bowl; unchanged
+        "Dead":  "bowl",   # Already bowl; unchanged
+    },
+    rrr_baseline={
+        # "Neutral" RPO for each pitch in T20 context.
+        # GSME divides actual RRR by this to get a normalised aggression index.
+        "Green": 7.5,
+        "Dry":   7.5,
+        "Hard":  8.5,
+        "Flat":  10.5,
+        "Dead":  11.5,
+    },
 )
 
 
@@ -287,12 +312,35 @@ _LISTA = FormatConfig(
         "Dead":  340,
     },
     correct_toss_choice={
-        # ListA toss logic differs slightly from T20 due to pitch wear & dew
+        # ListA day-match toss logic (pitch wear only, no dew)
         "Green": "bowl",   # New-ball seam threat; pitch stays decent all day
         "Dry":   "bat",    # Pitch deteriorates; spin brutal in 2nd innings
-        "Hard":  "bowl",   # D/N dew helps chaser; chase-friendly
-        "Flat":  "bowl",   # High totals still chaseable with dew
+        "Hard":  "bowl",   # Balanced; slight chase advantage
+        "Flat":  "bowl",   # High totals still chaseable
         "Dead":  "bat",    # Set a huge total; spinners can do nothing anyway
+    },
+    correct_toss_choice_dn={
+        # D/N ListA: dew from over 25 of the 2nd innings tips all pitches
+        # towards bowling first.  Your team bats 2nd at night with dew:
+        #   - Spin grips less (Dry advantage lost)
+        #   - Ball becomes slippery (more wides/extras)
+        #   - Outfield faster from moisture (Four chance ↑)
+        "Green": "bowl",   # Already bowl; dew makes chase even easier
+        "Dry":   "bowl",   # Overrides day "bat" — dew kills spin in overs 25-50
+        "Hard":  "bowl",   # Already bowl; unchanged
+        "Flat":  "bowl",   # Already bowl; unchanged
+        "Dead":  "bowl",   # Overrides day "bat" — batting paradise + dew = huge chase
+    },
+    rrr_baseline={
+        # "Neutral" RPO for each pitch in ListA (ODI) context.
+        # ODI scoring rates are significantly lower than T20; Hard pitch
+        # averages ~5.7-6.0 RPO in the first innings.
+        # A required rate above these baselines represents escalating pressure.
+        "Green": 4.8,   # Seam-friendly: low-scoring; 5+ RPO is already urgent
+        "Dry":   5.0,   # Spin-friendly: modest target, 5+ RPO is challenging
+        "Hard":  6.0,   # Balanced baseline for ODI cricket
+        "Flat":  7.0,   # High-scoring; 7+ RPO still challenging even on flat deck
+        "Dead":  7.5,   # Batting paradise; 8+ RPO is genuinely hard to sustain
     },
 )
 
