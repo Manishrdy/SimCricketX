@@ -1,5 +1,6 @@
 import random
 import logging
+from typing import Optional
 from engine.ground_config import (
     get_scoring_matrix as _gc_scoring_matrix,
     get_run_factor as _gc_run_factor,
@@ -577,7 +578,7 @@ def compute_weighted_prob(
     streak: dict,
     batter_runs: int = 0,
     balls_faced: int = 0,
-    format_name: str | None = None,
+    format_name: Optional[str] = None,
     config=None,
 ) -> float:
     """
@@ -742,7 +743,7 @@ def calculate_outcome(
     game_mode_override: str = None,
     fielding_quality: float = None,
     ground_config_override: dict = None,
-    format_config: "FormatConfig | None" = None,
+    format_config: Optional[FormatConfig] = None,
     is_day_night: bool = False,
 ) -> dict:
     """
