@@ -69,7 +69,7 @@ def register_team_routes(
             return None
 
         if not (12 <= len(players) <= 25):
-            return f"{fmt} profile: must have between 12 and 25 players."
+            return f"{fmt} profile: You must enter between 12 and 25 players."
 
         wk_count = sum(1 for p in players if p["role"] == "Wicketkeeper")
         if wk_count < 1:
@@ -86,6 +86,59 @@ def register_team_routes(
 
         return None
 
+    def _parse_legacy_profile_payload(form):
+        """
+        Backward-compatible parser for older form payloads that post flat
+        player arrays (player_name/player_role/etc.) instead of profiles_payload.
+        Returns (profiles_dict, error_str|None).
+        """
+        names = [str(v).strip() for v in form.getlist("player_name")]
+        if not any(names):
+            return None, "No profile data submitted."
+
+        field_lists = {
+            "player_role": [str(v).strip() for v in form.getlist("player_role")],
+            "batting_rating": form.getlist("batting_rating"),
+            "bowling_rating": form.getlist("bowling_rating"),
+            "fielding_rating": form.getlist("fielding_rating"),
+            "batting_hand": [str(v).strip() for v in form.getlist("batting_hand")],
+            "bowling_type": [str(v).strip() for v in form.getlist("bowling_type")],
+            "bowling_hand": [str(v).strip() for v in form.getlist("bowling_hand")],
+        }
+
+        count = len(names)
+        for field_name, values in field_lists.items():
+            if len(values) != count:
+                return None, (
+                    f"Invalid team payload: '{field_name}' has {len(values)} items, "
+                    f"expected {count}."
+                )
+
+        raw_players = []
+        for idx in range(count):
+            raw_players.append({
+                "name": names[idx],
+                "role": field_lists["player_role"][idx],
+                "batting_rating": field_lists["batting_rating"][idx],
+                "bowling_rating": field_lists["bowling_rating"][idx],
+                "fielding_rating": field_lists["fielding_rating"][idx],
+                "batting_hand": field_lists["batting_hand"][idx],
+                "bowling_type": field_lists["bowling_type"][idx],
+                "bowling_hand": field_lists["bowling_hand"][idx],
+            })
+
+        players, err = _extract_player_list(raw_players)
+        if err:
+            return None, f"T20 profile — {err}"
+
+        return {
+            "T20": {
+                "captain": (form.get("captain") or "").strip(),
+                "wicketkeeper": (form.get("wicketkeeper") or "").strip(),
+                "players": players,
+            }
+        }, None
+
     def _parse_profiles_payload(form):
         """
         Parse the 'profiles_payload' hidden field.
@@ -94,7 +147,7 @@ def register_team_routes(
         """
         raw = (form.get("profiles_payload") or "").strip()
         if not raw:
-            return None, "No profile data submitted."
+            return _parse_legacy_profile_payload(form)
         try:
             payload = json.loads(raw)
         except Exception:

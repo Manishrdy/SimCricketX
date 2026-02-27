@@ -127,6 +127,12 @@ def register_match_routes(
                 home_id = data.get("team1_id")
             if away_id is None:
                 away_id = data.get("team2_id")
+
+            try:
+                home_id = int(home_id)
+                away_id = int(away_id)
+            except (TypeError, ValueError):
+                return jsonify({"error": "Invalid team selection"}), 400
             
             # Tournament context
             req_tournament_id = data.get("tournament_id")
@@ -140,6 +146,8 @@ def register_match_routes(
                 return jsonify({"error": "Invalid team selection"}), 400
             if home_db.user_id != current_user.id or away_db.user_id != current_user.id:
                 return jsonify({"error": "Unauthorized team selection"}), 403
+            if home_db.id == away_db.id:
+                return jsonify({"error": "Please select two different teams"}), 400
 
             if req_fixture_id:
                 fixture = db.session.get(TournamentFixture, req_fixture_id)
@@ -169,14 +177,24 @@ def register_match_routes(
             home_profile = next((p for p in home_db.profiles if p.format_type == _fmt), None)
             away_profile = next((p for p in away_db.profiles if p.format_type == _fmt), None)
 
+            def _resolve_players_for_format(team_obj, profile_obj):
+                # Backward compatibility for legacy teams with players that are not
+                # attached to TeamProfile rows (profile_id is NULL in older data/tests).
+                if profile_obj:
+                    return list(profile_obj.players)
+                legacy_players = [p for p in team_obj.players if p.profile_id is None]
+                if legacy_players:
+                    return legacy_players
+                return []
+
             # Helper to convert DB team to Full Dict (mimicking JSON file structure).
-            def team_to_full_dict(t, profile):
+            def team_to_full_dict(t, players):
                 d = {
                     "team_name": t.name,
                     "short_code": t.short_code,
                     "players": [],
                 }
-                for p in profile.players:
+                for p in players:
                     d["players"].append({
                         "name": p.name,
                         "role": p.role,
@@ -191,8 +209,18 @@ def register_match_routes(
                     })
                 return d
 
-            full_home = team_to_full_dict(home_db, home_profile)
-            full_away = team_to_full_dict(away_db, away_profile)
+            home_players = _resolve_players_for_format(home_db, home_profile)
+            away_players = _resolve_players_for_format(away_db, away_profile)
+            if len(home_players) < 11 or len(away_players) < 11:
+                return jsonify({
+                    "error": (
+                        f"Selected teams do not have enough players for {_fmt}. "
+                        "Each side must have at least 11 players."
+                    )
+                }), 400
+
+            full_home = team_to_full_dict(home_db, home_players)
+            full_away = team_to_full_dict(away_db, away_players)
 
             # Backward-compatible payload support: if XI data is missing, derive a default XI.
             if not isinstance(data.get("playing_xi"), dict):
