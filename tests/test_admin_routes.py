@@ -21,6 +21,7 @@ from database.models import (
     AdminAuditLog,
     BlockedIP,
     FailedLoginAttempt,
+    AnnouncementBanner,
 )
 from app import db
 
@@ -226,6 +227,31 @@ class TestSystemConfiguration:
             follow_redirects=True,
         )
         assert response.status_code == 200
+
+    def test_admin_banner_view(self, admin_client):
+        """Test viewing announcement banner settings page."""
+        response = admin_client.get("/admin/banner")
+        assert response.status_code == 200
+
+    def test_admin_banner_update(self, admin_client):
+        """Test updating announcement banner settings."""
+        response = admin_client.post(
+            "/admin/banner/update",
+            data={
+                "is_enabled": "true",
+                "message": "Planned update at 9 PM UTC.",
+                "color_preset": "spotlight",
+                "position": "top",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        banner = AnnouncementBanner.query.first()
+        assert banner is not None
+        assert banner.is_enabled is True
+        assert banner.message == "Planned update at 9 PM UTC."
+        assert banner.color_preset == "spotlight"
+        assert banner.position == "top"
 
 
 class TestMaintenanceMode:

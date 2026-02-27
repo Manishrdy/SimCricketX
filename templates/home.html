@@ -348,6 +348,118 @@
         transform: translateX(4px);
     }
 
+    .global-announcement-banner {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(920px, calc(100vw - 2rem));
+        z-index: 120;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 14px;
+        box-shadow: 0 16px 42px rgba(0, 0, 0, 0.32);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        animation: banner-pop-in 220ms ease-out;
+    }
+
+    .global-announcement-banner.pos-bottom {
+        bottom: 1rem;
+        top: auto;
+    }
+
+    .global-announcement-banner.pos-top {
+        top: calc(var(--nav-height) + 0.85rem);
+        bottom: auto;
+    }
+
+    .global-announcement-banner.theme-urgent {
+        background: linear-gradient(135deg, #b45309 0%, #ea580c 46%, #dc2626 100%);
+    }
+
+    .global-announcement-banner.theme-spotlight {
+        background: linear-gradient(135deg, #1d4ed8 0%, #0284c7 52%, #0891b2 100%);
+    }
+
+    .global-announcement-banner.theme-calm {
+        background: linear-gradient(135deg, #334155 0%, #0f766e 52%, #047857 100%);
+    }
+
+    .global-announcement-banner::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 14px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+        pointer-events: none;
+    }
+
+    @keyframes banner-pop-in {
+        from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    }
+
+    .global-announcement-inner {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+    }
+
+    .global-announcement-icon {
+        color: #fff7ed;
+        font-size: 1rem;
+        margin-top: 0.1rem;
+        opacity: 0.95;
+    }
+
+    .global-announcement-tag {
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 800;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 999px;
+        padding: 0.12rem 0.5rem;
+        margin-bottom: 0.28rem;
+    }
+
+    .global-announcement-text {
+        flex: 1;
+        font-size: 0.94rem;
+        line-height: 1.45;
+        color: #fff;
+        white-space: pre-line;
+        text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+    }
+
+    .global-announcement-close {
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.14);
+        color: #fff;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+
+    .global-announcement-close:hover {
+        border-color: rgba(255, 255, 255, 0.65);
+        background: rgba(255, 255, 255, 0.24);
+    }
+
     /* Media Queries */
     @media (max-width: 768px) {
         .hero-section {
@@ -380,6 +492,31 @@
 
         .dashboard-grid {
             grid-template-columns: 1fr;
+        }
+
+        .global-announcement-banner {
+            width: calc(100vw - 1rem);
+        }
+
+        .global-announcement-banner.pos-bottom {
+            bottom: 0.7rem;
+        }
+
+        .global-announcement-banner.pos-top {
+            top: calc(var(--nav-height) + 0.45rem);
+        }
+
+        .global-announcement-inner {
+            padding: 0.75rem;
+            gap: 0.6rem;
+        }
+
+        .global-announcement-text {
+            font-size: 0.86rem;
+        }
+
+        .global-announcement-tag {
+            font-size: 0.62rem;
         }
     }
 </style>
@@ -522,6 +659,23 @@
 
 </div>
 
+{% if announcement_banner %}
+<div id="global-announcement-banner" class="global-announcement-banner theme-{{ announcement_banner.color_preset }} pos-{{ announcement_banner.position }}" data-version="{{ announcement_banner.version }}">
+    <div class="global-announcement-inner">
+        <i class="fa-solid fa-bullhorn global-announcement-icon" aria-hidden="true"></i>
+        <div class="global-announcement-text"><span class="global-announcement-tag">Announcement</span><br>{{ announcement_banner.message }}</div>
+        <button
+            id="global-announcement-close"
+            class="global-announcement-close"
+            type="button"
+            aria-label="Close announcement"
+        >
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+    </div>
+</div>
+{% endif %}
+
 {% if changelog_entries %}
 <div id="changelog-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;">
     <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;max-width:480px;width:90%;padding:32px;box-shadow:0 8px 32px rgba(0,0,0,0.18);position:relative;">
@@ -561,6 +715,21 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         clearTeamCreateDraftIfNeeded();
+
+        {% if announcement_banner %}
+        const announcementBanner = document.getElementById('global-announcement-banner');
+        const announcementCloseBtn = document.getElementById('global-announcement-close');
+        if (announcementBanner && announcementCloseBtn) {
+            announcementCloseBtn.addEventListener('click', async () => {
+                announcementBanner.style.display = 'none';
+                try {
+                    await fetch('/announcement-banner/dismiss', { method: 'POST' });
+                } catch (err) {
+                    // Ignore network errors; backend persistence will be retried on next close.
+                }
+            });
+        }
+        {% endif %}
 
         {% if changelog_entries %}
         const CURRENT_VERSION = "{{ app_version }}";

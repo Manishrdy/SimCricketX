@@ -48,6 +48,7 @@ def register_admin_routes(
     AUDIT_MODEL,
     LOGIN_HISTORY_MODEL,
     IP_WHITELIST_MODEL,
+    ANNOUNCEMENT_BANNER_MODEL,
     DBUser,
     DBTeam,
     DBTeamProfile,
@@ -71,6 +72,7 @@ def register_admin_routes(
     ActiveSession = ACTIVE_SESSION_MODEL
     LoginHistory = LOGIN_HISTORY_MODEL
     IPWhitelistEntry = IP_WHITELIST_MODEL
+    AnnouncementBanner = ANNOUNCEMENT_BANNER_MODEL
     BACKUP_DIR = os.path.join(PROJECT_ROOT, "data", "backups")
 
     @app.route('/admin/backup-database', methods=['POST'])
@@ -1332,6 +1334,128 @@ def register_admin_routes(
             app.logger.error(f"[Admin] Bot defense update error: {e}", exc_info=True)
             return jsonify({"error": "Failed to update bot defense settings"}), 500
 
+    @app.route('/admin/banner')
+    @login_required
+    @admin_required
+    def admin_banner():
+        preset_choices = {
+            "urgent": "Amber-Red (High Attention)",
+            "spotlight": "Blue-Cyan (Announcement)",
+            "calm": "Slate-Emerald (Low Noise)",
+        }
+        position_choices = {
+            "top": "Top",
+            "bottom": "Bottom",
+        }
+        banner = AnnouncementBanner.query.first()
+        if not banner:
+            banner = AnnouncementBanner(
+                message="",
+                is_enabled=False,
+                color_preset="urgent",
+                position="bottom",
+                version=1,
+                updated_by=current_user.id,
+            )
+            db.session.add(banner)
+            db.session.commit()
+        else:
+            changed = False
+            if str(getattr(banner, "color_preset", "") or "").lower() not in preset_choices:
+                banner.color_preset = "urgent"
+                changed = True
+            if str(getattr(banner, "position", "") or "").lower() not in position_choices:
+                banner.position = "bottom"
+                changed = True
+            if changed:
+                db.session.commit()
+        return render_template(
+            'admin/banner.html',
+            banner=banner,
+            preset_choices=preset_choices,
+            position_choices=position_choices,
+        )
+
+    @app.route('/admin/banner/update', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_banner_update():
+        try:
+            is_enabled = str(request.form.get("is_enabled", "false")).lower() in {"1", "true", "yes", "on"}
+            message = str(request.form.get("message", "")).strip()
+            color_preset = str(request.form.get("color_preset", "urgent") or "urgent").strip().lower()
+            position = str(request.form.get("position", "bottom") or "bottom").strip().lower()
+            allowed_presets = {"urgent", "spotlight", "calm"}
+            allowed_positions = {"top", "bottom"}
+
+            if is_enabled and not message:
+                return jsonify({"error": "Banner text is required when the banner is enabled"}), 400
+            if len(message) > 2000:
+                return jsonify({"error": "Banner text is too long (max 2000 characters)"}), 400
+            if color_preset not in allowed_presets:
+                return jsonify({"error": "Invalid color preset selected"}), 400
+            if position not in allowed_positions:
+                return jsonify({"error": "Invalid position selected"}), 400
+
+            banner = AnnouncementBanner.query.first()
+            is_new = banner is None
+            old_message = ""
+            old_enabled = False
+            old_preset = "urgent"
+            old_position = "bottom"
+
+            if is_new:
+                banner = AnnouncementBanner(
+                    message="",
+                    is_enabled=False,
+                    color_preset="urgent",
+                    position="bottom",
+                    version=1,
+                )
+                db.session.add(banner)
+            else:
+                old_message = str(banner.message or "")
+                old_enabled = bool(banner.is_enabled)
+                old_preset = str(getattr(banner, "color_preset", "urgent") or "urgent")
+                old_position = str(getattr(banner, "position", "bottom") or "bottom")
+                if not banner.version or banner.version < 1:
+                    banner.version = 1
+
+            # A text change indicates a new announcement, so create a new version.
+            if (not is_new) and message != old_message:
+                banner.version += 1
+
+            banner.message = message
+            banner.is_enabled = is_enabled
+            banner.color_preset = color_preset
+            banner.position = position
+            banner.updated_by = current_user.id
+            db.session.commit()
+
+            details = json.dumps({
+                "enabled_before": old_enabled,
+                "enabled_after": is_enabled,
+                "message_changed": message != old_message,
+                "preset_before": old_preset,
+                "preset_after": color_preset,
+                "position_before": old_position,
+                "position_after": position,
+                "version": banner.version,
+            })
+            log_admin_action(current_user.id, "update_announcement_banner", None, details, get_client_ip())
+
+            return jsonify({
+                "message": "Announcement banner updated",
+                "version": banner.version,
+                "is_enabled": banner.is_enabled,
+                "color_preset": banner.color_preset,
+                "position": banner.position,
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Admin] Announcement banner update error: {e}", exc_info=True)
+            return jsonify({"error": "Failed to update announcement banner"}), 500
+
     # --- Global Team Browser ---
     @app.route('/admin/global-teams')
     @login_required
@@ -2205,6 +2329,7 @@ def register_admin_routes(
     _register_admin_fallback('admin_backups', '/admin/backups')
     _register_admin_fallback('admin_restore_center', '/admin/restore-center')
     _register_admin_fallback('admin_bot_defense', '/admin/bot-defense')
+    _register_admin_fallback('admin_banner', '/admin/banner')
     _register_admin_fallback('admin_search', '/admin/search')
     _register_admin_fallback('admin_config', '/admin/config')
     _register_admin_fallback('admin_audit_log', '/admin/audit-log')
