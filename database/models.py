@@ -73,7 +73,7 @@ class Team(db.Model):
 
 
 class TeamProfile(db.Model):
-    """Format-specific squad profile for a team (T20, ListA, FirstClass)."""
+    """Format-specific squad profile for a team (T20, ListA)."""
     __tablename__ = 'team_profiles'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -83,7 +83,7 @@ class TeamProfile(db.Model):
         nullable=False,
         index=True,
     )
-    format_type = db.Column(db.String(20), nullable=False)  # 'T20', 'ListA', 'FirstClass'
+    format_type = db.Column(db.String(20), nullable=False)  # 'T20', 'ListA'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     __table_args__ = (

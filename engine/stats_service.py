@@ -37,7 +37,7 @@ class StatsService:
 
         Args:
             user_id (str): User ID
-            match_format (str, optional): Filter by format — 'T20', 'ListA', 'FirstClass'
+            match_format (str, optional): Filter by format — 'T20', 'ListA'
 
         Returns:
             dict: Statistics dictionary with batting, bowling, fielding, and leaderboards
@@ -71,7 +71,7 @@ class StatsService:
         Args:
             user_id (str): User ID
             tournament_id (int): Tournament ID
-            match_format (str, optional): Filter by format — 'T20', 'ListA', 'FirstClass'
+            match_format (str, optional): Filter by format — 'T20', 'ListA'
 
         Returns:
             dict: Statistics dictionary with batting, bowling, fielding, and leaderboards
