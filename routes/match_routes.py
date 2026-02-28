@@ -1212,9 +1212,7 @@ def register_match_routes(
                 "t20": ("T20", "T20"),
                 "lista": ("ListA", "List A"),
                 "odi": ("ListA", "List A"),
-                "firstclass": ("FirstClass", "FC"),
-                "fc": ("FirstClass", "FC"),
-                "test": ("FirstClass", "FC"),
+
             }
             return format_map.get(normalized, ("T20", "T20"))
 

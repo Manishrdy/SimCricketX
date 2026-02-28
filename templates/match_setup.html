@@ -847,7 +847,6 @@
                         {% for fmt in team.available_formats %}
                         <span class="fmt-badge fmt-{{ fmt | lower }}" data-fmt="{{ fmt }}">
                             {%- if fmt == 'ListA' -%}List A
-                            {%- elif fmt == 'FirstClass' -%}FC
                             {%- else -%}{{ fmt }}
                             {%- endif -%}
                         </span>

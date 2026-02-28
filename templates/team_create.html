@@ -846,10 +846,7 @@
               <i class="fa-solid fa-cricket-bat-ball"></i> List A / ODI
               <span class="profile-count-badge" id="badge-ListA">0</span>
             </button>
-            <button type="button" class="profile-tab" data-fmt="FirstClass" id="tab-FirstClass">
-              <i class="fa-solid fa-trophy"></i> First Class
-              <span class="profile-count-badge" id="badge-FirstClass">0</span>
-            </button>
+
           </div>
 
           <!-- Profile Panels -->
@@ -943,40 +940,7 @@
               </div>
             </div>
 
-            <!-- First Class Panel -->
-            <div class="profile-panel" id="panel-FirstClass" data-fmt="FirstClass" style="display:none;">
-              <div class="squad-toolbar">
-                <div class="squad-stats">
-                  <div class="stat-badge">Squad: <span class="player-counter" id="count-FirstClass">0/25</span></div>
-                </div>
-                <div class="btn-group">
-                  <button type="button" class="btn btn-secondary copy-from-t20-btn" data-fmt="FirstClass">
-                    <i class="fa-solid fa-copy"></i> Copy from T20
-                  </button>
-                  <button type="button" class="btn btn-secondary import-btn" data-fmt="FirstClass">
-                    <i class="fa-solid fa-file-import"></i> Import
-                  </button>
-                  <button type="button" class="btn btn-primary add-player-btn" data-fmt="FirstClass">
-                    <i class="fa-solid fa-plus"></i> Add Player
-                  </button>
-                </div>
-              </div>
-              <div class="players-list profile-players" id="players-FirstClass"></div>
-              <div style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
-                <div class="form-group">
-                  <label class="form-label">Captain (First Class)</label>
-                  <select class="form-select profile-captain" data-fmt="FirstClass" id="captain-FirstClass">
-                    <option value="">Select Captain</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Wicketkeeper (First Class)</label>
-                  <select class="form-select profile-wk" data-fmt="FirstClass" id="wk-FirstClass">
-                    <option value="">Select Wicketkeeper</option>
-                  </select>
-                </div>
-              </div>
-            </div>
+
           </div>
         </div>
       </div>
@@ -1073,7 +1037,7 @@
     try { TEAM_DATA = JSON.parse(document.getElementById('team-data-json').textContent); }
     catch (e) { console.error("Failed to parse team data", e); }
 
-    const FORMATS = ['T20', 'ListA', 'FirstClass'];
+    const FORMATS = ['T20', 'ListA'];
     const MAX = 25, MIN = 12;
     const DRAFT_KEY = 'team_create_draft_v2';
 
