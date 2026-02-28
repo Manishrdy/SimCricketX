@@ -10,7 +10,8 @@
       "Bash(python3:*)",
       "Bash(pip install:*)",
       "Bash(grep:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(find /Users/manish/Documents/SimCricketX -type f -name \"*.py\" -path \"*/engine/*\" -exec basename {} ;)"
     ]
   }
 }

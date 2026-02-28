@@ -6,7 +6,7 @@ from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
-VALID_FORMATS = ("T20", "ListA", "FirstClass")
+VALID_FORMATS = ("T20", "ListA")
 
 
 def register_team_routes(

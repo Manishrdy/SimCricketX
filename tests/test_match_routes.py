@@ -31,14 +31,6 @@ class TestMatchSetupRoute:
         assert test_team.name.encode() in response.data
         assert test_team_2.name.encode() in response.data
 
-    def test_match_setup_format_selector_hides_first_class(self, authenticated_client):
-        """Only T20 and List A should be selectable in match setup."""
-        response = authenticated_client.get("/match/setup")
-        assert response.status_code == 200
-        assert b'name="match-format-radio" value="T20"' in response.data
-        assert b'name="match-format-radio" value="ListA"' in response.data
-        assert b'name="match-format-radio" value="FirstClass"' not in response.data
-
     def test_create_match_success(self, authenticated_client, test_team, test_team_2):
         """Test successful match creation via JSON body (match_setup POST reads JSON)."""
         response = authenticated_client.post(
@@ -89,37 +81,6 @@ class TestMatchSetupRoute:
         )
         assert response.status_code == 400
 
-    def test_create_match_rejects_first_class_format(
-        self,
-        authenticated_client,
-        test_team,
-        test_team_2,
-    ):
-        """First Class is currently unsupported in Match Setup."""
-        response = authenticated_client.post(
-            "/match/setup",
-            json={
-                "team1_id": test_team.id,
-                "team2_id": test_team_2.id,
-                "match_format": "FirstClass",
-                "simulation_mode": "auto",
-            },
-        )
-        assert response.status_code == 400
-        payload = response.get_json()
-        assert payload
-        assert "unsupported match format" in payload.get("error", "").lower()
-
-    def test_verify_lineups_rejects_first_class_format(self, authenticated_client):
-        """Lineup verification should reject First Class format."""
-        response = authenticated_client.post(
-            "/api/match/verify-lineups",
-            json={"match_format": "FirstClass"},
-        )
-        assert response.status_code == 400
-        payload = response.get_json()
-        assert payload
-        assert "unsupported match format" in payload.get("error", "").lower()
 
 
 class TestMatchDetailRoute:

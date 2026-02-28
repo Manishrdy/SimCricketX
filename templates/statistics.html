@@ -637,21 +637,6 @@
         box-shadow: 0 2px 10px rgba(202, 138, 4, 0.45);
     }
 
-    .fmt-btn.format-fc {
-        border-color: rgba(124, 58, 237, 0.38);
-        color: #6d28d9;
-        background: rgba(167, 139, 250, 0.16);
-    }
-
-    .fmt-btn.format-fc:hover {
-        border-color: rgba(124, 58, 237, 0.58);
-        background: rgba(167, 139, 250, 0.26);
-    }
-
-    .fmt-btn.format-fc.active {
-        background: linear-gradient(135deg, #7c3aed, #a855f7);
-        box-shadow: 0 2px 10px rgba(124, 58, 237, 0.45);
-    }
 
     [data-theme="dark"] .fmt-btn.format-all {
         color: #a5b4fc;
@@ -668,10 +653,6 @@
         background: rgba(234, 179, 8, 0.26);
     }
 
-    [data-theme="dark"] .fmt-btn.format-fc {
-        color: #c4b5fd;
-        background: rgba(124, 58, 237, 0.26);
-    }
 
     /* Tournament Selector */
     .tournament-selector-wrapper {
@@ -1762,10 +1743,7 @@
                 onclick="selectFormat('ListA')">
                 <span>List A</span>
             </button>
-            <button class="fmt-btn format-fc {% if match_format == 'FirstClass' %}active{% endif %}"
-                onclick="selectFormat('FirstClass')">
-                <span>FC</span>
-            </button>
+
         </div>
 
         {% if view_type == 'tournament' or tournaments %}
