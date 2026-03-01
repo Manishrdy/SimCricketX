@@ -44,8 +44,14 @@ def register_core_routes(
         return entries
 
     @app.route("/")
-    @login_required
     def home():
+        if not current_user.is_authenticated:
+            return render_template(
+                "landing.html",
+                total_visits=get_visit_counter(),
+                matches_simulated=get_matches_simulated(),
+            )
+
         if not session.get("visit_counted"):
             increment_visit_counter()
             session["visit_counted"] = True

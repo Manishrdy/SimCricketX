@@ -876,14 +876,14 @@
         const docRoot = document.documentElement;
         const icon = toggle.querySelector('i');
 
-        const savedTheme = localStorage.theme || 'light';
+        const savedTheme = localStorage.getItem('theme') || 'light';
         docRoot.setAttribute('data-theme', savedTheme);
         updateIcon(savedTheme);
 
         toggle.onclick = () => {
             const next = docRoot.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
             docRoot.setAttribute('data-theme', next);
-            localStorage.theme = next;
+            localStorage.setItem('theme', next);
             updateIcon(next);
         };
 
