@@ -13,14 +13,16 @@ class TestHomeRoute:
     """Tests for the home/landing page route."""
 
     def test_home_page_unauthenticated(self, client):
-        """Test accessing home page without authentication redirects to login.
+        """Test accessing home page without authentication renders landing page.
 
-        The home route is decorated with @login_required, so unauthenticated
-        requests must receive a 302 redirect — not a 200.
+        Since v2.3.0, anonymous users see the public landing page at `/`
+        (for SEO and discovery) instead of being redirected to `/login`.
         """
         response = client.get("/")
-        assert response.status_code == 302
-        assert "login" in response.headers.get("Location", "").lower()
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert "SimCricketX" in body
+        assert "Sign In" in body
 
     def test_home_page_authenticated(self, authenticated_client):
         """Test accessing home page with authentication renders the dashboard."""
