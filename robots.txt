@@ -1,7 +1,4 @@
 User-agent: *
-Allow: /login
-Allow: /register
-Allow: /about
-Allow: /ground-conditions/guide
+Allow: /
 Disallow: /admin/
-Disallow: /
+Disallow: /auth/

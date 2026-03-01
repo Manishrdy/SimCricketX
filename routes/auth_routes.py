@@ -192,7 +192,10 @@ def register_auth_routes(
     def auth_challenge():
         """Issue short-lived proof-of-work challenge for auth forms."""
         payload = issue_auth_pow_challenge()
-        return jsonify(payload), 200
+        response = jsonify(payload)
+        response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        return response, 200
 
     @app.route("/change-password", methods=["GET", "POST"])
     @login_required
