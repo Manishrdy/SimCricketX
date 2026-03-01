@@ -14,6 +14,14 @@ import json
 def get_ip_address() -> str:
     try:
         from flask import request
+        from utils.helpers import load_config
+        cfg = load_config()
+        if cfg.get("security", {}).get("trust_proxy_headers", False):
+            forwarded = request.headers.get("X-Forwarded-For", "")
+            if forwarded:
+                first = forwarded.split(",")[0].strip()
+                if first:
+                    return first
         return (request.remote_addr or "").strip()
     except Exception:
         return ""

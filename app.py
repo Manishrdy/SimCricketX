@@ -60,7 +60,6 @@ from flask_login import (
 )
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from auth.user_auth import (
     register_user,
     verify_user,
@@ -934,7 +933,7 @@ def create_app():
 
     # --- Rate Limiting ---
     limiter = Limiter(
-        get_remote_address,
+        get_client_ip,
         app=app,
         default_limits=[],
         storage_uri="memory://",
@@ -1297,7 +1296,7 @@ def create_app():
     # --- Request logging ---
     @app.before_request
     def log_request():
-        app.logger.info(f"{request.remote_addr} {request.method} {request.path}")
+        app.logger.info(f"{get_client_ip()} {request.method} {request.path}")
         if request.path.startswith("/admin") or request.path.startswith("/__codex_probe"):
             from werkzeug.routing import MapAdapter
             adapter = app.url_map.bind("")
