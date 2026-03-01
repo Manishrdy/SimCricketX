@@ -1241,10 +1241,6 @@
                             <i class="fas fa-download"></i>
                             <span>Export My Data</span>
                         </a>
-                        <a href="{{ url_for('about') }}" class="profile-action-item">
-                            <i class="fas fa-circle-info"></i>
-                            <span>About</span>
-                        </a>
                         <button class="profile-action-item" onclick="toggleThemeFromDropdown()">
                             <i class="fas fa-moon" id="dropdownThemeIcon"></i>
                             <span>Toggle Theme</span>
@@ -1314,6 +1310,11 @@
     <footer
         style="text-align: center; padding: 1.25rem 1rem; font-size: 0.75rem; color: var(--fg-secondary); border-top: 1px solid var(--card-border); opacity: 0.7;">
         <span>SimCricketX</span>
+        <span style="margin: 0 0.4rem;">&middot;</span>
+        <a href="{{ url_for('about') }}"
+            style="color: var(--accent); text-decoration: none; font-weight: 500;">
+            <i class="fas fa-circle-info" style="font-size: 0.7rem;"></i> About
+        </a>
         <span style="margin: 0 0.4rem;">&middot;</span>
         <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer"
             style="color: var(--accent); text-decoration: none; font-weight: 500;">

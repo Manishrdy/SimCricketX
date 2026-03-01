@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- ── SEO ─────────────────────────────────────────────────── -->
+    <title>SimCricketX — Cricket Match Simulator | T20 &amp; List A Simulation</title>
+    <meta name="description" content="Build custom squads, tune pitch conditions, and simulate every ball. SimCricketX is a free probabilistic cricket match simulator for T20 and List A formats — ball-by-ball engine, player analytics, and full tournament brackets.">
+    <meta name="keywords" content="cricket simulator, cricket match simulation, T20 simulator, List A cricket, cricket game, ball by ball cricket, cricket statistics">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://simcricketx.app/">
+
+    <!-- ── Open Graph ──────────────────────────────────────────── -->
+    <meta property="og:type"        content="website">
+    <meta property="og:url"         content="https://simcricketx.app/">
+    <meta property="og:title"       content="SimCricketX — Cricket Match Simulator">
+    <meta property="og:description" content="Build squads, tune the pitch, and simulate every ball. A probabilistic cricket simulation engine for T20 and List A matches — free to use.">
+    <meta property="og:site_name"   content="SimCricketX">
+
+    <!-- ── Twitter Card ───────────────────────────────────────── -->
+    <meta name="twitter:card"        content="summary">
+    <meta name="twitter:title"       content="SimCricketX — Cricket Match Simulator">
+    <meta name="twitter:description" content="Probabilistic cricket simulation — T20 &amp; List A. Ball-by-ball engine, player stats, tournaments. Free.">
+
+    <!-- ── Fonts ──────────────────────────────────────────────── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- ── Icons ──────────────────────────────────────────────── -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+
+    <!-- ── Styles ─────────────────────────────────────────────── -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     NAVBAR
+     ════════════════════════════════════════════════════════════ -->
+<nav class="lp-nav" role="navigation" aria-label="Main navigation">
+    <div class="lp-nav-inner">
+
+        <a href="/" class="lp-logo" aria-label="SimCricketX — home">
+            <span class="lp-logo-icon" aria-hidden="true">🏏</span>
+            <span class="lp-logo-text">SimCricketX</span>
+        </a>
+
+        <div class="lp-nav-actions">
+            <button class="lp-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
+                <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+            </button>
+
+            <a href="{{ url_for('about') }}" class="lp-btn-ghost lp-nav-btn-about">
+                <i class="fas fa-info-circle" aria-hidden="true"></i> About
+            </a>
+
+            <a href="{{ url_for('login') }}" class="lp-btn-ghost">
+                <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Sign In
+            </a>
+
+            <a href="{{ url_for('register') }}" class="lp-btn-fill">
+                <i class="fas fa-user-plus" aria-hidden="true"></i> Get Started
+            </a>
+        </div>
+
+    </div>
+</nav>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     HERO
+     ════════════════════════════════════════════════════════════ -->
+<section class="lp-hero" aria-labelledby="hero-title">
+
+    <!-- Background blobs -->
+    <div class="lp-blob lp-blob-1" aria-hidden="true"></div>
+    <div class="lp-blob lp-blob-2" aria-hidden="true"></div>
+    <div class="lp-blob lp-blob-3" aria-hidden="true"></div>
+
+    <div class="lp-hero-inner">
+
+        <!-- ── Left: text content ── -->
+        <div class="lp-hero-content">
+
+            <div class="lp-hero-badge">
+                <span class="lp-badge-dot" aria-hidden="true"></span>
+                Cricket Simulation Engine
+            </div>
+
+            <h1 class="lp-hero-title" id="hero-title">
+                Simulate<br>
+                <span class="lp-hero-accent">Every Ball.</span>
+            </h1>
+
+            <p class="lp-hero-sub">
+                Build custom squads, tune pitch conditions, and let a probabilistic engine
+                resolve every delivery — T20 or List A. Full scorecards, career stats,
+                and tournament brackets, all in your browser.
+            </p>
+
+            <div class="lp-hero-cta">
+                <a href="{{ url_for('register') }}" class="lp-cta-primary">
+                    <i class="fas fa-play" aria-hidden="true"></i>
+                    Get Started Free
+                </a>
+                <a href="{{ url_for('login') }}" class="lp-cta-secondary">
+                    <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+                    Sign In
+                </a>
+            </div>
+
+            <div class="lp-hero-trust">
+                <span class="lp-trust-item">
+                    <i class="fas fa-check-circle" aria-hidden="true"></i>
+                    Free to use
+                </span>
+                <span class="lp-trust-item">
+                    <i class="fas fa-lock" aria-hidden="true"></i>
+                    No credit card
+                </span>
+                <span class="lp-trust-item">
+                    <i class="fab fa-github" aria-hidden="true"></i>
+                    Open source
+                </span>
+            </div>
+        </div>
+
+        <!-- ── Right: animated cricket ball ── -->
+        <div class="lp-hero-visual" aria-hidden="true">
+            <div class="lp-ball-wrap">
+
+                <!-- Orbit ring with orbiting dot -->
+                <div class="lp-ball-orbit"></div>
+
+                <!-- SVG cricket ball -->
+                <svg class="lp-hero-ball"
+                     viewBox="0 0 200 200"
+                     xmlns="http://www.w3.org/2000/svg"
+                     role="img"
+                     aria-label="Animated cricket ball">
+                    <defs>
+                        <radialGradient id="lp-ballGrad" cx="36%" cy="34%" r="56%">
+                            <stop offset="0%"   stop-color="#e85c50"/>
+                            <stop offset="55%"  stop-color="#c0392b"/>
+                            <stop offset="100%" stop-color="#7d1a0e"/>
+                        </radialGradient>
+                        <filter id="lp-ballShadow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="rgba(192,57,43,0.40)"/>
+                        </filter>
+                    </defs>
+
+                    <!-- Ball body -->
+                    <circle cx="100" cy="100" r="90"
+                            fill="url(#lp-ballGrad)"
+                            filter="url(#lp-ballShadow)"/>
+
+                    <!-- Left seam -->
+                    <path d="M100,12 C55,38 55,88 100,100 C55,112 55,162 100,188"
+                          fill="none"
+                          stroke="rgba(255,200,185,0.72)"
+                          stroke-width="4"
+                          stroke-linecap="round"/>
+
+                    <!-- Right seam -->
+                    <path d="M100,12 C145,38 145,88 100,100 C145,112 145,162 100,188"
+                          fill="none"
+                          stroke="rgba(255,200,185,0.72)"
+                          stroke-width="4"
+                          stroke-linecap="round"/>
+
+                    <!-- Left seam stitching -->
+                    <g stroke="rgba(255,210,195,0.62)" stroke-width="2.2" stroke-linecap="round">
+                        <line x1="62" y1="34" x2="58" y2="42"/>
+                        <line x1="51" y1="55" x2="47" y2="63"/>
+                        <line x1="47" y1="78" x2="43" y2="86"/>
+                        <line x1="51" y1="115" x2="47" y2="123"/>
+                        <line x1="62" y1="140" x2="58" y2="148"/>
+                        <line x1="51" y1="161" x2="47" y2="169"/>
+                    </g>
+
+                    <!-- Right seam stitching -->
+                    <g stroke="rgba(255,210,195,0.62)" stroke-width="2.2" stroke-linecap="round">
+                        <line x1="138" y1="34" x2="142" y2="42"/>
+                        <line x1="149" y1="55" x2="153" y2="63"/>
+                        <line x1="153" y1="78" x2="157" y2="86"/>
+                        <line x1="149" y1="115" x2="153" y2="123"/>
+                        <line x1="138" y1="140" x2="142" y2="148"/>
+                        <line x1="149" y1="161" x2="153" y2="169"/>
+                    </g>
+
+                    <!-- Primary shine -->
+                    <ellipse cx="66" cy="64" rx="22" ry="15"
+                             fill="rgba(255,255,255,0.20)"
+                             transform="rotate(-25,66,64)"/>
+                    <!-- Secondary shine -->
+                    <ellipse cx="136" cy="145" rx="10" ry="7"
+                             fill="rgba(255,255,255,0.09)"
+                             transform="rotate(-20,136,145)"/>
+                </svg>
+
+                <!-- Ball ground shadow -->
+                <div class="lp-ball-shadow"></div>
+
+                <!-- Cricket stumps -->
+                <div class="lp-stumps">
+                    <div class="lp-stump lp-stump-1">
+                        <div class="lp-bail"></div>
+                    </div>
+                    <div class="lp-stump lp-stump-2"></div>
+                    <div class="lp-stump lp-stump-3"></div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     LIVE STATS BAR
+     ════════════════════════════════════════════════════════════ -->
+<section class="lp-stats" aria-label="Platform statistics">
+    <div class="lp-stats-inner">
+        <div class="lp-stat">
+            <span class="lp-stat-num" id="statMatches">{{ matches_simulated | default(0) }}</span>
+            <span class="lp-stat-label">Matches Simulated</span>
+        </div>
+        <div class="lp-stat">
+            <span class="lp-stat-num" id="statVisits">{{ total_visits | default(0) }}</span>
+            <span class="lp-stat-label">Platform Visits</span>
+        </div>
+        <div class="lp-stat">
+            <span class="lp-stat-num">2</span>
+            <span class="lp-stat-label">Match Formats</span>
+        </div>
+        <div class="lp-stat">
+            <span class="lp-stat-num">100%</span>
+            <span class="lp-stat-label">Free to Use</span>
+        </div>
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     FEATURES
+     ════════════════════════════════════════════════════════════ -->
+<section class="lp-section" aria-labelledby="features-title">
+    <div class="lp-section-inner">
+
+        <div class="lp-section-label" aria-hidden="true">01 — What You Get</div>
+
+        <h2 class="lp-section-title" id="features-title">
+            Everything a cricket sim needs
+        </h2>
+        <p class="lp-section-sub">
+            From squad management to full tournament brackets — built for cricket fans
+            who want results that feel authentic, not random.
+        </p>
+
+        <div class="lp-features-grid">
+
+            <div class="lp-feature-card">
+                <div class="lp-feature-icon">
+                    <i class="fas fa-baseball-ball" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <div class="lp-feature-title">Ball-by-Ball Engine</div>
+                    <div class="lp-feature-desc">
+                        Every delivery resolved via weighted probability — batting/bowling matchups,
+                        pitch conditions, and over-phase dynamics working together.
+                    </div>
+                </div>
+            </div>
+
+            <div class="lp-feature-card">
+                <div class="lp-feature-icon">
+                    <i class="fas fa-layer-group" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <div class="lp-feature-title">T20 &amp; List A Formats</div>
+                    <div class="lp-feature-desc">
+                        Separate format-specific squads per team — your 50-over specialists
+                        won't be forced into T20 line-ups.
+                    </div>
+                </div>
+            </div>
+
+            <div class="lp-feature-card">
+                <div class="lp-feature-icon">
+                    <i class="fas fa-sliders" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <div class="lp-feature-title">Ground Conditions</div>
+                    <div class="lp-feature-desc">
+                        Choose pitch profile (Green, Dry, Hard, Flat, Dead), game mode,
+                        and over-phase boosts to shape batting and bowling outcomes.
+                    </div>
+                </div>
+            </div>
+
+            <div class="lp-feature-card">
+                <div class="lp-feature-icon">
+                    <i class="fas fa-trophy" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <div class="lp-feature-title">Tournament System</div>
+                    <div class="lp-feature-desc">
+                        Round-robin or knockout tournaments with automatic standings,
+                        point tables, and bracket progression.
+                    </div>
+                </div>
+            </div>
+
+            <div class="lp-feature-card">
+                <div class="lp-feature-icon">
+                    <i class="fas fa-chart-line" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <div class="lp-feature-title">Player Analytics</div>
+                    <div class="lp-feature-desc">
+                        Career stats, match-by-match breakdowns, and head-to-head comparisons
+                        across all formats and tournaments.
+                    </div>
+                </div>
+            </div>
+
+            <div class="lp-feature-card">
+                <div class="lp-feature-icon">
+                    <i class="fas fa-download" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <div class="lp-feature-title">Export Your Data</div>
+                    <div class="lp-feature-desc">
+                        Download your full match history, scorecards, and player statistics
+                        as structured data whenever you need.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     HOW IT WORKS
+     ════════════════════════════════════════════════════════════ -->
+<section class="lp-how" aria-labelledby="how-title">
+    <div class="lp-section-inner">
+
+        <div class="lp-section-label" aria-hidden="true">02 — Getting Started</div>
+        <h2 class="lp-section-title" id="how-title">Up and running in four steps</h2>
+        <p class="lp-section-sub">
+            No installation, no configuration files — sign up and start simulating in minutes.
+        </p>
+
+        <div class="lp-steps">
+
+            <div class="lp-step">
+                <div class="lp-step-num">01</div>
+                <div class="lp-step-body">
+                    <div class="lp-step-title">Create a Free Account</div>
+                    <div class="lp-step-desc">
+                        Sign up with your email. No external logins, no subscriptions —
+                        your account and all data live securely on the platform.
+                    </div>
+                </div>
+            </div>
+
+            <div class="lp-step">
+                <div class="lp-step-num">02</div>
+                <div class="lp-step-body">
+                    <div class="lp-step-title">Build Your Squads</div>
+                    <div class="lp-step-desc">
+                        Create teams, add players with roles (Batsman, Bowler, All-rounder,
+                        Wicketkeeper), and maintain separate T20 and List A squads.
+                    </div>
+                </div>
+            </div>
+
+            <div class="lp-step">
+                <div class="lp-step-num">03</div>
+                <div class="lp-step-body">
+                    <div class="lp-step-title">Set Ground Conditions</div>
+                    <div class="lp-step-desc">
+                        Pick the pitch type, game mode, and over-phase boosts that will
+                        govern your simulation — or leave defaults and dive straight in.
+                    </div>
+                </div>
+            </div>
+
+            <div class="lp-step">
+                <div class="lp-step-num">04</div>
+                <div class="lp-step-body">
+                    <div class="lp-step-title">Simulate &amp; Analyse</div>
+                    <div class="lp-step-desc">
+                        Pick your playing XI, run the simulation, and get a full ball-by-ball
+                        scorecard, player stats, and tournament progression instantly.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     CTA SECTION
+     ════════════════════════════════════════════════════════════ -->
+<section class="lp-cta-section" aria-labelledby="cta-title">
+    <div class="lp-section-inner">
+        <h2 class="lp-cta-heading" id="cta-title">
+            Ready to simulate<br>
+            <span>your first match?</span>
+        </h2>
+        <p class="lp-cta-sub">
+            Two minutes to sign up, build a team, and run your first simulation.
+            No installation required.
+        </p>
+        <div class="lp-cta-actions">
+            <a href="{{ url_for('register') }}" class="lp-cta-primary" style="font-size:1rem; padding:0.9rem 2.2rem;">
+                <i class="fas fa-rocket" aria-hidden="true"></i>
+                Create Free Account
+            </a>
+            <a href="{{ url_for('about') }}" class="lp-cta-secondary">
+                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                Learn More
+            </a>
+        </div>
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     FOOTER
+     ════════════════════════════════════════════════════════════ -->
+<footer class="lp-footer" role="contentinfo">
+    <div class="lp-footer-inner">
+
+        <a href="/" class="lp-footer-logo" aria-label="SimCricketX home">
+            <span aria-hidden="true">🏏</span>
+            <span class="lp-footer-logo-text">SimCricketX</span>
+        </a>
+
+        <nav class="lp-footer-links" aria-label="Footer links">
+            <a href="{{ url_for('about') }}">
+                <i class="fas fa-info-circle" aria-hidden="true"></i> About
+            </a>
+            <a href="{{ url_for('login') }}">
+                <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Sign In
+            </a>
+            <a href="{{ url_for('register') }}">
+                <i class="fas fa-user-plus" aria-hidden="true"></i> Register
+            </a>
+            <a href="{{ url_for('ground_conditions_guide') }}">
+                <i class="fas fa-book" aria-hidden="true"></i> Guide
+            </a>
+            <a href="https://github.com/manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer">
+                <i class="fab fa-github" aria-hidden="true"></i> GitHub
+            </a>
+            <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer">
+                <i class="fas fa-globe" aria-hidden="true"></i> Planet Cricket
+            </a>
+        </nav>
+
+        <span class="lp-footer-copy">
+            &copy; <span id="footerYear">2026</span> SimCricketX
+        </span>
+
+    </div>
+</footer>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SCRIPTS
+     ════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+    'use strict';
+
+    /* ── Theme toggle ──────────────────────────────────────────── */
+    var html  = document.documentElement;
+    var btn   = document.getElementById('themeBtn');
+    var icon  = document.getElementById('themeIcon');
+
+    function applyTheme(t) {
+        html.setAttribute('data-theme', t);
+        icon.className = (t === 'dark') ? 'fas fa-sun' : 'fas fa-moon';
+        try { localStorage.setItem('theme', t); } catch (e) {}
+    }
+
+    var saved = null;
+    try { saved = localStorage.getItem('theme'); } catch (e) {}
+    if (!saved) {
+        saved = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+            ? 'dark' : 'light';
+    }
+    applyTheme(saved);
+
+    btn.addEventListener('click', function () {
+        applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+
+    /* ── Format stat numbers with locale commas ────────────────── */
+    ['statMatches', 'statVisits'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var n = parseInt(el.textContent, 10);
+        if (!isNaN(n)) el.textContent = n.toLocaleString();
+    });
+
+    /* ── Footer year ───────────────────────────────────────────── */
+    var fy = document.getElementById('footerYear');
+    if (fy) fy.textContent = new Date().getFullYear();
+}());
+</script>
+
+</body>
+</html>

@@ -1,810 +1,315 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="en" data-theme="light">
 <head>
+    <!-- Apply saved theme immediately to prevent flash -->
     <script>
-        // Login page has independent theme system - don't inherit from localStorage
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('theme'); } catch (e) {}
+            if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', t);
+        }());
     </script>
 
     <meta charset="UTF-8">
-    <title>SimCricketX - Login</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <!-- Modern CSS Reset -->
-    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
-
-    <!-- Font Awesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-
-    <!-- Google Fonts -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
-        rel="stylesheet">
-
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/shared.css') }}">
-
-    <style>
-        :root {
-            /* Light Theme - Minimalistic (from layout.html) */
-            --bg: #ffffff;
-            --bg-secondary: #f8f9fa;
-            --fg: #1a1a1a;
-            --fg-secondary: #666666;
-            --card-bg: #ffffff;
-            --card-border: #e2e4e8;
-            --accent: #24292f;
-            /* Very dark grey almost black for minimal look */
-            --accent-hover: #000000;
-            --accent-light: #f3f4f6;
-            --shadow: rgba(0, 0, 0, 0.05);
-            --shadow-strong: 0 4px 12px rgba(0, 0, 0, 0.08);
-            /* Mapped to shadow-lg */
-            --nav-height: 64px;
-            --border-radius: 8px;
-            --transition: all 0.2s ease;
-            --gradient: linear-gradient(135deg, #24292f 0%, #4a5568 100%);
-
-            /* Status colors (kept from original login) */
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-
-            /* Login specific mappings */
-            --bg-primary: var(--bg);
-            --bg-secondary: var(--bg-secondary);
-            --fg-primary: var(--fg);
-        }
-
-        [data-theme="dark"] {
-            /* Dark Theme - VS Code One Dark Pro */
-            --bg: #282c34;
-            --bg-secondary: #21252b;
-            --fg: #abb2bf;
-            --fg-secondary: #5c6370;
-            --card-bg: #21252b;
-            --card-border: #3e4451;
-            --accent: #61afef;
-            --accent-hover: #528bcc;
-            --accent-light: rgba(97, 175, 239, 0.15);
-            --shadow: rgba(0, 0, 0, 0.3);
-            --shadow-strong: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 60px rgba(97, 175, 239, 0.1);
-            --gradient: linear-gradient(135deg, #61afef 0%, #c678dd 100%);
-
-            /* One Dark Pro Extended Palette */
-            --one-dark-red: #e06c75;
-            --one-dark-green: #98c379;
-            --one-dark-yellow: #e5c07b;
-            --one-dark-blue: #61afef;
-            --one-dark-purple: #c678dd;
-            --one-dark-cyan: #56b6c2;
-            --one-dark-orange: #d19a66;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html,
-        body {
-            height: 100%;
-            overflow: hidden;
-        }
-
-        /* Animations from home.html */
-        @keyframes stadiumPulse {
-
-            0%,
-            100% {
-                opacity: 0.03;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 0.06;
-                transform: scale(1.02);
-            }
-        }
-
-        @keyframes ballBounce {
-
-            0%,
-            100% {
-                transform: translateY(0) rotate(0deg);
-            }
-
-            25% {
-                transform: translateY(-20px) rotate(90deg);
-            }
-
-            50% {
-                transform: translateY(0) rotate(180deg);
-            }
-
-            75% {
-                transform: translateY(-10px) rotate(270deg);
-            }
-        }
-
-        body {
-            /* Hero Section Background from home.html */
-            background:
-                radial-gradient(ellipse at center, rgba(34, 139, 34, 0.05) 0%, transparent 70%),
-                linear-gradient(180deg, var(--bg) 0%, rgba(34, 139, 34, 0.02) 100%);
-            color: var(--fg);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            margin: 0;
-            padding: 0;
-        }
-
-        /* Cricket Field Pattern (adapted from .hero-section::before) */
-        body::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 100%;
-            height: 100%;
-            background:
-                repeating-linear-gradient(90deg, transparent, transparent 49px, rgba(34, 139, 34, 0.03) 49px, rgba(34, 139, 34, 0.03) 50px),
-                repeating-linear-gradient(0deg, transparent, transparent 49px, rgba(34, 139, 34, 0.03) 49px, rgba(34, 139, 34, 0.03) 50px);
-            animation: stadiumPulse 8s ease-in-out infinite;
-            z-index: 0;
-            opacity: 0.5;
-            pointer-events: none;
-        }
-
-        /* Cricket Ball Decoration (from home.html) */
-        .cricket-ball {
-            position: absolute;
-            top: 10%;
-            right: 5%;
-            width: 60px;
-            height: 60px;
-            background: radial-gradient(circle at 30% 30%, #DC143C, #8B0000);
-            border-radius: 50%;
-            box-shadow:
-                inset -5px -5px 10px rgba(0, 0, 0, 0.3),
-                0 5px 20px rgba(220, 20, 60, 0.2);
-            animation: ballBounce 6s ease-in-out infinite;
-            z-index: 1;
-            opacity: 0.15;
-            pointer-events: none;
-        }
-
-        .cricket-ball::before,
-        .cricket-ball::after {
-            content: '';
-            position: absolute;
-            width: 2px;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.3);
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .cricket-ball::before {
-            transform: translateX(-50%) rotate(20deg);
-        }
-
-        .cricket-ball::after {
-            transform: translateX(-50%) rotate(-20deg);
-        }
-
-        /* Stumps Decoration (from home.html) */
-        .stumps-left,
-        .stumps-right {
-            position: absolute;
-            bottom: 20%;
-            width: 4px;
-            height: 80px;
-            background: linear-gradient(180deg, #8B4513, #654321);
-            opacity: 0.08;
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        .stumps-left {
-            left: 8%;
-            transform: rotate(-5deg);
-        }
-
-        .stumps-right {
-            right: 8%;
-            transform: rotate(5deg);
-        }
-
-        .stumps-left::before,
-        .stumps-left::after,
-        .stumps-right::before,
-        .stumps-right::after {
-            content: '';
-            position: absolute;
-            width: 4px;
-            height: 100%;
-            background: linear-gradient(180deg, #8B4513, #654321);
-        }
-
-        .stumps-left::before,
-        .stumps-right::before {
-            left: 12px;
-        }
-
-        .stumps-left::after,
-        .stumps-right::after {
-            left: 24px;
-        }
-
-        /* Theme Toggle */
-        .theme-controls {
-            position: fixed;
-            top: 2rem;
-            right: 2rem;
-            display: flex;
-            gap: 1rem;
-            z-index: 1000;
-        }
-
-        .theme-toggle {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            cursor: pointer;
-            font-size: 1.25rem;
-            color: var(--fg);
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 12px var(--shadow);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-        }
-
-        .theme-toggle:hover {
-            transform: scale(1.1);
-            box-shadow: 0 8px 25px var(--shadow-strong);
-            color: var(--accent);
-            border-color: var(--accent);
-        }
-
-        /* Main Container */
-        .auth-container {
-            width: 100%;
-            max-width: 450px;
-            z-index: 10;
-            position: relative;
-            padding: 0 1rem;
-        }
-
-        /* Logo Section */
-        .logo-section {
-            text-align: center;
-            margin-bottom: 2.5rem;
-        }
-
-        .logo {
-            font-size: 2.8rem;
-            font-weight: 700;
-            color: var(--fg);
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-            text-shadow: 0 2px 8px var(--shadow);
-        }
-
-        .logo-icon {
-            font-size: 3.2rem;
-            background: var(--gradient);
-            /* Using gradient from layout */
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            animation: bounce 2s ease-in-out infinite;
-        }
-
-        .logo-text {
-            background: var(--gradient);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-
-        @keyframes bounce {
-
-            0%,
-            20%,
-            50%,
-            80%,
-            100% {
-                transform: translateY(0);
-            }
-
-            40% {
-                transform: translateY(-10px);
-            }
-
-            60% {
-                transform: translateY(-5px);
-            }
-        }
-
-        /* Login Card - Matched to dashboard-card style */
-        .login-card {
-            background: var(--card-bg);
-            border: 2px solid var(--card-border);
-            /* Thicker border like dashboard */
-            border-radius: 24px;
-            /* More rounded */
-            padding: 2.5rem;
-            box-shadow: 0 20px 60px var(--shadow-strong);
-            position: relative;
-            overflow: hidden;
-            width: 100%;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* Pitch Stripe Effect on Card */
-        .login-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 6px;
-            background: repeating-linear-gradient(90deg,
-                    var(--accent) 0px,
-                    var(--accent) 20px,
-                    transparent 20px,
-                    transparent 40px);
-            opacity: 0.1;
-            /* Subtle always visible */
-        }
-
-        .card-header {
-            text-align: center;
-            margin-bottom: 1.8rem;
-        }
-
-        .card-title {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: var(--fg);
-            margin-bottom: 0.6rem;
-            letter-spacing: -0.01em;
-        }
-
-        .card-subtitle {
-            color: var(--fg-secondary);
-            font-size: 0.95rem;
-            line-height: 1.4;
-        }
-
-        /* Flash Messages */
-        .flash-messages {
-            margin-bottom: 1.5rem;
-        }
-
-        .alert {
-            padding: 1rem 1.25rem;
-            border-radius: 12px;
-            margin-bottom: 1rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            animation: slideInDown 0.3s ease-out;
-        }
-
-        @keyframes slideInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .alert-success {
-            background: rgba(16, 185, 129, 0.15);
-            color: var(--success);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        .alert-danger {
-            background: rgba(239, 68, 68, 0.15);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        /* Form Styles */
-        .login-form {
-            display: flex;
-            flex-direction: column;
-            gap: 1.3rem;
-        }
-
-        .form-group {
-            position: relative;
-        }
-
-        .form-label {
-            display: block;
-            font-size: 0.9rem;
-            font-weight: 600;
-            /* Bolder label */
-            color: var(--fg);
-            margin-bottom: 0.6rem;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 1rem 1.2rem;
-            padding-left: 3.2rem;
-            border: 2px solid var(--card-border);
-            /* Matches card border */
-            border-radius: 12px;
-            background: var(--bg-secondary);
-            color: var(--fg);
-            font-size: 1rem;
-            transition: var(--transition);
-            font-family: inherit;
-            height: 52px;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 4px var(--accent-light);
-            background: var(--card-bg);
-        }
-
-        .form-input::placeholder {
-            color: var(--fg-secondary);
-        }
-
-        .input-icon {
-            position: absolute;
-            left: 1.2rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--fg-secondary);
-            font-size: 1.1rem;
-            pointer-events: none;
-            transition: var(--transition);
-        }
-
-        .form-group:focus-within .input-icon {
-            color: var(--accent);
-        }
-
-        /* Submit Button */
-        .submit-btn {
-            width: 100%;
-            padding: 1.1rem;
-            border: none;
-            border-radius: 12px;
-            background: var(--gradient);
-            /* Use gradient */
-            color: white;
-            font-size: 1.05rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            position: relative;
-            overflow: hidden;
-            margin-top: 0.7rem;
-            height: 54px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            opacity: 0.95;
-        }
-
-        .submit-btn:active {
-            transform: translateY(0);
-        }
-
-        /* Footer Links */
-        .auth-footer {
-            text-align: center;
-            margin-top: 1.8rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid var(--card-border);
-        }
-
-        .auth-footer p {
-            font-size: 0.95rem;
-            color: var(--fg-secondary);
-        }
-
-        .auth-link {
-            color: var(--accent);
-            /* In dark mode accent is blue, in light it's dark grey */
-            text-decoration: none;
-            font-weight: 600;
-            transition: var(--transition);
-        }
-
-        .auth-link:hover {
-            text-decoration: underline;
-            color: var(--accent-hover);
-        }
-
-        /* Loading State */
-        .loading {
-            pointer-events: none;
-            opacity: 0.7;
-        }
-
-        /* Responsive */
-        @media (max-width: 600px) {
-            .auth-container {
-                max-width: 90%;
-            }
-
-            .login-card {
-                padding: 2rem;
-            }
-
-            .logo {
-                font-size: 2.2rem;
-            }
-
-            .logo-icon {
-                font-size: 2.6rem;
-            }
-
-            .cricket-ball {
-                width: 40px;
-                height: 40px;
-                top: 5%;
-            }
-        }
-    </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In — SimCricketX</title>
+    <meta name="robots" content="noindex">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+
+    <!-- Auth styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
 </head>
-
 <body>
-    <!-- Theme Controls -->
-    <div class="theme-controls">
-        <button class="theme-toggle" id="theme-toggle" title="Toggle Theme">
-            <i class="fas fa-moon"></i>
-        </button>
-    </div>
 
-    <!-- Decorative Elements (Home Theme) -->
-    <div class="cricket-ball"></div>
-    <div class="stumps-left"></div>
-    <div class="stumps-right"></div>
+<div class="auth-page">
 
-    <!-- Main Container -->
-    <div class="auth-container">
-        <!-- Logo Section -->
-        <div class="logo-section">
-            <div class="logo">
-                <i class="fa-solid fa-baseball-ball logo-icon"></i>
-                <!-- Changed to baseball-ball to match home icon class -->
-                <span class="logo-text">SimCricketX</span>
+    <!-- ════════════════════════════════════════════════════════
+         LEFT PANEL — branding
+         ════════════════════════════════════════════════════════ -->
+    <aside class="auth-left" aria-hidden="true">
+        <div class="auth-left-glow"></div>
+        <div class="auth-left-glow2"></div>
+
+        <a href="/" class="auth-left-logo">
+            <span class="auth-left-logo-icon">🏏</span>
+            SimCricketX
+        </a>
+
+        <div class="auth-left-body">
+
+            <!-- Animated cricket ball -->
+            <svg class="auth-left-ball" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <radialGradient id="login-ballGrad" cx="36%" cy="34%" r="56%">
+                        <stop offset="0%"   stop-color="#e85c50"/>
+                        <stop offset="55%"  stop-color="#c0392b"/>
+                        <stop offset="100%" stop-color="#7d1a0e"/>
+                    </radialGradient>
+                </defs>
+                <circle cx="100" cy="100" r="90" fill="url(#login-ballGrad)"/>
+                <path d="M100,12 C55,38 55,88 100,100 C55,112 55,162 100,188"
+                      fill="none" stroke="rgba(255,200,185,0.7)" stroke-width="4" stroke-linecap="round"/>
+                <path d="M100,12 C145,38 145,88 100,100 C145,112 145,162 100,188"
+                      fill="none" stroke="rgba(255,200,185,0.7)" stroke-width="4" stroke-linecap="round"/>
+                <g stroke="rgba(255,210,195,0.6)" stroke-width="2" stroke-linecap="round">
+                    <line x1="62" y1="34" x2="58" y2="42"/> <line x1="51" y1="55" x2="47" y2="63"/>
+                    <line x1="47" y1="78" x2="43" y2="86"/> <line x1="51" y1="115" x2="47" y2="123"/>
+                    <line x1="62" y1="140" x2="58" y2="148"/>
+                </g>
+                <g stroke="rgba(255,210,195,0.6)" stroke-width="2" stroke-linecap="round">
+                    <line x1="138" y1="34" x2="142" y2="42"/> <line x1="149" y1="55" x2="153" y2="63"/>
+                    <line x1="153" y1="78" x2="157" y2="86"/> <line x1="149" y1="115" x2="153" y2="123"/>
+                    <line x1="138" y1="140" x2="142" y2="148"/>
+                </g>
+                <ellipse cx="66" cy="64" rx="22" ry="15" fill="rgba(255,255,255,0.18)" transform="rotate(-25,66,64)"/>
+            </svg>
+
+            <div class="auth-left-tagline">
+                Simulate<br>
+                <span class="auth-left-tagline-accent">Every Ball.</span>
             </div>
+
+            <p class="auth-left-sub">
+                Build squads, tune pitch conditions, and run T20 &amp; List A simulations
+                powered by a probabilistic ball-by-ball engine.
+            </p>
+
+            <ul class="auth-left-features">
+                <li><i class="fas fa-check-circle"></i> Ball-by-ball simulation engine</li>
+                <li><i class="fas fa-check-circle"></i> T20 &amp; List A format squads</li>
+                <li><i class="fas fa-check-circle"></i> Tournaments &amp; player analytics</li>
+                <li><i class="fas fa-check-circle"></i> Ground conditions &amp; pitch control</li>
+            </ul>
+
         </div>
 
-        <!-- Login Card -->
-        <div class="login-card">
-            <div class="card-header">
-                <h1 class="card-title">Welcome Back</h1>
-                <p class="card-subtitle">Sign in to continue your cricket journey</p>
-            </div>
+        <div class="auth-left-footer">
+            Free &nbsp;·&nbsp; Open source &nbsp;·&nbsp; No credit card &nbsp;·&nbsp;
+            <a href="https://github.com/manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </div>
+    </aside>
 
-            <!-- Error Messages -->
+
+    <!-- ════════════════════════════════════════════════════════
+         RIGHT PANEL — form
+         ════════════════════════════════════════════════════════ -->
+    <main class="auth-right">
+
+        <!-- Theme toggle -->
+        <button class="auth-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
+            <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+        </button>
+
+        <div class="auth-form-wrap">
+
+            <h1 class="auth-form-title">Welcome back</h1>
+            <p class="auth-form-sub">Sign in to continue your cricket journey</p>
+
+            <!-- Error -->
             {% if error %}
-            <div class="flash-messages">
-                <div class="alert alert-danger">
-                    <i class="fa-solid fa-exclamation-triangle"></i>
-                    <span>{{ error }}</span>
-                </div>
+            <div class="auth-alert" id="authAlert">
+                <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                <span>{{ error }}</span>
             </div>
             {% endif %}
 
-            <!-- Login Form -->
-            <form class="login-form" method="POST" action="/login" id="loginForm">
+            <!-- Login form -->
+            <form class="auth-form" method="POST" action="/login" id="loginForm" novalidate>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="challenge_id" id="challenge_id">
+                <input type="hidden" name="challenge_id"      id="challenge_id">
                 <input type="hidden" name="challenge_counter" id="challenge_counter">
-                <input type="hidden" name="challenge_digest" id="challenge_digest">
-                <div class="form-group">
-                    <label for="email" class="form-label">Email Address</label>
-                    <div style="position: relative;">
-                        <i class="fa-solid fa-envelope input-icon"></i>
-                        <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email"
-                            required autofocus>
+                <input type="hidden" name="challenge_digest"  id="challenge_digest">
+
+                <!-- Email -->
+                <div class="auth-field">
+                    <label class="auth-label" for="email">Email address</label>
+                    <div class="auth-input-wrap">
+                        <i class="fas fa-envelope auth-input-icon" aria-hidden="true"></i>
+                        <input class="auth-input"
+                               type="email"
+                               id="email"
+                               name="email"
+                               placeholder="you@example.com"
+                               required
+                               autofocus
+                               autocomplete="email">
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="password" class="form-label">Password</label>
-                    <div style="position: relative;">
-                        <i class="fa-solid fa-lock input-icon"></i>
-                        <input type="password" id="password" name="password" class="form-input"
-                            placeholder="Enter your password" required>
+                <!-- Password -->
+                <div class="auth-field">
+                    <label class="auth-label" for="password">Password</label>
+                    <div class="auth-input-wrap">
+                        <i class="fas fa-lock auth-input-icon" aria-hidden="true"></i>
+                        <input class="auth-input auth-input--pw"
+                               type="password"
+                               id="password"
+                               name="password"
+                               placeholder="Your password"
+                               required
+                               autocomplete="current-password">
+                        <button type="button" class="auth-eye-btn" id="eyeBtn" aria-label="Show password">
+                            <i class="fas fa-eye" id="eyeIcon" aria-hidden="true"></i>
+                        </button>
                     </div>
                 </div>
 
-                <button type="submit" class="submit-btn" id="submitBtn">
-                    <span class="btn-text">Sign In</span>
+                <button type="submit" class="auth-btn" id="submitBtn">
+                    <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+                    <span id="btnText">Sign In</span>
                 </button>
             </form>
 
-            <!-- Footer -->
-            <div class="auth-footer">
-                <p>
-                    Don't have an account?
-                    <a href="/register" class="auth-link">Create one here</a>
-                </p>
-                <p style="margin-top: 0.75rem; font-size: 0.8rem;">
-                    Like SimCricketX?
-                    <a href="https://github.com/Manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer"
-                        class="auth-link">
-                        <i class="fab fa-github"></i> Star on GitHub
-                    </a>
-                </p>
-                <p style="margin-top: 0.75rem; font-size: 0.8rem;">
-                    Having issues?
-                    <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer" class="auth-link">
-                        Contact the developer
-                    </a>
-                </p>
+            <div class="auth-divider"></div>
+
+            <div class="auth-link-row">
+                Don't have an account?
+                <a href="{{ url_for('register') }}">Create one free</a>
             </div>
+            <div class="auth-link-row">
+                <a href="https://github.com/Manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer">
+                    <i class="fab fa-github" aria-hidden="true"></i> Star on GitHub
+                </a>
+                <span class="sep">·</span>
+                <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer">
+                    Contact developer
+                </a>
+            </div>
+
         </div>
-    </div>
+    </main>
 
-    <script>
-        // Theme Toggle Functionality
-        const toggle = document.getElementById('theme-toggle');
-        const icon = toggle.querySelector('i');
-        const root = document.documentElement;
+</div><!-- /auth-page -->
 
-        // Initialize theme
-        const saved = localStorage.getItem('theme');
-        if (saved) {
-            root.setAttribute('data-theme', saved);
-            updateIcon(saved);
-        } else {
-            updateIcon('light');
+
+<script>
+(function () {
+    'use strict';
+
+    /* ── Theme ───────────────────────────────────────────────── */
+    var html = document.documentElement;
+    var btn  = document.getElementById('themeBtn');
+    var icon = document.getElementById('themeIcon');
+
+    function applyTheme(t) {
+        html.setAttribute('data-theme', t);
+        icon.className = (t === 'dark') ? 'fas fa-sun' : 'fas fa-moon';
+        try { localStorage.setItem('theme', t); } catch (e) {}
+    }
+
+    // Sync icon with already-applied theme (set in <head>)
+    applyTheme(html.getAttribute('data-theme') || 'light');
+
+    btn.addEventListener('click', function () {
+        applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+
+    /* ── Password visibility toggle ─────────────────────────── */
+    var eyeBtn  = document.getElementById('eyeBtn');
+    var eyeIcon = document.getElementById('eyeIcon');
+    var pwInput = document.getElementById('password');
+
+    eyeBtn.addEventListener('click', function () {
+        var show = pwInput.type === 'password';
+        pwInput.type = show ? 'text' : 'password';
+        eyeIcon.className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
+        eyeBtn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    });
+
+    /* ── Proof-of-Work challenge ─────────────────────────────── */
+    var loginForm            = document.getElementById('loginForm');
+    var submitBtn            = document.getElementById('submitBtn');
+    var btnText              = document.getElementById('btnText');
+    var challengeIdInput     = document.getElementById('challenge_id');
+    var challengeCounterInput= document.getElementById('challenge_counter');
+    var challengeDigestInput = document.getElementById('challenge_digest');
+    var powChallenge         = null;
+    var submittingWithPow    = false;
+
+    async function sha256Hex(input) {
+        var data       = new TextEncoder().encode(input);
+        var hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        var hashArray  = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    }
+
+    async function fetchChallenge() {
+        var res = await fetch('/auth/challenge', { method: 'GET', cache: 'no-store' });
+        if (!res.ok) throw new Error('Could not start security check');
+        powChallenge = await res.json();
+    }
+
+    async function solveChallenge(challenge) {
+        if (!window.crypto || !window.crypto.subtle) {
+            throw new Error('Browser security API unavailable');
         }
-
-        // Update toggle icon
-        function updateIcon(theme) {
-            icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-        }
-
-        // Theme toggle click handler
-        toggle.onclick = () => {
-            const currentTheme = root.getAttribute('data-theme') || 'light';
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            root.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            updateIcon(newTheme);
-        };
-
-        // Form Enhancement + invisible proof-of-work challenge
-        const loginForm = document.getElementById('loginForm');
-        const submitBtn = document.getElementById('submitBtn');
-        const challengeIdInput = document.getElementById('challenge_id');
-        const challengeCounterInput = document.getElementById('challenge_counter');
-        const challengeDigestInput = document.getElementById('challenge_digest');
-        let powChallenge = null;
-        let submittingWithPow = false;
-
-        async function sha256Hex(input) {
-            const data = new TextEncoder().encode(input);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
-        async function fetchChallenge() {
-            const res = await fetch('/auth/challenge', { method: 'GET', cache: 'no-store' });
-            if (!res.ok) throw new Error('Could not start security check');
-            powChallenge = await res.json();
-        }
-
-        async function solveChallenge(challenge) {
-            if (!window.crypto || !window.crypto.subtle) {
-                throw new Error('Browser security API unavailable');
+        var prefix        = '0'.repeat(challenge.difficulty || 3);
+        var maxIterations = Math.max(10000, Number(challenge.max_iterations || 1500000));
+        for (var counter = 0; counter < maxIterations; counter++) {
+            var digest = await sha256Hex(challenge.nonce + ':' + counter);
+            if (digest.startsWith(prefix)) {
+                return { counter: counter, digest: digest };
             }
-            const prefix = '0'.repeat(challenge.difficulty || 3);
-            const maxIterations = Math.max(10_000, Number(challenge.max_iterations || 1_500_000));
-            for (let counter = 0; counter < maxIterations; counter++) {
-                const digest = await sha256Hex(`${challenge.nonce}:${counter}`);
-                if (digest.startsWith(prefix)) {
-                    return { counter, digest };
-                }
-                if (counter % 250 === 0) {
-                    await new Promise(resolve => setTimeout(resolve, 0));
-                }
+            if (counter % 250 === 0) {
+                await new Promise(function (resolve) { setTimeout(resolve, 0); });
             }
-            throw new Error('Security check timed out');
         }
+        throw new Error('Security check timed out');
+    }
 
-        // Add loading state on form submit
-        if (loginForm) {
-            loginForm.addEventListener('submit', async function (e) {
-                if (submittingWithPow) return;
-                e.preventDefault();
-                submitBtn.innerHTML = '<i class="fa-solid fa-shield-halved fa-spin"></i> Running Security Check...';
-                submitBtn.disabled = true;
-                submitBtn.style.opacity = '0.8';
-                document.body.classList.add('loading');
+    loginForm.addEventListener('submit', async function (e) {
+        if (submittingWithPow) return;
+        e.preventDefault();
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-shield-halved fa-spin"></i> Running Security Check…';
+        document.body.style.pointerEvents = 'none';
 
-                try {
-                    if (!powChallenge) {
-                        await fetchChallenge();
-                    }
-                    if (powChallenge.enabled === false) {
-                        submittingWithPow = true;
-                        loginForm.submit();
-                        return;
-                    }
-                    const solved = await solveChallenge(powChallenge);
-                    challengeIdInput.value = powChallenge.challenge_id;
-                    challengeCounterInput.value = String(solved.counter);
-                    challengeDigestInput.value = solved.digest;
-                    submittingWithPow = true;
-                    loginForm.submit();
-                } catch (err) {
-                    submitBtn.innerHTML = '<span class="btn-text">Sign In</span>';
-                    submitBtn.disabled = false;
-                    submitBtn.style.opacity = '1';
-                    document.body.classList.remove('loading');
-                    alert(err.message || 'Security check failed');
-                    try { await fetchChallenge(); } catch (_) {}
-                }
-            });
+        try {
+            if (!powChallenge) await fetchChallenge();
+            if (powChallenge.enabled === false) {
+                submittingWithPow = true;
+                loginForm.submit();
+                return;
+            }
+            var solved = await solveChallenge(powChallenge);
+            challengeIdInput.value      = powChallenge.challenge_id;
+            challengeCounterInput.value = String(solved.counter);
+            challengeDigestInput.value  = solved.digest;
+            submittingWithPow = true;
+            loginForm.submit();
+        } catch (err) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> <span>Sign In</span>';
+            document.body.style.pointerEvents = '';
+            alert(err.message || 'Security check failed');
+            try { await fetchChallenge(); } catch (_) {}
         }
+    });
 
-        // Input focus effects
-        document.querySelectorAll('.form-input').forEach(input => {
-            input.addEventListener('focus', function () {
-                this.parentElement.querySelector('.input-icon').style.color = 'var(--accent)';
-            });
+    /* ── Init: fetch challenge + auto-dismiss errors ─────────── */
+    window.addEventListener('DOMContentLoaded', function () {
+        fetchChallenge().catch(function () {});
 
-            input.addEventListener('blur', function () {
-                this.parentElement.querySelector('.input-icon').style.color = 'var(--fg-secondary)';
-            });
-        });
-
-        // Auto-dismiss flash messages after 5 seconds
-        window.addEventListener('DOMContentLoaded', () => {
-            fetchChallenge().catch(() => {});
-            setTimeout(() => {
-                document.querySelectorAll('.alert').forEach(el => {
-                    el.style.transition = 'opacity 0.3s, transform 0.3s';
-                    el.style.opacity = '0';
-                    el.style.transform = 'translateY(-20px)';
-                    setTimeout(() => el.remove(), 300);
-                });
+        var alert = document.getElementById('authAlert');
+        if (alert) {
+            setTimeout(function () {
+                alert.style.transition = 'opacity 0.35s, transform 0.35s';
+                alert.style.opacity    = '0';
+                alert.style.transform  = 'translateY(-10px)';
+                setTimeout(function () { alert.remove(); }, 380);
             }, 5000);
-        });
-    </script>
-</body>
+        }
+    });
+}());
+</script>
 
+</body>
 </html>
