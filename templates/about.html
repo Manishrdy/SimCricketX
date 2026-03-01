@@ -1,0 +1,269 @@
+{% extends "layout.html" %}
+
+{% block title %}About — SimCricketX{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/about.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="about-page">
+
+    <!-- ══════════════════════════════════════════
+         HERO
+    ══════════════════════════════════════════ -->
+    <section class="about-hero">
+        <div class="about-blob about-blob-1"></div>
+        <div class="about-blob about-blob-2"></div>
+
+        <div class="about-badge">
+            <span class="dot"></span>
+            Cricket Simulation Engine
+        </div>
+
+        <h1 class="about-title">SimCricketX</h1>
+
+        <p class="about-subtitle">
+            A fully-featured cricket match simulator — build your squads, tune the pitch,
+            and watch every ball unfold through a probabilistic engine built from the ground up.
+        </p>
+
+        <div class="about-cta-row">
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('home') }}" class="about-btn about-btn-primary">
+                <i class="fas fa-play"></i> Go to Dashboard
+            </a>
+            {% else %}
+            <a href="{{ url_for('register') }}" class="about-btn about-btn-primary">
+                <i class="fas fa-user-plus"></i> Get Started Free
+            </a>
+            {% endif %}
+            <a href="https://github.com/manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer"
+               class="about-btn about-btn-outline">
+                <i class="fab fa-github"></i> View on GitHub
+            </a>
+            <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer"
+               class="about-btn about-btn-planet">
+                <i class="fas fa-cricket-bat-ball"></i> Planet Cricket
+            </a>
+        </div>
+    </section>
+
+    <div class="about-divider"></div>
+
+    <!-- ══════════════════════════════════════════
+         WHAT IS IT
+    ══════════════════════════════════════════ -->
+    <div class="about-section-label">
+        <div class="label-line"></div>
+        <span class="label-text">01 — What is SimCricketX</span>
+        <div class="label-line"></div>
+    </div>
+
+    <div class="about-intro-card" style="margin-bottom: 2.5rem;">
+        <p>
+            SimCricketX is a web-based cricket simulation platform that lets you create custom
+            teams, curate format-specific squads, and simulate full T20 or List A matches using
+            a probabilistic ball-outcome engine. Every delivery is resolved using player roles,
+            pitch conditions, game modes, and over-phase dynamics — giving results that feel
+            cricket-accurate rather than random.
+        </p>
+        <p>
+            Built as a passion project for cricket enthusiasts who want more than a scorecard
+            generator — you get full player statistics, tournament brackets, head-to-head
+            analytics, and exportable match data.
+        </p>
+    </div>
+
+    <!-- Feature grid -->
+    <div class="about-features" style="margin-bottom: 3rem;">
+
+        <div class="about-feature">
+            <div class="about-feature-icon"><i class="fas fa-baseball-ball"></i></div>
+            <div class="about-feature-body">
+                <div class="about-feature-title">Ball-by-Ball Engine</div>
+                <div class="about-feature-desc">Every delivery resolved via weighted probability — batting/bowling matchups, conditions, and phase.</div>
+            </div>
+        </div>
+
+        <div class="about-feature">
+            <div class="about-feature-icon"><i class="fas fa-layer-group"></i></div>
+            <div class="about-feature-body">
+                <div class="about-feature-title">T20 &amp; List A Formats</div>
+                <div class="about-feature-desc">Separate format-specific squads per team so your 50-over specialists aren't picking for T20s.</div>
+            </div>
+        </div>
+
+        <div class="about-feature">
+            <div class="about-feature-icon"><i class="fas fa-sliders"></i></div>
+            <div class="about-feature-body">
+                <div class="about-feature-title">Ground Conditions</div>
+                <div class="about-feature-desc">Choose pitch profile, game mode, and over-phase boosts to shape batting and bowling outcomes.</div>
+            </div>
+        </div>
+
+        <div class="about-feature">
+            <div class="about-feature-icon"><i class="fas fa-trophy"></i></div>
+            <div class="about-feature-body">
+                <div class="about-feature-title">Tournament System</div>
+                <div class="about-feature-desc">Create round-robin or knockout tournaments with automatic standings and progression.</div>
+            </div>
+        </div>
+
+        <div class="about-feature">
+            <div class="about-feature-icon"><i class="fas fa-chart-line"></i></div>
+            <div class="about-feature-body">
+                <div class="about-feature-title">Player Analytics</div>
+                <div class="about-feature-desc">Career stats, match-by-match breakdowns, and head-to-head comparisons across all formats.</div>
+            </div>
+        </div>
+
+        <div class="about-feature">
+            <div class="about-feature-icon"><i class="fas fa-download"></i></div>
+            <div class="about-feature-body">
+                <div class="about-feature-title">Export Your Data</div>
+                <div class="about-feature-desc">Download your full match history, scorecards, and player stats as structured data.</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════
+         HOW TO USE
+    ══════════════════════════════════════════ -->
+    <div class="about-section-label">
+        <div class="label-line"></div>
+        <span class="label-text">02 — How to Use</span>
+        <div class="label-line"></div>
+    </div>
+
+    <div class="about-steps">
+
+        <div class="about-step">
+            <div class="about-step-num">01</div>
+            <div class="about-step-body">
+                <div class="about-step-title">Register an Account</div>
+                <div class="about-step-desc">
+                    Sign up with your email. No external logins or subscriptions needed —
+                    your account and all its data live on the platform.
+                </div>
+            </div>
+        </div>
+
+        <div class="about-step">
+            <div class="about-step-num">02</div>
+            <div class="about-step-body">
+                <div class="about-step-title">Build Your Squads</div>
+                <div class="about-step-desc">
+                    Create teams and add players with roles (Batsman, Bowler, All-rounder, Wicketkeeper).
+                    Maintain separate T20 and List A squads for each team.
+                </div>
+            </div>
+        </div>
+
+        <div class="about-step">
+            <div class="about-step-num">03</div>
+            <div class="about-step-body">
+                <div class="about-step-title">Configure Ground Conditions</div>
+                <div class="about-step-desc">
+                    Head to Ground Conditions to set the pitch type (Green, Dry, Hard, Flat, Dead),
+                    game mode, and per-phase boosts that will govern your simulation.
+                </div>
+            </div>
+        </div>
+
+        <div class="about-step">
+            <div class="about-step-num">04</div>
+            <div class="about-step-body">
+                <div class="about-step-title">Set Up &amp; Simulate a Match</div>
+                <div class="about-step-desc">
+                    Select two teams, choose the format, pick your XI, and simulate.
+                    The engine resolves every ball and generates a full scorecard instantly.
+                </div>
+            </div>
+        </div>
+
+        <div class="about-step">
+            <div class="about-step-num">05</div>
+            <div class="about-step-body">
+                <div class="about-step-title">Analyse &amp; Compete</div>
+                <div class="about-step-desc">
+                    Dive into player career stats, run tournaments with bracket progression,
+                    and track your all-time leaderboards. Export anything you need.
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════
+         TECH STACK
+    ══════════════════════════════════════════ -->
+    <div class="about-section-label">
+        <div class="label-line"></div>
+        <span class="label-text">03 — Built With</span>
+        <div class="label-line"></div>
+    </div>
+
+    <div class="about-tech-row" style="margin-bottom: 3rem;">
+        <span class="about-tech-badge"><i class="fab fa-python"></i> Python 3</span>
+        <span class="about-tech-badge"><i class="fas fa-flask"></i> Flask</span>
+        <span class="about-tech-badge"><i class="fas fa-database"></i> SQLite + SQLAlchemy</span>
+        <span class="about-tech-badge"><i class="fab fa-js"></i> Vanilla JS</span>
+        <span class="about-tech-badge"><i class="fab fa-css3-alt"></i> CSS Variables + Dark Mode</span>
+        <span class="about-tech-badge"><i class="fas fa-shield-alt"></i> CSRF + Rate Limiting</span>
+        <span class="about-tech-badge"><i class="fas fa-code-branch"></i> Open Source</span>
+    </div>
+
+    <!-- ══════════════════════════════════════════
+         CONNECT
+    ══════════════════════════════════════════ -->
+    <div class="about-section-label">
+        <div class="label-line"></div>
+        <span class="label-text">04 — Connect</span>
+        <div class="label-line"></div>
+    </div>
+
+    <div class="about-connect-grid">
+
+        <a href="https://github.com/manishrdy/" target="_blank" rel="noopener noreferrer"
+           class="about-connect-card github">
+            <div class="about-connect-icon">
+                <i class="fab fa-github"></i>
+            </div>
+            <div class="about-connect-body">
+                <div class="about-connect-title">GitHub</div>
+                <div class="about-connect-desc">Source code, issues &amp; contributions</div>
+                <div class="about-connect-handle">github.com/manishrdy</div>
+            </div>
+            <div class="about-connect-arrow"><i class="fas fa-arrow-up-right-from-square"></i></div>
+        </a>
+
+        <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer"
+           class="about-connect-card planet">
+            <div class="about-connect-icon">
+                <i class="fas fa-globe"></i>
+            </div>
+            <div class="about-connect-body">
+                <div class="about-connect-title">Planet Cricket</div>
+                <div class="about-connect-desc">Discussion, feedback &amp; community</div>
+                <div class="about-connect-handle">planetcricket.org · manish</div>
+            </div>
+            <div class="about-connect-arrow"><i class="fas fa-arrow-up-right-from-square"></i></div>
+        </a>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════
+         FOOTER NOTE
+    ══════════════════════════════════════════ -->
+    <div class="about-footer-note">
+        SimCricketX is a personal project built out of a love for cricket and simulation.
+        It is <a href="https://github.com/manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer">open source</a> —
+        feedback, bug reports, and feature ideas are always welcome on
+        <a href="https://www.planetcricket.org/forums/members/manish.176972/" target="_blank" rel="noopener noreferrer">Planet Cricket</a>
+        or via <a href="https://github.com/manishrdy/" target="_blank" rel="noopener noreferrer">GitHub</a>.
+    </div>
+
+</div>
+{% endblock %}

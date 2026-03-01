@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 
-from flask import jsonify, render_template, request, session
+from flask import jsonify, render_template, request, send_from_directory, session
 from flask_login import current_user, login_required
 
 
@@ -162,3 +162,11 @@ def register_core_routes(
     @app.route("/ground-conditions/guide")
     def ground_conditions_guide():
         return render_template("ground_conditions_guide.html")
+
+    @app.route("/about")
+    def about():
+        return render_template("about.html")
+
+    @app.route("/robots.txt")
+    def robots_txt():
+        return send_from_directory(basedir, "robots.txt", mimetype="text/plain")
