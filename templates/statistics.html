@@ -1,2431 +1,1190 @@
 {% extends "layout.html" %}
 
-{% block title %}Statistics Hub - SimCricketX{% endblock %}
+{% block title %}Statistics — SimCricketX{% endblock %}
 
 {% block extra_css %}
-<link
-    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
-    rel="stylesheet">
-
 <style>
-    /* ===== PREMIUM STATISTICS HUB STYLES ===== */
-
-    /* Override font for this page */
-    .stats-page {
-        font-family: 'Outfit', 'Inter', sans-serif;
-    }
-
-    /* Utility Classes */
-    .hidden {
-        display: none !important;
-    }
-
-    /* Animated Background Gradient */
-    @keyframes gradientShift {
-
-        0%,
-        100% {
-            background-position: 0% 50%;
-        }
-
-        50% {
-            background-position: 100% 50%;
-        }
-    }
-
-    @keyframes float {
-
-        0%,
-        100% {
-            transform: translateY(0) rotate(0deg);
-        }
-
-        50% {
-            transform: translateY(-20px) rotate(5deg);
-        }
-    }
-
-    @keyframes pulse {
-
-        0%,
-        100% {
-            opacity: 0.5;
-            transform: scale(1);
-        }
-
-        50% {
-            opacity: 0.8;
-            transform: scale(1.05);
-        }
-    }
-
-    @keyframes shimmer {
-        0% {
-            background-position: -200% center;
-        }
-
-        100% {
-            background-position: 200% center;
-        }
-    }
-
-    @keyframes slideInUp {
-        from {
-            opacity: 0;
-            transform: translateY(30px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    @keyframes countUp {
-        from {
-            opacity: 0;
-            transform: scale(0.5);
-        }
-
-        to {
-            opacity: 1;
-            transform: scale(1);
-        }
-    }
-
-    @keyframes glowPulse {
-
-        0%,
-        100% {
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
-        }
-
-        50% {
-            box-shadow: 0 0 40px rgba(99, 102, 241, 0.4);
-        }
-    }
-
-    /* Hero Section Enhanced */
-    .stats-hero {
-        position: relative;
-        text-align: center;
-        padding: 5rem 2rem 4rem;
-        margin-bottom: 3rem;
-        overflow: hidden;
-        background: linear-gradient(135deg,
-                rgba(99, 102, 241, 0.03) 0%,
-                rgba(168, 85, 247, 0.03) 50%,
-                rgba(236, 72, 153, 0.03) 100%);
-        border-radius: 32px;
-        border: 1px solid var(--card-border);
-    }
-
-    .stats-hero::before {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background:
-            radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
-            radial-gradient(circle at 80% 20%, rgba(168, 85, 247, 0.08) 0%, transparent 40%),
-            radial-gradient(circle at 50% 50%, rgba(236, 72, 153, 0.05) 0%, transparent 60%);
-        animation: pulse 8s ease-in-out infinite;
-        z-index: 0;
-    }
-
-    /* Floating Decorative Elements */
-    .float-element {
-        position: absolute;
-        border-radius: 50%;
-        opacity: 0.1;
-        z-index: 0;
-        pointer-events: none;
-    }
-
-    .float-1 {
-        width: 120px;
-        height: 120px;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        top: 10%;
-        right: 10%;
-        animation: float 8s ease-in-out infinite;
-    }
-
-    .float-2 {
-        width: 80px;
-        height: 80px;
-        background: linear-gradient(135deg, #ec4899, #f472b6);
-        bottom: 20%;
-        left: 8%;
-        animation: float 10s ease-in-out infinite 1s;
-    }
-
-    .float-3 {
-        width: 60px;
-        height: 60px;
-        background: linear-gradient(135deg, #10b981, #34d399);
-        top: 30%;
-        left: 15%;
-        animation: float 7s ease-in-out infinite 0.5s;
-    }
-
-    .hero-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 1.25rem;
-        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
-        border: 1px solid rgba(99, 102, 241, 0.2);
-        border-radius: 100px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: #6366f1;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        margin-bottom: 1.5rem;
-        position: relative;
-        z-index: 2;
-        backdrop-filter: blur(10px);
-    }
-
-    [data-theme="dark"] .hero-badge {
-        background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
-        color: #818cf8;
-    }
-
-    .hero-badge i {
-        font-size: 0.9rem;
-    }
-
-    .stats-hero-title {
-        font-size: 2.4rem;
-        font-weight: 800;
-        margin-bottom: 1rem;
-        background: linear-gradient(135deg, #1a1a2e 0%, #4a4a6a 50%, #1a1a2e 100%);
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-        animation: shimmer 4s linear infinite;
-        position: relative;
-        z-index: 2;
-        letter-spacing: -0.02em;
-    }
-
-    @media (max-width: 900px) {
-        .stats-hero-title {
-            font-size: 2rem;
-        }
-    }
-
-    @media (max-width: 600px) {
-        .stats-hero-title {
-            font-size: 1.8rem;
-        }
-    }
-
-    [data-theme="dark"] .stats-hero-title {
-        background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, #e2e8f0 100%);
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        background-clip: text;
-    }
-
-    .stats-hero-subtitle {
-        font-size: 1.15rem;
-        color: var(--fg-secondary);
-        max-width: 600px;
-        margin: 0 auto;
-        position: relative;
-        z-index: 2;
-        font-weight: 400;
-        line-height: 1.7;
-    }
-
-    /* === Insights Widgets === */
-    .insights-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 1.5rem;
-        margin-top: 1.5rem;
-    }
-
-    .insight-card {
-        background: var(--bg-secondary);
-        border: 1px solid var(--card-border);
-        border-radius: 20px;
-        padding: 1.5rem;
-        position: relative;
-        overflow: hidden;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
-    }
-
-    .insight-card::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.08), transparent 45%);
-        opacity: 0.6;
-        pointer-events: none;
-    }
-
-    .insight-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 1.25rem;
-        font-weight: 700;
-        font-size: 1rem;
-    }
-
-    .insight-subtitle {
-        font-size: 0.8rem;
-        color: var(--fg-secondary);
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-    }
-
-    .insight-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0.9rem;
-        position: relative;
-        z-index: 1;
-    }
-
-    .insight-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-    }
-
-    .insight-player {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .insight-player .player-name {
-        font-weight: 600;
-        font-size: 0.95rem;
-        color: var(--fg);
-    }
-
-    .insight-player .player-team {
-        font-size: 0.8rem;
-        color: var(--fg-secondary);
-    }
-
-    .impact-dots {
-        display: inline-flex;
-        gap: 6px;
-        align-items: center;
-    }
-
-    .impact-dots span {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: rgba(99, 102, 241, 0.2);
-        box-shadow: 0 0 10px rgba(99, 102, 241, 0.1);
-    }
-
-    .impact-dots span.is-hot {
-        background: linear-gradient(135deg, #6366f1, #ec4899);
-        box-shadow: 0 0 12px rgba(236, 72, 153, 0.35);
-    }
-
-    .form-group {
-        margin-bottom: 1rem;
-    }
-
-    .form-title {
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--fg-secondary);
-        margin-bottom: 0.75rem;
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-    }
-
-    .form-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        margin-bottom: 0.85rem;
-    }
-
-    .sparkline {
-        width: 110px;
-        height: 36px;
-    }
-
-    .sparkline path {
-        fill: none;
-        stroke: url(#sparkGradient);
-        stroke-width: 2.5;
-    }
-
-    .sparkline circle {
-        fill: #ec4899;
-    }
-
-    .conditions-grid {
-        display: grid;
-        gap: 1rem;
-        padding-bottom: 0.75rem;
-        padding-right: 0.5rem;
-        position: relative;
-        z-index: 1;
-    }
-
-    .conditions-title {
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        color: var(--fg-secondary);
-        letter-spacing: 0.08em;
-        margin-bottom: 0.6rem;
-    }
-
-    .condition-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        align-items: center;
-        gap: 0.75rem;
-        padding-right: 0.25rem;
-    }
-
-    .condition-meta {
-        font-size: 0.75rem;
-        color: var(--fg-secondary);
-    }
-
-    .venue-ring {
-        width: 42px;
-        height: 42px;
-        border-radius: 50%;
-        background: conic-gradient(#6366f1 0deg, rgba(99, 102, 241, 0.15) 0deg);
-        display: grid;
-        place-items: center;
-        font-size: 0.6rem;
-        color: var(--fg);
-        border: 1px solid rgba(99, 102, 241, 0.25);
-    }
-
-    .venue-ring span {
-        font-weight: 600;
-    }
-
-    .pitch-bar {
-        width: 100%;
-        height: 10px;
-        border-radius: 999px;
-        background: rgba(148, 163, 184, 0.2);
-        overflow: hidden;
-        position: relative;
-    }
-
-    .pitch-bar-fill {
-        height: 100%;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #10b981, #22d3ee);
-        position: relative;
-    }
-
-    .pitch-bar-fill::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background-image: repeating-linear-gradient(135deg,
-                rgba(255, 255, 255, 0.2),
-                rgba(255, 255, 255, 0.2) 6px,
-                transparent 6px,
-                transparent 12px);
-        opacity: 0.5;
-    }
-
-    /* Dashboard Control Panel - Glassmorphism */
-    .stats-controls {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        border-radius: 24px;
-        padding: 2rem;
-        margin-bottom: 3rem;
-        box-shadow:
-            0 4px 24px rgba(0, 0, 0, 0.06),
-            0 1px 2px rgba(0, 0, 0, 0.04);
-        animation: slideInUp 0.6s ease-out;
-    }
-
-    [data-theme="dark"] .stats-controls {
-        background: rgba(30, 30, 46, 0.8);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow:
-            0 4px 24px rgba(0, 0, 0, 0.3),
-            0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-    }
-
-    .controls-header {
-        font-size: 0.85rem;
-        font-weight: 600;
-        margin-bottom: 1.25rem;
-        color: var(--fg-secondary);
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-    }
-
-    .controls-header i {
-        color: #6366f1;
-    }
-
-    /* Toggle Button Group */
-    .view-toggle {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-        background: var(--bg-secondary);
-        padding: 0.375rem;
-        border-radius: 16px;
-        width: fit-content;
-    }
-
-    .view-btn {
-        padding: 0.875rem 1.75rem;
-        border: none;
-        border-radius: 12px;
-        background: transparent;
-        color: var(--fg-secondary);
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        font-size: 0.9rem;
-        display: flex;
-        align-items: center;
-        gap: 0.625rem;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .view-btn::before {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        opacity: 0;
-        transition: opacity 0.3s ease;
-        z-index: 0;
-    }
-
-    .view-btn span,
-    .view-btn i {
-        position: relative;
-        z-index: 1;
-    }
-
-    .view-btn:hover:not(.active) {
-        color: var(--fg);
-        background: var(--card-bg);
-    }
-
-    .view-btn.active {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        color: white;
-        box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
-    }
-
-    .view-btn.active:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
-    }
-
-    .view-btn:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-
-    /* Format Pill Selector */
-    .format-toggle {
-        display: flex;
-        gap: 0.375rem;
-        flex-wrap: wrap;
-        align-items: center;
-    }
-
-    .fmt-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.3rem;
-        padding: 0.3rem 0.85rem;
-        border-radius: 999px;
-        border: 1.5px solid var(--card-border);
-        background: var(--card-bg);
-        color: var(--fg-secondary);
-        font-size: 0.78rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.18s ease;
-        white-space: nowrap;
-    }
-
-    .fmt-btn:hover {
-        transform: translateY(-1px);
-        color: var(--fg);
-    }
-
-    .fmt-btn.active {
-        color: #fff;
-        border-color: transparent;
-    }
-
-    .fmt-btn.format-all {
-        border-color: rgba(99, 102, 241, 0.35);
-        color: #4f46e5;
-        background: rgba(99, 102, 241, 0.12);
-    }
-
-    .fmt-btn.format-all:hover {
-        border-color: rgba(99, 102, 241, 0.55);
-        background: rgba(99, 102, 241, 0.2);
-    }
-
-    .fmt-btn.format-all.active {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        box-shadow: 0 2px 10px rgba(99, 102, 241, 0.45);
-    }
-
-    .fmt-btn.format-t20 {
-        border-color: rgba(2, 132, 199, 0.38);
-        color: #0369a1;
-        background: rgba(14, 165, 233, 0.14);
-    }
-
-    .fmt-btn.format-t20:hover {
-        border-color: rgba(2, 132, 199, 0.6);
-        background: rgba(14, 165, 233, 0.24);
-    }
-
-    .fmt-btn.format-t20.active {
-        background: linear-gradient(135deg, #0284c7, #0ea5e9);
-        box-shadow: 0 2px 10px rgba(2, 132, 199, 0.45);
-    }
-
-    .fmt-btn.format-lista {
-        border-color: rgba(202, 138, 4, 0.4);
-        color: #a16207;
-        background: rgba(234, 179, 8, 0.16);
-    }
-
-    .fmt-btn.format-lista:hover {
-        border-color: rgba(202, 138, 4, 0.62);
-        background: rgba(234, 179, 8, 0.24);
-    }
-
-    .fmt-btn.format-lista.active {
-        background: linear-gradient(135deg, #ca8a04, #f59e0b);
-        box-shadow: 0 2px 10px rgba(202, 138, 4, 0.45);
-    }
-
-
-    [data-theme="dark"] .fmt-btn.format-all {
-        color: #a5b4fc;
-        background: rgba(99, 102, 241, 0.22);
-    }
-
-    [data-theme="dark"] .fmt-btn.format-t20 {
-        color: #7dd3fc;
-        background: rgba(14, 165, 233, 0.24);
-    }
-
-    [data-theme="dark"] .fmt-btn.format-lista {
-        color: #facc15;
-        background: rgba(234, 179, 8, 0.26);
-    }
-
-
-    /* Tournament Selector */
-    .tournament-selector-wrapper {
-        display: flex;
-        flex-direction: column;
-        gap: 0.625rem;
-        animation: slideInUp 0.4s ease-out;
-    }
-
-    .tournament-selector-wrapper label {
-        font-size: 0.85rem;
-        font-weight: 500;
-        color: var(--fg-secondary);
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .tournament-select {
-        padding: 1rem 1.5rem;
-        padding-right: 3rem;
-        border: 2px solid var(--card-border);
-        border-radius: 14px;
-        background: var(--card-bg);
-        color: var(--fg);
-        font-size: 0.95rem;
-        font-family: inherit;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        cursor: pointer;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 1rem center;
-        background-size: 1.25rem;
-        max-width: 400px;
-    }
-
-    .tournament-select:hover {
-        border-color: #6366f1;
-    }
-
-    .tournament-select:focus {
-        outline: none;
-        border-color: #6366f1;
-        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
-    }
-
-    /* ===== LEADERBOARD SECTION ===== */
-    .leaderboard-section {
-        margin-bottom: 4rem;
-        animation: slideInUp 0.6s ease-out 0.1s backwards;
-    }
-
-    .section-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 2rem;
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-
-    .section-title {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--fg);
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin: 0;
-    }
-
-    .section-title i {
-        color: #f59e0b;
-        font-size: 1.3rem;
-    }
-
-    .section-subtitle {
-        font-size: 0.9rem;
-        color: var(--fg-secondary);
-    }
-
-    /* Leaderboard Grid */
-    .leaderboard-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-        gap: 1.5rem;
-    }
-
-    /* Premium Leaderboard Cards */
-    .leaderboard-card {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: 20px;
-        padding: 0;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .leaderboard-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 100%;
-        background: linear-gradient(180deg, transparent 0%, rgba(99, 102, 241, 0.02) 100%);
-        opacity: 0;
-        transition: opacity 0.4s ease;
-        pointer-events: none;
-    }
-
-    .leaderboard-card:hover {
-        transform: translateY(-6px);
-        box-shadow:
-            0 20px 40px rgba(0, 0, 0, 0.08),
-            0 0 0 1px rgba(99, 102, 241, 0.1);
-        border-color: rgba(99, 102, 241, 0.3);
-    }
-
-    [data-theme="dark"] .leaderboard-card:hover {
-        box-shadow:
-            0 20px 40px rgba(0, 0, 0, 0.4),
-            0 0 40px rgba(99, 102, 241, 0.1);
-    }
-
-    .leaderboard-card:hover::before {
-        opacity: 1;
-    }
-
-    .leaderboard-header {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        padding: 1.5rem 1.75rem;
-        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--card-bg) 100%);
-        border-bottom: 1px solid var(--card-border);
-    }
-
-    .leaderboard-icon-wrapper {
-        width: 48px;
-        height: 48px;
-        border-radius: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.25rem;
-        transition: all 0.3s ease;
-    }
-
-    .leaderboard-card:nth-child(1) .leaderboard-icon-wrapper {
-        background: linear-gradient(135deg, #fef3c7, #fde68a);
-        color: #d97706;
-    }
-
-    .leaderboard-card:nth-child(2) .leaderboard-icon-wrapper {
-        background: linear-gradient(135deg, #ede9fe, #ddd6fe);
-        color: #7c3aed;
-    }
-
-    .leaderboard-card:nth-child(3) .leaderboard-icon-wrapper {
-        background: linear-gradient(135deg, #fee2e2, #fecaca);
-        color: #dc2626;
-    }
-
-    .leaderboard-card:nth-child(4) .leaderboard-icon-wrapper {
-        background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-        color: #059669;
-    }
-
-    [data-theme="dark"] .leaderboard-card:nth-child(1) .leaderboard-icon-wrapper {
-        background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.2));
-    }
-
-    [data-theme="dark"] .leaderboard-card:nth-child(2) .leaderboard-icon-wrapper {
-        background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(124, 58, 237, 0.2));
-    }
-
-    [data-theme="dark"] .leaderboard-card:nth-child(3) .leaderboard-icon-wrapper {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2));
-    }
-
-    [data-theme="dark"] .leaderboard-card:nth-child(4) .leaderboard-icon-wrapper {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.2));
-    }
-
-    .leaderboard-card:hover .leaderboard-icon-wrapper {
-        transform: scale(1.1) rotate(5deg);
-    }
-
-    .leaderboard-title {
-        font-size: 1rem;
-        font-weight: 700;
-        margin: 0;
-        color: var(--fg);
-    }
-
-    /* Leaderboard List */
-    .leaderboard-list {
-        list-style: none;
-        padding: 0.75rem;
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.375rem;
-    }
-
-    .leaderboard-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.875rem 1rem;
-        background: var(--bg-secondary);
-        border-radius: 12px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .leaderboard-item::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        height: 100%;
-        width: 3px;
-        background: linear-gradient(180deg, #6366f1, #8b5cf6);
-        opacity: 0;
-        transition: opacity 0.3s ease;
-    }
-
-    .leaderboard-item:hover {
-        background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.05));
-        transform: translateX(4px);
-    }
-
-    .leaderboard-item:hover::before {
-        opacity: 1;
-    }
-
-
-    /* Rank Badges */
-    .leaderboard-item:first-child .rank-badge {
-        background: linear-gradient(135deg, #fbbf24, #f59e0b);
-        color: white;
-        box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
-    }
-
-    .leaderboard-item:nth-child(2) .rank-badge {
-        background: linear-gradient(135deg, #9ca3af, #6b7280);
-        color: white;
-        box-shadow: 0 2px 8px rgba(156, 163, 175, 0.4);
-    }
-
-    .leaderboard-item:nth-child(3) .rank-badge {
-        background: linear-gradient(135deg, #d97706, #b45309);
-        color: white;
-        box-shadow: 0 2px 8px rgba(217, 119, 6, 0.4);
-    }
-
-    .rank-badge {
-        width: 28px;
-        height: 28px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.75rem;
-        font-weight: 700;
-        background: var(--card-border);
-        color: var(--fg-secondary);
-        flex-shrink: 0;
-    }
-
-    .player-info {
-        display: flex;
-        align-items: center;
-        gap: 0.875rem;
-        flex: 1;
-        min-width: 0;
-    }
-
-    .player-details {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-    }
-
-    .player-name {
-        font-weight: 600;
-        font-size: 0.9rem;
-        color: var(--fg);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .player-team {
-        font-size: 0.75rem;
-        color: var(--fg-secondary);
-        margin-top: 0.125rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .stat-value {
-        font-weight: 700;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 1.1rem;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-        padding-left: 1rem;
-        flex-shrink: 0;
-    }
-
-    .compare-table td {
-        vertical-align: middle;
-    }
-
-    .compare-cell {
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-    }
-
-    .compare-value {
-        font-weight: 600;
-    }
-
-    .compare-bar {
-        position: relative;
-        height: 6px;
-        border-radius: 999px;
-        background: rgba(99, 102, 241, 0.12);
-        overflow: hidden;
-    }
-
-    .compare-bar-fill {
-        position: absolute;
-        left: 0;
-        top: 0;
-        height: 100%;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #6366f1, #8b5cf6);
-    }
-
-    .compare-bar-fill.is-secondary {
-        background: linear-gradient(90deg, #f59e0b, #f97316);
-    }
-
-    /* ===== DETAILED STATS SECTION ===== */
-    .detailed-stats {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: 24px;
-        padding: 2rem;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
-        animation: slideInUp 0.6s ease-out 0.2s backwards;
-    }
-
-    [data-theme="dark"] .detailed-stats {
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
-    }
-
-    /* Premium Tab Design */
-    .stats-tabs-wrapper {
-        margin-bottom: 2rem;
-    }
-
-    .stats-tabs {
-        display: flex;
-        gap: 0.375rem;
-        background: var(--bg-secondary);
-        padding: 0.375rem;
-        border-radius: 16px;
-        overflow-x: auto;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
-        width: fit-content;
-    }
-
-    .stats-tabs::-webkit-scrollbar {
-        display: none;
-    }
-
-    .tab-btn {
-        padding: 0.875rem 1.75rem;
-        cursor: pointer;
-        background: transparent;
-        border: none;
-        font-size: 0.925rem;
-        font-weight: 600;
-        color: var(--fg-secondary);
-        border-radius: 12px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        white-space: nowrap;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        position: relative;
-    }
-
-    .tab-btn i {
-        font-size: 0.9rem;
-        transition: transform 0.3s ease;
-    }
-
-    .tab-btn:hover:not(.active) {
-        color: var(--fg);
-        background: var(--card-bg);
-    }
-
-    .tab-btn.active {
-        background: white;
-        color: #6366f1;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
-
-    [data-theme="dark"] .tab-btn.active {
-        background: var(--card-bg);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    }
-
-    .tab-btn.active i {
-        transform: scale(1.15);
-    }
-
-    .tab-panel {
-        display: none;
-        animation: slideInUp 0.4s ease-out;
-    }
-
-    .tab-panel.active {
-        display: block;
-    }
-
-    /* Export Controls */
-    .export-controls {
-        display: flex;
-        gap: 0.75rem;
-        margin-bottom: 1.5rem;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-
-    .export-btns {
-        display: flex;
-        gap: 0.625rem;
-        flex-wrap: wrap;
-    }
-
-    .team-filter-inline {
-        display: flex;
-        align-items: center;
-        gap: 0.625rem;
-    }
-
-    .team-filter-label {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--fg-secondary);
-        white-space: nowrap;
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-    }
-
-    .team-filter-label i {
-        color: #6366f1;
-        font-size: 0.75rem;
-    }
-
-    .team-filter-select {
-        padding: 0.65rem 2.25rem 0.65rem 0.875rem;
-        border: 1px solid var(--card-border);
-        border-radius: 12px;
-        background: var(--bg-secondary);
-        color: var(--fg);
-        font-size: 0.875rem;
-        font-family: 'Outfit', sans-serif;
-        font-weight: 500;
-        cursor: pointer;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 0.625rem center;
-        background-color: var(--bg-secondary);
-        outline: none;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .team-filter-select:hover {
-        border-color: #6366f1;
-    }
-
-    .team-filter-select:focus {
-        border-color: #6366f1;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-    }
-
-    .btn-export {
-        padding: 0.75rem 1.375rem;
-        background: var(--bg-secondary);
-        color: var(--fg);
-        border: 1px solid var(--card-border);
-        border-radius: 12px;
-        cursor: pointer;
-        font-weight: 600;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.875rem;
-    }
-
-    .btn-export:hover {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        color: white;
-        border-color: transparent;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
-    }
-
-    .btn-export i {
-        font-size: 0.9rem;
-    }
-
-    /* Premium Table Styling */
-    .table-wrapper {
-        overflow-x: auto;
-        border-radius: 16px;
-        border: 1px solid var(--card-border);
-        background: var(--bg-secondary);
-    }
-
-    .table-wrapper::-webkit-scrollbar {
-        height: 8px;
-    }
-
-    .table-wrapper::-webkit-scrollbar-thumb {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        border-radius: 4px;
-    }
-
-    .table-wrapper::-webkit-scrollbar-track {
-        background: var(--bg-secondary);
-        border-radius: 4px;
-    }
-
-    .stats-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-        font-size: 0.875rem;
-    }
-
-    .stats-table thead {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
-    .stats-table th {
-        background: linear-gradient(180deg, var(--card-bg) 0%, var(--bg-secondary) 100%);
-        padding: 1rem 0.875rem;
-        font-weight: 700;
-        text-align: left;
-        white-space: nowrap;
-        color: var(--fg);
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        border-bottom: 2px solid var(--card-border);
-    }
-
-    .stats-table th:first-child {
-        border-top-left-radius: 16px;
-        padding-left: 1.25rem;
-    }
-
-    .stats-table th:last-child {
-        border-top-right-radius: 16px;
-        padding-right: 1.25rem;
-    }
-
-    .stats-table td {
-        padding: 1rem 0.875rem;
-        border-bottom: 1px solid var(--card-border);
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.85rem;
-        color: var(--fg);
-        background: var(--card-bg);
-        transition: all 0.2s ease;
-    }
-
-    .stats-table td:first-child {
-        padding-left: 1.25rem;
-    }
-
-    .stats-table td:last-child {
-        padding-right: 1.25rem;
-    }
-
-    .stats-table tbody tr {
-        transition: all 0.2s ease;
-    }
-
-    .stats-table tbody tr:hover td {
-        background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.03));
-    }
-
-    .stats-table tbody tr:last-child td {
-        border-bottom: none;
-    }
-
-    .stats-table tbody tr:last-child td:first-child {
-        border-bottom-left-radius: 16px;
-    }
-
-    .stats-table tbody tr:last-child td:last-child {
-        border-bottom-right-radius: 16px;
-    }
-
-    /* Player Name Column */
-    .stats-table td:first-child,
-    .stats-table td:nth-child(2) {
-        font-family: 'Outfit', sans-serif;
-        font-weight: 600;
-    }
-
-    /* Highlight Key Stats */
-    .stats-table td:nth-child(5) {
-        color: #6366f1;
-        font-weight: 600;
-    }
-
-    /* Empty State */
-    .empty-state {
-        text-align: center;
-        padding: 6rem 2rem;
-        animation: slideInUp 0.6s ease-out;
-    }
-
-    .empty-icon-wrapper {
-        width: 120px;
-        height: 120px;
-        margin: 0 auto 2rem;
-        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        animation: pulse 4s ease-in-out infinite;
-    }
-
-    .empty-icon {
-        font-size: 3.5rem;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-    }
-
-    .empty-title {
-        font-size: 1.75rem;
-        font-weight: 700;
-        margin-bottom: 0.75rem;
-        color: var(--fg);
-    }
-
-    .empty-subtitle {
-        color: var(--fg-secondary);
-        margin-bottom: 2.5rem;
-        font-size: 1.05rem;
-        max-width: 400px;
-        margin-left: auto;
-        margin-right: auto;
-        line-height: 1.6;
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        color: white;
-        border: none;
-        padding: 1rem 2rem;
-        border-radius: 14px;
-        font-weight: 600;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
-        display: inline-flex;
-        align-items: center;
-        gap: 0.625rem;
-    }
-
-    .btn-primary:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
-    }
-
-    .btn-primary i {
-        font-size: 1rem;
-    }
-
-    /* No Data Message */
-    .no-data-message {
-        text-align: center;
-        padding: 4rem 2rem;
-        color: var(--fg-secondary);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .no-data-message i {
-        font-size: 2.5rem;
-        opacity: 0.4;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-        .stats-hero {
-            padding: 3rem 1.5rem;
-            border-radius: 20px;
-            margin-bottom: 2rem;
-        }
-
-        .stats-hero-title {
-            font-size: 2.25rem;
-        }
-
-        .stats-hero-subtitle {
-            font-size: 1rem;
-        }
-
-        .float-element {
-            display: none;
-        }
-
-        .stats-controls {
-            padding: 1.5rem;
-            border-radius: 20px;
-        }
-
-        .view-toggle {
-            flex-direction: column;
-            width: 100%;
-        }
-
-        .view-btn {
-            justify-content: center;
-            width: 100%;
-        }
-
-        .leaderboard-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .detailed-stats {
-            padding: 1.5rem;
-            border-radius: 20px;
-        }
-
-        .stats-tabs {
-            width: 100%;
-        }
-
-        .tab-btn {
-            flex: 1;
-            justify-content: center;
-            padding: 0.75rem 1rem;
-        }
-
-        .stats-table {
-            font-size: 0.75rem;
-        }
-
-        .stats-table th,
-        .stats-table td {
-            padding: 0.625rem 0.5rem;
-        }
-
-        .export-controls {
-            flex-direction: column;
-        }
-
-        .btn-export {
-            width: 100%;
-            justify-content: center;
-        }
-
-        .section-title {
-            font-size: 1.25rem;
-        }
-    }
-
-    /* Animation delay utilities */
-    .delay-1 {
-        animation-delay: 0.1s;
-    }
-
-    .delay-2 {
-        animation-delay: 0.2s;
-    }
-
-    .delay-3 {
-        animation-delay: 0.3s;
-    }
-
-    .delay-4 {
-        animation-delay: 0.4s;
-    }
-
-    /* ===== REDESIGNED CONDITIONS LENS ===== */
-    .conditions-lens-body {
-        display: flex;
-        flex-direction: column;
-        gap: 1.25rem;
-        position: relative;
-        z-index: 1;
-    }
-
-    .conditions-section-title {
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--fg-secondary);
-        margin-bottom: 0.625rem;
-        display: flex;
-        align-items: center;
-        gap: 0.375rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid var(--card-border);
-    }
-
-    .venue-item {
-        display: flex;
-        align-items: center;
-        gap: 0.625rem;
-        padding: 0.45rem 0;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.08);
-    }
-
-    .venue-item:last-child {
-        border-bottom: none;
-        padding-bottom: 0;
-    }
-
-    .venue-icon {
-        width: 28px;
-        height: 28px;
-        border-radius: 7px;
-        background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.08));
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #6366f1;
-        font-size: 0.75rem;
-        flex-shrink: 0;
-    }
-
-    .venue-info {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .venue-name {
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: var(--fg);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .venue-meta {
-        font-size: 0.68rem;
-        color: var(--fg-secondary);
-        margin-top: 0.1rem;
-    }
-
-    .venue-runs-badge {
-        padding: 0.2rem 0.55rem;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        color: white;
-        border-radius: 100px;
-        font-size: 0.72rem;
-        font-weight: 700;
-        white-space: nowrap;
-        flex-shrink: 0;
-        font-family: 'JetBrains Mono', monospace;
-    }
-
-    .pitch-item {
-        margin-bottom: 0.6rem;
-    }
-
-    .pitch-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .pitch-header-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.3rem;
-    }
-
-    .pitch-label {
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: var(--fg);
-    }
-
-    .pitch-runs-label {
-        font-size: 0.72rem;
-        color: var(--fg-secondary);
-        font-family: 'JetBrains Mono', monospace;
-    }
-
-    /* Filter summary bar */
-    .filter-summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 1rem;
-        padding: 0.6rem 1rem;
-        background: var(--bg-secondary);
-        border-radius: 10px;
-        border: 1px solid var(--card-border);
-        font-size: 0.83rem;
-        color: var(--fg-secondary);
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-
-    .filter-summary-count {
-        font-weight: 500;
-        color: var(--fg-secondary);
-    }
-
-    .filter-summary-count strong {
-        color: #6366f1;
-        font-weight: 700;
-    }
-
-    .btn-clear-filters {
-        padding: 0.3rem 0.75rem;
-        background: rgba(239, 68, 68, 0.08);
-        color: #ef4444;
-        border: 1px solid rgba(239, 68, 68, 0.2);
-        border-radius: 7px;
-        cursor: pointer;
-        font-size: 0.75rem;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        display: none;
-        align-items: center;
-        gap: 0.35rem;
-        font-family: 'Outfit', sans-serif;
-    }
-
-    .btn-clear-filters:hover {
-        background: rgba(239, 68, 68, 0.15);
-    }
-
-    /* Sortable headers */
-    .sortable {
-        cursor: pointer;
-        user-select: none;
-        white-space: nowrap;
-    }
-
-    .sortable:hover {
-        color: #6366f1 !important;
-    }
-
-    .sortable .sort-icon {
-        opacity: 0.3;
-        font-size: 0.65rem;
-        margin-left: 0.25rem;
-        transition: opacity 0.2s ease;
-    }
-
-    .sortable:hover .sort-icon,
-    .sortable.sort-asc .sort-icon,
-    .sortable.sort-desc .sort-icon {
-        opacity: 1;
-        color: #6366f1;
-    }
-
-    /* Tab count badges */
-    .tab-count {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(99, 102, 241, 0.1);
-        color: #6366f1;
-        font-size: 0.68rem;
-        font-weight: 700;
-        border-radius: 100px;
-        padding: 0.1rem 0.45rem;
-        min-width: 20px;
-        transition: all 0.3s ease;
-    }
-
-    .tab-btn.active .tab-count {
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
-    }
-
-    /* Redesigned detailed stats section */
-    .detailed-stats-inner-header {
-        display: flex;
-        align-items: center;
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-    }
-
-    .stats-tabs-wrapper {
-        flex: 1;
-    }
+/* ===== STATISTICS PAGE — REDESIGN ===== */
+.stats-page {
+    --c1: #6366f1;
+    --c2: #8b5cf6;
+    --c3: #ec4899;
+    --cgold: #f59e0b;
+    --cgreen: #10b981;
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 0 1.25rem 4rem;
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+/* ===== STICKY CONTROLS BAR ===== */
+.stats-bar {
+    position: sticky;
+    top: var(--nav-height, 64px);
+    z-index: 80;
+    background: var(--bg);
+    border-bottom: 1px solid var(--card-border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.stats-bar-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--fg);
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-right: 0.25rem;
+}
+
+.stats-bar-title em {
+    color: var(--c1);
+    font-style: normal;
+}
+
+.stats-bar-spacer { flex: 1; min-width: 8px; }
+
+/* Pill toggle group */
+.pill-group {
+    display: inline-flex;
+    background: var(--bg-secondary);
+    border: 1px solid var(--card-border);
+    border-radius: 100px;
+    padding: 3px;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.pill-btn {
+    padding: 0.28rem 0.85rem;
+    border-radius: 100px;
+    border: none;
+    background: transparent;
+    color: var(--fg-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    font-family: inherit;
+    line-height: 1.4;
+}
+
+.pill-btn.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+[data-theme="dark"] .pill-btn.active {
+    background: var(--c1);
+}
+
+.pill-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.bar-select {
+    appearance: none;
+    padding: 0.32rem 2rem 0.32rem 0.8rem;
+    border: 1px solid var(--card-border);
+    border-radius: 100px;
+    background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 0.65rem center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--fg);
+    cursor: pointer;
+    font-family: inherit;
+    max-width: 220px;
+}
+
+/* ===== KPI STRIP ===== */
+.kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.875rem;
+    margin-bottom: 1.75rem;
+}
+
+@media (max-width: 860px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .kpi-strip { grid-template-columns: 1fr 1fr; } }
+
+.kpi-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1.1rem 1.25rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    opacity: 0.07;
+    transform: translate(25%, -25%);
+}
+
+.kpi-card:nth-child(1)::before { background: var(--c1); }
+.kpi-card:nth-child(2)::before { background: var(--cgreen); }
+.kpi-card:nth-child(3)::before { background: var(--cgold); }
+.kpi-card:nth-child(4)::before { background: var(--c3); }
+
+.kpi-icon {
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+}
+
+.kpi-card:nth-child(1) .kpi-icon { background: rgba(99,102,241,.12); color: var(--c1); }
+.kpi-card:nth-child(2) .kpi-icon { background: rgba(16,185,129,.12); color: var(--cgreen); }
+.kpi-card:nth-child(3) .kpi-icon { background: rgba(245,158,11,.12); color: var(--cgold); }
+.kpi-card:nth-child(4) .kpi-icon { background: rgba(236,72,153,.12); color: var(--c3); }
+
+.kpi-value {
+    font-size: 1.9rem;
+    font-weight: 800;
+    color: var(--fg);
+    line-height: 1;
+    margin-bottom: 0.35rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.kpi-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--fg-secondary);
+}
+
+.kpi-sub {
+    font-size: 0.7rem;
+    color: var(--fg-secondary);
+    margin-top: 0.2rem;
+}
+
+/* ===== SECTION WRAPPER ===== */
+.stats-section { margin-bottom: 2rem; }
+
+.section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+
+.section-head h2 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--fg);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+}
+
+.section-head h2 i { color: var(--c1); font-size: 0.85rem; }
+
+.section-sub {
+    font-size: 0.75rem;
+    color: var(--fg-secondary);
+}
+
+/* ===== LEADERBOARD GRID ===== */
+.lb-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 1080px) { .lb-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px)  { .lb-grid { grid-template-columns: 1fr; } }
+
+.lb-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.lb-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--card-border);
+    background: var(--bg-secondary);
+}
+
+.lb-icon {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem;
+    flex-shrink: 0;
+}
+
+.lb-icon.runs    { background: rgba(99,102,241,.12); color: var(--c1); }
+.lb-icon.wickets { background: rgba(236,72,153,.12); color: var(--c3); }
+.lb-icon.figures { background: rgba(239,68,68,.12);  color: #ef4444; }
+.lb-icon.sr      { background: rgba(245,158,11,.12); color: var(--cgold); }
+.lb-icon.avg     { background: rgba(16,185,129,.12); color: var(--cgreen); }
+
+.lb-card-title { font-size: 0.83rem; font-weight: 700; color: var(--fg); }
+.lb-card-sub   { font-size: 0.65rem; color: var(--fg-secondary); margin-top: 0.05rem; }
+
+.lb-list { padding: 0.3rem 0; }
+
+.lb-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.45rem 1rem;
+    transition: background 0.12s;
+}
+
+.lb-row:hover { background: var(--bg-secondary); }
+
+.lb-row:first-child {
+    background: linear-gradient(90deg, rgba(99,102,241,.05) 0%, transparent 100%);
+}
+
+.rank-chip {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.62rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    color: var(--fg-secondary);
+    border: 1px solid var(--card-border);
+}
+
+.rank-chip.gold   { background: linear-gradient(135deg,#f59e0b,#fbbf24); color:#fff; border:none; }
+.rank-chip.silver { background: linear-gradient(135deg,#94a3b8,#cbd5e1); color:#fff; border:none; }
+.rank-chip.bronze { background: linear-gradient(135deg,#92400e,#d97706); color:#fff; border:none; }
+
+.lb-info { flex: 1; min-width: 0; }
+.lb-name { font-size: 0.82rem; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-team { font-size: 0.65rem; color: var(--fg-secondary); margin-top: 0.05rem; }
+
+.lb-val {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--c1);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+[data-theme="dark"] .lb-val { color: #818cf8; }
+
+/* ===== INSIGHTS ===== */
+.insights-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 1080px) { .insights-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px)  { .insights-grid { grid-template-columns: 1fr; } }
+
+.insight-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.insight-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--card-border);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+}
+
+.insight-head-title { font-size: 0.83rem; font-weight: 700; color: var(--fg); }
+.insight-head-sub   { font-size: 0.65rem; color: var(--fg-secondary); }
+
+.insight-body { padding: 0.75rem 1rem; flex: 1; overflow-y: auto; max-height: 300px; }
+
+/* Impact */
+.impact-row {
+    display: flex; align-items: center; gap: 0.55rem;
+    padding: 0.35rem 0;
+}
+.impact-row:not(:last-child) { border-bottom: 1px solid var(--card-border); }
+.impact-player { flex: 1; min-width: 0; }
+.impact-player-name { font-size: 0.78rem; font-weight: 600; color: var(--fg); }
+.impact-player-team { font-size: 0.63rem; color: var(--fg-secondary); }
+.impact-bar-wrap { width: 72px; flex-shrink: 0; }
+.impact-bar-bg  { height: 5px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden; }
+.impact-bar-fill { height: 100%; background: linear-gradient(90deg, var(--c1), var(--c3)); border-radius: 3px; width: 0; transition: width 0.6s ease; }
+.impact-score { font-size: 0.72rem; font-weight: 700; color: var(--c1); width: 28px; text-align: right; flex-shrink: 0; }
+
+/* Form */
+.form-group-label {
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--fg-secondary);
+    margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.3rem;
+}
+.form-row {
+    display: flex; align-items: center; gap: 0.55rem;
+    padding: 0.3rem 0;
+}
+.form-row:not(:last-child) { border-bottom: 1px solid var(--card-border); }
+.form-player { flex: 1; min-width: 0; }
+.form-player-name { font-size: 0.75rem; font-weight: 600; color: var(--fg); }
+.form-player-team { font-size: 0.62rem; color: var(--fg-secondary); }
+.sparkline { flex-shrink: 0; width: 80px; height: 28px; overflow: visible; }
+
+/* Conditions */
+.cond-label {
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--fg-secondary);
+    margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.3rem;
+}
+.venue-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; }
+.venue-row:not(:last-child) { border-bottom: 1px solid var(--card-border); }
+.venue-name  { flex: 1; font-size: 0.75rem; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.venue-meta  { font-size: 0.62rem; color: var(--fg-secondary); flex-shrink: 0; }
+.venue-badge { font-size: 0.68rem; font-weight: 700; background: linear-gradient(135deg,var(--c1),var(--c2)); color:#fff; padding: 0.12rem 0.5rem; border-radius: 100px; flex-shrink: 0; }
+
+.pitch-row { margin-bottom: 0.5rem; }
+.pitch-row:last-child { margin-bottom: 0; }
+.pitch-row-head { display: flex; justify-content: space-between; margin-bottom: 0.2rem; }
+.pitch-row-name { font-size: 0.75rem; font-weight: 500; color: var(--fg); }
+.pitch-row-val  { font-size: 0.65rem; color: var(--fg-secondary); }
+.pitch-bg   { height: 5px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden; }
+.pitch-fill { height: 100%; background: linear-gradient(90deg, var(--c1), var(--c2)); border-radius: 3px; width: 0; transition: width 0.6s ease; }
+
+/* ===== TWO-COL LAYOUT ===== */
+.two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+.content-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.content-head {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--card-border);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+}
+
+.content-head-title {
+    font-size: 0.83rem; font-weight: 700; color: var(--fg);
+    display: flex; align-items: center; gap: 0.4rem;
+}
+
+.content-head-title i { color: var(--c1); font-size: 0.8rem; }
+.content-body { padding: 0.75rem 1rem; flex: 1; overflow-y: auto; max-height: 360px; }
+
+/* Partnership mini table */
+.p-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.p-table th {
+    padding: 0.3rem 0.4rem; text-align: left; white-space: nowrap;
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--fg-secondary);
+    border-bottom: 1px solid var(--card-border);
+}
+.p-table td {
+    padding: 0.45rem 0.4rem; color: var(--fg);
+    border-bottom: 1px solid var(--card-border);
+    vertical-align: middle;
+}
+.p-table tr:last-child td { border-bottom: none; }
+.p-table tr:hover td { background: var(--bg-secondary); }
+.p-names { font-weight: 600; }
+.p-contrib { font-size: 0.63rem; color: var(--fg-secondary); margin-top: 0.05rem; }
+.p-runs { font-weight: 700; color: var(--c1); }
+
+/* ===== PLAYER COMPARISON ===== */
+.comp-roles { display: flex; gap: 0.5rem; margin-bottom: 0.875rem; }
+.comp-role-btn {
+    flex: 1; padding: 0.38rem; border: 1px solid var(--card-border);
+    border-radius: 8px; background: var(--bg-secondary); color: var(--fg-secondary);
+    font-size: 0.75rem; font-weight: 600; cursor: pointer; font-family: inherit;
+    transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+}
+.comp-role-btn.active { background: var(--c1); color: #fff; border-color: var(--c1); }
+
+.comp-selects { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.625rem; }
+.comp-sel {
+    width: 100%; padding: 0.38rem 0.6rem;
+    border: 1px solid var(--card-border); border-radius: 8px;
+    background: var(--bg-secondary); color: var(--fg);
+    font-size: 0.75rem; font-family: inherit; cursor: pointer;
+}
+
+.comp-go-btn {
+    width: 100%; padding: 0.45rem;
+    background: var(--c1); color: #fff; border: none; border-radius: 8px;
+    font-size: 0.8rem; font-weight: 700; cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+    margin-bottom: 1rem; transition: opacity 0.15s;
+}
+.comp-go-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Comparison results */
+.comp-header-row {
+    display: grid; grid-template-columns: 80px 1fr 1fr;
+    gap: 0.35rem; margin-bottom: 0.4rem;
+}
+.comp-player-col { font-size: 0.72rem; font-weight: 700; }
+.comp-player-col.p1 { color: var(--c1); }
+.comp-player-col.p2 { color: var(--c3); }
+.comp-player-team { font-size: 0.6rem; color: var(--fg-secondary); font-weight: 400; }
+.comp-section-label {
+    font-size: 0.63rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--fg-secondary);
+    margin: 0.75rem 0 0.35rem; display: flex; align-items: center; gap: 0.3rem;
+}
+.comp-row {
+    display: grid; grid-template-columns: 80px 1fr 1fr;
+    gap: 0.35rem; align-items: center; margin-bottom: 0.4rem;
+}
+.comp-key { font-size: 0.67rem; color: var(--fg-secondary); font-weight: 600; text-align: right; padding-right: 0.35rem; }
+.comp-val-wrap { display: flex; flex-direction: column; gap: 2px; }
+.comp-val { font-size: 0.75rem; font-weight: 700; color: var(--fg); line-height: 1.2; }
+.comp-val.winner { color: var(--c1); }
+.comp-val.winner.p2 { color: var(--c3); }
+.comp-bar-bg { height: 4px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden; }
+.comp-bar-fill { height: 100%; background: linear-gradient(90deg,var(--c1),var(--c2)); border-radius: 2px; }
+.comp-bar-fill.alt { background: linear-gradient(90deg,var(--c3),#f472b6); }
+
+/* ===== DETAILED STATS CARD ===== */
+.detailed-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.stats-tabs-bar {
+    display: flex; align-items: center;
+    padding: 0 1rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--card-border);
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.stats-tabs-bar::-webkit-scrollbar { display: none; }
+
+.stab {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.7rem 1.1rem;
+    border: none; background: transparent;
+    color: var(--fg-secondary); font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: all 0.15s; white-space: nowrap;
+}
+.stab:hover { color: var(--fg); }
+.stab.active { color: var(--c1); border-bottom-color: var(--c1); }
+
+.tab-badge {
+    background: var(--card-border); color: var(--fg-secondary);
+    font-size: 0.6rem; font-weight: 700;
+    padding: 0.1rem 0.4rem; border-radius: 100px;
+}
+.stab.active .tab-badge { background: var(--c1); color: #fff; }
+
+.table-controls {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.6rem 1rem; border-bottom: 1px solid var(--card-border);
+    flex-wrap: wrap;
+}
+
+.tbl-search {
+    flex: 1; min-width: 140px;
+    padding: 0.35rem 0.75rem 0.35rem 2rem;
+    border: 1px solid var(--card-border); border-radius: 8px;
+    background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' fill='none' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='8' stroke='%23888' stroke-width='2'/%3E%3Cpath d='m21 21-4.35-4.35' stroke='%23888' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat left 0.55rem center;
+    font-size: 0.75rem; color: var(--fg); font-family: inherit;
+}
+.tbl-search::placeholder { color: var(--fg-secondary); }
+
+.tbl-team-sel {
+    appearance: none;
+    padding: 0.35rem 1.8rem 0.35rem 0.7rem;
+    border: 1px solid var(--card-border); border-radius: 8px;
+    background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 0.55rem center;
+    font-size: 0.75rem; color: var(--fg); font-family: inherit; cursor: pointer;
+}
+
+.tbl-count { font-size: 0.7rem; color: var(--fg-secondary); white-space: nowrap; }
+
+.export-grp { display: flex; gap: 0.25rem; margin-left: auto; flex-shrink: 0; }
+.btn-exp {
+    display: flex; align-items: center; gap: 0.25rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--card-border); border-radius: 7px;
+    background: var(--bg-secondary); color: var(--fg-secondary);
+    font-size: 0.68rem; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: all 0.15s; white-space: nowrap;
+}
+.btn-exp:hover { color: var(--c1); border-color: var(--c1); background: rgba(99,102,241,.06); }
+
+.table-panel { display: none; }
+.table-panel.active { display: block; }
+
+.tbl-wrap { overflow-x: auto; max-height: 460px; overflow-y: auto; }
+
+.stats-tbl {
+    width: 100%; border-collapse: collapse; font-size: 0.77rem;
+}
+
+.stats-tbl thead {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--bg-secondary);
+}
+
+.stats-tbl th {
+    padding: 0.55rem 0.8rem;
+    text-align: left; white-space: nowrap;
+    color: var(--fg-secondary);
+    font-size: 0.62rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 2px solid var(--card-border);
+    cursor: pointer; user-select: none;
+    transition: color 0.12s;
+}
+.stats-tbl th:hover { color: var(--c1); }
+.stats-tbl th.sort-asc,
+.stats-tbl th.sort-desc { color: var(--c1); }
+
+.sa { font-size: 0.55rem; margin-left: 0.2rem; opacity: 0.35; }
+.sort-asc .sa, .sort-desc .sa { opacity: 1; }
+
+.stats-tbl td {
+    padding: 0.48rem 0.8rem;
+    color: var(--fg); border-bottom: 1px solid var(--card-border);
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.stats-tbl tbody tr:hover td { background: var(--bg-secondary); }
+.stats-tbl tbody tr:last-child td { border-bottom: none; }
+.stats-tbl td.kc { font-weight: 700; color: var(--c1); }
+[data-theme="dark"] .stats-tbl td.kc { color: #818cf8; }
+
+/* ===== EMPTY / NO DATA ===== */
+.empty-state {
+    text-align: center; padding: 4rem 2rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border); border-radius: 16px;
+}
+.empty-ico { font-size: 2.8rem; margin-bottom: 1rem; opacity: 0.25; }
+.empty-title { font-size: 1.15rem; font-weight: 700; color: var(--fg); margin-bottom: 0.5rem; }
+.empty-text { font-size: 0.88rem; color: var(--fg-secondary); max-width: 380px; margin: 0 auto 1.5rem; line-height: 1.6; }
+.btn-go {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.5rem 1.25rem; background: var(--accent); color: #fff;
+    border-radius: 8px; text-decoration: none; font-size: 0.83rem; font-weight: 600;
+}
+
+.no-data {
+    text-align: center; padding: 1.5rem 1rem;
+    color: var(--fg-secondary); font-size: 0.8rem;
+}
+.no-data i { display: block; font-size: 1.6rem; margin-bottom: 0.4rem; opacity: 0.3; }
+
+.loading-spin { text-align: center; padding: 2rem; color: var(--fg-secondary); font-size: 0.82rem; }
+.loading-spin i { display: block; font-size: 1.4rem; margin-bottom: 0.4rem; color: var(--c1); }
+
+.divider { margin: 0.5rem 0; border: none; border-top: 1px solid var(--card-border); }
+
+@media (max-width: 600px) {
+    .stats-bar-title { font-size: 0.88rem; }
+    .kpi-value { font-size: 1.5rem; }
+    .table-controls { gap: 0.35rem; }
+    .export-grp { margin-left: 0; }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="stats-page">
 
-    <!-- Hero Section -->
-    <div class="stats-hero">
-        <div class="float-element float-1"></div>
-        <div class="float-element float-2"></div>
-        <div class="float-element float-3"></div>
+    <!-- STICKY CONTROLS BAR -->
+    <div class="stats-bar">
+        <div class="stats-bar-title">Statistics <em>Hub</em></div>
 
-        <div class="hero-badge">
-            <i class="fas fa-chart-line"></i>
-            <span>Real-Time Analytics</span>
-        </div>
-        <h1 class="stats-hero-title">Statistics Hub</h1>
-        <p class="stats-hero-subtitle">Track performance, analyze trends, and discover your top performers with
-            comprehensive cricket statistics</p>
-    </div>
-
-    <!-- Stats Controls -->
-    <div class="stats-controls">
-        <div class="controls-header">
-            <i class="fas fa-sliders-h"></i>
-            <span>Dashboard View</span>
-        </div>
-
-        <div class="view-toggle">
-            <button class="view-btn {% if view_type == 'overall' or not view_type %}active{% endif %}"
-                onclick="switchView('overall')">
-                <i class="fas fa-globe"></i>
-                <span>Overall Statistics</span>
-            </button>
-            <button class="view-btn {% if view_type == 'tournament' %}active{% endif %}"
+        <div class="pill-group">
+            <button class="pill-btn {% if view_type == 'overall' or not view_type %}active{% endif %}"
+                onclick="switchView('overall')">Overall</button>
+            <button class="pill-btn {% if view_type == 'tournament' %}active{% endif %}"
                 onclick="switchView('tournament')"
-                {% if not tournaments %}disabled title="Create a tournament first to use this view"{% endif %}>
-                <i class="fas fa-trophy"></i>
-                <span>Tournament Stats</span>
-            </button>
+                {% if not tournaments %}disabled title="No tournaments yet"{% endif %}>Tournament</button>
         </div>
 
-        <!-- Format Selector -->
-        <div class="format-toggle">
-            <button class="fmt-btn format-all {% if not match_format %}active{% endif %}"
-                onclick="selectFormat('')">
-                <i class="fas fa-layer-group"></i><span>All</span>
-            </button>
-            <button class="fmt-btn format-t20 {% if match_format == 'T20' %}active{% endif %}"
-                onclick="selectFormat('T20')">
-                <span>T20</span>
-            </button>
-            <button class="fmt-btn format-lista {% if match_format == 'ListA' %}active{% endif %}"
-                onclick="selectFormat('ListA')">
-                <span>List A</span>
-            </button>
-
-        </div>
-
-        {% if view_type == 'tournament' or tournaments %}
-        <div class="tournament-selector-wrapper{% if view_type != 'tournament' %} hidden{% endif %}"
-            id="tournament-selector">
-            <label for="tournament-select">
-                <i class="fas fa-filter"></i> Select Tournament
-            </label>
-            <select id="tournament-select" class="tournament-select" onchange="selectTournament(this.value)">
-                <option value="">Choose a tournament...</option>
-                {% for t in tournaments %}
-                <option value="{{ t.id }}" {% if tournament_id==t.id %}selected{% endif %}>
-                    {{ t.name }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
+        {% if tournaments %}
+        <select class="bar-select" id="tournament-select" onchange="selectTournament(this.value)"
+            {% if view_type != 'tournament' %}style="display:none"{% endif %}>
+            <option value="">Select tournament…</option>
+            {% for t in tournaments %}
+            <option value="{{ t.id }}" {% if tournament_id == t.id %}selected{% endif %}>{{ t.name }}</option>
+            {% endfor %}
+        </select>
         {% endif %}
+
+        <div class="stats-bar-spacer"></div>
+
+        <div class="pill-group">
+            <button class="pill-btn {% if not match_format %}active{% endif %}" onclick="selectFormat('')">All</button>
+            <button class="pill-btn {% if match_format == 'T20' %}active{% endif %}" onclick="selectFormat('T20')">T20</button>
+            <button class="pill-btn {% if match_format == 'ListA' %}active{% endif %}" onclick="selectFormat('ListA')">List A</button>
+        </div>
     </div>
 
     {% if not has_stats %}
-    <!-- Empty State -->
+    <!-- EMPTY STATE -->
     <div class="empty-state">
-        <div class="empty-icon-wrapper">
-            <i class="fas fa-chart-line empty-icon"></i>
-        </div>
-        <h2 class="empty-title">No Statistics Available</h2>
-        <p class="empty-subtitle">
+        <div class="empty-ico"><i class="fas fa-chart-bar" style="color:var(--c1)"></i></div>
+        <h2 class="empty-title">No Statistics Yet</h2>
+        <p class="empty-text">
             {% if view_type == 'tournament' and not tournament_id %}
-            Please select a tournament to view statistics.
+                Select a tournament above to view its statistics.
             {% elif view_type == 'tournament' %}
-            This tournament doesn't have any match data yet. Simulate some matches to see statistics!
+                This tournament has no match data yet. Simulate some matches to get started!
             {% else %}
-            Start by simulating matches or creating tournaments to generate statistics.
+                Simulate matches or create tournaments to generate statistics.
             {% endif %}
         </p>
-        <a href="{{ url_for('home') }}" class="btn-primary">
-            <i class="fas fa-home"></i>
-            <span>Go to Dashboard</span>
+        <a href="{{ url_for('home') }}" class="btn-go">
+            <i class="fas fa-home"></i> Go to Dashboard
         </a>
     </div>
 
     {% else %}
 
-    <!-- Leaderboards -->
-    {% if leaderboards and (leaderboards.most_runs or leaderboards.most_wickets or leaderboards.best_bowling_figures or
-    leaderboards.highest_sr or
-    leaderboards.best_average) %}
-    <section class="leaderboard-section">
-        <div class="section-header">
-            <h2 class="section-title">
-                <i class="fas fa-crown"></i>
-                Top Performers
-            </h2>
-            <span class="section-subtitle">Leading players across all categories</span>
+    <!-- KPI STRIP -->
+    <div class="kpi-strip">
+        <div class="kpi-card">
+            <div class="kpi-icon"><i class="fas fa-users"></i></div>
+            <div class="kpi-value">{{ batting_stats | length }}</div>
+            <div class="kpi-label">Players</div>
+            <div class="kpi-sub">with batting records</div>
         </div>
+        <div class="kpi-card">
+            <div class="kpi-icon"><i class="fas fa-baseball-ball"></i></div>
+            <div class="kpi-value" id="kpi-runs">—</div>
+            <div class="kpi-label">Total Runs</div>
+            <div class="kpi-sub" id="kpi-innings-sub">across all innings</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon"><i class="fas fa-bowling-ball"></i></div>
+            <div class="kpi-value" id="kpi-wickets">—</div>
+            <div class="kpi-label">Total Wickets</div>
+            <div class="kpi-sub">by {{ bowling_stats | length }} bowlers</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon"><i class="fas fa-crown"></i></div>
+            <div class="kpi-value" id="kpi-top-name" style="font-size:1rem;line-height:1.3">—</div>
+            <div class="kpi-label">Top Scorer</div>
+            <div class="kpi-sub" id="kpi-top-runs"></div>
+        </div>
+    </div>
 
-        <div class="leaderboard-grid">
+    <!-- LEADERBOARDS -->
+    {% if leaderboards and (leaderboards.most_runs or leaderboards.most_wickets or leaderboards.best_bowling_figures or leaderboards.highest_sr or leaderboards.best_average) %}
+    <div class="stats-section">
+        <div class="section-head">
+            <h2><i class="fas fa-crown"></i> Top Performers</h2>
+            <span class="section-sub">Rankings across all key categories</span>
+        </div>
+        <div class="lb-grid">
+
             {% if leaderboards.most_runs %}
-            <div class="leaderboard-card">
-                <div class="leaderboard-header">
-                    <div class="leaderboard-icon-wrapper">
-                        <i class="fa-solid fa-trophy"></i>
-                    </div>
-                    <h3 class="leaderboard-title">Top Run Scorers</h3>
+            <div class="lb-card">
+                <div class="lb-card-head">
+                    <div class="lb-icon runs"><i class="fas fa-trophy"></i></div>
+                    <div><div class="lb-card-title">Top Run Scorers</div></div>
                 </div>
-                <ul class="leaderboard-list">
+                <div class="lb-list">
                     {% for p in leaderboards.most_runs %}
-                    <li class="leaderboard-item">
-                        <div class="player-info">
-                            <span class="rank-badge">{{ loop.index }}</span>
-                            <div class="player-details">
-                                <span class="player-name">{{ p.player }}</span>
-                                <span class="player-team">{{ p.team }}</span>
-                            </div>
+                    <div class="lb-row">
+                        <span class="rank-chip {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">{{ loop.index }}</span>
+                        <div class="lb-info">
+                            <div class="lb-name">{{ p.player }}</div>
+                            <div class="lb-team">{{ p.team }}</div>
                         </div>
-                        <span class="stat-value">{{ p.runs }}</span>
-                    </li>
+                        <span class="lb-val">{{ p.runs }}</span>
+                    </div>
                     {% endfor %}
-                </ul>
+                </div>
             </div>
             {% endif %}
 
             {% if leaderboards.most_wickets %}
-            <div class="leaderboard-card">
-                <div class="leaderboard-header">
-                    <div class="leaderboard-icon-wrapper">
-                        <i class="fa-solid fa-medal"></i>
-                    </div>
-                    <h3 class="leaderboard-title">Top Wicket Takers</h3>
+            <div class="lb-card">
+                <div class="lb-card-head">
+                    <div class="lb-icon wickets"><i class="fas fa-medal"></i></div>
+                    <div><div class="lb-card-title">Top Wicket Takers</div></div>
                 </div>
-                <ul class="leaderboard-list">
+                <div class="lb-list">
                     {% for p in leaderboards.most_wickets %}
-                    <li class="leaderboard-item">
-                        <div class="player-info">
-                            <span class="rank-badge">{{ loop.index }}</span>
-                            <div class="player-details">
-                                <span class="player-name">{{ p.player }}</span>
-                                <span class="player-team">{{ p.team }}</span>
-                            </div>
+                    <div class="lb-row">
+                        <span class="rank-chip {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">{{ loop.index }}</span>
+                        <div class="lb-info">
+                            <div class="lb-name">{{ p.player }}</div>
+                            <div class="lb-team">{{ p.team }}</div>
                         </div>
-                        <span class="stat-value">{{ p.wickets }}</span>
-                    </li>
+                        <span class="lb-val">{{ p.wickets }}</span>
+                    </div>
                     {% endfor %}
-                </ul>
+                </div>
             </div>
             {% endif %}
 
             {% if leaderboards.best_bowling_figures %}
-            <div class="leaderboard-card">
-                <div class="leaderboard-header">
-                    <div class="leaderboard-icon-wrapper">
-                        <i class="fa-solid fa-fire"></i>
-                    </div>
-                    <h3 class="leaderboard-title">Best Bowling Figures</h3>
+            <div class="lb-card">
+                <div class="lb-card-head">
+                    <div class="lb-icon figures"><i class="fas fa-fire"></i></div>
+                    <div><div class="lb-card-title">Best Bowling Figures</div></div>
                 </div>
-                <ul class="leaderboard-list">
+                <div class="lb-list">
                     {% for fig in leaderboards.best_bowling_figures %}
-                    <li class="leaderboard-item">
-                        <div class="player-info">
-                            <span class="rank-badge">{{ loop.index }}</span>
-                            <div class="player-details">
-                                <span class="player-name">{{ fig.player }}</span>
-                                <span class="player-team">{{ fig.team }} · vs {{ fig.opponent }} · {{ fig.match_date
-                                    }}</span>
-                            </div>
+                    <div class="lb-row">
+                        <span class="rank-chip {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">{{ loop.index }}</span>
+                        <div class="lb-info">
+                            <div class="lb-name">{{ fig.player }}</div>
+                            <div class="lb-team">{{ fig.team }} · vs {{ fig.opponent }} · {{ fig.match_date }}</div>
                         </div>
-                        <span class="stat-value">{{ fig.figures }}</span>
-                    </li>
+                        <span class="lb-val">{{ fig.figures }}</span>
+                    </div>
                     {% endfor %}
-                </ul>
+                </div>
             </div>
             {% endif %}
 
             {% if leaderboards.highest_sr %}
-            <div class="leaderboard-card">
-                <div class="leaderboard-header">
-                    <div class="leaderboard-icon-wrapper">
-                        <i class="fa-solid fa-bolt"></i>
+            <div class="lb-card">
+                <div class="lb-card-head">
+                    <div class="lb-icon sr"><i class="fas fa-bolt"></i></div>
+                    <div>
+                        <div class="lb-card-title">Highest Strike Rate</div>
+                        <div class="lb-card-sub">Min 50 balls faced</div>
                     </div>
-                    <h3 class="leaderboard-title">Highest Strike Rates</h3>
-                    <span class="leaderboard-subtitle"
-                        style="font-size: 0.75rem; color: var(--fg-secondary); margin-top: 0.25rem;">Min 50 balls
-                        faced</span>
                 </div>
-                <ul class="leaderboard-list">
+                <div class="lb-list">
                     {% for p in leaderboards.highest_sr %}
-                    <li class="leaderboard-item">
-                        <div class="player-info">
-                            <span class="rank-badge">{{ loop.index }}</span>
-                            <div class="player-details">
-                                <span class="player-name">{{ p.player }}</span>
-                                <span class="player-team">{{ p.team }}</span>
-                            </div>
+                    <div class="lb-row">
+                        <span class="rank-chip {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">{{ loop.index }}</span>
+                        <div class="lb-info">
+                            <div class="lb-name">{{ p.player }}</div>
+                            <div class="lb-team">{{ p.team }}</div>
                         </div>
-                        <span class="stat-value">{{ p.sr }}</span>
-                    </li>
+                        <span class="lb-val">{{ p.sr }}</span>
+                    </div>
                     {% endfor %}
-                </ul>
+                </div>
             </div>
             {% endif %}
 
             {% if leaderboards.best_average %}
-            <div class="leaderboard-card">
-                <div class="leaderboard-header">
-                    <div class="leaderboard-icon-wrapper">
-                        <i class="fa-solid fa-star"></i>
-                    </div>
-                    <h3 class="leaderboard-title">Best Averages</h3>
+            <div class="lb-card">
+                <div class="lb-card-head">
+                    <div class="lb-icon avg"><i class="fas fa-star"></i></div>
+                    <div><div class="lb-card-title">Best Batting Average</div></div>
                 </div>
-                <ul class="leaderboard-list">
+                <div class="lb-list">
                     {% for p in leaderboards.best_average %}
-                    <li class="leaderboard-item">
-                        <div class="player-info">
-                            <span class="rank-badge">{{ loop.index }}</span>
-                            <div class="player-details">
-                                <span class="player-name">{{ p.player }}</span>
-                                <span class="player-team">{{ p.team }}</span>
-                            </div>
+                    <div class="lb-row">
+                        <span class="rank-chip {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">{{ loop.index }}</span>
+                        <div class="lb-info">
+                            <div class="lb-name">{{ p.player }}</div>
+                            <div class="lb-team">{{ p.team }}</div>
                         </div>
-                        <span class="stat-value">{{ p.average }}</span>
-                    </li>
+                        <span class="lb-val">{{ p.average }}</span>
+                    </div>
                     {% endfor %}
-                </ul>
+                </div>
             </div>
             {% endif %}
+
         </div>
-    </section>
+    </div>
     {% endif %}
 
-    {% if insights and (insights.impact or insights.form.batting or insights.form.bowling or insights.conditions.venues
-    or insights.conditions.pitches) %}
-    <section class="leaderboard-section" id="insights-section">
-        <div class="section-header">
-            <h2 class="section-title">
-                <i class="fas fa-chart-line"></i>
-                Advanced Insights
-            </h2>
-            <span class="section-subtitle">Form pulse, impact index, and conditions lens</span>
+    <!-- ADVANCED INSIGHTS -->
+    {% if insights and (insights.impact or insights.form.batting or insights.form.bowling or insights.conditions.venues or insights.conditions.pitches) %}
+    <div class="stats-section">
+        <div class="section-head">
+            <h2><i class="fas fa-chart-line"></i> Advanced Insights</h2>
+            <span class="section-sub">Impact index, form pulse &amp; conditions lens</span>
         </div>
-
         <div class="insights-grid">
+
+            <!-- Impact Index -->
             <div class="insight-card">
-                <div class="insight-header">
-                    <span>Impact Index</span>
-                    <span class="insight-subtitle">Runs + Wkts + Fielding</span>
+                <div class="insight-head">
+                    <span class="insight-head-title">Impact Index</span>
+                    <span class="insight-head-sub">Runs + Wkts + Fielding</span>
                 </div>
-                {% if insights.impact %}
-                <div class="insight-list">
+                <div class="insight-body">
+                    {% if insights.impact %}
                     {% for p in insights.impact %}
-                    <div class="insight-item">
-                        <div class="insight-player">
-                            <span class="player-name">{{ p.player }}</span>
-                            <span class="player-team">{{ p.team }}</span>
+                    <div class="impact-row">
+                        <div class="impact-player">
+                            <div class="impact-player-name">{{ p.player }}</div>
+                            <div class="impact-player-team">{{ p.team }}</div>
                         </div>
-                        <div class="impact-dots" data-impact="{{ p.impact }}"></div>
+                        <div class="impact-bar-wrap">
+                            <div class="impact-bar-bg">
+                                <div class="impact-bar-fill" data-value="{{ p.impact }}"></div>
+                            </div>
+                        </div>
+                        <span class="impact-score">{{ p.impact }}</span>
                     </div>
                     {% endfor %}
+                    {% else %}
+                    <div class="no-data"><i class="fas fa-chart-pie"></i>No impact data yet</div>
+                    {% endif %}
                 </div>
-                {% else %}
-                <div class="no-data-message"><i class="fas fa-chart-pie"></i>
-                    <p>No impact data yet</p>
-                </div>
-                {% endif %}
             </div>
 
+            <!-- Form Pulse -->
             <div class="insight-card">
-                <div class="insight-header">
-                    <span>Form Pulse</span>
-                    <span class="insight-subtitle">Last 5 innings</span>
+                <div class="insight-head">
+                    <span class="insight-head-title">Form Pulse</span>
+                    <span class="insight-head-sub">Last 5 innings</span>
                 </div>
-                {% if insights.form.batting or insights.form.bowling %}
-                <div class="form-group">
-                    <div class="form-title"><i class="fas fa-cricket-bat"></i> Batting Form</div>
+                <div class="insight-body">
+                    {% if insights.form.batting or insights.form.bowling %}
                     {% if insights.form.batting %}
+                    <div class="form-group-label"><i class="fas fa-baseball-ball"></i> Batting</div>
                     {% for p in insights.form.batting %}
                     <div class="form-row">
-                        <div class="insight-player">
-                            <span class="player-name">{{ p.player }}</span>
-                            <span class="player-team">{{ p.team }}</span>
+                        <div class="form-player">
+                            <div class="form-player-name">{{ p.player }}</div>
+                            <div class="form-player-team">{{ p.team }}</div>
                         </div>
-                        <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 110 36"
-                            preserveAspectRatio="none"></svg>
+                        <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 80 28" preserveAspectRatio="none"></svg>
                     </div>
                     {% endfor %}
-                    {% else %}
-                    <div class="no-data-message">
-                        <p>No batting form yet</p>
-                    </div>
                     {% endif %}
-                </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <div class="form-title"><i class="fas fa-bowling-ball"></i> Bowling Form</div>
                     {% if insights.form.bowling %}
+                    <hr class="divider">
+                    <div class="form-group-label"><i class="fas fa-bowling-ball"></i> Bowling</div>
                     {% for p in insights.form.bowling %}
                     <div class="form-row">
-                        <div class="insight-player">
-                            <span class="player-name">{{ p.player }}</span>
-                            <span class="player-team">{{ p.team }}</span>
+                        <div class="form-player">
+                            <div class="form-player-name">{{ p.player }}</div>
+                            <div class="form-player-team">{{ p.team }}</div>
                         </div>
-                        <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 110 36"
-                            preserveAspectRatio="none"></svg>
+                        <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 80 28" preserveAspectRatio="none"></svg>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% else %}
+                    <div class="no-data"><i class="fas fa-chart-line"></i>No form data yet</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Conditions Lens -->
+            <div class="insight-card">
+                <div class="insight-head">
+                    <span class="insight-head-title">Conditions Lens</span>
+                    <span class="insight-head-sub">Venue &amp; pitch analysis</span>
+                </div>
+                <div class="insight-body">
+                    <div class="cond-label"><i class="fas fa-map-marker-alt"></i> Venues (Avg Runs)</div>
+                    {% if insights.conditions.venues %}
+                    {% for v in insights.conditions.venues %}
+                    <div class="venue-row">
+                        <div class="venue-name" title="{{ v.label }}">{{ v.label }}</div>
+                        <div class="venue-meta">{{ v.matches }}m</div>
+                        <span class="venue-badge">{{ v.avg_runs }}</span>
                     </div>
                     {% endfor %}
                     {% else %}
-                    <div class="no-data-message">
-                        <p>No bowling form yet</p>
+                    <div class="no-data" style="padding:.5rem 0"><i></i>No venue data yet</div>
+                    {% endif %}
+
+                    <hr class="divider">
+                    <div class="cond-label"><i class="fas fa-layer-group"></i> Pitches (Avg Runs)</div>
+                    {% if insights.conditions.pitches %}
+                    {% for p in insights.conditions.pitches %}
+                    <div class="pitch-row">
+                        <div class="pitch-row-head">
+                            <span class="pitch-row-name">{{ p.label }}</span>
+                            <span class="pitch-row-val">{{ p.avg_runs }} runs</span>
+                        </div>
+                        <div class="pitch-bg">
+                            <div class="pitch-fill" data-value="{{ p.avg_runs }}"></div>
+                        </div>
                     </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="no-data" style="padding:.5rem 0"><i></i>No pitch data yet</div>
                     {% endif %}
                 </div>
-                {% else %}
-                <div class="no-data-message"><i class="fas fa-chart-line"></i>
-                    <p>No form data yet</p>
+            </div>
+
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- PARTNERSHIPS + PLAYER COMPARISON -->
+    <div class="stats-section">
+        <div class="two-col">
+
+            <!-- Partnerships -->
+            <div class="content-card">
+                <div class="content-head">
+                    <div class="content-head-title"><i class="fas fa-user-friends"></i> Best Partnerships</div>
                 </div>
+                <div class="content-body" id="partnerships-container">
+                    <div class="loading-spin"><i class="fas fa-spinner fa-spin"></i>Loading…</div>
+                </div>
+            </div>
+
+            <!-- Player Comparison -->
+            <div class="content-card">
+                <div class="content-head">
+                    <div class="content-head-title"><i class="fas fa-balance-scale"></i> Player Comparison</div>
+                </div>
+                <div class="content-body">
+                    <div class="comp-roles">
+                        <button class="comp-role-btn active" onclick="selectComparisonRole('batsman')">
+                            <i class="fas fa-baseball-ball"></i> Batsmen
+                        </button>
+                        <button class="comp-role-btn" onclick="selectComparisonRole('bowler')">
+                            <i class="fas fa-bowling-ball"></i> Bowlers
+                        </button>
+                    </div>
+                    <div class="comp-selects">
+                        <select id="player1-select" class="comp-sel" onchange="updateCompareButton()">
+                            <option value="">Player 1…</option>
+                        </select>
+                        <select id="player2-select" class="comp-sel" onchange="updateCompareButton()">
+                            <option value="">Player 2…</option>
+                        </select>
+                    </div>
+                    <button class="comp-go-btn" id="compare-btn" onclick="comparePlayers()" disabled>
+                        <i class="fas fa-balance-scale"></i> Compare Players
+                    </button>
+                    <div id="comparison-results" style="display:none"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- DETAILED STATISTICS -->
+    <div class="stats-section">
+        <div class="section-head">
+            <h2><i class="fas fa-table"></i> Detailed Statistics</h2>
+            <span class="section-sub">Sort, filter &amp; export</span>
+        </div>
+        <div class="detailed-card">
+
+            <!-- Tab Bar -->
+            <div class="stats-tabs-bar">
+                <button class="stab active" data-tab="batting">
+                    <i class="fas fa-baseball-ball"></i> Batting
+                    {% if batting_stats %}<span class="tab-badge">{{ batting_stats|length }}</span>{% endif %}
+                </button>
+                <button class="stab" data-tab="bowling">
+                    <i class="fas fa-bowling-ball"></i> Bowling
+                    {% if bowling_stats %}<span class="tab-badge">{{ bowling_stats|length }}</span>{% endif %}
+                </button>
+                <button class="stab" data-tab="fielding">
+                    <i class="fas fa-hand-paper"></i> Fielding
+                    {% if fielding_stats %}<span class="tab-badge">{{ fielding_stats|length }}</span>{% endif %}
+                </button>
+            </div>
+
+            <!-- BATTING PANEL -->
+            <div class="table-panel active" id="batting">
+                {% if batting_stats %}
+                <div class="table-controls">
+                    <input class="tbl-search" type="text" placeholder="Search player or team…" oninput="applyFilter('batting')">
+                    <select class="tbl-team-sel" onchange="applyFilter('batting')"><option value="">All teams</option></select>
+                    <span class="tbl-count" id="batting-count">{{ batting_stats|length }} players</span>
+                    <div class="export-grp">
+                        <button class="btn-exp" onclick="exportFiltered('batting','csv')"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn-exp" onclick="exportFiltered('batting','txt')"><i class="fas fa-file-alt"></i> TXT</button>
+                        <button class="btn-exp" onclick="exportImage('batting','png',this)"><i class="fas fa-image"></i> PNG</button>
+                    </div>
+                </div>
+                <div class="tbl-wrap">
+                    <table class="stats-tbl" id="batting-table">
+                        <thead>
+                            <tr>
+                                <th onclick="handleSort('batting-table',0)">Player <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',1)">Team <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',2)" title="Matches">M <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',3)" title="Innings">Inn <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',4)">Runs <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',5)">Balls <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',6)" title="Not Outs">NO <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',7)" title="Strike Rate">SR <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',8)" title="Average">Avg <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',9)" title="Ducks">0s <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',10)">4s <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',11)">6s <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',12)" title="Half-centuries">50s <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('batting-table',13)" title="Centuries">100s <span class="sa">⇕</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in batting_stats %}
+                            <tr>
+                                <td>{{ row.player }}</td>
+                                <td>{{ row.team }}</td>
+                                <td>{{ row.matches }}</td>
+                                <td>{{ row.innings }}</td>
+                                <td class="kc">{{ row.runs }}</td>
+                                <td>{{ row.balls }}</td>
+                                <td>{{ row.not_outs }}</td>
+                                <td class="kc">{{ row.strike_rate }}</td>
+                                <td class="kc">{{ row.average }}</td>
+                                <td>{{ row.zeros }}</td>
+                                <td>{{ row.fours }}</td>
+                                <td>{{ row.sixes }}</td>
+                                <td>{{ row.fifties }}</td>
+                                <td>{{ row.hundreds }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="no-data"><i class="fas fa-info-circle"></i>No batting data available</div>
                 {% endif %}
             </div>
 
-            <div class="insight-card">
-                <div class="insight-header">
-                    <span>Conditions Lens</span>
-                    <span class="insight-subtitle">Venue &amp; pitch snapshots</span>
-                </div>
-                <div class="conditions-lens-body">
-                    <!-- Venues -->
-                    <div>
-                        <div class="conditions-section-title">
-                            <i class="fas fa-map-marker-alt"></i>
-                            Venues (Avg Runs)
-                        </div>
-                        {% if insights.conditions.venues %}
-                        {% for v in insights.conditions.venues %}
-                        <div class="venue-item">
-                            <div class="venue-icon"><i class="fas fa-landmark"></i></div>
-                            <div class="venue-info">
-                                <div class="venue-name" title="{{ v.label }}">{{ v.label }}</div>
-                                <div class="venue-meta">{{ v.matches }} match{{ 'es' if v.matches != 1 else '' }}</div>
-                            </div>
-                            <div class="venue-runs-badge">{{ v.avg_runs }}</div>
-                        </div>
-                        {% endfor %}
-                        {% else %}
-                        <div class="no-data-message"><p>No venue data yet</p></div>
-                        {% endif %}
-                    </div>
-                    <!-- Pitches -->
-                    <div>
-                        <div class="conditions-section-title">
-                            <i class="fas fa-layer-group"></i>
-                            Pitches (Avg Runs)
-                        </div>
-                        {% if insights.conditions.pitches %}
-                        {% for p in insights.conditions.pitches %}
-                        <div class="pitch-item">
-                            <div class="pitch-header-row">
-                                <span class="pitch-label">{{ p.label }}</span>
-                                <span class="pitch-runs-label">{{ p.avg_runs }} runs</span>
-                            </div>
-                            <div class="pitch-bar">
-                                <div class="pitch-bar-fill" data-value="{{ p.avg_runs }}"></div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                        {% else %}
-                        <div class="no-data-message"><p>No pitch data yet</p></div>
-                        {% endif %}
+            <!-- BOWLING PANEL -->
+            <div class="table-panel" id="bowling">
+                {% if bowling_stats %}
+                <div class="table-controls">
+                    <input class="tbl-search" type="text" placeholder="Search player or team…" oninput="applyFilter('bowling')">
+                    <select class="tbl-team-sel" onchange="applyFilter('bowling')"><option value="">All teams</option></select>
+                    <span class="tbl-count" id="bowling-count">{{ bowling_stats|length }} bowlers</span>
+                    <div class="export-grp">
+                        <button class="btn-exp" onclick="exportFiltered('bowling','csv')"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn-exp" onclick="exportFiltered('bowling','txt')"><i class="fas fa-file-alt"></i> TXT</button>
+                        <button class="btn-exp" onclick="exportImage('bowling','png',this)"><i class="fas fa-image"></i> PNG</button>
                     </div>
                 </div>
-            </div>
-        </div>
-    </section>
-    {% endif %}
-
-    <!-- Best Partnerships Section -->
-    <section class="leaderboard-section" id="partnerships-section">
-        <div class="section-header">
-            <h2 class="section-title">
-                <i class="fas fa-user-friends"></i>
-                Best Partnerships
-            </h2>
-        </div>
-        <div id="partnerships-container" class="loading">
-            <div style="text-align: center; padding: 3rem;">
-                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent);"></i>
-                <p style="margin-top: 1rem; color: var(--fg-secondary);">Loading partnerships...</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Player Comparison Tool Section -->
-    <section class="leaderboard-section" id="player-comparison-section">
-        <div class="section-header">
-            <h2 class="section-title">
-                <i class="fas fa-balance-scale"></i>
-                Player Comparison Tool
-            </h2>
-        </div>
-
-        <div class="detailed-stats" style="margin-bottom: 0;">
-            <!-- Role Filter -->
-            <div style="margin-bottom: 2rem;">
-                <label
-                    style="font-size: 0.9rem; font-weight: 600; color: var(--fg); margin-bottom: 0.75rem; display: block;">
-                    <i class="fas fa-filter"></i> Compare By Role
-                </label>
-                <div class="view-toggle">
-                    <button class="view-btn active" onclick="selectComparisonRole('batsman')">
-                        <i class="fas fa-cricket-bat"></i>
-                        <span>Batsmen</span>
-                    </button>
-                    <button class="view-btn" onclick="selectComparisonRole('bowler')">
-                        <i class="fas fa-bowling-ball"></i>
-                        <span>Bowlers</span>
-                    </button>
+                <div class="tbl-wrap">
+                    <table class="stats-tbl" id="bowling-table">
+                        <thead>
+                            <tr>
+                                <th onclick="handleSort('bowling-table',0)">Player <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',1)">Team <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',2)" title="Matches">M <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',3)" title="Innings">Inn <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',4)">Overs <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',5)">Runs <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',6)">Wkts <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',7)">Best <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',8)" title="Average">Avg <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',9)" title="Economy Rate">Eco <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',10)">Dots <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',11)">Wides <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('bowling-table',12)" title="No Balls">NB <span class="sa">⇕</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in bowling_stats %}
+                            <tr>
+                                <td>{{ row.player }}</td>
+                                <td>{{ row.team }}</td>
+                                <td>{{ row.matches }}</td>
+                                <td>{{ row.innings }}</td>
+                                <td>{{ row.overs }}</td>
+                                <td>{{ row.runs }}</td>
+                                <td class="kc">{{ row.wickets }}</td>
+                                <td class="kc">{{ row.best }}</td>
+                                <td class="kc">{{ row.average }}</td>
+                                <td class="kc">{{ row.economy }}</td>
+                                <td>{{ row.dots }}</td>
+                                <td>{{ row.wides }}</td>
+                                <td>{{ row.no_balls }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+                {% else %}
+                <div class="no-data"><i class="fas fa-info-circle"></i>No bowling data available</div>
+                {% endif %}
             </div>
 
-            <!-- Player Selection -->
-            <div
-                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-                <div>
-                    <label for="player1-select"
-                        style="font-size: 0.85rem; font-weight: 500; color: var(--fg-secondary); display: block; margin-bottom: 0.625rem;">
-                        <i class="fas fa-user"></i> Player 1
-                    </label>
-                    <select id="player1-select" class="tournament-select" style="max-width: 100%;">
-                        <option value="">Select Player 1...</option>
-                    </select>
+            <!-- FIELDING PANEL -->
+            <div class="table-panel" id="fielding">
+                {% if fielding_stats %}
+                <div class="table-controls">
+                    <input class="tbl-search" type="text" placeholder="Search player or team…" oninput="applyFilter('fielding')">
+                    <select class="tbl-team-sel" onchange="applyFilter('fielding')"><option value="">All teams</option></select>
+                    <span class="tbl-count" id="fielding-count">{{ fielding_stats|length }} players</span>
+                    <div class="export-grp">
+                        <button class="btn-exp" onclick="exportFiltered('fielding','csv')"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn-exp" onclick="exportFiltered('fielding','txt')"><i class="fas fa-file-alt"></i> TXT</button>
+                        <button class="btn-exp" onclick="exportImage('fielding','png',this)"><i class="fas fa-image"></i> PNG</button>
+                    </div>
                 </div>
-                <div>
-                    <label for="player2-select"
-                        style="font-size: 0.85rem; font-weight: 500; color: var(--fg-secondary); display: block; margin-bottom: 0.625rem;">
-                        <i class="fas fa-user"></i> Player 2
-                    </label>
-                    <select id="player2-select" class="tournament-select" style="max-width: 100%;">
-                        <option value="">Select Player 2...</option>
-                    </select>
+                <div class="tbl-wrap">
+                    <table class="stats-tbl" id="fielding-table">
+                        <thead>
+                            <tr>
+                                <th onclick="handleSort('fielding-table',0)">Player <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('fielding-table',1)">Team <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('fielding-table',2)">Matches <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('fielding-table',3)">Catches <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('fielding-table',4)">Run Outs <span class="sa">⇕</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in fielding_stats %}
+                            <tr>
+                                <td>{{ row.player }}</td>
+                                <td>{{ row.team }}</td>
+                                <td>{{ row.matches }}</td>
+                                <td class="kc">{{ row.catches }}</td>
+                                <td class="kc">{{ row.run_outs }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+                {% else %}
+                <div class="no-data"><i class="fas fa-info-circle"></i>No fielding data available</div>
+                {% endif %}
             </div>
 
-            <!-- Compare Button -->
-            <div style="text-align: center; margin-bottom: 2rem;">
-                <button onclick="comparePlayers()" id="compare-btn" class="btn-primary" disabled>
-                    <i class="fas fa-balance-scale"></i>
-                    <span>Compare Players</span>
-                </button>
-            </div>
-
-            <!-- Comparison Results -->
-            <div id="comparison-results" style="display: none;"></div>
         </div>
-    </section>
-
-
-    <!-- Detailed Statistics -->
-    <section class="detailed-stats">
-        <div class="section-header">
-            <h2 class="section-title">
-                <i class="fas fa-table"></i>
-                Detailed Statistics
-            </h2>
-            <span class="section-subtitle">Filter, sort, and export player stats by category</span>
-        </div>
-
-        <div class="stats-tabs-wrapper">
-            <div class="stats-tabs">
-                <button class="tab-btn active" data-tab="batting">
-                    <i class="fas fa-baseball-ball"></i>
-                    <span>Batting</span>
-                    {% if batting_stats %}<span class="tab-count">{{ batting_stats|length }}</span>{% endif %}
-                </button>
-                <button class="tab-btn" data-tab="bowling">
-                    <i class="fas fa-bowling-ball"></i>
-                    <span>Bowling</span>
-                    {% if bowling_stats %}<span class="tab-count">{{ bowling_stats|length }}</span>{% endif %}
-                </button>
-                <button class="tab-btn" data-tab="fielding">
-                    <i class="fas fa-hand-paper"></i>
-                    <span>Fielding</span>
-                    {% if fielding_stats %}<span class="tab-count">{{ fielding_stats|length }}</span>{% endif %}
-                </button>
-            </div>
-        </div>
-
-        <!-- Batting Table -->
-        <div id="batting" class="tab-panel active">
-            {% if batting_stats %}
-            <div class="export-controls">
-                <div class="team-filter-inline">
-                    <span class="team-filter-label"><i class="fas fa-filter"></i> Team</span>
-                    <select class="team-filter-select" onchange="applyFilter('batting')">
-                        <option value="">All Teams</option>
-                    </select>
-                </div>
-                <div class="export-btns">
-                    <button class="btn-export" onclick="exportFiltered('batting', 'csv')">
-                        <i class="fas fa-file-csv"></i>
-                        <span>Export CSV</span>
-                    </button>
-                    <button class="btn-export" onclick="exportFiltered('batting', 'txt')">
-                        <i class="fas fa-file-alt"></i>
-                        <span>Export TXT</span>
-                    </button>
-                    <button class="btn-export" onclick="exportImage('batting', 'png', this)">
-                        <i class="fas fa-image"></i>
-                        <span>Export PNG</span>
-                    </button>
-                </div>
-            </div>
-            <div class="filter-summary" id="batting-filter-summary" data-total="{{ batting_stats|length }}">
-                <span class="filter-summary-count">Showing <strong id="batting-visible-count">{{ batting_stats|length }}</strong> of {{ batting_stats|length }} players</span>
-                <button class="btn-clear-filters" id="batting-clear-btn" onclick="clearFilters('batting')">
-                    <i class="fas fa-times"></i> Clear Filters
-                </button>
-            </div>
-            <div class="table-wrapper">
-                <table class="stats-table" id="batting-table">
-                    <thead>
-                        <tr>
-                            <th class="sortable" onclick="handleSort('batting-table',0)">Player <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',1)">Team <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',2)">M <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',3)">Inn <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',4)">Runs <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',5)">Balls <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',6)">NO <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',7)">SR <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',8)">Avg <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',9)">0s <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',10)">1s <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',11)">2s <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',12)">3s <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',13)">4s <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',14)">6s <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',15)">30s <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',16)">50s <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('batting-table',17)">100s <span class="sort-icon">⇕</span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in batting_stats %}
-                        <tr>
-                            <td>{{ row.player }}</td>
-                            <td>{{ row.team }}</td>
-                            <td>{{ row.matches }}</td>
-                            <td>{{ row.innings }}</td>
-                            <td>{{ row.runs }}</td>
-                            <td>{{ row.balls }}</td>
-                            <td>{{ row.not_outs }}</td>
-                            <td>{{ row.strike_rate }}</td>
-                            <td>{{ row.average }}</td>
-                            <td>{{ row.zeros }}</td>
-                            <td>{{ row.ones }}</td>
-                            <td>{{ row.twos }}</td>
-                            <td>{{ row.threes }}</td>
-                            <td>{{ row.fours }}</td>
-                            <td>{{ row.sixes }}</td>
-                            <td>{{ row.thirties }}</td>
-                            <td>{{ row.fifties }}</td>
-                            <td>{{ row.hundreds }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="no-data-message">
-                <i class="fas fa-info-circle"></i>
-                <p>No batting data available</p>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- Bowling Table -->
-        <div id="bowling" class="tab-panel">
-            {% if bowling_stats %}
-            <div class="export-controls">
-                <div class="team-filter-inline">
-                    <span class="team-filter-label"><i class="fas fa-filter"></i> Team</span>
-                    <select class="team-filter-select" onchange="applyFilter('bowling')">
-                        <option value="">All Teams</option>
-                    </select>
-                </div>
-                <div class="export-btns">
-                    <button class="btn-export" onclick="exportFiltered('bowling', 'csv')">
-                        <i class="fas fa-file-csv"></i>
-                        <span>Export CSV</span>
-                    </button>
-                    <button class="btn-export" onclick="exportFiltered('bowling', 'txt')">
-                        <i class="fas fa-file-alt"></i>
-                        <span>Export TXT</span>
-                    </button>
-                    <button class="btn-export" onclick="exportImage('bowling', 'png', this)">
-                        <i class="fas fa-image"></i>
-                        <span>Export PNG</span>
-                    </button>
-                </div>
-            </div>
-            <div class="filter-summary" id="bowling-filter-summary" data-total="{{ bowling_stats|length }}">
-                <span class="filter-summary-count">Showing <strong id="bowling-visible-count">{{ bowling_stats|length }}</strong> of {{ bowling_stats|length }} bowlers</span>
-                <button class="btn-clear-filters" id="bowling-clear-btn" onclick="clearFilters('bowling')">
-                    <i class="fas fa-times"></i> Clear Filters
-                </button>
-            </div>
-            <div class="table-wrapper">
-                <table class="stats-table" id="bowling-table">
-                    <thead>
-                        <tr>
-                            <th class="sortable" onclick="handleSort('bowling-table',0)">Team <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',1)">Player <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',2)">M <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',3)">Inn <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',4)">Overs <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',5)">Runs <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',6)">Wkts <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',7)">Best <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',8)">Avg <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',9)">Eco <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',10)">Dots <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',11)">Bowled <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',12)">LBW <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',13)">Byes <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',14)">LB <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',15)">Wides <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('bowling-table',16)">NB <span class="sort-icon">⇕</span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in bowling_stats %}
-                        <tr>
-                            <td>{{ row.team }}</td>
-                            <td>{{ row.player }}</td>
-                            <td>{{ row.matches }}</td>
-                            <td>{{ row.innings }}</td>
-                            <td>{{ row.overs }}</td>
-                            <td>{{ row.runs }}</td>
-                            <td>{{ row.wickets }}</td>
-                            <td>{{ row.best }}</td>
-                            <td>{{ row.average }}</td>
-                            <td>{{ row.economy }}</td>
-                            <td>{{ row.dots }}</td>
-                            <td>{{ row.bowled }}</td>
-                            <td>{{ row.lbw }}</td>
-                            <td>{{ row.byes }}</td>
-                            <td>{{ row.leg_byes }}</td>
-                            <td>{{ row.wides }}</td>
-                            <td>{{ row.no_balls }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="no-data-message">
-                <i class="fas fa-info-circle"></i>
-                <p>No bowling data available</p>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- Fielding Table -->
-        <div id="fielding" class="tab-panel">
-            {% if fielding_stats %}
-            <div class="export-controls">
-                <div class="team-filter-inline">
-                    <span class="team-filter-label"><i class="fas fa-filter"></i> Team</span>
-                    <select class="team-filter-select" onchange="applyFilter('fielding')">
-                        <option value="">All Teams</option>
-                    </select>
-                </div>
-                <div class="export-btns">
-                    <button class="btn-export" onclick="exportFiltered('fielding', 'csv')">
-                        <i class="fas fa-file-csv"></i>
-                        <span>Export CSV</span>
-                    </button>
-                    <button class="btn-export" onclick="exportFiltered('fielding', 'txt')">
-                        <i class="fas fa-file-alt"></i>
-                        <span>Export TXT</span>
-                    </button>
-                    <button class="btn-export" onclick="exportImage('fielding', 'png', this)">
-                        <i class="fas fa-image"></i>
-                        <span>Export PNG</span>
-                    </button>
-                </div>
-            </div>
-            <div class="filter-summary" id="fielding-filter-summary" data-total="{{ fielding_stats|length }}">
-                <span class="filter-summary-count">Showing <strong id="fielding-visible-count">{{ fielding_stats|length }}</strong> of {{ fielding_stats|length }} players</span>
-                <button class="btn-clear-filters" id="fielding-clear-btn" onclick="clearFilters('fielding')">
-                    <i class="fas fa-times"></i> Clear Filters
-                </button>
-            </div>
-            <div class="table-wrapper">
-                <table class="stats-table" id="fielding-table">
-                    <thead>
-                        <tr>
-                            <th class="sortable" onclick="handleSort('fielding-table',0)">Player <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('fielding-table',1)">Team <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('fielding-table',2)">Matches <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('fielding-table',3)">Catches <span class="sort-icon">⇕</span></th>
-                            <th class="sortable" onclick="handleSort('fielding-table',4)">Run Outs <span class="sort-icon">⇕</span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in fielding_stats %}
-                        <tr>
-                            <td>{{ row.player }}</td>
-                            <td>{{ row.team }}</td>
-                            <td>{{ row.matches }}</td>
-                            <td>{{ row.catches }}</td>
-                            <td>{{ row.run_outs }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="no-data-message">
-                <i class="fas fa-info-circle"></i>
-                <p>No fielding data available yet</p>
-            </div>
-            {% endif %}
-        </div>
-    </section>
+    </div>
 
     {% endif %}
 
@@ -2435,596 +1194,387 @@
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
 <script>
-    // ======= TAB SWITCHING =======
-    document.querySelectorAll('.tab-btn').forEach(button => {
-        button.addEventListener('click', () => {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
-            button.classList.add('active');
-            const tabId = button.getAttribute('data-tab');
-            document.getElementById(tabId).classList.add('active');
+// ===== URL / VIEW NAVIGATION =====
+function switchView(view) {
+    const p = new URLSearchParams(window.location.search);
+    p.set('view', view);
+    const sel = document.getElementById('tournament-select');
+    if (view === 'overall') {
+        p.delete('tournament_id');
+        window.location.href = '/statistics?' + p.toString();
+    } else {
+        if (sel) sel.style.display = '';
+    }
+}
+
+function selectTournament(id) {
+    if (!id) return;
+    const p = new URLSearchParams(window.location.search);
+    p.set('view', 'tournament');
+    p.set('tournament_id', id);
+    window.location.href = '/statistics?' + p.toString();
+}
+
+function selectFormat(fmt) {
+    const p = new URLSearchParams(window.location.search);
+    fmt ? p.set('match_format', fmt) : p.delete('match_format');
+    window.location.href = '/statistics?' + p.toString();
+}
+
+// ===== TABS =====
+document.querySelectorAll('.stab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.table-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+    });
+});
+
+// ===== FILTER + SEARCH =====
+function applyFilter(type) {
+    const table = document.getElementById(type + '-table');
+    if (!table) return;
+    const panel = document.getElementById(type);
+    const search = (panel.querySelector('.tbl-search')?.value || '').toLowerCase();
+    const team   = (panel.querySelector('.tbl-team-sel')?.value || '').toLowerCase();
+    let count = 0;
+    table.querySelectorAll('tbody tr').forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const playerText = (cells[0]?.textContent || '').toLowerCase();
+        const teamText   = (cells[1]?.textContent || '').toLowerCase();
+        const show = (!search || playerText.includes(search) || teamText.includes(search))
+                  && (!team   || teamText === team);
+        row.style.display = show ? '' : 'none';
+        if (show) count++;
+    });
+    const unit = type === 'bowling' ? 'bowlers' : 'players';
+    const el = document.getElementById(type + '-count');
+    if (el) el.textContent = count + ' ' + unit;
+}
+
+function initTeamDropdowns() {
+    ['batting', 'bowling', 'fielding'].forEach(type => {
+        const table = document.getElementById(type + '-table');
+        if (!table) return;
+        const teams = new Set();
+        table.querySelectorAll('tbody tr td:nth-child(2)').forEach(td => teams.add(td.textContent.trim()));
+        const sel = document.querySelector('#' + type + ' .tbl-team-sel');
+        if (!sel) return;
+        Array.from(teams).sort().forEach(t => {
+            const o = document.createElement('option');
+            o.value = t; o.textContent = t;
+            sel.appendChild(o);
         });
     });
+}
 
-    // ======= VIEW SWITCHING =======
-    function switchView(view) {
-        const params = new URLSearchParams(window.location.search);
-        params.set('view', view);
-        if (view === 'tournament') {
-            document.getElementById('tournament-selector').classList.remove('hidden');
-            document.querySelectorAll('.view-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.textContent.includes('Tournament'));
-            });
-        } else {
-            params.delete('tournament_id');
-            window.location.href = '/statistics?' + params.toString();
+// ===== SORT =====
+const sortState = {};
+function handleSort(tableId, colIdx) {
+    const key = tableId + '-' + colIdx;
+    const dir = sortState[key] === 'asc' ? 'desc' : 'asc';
+    sortState[key] = dir;
+    const table = document.getElementById(tableId);
+    table.querySelectorAll('thead th').forEach((th, i) => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        const a = th.querySelector('.sa');
+        if (a) a.textContent = '⇕';
+        if (i === colIdx) {
+            th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+            if (a) a.textContent = dir === 'asc' ? '↑' : '↓';
         }
+    });
+    const tbody = table.querySelector('tbody');
+    Array.from(tbody.querySelectorAll('tr'))
+        .sort((a, b) => {
+            const at = (a.querySelectorAll('td')[colIdx]?.textContent || '').trim();
+            const bt = (b.querySelectorAll('td')[colIdx]?.textContent || '').trim();
+            const an = parseFloat(at), bn = parseFloat(bt);
+            if (!isNaN(an) && !isNaN(bn)) return dir === 'asc' ? an - bn : bn - an;
+            return dir === 'asc' ? at.localeCompare(bt) : bt.localeCompare(at);
+        })
+        .forEach(r => tbody.appendChild(r));
+}
+
+// ===== EXPORT =====
+function exportFiltered(type, format) {
+    const table = document.getElementById(type + '-table');
+    if (!table) return;
+    const headers = Array.from(table.querySelectorAll('thead tr th'))
+        .map(th => th.textContent.replace(/[⇕↑↓]/g, '').trim());
+    const rows = Array.from(table.querySelectorAll('tbody tr'))
+        .filter(r => r.style.display !== 'none')
+        .map(r => Array.from(r.querySelectorAll('td')).map(td => td.textContent.trim()));
+    if (format === 'csv') {
+        let csv = headers.map(h => '"' + h.replace(/"/g, '""') + '"').join(',') + '\n';
+        rows.forEach(r => { csv += r.map(c => '"' + c.replace(/"/g, '""') + '"').join(',') + '\n'; });
+        dlBlob(csv, type + '_stats.csv', 'text/csv');
+    } else {
+        const w = headers.map((h, i) => Math.max(h.length, ...rows.map(r => (r[i] || '').length)) + 2);
+        const sep = w.map(n => '-'.repeat(n)).join('+');
+        const fmt = cols => cols.map((c, i) => (c || '').padEnd(w[i])).join('|');
+        let txt = type.toUpperCase() + ' STATISTICS\nGenerated: ' + new Date().toLocaleString() + '\nRecords: ' + rows.length + '\n\n';
+        txt += sep + '\n' + fmt(headers) + '\n' + sep + '\n';
+        rows.forEach(r => { txt += fmt(r) + '\n'; });
+        txt += sep + '\n';
+        dlBlob(txt, type + '_stats.txt', 'text/plain');
     }
+}
 
-    function selectTournament(tournamentId) {
-        if (tournamentId) {
-            const params = new URLSearchParams(window.location.search);
-            params.set('view', 'tournament');
-            params.set('tournament_id', tournamentId);
-            window.location.href = '/statistics?' + params.toString();
-        }
+function dlBlob(content, filename, mime) {
+    const blob = new Blob(['\uFEFF' + content], { type: mime + ';charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+}
+
+function exportImage(type, format, btn) {
+    const wrap = document.getElementById(type)?.querySelector('.tbl-wrap');
+    if (!wrap || typeof html2canvas === 'undefined') {
+        alert('Image export unavailable. Please try CSV or TXT.'); return;
     }
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    html2canvas(wrap, { backgroundColor: isDark ? '#21252b' : '#ffffff', scale: 2, logging: false, useCORS: true })
+        .then(canvas => {
+            const a = document.createElement('a');
+            a.download = type + '_stats_' + new Date().toISOString().slice(0, 10) + '.' + format;
+            a.href = canvas.toDataURL('image/png');
+            a.click();
+        })
+        .catch(() => alert('Image export failed. Please try CSV or TXT.'))
+        .finally(() => { btn.innerHTML = orig; btn.disabled = false; });
+}
 
-    function selectFormat(fmt) {
-        const params = new URLSearchParams(window.location.search);
-        if (fmt) {
-            params.set('match_format', fmt);
-        } else {
-            params.delete('match_format');
-        }
-        window.location.href = '/statistics?' + params.toString();
+// ===== KPI COMPUTATION (from rendered table data) =====
+function computeKPIs() {
+    let totalRuns = 0, totalInnings = 0, totalWkts = 0;
+    let topRuns = 0, topName = '';
+    document.querySelectorAll('#batting-table tbody tr').forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const runs = parseInt(cells[4]?.textContent || 0);
+        const inn  = parseInt(cells[3]?.textContent || 0);
+        totalRuns += runs; totalInnings += inn;
+        if (runs > topRuns) { topRuns = runs; topName = cells[0]?.textContent.trim() || ''; }
+    });
+    document.querySelectorAll('#bowling-table tbody tr').forEach(row => {
+        totalWkts += parseInt(row.querySelectorAll('td')[6]?.textContent || 0);
+    });
+    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setEl('kpi-runs', totalRuns.toLocaleString());
+    setEl('kpi-innings-sub', 'across ' + totalInnings + ' innings');
+    setEl('kpi-wickets', totalWkts.toLocaleString());
+    if (topName) {
+        const firstName = topName.split(' ')[0];
+        setEl('kpi-top-name', firstName.length > 10 ? firstName.slice(0, 9) + '…' : firstName);
+        setEl('kpi-top-runs', topRuns + ' runs');
     }
+}
 
-    // ======= FILTER SYSTEM =======
-    function applyFilter(type) {
-        const table = document.getElementById(type + '-table');
-        if (!table) return;
+// ===== PARTNERSHIPS =====
+function loadPartnerships() {
+    const p = new URLSearchParams(window.location.search);
+    const view = p.get('view') || 'overall';
+    const tid  = p.get('tournament_id') || '';
+    const url  = view === 'tournament' && tid
+        ? '/api/tournament/' + tid + '/partnerships?limit=10'
+        : '/api/partnerships?limit=10';
 
-        const teamSelect = document.querySelector(`#${type} .team-filter-select`);
-        const teamVal = teamSelect ? teamSelect.value : '';
-        const teamColIdx = type === 'bowling' ? 0 : 1;
-
-        const rows = Array.from(table.querySelectorAll('tbody tr'));
-        let visibleCount = 0;
-
-        rows.forEach(row => {
-            const cells = row.querySelectorAll('td');
-            const cellText = (cells[teamColIdx]?.textContent || '').trim();
-            const visible = !teamVal || cellText.toLowerCase() === teamVal.toLowerCase();
-            row.style.display = visible ? '' : 'none';
-            if (visible) visibleCount++;
-        });
-
-        const countEl = document.getElementById(type + '-visible-count');
-        if (countEl) countEl.textContent = visibleCount;
-
-        const clearBtn = document.getElementById(type + '-clear-btn');
-        if (clearBtn) clearBtn.style.display = teamVal ? 'flex' : 'none';
-    }
-
-    function clearFilters(type) {
-        const teamSelect = document.querySelector(`#${type} .team-filter-select`);
-        if (teamSelect) teamSelect.selectedIndex = 0;
-        applyFilter(type);
-    }
-
-    // ======= TEAM DROPDOWN POPULATION =======
-    function initTeamDropdowns() {
-        const configs = [
-            { type: 'batting', teamColIdx: 1 },
-            { type: 'bowling', teamColIdx: 0 },
-            { type: 'fielding', teamColIdx: 1 }
-        ];
-        configs.forEach(({ type, teamColIdx }) => {
-            const table = document.getElementById(type + '-table');
-            if (!table) return;
-
-            const teams = new Set();
-            table.querySelectorAll('tbody tr').forEach(row => {
-                const cell = row.querySelectorAll('td')[teamColIdx];
-                if (cell) teams.add(cell.textContent.trim());
-            });
-
-            const teamSelect = document.querySelector(`#${type} .team-filter-select`);
-            if (!teamSelect) return;
-
-            Array.from(teams).sort().forEach(team => {
-                const opt = document.createElement('option');
-                opt.value = team;
-                opt.textContent = team;
-                teamSelect.appendChild(opt);
-            });
-        });
-    }
-
-    // ======= SORT SYSTEM =======
-    const sortState = {};
-
-    function handleSort(tableId, colIdx) {
-        const key = tableId + '-' + colIdx;
-        const currentDir = sortState[key] || 'none';
-        const newDir = currentDir === 'asc' ? 'desc' : 'asc';
-        sortState[key] = newDir;
-
-        const table = document.getElementById(tableId);
-        table.querySelectorAll('thead tr:first-child th.sortable').forEach((th, i) => {
-            th.classList.remove('sort-asc', 'sort-desc');
-            const icon = th.querySelector('.sort-icon');
-            if (icon) icon.textContent = '⇕';
-            if (i === colIdx) {
-                th.classList.add(newDir === 'asc' ? 'sort-asc' : 'sort-desc');
-                if (icon) icon.textContent = newDir === 'asc' ? '↑' : '↓';
-            }
-        });
-
-        const tbody = table.querySelector('tbody');
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-        rows.sort((a, b) => {
-            const aText = (a.querySelectorAll('td')[colIdx]?.textContent || '').trim();
-            const bText = (b.querySelectorAll('td')[colIdx]?.textContent || '').trim();
-            const aNum = parseFloat(aText);
-            const bNum = parseFloat(bText);
-            if (!isNaN(aNum) && !isNaN(bNum)) {
-                return newDir === 'asc' ? aNum - bNum : bNum - aNum;
-            }
-            return newDir === 'asc' ? aText.localeCompare(bText) : bText.localeCompare(aText);
-        });
-        rows.forEach(row => tbody.appendChild(row));
-    }
-
-    // ======= CLIENT-SIDE EXPORT (respects filters) =======
-    function exportFiltered(type, format) {
-        const table = document.getElementById(type + '-table');
-        if (!table) return;
-
-        const headers = Array.from(table.querySelectorAll('thead tr:first-child th'))
-            .map(th => th.textContent.replace(/[⇕↑↓]/g, '').trim());
-
-        const visibleRows = Array.from(table.querySelectorAll('tbody tr'))
-            .filter(tr => tr.style.display !== 'none')
-            .map(tr => Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim()));
-
-        if (format === 'csv') {
-            let csv = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
-            visibleRows.forEach(row => {
-                csv += row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',') + '\n';
-            });
-            downloadBlob(csv, `${type}_stats.csv`, 'text/csv');
-        } else if (format === 'txt') {
-            const colWidths = headers.map((h, i) => {
-                const maxData = visibleRows.reduce((m, r) => Math.max(m, (r[i] || '').length), 0);
-                return Math.max(h.length, maxData) + 2;
-            });
-            const sep = colWidths.map(w => '-'.repeat(w)).join('+');
-            const fmtRow = cols => cols.map((c, i) => (c || '').padEnd(colWidths[i])).join('|');
-
-            let txt = `${type.toUpperCase()} STATISTICS\n`;
-            txt += `Generated: ${new Date().toLocaleString()}\n`;
-            txt += `Records: ${visibleRows.length}\n\n`;
-            txt += sep + '\n' + fmtRow(headers) + '\n' + sep + '\n';
-            visibleRows.forEach(row => { txt += fmtRow(row) + '\n'; });
-            txt += sep + '\n';
-            downloadBlob(txt, `${type}_stats.txt`, 'text/plain');
-        }
-    }
-
-    function downloadBlob(content, filename, mimeType) {
-        const blob = new Blob(['\uFEFF' + content], { type: mimeType + ';charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
-
-    // ======= IMAGE EXPORT =======
-    function exportImage(type, format, btn) {
-        const panel = document.getElementById(type);
-        const tableWrapper = panel?.querySelector('.table-wrapper');
-        if (!tableWrapper || typeof html2canvas === 'undefined') {
-            alert('Image export is not available. Please try CSV or TXT instead.');
+    fetch(url).then(r => r.json()).then(data => {
+        const c = document.getElementById('partnerships-container');
+        if (!data.success || !data.data?.length) {
+            c.innerHTML = '<div class="no-data"><i class="fas fa-user-friends"></i>No partnerships yet</div>';
             return;
         }
+        let html = '<table class="p-table"><thead><tr><th>#</th><th>Partnership</th><th>Runs</th><th>Balls</th><th>Wkt</th>';
+        if (view === 'overall') html += '<th>Tournament</th>';
+        html += '</tr></thead><tbody>';
+        data.data.forEach((pt, i) => {
+            const b1 = pt.batsman1.split(' ').pop(), b2 = pt.batsman2.split(' ').pop();
+            const contrib = (pt.batsman1_contribution != null)
+                ? '<div class="p-contrib">' + pt.batsman1_contribution + ' / ' + pt.batsman2_contribution + '</div>' : '';
+            html += '<tr>'
+                  + '<td><span class="rank-chip ' + (i===0?'gold':i===1?'silver':i===2?'bronze':'') + '">' + (i+1) + '</span></td>'
+                  + '<td><div class="p-names">' + b1 + ' &amp; ' + b2 + '</div>' + contrib + '</td>'
+                  + '<td class="p-runs">' + pt.runs + '</td>'
+                  + '<td>' + pt.balls + '</td>'
+                  + '<td>' + formatOrdinal(pt.wicket) + '</td>';
+            if (view === 'overall') html += '<td>' + (pt.tournament || '—') + '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        c.innerHTML = html;
+    }).catch(() => {
+        document.getElementById('partnerships-container').innerHTML =
+            '<div class="no-data"><i class="fas fa-exclamation-circle"></i>Error loading partnerships</div>';
+    });
+}
 
-        const origHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        btn.disabled = true;
+function formatOrdinal(n) {
+    const num = parseInt(n, 10);
+    if (isNaN(num)) return n;
+    const m = num % 100;
+    if (m >= 11 && m <= 13) return num + 'th';
+    const sfx = ['th','st','nd','rd'];
+    return num + (sfx[num % 10] || 'th');
+}
 
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        const bgColor = isDark ? '#1e1e2e' : '#ffffff';
-        const fgColor = isDark ? '#e2e8f0' : '#1a1a2e';
-        const borderColor = isDark ? '#2d2d44' : '#e2e8f0';
-        const headBg = isDark ? '#16213e' : '#f8fafc';
+// ===== PLAYER COMPARISON =====
+let allPlayers = [], currentRole = 'batsman';
 
-        html2canvas(tableWrapper, {
-            backgroundColor: bgColor,
-            scale: 2,
-            logging: false,
-            useCORS: true,
-            allowTaint: true,
-            onclone: (clonedDoc) => {
-                // Apply resolved colors for proper rendering
-                clonedDoc.querySelectorAll('.stats-table td').forEach(td => {
-                    td.style.backgroundColor = bgColor;
-                    td.style.color = fgColor;
-                    td.style.borderColor = borderColor;
-                });
-                clonedDoc.querySelectorAll('.stats-table th').forEach(th => {
-                    th.style.backgroundColor = headBg;
-                    th.style.color = fgColor;
-                    th.style.borderColor = borderColor;
-                });
-                clonedDoc.querySelectorAll('.stats-table tbody tr:hover td').forEach(td => {
-                    td.style.background = 'none';
-                });
-                // Resolve JetBrains Mono font fallback
-                clonedDoc.querySelectorAll('.stats-table td').forEach(td => {
-                    td.style.fontFamily = 'monospace';
-                });
-            }
-        }).then(canvas => {
-            const mime = format === 'png' ? 'image/png' : 'image/jpeg';
-            const quality = format === 'jpg' ? 0.92 : undefined;
-            const dateStr = new Date().toISOString().slice(0, 10);
-            const link = document.createElement('a');
-            link.download = `${type}_stats_${dateStr}.${format}`;
-            link.href = canvas.toDataURL(mime, quality);
-            link.click();
-            btn.innerHTML = origHTML;
-            btn.disabled = false;
-        }).catch(err => {
-            console.error('Image export error:', err);
-            btn.innerHTML = origHTML;
-            btn.disabled = false;
-            alert('Image export failed. Please try CSV or TXT format.');
+function loadPlayersForComparison() {
+    fetch('/api/compare-players?player_ids=').then(r => r.json()).then(data => {
+        if (data.success) { allPlayers = data.available_players || []; filterPlayersByRole(currentRole); }
+    }).catch(() => {});
+}
+
+function filterPlayersByRole(role) {
+    const filtered = allPlayers.filter(p => {
+        const r = (p.role || '').toLowerCase();
+        return role === 'batsman'
+            ? r.includes('batsman') || r.includes('all-rounder')
+            : r.includes('bowler') || r.includes('all-rounder');
+    });
+    ['player1-select', 'player2-select'].forEach((id, idx) => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = '<option value="">Player ' + (idx + 1) + '…</option>';
+        filtered.forEach(p => {
+            sel.innerHTML += '<option value="' + p.id + '">' + p.name + ' (' + (p.team || '?') + ')</option>';
+        });
+    });
+    updateCompareButton();
+}
+
+function selectComparisonRole(role) {
+    currentRole = role;
+    document.querySelectorAll('.comp-role-btn').forEach(b => {
+        b.classList.toggle('active', b.textContent.toLowerCase().includes(role));
+    });
+    filterPlayersByRole(role);
+    document.getElementById('comparison-results').style.display = 'none';
+}
+
+function updateCompareButton() {
+    const p1 = document.getElementById('player1-select').value;
+    const p2 = document.getElementById('player2-select').value;
+    document.getElementById('compare-btn').disabled = !p1 || !p2 || p1 === p2;
+}
+
+function comparePlayers() {
+    const p1 = document.getElementById('player1-select').value;
+    const p2 = document.getElementById('player2-select').value;
+    if (!p1 || !p2) return;
+    const res = document.getElementById('comparison-results');
+    res.style.display = 'block';
+    res.innerHTML = '<div class="loading-spin"><i class="fas fa-spinner fa-spin"></i>Comparing…</div>';
+    const params = new URLSearchParams(window.location.search);
+    let url = '/api/compare-players?player_ids=' + p1 + ',' + p2;
+    if (params.get('view') === 'tournament' && params.get('tournament_id'))
+        url += '&tournament_id=' + params.get('tournament_id');
+    fetch(url).then(r => r.json()).then(data => {
+        if (data.success && data.data?.length >= 2) displayComparison(data.data);
+        else res.innerHTML = '<div class="no-data"><i class="fas fa-exclamation-triangle"></i>Could not compare players</div>';
+    }).catch(() => {
+        res.innerHTML = '<div class="no-data"><i class="fas fa-exclamation-circle"></i>Error loading comparison</div>';
+    });
+}
+
+function displayComparison(players) {
+    const p1 = players[0], p2 = players[1];
+    const res = document.getElementById('comparison-results');
+
+    const buildRow = (key, label, v1, v2, lowerBetter) => {
+        const n1 = parseFloat(v1) || 0, n2 = parseFloat(v2) || 0, max = Math.max(n1, n2, 1);
+        const w1 = (n1 / max * 100).toFixed(1), w2 = (n2 / max * 100).toFixed(1);
+        const p1wins = lowerBetter ? (n1 > 0 && (n2 === 0 || n1 < n2)) : n1 > n2;
+        const p2wins = lowerBetter ? (n2 > 0 && (n1 === 0 || n2 < n1)) : n2 > n1;
+        return '<div class="comp-row">'
+             + '<div class="comp-key">' + label + '</div>'
+             + '<div class="comp-val-wrap">'
+             +   '<span class="comp-val' + (p1wins ? ' winner' : '') + '">' + (v1 || '—') + '</span>'
+             +   '<div class="comp-bar-bg"><div class="comp-bar-fill" style="width:' + w1 + '%"></div></div>'
+             + '</div>'
+             + '<div class="comp-val-wrap">'
+             +   '<span class="comp-val' + (p2wins ? ' winner p2' : '') + '">' + (v2 || '—') + '</span>'
+             +   '<div class="comp-bar-bg"><div class="comp-bar-fill alt" style="width:' + w2 + '%"></div></div>'
+             + '</div>'
+             + '</div>';
+    };
+
+    let html = '<div class="comp-header-row">'
+             + '<div></div>'
+             + '<div class="comp-player-col p1">' + p1.name + '<br><span class="comp-player-team">' + (p1.team||'') + '</span></div>'
+             + '<div class="comp-player-col p2">' + p2.name + '<br><span class="comp-player-team">' + (p2.team||'') + '</span></div>'
+             + '</div>';
+
+    if (p1.batting || p2.batting) {
+        html += '<div class="comp-section-label"><i class="fas fa-baseball-ball"></i> Batting</div>';
+        [['innings','Inn',false],['runs','Runs',false],['average','Avg',false],['strike_rate','SR',false],['fifties','50s',false],['hundreds','100s',false]].forEach(([k, lbl, lb]) => {
+            html += buildRow(k, lbl, p1.batting?.[k] ?? '—', p2.batting?.[k] ?? '—', lb);
+        });
+    }
+    if (p1.bowling || p2.bowling) {
+        html += '<div class="comp-section-label"><i class="fas fa-bowling-ball"></i> Bowling</div>';
+        [['wickets','Wkts',false],['average','Avg',true],['economy','Eco',true]].forEach(([k, lbl, lb]) => {
+            html += buildRow(k, lbl, p1.bowling?.[k] ?? '—', p2.bowling?.[k] ?? '—', lb);
+        });
+    }
+    res.innerHTML = html;
+}
+
+// ===== INSIGHTS VISUALS =====
+function renderInsights() {
+    // Impact bars (relative scaling)
+    const impactBars = Array.from(document.querySelectorAll('.impact-bar-fill[data-value]'));
+    if (impactBars.length) {
+        const vals = impactBars.map(el => parseFloat(el.dataset.value) || 0);
+        const max = Math.max(...vals, 1);
+        impactBars.forEach((el, i) => {
+            requestAnimationFrame(() => { el.style.width = (vals[i] / max * 100) + '%'; });
         });
     }
 
-    // ======= DOMContentLoaded INIT =======
-    document.addEventListener('DOMContentLoaded', () => {
-        // Leaderboard entrance animations
-        document.querySelectorAll('.leaderboard-item').forEach((item, index) => {
-            item.style.opacity = '0';
-            item.style.transform = 'translateX(-20px)';
-            setTimeout(() => {
-                item.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
-                item.style.opacity = '1';
-                item.style.transform = 'translateX(0)';
-            }, 100 + (index * 50));
-        });
-
-        // Init table features
-        initTeamDropdowns();
-
-        // Load async data
-        loadPartnerships();
-        loadPlayersForComparison('batsman');
-        renderInsightsVisuals();
+    // Sparklines
+    document.querySelectorAll('.sparkline').forEach((svg, idx) => {
+        const data = (svg.dataset.series || '').split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
+        if (!data.length) return;
+        const W = 80, H = 28;
+        const mn = Math.min(...data), mx = Math.max(...data);
+        const range = mx - mn || 1;
+        const step = W / (data.length - 1 || 1);
+        const pts = data.map((v, i) => ({ x: i * step, y: H - ((v - mn) / range) * (H - 6) - 3 }));
+        const path = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+        const gid = 'sg' + idx;
+        svg.innerHTML = '<defs><linearGradient id="' + gid + '" x1="0%" y1="0%" x2="100%" y2="0%">'
+            + '<stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#ec4899"/>'
+            + '</linearGradient></defs>'
+            + '<path d="' + path + '" stroke="url(#' + gid + ')" fill="none" stroke-width="2"/>'
+            + '<circle cx="' + pts[pts.length-1].x.toFixed(1) + '" cy="' + pts[pts.length-1].y.toFixed(1) + '" r="2.5" fill="#ec4899"/>';
     });
 
-    // Global variables for player comparison
-    let currentComparisonRole = 'batsman';
-    let allPlayers = [];
-
-    function formatOrdinal(n) {
-        const num = parseInt(n, 10);
-        if (Number.isNaN(num)) return n;
-        const mod100 = num % 100;
-        if (mod100 >= 11 && mod100 <= 13) return num + 'th';
-        switch (num % 10) {
-            case 1: return num + 'st';
-            case 2: return num + 'nd';
-            case 3: return num + 'rd';
-            default: return num + 'th';
-        }
-    }
-
-    // Load partnerships
-    function loadPartnerships() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const view = urlParams.get('view') || 'overall';
-        const tournamentId = urlParams.get('tournament_id') || '';
-
-        let url = view === 'tournament' && tournamentId
-            ? '/api/tournament/' + tournamentId + '/partnerships?limit=10'
-            : '/api/partnerships?limit=10';
-
-        fetch(url)
-            .then(res => res.json())
-            .then(data => {
-                const container = document.getElementById('partnerships-container');
-                if (data.success && data.data && data.data.length > 0) {
-                    let html = '<div class="table-wrapper"><table class="stats-table">';
-                    html += '<thead><tr><th>Rank</th><th>Partnership</th><th>Runs</th><th>Balls</th><th>Wicket</th>';
-                    if (view === 'overall') html += '<th>Tournament</th>';
-                    html += '</tr></thead><tbody>';
-
-                    data.data.forEach((p, index) => {
-                        html += '<tr>';
-                        html += '<td><span class="rank-badge">' + (index + 1) + '</span></td>';
-                        html += '<td class="player-name">' + p.batsman1.split(' ').pop() + ' & ' + p.batsman2.split(' ').pop() + '</td>';
-                        html += '<td class="stat-value">' + p.runs + '</td>';
-                        html += '<td>' + p.balls + '</td>';
-                        html += '<td>' + formatOrdinal(p.wicket) + '</td>';
-                        if (view === 'overall') html += '<td>' + (p.tournament || 'N/A') + '</td>';
-                        html += '</tr>';
-                    });
-
-                    html += '</tbody></table></div>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-data-message"><i class="fas fa-user-friends"></i><p>No partnerships available yet</p></div>';
-                }
-            })
-            .catch(err => {
-                console.error('Error loading partnerships:', err);
-                document.getElementById('partnerships-container').innerHTML = '<div class="no-data-message"><i class="fas fa-exclamation-circle"></i><p>Error loading data</p></div>';
-            });
-    }
-
-    // Load players for comparison based on role
-    function loadPlayersForComparison(role) {
-        fetch('/api/compare-players?player_ids=')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.available_players) {
-                    allPlayers = data.available_players;
-                    filterPlayersByRole(role);
-                }
-            })
-            .catch(err => console.error('Error loading players:', err));
-    }
-
-    // Filter players by role
-    function filterPlayersByRole(role) {
-        const player1Select = document.getElementById('player1-select');
-        const player2Select = document.getElementById('player2-select');
-
-        // Filter players based on role
-        const filteredPlayers = allPlayers.filter(p => {
-            const playerRole = (p.role || '').toLowerCase();
-            if (role === 'batsman') {
-                return playerRole.includes('batsman') || playerRole.includes('all-rounder') || playerRole.includes('wicket-keeper');
-            } else {
-                return playerRole.includes('bowler') || playerRole.includes('all-rounder');
-            }
-        });
-
-        // Update dropdowns
-        player1Select.innerHTML = '<option value="">Select Player 1...</option>';
-        player2Select.innerHTML = '<option value="">Select Player 2...</option>';
-
-        filteredPlayers.forEach(p => {
-            player1Select.innerHTML += '<option value="' + p.id + '">' + p.name + ' (' + (p.team || 'Unknown') + ')</option>';
-            player2Select.innerHTML += '<option value="' + p.id + '">' + p.name + ' (' + (p.team || 'Unknown') + ')</option>';
-        });
-
-        // Reset selections
-        updateCompareButton();
-    }
-
-    // Select comparison role
-    function selectComparisonRole(role) {
-        currentComparisonRole = role;
-
-        // Update button states
-        document.querySelectorAll('#player-comparison-section .view-btn').forEach(btn => {
-            if (btn.textContent.toLowerCase().includes(role)) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-
-        // Filter players
-        filterPlayersByRole(role);
-
-        // Hide results
-        document.getElementById('comparison-results').style.display = 'none';
-    }
-
-    // Update comparebutton state
-    function updateCompareButton() {
-        const player1 = document.getElementById('player1-select').value;
-        const player2 = document.getElementById('player2-select').value;
-        const btn = document.getElementById('compare-btn');
-
-        btn.disabled = !player1 || !player2 || player1 === player2;
-    }
-
-
-    // Event listeners for player selection
-    document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('player1-select').addEventListener('change', updateCompareButton);
-        document.getElementById('player2-select').addEventListener('change', updateCompareButton);
-    });
-
-    // Compare players
-    function comparePlayers() {
-        const player1Id = document.getElementById('player1-select').value;
-        const player2Id = document.getElementById('player2-select').value;
-
-        if (!player1Id || !player2Id) return;
-
-        const resultsDiv = document.getElementById('comparison-results');
-        resultsDiv.innerHTML = '<div style="text-align: center; padding: 2rem;"><i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent);"></i><p style="margin-top: 1rem;">Comparing players...</p></div>';
-        resultsDiv.style.display = 'block';
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const view = urlParams.get('view') || 'overall';
-        const tournamentId = urlParams.get('tournament_id') || '';
-
-        let url = '/api/compare-players?player_ids=' + player1Id + ',' + player2Id;
-        if (view === 'tournament' && tournamentId) {
-            url += '&tournament_id=' + tournamentId;
-        }
-
-        fetch(url)
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.data && data.data.length >= 2) {
-                    displayComparisonResults(data.data);
-                } else {
-                    resultsDiv.innerHTML = '<div class="no-data-message"><i class="fas fa-exclamation-triangle"></i><p>Could not compare players</p></div>';
-                }
-            })
-            .catch(err => {
-                console.error('Error comparing players:', err);
-                resultsDiv.innerHTML = '<div class="no-data-message"><i class="fas fa-exclamation-circle"></i><p>Error loading comparison</p></div>';
-            });
-    }
-
-    // Display comparison results
-    function displayComparisonResults(players) {
-        const p1 = players[0];
-        const p2 = players[1];
-        const resultsDiv = document.getElementById('comparison-results');
-
-        let html = '';
-
-        // Batting comparison
-        if (p1.batting || p2.batting) {
-            html += '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-size: 1.2rem; color: var(--fg);"><i class="fas fa-cricket-bat"></i> Batting Comparison</h3>';
-            html += '<div class="table-wrapper"><table class="stats-table compare-table">';
-            html += '<thead><tr><th>Stat</th><th>' + p1.name + '</th><th>' + p2.name + '</th></tr></thead><tbody>';
-
-            const battingStats = ['matches', 'innings', 'runs', 'average', 'strike_rate', 'fifties', 'hundreds'];
-            battingStats.forEach(stat => {
-                const v1 = stat === 'matches' ? (p1.matches || 0) : ((p1.batting && p1.batting[stat]) || 0);
-                const v2 = stat === 'matches' ? (p2.matches || 0) : ((p2.batting && p2.batting[stat]) || 0);
-                const maxVal = Math.max(v1, v2, 1);
-                html += '<tr><td>' + stat.replace('_', ' ').toUpperCase() + '</td>';
-                html += '<td><div class="compare-cell">';
-                html += '<div class="compare-value ' + (v1 > v2 ? 'stat-value' : '') + '">' + v1 + '</div>';
-                html += '<div class="compare-bar"><div class="compare-bar-fill" style="width:' + (v1 / maxVal * 100) + '%"></div></div>';
-                html += '</div></td>';
-                html += '<td><div class="compare-cell">';
-                html += '<div class="compare-value ' + (v2 > v1 ? 'stat-value' : '') + '">' + v2 + '</div>';
-                html += '<div class="compare-bar"><div class="compare-bar-fill is-secondary" style="width:' + (v2 / maxVal * 100) + '%"></div></div>';
-                html += '</div></td></tr>';
-            });
-
-            html += '</tbody></table></div>';
-        }
-
-        // Bowling comparison
-        if (p1.bowling || p2.bowling) {
-            html += '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-size: 1.2rem; color: var(--fg);"><i class="fas fa-bowling-ball"></i> Bowling Comparison</h3>';
-            html += '<div class="table-wrapper"><table class="stats-table compare-table">';
-            html += '<thead><tr><th>Stat</th><th>' + p1.name + '</th><th>' + p2.name + '</th></tr></thead><tbody>';
-
-            const bowlingStats = ['matches', 'innings', 'wickets', 'average', 'economy', 'four_wickets', 'five_wickets'];
-            bowlingStats.forEach(stat => {
-                const v1 = stat === 'matches' ? (p1.matches || 0) : ((p1.bowling && p1.bowling[stat]) || 0);
-                const v2 = stat === 'matches' ? (p2.matches || 0) : ((p2.bowling && p2.bowling[stat]) || 0);
-                const maxVal = Math.max(v1, v2, 1);
-                const better = stat === 'average' || stat === 'economy' ? (v1 > 0 && (v2 === 0 || v1 < v2)) : v1 > v2;
-                html += '<tr><td>' + stat.replace('_', ' ').toUpperCase() + '</td>';
-                html += '<td><div class="compare-cell">';
-                html += '<div class="compare-value ' + (better ? 'stat-value' : '') + '">' + (v1 || '-') + '</div>';
-                html += '<div class="compare-bar"><div class="compare-bar-fill" style="width:' + (v1 / maxVal * 100) + '%"></div></div>';
-                html += '</div></td>';
-                html += '<td><div class="compare-cell">';
-                html += '<div class="compare-value ' + (!better && v2 > 0 ? 'stat-value' : '') + '">' + (v2 || '-') + '</div>';
-                html += '<div class="compare-bar"><div class="compare-bar-fill is-secondary" style="width:' + (v2 / maxVal * 100) + '%"></div></div>';
-                html += '</div></td></tr>';
-            });
-
-            html += '</tbody></table></div>';
-        }
-
-        resultsDiv.innerHTML = html;
-    }
-
-    function renderInsightsVisuals() {
-        renderImpactDots();
-        renderSparklines();
-        renderVenueRings();
-        renderPitchBars();
-    }
-
-    function renderImpactDots() {
-        const dots = Array.from(document.querySelectorAll('.impact-dots'));
-        if (!dots.length) return;
-        const impacts = dots.map(el => parseFloat(el.dataset.impact || '0'));
-        const maxImpact = Math.max(...impacts, 1);
-        dots.forEach(el => {
-            const impact = parseFloat(el.dataset.impact || '0');
-            const filled = Math.max(1, Math.round((impact / maxImpact) * 8));
-            el.innerHTML = '';
-            for (let i = 0; i < 8; i++) {
-                const dot = document.createElement('span');
-                if (i < filled) dot.classList.add('is-hot');
-                el.appendChild(dot);
-            }
+    // Pitch bars (relative scaling)
+    const pitchBars = Array.from(document.querySelectorAll('.pitch-fill[data-value]'));
+    if (pitchBars.length) {
+        const vals = pitchBars.map(el => parseFloat(el.dataset.value) || 0);
+        const max = Math.max(...vals, 1);
+        pitchBars.forEach((el, i) => {
+            requestAnimationFrame(() => { el.style.width = Math.max(8, vals[i] / max * 100) + '%'; });
         });
     }
+}
 
-    function renderSparklines() {
-        const svgs = document.querySelectorAll('.sparkline');
-        svgs.forEach((svg, index) => {
-            const data = (svg.dataset.series || '')
-                .split(',')
-                .map(v => parseFloat(v.trim()))
-                .filter(v => !Number.isNaN(v));
-            if (!data.length) return;
-            const w = 110;
-            const h = 36;
-            const min = Math.min(...data);
-            const max = Math.max(...data);
-            const range = max - min || 1;
-            const step = w / (data.length - 1 || 1);
-            const points = data.map((v, i) => {
-                const x = i * step;
-                const y = h - ((v - min) / range) * (h - 6) - 3;
-                return { x, y };
-            });
-            const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-            const gradId = `sparkGradient-${index}`;
-            svg.innerHTML = `
-                <defs>
-                    <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stop-color="#6366f1"/>
-                        <stop offset="100%" stop-color="#ec4899"/>
-                    </linearGradient>
-                </defs>
-                <path d="${path}" stroke="url(#${gradId})" fill="none" stroke-width="2.5"/>
-                <circle cx="${points[points.length - 1].x}" cy="${points[points.length - 1].y}" r="2.5"/>
-            `;
-        });
-    }
-
-    function renderVenueRings() {
-        const rings = Array.from(document.querySelectorAll('.venue-ring'));
-        if (!rings.length) return;
-        const values = rings.map(el => parseFloat(el.dataset.value || '0'));
-        const maxVal = Math.max(...values, 1);
-        rings.forEach(el => {
-            const value = parseFloat(el.dataset.value || '0');
-            const pct = Math.min(100, Math.round((value / maxVal) * 100));
-            el.style.background = `conic-gradient(#6366f1 0deg, #ec4899 ${pct * 3.6}deg, rgba(99, 102, 241, 0.15) ${pct * 3.6}deg)`;
-        });
-    }
-
-    function renderPitchBars() {
-        const bars = Array.from(document.querySelectorAll('.pitch-bar-fill'));
-        if (!bars.length) return;
-        const values = bars.map(el => parseFloat(el.dataset.value || '0'));
-        const maxVal = Math.max(...values, 1);
-        bars.forEach(el => {
-            const value = parseFloat(el.dataset.value || '0');
-            const pct = Math.max(8, Math.round((value / maxVal) * 100));
-            el.style.width = `${pct}%`;
-        });
-    }
-
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+    initTeamDropdowns();
+    computeKPIs();
+    loadPartnerships();
+    loadPlayersForComparison();
+    renderInsights();
+});
 </script>
 {% endblock %}
