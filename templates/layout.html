@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}SimCricketX{% endblock %}</title>
+    <link rel="canonical" href="{{ request.base_url }}">
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
@@ -1239,6 +1240,10 @@
                         <a href="{{ url_for('export_my_data') }}" class="profile-action-item">
                             <i class="fas fa-download"></i>
                             <span>Export My Data</span>
+                        </a>
+                        <a href="{{ url_for('about') }}" class="profile-action-item">
+                            <i class="fas fa-circle-info"></i>
+                            <span>About</span>
                         </a>
                         <button class="profile-action-item" onclick="toggleThemeFromDropdown()">
                             <i class="fas fa-moon" id="dropdownThemeIcon"></i>
