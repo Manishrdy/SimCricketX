@@ -1,3 +1,14 @@
+[2.3.0] 2026-02-28
+- Added public landing page at / with cricket animations, SEO meta tags, and Open Graph support
+- Fixed Google Search Console redirect issue — unauthenticated visitors now see landing page instead of being redirected to /login
+- Updated robots.txt to allow all pages except /admin/ and /auth/
+- Redesigned login and register pages with a modern split-panel layout (teal branding left, form right)
+- Added missing confirm_password field to register page with real-time password match validation
+- Added password visibility toggle (eye button) to login and register password fields
+- Extracted shared auth styles into static/css/auth.css
+- Fixed theme inconsistency: all pages now use the same "theme" localStorage key for dark/light mode
+- Moved About link from profile dropdown to site footer (visible on all pages)
+
 [2.2.1] 2026-02-25
 - Fixed fallback pitch scoring matrices in ball_outcome.py so Green/Dry/Hard/Flat/Dead and DEFAULT all sum to 1.0 (removed startup matrix-sum warnings)
 - Tuned game mode wicket risk: aggressive wicket_mult increased from 1.25 to 1.375 (+10%)
