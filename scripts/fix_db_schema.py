@@ -26,6 +26,13 @@ def ensure_schema(engine, db_obj=None):
                     conn.execute(text(stmt))
 
     # ── users ──
+    # Check before adding so we know if force_email_verify is brand-new (for backfill below)
+    _user_cols_before = (
+        [c["name"] for c in inspector.get_columns("users")]
+        if "users" in tables else []
+    )
+    _force_verify_is_new = "force_email_verify" not in _user_cols_before
+
     _add_missing_cols("users", {
         "stable_id":                   "VARCHAR(36)",
         "last_login":                  "DATETIME",
@@ -48,6 +55,8 @@ def ensure_schema(engine, db_obj=None):
         # Resend-verification rate limiting
         "verify_resend_count":         "INTEGER NOT NULL DEFAULT 0",
         "verify_resend_window_start":  "DATETIME",
+        # Force re-verify on next login for pre-existing users
+        "force_email_verify":          "BOOLEAN NOT NULL DEFAULT 0",
     })
 
     # Backfill: pre-existing users (created before email verification was introduced)
@@ -59,6 +68,18 @@ def ensure_schema(engine, db_obj=None):
             ))
     except Exception:
         pass
+
+    # Backfill: when force_email_verify is first added, flag all currently-verified
+    # users so they must re-verify through the new system on their next login.
+    # This only runs ONCE (when the column is brand new), not on every startup.
+    if _force_verify_is_new:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "UPDATE users SET force_email_verify = 1 WHERE email_verified = 1"
+                ))
+        except Exception:
+            pass
 
     # ── teams ──
     _add_missing_cols("teams", {

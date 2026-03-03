@@ -11,7 +11,8 @@
       "Bash(pip install:*)",
       "Bash(grep:*)",
       "Bash(wc:*)",
-      "Bash(find /Users/manish/Documents/SimCricketX -type f -name \"*.py\" -path \"*/engine/*\" -exec basename {} ;)"
+      "Bash(find /Users/manish/Documents/SimCricketX -type f -name \"*.py\" -path \"*/engine/*\" -exec basename {} ;)",
+      "Bash(ls:*)"
     ]
   }
 }
