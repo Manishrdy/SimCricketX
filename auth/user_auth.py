@@ -11,6 +11,7 @@ from database import db
 import json
 
 EMAIL_VERIFY_TTL_MINUTES = 10
+PASSWORD_RESET_TTL_MINUTES = 10
 
 # --- Helper Functions ---
 
@@ -126,6 +127,29 @@ def generate_email_verify_token(email: str) -> str | None:
     except Exception as e:
         db.session.rollback()
         logging.error(f"[Auth] Failed to generate verify token for {email}: {e}")
+        return None
+
+
+def generate_password_reset_token(email: str) -> str | None:
+    """Generate a fresh password-reset token and persist it (10-min TTL).
+
+    Returns the raw token on success, None if the user doesn't exist or DB fails.
+    Always call this regardless of whether the email exists to avoid timing attacks —
+    the caller must not reveal whether a user was found.
+    """
+    email = email.lower().strip()
+    user = db.session.get(User, email)
+    if not user:
+        return None
+    token = secrets.token_urlsafe(32)
+    user.reset_token = token
+    user.reset_token_expires = datetime.utcnow() + timedelta(minutes=PASSWORD_RESET_TTL_MINUTES)
+    try:
+        db.session.commit()
+        return token
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"[Auth] Failed to generate reset token for {email}: {e}")
         return None
 
 

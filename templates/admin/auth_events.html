@@ -1,0 +1,302 @@
+{% extends "admin/layout.html" %}
+{% block admin_content %}
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Auth Event Log</h1>
+        <p class="admin-page-subtitle">
+            {{ total }} event{{ 's' if total != 1 }} &nbsp;·&nbsp;
+            {{ pending_counts.values() | sum }} pending
+        </p>
+    </div>
+    <div class="admin-page-actions">
+        <button onclick="clearResolved()" class="a-btn a-btn-secondary">
+            <i class="fas fa-broom"></i> Clear Resolved
+        </button>
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+<!-- Summary badges -->
+{% if pending_counts %}
+<div class="a-stats-grid" style="margin-bottom:1.5rem;">
+    {% set type_labels = {
+        'resend_rate_limit':  ('fa-tachometer-alt', 'Rate Limit Hit',    '#f59e0b'),
+        'email_send_failure': ('fa-paper-plane',    'Email Send Failure', '#ef4444'),
+        'verify_token_expired':('fa-clock',         'Verify Expired',    '#8b5cf6'),
+        'reset_token_expired': ('fa-key',           'Reset Expired',     '#3b82f6')
+    } %}
+    {% for etype, cnt in pending_counts.items() %}
+    {% set icon, label, color = type_labels.get(etype, ('fa-circle', etype, '#6b7280')) %}
+    <div class="a-stat-card" style="border-left: 3px solid {{ color }}; cursor:pointer;"
+         onclick="filterType('{{ etype }}')">
+        <div class="a-stat-label"><i class="fas {{ icon }}" style="color:{{ color }}"></i> {{ label }}</div>
+        <div class="a-stat-value" style="color:{{ color }}">{{ cnt }}</div>
+        <div class="a-stat-sub">pending</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div style="display:flex; gap:0.75rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
+    <form method="GET" style="display:contents;">
+        <select name="status" class="a-input" style="width:auto;" onchange="this.form.submit()">
+            <option value="" {% if not status_filter %}selected{% endif %}>All statuses</option>
+            <option value="pending"   {% if status_filter=='pending'   %}selected{% endif %}>Pending</option>
+            <option value="contacted" {% if status_filter=='contacted' %}selected{% endif %}>Contacted</option>
+            <option value="resolved"  {% if status_filter=='resolved'  %}selected{% endif %}>Resolved</option>
+        </select>
+        <select name="type" class="a-input" style="width:auto;" onchange="this.form.submit()">
+            <option value="" {% if not type_filter %}selected{% endif %}>All types</option>
+            <option value="resend_rate_limit"   {% if type_filter=='resend_rate_limit'   %}selected{% endif %}>Rate Limit Hit</option>
+            <option value="email_send_failure"  {% if type_filter=='email_send_failure'  %}selected{% endif %}>Email Send Failure</option>
+            <option value="verify_token_expired"{% if type_filter=='verify_token_expired'%}selected{% endif %}>Verify Expired</option>
+            <option value="reset_token_expired" {% if type_filter=='reset_token_expired' %}selected{% endif %}>Reset Expired</option>
+        </select>
+        {% if status_filter or type_filter %}
+        <a href="/admin/auth-events" class="a-btn a-btn-secondary a-btn-sm">
+            <i class="fas fa-times"></i> Clear
+        </a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="a-table-wrap">
+    <table class="a-table">
+        <thead>
+            <tr>
+                <th style="width:130px;">Type</th>
+                <th>Email / User</th>
+                <th>Details</th>
+                <th>IP</th>
+                <th>When</th>
+                <th style="width:100px;">Status</th>
+                <th style="width:140px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ev in events %}
+            <tr id="row-{{ ev.id }}" class="{% if ev.status == 'resolved' %}opacity-muted{% endif %}">
+                <!-- Type badge -->
+                <td>
+                    {% if ev.event_type == 'resend_rate_limit' %}
+                        <span class="a-badge" style="background:#fef3c7;color:#92400e;">
+                            <i class="fas fa-tachometer-alt"></i> Rate Limit
+                        </span>
+                    {% elif ev.event_type == 'email_send_failure' %}
+                        <span class="a-badge" style="background:#fee2e2;color:#991b1b;">
+                            <i class="fas fa-paper-plane"></i> Send Fail
+                        </span>
+                    {% elif ev.event_type == 'verify_token_expired' %}
+                        <span class="a-badge" style="background:#ede9fe;color:#5b21b6;">
+                            <i class="fas fa-clock"></i> Verify Exp
+                        </span>
+                    {% elif ev.event_type == 'reset_token_expired' %}
+                        <span class="a-badge" style="background:#dbeafe;color:#1e40af;">
+                            <i class="fas fa-key"></i> Reset Exp
+                        </span>
+                    {% else %}
+                        <span class="a-badge">{{ ev.event_type }}</span>
+                    {% endif %}
+                </td>
+
+                <!-- Email + user info -->
+                <td>
+                    <div style="font-weight:600; font-size:0.85rem;">{{ ev.email }}</div>
+                    {% if ev.user %}
+                    <div style="font-size:0.75rem; color:var(--fg-secondary);">
+                        {{ ev.user.display_name or '—' }}
+                        &nbsp;·&nbsp;
+                        <a href="/admin/users/{{ ev.email }}" style="font-size:0.75rem;">view profile</a>
+                        &nbsp;·&nbsp;
+                        <a href="mailto:{{ ev.email }}" style="font-size:0.75rem;">
+                            <i class="fas fa-envelope"></i> email
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if ev.admin_notes %}
+                    <div style="font-size:0.75rem; color:var(--fg-secondary); margin-top:0.25rem;
+                                font-style:italic; max-width:220px; white-space:pre-wrap;">
+                        <i class="fas fa-sticky-note"></i> {{ ev.admin_notes }}
+                    </div>
+                    {% endif %}
+                </td>
+
+                <!-- Details -->
+                <td style="font-size:0.78rem; max-width:200px; word-break:break-word;">
+                    {{ ev.details or '—' }}
+                </td>
+
+                <!-- IP -->
+                <td><code style="font-size:0.78rem;">{{ ev.ip_address or '—' }}</code></td>
+
+                <!-- When -->
+                <td style="white-space:nowrap; font-size:0.82rem;">
+                    {{ ev.created_at | localtime(True) if ev.created_at else '—' }}
+                    {% if ev.resolved_at %}
+                    <div style="font-size:0.72rem; color:var(--fg-secondary);">
+                        Resolved {{ ev.resolved_at | localtime(True) }}
+                        {% if ev.resolved_by %} by {{ ev.resolved_by }}{% endif %}
+                    </div>
+                    {% endif %}
+                </td>
+
+                <!-- Status badge -->
+                <td>
+                    <span id="badge-{{ ev.id }}" class="a-badge
+                        {% if ev.status == 'pending'   %}a-badge-warning
+                        {% elif ev.status == 'contacted' %}a-badge-info
+                        {% elif ev.status == 'resolved' %}a-badge-success
+                        {% endif %}">
+                        {{ ev.status | capitalize }}
+                    </span>
+                </td>
+
+                <!-- Actions -->
+                <td>
+                    <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                        {% if ev.status != 'contacted' %}
+                        <button onclick="updateEvent({{ ev.id }}, 'contacted')"
+                                class="a-btn a-btn-secondary a-btn-sm" title="Mark as Contacted">
+                            <i class="fas fa-phone"></i>
+                        </button>
+                        {% endif %}
+                        {% if ev.status != 'resolved' %}
+                        <button onclick="updateEvent({{ ev.id }}, 'resolved')"
+                                class="a-btn a-btn-success a-btn-sm" title="Mark as Resolved">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        {% endif %}
+                        <button onclick="openNotes({{ ev.id }}, `{{ (ev.admin_notes or '') | replace('`','\\`') }}`)"
+                                class="a-btn a-btn-secondary a-btn-sm" title="Add Notes">
+                            <i class="fas fa-sticky-note"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" class="a-empty">
+                    <p>No auth events recorded{% if status_filter or type_filter %} for this filter{% endif %}</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="a-pagination">
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="active">{{ p }}</span>
+        {% else %}
+        <a href="?page={{ p }}&status={{ status_filter }}&type={{ type_filter }}">{{ p }}</a>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Notes modal -->
+<div id="notesModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45);
+     z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:var(--card-bg); border:1px solid var(--card-border); border-radius:12px;
+                padding:1.5rem; width:min(480px, 92vw); box-shadow: 0 8px 32px rgba(0,0,0,0.25);">
+        <h3 style="margin:0 0 1rem; font-size:1rem;">Admin Notes</h3>
+        <input type="hidden" id="notesEventId">
+        <textarea id="notesText" rows="4" class="a-input" style="width:100%; resize:vertical;"
+                  placeholder="Notes about this user / resolution steps…"></textarea>
+        <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:1rem;">
+            <button onclick="closeNotes()" class="a-btn a-btn-secondary">Cancel</button>
+            <button onclick="saveNotes()" class="a-btn a-btn-primary">Save Notes</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.opacity-muted { opacity: 0.55; }
+.a-badge {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.2rem 0.5rem; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 600; white-space: nowrap;
+    background: var(--bg-secondary); color: var(--fg-secondary);
+}
+.a-badge-warning { background:#fef3c7; color:#92400e; }
+.a-badge-info    { background:#dbeafe; color:#1e40af; }
+.a-badge-success { background:#d1fae5; color:#065f46; }
+[data-theme="dark"] .a-badge-warning { background:#451a03; color:#fcd34d; }
+[data-theme="dark"] .a-badge-info    { background:#1e3a5f; color:#93c5fd; }
+[data-theme="dark"] .a-badge-success { background:#064e3b; color:#6ee7b7; }
+[data-theme="dark"] .opacity-muted   { opacity: 0.4; }
+</style>
+
+<script>
+function showAlert(msg, type) {
+    const c = document.getElementById('alertContainer');
+    c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
+    setTimeout(() => c.innerHTML = '', 4000);
+}
+
+async function updateEvent(id, status, notes) {
+    const fd = new FormData();
+    fd.append('status', status);
+    if (notes !== undefined) fd.append('admin_notes', notes);
+    const res = await fetch(`/admin/auth-events/${id}/update`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) { showAlert(data.error || 'Error', 'error'); return; }
+
+    const row = document.getElementById(`row-${id}`);
+    const badge = document.getElementById(`badge-${id}`);
+    if (row) {
+        row.classList.toggle('opacity-muted', status === 'resolved');
+    }
+    if (badge) {
+        badge.className = 'a-badge' + (
+            status === 'pending'   ? ' a-badge-warning' :
+            status === 'contacted' ? ' a-badge-info' :
+            status === 'resolved'  ? ' a-badge-success' : ''
+        );
+        badge.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+    }
+    showAlert('Updated successfully', 'success');
+}
+
+function openNotes(id, currentNotes) {
+    document.getElementById('notesEventId').value = id;
+    document.getElementById('notesText').value = currentNotes;
+    document.getElementById('notesModal').style.display = 'flex';
+}
+function closeNotes() {
+    document.getElementById('notesModal').style.display = 'none';
+}
+async function saveNotes() {
+    const id = document.getElementById('notesEventId').value;
+    const notes = document.getElementById('notesText').value.trim();
+    // Keep current status — just update notes
+    const row = document.getElementById(`row-${id}`);
+    const badge = document.getElementById(`badge-${id}`);
+    const currentStatus = badge ? badge.textContent.trim().toLowerCase() : 'pending';
+    closeNotes();
+    await updateEvent(parseInt(id), currentStatus, notes);
+    // Refresh notes display in the row
+    setTimeout(() => location.reload(), 800);
+}
+
+function filterType(t) {
+    const url = new URL(window.location);
+    url.searchParams.set('type', t);
+    url.searchParams.set('status', 'pending');
+    window.location = url.toString();
+}
+
+async function clearResolved() {
+    if (!confirm('Delete all resolved auth event records?')) return;
+    const res = await fetch('/admin/auth-events/clear-resolved', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) { showAlert(`Deleted ${data.deleted} record(s)`, 'success'); setTimeout(() => location.reload(), 1200); }
+    else showAlert(data.error, 'error');
+}
+</script>
+
+{% endblock %}

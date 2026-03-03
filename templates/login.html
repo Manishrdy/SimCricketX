@@ -178,6 +178,14 @@
                 </button>
             </form>
 
+            <div class="auth-link-row" style="margin-top:14px;">
+                <a href="{{ url_for('forgot_password') }}">Forgot password?</a>
+                {% if error_type == 'unverified' %}
+                <span class="sep">·</span>
+                <a href="{{ url_for('verify_email_pending') }}">Resend verification</a>
+                {% endif %}
+            </div>
+
             <div class="auth-divider"></div>
 
             <div class="auth-link-row">

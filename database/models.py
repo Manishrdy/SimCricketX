@@ -42,6 +42,14 @@ class User(UserMixin, db.Model):
     email_verify_token = db.Column(db.String(64), nullable=True, index=True)
     email_verify_token_expires = db.Column(db.DateTime, nullable=True)
 
+    # Password reset
+    reset_token = db.Column(db.String(64), nullable=True, index=True)
+    reset_token_expires = db.Column(db.DateTime, nullable=True)
+
+    # Resend-verification rate limiting (per-email, DB-backed, 4-hour window)
+    verify_resend_count = db.Column(db.Integer, default=0, nullable=False)
+    verify_resend_window_start = db.Column(db.DateTime, nullable=True)
+
     # Relationships — cascade so deleting a User removes all owned data
     teams = relationship('Team', backref='owner', lazy=True, cascade="all, delete-orphan")
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
@@ -583,3 +591,37 @@ class UserGroundConfig(db.Model):
 
     user = relationship('User', backref=db.backref(
         'ground_config', uselist=False, cascade='all, delete-orphan'))
+
+
+class AuthEventLog(db.Model):
+    """Log of notable auth events for admin review.
+
+    Event types:
+      resend_rate_limit   — user hit the verification-resend cap
+      email_send_failure  — Resend API returned an error
+      verify_token_expired — user clicked an expired verification link
+      reset_token_expired  — user clicked an expired password-reset link
+    """
+    __tablename__ = 'auth_event_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_type = db.Column(db.String(30), nullable=False, index=True)
+    email = db.Column(db.String(120), nullable=False, index=True)
+    # Nullable — user may not exist (e.g. unknown email submitted to forgot-password)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    details = db.Column(db.Text, nullable=True)          # free-form JSON or text
+    ip_address = db.Column(db.String(50), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Admin workflow fields
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending | contacted | resolved
+    admin_notes = db.Column(db.Text, nullable=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolved_by = db.Column(db.String(120), nullable=True)
+
+    user = relationship('User', foreign_keys=[user_id],
+                        backref=db.backref('auth_events', cascade='all, delete-orphan', passive_deletes=True))
+
+    __table_args__ = (
+        db.Index('ix_auth_event_log_status_type', 'status', 'event_type'),
+    )

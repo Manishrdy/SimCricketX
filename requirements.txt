@@ -19,6 +19,8 @@ flask-limiter
 flask-socketio>=5.3
 simple-websocket>=0.9
 pyinstaller
+resend
+python-dotenv
 
 # ── Testing ───────────────────────────────────────────────────────────────────
 pytest>=7.4.0
