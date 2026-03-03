@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <script>
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('theme'); } catch (e) {}
+            if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', t);
+        }());
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify your email — SimCricketX</title>
+    <meta name="robots" content="noindex">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+</head>
+<body>
+
+<div class="auth-page">
+
+    <!-- LEFT PANEL -->
+    <aside class="auth-left" aria-hidden="true">
+        <div class="auth-left-glow"></div>
+        <div class="auth-left-glow2"></div>
+
+        <a href="/" class="auth-left-logo">
+            <span class="auth-left-logo-icon">🏏</span>
+            SimCricketX
+        </a>
+
+        <div class="auth-left-body">
+            <svg class="auth-left-ball" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <radialGradient id="ballGrad" cx="36%" cy="34%" r="56%">
+                        <stop offset="0%"   stop-color="#e85c50"/>
+                        <stop offset="55%"  stop-color="#c0392b"/>
+                        <stop offset="100%" stop-color="#7d1a0e"/>
+                    </radialGradient>
+                </defs>
+                <circle cx="100" cy="100" r="90" fill="url(#ballGrad)"/>
+                <path d="M100,12 C55,38 55,88 100,100 C55,112 55,162 100,188"
+                      fill="none" stroke="rgba(255,200,185,0.7)" stroke-width="4" stroke-linecap="round"/>
+                <path d="M100,12 C145,38 145,88 100,100 C145,112 145,162 100,188"
+                      fill="none" stroke="rgba(255,200,185,0.7)" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+
+            <div class="auth-left-tagline">
+                One step<br>
+                <span class="auth-left-tagline-accent">to go.</span>
+            </div>
+
+            <p class="auth-left-sub">
+                Check your inbox and click the verification link to activate your SimCricketX account.
+            </p>
+        </div>
+
+        <div class="auth-left-footer">
+            Free &nbsp;·&nbsp; Open source &nbsp;·&nbsp; No credit card &nbsp;·&nbsp;
+            <a href="https://github.com/manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </div>
+    </aside>
+
+    <!-- RIGHT PANEL -->
+    <main class="auth-right">
+
+        <button class="auth-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
+            <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+        </button>
+
+        <div class="auth-form-wrap">
+
+            <!-- Flash messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="auth-alert auth-alert--{{ category }}" id="flashAlert">
+                <i class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'warning' %}exclamation-triangle{% elif category == 'danger' %}times-circle{% else %}info-circle{% endif %}" aria-hidden="true"></i>
+                <span>{{ message }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <!-- Envelope icon -->
+            <div style="text-align:center;margin-bottom:20px;">
+                <span style="display:inline-flex;align-items:center;justify-content:center;
+                             width:68px;height:68px;border-radius:50%;
+                             background:var(--surface-2,#ecfdf5);
+                             border:2px solid var(--border,#a7f3d0);">
+                    <i class="fas fa-envelope-open-text" style="font-size:26px;color:var(--primary,#0f766e);"></i>
+                </span>
+            </div>
+
+            <h1 class="auth-form-title">Check your inbox</h1>
+            <p class="auth-form-sub">
+                We've sent a verification link to
+                {% if email %}
+                <strong>{{ email }}</strong>
+                {% else %}
+                your email address
+                {% endif %}.
+                The link is valid for <strong>10 minutes</strong>.
+            </p>
+
+            <p style="font-size:13px;color:var(--text-muted,#6b7280);margin:16px 0 24px;line-height:1.6;">
+                Didn't receive it? Check your spam folder, or request a new link below.
+            </p>
+
+            <!-- Resend form -->
+            <form method="POST" action="{{ url_for('resend_verification') }}" id="resendForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="email" value="{{ email or '' }}">
+
+                <button type="submit" class="auth-btn" id="resendBtn">
+                    <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                    <span id="resendBtnText">Resend verification email</span>
+                </button>
+            </form>
+
+            <div class="auth-divider"></div>
+
+            <div class="auth-link-row">
+                Already verified?
+                <a href="{{ url_for('login') }}">Sign in</a>
+            </div>
+
+        </div>
+    </main>
+
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    /* Theme */
+    var html = document.documentElement;
+    var btn  = document.getElementById('themeBtn');
+    var icon = document.getElementById('themeIcon');
+    function applyTheme(t) {
+        html.setAttribute('data-theme', t);
+        icon.className = (t === 'dark') ? 'fas fa-sun' : 'fas fa-moon';
+        try { localStorage.setItem('theme', t); } catch (e) {}
+    }
+    applyTheme(html.getAttribute('data-theme') || 'light');
+    btn.addEventListener('click', function () {
+        applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+
+    /* Resend button — one-shot to prevent duplicate sends */
+    var resendForm = document.getElementById('resendForm');
+    var resendBtn  = document.getElementById('resendBtn');
+    var resendText = document.getElementById('resendBtnText');
+    if (resendForm) {
+        resendForm.addEventListener('submit', function () {
+            resendBtn.disabled = true;
+            resendText.textContent = 'Sending…';
+        });
+    }
+
+    /* Auto-dismiss flash alerts */
+    var flash = document.getElementById('flashAlert');
+    if (flash) {
+        setTimeout(function () {
+            flash.style.transition = 'opacity 0.35s, transform 0.35s';
+            flash.style.opacity    = '0';
+            flash.style.transform  = 'translateY(-10px)';
+            setTimeout(function () { flash.remove(); }, 380);
+        }, 5000);
+    }
+}());
+</script>
+
+</body>
+</html>
