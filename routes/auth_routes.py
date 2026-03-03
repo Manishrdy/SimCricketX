@@ -4,6 +4,7 @@ from datetime import datetime
 
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
+from utils.email_service import send_verification_email
 
 
 def register_auth_routes(
@@ -22,6 +23,7 @@ def register_auth_routes(
     ActiveSession,
     LoginHistory,
     get_client_ip,
+    generate_email_verify_token,
 ):
     @app.route("/register", methods=["GET", "POST"])
     @limiter.limit("5 per minute", methods=["POST"])
@@ -69,7 +71,19 @@ def register_auth_routes(
                 return render_template("register.html", error=policy_error)
 
             if register_user(email, password, display_name=display_name):
-                return redirect(url_for("login"))
+                # Send verification email immediately after registration
+                user = db.session.get(DBUser, email)
+                if user and user.email_verify_token:
+                    verify_link = url_for(
+                        "verify_email", token=user.email_verify_token, _external=True
+                    )
+                    send_verification_email(
+                        email,
+                        display_name or email,
+                        verify_link,
+                    )
+                session["pending_verify_email"] = email
+                return redirect(url_for("verify_email_pending"))
             return render_template(
                 "register.html",
                 error="Registration failed. Please try a different email.",
@@ -111,6 +125,15 @@ def register_auth_routes(
             if verify_user(email, password):
                 user = db.session.get(DBUser, email)
                 if user:
+                    if not user.email_verified:
+                        session["pending_verify_email"] = email
+                        return render_template(
+                            "login.html",
+                            error="Please verify your email before signing in.",
+                            error_type="unverified",
+                            unverified_email=email,
+                        )
+
                     if user.is_banned:
                         if user.banned_until and user.banned_until <= datetime.utcnow():
                             user.is_banned = False
@@ -351,3 +374,66 @@ def register_auth_routes(
         logout_user()
         session.pop("_flashes", None)
         return redirect(url_for("login"))
+
+    # ── Email verification ─────────────────────────────────────────────────────
+
+    @app.route("/verify-email")
+    def verify_email():
+        """Consume a one-time email verification token."""
+        token = request.args.get("token", "").strip()
+        if not token:
+            flash("Invalid verification link.", "danger")
+            return redirect(url_for("login"))
+
+        user = DBUser.query.filter_by(email_verify_token=token).first()
+        if not user:
+            flash("Invalid or already-used verification link.", "danger")
+            return redirect(url_for("login"))
+
+        if datetime.utcnow() > user.email_verify_token_expires:
+            session["pending_verify_email"] = user.id
+            flash("Verification link has expired. Request a new one below.", "warning")
+            return redirect(url_for("verify_email_pending"))
+
+        try:
+            user.email_verified = True
+            user.email_verify_token = None
+            user.email_verify_token_expires = None
+            db.session.commit()
+            app.logger.info(f"[Auth] Email verified for {user.id}")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Auth] Email verification DB error: {e}")
+            flash("Something went wrong. Please try again.", "danger")
+            return redirect(url_for("login"))
+
+        flash("Email verified! You can now sign in.", "success")
+        return redirect(url_for("login"))
+
+    @app.route("/verify-email-pending")
+    def verify_email_pending():
+        """Holding page shown after registration or when verification is needed."""
+        email = session.get("pending_verify_email", "")
+        return render_template("verify_email_pending.html", email=email)
+
+    @app.route("/resend-verification", methods=["POST"])
+    @limiter.limit("3 per hour", methods=["POST"])
+    def resend_verification():
+        """Resend the verification email. Rate-limited to 3 attempts per hour."""
+        email = request.form.get("email", "").strip().lower()
+
+        # Always respond the same way to prevent email enumeration
+        user = db.session.get(DBUser, email) if email else None
+        if user and not user.email_verified:
+            token = generate_email_verify_token(email)
+            if token:
+                verify_link = url_for("verify_email", token=token, _external=True)
+                send_verification_email(email, user.display_name or email, verify_link)
+                app.logger.info(f"[Auth] Verification email resent to {email}")
+
+        flash(
+            "If that email is registered and unverified, a new link has been sent.",
+            "info",
+        )
+        session["pending_verify_email"] = email
+        return redirect(url_for("verify_email_pending"))

@@ -31,6 +31,10 @@ if sys.platform == "win32":
     # Set environment variables for UTF-8
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 
+# Load .env before anything reads environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
 # Now import everything else
 import json
 import re
@@ -67,7 +71,8 @@ from auth.user_auth import (
     update_user_email,
     update_user_password,
     log_admin_action,
-    validate_password_policy
+    validate_password_policy,
+    generate_email_verify_token,
 )
 from engine.team import Team, save_team, PITCH_PREFERENCES
 from engine.player import Player, PLAYER_ROLES, BATTING_HANDS, BOWLING_TYPES, BOWLING_HANDS
@@ -1885,6 +1890,7 @@ def create_app():
         ActiveSession=ActiveSession,
         LoginHistory=LoginHistory,
         get_client_ip=get_client_ip,
+        generate_email_verify_token=generate_email_verify_token,
     )
 
     def load_user_teams(user_email, match_format="T20"):

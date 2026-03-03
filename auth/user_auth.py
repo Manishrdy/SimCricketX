@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import logging
 import re
+import secrets
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from werkzeug.security import check_password_hash, generate_password_hash
 from database.models import User, AdminAuditLog
 from database import db
 import json
+
+EMAIL_VERIFY_TTL_MINUTES = 10
 
 # --- Helper Functions ---
 
@@ -83,12 +86,16 @@ def register_user(email: str, password: str, display_name: Optional[str] = None)
         return False
 
     try:
+        token = secrets.token_urlsafe(32)
         new_user = User(
             id=email,
             password_hash=generate_password_hash(password),
             ip_address=get_ip_address(),
             last_login=datetime.now(timezone.utc),
-            display_name=display_name
+            display_name=display_name,
+            email_verified=False,
+            email_verify_token=token,
+            email_verify_token_expires=datetime.utcnow() + timedelta(minutes=EMAIL_VERIFY_TTL_MINUTES),
         )
 
         db.session.add(new_user)
@@ -99,6 +106,28 @@ def register_user(email: str, password: str, display_name: Optional[str] = None)
         db.session.rollback()
         logging.error(f"[Auth] Registration failed for {email}: {e}")
         return False
+
+def generate_email_verify_token(email: str) -> str | None:
+    """Generate a fresh email verification token and persist it (10-min TTL).
+
+    Returns the raw token string on success, None on failure.
+    Call this for both initial registration and the resend flow.
+    """
+    email = email.lower().strip()
+    user = db.session.get(User, email)
+    if not user:
+        return None
+    token = secrets.token_urlsafe(32)
+    user.email_verify_token = token
+    user.email_verify_token_expires = datetime.utcnow() + timedelta(minutes=EMAIL_VERIFY_TTL_MINUTES)
+    try:
+        db.session.commit()
+        return token
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"[Auth] Failed to generate verify token for {email}: {e}")
+        return None
+
 
 def verify_user(email: str, password: str) -> bool:
     """Verify credentials against database."""

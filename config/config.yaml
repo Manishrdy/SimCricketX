@@ -5,9 +5,7 @@ backup:
   token: 53479bbdcfff64e78e39f6bd06196b347b53e5d9801774246f69a5d37d02b30c
 security:
   trust_proxy_headers: true
-resend:
-  token: re_XqaMX2wV_JMGz6Pa4hzKQbkoVwERD35mT
 email:
   from_address: "SimCricketX <no-reply@simcricketx.app>"
-  support_email: support@simcricketx.app
+  support_email: d6mr07@gmail.com
   app_url: https://simcricketx.app

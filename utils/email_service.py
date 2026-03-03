@@ -6,7 +6,7 @@ Config (config/config.yaml):
     token: re_...                          # Resend API key
   email:
     from_address: "SimCricketX <no-reply@simcricketx.app>"
-    support_email: support@simcricketx.app
+    support_email: d6mr07@gmail.com
     app_url: https://simcricketx.app
 
 Environment variable fallbacks:
@@ -16,14 +16,15 @@ Environment variable fallbacks:
 import logging
 import os
 from datetime import datetime, timezone
-from pathlib import Path
 
 import resend
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 log = logging.getLogger(__name__)
 
-_TEMPLATES_DIR = Path(__file__).parent.parent / "email_templates"
+# Resend template IDs (created from email_templates/ HTML files)
+_TMPL_EMAIL_VERIFY  = "cf85ee2c-a4bb-41be-aefb-161d993b1b69"
+_TMPL_PASSWORD_RESET = "e82787f5-1ff5-4e4d-a690-d4f5bef91395"
+_TMPL_ACCOUNT_DELETION = "d081688a-5cab-41fe-a715-10dd65ceec5a"
 
 
 # ── Config helpers ─────────────────────────────────────────────────────────────
@@ -37,10 +38,7 @@ def _cfg() -> dict:
 
 
 def _api_key() -> str:
-    return (
-        os.environ.get("RESEND_API_KEY")
-        or _cfg().get("resend", {}).get("token", "")
-    )
+    return os.environ.get("RESEND_API_KEY", "")
 
 
 def _from_addr() -> str:
@@ -50,33 +48,44 @@ def _from_addr() -> str:
 
 
 def _support_email() -> str:
-    return _cfg().get("email", {}).get("support_email", "support@simcricketx.app")
+    return _cfg().get("email", {}).get("support_email", "d6mr07@gmail.com")
 
 
 def _app_url() -> str:
     return _cfg().get("email", {}).get("app_url", "https://simcricketx.app")
 
 
-# ── Template renderer ─────────────────────────────────────────────────────────
+# ── Core send functions ────────────────────────────────────────────────────────
 
-def _render(template_name: str, **kwargs) -> str:
-    """Render a Jinja2 HTML email template from email_templates/."""
-    env = Environment(
-        loader=FileSystemLoader(str(_TEMPLATES_DIR)),
-        autoescape=select_autoescape(["html"]),
-    )
-    return env.get_template(template_name).render(
-        support_email=_support_email(),
-        app_url=_app_url(),
-        year=datetime.now(timezone.utc).year,
-        **kwargs,
-    )
+def send_email_via_template(to: str, template_id: str, variables: dict) -> bool:
+    """Send a transactional email using a Resend template ID.
 
+    Args:
+        to:          recipient email address
+        template_id: Resend template ID (e.g. 'cf85ee2c-...')
+        variables:   dict of variable substitutions for the template
+    """
+    api_key = _api_key()
+    if not api_key:
+        log.error("[Email] Resend API key not configured — template email not sent to %s", to)
+        return False
+    try:
+        resend.api_key = api_key
+        resend.Emails.send({
+            "from": _from_addr(),
+            "to": [to],
+            "template_id": template_id,
+            "variables": variables,
+        })
+        log.info("[Email] Template %s sent to %s", template_id, to)
+        return True
+    except Exception as exc:
+        log.error("[Email] Failed to send template %s to %s: %s", template_id, to, exc)
+        return False
 
-# ── Core send ─────────────────────────────────────────────────────────────────
 
 def send_email(to: str, subject: str, html: str) -> bool:
-    """Low-level send via Resend. Returns True on success."""
+    """Low-level send via Resend with inline HTML. Returns True on success."""
     api_key = _api_key()
     if not api_key:
         log.error("[Email] Resend API key not configured — email not sent to %s", to)
@@ -102,7 +111,7 @@ def send_verification_email(
     to: str,
     display_name: str,
     verification_link: str,
-    ttl_hours: int = 24,
+    ttl_minutes: int = 10,
 ) -> bool:
     """
     Send email address verification after registration.
@@ -111,22 +120,27 @@ def send_verification_email(
         to:                 recipient email address
         display_name:       user's chosen display name
         verification_link:  full URL with signed token (e.g. /verify-email?token=...)
-        ttl_hours:          hours until the link expires (shown to user)
+        ttl_minutes:        minutes until the link expires (shown to user)
     """
-    html = _render(
-        "email_verify.html",
-        display_name=display_name,
-        verification_link=verification_link,
-        ttl_hours=ttl_hours,
+    return send_email_via_template(
+        to=to,
+        template_id=_TMPL_EMAIL_VERIFY,
+        variables={
+            "display_name": display_name,
+            "verification_link": verification_link,
+            "ttl_minutes": str(ttl_minutes),
+            "year": str(datetime.now(timezone.utc).year),
+            "app_url": _app_url(),
+            "support_email": _support_email(),
+        },
     )
-    return send_email(to, "Verify your SimCricketX email address", html)
 
 
 def send_password_reset_email(
     to: str,
     display_name: str,
     reset_link: str,
-    ttl_minutes: int = 30,
+    ttl_minutes: int = 10,
 ) -> bool:
     """
     Send a password reset link for the forgot-password flow.
@@ -137,13 +151,18 @@ def send_password_reset_email(
         reset_link:   full URL with signed reset token (e.g. /reset-password?token=...)
         ttl_minutes:  minutes until the link expires (shown to user)
     """
-    html = _render(
-        "password_reset.html",
-        display_name=display_name,
-        reset_link=reset_link,
-        ttl_minutes=ttl_minutes,
+    return send_email_via_template(
+        to=to,
+        template_id=_TMPL_PASSWORD_RESET,
+        variables={
+            "display_name": display_name,
+            "reset_link": reset_link,
+            "ttl_minutes": str(ttl_minutes),
+            "year": str(datetime.now(timezone.utc).year),
+            "app_url": _app_url(),
+            "support_email": _support_email(),
+        },
     )
-    return send_email(to, "Reset your SimCricketX password", html)
 
 
 def send_account_deletion_email(
@@ -159,9 +178,14 @@ def send_account_deletion_email(
         display_name:   user's display name (captured before deletion)
         deletion_date:  human-readable date/time string, e.g. "March 2, 2026 at 14:35 UTC"
     """
-    html = _render(
-        "account_deletion.html",
-        display_name=display_name,
-        deletion_date=deletion_date,
+    return send_email_via_template(
+        to=to,
+        template_id=_TMPL_ACCOUNT_DELETION,
+        variables={
+            "display_name": display_name,
+            "deletion_date": deletion_date,
+            "year": str(datetime.now(timezone.utc).year),
+            "app_url": _app_url(),
+            "support_email": _support_email(),
+        },
     )
-    return send_email(to, "Your SimCricketX account has been deleted", html)
