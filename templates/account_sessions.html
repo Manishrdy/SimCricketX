@@ -1,0 +1,129 @@
+{% extends "layout.html" %}
+{% block title %}Active Sessions | SimCricketX{% endblock %}
+{% block content %}
+
+<div style="max-width: 800px; margin: 2.5rem auto; padding: 0 1rem;">
+
+    <!-- Header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h1 style="font-size: 1.4rem; font-weight: 700; color: var(--fg); margin: 0;">Active Sessions</h1>
+            <p style="font-size: 0.85rem; color: var(--fg-secondary); margin: 0.25rem 0 0;">
+                Devices currently signed in to your account.
+            </p>
+        </div>
+        {% if sessions | length > 1 %}
+        <form method="POST" action="{{ url_for('revoke_all_sessions') }}"
+              onsubmit="return confirm('Sign out of all other devices?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit"
+                    style="padding: 0.55rem 1.1rem; background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.3); color: #dc2626; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer;">
+                <i class="fas fa-right-from-bracket"></i> Sign out all other devices
+            </button>
+        </form>
+        {% endif %}
+    </div>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div style="padding: 0.7rem 1rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem;
+                {% if category == 'success' %}background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); color: #059669;
+                {% elif category == 'danger' %}background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.3); color: #dc2626;
+                {% elif category == 'warning' %}background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); color: #d97706;
+                {% else %}background: var(--card-bg); border: 1px solid var(--card-border); color: var(--fg);
+                {% endif %}">
+        {% if category == 'success' %}<i class="fas fa-check-circle"></i>
+        {% elif category == 'danger' %}<i class="fas fa-exclamation-circle"></i>
+        {% elif category == 'warning' %}<i class="fas fa-triangle-exclamation"></i>
+        {% else %}<i class="fas fa-info-circle"></i>{% endif %}
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <!-- Sessions list -->
+    {% if sessions %}
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        {% for s in sessions %}
+        {% set is_current = (s.session_token == current_token) %}
+        <div style="background: var(--card-bg); border: 1px solid {% if is_current %}var(--accent){% else %}var(--card-border){% endif %}; border-radius: 10px; padding: 1rem 1.25rem;
+                    display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+
+            <!-- Device icon + info -->
+            <div style="display: flex; align-items: flex-start; gap: 0.85rem; flex: 1; min-width: 0;">
+                <div style="padding: 0.6rem; background: var(--accent-light); border-radius: 8px; flex-shrink: 0;">
+                    {% set ua = s.user_agent | lower if s.user_agent else '' %}
+                    {% if 'mobile' in ua or 'android' in ua or 'iphone' in ua %}
+                        <i class="fas fa-mobile-screen-button" style="color: var(--accent); font-size: 1.1rem;"></i>
+                    {% elif 'tablet' in ua or 'ipad' in ua %}
+                        <i class="fas fa-tablet-screen-button" style="color: var(--accent); font-size: 1.1rem;"></i>
+                    {% else %}
+                        <i class="fas fa-desktop" style="color: var(--accent); font-size: 1.1rem;"></i>
+                    {% endif %}
+                </div>
+                <div style="min-width: 0;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.2rem;">
+                        <span style="font-size: 0.88rem; font-weight: 600; color: var(--fg);">
+                            {{ s.ip_address or 'Unknown IP' }}
+                        </span>
+                        {% if is_current %}
+                        <span style="font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.5rem; background: var(--accent-light); color: var(--accent); border-radius: 99px; border: 1px solid var(--accent);">
+                            This device
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--fg-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 380px;"
+                         title="{{ s.user_agent or 'Unknown browser' }}">
+                        {{ s.user_agent or 'Unknown browser' }}
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--fg-secondary); margin-top: 0.3rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <span title="Login time">
+                            <i class="fas fa-right-to-bracket" style="opacity:0.5;"></i>
+                            Signed in {{ s.login_at.strftime('%b %d, %Y %H:%M') }} UTC
+                        </span>
+                        <span title="Last activity">
+                            <i class="fas fa-clock" style="opacity:0.5;"></i>
+                            Active {{ s.last_active.strftime('%b %d, %Y %H:%M') }} UTC
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Revoke button -->
+            <div style="flex-shrink: 0;">
+                {% if is_current %}
+                <span style="font-size: 0.78rem; color: var(--fg-secondary); font-style: italic;">Current session</span>
+                {% else %}
+                <form method="POST" action="{{ url_for('revoke_session') }}"
+                      onsubmit="return confirm('Revoke this session?');" style="margin: 0;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="session_id" value="{{ s.id }}">
+                    <button type="submit"
+                            style="padding: 0.45rem 0.9rem; background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.3); color: #dc2626; border-radius: 7px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                        <i class="fas fa-xmark"></i> Revoke
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 3rem 1rem; color: var(--fg-secondary);">
+        <i class="fas fa-desktop" style="font-size: 2rem; opacity: 0.3; display: block; margin-bottom: 0.75rem;"></i>
+        No active sessions found.
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 1.5rem;">
+        <a href="{{ url_for('home') }}" style="font-size: 0.84rem; color: var(--fg-secondary); text-decoration: none;">
+            <i class="fas fa-arrow-left"></i> Back to home
+        </a>
+    </div>
+</div>
+
+{% endblock %}

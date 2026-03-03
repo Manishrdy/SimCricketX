@@ -314,6 +314,32 @@ body {
 }
 .auth-alert i { margin-top: 0.08rem; flex-shrink: 0; font-size: 0.9rem; }
 
+/* Error alert variants */
+.auth-alert--banned {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #b45309;
+}
+.auth-alert--security {
+    background: rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, 0.35);
+    color: #1d4ed8;
+}
+.auth-alert--system {
+    background: rgba(220, 38, 38, 0.12);
+    border-color: rgba(220, 38, 38, 0.4);
+    color: #991b1b;
+}
+.auth-alert--validation {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: #4338ca;
+}
+[data-theme="dark"] .auth-alert--banned  { color: #fbbf24; }
+[data-theme="dark"] .auth-alert--security { color: #60a5fa; }
+[data-theme="dark"] .auth-alert--system  { color: #f87171; }
+[data-theme="dark"] .auth-alert--validation { color: #a5b4fc; }
+
 /* Form */
 .auth-form {
     display: flex;
