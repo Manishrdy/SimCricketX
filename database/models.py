@@ -37,6 +37,11 @@ class User(UserMixin, db.Model):
     # Force password reset on next login
     force_password_reset = db.Column(db.Boolean, default=False, nullable=False)
 
+    # Email verification
+    email_verified = db.Column(db.Boolean, default=False, nullable=False)
+    email_verify_token = db.Column(db.String(64), nullable=True, index=True)
+    email_verify_token_expires = db.Column(db.DateTime, nullable=True)
+
     # Relationships — cascade so deleting a User removes all owned data
     teams = relationship('Team', backref='owner', lazy=True, cascade="all, delete-orphan")
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
