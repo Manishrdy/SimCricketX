@@ -73,6 +73,7 @@ from auth.user_auth import (
     log_admin_action,
     validate_password_policy,
     generate_email_verify_token,
+    generate_password_reset_token,
 )
 from engine.team import Team, save_team, PITCH_PREFERENCES
 from engine.player import Player, PLAYER_ROLES, BATTING_HANDS, BOWLING_TYPES, BOWLING_HANDS
@@ -125,6 +126,7 @@ from database.models import (
     IPWhitelistEntry,
     AnnouncementBanner,
     UserBannerDismissal,
+    AuthEventLog,
 )
 from engine.tournament_engine import TournamentEngine
 from sqlalchemy import func, text  # For aggregate functions
@@ -841,23 +843,40 @@ def create_app():
 
 
 
+    def _clear_app_session():
+        """Pop only app-specific session keys, preserving Flask-Login and Flask-WTF internals.
+
+        Never call session.clear() after logout_user() — it wipes Flask-Login's
+        '_remember: clear' flag (preventing the remember-me cookie from being deleted)
+        and Flask-WTF's CSRF token (causing CSRF errors on subsequent form submissions).
+        """
+        for key in ('session_token', 'force_password_reset', 'pending_verify_email',
+                    'visit_counted', 'show_github_star_prompt'):
+            session.pop(key, None)
+
     @app.before_request
     def update_session_activity():
         """Update last_active and enforce that authenticated sessions are revocable."""
         if not current_user.is_authenticated:
             return None
+        if request.endpoint is None:
+            # Unregistered path (e.g. /favicon.ico) — skip session guard
+            return None
         if app.config.get("TESTING") and (
             request.endpoint == "create_team" or request.path.startswith("/match/")
         ):
             return None
-        if request.endpoint in ('login', 'logout', 'static'):
+        if request.endpoint in ('login', 'logout', 'static',
+                                'verify_email', 'verify_email_pending', 'resend_verification',
+                                'forgot_password', 'reset_password',
+                                'auth_challenge', 'register'):
             return None
 
         token = session.get('session_token')
         if not token:
             app.logger.warning(f"[Auth] Missing session token for authenticated user {current_user.id}")
             logout_user()
-            session.clear()
+            _clear_app_session()
             if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
                 return jsonify({"error": "Session expired. Please log in again."}), 401
             return redirect(url_for('login'))
@@ -870,7 +889,7 @@ def create_app():
             if not active:
                 app.logger.warning(f"[Auth] Revoked or invalid session token for {current_user.id}")
                 logout_user()
-                session.clear()
+                _clear_app_session()
                 if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
                     return jsonify({"error": "Session expired. Please log in again."}), 401
                 return redirect(url_for('login'))
@@ -883,7 +902,7 @@ def create_app():
                 db.session.delete(active)
                 db.session.commit()
                 logout_user()
-                session.clear()
+                _clear_app_session()
                 app.logger.info(f"[Auth] Session expired due to inactivity for {current_user.id}")
                 if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
                     return jsonify({"error": "Session expired due to inactivity. Please log in again."}), 401
@@ -1296,6 +1315,7 @@ def create_app():
         LOGIN_HISTORY_MODEL=LoginHistory,
         IP_WHITELIST_MODEL=IPWhitelistEntry,
         ANNOUNCEMENT_BANNER_MODEL=AnnouncementBanner,
+        AUTH_EVENT_MODEL=AuthEventLog,
         DBUser=DBUser,
         DBTeam=DBTeam,
         DBTeamProfile=DBTeamProfile,
@@ -1889,8 +1909,10 @@ def create_app():
         FailedLoginAttempt=FailedLoginAttempt,
         ActiveSession=ActiveSession,
         LoginHistory=LoginHistory,
+        AuthEventLog=AuthEventLog,
         get_client_ip=get_client_ip,
         generate_email_verify_token=generate_email_verify_token,
+        generate_password_reset_token=generate_password_reset_token,
     )
 
     def load_user_teams(user_email, match_format="T20"):

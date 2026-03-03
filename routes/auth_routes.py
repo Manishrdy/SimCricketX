@@ -1,10 +1,18 @@
 """Authentication and account route registration."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
-from utils.email_service import send_verification_email
+from utils.email_service import (
+    send_verification_email,
+    send_password_reset_email,
+    send_account_deletion_email,
+)
+
+# Resend-verification rate-limit constants
+_RESEND_MAX = 3
+_RESEND_WINDOW_HOURS = 4
 
 
 def register_auth_routes(
@@ -22,9 +30,28 @@ def register_auth_routes(
     FailedLoginAttempt,
     ActiveSession,
     LoginHistory,
+    AuthEventLog,
     get_client_ip,
     generate_email_verify_token,
+    generate_password_reset_token,
 ):
+    def _log_auth_event(event_type, email, details=None, user_id=None):
+        """Persist an AuthEventLog record. Best-effort — never raises."""
+        try:
+            entry = AuthEventLog(
+                event_type=event_type,
+                email=email,
+                user_id=user_id,
+                details=details,
+                ip_address=get_client_ip(),
+                status='pending',
+            )
+            db.session.add(entry)
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            app.logger.error(f"[AuthEvent] Failed to log {event_type} for {email}: {exc}")
+
     @app.route("/register", methods=["GET", "POST"])
     @limiter.limit("5 per minute", methods=["POST"])
     def register():
@@ -77,11 +104,18 @@ def register_auth_routes(
                     verify_link = url_for(
                         "verify_email", token=user.email_verify_token, _external=True
                     )
-                    send_verification_email(
+                    sent = send_verification_email(
                         email,
                         display_name or email,
                         verify_link,
                     )
+                    if not sent:
+                        _log_auth_event(
+                            'email_send_failure',
+                            email,
+                            details="send_verification_email returned False on registration",
+                            user_id=email,
+                        )
                 session["pending_verify_email"] = email
                 return redirect(url_for("verify_email_pending"))
             return render_template(
@@ -97,7 +131,7 @@ def register_auth_routes(
     def login():
         try:
             if request.method == "GET":
-                if current_user.is_authenticated:
+                if current_user.is_authenticated and session.get("session_token"):
                     return redirect(url_for("home"))
                 return render_template("login.html")
 
@@ -290,10 +324,20 @@ def register_auth_routes(
             flash("Account deletion requires typing DELETE to confirm.", "danger")
             return redirect(url_for("home"))
 
+        # Capture user details before deletion — the record won't exist afterward
         email = current_user.id
+        display_name = current_user.display_name or email
+        _now = datetime.utcnow()
+        deletion_date = f"{_now.strftime('%B')} {_now.day}, {_now.strftime('%Y at %H:%M UTC')}"
+
         app.logger.info(f"Account deletion requested for {email}")
         if delete_user(email, requesting_user_email=current_user.id):
             logout_user()
+            # Fire-and-forget — don't block the redirect on email success
+            try:
+                send_account_deletion_email(email, display_name, deletion_date)
+            except Exception as exc:
+                app.logger.error(f"[Auth] Deletion email failed for {email}: {exc}")
             return redirect(url_for("register"))
 
         flash("Failed to delete account. Please try again.", "danger")
@@ -392,6 +436,12 @@ def register_auth_routes(
 
         if datetime.utcnow() > user.email_verify_token_expires:
             session["pending_verify_email"] = user.id
+            _log_auth_event(
+                'verify_token_expired',
+                user.id,
+                details="User clicked expired verification link",
+                user_id=user.id,
+            )
             flash("Verification link has expired. Request a new one below.", "warning")
             return redirect(url_for("verify_email_pending"))
 
@@ -417,23 +467,174 @@ def register_auth_routes(
         return render_template("verify_email_pending.html", email=email)
 
     @app.route("/resend-verification", methods=["POST"])
-    @limiter.limit("3 per hour", methods=["POST"])
+    @limiter.limit("10 per hour", methods=["POST"])  # broad IP guard; per-email logic below
     def resend_verification():
-        """Resend the verification email. Rate-limited to 3 attempts per hour."""
+        """Resend the verification email.
+        Per-email cap: 3 attempts per 4-hour window (DB-backed, persistent).
+        """
         email = request.form.get("email", "").strip().lower()
+        session["pending_verify_email"] = email
 
-        # Always respond the same way to prevent email enumeration
         user = db.session.get(DBUser, email) if email else None
+
         if user and not user.email_verified:
+            now = datetime.utcnow()
+            window_start = user.verify_resend_window_start
+            window_expired = (
+                window_start is None
+                or (now - window_start) > timedelta(hours=_RESEND_WINDOW_HOURS)
+            )
+
+            if window_expired:
+                # Fresh window — reset counter
+                user.verify_resend_count = 0
+                user.verify_resend_window_start = now
+
+            if user.verify_resend_count >= _RESEND_MAX:
+                # Rate limit hit — log the event and tell the user
+                hours_left = _RESEND_WINDOW_HOURS - int(
+                    (now - user.verify_resend_window_start).total_seconds() / 3600
+                )
+                app.logger.warning(f"[Auth] Resend rate limit hit for {email}")
+                _log_auth_event(
+                    'resend_rate_limit',
+                    email,
+                    details=f"Resend cap ({_RESEND_MAX}/{_RESEND_WINDOW_HOURS}h) hit. "
+                            f"~{max(1, hours_left)}h remaining in window.",
+                    user_id=user.id,
+                )
+                flash(
+                    f"Too many resend attempts. Please wait up to {_RESEND_WINDOW_HOURS} hours "
+                    "before trying again, or contact support.",
+                    "warning",
+                )
+                return redirect(url_for("verify_email_pending"))
+
+            # Send the email
             token = generate_email_verify_token(email)
             if token:
                 verify_link = url_for("verify_email", token=token, _external=True)
-                send_verification_email(email, user.display_name or email, verify_link)
-                app.logger.info(f"[Auth] Verification email resent to {email}")
+                sent = send_verification_email(email, user.display_name or email, verify_link)
+                if sent:
+                    user.verify_resend_count += 1
+                    try:
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                    app.logger.info(f"[Auth] Verification email resent to {email} "
+                                    f"(attempt {user.verify_resend_count}/{_RESEND_MAX})")
+                else:
+                    db.session.rollback()
+                    app.logger.error(f"[Auth] Resend email send failure for {email}")
+                    _log_auth_event(
+                        'email_send_failure',
+                        email,
+                        details="send_verification_email returned False on resend",
+                        user_id=user.id,
+                    )
 
         flash(
             "If that email is registered and unverified, a new link has been sent.",
             "info",
         )
-        session["pending_verify_email"] = email
         return redirect(url_for("verify_email_pending"))
+
+    # ── Password reset ─────────────────────────────────────────────────────────
+
+    @app.route("/forgot-password", methods=["GET", "POST"])
+    @limiter.limit("5 per hour", methods=["POST"])
+    def forgot_password():
+        """Step 1 — User submits their email to receive a reset link."""
+        if request.method == "GET":
+            return render_template("forgot_password.html")
+
+        email = request.form.get("email", "").strip().lower()
+
+        # Always show the same response to prevent email enumeration
+        if email:
+            token = generate_password_reset_token(email)
+            if token:
+                user = db.session.get(DBUser, email)
+                reset_link = url_for("reset_password", token=token, _external=True)
+                sent = send_password_reset_email(
+                    email,
+                    user.display_name or email,
+                    reset_link,
+                )
+                if sent:
+                    app.logger.info(f"[Auth] Password reset email sent to {email}")
+                else:
+                    app.logger.error(f"[Auth] Password reset email send failure for {email}")
+                    _log_auth_event(
+                        'email_send_failure',
+                        email,
+                        details="send_password_reset_email returned False",
+                        user_id=user.id if user else None,
+                    )
+
+        flash(
+            "If that email is registered, a password reset link has been sent.",
+            "info",
+        )
+        return redirect(url_for("forgot_password"))
+
+    @app.route("/reset-password", methods=["GET", "POST"])
+    @limiter.limit("10 per hour", methods=["POST"])
+    def reset_password():
+        """Step 2 — User clicks the emailed link and sets a new password."""
+        token = request.args.get("token", "").strip()
+
+        if not token:
+            flash("Invalid reset link.", "danger")
+            return redirect(url_for("forgot_password"))
+
+        user = DBUser.query.filter_by(reset_token=token).first()
+        if not user:
+            flash("Invalid or already-used reset link.", "danger")
+            return redirect(url_for("forgot_password"))
+
+        if datetime.utcnow() > user.reset_token_expires:
+            _log_auth_event(
+                'reset_token_expired',
+                user.id,
+                details="User clicked expired password-reset link",
+                user_id=user.id,
+            )
+            flash("This reset link has expired. Please request a new one.", "warning")
+            return redirect(url_for("forgot_password"))
+
+        if request.method == "GET":
+            return render_template("reset_password.html", token=token)
+
+        # POST — validate and apply new password
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        ok, policy_error = validate_password_policy(new_password)
+        if not ok:
+            return render_template("reset_password.html", token=token, error=policy_error)
+        if new_password != confirm_password:
+            return render_template("reset_password.html", token=token, error="Passwords do not match.")
+
+        try:
+            from werkzeug.security import generate_password_hash
+
+            user.password_hash = generate_password_hash(new_password)
+            user.reset_token = None
+            user.reset_token_expires = None
+            user.force_password_reset = False
+            # Proving ownership of the inbox also verifies the email
+            user.email_verified = True
+
+            # Invalidate all active sessions so old sessions can't be reused
+            ActiveSession.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+
+            db.session.commit()
+            app.logger.info(f"[Auth] Password reset completed for {user.id}")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Auth] Password reset DB error for {user.id}: {e}")
+            return render_template("reset_password.html", token=token, error="Something went wrong. Please try again.")
+
+        flash("Password reset successfully! You can now sign in with your new password.", "success")
+        return redirect(url_for("login"))
