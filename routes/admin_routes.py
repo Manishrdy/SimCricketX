@@ -49,6 +49,7 @@ def register_admin_routes(
     LOGIN_HISTORY_MODEL,
     IP_WHITELIST_MODEL,
     ANNOUNCEMENT_BANNER_MODEL,
+    AUTH_EVENT_MODEL,
     DBUser,
     DBTeam,
     DBTeamProfile,
@@ -73,6 +74,7 @@ def register_admin_routes(
     LoginHistory = LOGIN_HISTORY_MODEL
     IPWhitelistEntry = IP_WHITELIST_MODEL
     AnnouncementBanner = ANNOUNCEMENT_BANNER_MODEL
+    AuthEventLog = AUTH_EVENT_MODEL
     BACKUP_DIR = os.path.join(PROJECT_ROOT, "data", "backups")
 
     @app.route('/admin/backup-database', methods=['POST'])
@@ -2333,6 +2335,91 @@ def register_admin_routes(
     _register_admin_fallback('admin_search', '/admin/search')
     _register_admin_fallback('admin_config', '/admin/config')
     _register_admin_fallback('admin_audit_log', '/admin/audit-log')
+
+    # ── Auth Event Log ─────────────────────────────────────────────────────────
+
+    @app.route('/admin/auth-events')
+    @login_required
+    @admin_required
+    def admin_auth_events():
+        """Auth event log — rate-limit hits, email failures, expired tokens."""
+        page = request.args.get('page', 1, type=int)
+        per_page = 30
+        status_filter = request.args.get('status', '')
+        type_filter = request.args.get('type', '')
+
+        q = AuthEventLog.query.order_by(AuthEventLog.created_at.desc())
+        if status_filter:
+            q = q.filter(AuthEventLog.status == status_filter)
+        if type_filter:
+            q = q.filter(AuthEventLog.event_type == type_filter)
+
+        paginated = q.paginate(page=page, per_page=per_page, error_out=False)
+
+        # Pending counts by type for the summary bar
+        pending_counts = {
+            row[0]: row[1]
+            for row in db.session.query(
+                AuthEventLog.event_type, func.count(AuthEventLog.id)
+            ).filter(AuthEventLog.status == 'pending').group_by(AuthEventLog.event_type).all()
+        }
+
+        return render_template(
+            'admin/auth_events.html',
+            events=paginated.items,
+            page=page,
+            total_pages=paginated.pages,
+            total=paginated.total,
+            status_filter=status_filter,
+            type_filter=type_filter,
+            pending_counts=pending_counts,
+        )
+
+    @app.route('/admin/auth-events/<int:event_id>/update', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_auth_event_update(event_id):
+        """Update status and/or admin notes on an auth event."""
+        event = AuthEventLog.query.get_or_404(event_id)
+        new_status = request.form.get('status', '').strip()
+        notes = request.form.get('admin_notes', '').strip()
+
+        if new_status not in ('pending', 'contacted', 'resolved'):
+            return jsonify({'error': 'Invalid status'}), 400
+
+        event.status = new_status
+        event.admin_notes = notes or event.admin_notes
+        if new_status == 'resolved' and not event.resolved_at:
+            event.resolved_at = datetime.utcnow()
+            event.resolved_by = current_user.id
+        try:
+            db.session.commit()
+            log_admin_action(current_user.id, 'auth_event_update',
+                             target=event.email,
+                             details=f"id={event_id} status→{new_status}",
+                             ip_address=get_client_ip())
+            return jsonify({'ok': True, 'status': new_status})
+        except Exception as exc:
+            db.session.rollback()
+            app.logger.error(f"[Admin] auth_event_update error: {exc}")
+            return jsonify({'error': 'Database error'}), 500
+
+    @app.route('/admin/auth-events/clear-resolved', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_auth_events_clear_resolved():
+        """Bulk-delete all resolved auth event records."""
+        try:
+            deleted = AuthEventLog.query.filter_by(status='resolved').delete(synchronize_session=False)
+            db.session.commit()
+            log_admin_action(current_user.id, 'auth_events_clear_resolved',
+                             details=f"{deleted} resolved records deleted",
+                             ip_address=get_client_ip())
+            return jsonify({'ok': True, 'deleted': deleted})
+        except Exception as exc:
+            db.session.rollback()
+            app.logger.error(f"[Admin] auth_events_clear_resolved error: {exc}")
+            return jsonify({'error': 'Database error'}), 500
 
     @app.route('/admin')
     @login_required

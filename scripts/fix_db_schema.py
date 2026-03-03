@@ -27,18 +27,38 @@ def ensure_schema(engine, db_obj=None):
 
     # ── users ──
     _add_missing_cols("users", {
-        "stable_id":            "VARCHAR(36)",
-        "last_login":           "DATETIME",
-        "ip_address":           "VARCHAR(50)",
-        "mac_address":          "VARCHAR(50)",
-        "hostname":             "VARCHAR(100)",
-        "display_name":         "VARCHAR(100)",
-        "is_admin":             "BOOLEAN NOT NULL DEFAULT 0",
-        "is_banned":            "BOOLEAN NOT NULL DEFAULT 0",
-        "banned_until":         "DATETIME",
-        "ban_reason":           "VARCHAR(500)",
-        "force_password_reset": "BOOLEAN NOT NULL DEFAULT 0",
+        "stable_id":                   "VARCHAR(36)",
+        "last_login":                  "DATETIME",
+        "ip_address":                  "VARCHAR(50)",
+        "mac_address":                 "VARCHAR(50)",
+        "hostname":                    "VARCHAR(100)",
+        "display_name":                "VARCHAR(100)",
+        "is_admin":                    "BOOLEAN NOT NULL DEFAULT 0",
+        "is_banned":                   "BOOLEAN NOT NULL DEFAULT 0",
+        "banned_until":                "DATETIME",
+        "ban_reason":                  "VARCHAR(500)",
+        "force_password_reset":        "BOOLEAN NOT NULL DEFAULT 0",
+        # Email verification (added for transactional email flow)
+        "email_verified":              "INTEGER NOT NULL DEFAULT 0",
+        "email_verify_token":          "TEXT",
+        "email_verify_token_expires":  "DATETIME",
+        # Password reset
+        "reset_token":                 "TEXT",
+        "reset_token_expires":         "DATETIME",
+        # Resend-verification rate limiting
+        "verify_resend_count":         "INTEGER NOT NULL DEFAULT 0",
+        "verify_resend_window_start":  "DATETIME",
     })
+
+    # Backfill: pre-existing users (created before email verification was introduced)
+    # are considered verified so they are not locked out.
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE users SET email_verified = 1 WHERE email_verified = 0 AND email_verify_token IS NULL"
+            ))
+    except Exception:
+        pass
 
     # ── teams ──
     _add_missing_cols("teams", {
@@ -154,13 +174,27 @@ def ensure_schema(engine, db_obj=None):
         # Keep schema guard non-fatal during startup.
         pass
 
+    # ── auth_event_log ──
+    _add_missing_cols("auth_event_log", {
+        "event_type":  "VARCHAR(30) NOT NULL DEFAULT ''",
+        "email":       "VARCHAR(120) NOT NULL DEFAULT ''",
+        "user_id":     "VARCHAR(120)",
+        "details":     "TEXT",
+        "ip_address":  "VARCHAR(50)",
+        "created_at":  "DATETIME",
+        "status":      "VARCHAR(20) NOT NULL DEFAULT 'pending'",
+        "admin_notes": "TEXT",
+        "resolved_at": "DATETIME",
+        "resolved_by": "VARCHAR(120)",
+    })
+
     # ── Ensure all tables exist (creates any missing ones) ──
     all_required_tables = (
         "tournament_player_stats_cache", "admin_audit_log",
         "match_partnerships", "failed_login_attempts",
         "blocked_ips", "active_sessions", "site_counters",
         "login_history", "ip_whitelist", "announcement_banner",
-        "user_banner_dismissals",
+        "user_banner_dismissals", "auth_event_log",
     )
     missing = [t for t in all_required_tables if t not in tables]
     if missing and db_obj is not None:
@@ -169,7 +203,7 @@ def ensure_schema(engine, db_obj=None):
             TournamentPlayerStatsCache, AdminAuditLog, MatchPartnership,
             FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter,
             LoginHistory, IPWhitelistEntry, AnnouncementBanner,
-            UserBannerDismissal,
+            UserBannerDismissal, AuthEventLog,
         )
         db_obj.create_all()
 
