@@ -870,6 +870,21 @@ def create_app():
                     return jsonify({"error": "Session expired. Please log in again."}), 401
                 return redirect(url_for('login'))
 
+            inactivity_limit = timedelta(minutes=app.config.get("SESSION_INACTIVITY_MINUTES", 120))
+            last = active.last_active
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - last > inactivity_limit:
+                db.session.delete(active)
+                db.session.commit()
+                logout_user()
+                session.clear()
+                app.logger.info(f"[Auth] Session expired due to inactivity for {current_user.id}")
+                if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+                    return jsonify({"error": "Session expired due to inactivity. Please log in again."}), 401
+                flash("Your session expired due to inactivity. Please sign in again.", "info")
+                return redirect(url_for('login'))
+
             active.last_active = datetime.utcnow()
             db.session.commit()
         except Exception:
@@ -927,6 +942,7 @@ def create_app():
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)
     app.config["REMEMBER_COOKIE_REFRESH_EACH_REQUEST"] = True
+    app.config["SESSION_INACTIVITY_MINUTES"] = 120  # 2-hour inactivity timeout
 
     # --- CSRF Protection ---
     csrf = CSRFProtect(app)

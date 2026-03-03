@@ -115,8 +115,18 @@
 
             <!-- Error -->
             {% if error %}
-            <div class="auth-alert" id="authAlert">
-                <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+            <div class="auth-alert auth-alert--{{ error_type or 'credentials' }}" id="authAlert" role="alert">
+                {% if error_type == 'banned' %}
+                    <i class="fas fa-ban" aria-hidden="true"></i>
+                {% elif error_type == 'security' %}
+                    <i class="fas fa-shield-halved" aria-hidden="true"></i>
+                {% elif error_type == 'system' %}
+                    <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+                {% elif error_type == 'validation' %}
+                    <i class="fas fa-circle-info" aria-hidden="true"></i>
+                {% else %}
+                    <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                {% endif %}
                 <span>{{ error }}</span>
             </div>
             {% endif %}
@@ -294,19 +304,9 @@
         }
     });
 
-    /* ── Init: fetch challenge + auto-dismiss errors ─────────── */
+    /* ── Init: fetch challenge ───────────────────────────────── */
     window.addEventListener('DOMContentLoaded', function () {
         fetchChallenge().catch(function () {});
-
-        var alert = document.getElementById('authAlert');
-        if (alert) {
-            setTimeout(function () {
-                alert.style.transition = 'opacity 0.35s, transform 0.35s';
-                alert.style.opacity    = '0';
-                alert.style.transform  = 'translateY(-10px)';
-                setTimeout(function () { alert.remove(); }, 380);
-            }, 5000);
-        }
     });
 }());
 </script>

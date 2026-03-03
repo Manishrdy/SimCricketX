@@ -94,7 +94,7 @@ def register_auth_routes(
             challenge_digest = request.form.get("challenge_digest", "")
 
             if not email or not password:
-                return render_template("login.html", error="Email and password required")
+                return render_template("login.html", error="Email and password are required.", error_type="validation")
 
             challenge_ok, challenge_msg = verify_auth_pow_solution(
                 challenge_id,
@@ -104,7 +104,8 @@ def register_auth_routes(
             if not challenge_ok:
                 return render_template(
                     "login.html",
-                    error=f"Security challenge failed: {challenge_msg}",
+                    error="Security check failed. Please refresh the page and try again.",
+                    error_type="security",
                 )
 
             if verify_user(email, password):
@@ -127,6 +128,7 @@ def register_auth_routes(
                             return render_template(
                                 "login.html",
                                 error=f"Account suspended{until}. Reason: {reason}",
+                                error_type="banned",
                             )
 
                     login_user(
@@ -181,11 +183,11 @@ def register_auth_routes(
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
-                return render_template("login.html", error="Invalid email or password")
+                return render_template("login.html", error="Invalid email or password.", error_type="credentials")
 
         except Exception as e:
             app.logger.error(f"Login error: {e}")
-            return render_template("login.html", error="System error")
+            return render_template("login.html", error="A system error occurred. Please try again.", error_type="system")
 
     @app.route("/auth/challenge", methods=["GET"])
     @limiter.limit("30 per minute")
@@ -273,6 +275,64 @@ def register_auth_routes(
 
         flash("Failed to delete account. Please try again.", "danger")
         return redirect(url_for("home"))
+
+    @app.route("/account/sessions", methods=["GET"])
+    @login_required
+    def account_sessions():
+        """Show all active sessions for the current user."""
+        sessions = ActiveSession.query.filter_by(
+            user_id=current_user.id
+        ).order_by(ActiveSession.last_active.desc()).all()
+        current_token = session.get("session_token")
+        return render_template("account_sessions.html", sessions=sessions, current_token=current_token)
+
+    @app.route("/account/sessions/revoke", methods=["POST"])
+    @login_required
+    def revoke_session():
+        """Revoke a specific session by ID."""
+        session_id = request.form.get("session_id", type=int)
+        current_token = session.get("session_token")
+        if not session_id:
+            flash("Invalid request.", "danger")
+            return redirect(url_for("account_sessions"))
+        target = ActiveSession.query.filter_by(
+            id=session_id, user_id=current_user.id
+        ).first()
+        if not target:
+            flash("Session not found.", "danger")
+            return redirect(url_for("account_sessions"))
+        if target.session_token == current_token:
+            flash("Cannot revoke your current session. Use Sign Out instead.", "warning")
+            return redirect(url_for("account_sessions"))
+        try:
+            db.session.delete(target)
+            db.session.commit()
+            app.logger.info(f"[Auth] Session {session_id} revoked by {current_user.id}")
+            flash("Session revoked successfully.", "success")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Auth] Session revoke error: {e}")
+            flash("Failed to revoke session.", "danger")
+        return redirect(url_for("account_sessions"))
+
+    @app.route("/account/sessions/revoke-all", methods=["POST"])
+    @login_required
+    def revoke_all_sessions():
+        """Revoke all sessions except the current one."""
+        current_token = session.get("session_token")
+        try:
+            deleted = ActiveSession.query.filter(
+                ActiveSession.user_id == current_user.id,
+                ActiveSession.session_token != current_token
+            ).delete(synchronize_session=False)
+            db.session.commit()
+            app.logger.info(f"[Auth] {deleted} other session(s) revoked by {current_user.id}")
+            flash(f"Signed out of {deleted} other device(s).", "success")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Auth] Revoke-all error: {e}")
+            flash("Failed to sign out other devices.", "danger")
+        return redirect(url_for("account_sessions"))
 
     @app.route("/logout", methods=["POST"])
     @login_required
