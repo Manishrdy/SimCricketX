@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <script>
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('theme'); } catch (e) {}
+            if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', t);
+        }());
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify your email — SimCricketX</title>
+    <meta name="robots" content="noindex">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+
+    <style>
+        .fv-card {
+            background: var(--card-bg, #fff);
+            border: 1px solid var(--card-border, #e5e7eb);
+            border-radius: 14px;
+            padding: 1.75rem 1.5rem;
+            margin-bottom: 1rem;
+            transition: border-color 0.18s, box-shadow 0.18s;
+            position: relative;
+        }
+        .fv-card-header {
+            cursor: pointer;
+        }
+        .fv-card:hover {
+            border-color: var(--accent, #0f766e);
+            box-shadow: 0 0 0 3px rgba(15,118,110,0.12);
+        }
+        .fv-card.fv-card--active {
+            border-color: var(--accent, #0f766e);
+            box-shadow: 0 0 0 3px rgba(15,118,110,0.15);
+        }
+        .fv-card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            cursor: pointer;
+        }
+        .fv-card-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            flex-shrink: 0;
+        }
+        .fv-card-icon--green {
+            background: rgba(16,185,129,0.12);
+            color: #059669;
+        }
+        .fv-card-icon--blue {
+            background: rgba(59,130,246,0.12);
+            color: #2563eb;
+        }
+        .fv-card-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--fg);
+            margin: 0 0 0.2rem;
+        }
+        .fv-card-sub {
+            font-size: 0.8rem;
+            color: var(--fg-secondary, #6b7280);
+            margin: 0;
+        }
+        .fv-card-arrow {
+            margin-left: auto;
+            color: var(--fg-secondary, #6b7280);
+            transition: transform 0.18s;
+        }
+        .fv-card--active .fv-card-arrow {
+            transform: rotate(90deg);
+        }
+        .fv-card-body {
+            display: none;
+            padding-top: 1.1rem;
+            border-top: 1px solid var(--card-border, #e5e7eb);
+            margin-top: 1rem;
+        }
+        .fv-card--active .fv-card-body {
+            display: block;
+        }
+        .fv-email-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(128, 128, 128, 0.12);
+            border: 1px solid var(--card-border, #e5e7eb);
+            border-radius: 6px;
+            padding: 0.3rem 0.65rem;
+            font-size: 0.82rem;
+            color: var(--fg);
+            font-family: 'IBM Plex Mono', monospace;
+            word-break: break-all;
+            margin-bottom: 1rem;
+        }
+        .fv-divider {
+            text-align: center;
+            font-size: 0.78rem;
+            color: var(--fg-secondary, #6b7280);
+            margin: 1.25rem 0;
+            position: relative;
+        }
+        .fv-divider::before, .fv-divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 42%;
+            height: 1px;
+            background: var(--card-border, #e5e7eb);
+        }
+        .fv-divider::before { left: 0; }
+        .fv-divider::after { right: 0; }
+        .fv-input {
+            width: 100%;
+            padding: 0.65rem 0.75rem;
+            border: 1px solid var(--card-border, #e5e7eb);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--fg);
+            font-size: 0.9rem;
+            box-sizing: border-box;
+            transition: border-color 0.15s;
+        }
+        .fv-input:focus {
+            outline: none;
+            border-color: var(--accent, #0f766e);
+            box-shadow: 0 0 0 3px rgba(15,118,110,0.12);
+        }
+        .fv-btn {
+            width: 100%;
+            padding: 0.7rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: opacity 0.15s;
+        }
+        .fv-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .fv-btn--primary {
+            background: var(--gradient, linear-gradient(135deg,#0f766e,#0d9488));
+            color: #fff;
+        }
+        .fv-btn--secondary {
+            background: rgba(59,130,246,0.1);
+            color: #2563eb;
+            border: 1px solid rgba(59,130,246,0.25);
+        }
+        .fv-btn--secondary:hover { background: rgba(59,130,246,0.18); }
+        .fv-note {
+            font-size: 0.76rem;
+            color: var(--fg-secondary, #6b7280);
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+        .fv-confirm-box {
+            background: rgba(59,130,246,0.06);
+            border: 1px solid rgba(59,130,246,0.2);
+            border-radius: 10px;
+            padding: 1rem 1.1rem;
+            margin-bottom: 0.85rem;
+        }
+        .fv-confirm-label {
+            font-size: 0.8rem;
+            color: var(--fg-secondary, #6b7280);
+            margin: 0 0 0.35rem;
+        }
+        .fv-confirm-actions {
+            display: flex;
+            gap: 0.6rem;
+            margin-top: 0.85rem;
+        }
+        .fv-btn--ghost {
+            background: transparent;
+            color: var(--fg-secondary, #6b7280);
+            border: 1px solid var(--card-border, #e5e7eb);
+        }
+        .fv-btn--ghost:hover {
+            background: rgba(128,128,128,0.08);
+        }
+    </style>
+</head>
+<body>
+
+<div class="auth-page">
+
+    <!-- LEFT PANEL -->
+    <aside class="auth-left" aria-hidden="true">
+        <div class="auth-left-glow"></div>
+        <div class="auth-left-glow2"></div>
+
+        <a href="/" class="auth-left-logo">
+            <span class="auth-left-logo-icon">🏏</span>
+            SimCricketX
+        </a>
+
+        <div class="auth-left-body">
+            <svg class="auth-left-ball" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <radialGradient id="ballGrad" cx="36%" cy="34%" r="56%">
+                        <stop offset="0%"   stop-color="#e85c50"/>
+                        <stop offset="55%"  stop-color="#c0392b"/>
+                        <stop offset="100%" stop-color="#7d1a0e"/>
+                    </radialGradient>
+                </defs>
+                <circle cx="100" cy="100" r="90" fill="url(#ballGrad)"/>
+                <path d="M100,12 C55,38 55,88 100,100 C55,112 55,162 100,188"
+                      fill="none" stroke="rgba(255,200,185,0.7)" stroke-width="4" stroke-linecap="round"/>
+                <path d="M100,12 C145,38 145,88 100,100 C145,112 145,162 100,188"
+                      fill="none" stroke="rgba(255,200,185,0.7)" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+
+            <div class="auth-left-tagline">
+                Quick<br>
+                <span class="auth-left-tagline-accent">security step.</span>
+            </div>
+
+            <p class="auth-left-sub">
+                We've added email verification to keep your account safe. Confirm your email to continue.
+            </p>
+        </div>
+
+        <div class="auth-left-footer">
+            Free &nbsp;·&nbsp; Open source &nbsp;·&nbsp; No credit card &nbsp;·&nbsp;
+            <a href="https://github.com/manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </div>
+    </aside>
+
+    <!-- RIGHT PANEL -->
+    <main class="auth-right">
+
+        <button class="auth-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
+            <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+        </button>
+
+        <div class="auth-form-wrap">
+
+            <!-- Flash messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="auth-alert auth-alert--{{ category }}" id="flashAlert">
+                <i class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'warning' %}exclamation-triangle{% elif category == 'danger' %}times-circle{% else %}info-circle{% endif %}" aria-hidden="true"></i>
+                <span>{{ message }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <!-- Shield icon -->
+            <div style="text-align:center;margin-bottom:20px;">
+                <span style="display:inline-flex;align-items:center;justify-content:center;
+                             width:68px;height:68px;border-radius:50%;
+                             background:rgba(234,179,8,0.1);
+                             border:2px solid rgba(234,179,8,0.35);">
+                    <i class="fas fa-shield-halved" style="font-size:26px;color:#ca8a04;"></i>
+                </span>
+            </div>
+
+            <h1 class="auth-form-title">Verify your email</h1>
+            <p class="auth-form-sub">
+                Hi <strong>{{ display_name }}</strong> — we've introduced email verification to keep accounts secure.
+                Please verify your email to continue.
+            </p>
+
+            <!-- Option 1: Verify existing email -->
+            <div class="fv-card" id="card1">
+                <div class="fv-card-header" onclick="toggleCard('card1', 'card2')">
+                    <div class="fv-card-icon fv-card-icon--green">
+                        <i class="fas fa-envelope-circle-check"></i>
+                    </div>
+                    <div>
+                        <p class="fv-card-title">Verify my email</p>
+                        <p class="fv-card-sub">Send a link to my current address</p>
+                    </div>
+                    <i class="fas fa-chevron-right fv-card-arrow"></i>
+                </div>
+
+                <div class="fv-card-body">
+                    <p style="font-size:0.83rem;color:var(--fg-secondary);margin:0 0 0.75rem;">
+                        A verification link will be sent to:
+                    </p>
+                    <div class="fv-email-badge">
+                        <i class="fas fa-at" style="opacity:0.6;"></i>
+                        {{ email }}
+                    </div>
+                    <form method="POST" action="{{ url_for('force_verify_email_send') }}" id="sendForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="fv-btn fv-btn--primary" id="sendBtn">
+                            <i class="fas fa-paper-plane"></i>
+                            <span id="sendBtnText">Send verification link</span>
+                        </button>
+                    </form>
+                    <p class="fv-note">Link is valid for 10 minutes. Check your spam folder if you don't see it.</p>
+                </div>
+            </div>
+
+            <div class="fv-divider">or</div>
+
+            <!-- Option 2: Change email -->
+            <div class="fv-card" id="card2">
+                <div class="fv-card-header" onclick="toggleCard('card2', 'card1')">
+                    <div class="fv-card-icon fv-card-icon--blue">
+                        <i class="fas fa-pen-to-square"></i>
+                    </div>
+                    <div>
+                        <p class="fv-card-title">Use a different email</p>
+                        <p class="fv-card-sub">Change and verify a new address</p>
+                    </div>
+                    <i class="fas fa-chevron-right fv-card-arrow"></i>
+                </div>
+
+                <div class="fv-card-body">
+
+                    <!-- Step 1: Email input -->
+                    <div id="changeInputSection">
+                        <p style="font-size:0.83rem;color:var(--fg-secondary);margin:0 0 0.75rem;">
+                            Enter your new email address. Your account data stays intact — only your login email changes.
+                        </p>
+                        <form id="changeForm" method="POST" action="{{ url_for('force_verify_email_change') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div style="margin-bottom:0.75rem;">
+                                <label for="new_email" style="display:block;font-size:0.82rem;font-weight:600;color:var(--fg);margin-bottom:0.3rem;">New email address</label>
+                                <input type="email" name="new_email" id="new_email" required
+                                       placeholder="you@example.com"
+                                       class="fv-input"
+                                       autocomplete="email">
+                            </div>
+                            <button type="button" class="fv-btn fv-btn--secondary" onclick="showChangeConfirm()">
+                                <i class="fas fa-arrow-right"></i>
+                                Continue
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Step 2: Inline confirmation (hidden until Continue is clicked) -->
+                    <div id="changeConfirmSection" style="display:none;">
+                        <div class="fv-confirm-box">
+                            <p class="fv-confirm-label">Changing your login email to:</p>
+                            <div class="fv-email-badge" id="confirmEmailDisplay" style="margin-bottom:0;"></div>
+                        </div>
+                        <p style="font-size:0.83rem;color:var(--fg-secondary);margin:0 0 0.5rem;">
+                            A verification link will be sent to this address. You'll need to verify it before you can access the app.
+                        </p>
+                        <div class="fv-confirm-actions">
+                            <button type="button" class="fv-btn fv-btn--ghost" onclick="cancelChangeConfirm()" style="flex:1;">
+                                <i class="fas fa-arrow-left"></i>
+                                Go back
+                            </button>
+                            <button type="button" class="fv-btn fv-btn--secondary" id="confirmChangeBtn" onclick="submitChangeForm()" style="flex:2;">
+                                <i class="fas fa-arrow-right-arrow-left"></i>
+                                <span id="confirmChangeBtnText">Yes, change &amp; send link</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <p class="fv-note">You'll receive a verification link at the new address.</p>
+                </div>
+            </div>
+
+            <div style="margin-top:1.5rem;text-align:center;">
+                <form method="POST" action="{{ url_for('logout') }}" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" style="background:none;border:none;cursor:pointer;font-size:0.82rem;color:var(--fg-secondary);text-decoration:underline;text-underline-offset:2px;">
+                        Sign out
+                    </button>
+                </form>
+            </div>
+
+        </div>
+    </main>
+
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    /* Theme */
+    var html = document.documentElement;
+    var btn  = document.getElementById('themeBtn');
+    var icon = document.getElementById('themeIcon');
+    function applyTheme(t) {
+        html.setAttribute('data-theme', t);
+        icon.className = (t === 'dark') ? 'fas fa-sun' : 'fas fa-moon';
+        try { localStorage.setItem('theme', t); } catch (e) {}
+    }
+    applyTheme(html.getAttribute('data-theme') || 'light');
+    btn.addEventListener('click', function () {
+        applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+
+    /* Auto-dismiss flash */
+    var flash = document.getElementById('flashAlert');
+    if (flash) {
+        setTimeout(function () {
+            flash.style.transition = 'opacity 0.35s, transform 0.35s';
+            flash.style.opacity = '0';
+            flash.style.transform = 'translateY(-10px)';
+            setTimeout(function () { flash.remove(); }, 380);
+        }, 6000);
+    }
+
+    /* Send button — one-shot */
+    var sendForm = document.getElementById('sendForm');
+    var sendBtn  = document.getElementById('sendBtn');
+    var sendText = document.getElementById('sendBtnText');
+    if (sendForm) {
+        sendForm.addEventListener('submit', function () {
+            sendBtn.disabled = true;
+            sendText.textContent = 'Sending…';
+        });
+    }
+
+}());
+
+/* Accordion toggle */
+function toggleCard(activeId, otherId) {
+    var active = document.getElementById(activeId);
+    var other  = document.getElementById(otherId);
+    var isOpen = active.classList.contains('fv-card--active');
+    active.classList.toggle('fv-card--active', !isOpen);
+    if (other) other.classList.remove('fv-card--active');
+}
+
+/* Inline email-change confirmation */
+function showChangeConfirm() {
+    var input = document.getElementById('new_email');
+    if (!input.reportValidity()) return;
+    var val = input.value.trim();
+    if (!val) return;
+    document.getElementById('confirmEmailDisplay').textContent = val;
+    document.getElementById('changeInputSection').style.display = 'none';
+    document.getElementById('changeConfirmSection').style.display = 'block';
+}
+
+function cancelChangeConfirm() {
+    document.getElementById('changeConfirmSection').style.display = 'none';
+    document.getElementById('changeInputSection').style.display = 'block';
+}
+
+function submitChangeForm() {
+    var btn  = document.getElementById('confirmChangeBtn');
+    var text = document.getElementById('confirmChangeBtnText');
+    btn.disabled = true;
+    text.textContent = 'Updating…';
+    document.getElementById('changeForm').submit();
+}
+</script>
+
+</body>
+</html>

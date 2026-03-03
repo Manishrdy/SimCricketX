@@ -34,6 +34,7 @@ def register_auth_routes(
     get_client_ip,
     generate_email_verify_token,
     generate_password_reset_token,
+    update_user_email,
 ):
     def _log_auth_event(event_type, email, details=None, user_id=None):
         """Persist an AuthEventLog record. Best-effort — never raises."""
@@ -51,6 +52,29 @@ def register_auth_routes(
         except Exception as exc:
             db.session.rollback()
             app.logger.error(f"[AuthEvent] Failed to log {event_type} for {email}: {exc}")
+
+    # Endpoints exempt from the force-email-verify redirect
+    _FORCE_VERIFY_EXEMPT = {
+        'force_verify_email',
+        'force_verify_email_send',
+        'force_verify_email_change',
+        'verify_email',
+        'logout',
+        'static',
+        'auth_challenge',
+    }
+
+    @app.before_request
+    def enforce_force_email_verify():
+        """Redirect authenticated users who still need to re-verify their email."""
+        if not current_user.is_authenticated:
+            return
+        if not current_user.force_email_verify:
+            session.pop("force_email_verify", None)
+            return
+        if request.endpoint in _FORCE_VERIFY_EXEMPT:
+            return
+        return redirect(url_for('force_verify_email'))
 
     @app.route("/register", methods=["GET", "POST"])
     @limiter.limit("5 per minute", methods=["POST"])
@@ -220,6 +244,11 @@ def register_auth_routes(
                     except Exception as e:
                         db.session.rollback()
                         app.logger.error(f"[Auth] Session tracking error: {e}")
+
+                    if user.force_email_verify:
+                        session["force_email_verify"] = True
+                        app.logger.info(f"[Auth] Redirecting {email} to force email verify")
+                        return redirect(url_for("force_verify_email"))
 
                     if user.force_password_reset:
                         session["force_password_reset"] = True
@@ -447,6 +476,7 @@ def register_auth_routes(
 
         try:
             user.email_verified = True
+            user.force_email_verify = False
             user.email_verify_token = None
             user.email_verify_token_expires = None
             db.session.commit()
@@ -457,6 +487,7 @@ def register_auth_routes(
             flash("Something went wrong. Please try again.", "danger")
             return redirect(url_for("login"))
 
+        session.pop("force_email_verify", None)
         flash("Email verified! You can now sign in.", "success")
         return redirect(url_for("login"))
 
@@ -465,6 +496,117 @@ def register_auth_routes(
         """Holding page shown after registration or when verification is needed."""
         email = session.get("pending_verify_email", "")
         return render_template("verify_email_pending.html", email=email)
+
+    # ── Force email verification (for pre-existing users) ──────────────────────
+
+    @app.route("/force-verify-email", methods=["GET"])
+    @login_required
+    def force_verify_email():
+        """Full-page prompt for users who must re-verify their email."""
+        if not current_user.force_email_verify:
+            return redirect(url_for("home"))
+        return render_template(
+            "force_verify_email.html",
+            email=current_user.id,
+            display_name=current_user.display_name or current_user.id,
+        )
+
+    @app.route("/force-verify-email/send", methods=["POST"])
+    @login_required
+    @limiter.limit("5 per hour")
+    def force_verify_email_send():
+        """Send a verification link to the user's current email."""
+        if not current_user.force_email_verify:
+            return redirect(url_for("home"))
+        email = current_user.id
+        token = generate_email_verify_token(email)
+        if token:
+            verify_link = url_for("verify_email", token=token, _external=True)
+            sent = send_verification_email(email, current_user.display_name or email, verify_link)
+            if sent:
+                flash("Verification link sent! Check your inbox (and spam folder).", "success")
+            else:
+                flash("Failed to send email. Please try again shortly.", "danger")
+                _log_auth_event(
+                    'email_send_failure',
+                    email,
+                    details="force_verify_email_send: send_verification_email returned False",
+                    user_id=email,
+                )
+        else:
+            flash("Could not generate a verification token. Please try again.", "danger")
+        return redirect(url_for("force_verify_email"))
+
+    @app.route("/force-verify-email/change-email", methods=["POST"])
+    @login_required
+    @limiter.limit("5 per hour")
+    def force_verify_email_change():
+        """Let the user switch to a new email, then send verification to it."""
+        if not current_user.force_email_verify:
+            return redirect(url_for("home"))
+
+        new_email = request.form.get("new_email", "").strip().lower()
+        if not new_email or "@" not in new_email or "." not in new_email:
+            flash("Please enter a valid email address.", "danger")
+            return redirect(url_for("force_verify_email"))
+
+        old_email = current_user.id
+        if new_email == old_email:
+            flash("That's already your current email. Use 'Verify existing email' instead.", "warning")
+            return redirect(url_for("force_verify_email"))
+
+        # Change the email in the DB (cascades to all FK tables)
+        ok, msg = update_user_email(old_email, new_email)
+        if not ok:
+            flash(f"Could not change email: {msg}", "danger")
+            return redirect(url_for("force_verify_email"))
+
+        # Reload the user record under the new PK and reset verification flags
+        new_user = db.session.get(DBUser, new_email)
+        if not new_user:
+            app.logger.error(f"[Auth] force_verify_email_change: couldn't reload user after rename {old_email} -> {new_email}")
+            flash("Email changed but your account couldn't be reloaded. Please sign in again.", "warning")
+            logout_user()
+            return redirect(url_for("login"))
+
+        try:
+            new_user.email_verified = False
+            new_user.force_email_verify = True
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Auth] force_verify_email_change: flag reset failed: {e}")
+
+        # Generate verification token for the new email
+        token = generate_email_verify_token(new_email)
+
+        # Re-authenticate under the new identity (PK changed)
+        logout_user()
+        refreshed = db.session.get(DBUser, new_email)
+        if refreshed:
+            login_user(refreshed, remember=True, duration=app.config.get("REMEMBER_COOKIE_DURATION"))
+            session.permanent = True
+            session["force_email_verify"] = True
+
+        # Send verification email to the new address
+        if token:
+            verify_link = url_for("verify_email", token=token, _external=True)
+            sent = send_verification_email(new_email, (refreshed.display_name if refreshed else None) or new_email, verify_link)
+            if sent:
+                app.logger.info(f"[Auth] Email changed {old_email} -> {new_email}; verification sent")
+                flash(f"Email updated to {new_email}. A verification link has been sent — check your inbox.", "success")
+            else:
+                _log_auth_event(
+                    'email_send_failure',
+                    new_email,
+                    details="force_verify_email_change: send_verification_email returned False after email change",
+                    user_id=new_email,
+                )
+                flash(f"Email updated to {new_email}, but we couldn't send the verification email. Use 'Verify existing email' to retry.", "warning")
+        else:
+            flash(f"Email updated to {new_email}, but verification token generation failed. Please try again.", "warning")
+
+        return redirect(url_for("force_verify_email"))
 
     @app.route("/resend-verification", methods=["POST"])
     @limiter.limit("10 per hour", methods=["POST"])  # broad IP guard; per-email logic below

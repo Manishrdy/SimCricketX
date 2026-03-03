@@ -1913,6 +1913,7 @@ def create_app():
         get_client_ip=get_client_ip,
         generate_email_verify_token=generate_email_verify_token,
         generate_password_reset_token=generate_password_reset_token,
+        update_user_email=update_user_email,
     )
 
     def load_user_teams(user_email, match_format="T20"):
