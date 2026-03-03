@@ -37,6 +37,9 @@ class User(UserMixin, db.Model):
     # Force password reset on next login
     force_password_reset = db.Column(db.Boolean, default=False, nullable=False)
 
+    # Force email verification on next login (for users who pre-date the email verification system)
+    force_email_verify = db.Column(db.Boolean, default=False, nullable=False)
+
     # Email verification
     email_verified = db.Column(db.Boolean, default=False, nullable=False)
     email_verify_token = db.Column(db.String(64), nullable=True, index=True)
