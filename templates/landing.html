@@ -48,10 +48,6 @@
         </a>
 
         <div class="lp-nav-actions">
-            <button class="lp-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
-                <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
-            </button>
-
             <a href="{{ url_for('about') }}" class="lp-btn-ghost lp-nav-btn-about">
                 <i class="fas fa-info-circle" aria-hidden="true"></i> About
             </a>
@@ -63,6 +59,10 @@
             <a href="{{ url_for('register') }}" class="lp-btn-fill">
                 <i class="fas fa-user-plus" aria-hidden="true"></i> Get Started
             </a>
+
+            <button class="lp-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
+                <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+            </button>
         </div>
 
     </div>
