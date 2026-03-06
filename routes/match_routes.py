@@ -410,6 +410,22 @@ def register_match_routes(
     @app.route("/match/<match_id>")
     @login_required
     def match_detail(match_id):
+        # Check live in-memory state first — handles resume and completed-but-not-archived cases
+        with MATCH_INSTANCES_LOCK:
+            live_match = MATCH_INSTANCES.get(match_id)
+
+        if live_match and live_match.data.get("created_by") == current_user.id:
+            if live_match.data.get("current_state") == "completed":
+                # Match finished in memory; if DB record exists go straight to scoreboard
+                db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
+                if db_match:
+                    return redirect(url_for("view_scoreboard", match_id=match_id))
+            else:
+                # Match is live — render page with resume flag so JS can restore state
+                match_data, _path, _err = _load_match_file_for_user(match_id)
+                if match_data:
+                    return render_template("match_detail.html", match=match_data, resume_mode=True)
+
         match_data, _path, _err = _load_match_file_for_user(match_id)
 
         if not match_data:
@@ -419,15 +435,80 @@ def register_match_routes(
                 return redirect(url_for("view_scoreboard", match_id=match_id))
             return redirect(url_for("home"))
 
-        # increment_matches_simulated()  <-- REMOVED: Caused premature counting on page load/reload
-        
         # Check if match is completed
         if match_data.get("current_state") == "completed":
-             # Redirect to the dedicated scoreboard view
-             return redirect(url_for("view_scoreboard", match_id=match_id))
-            
-        # Render the detail page, passing the loaded JSON
+            return redirect(url_for("view_scoreboard", match_id=match_id))
+
         return render_template("match_detail.html", match=match_data)
+
+    @app.route("/match/<match_id>/live-state", methods=["GET"])
+    @login_required
+    def match_live_state(match_id):
+        """Return a snapshot of the current in-memory match state for resume detection."""
+        with MATCH_INSTANCES_LOCK:
+            match = MATCH_INSTANCES.get(match_id)
+
+        if not match:
+            db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
+            if db_match:
+                return jsonify({"status": "completed"})
+            return jsonify({"status": "not_in_memory"})
+
+        if match.data.get("created_by") != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
+
+        if match.data.get("current_state") == "completed":
+            return jsonify({"status": "completed"})
+
+        striker = match.current_striker or {}
+        non_striker = match.current_non_striker or {}
+        current_bowler = getattr(match, "current_bowler", None) or {}
+
+        striker_stats = match.batsman_stats.get(striker.get("name", ""), {})
+        non_striker_stats = match.batsman_stats.get(non_striker.get("name", ""), {})
+        bowler_stats_entry = match.bowler_stats.get(current_bowler.get("name", ""), {})
+
+        current_ball = getattr(match, "current_ball", 0)
+        total_balls = match.current_over * 6 + current_ball
+        crr = round((match.score * 6 / total_balls), 2) if total_balls > 0 else 0.0
+
+        batting_name = match._get_team_name(match.batting_team) if hasattr(match, "_get_team_name") else ""
+        bowling_name = match._get_team_name(match.bowling_team) if hasattr(match, "_get_team_name") else ""
+
+        return jsonify({
+            "status": "in_progress",
+            "innings": match.innings,
+            "score": match.score,
+            "wickets": match.wickets,
+            "current_over": match.current_over,
+            "current_ball": current_ball,
+            "current_over_outcomes": list(getattr(match, "current_over_outcomes", [])),
+            "target": match.target,
+            "batting_team_name": batting_name,
+            "bowling_team_name": bowling_name,
+            "striker": {
+                "name": striker.get("name", ""),
+                "runs": striker_stats.get("runs", 0),
+                "balls": striker_stats.get("balls", 0),
+                "fours": striker_stats.get("fours", 0),
+                "sixes": striker_stats.get("sixes", 0),
+            },
+            "non_striker": {
+                "name": non_striker.get("name", ""),
+                "runs": non_striker_stats.get("runs", 0),
+                "balls": non_striker_stats.get("balls", 0),
+            },
+            "current_bowler": {
+                "name": current_bowler.get("name", ""),
+                "overs": bowler_stats_entry.get("overs", 0),
+                "runs": bowler_stats_entry.get("runs", 0),
+                "wickets": bowler_stats_entry.get("wickets", 0),
+            },
+            "partnership_runs": getattr(match, "partnership_runs", 0),
+            "partnership_balls": getattr(match, "partnership_balls", 0),
+            "crr": crr,
+            "match_format": match.data.get("match_format", "T20"),
+        })
     
     @app.route("/match/<match_id>/scoreboard")
     @login_required
