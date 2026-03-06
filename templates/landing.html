@@ -48,16 +48,16 @@
         </a>
 
         <div class="lp-nav-actions">
-            <a href="{{ url_for('about') }}" class="lp-btn-ghost lp-nav-btn-about">
-                <i class="fas fa-info-circle" aria-hidden="true"></i> About
+            <a href="{{ url_for('register') }}" class="lp-btn-fill">
+                <i class="fas fa-user-plus" aria-hidden="true"></i> Get Started
             </a>
 
             <a href="{{ url_for('login') }}" class="lp-btn-ghost">
                 <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Sign In
             </a>
 
-            <a href="{{ url_for('register') }}" class="lp-btn-fill">
-                <i class="fas fa-user-plus" aria-hidden="true"></i> Get Started
+            <a href="{{ url_for('about') }}" class="lp-btn-ghost lp-nav-btn-about">
+                <i class="fas fa-info-circle" aria-hidden="true"></i> About
             </a>
 
             <button class="lp-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
@@ -447,17 +447,14 @@
         </a>
 
         <nav class="lp-footer-links" aria-label="Footer links">
-            <a href="{{ url_for('about') }}">
-                <i class="fas fa-info-circle" aria-hidden="true"></i> About
+            <a href="{{ url_for('register') }}">
+                <i class="fas fa-user-plus" aria-hidden="true"></i> Register
             </a>
             <a href="{{ url_for('login') }}">
                 <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Sign In
             </a>
-            <a href="{{ url_for('register') }}">
-                <i class="fas fa-user-plus" aria-hidden="true"></i> Register
-            </a>
-            <a href="{{ url_for('ground_conditions_guide') }}">
-                <i class="fas fa-book" aria-hidden="true"></i> Guide
+            <a href="{{ url_for('about') }}">
+                <i class="fas fa-info-circle" aria-hidden="true"></i> About
             </a>
             <a href="https://github.com/manishrdy/SimCricketX" target="_blank" rel="noopener noreferrer">
                 <i class="fab fa-github" aria-hidden="true"></i> GitHub
