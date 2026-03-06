@@ -1,3 +1,11 @@
+[2.3.1] 2026-03-06
+- Added ongoing match indicator to profile dropdown — active simulations appear at the top with team names, format, innings, over, and current score
+- Added pulsing green badge on profile avatar when one or more matches are in progress
+- Added GET /match/<match_id>/live-state endpoint that serializes the full in-memory Match state (score, wickets, batsmen, bowler, over outcomes, target, commentary log)
+- Match resume: navigating back to an active match page now detects in-progress state and restores the score banner, over strip, and batting/bowling info before continuing simulation
+- Commentary preservation: every ball's commentary HTML is now accumulated server-side (both HTTP and WebSocket paths); on resume the full commentary history is replayed into the log followed by a green RESUMED marker
+- Fixed edge case where a completed match (finished in memory but JSON file still present) would incorrectly re-render the simulation page instead of redirecting to the scoreboard
+
 [2.3.0] 2026-02-28
 - Added public landing page at / with cricket animations, SEO meta tags, and Open Graph support
 - Fixed Google Search Console redirect issue — unauthenticated visitors now see landing page instead of being redirected to /login

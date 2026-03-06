@@ -1819,6 +1819,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // ── Replay previous commentary ────────────────────────────────
+            if (state.commentary_log && state.commentary_log.length) {
+                state.commentary_log.forEach(entry => appendLog(entry, 'comment'));
+            }
+
             // ── Resume notice in commentary log ──────────────────────────
             const overLabel = `${state.current_over}.${state.current_ball}`;
             const inningsLabel = state.innings === 1 ? '1st' : '2nd';
