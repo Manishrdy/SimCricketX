@@ -167,6 +167,15 @@ def register_admin_routes(
             # Active sessions count
             stats['active_sessions'] = ActiveSession.query.count()
 
+            # Today's counters
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            cutoff_1h   = datetime.utcnow() - timedelta(hours=1)
+            stats['signups_today']    = DBUser.query.filter(DBUser.created_at >= today_start).count()
+            stats['matches_today']    = DBMatch.query.filter(DBMatch.date >= today_start).count()
+            stats['failed_logins_1h'] = FailedLoginAttempt.query.filter(
+                FailedLoginAttempt.timestamp >= cutoff_1h
+            ).count()
+
             # Recent activity from audit log
             recent_audit = db.session.query(AdminAuditLog).order_by(AdminAuditLog.timestamp.desc()).limit(10).all()
             audit_entries = []
@@ -2017,44 +2026,127 @@ def register_admin_routes(
     @login_required
     @admin_required
     def admin_dashboard_stream():
-        """Server-Sent Events stream for live dashboard stats."""
+        """Server-Sent Events stream for live dashboard stats.
+
+        Protocol:
+          event: stats  — emitted every 10 s with all KPI counters
+          event: feed   — emitted every 30 s with recent audit + login rows
+          : keep-alive  — SSE comment emitted every 10 s to prevent proxy/nginx
+                          from closing idle connections (Nginx default timeout 60 s)
+        """
         @stream_with_context
         def generate():
             import time as time_mod
+
+            STATS_INTERVAL = 10       # seconds between stats events
+            FEED_EVERY_N  = 3         # emit feed every N stats ticks (= 30 s)
+            tick = 0
+
             while True:
+                # --- heartbeat: keeps proxies from closing the connection ---
+                yield ": keep-alive\n\n"
+
                 try:
-                    total_users = DBUser.query.count()
-                    total_teams = DBTeam.query.count()
-                    total_matches = DBMatch.query.count()
+                    # ── core counters ──────────────────────────────────────
+                    total_users      = DBUser.query.count()
+                    total_teams      = DBTeam.query.count()
+                    total_matches    = DBMatch.query.count()
                     total_tournaments = Tournament.query.count()
-                    active_sessions = ActiveSession.query.count()
+                    active_sessions  = ActiveSession.query.count()
+
                     with MATCH_INSTANCES_LOCK:
                         live_matches = len(MATCH_INSTANCES)
+
                     cutoff_7d = datetime.utcnow() - timedelta(days=7)
-                    active_users_7d = db.session.query(func.count(ActiveSession.user_id.distinct())).filter(
-                        ActiveSession.last_active >= cutoff_7d
-                    ).scalar() or 0
+                    active_users_7d = (
+                        db.session.query(func.count(ActiveSession.user_id.distinct()))
+                        .filter(ActiveSession.last_active >= cutoff_7d)
+                        .scalar() or 0
+                    )
+
                     db_path = os.path.join(basedir, 'cricket_sim.db')
-                    db_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 2) if os.path.exists(db_path) else 0
-                    payload = json.dumps({
-                        'total_users': total_users,
-                        'total_teams': total_teams,
-                        'total_matches': total_matches,
+                    db_size_mb = (
+                        round(os.path.getsize(db_path) / (1024 * 1024), 2)
+                        if os.path.exists(db_path) else 0
+                    )
+
+                    # ── today / recent counters ────────────────────────────
+                    today_start   = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                    cutoff_1h     = datetime.utcnow() - timedelta(hours=1)
+
+                    signups_today     = DBUser.query.filter(DBUser.created_at >= today_start).count()
+                    matches_today     = DBMatch.query.filter(DBMatch.date >= today_start).count()
+                    failed_logins_1h  = FailedLoginAttempt.query.filter(
+                        FailedLoginAttempt.timestamp >= cutoff_1h
+                    ).count()
+
+                    stats_payload = json.dumps({
+                        'total_users':       total_users,
+                        'total_teams':       total_teams,
+                        'total_matches':     total_matches,
                         'total_tournaments': total_tournaments,
-                        'active_sessions': active_sessions,
-                        'live_matches': live_matches,
-                        'active_users_7d': active_users_7d,
-                        'db_size_mb': db_size_mb,
+                        'active_sessions':   active_sessions,
+                        'live_matches':      live_matches,
+                        'active_users_7d':   active_users_7d,
+                        'db_size_mb':        db_size_mb,
+                        'signups_today':     signups_today,
+                        'matches_today':     matches_today,
+                        'failed_logins_1h':  failed_logins_1h,
+                        'server_ts':         datetime.utcnow().isoformat(),
                     })
-                    yield f"data: {payload}\n\n"
-                except Exception:
-                    yield "data: {}\n\n"
+                    yield f"event: stats\ndata: {stats_payload}\n\n"
+
+                    # ── feed: recent audit + login rows (every FEED_EVERY_N ticks) ──
+                    if tick % FEED_EVERY_N == 0:
+                        recent_audit = (
+                            db.session.query(AdminAuditLog)
+                            .order_by(AdminAuditLog.timestamp.desc())
+                            .limit(5).all()
+                        )
+                        audit_feed = [
+                            {
+                                'admin':  e.admin_email,
+                                'action': e.action.replace('_', ' ').title(),
+                                'target': e.target or '',
+                                'ts':     e.timestamp.isoformat() if e.timestamp else '',
+                            }
+                            for e in recent_audit
+                        ]
+
+                        recent_logins = (
+                            db.session.query(DBUser)
+                            .filter(DBUser.last_login.isnot(None))
+                            .order_by(DBUser.last_login.desc())
+                            .limit(5).all()
+                        )
+                        login_feed = [
+                            {'email': u.id, 'ts': u.last_login.isoformat()}
+                            for u in recent_logins
+                        ]
+
+                        feed_payload = json.dumps({'audit': audit_feed, 'logins': login_feed})
+                        yield f"event: feed\ndata: {feed_payload}\n\n"
+
+                except Exception as e:
+                    app.logger.warning(f"[Admin SSE] Stream error on tick {tick}: {e}")
+                    yield "event: stats\ndata: {}\n\n"
+
                 # Keep tests deterministic and avoid hanging teardown on long-lived streams.
                 if app.testing:
                     break
-                time_mod.sleep(10)
-        return Response(generate(), mimetype='text/event-stream',
-                        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+                tick += 1
+                time_mod.sleep(STATS_INTERVAL)
+
+        return Response(
+            generate(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control':    'no-cache',
+                'X-Accel-Buffering': 'no',
+                'Connection':       'keep-alive',
+            },
+        )
 
     # --- 9. IP Whitelist Mode ---
     @app.route('/admin/ip-whitelist')
