@@ -32,12 +32,22 @@
         font-size: 0.78rem;
         white-space: nowrap;
     }
+
+    @keyframes stat-flash {
+        0%   { background-color: transparent; }
+        20%  { background-color: rgba(34, 197, 94, 0.18); }
+        100% { background-color: transparent; }
+    }
+    .stat-changed {
+        animation: stat-flash 0.9s ease-out;
+        border-radius: 4px;
+    }
 </style>
 
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Dashboard</h1>
-        <p class="admin-page-subtitle">System overview and quick actions &mdash; <span id="liveIndicator" style="font-size:0.78rem;color:var(--fg-secondary);">connecting...</span></p>
+        <p class="admin-page-subtitle">System overview and quick actions &mdash; <span id="liveIndicator" style="font-size:0.78rem;color:var(--fg-secondary);">connecting…</span><span id="liveLastUpdated" style="font-size:0.75rem;color:var(--fg-secondary);margin-left:0.6rem;"></span></p>
     </div>
 </div>
 
@@ -83,6 +93,21 @@
         <div class="a-stat-label">Live Matches</div>
         <div class="a-stat-value" id="live-live_matches">{{ stats.live_matches }}</div>
     </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-user-plus"></i></div>
+        <div class="a-stat-label">Signups Today</div>
+        <div class="a-stat-value" id="live-signups_today">{{ stats.signups_today }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-play-circle"></i></div>
+        <div class="a-stat-label">Matches Today</div>
+        <div class="a-stat-value" id="live-matches_today">{{ stats.matches_today }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-icon"><i class="fas fa-shield-alt"></i></div>
+        <div class="a-stat-label">Failed Logins (1h)</div>
+        <div class="a-stat-value" id="live-failed_logins_1h">{{ stats.failed_logins_1h }}</div>
+    </div>
 </div>
 
 <div class="a-grid-2">
@@ -103,20 +128,20 @@
     <div class="a-section">
         <h3 class="a-section-title"><i class="fas fa-clock"></i> Recent Logins</h3>
         <div class="a-card-flat">
-            {% if recent_activity %}
-            <div class="admin-recent-logins">
-                {% for activity in recent_activity %}
-                <div class="admin-recent-login-row">
-                    <span><strong>{{ activity.email }}</strong></span>
-                    <span class="admin-recent-login-time">{{ activity.time }}</span>
+            <div id="live-logins-wrap" class="admin-recent-logins">
+                {% if recent_activity %}
+                    {% for activity in recent_activity %}
+                    <div class="admin-recent-login-row">
+                        <span><strong>{{ activity.email }}</strong></span>
+                        <span class="admin-recent-login-time">{{ activity.time }}</span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="a-empty">
+                    <p>No recent activity</p>
                 </div>
-                {% endfor %}
+                {% endif %}
             </div>
-            {% else %}
-            <div class="a-empty">
-                <p>No recent activity</p>
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>
@@ -124,7 +149,6 @@
 <!-- Audit Trail -->
 <div class="a-section" style="margin-top: 1rem;">
     <h3 class="a-section-title"><i class="fas fa-scroll"></i> Recent Admin Actions</h3>
-    {% if audit_entries %}
     <div class="a-table-wrap">
         <table class="a-table">
             <thead>
@@ -135,15 +159,23 @@
                     <th>When</th>
                 </tr>
             </thead>
-            <tbody>
-                {% for e in audit_entries %}
+            <tbody id="live-audit-tbody">
+                {% if audit_entries %}
+                    {% for e in audit_entries %}
+                    <tr>
+                        <td><strong>{{ e.admin }}</strong></td>
+                        <td><span class="a-badge a-badge-info">{{ e.action }}</span></td>
+                        <td style="color: var(--fg-secondary);">{{ e.target or '-' }}</td>
+                        <td style="color: var(--fg-secondary); font-size: 0.8rem;">{{ e.time }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
                 <tr>
-                    <td><strong>{{ e.admin }}</strong></td>
-                    <td><span class="a-badge a-badge-info">{{ e.action }}</span></td>
-                    <td style="color: var(--fg-secondary);">{{ e.target or '-' }}</td>
-                    <td style="color: var(--fg-secondary); font-size: 0.8rem;">{{ e.time }}</td>
+                    <td colspan="4" style="color: var(--fg-secondary); text-align: center; padding: 1rem;">
+                        <i class="fas fa-check-circle"></i> No admin actions recorded yet
+                    </td>
                 </tr>
-                {% endfor %}
+                {% endif %}
             </tbody>
         </table>
     </div>
@@ -151,45 +183,194 @@
         <a href="/admin/audit-log" class="a-btn a-btn-ghost a-btn-sm">View Full Audit Log <i
                 class="fas fa-arrow-right"></i></a>
     </div>
-    {% else %}
-    <div class="a-card-flat">
-        <div class="a-empty"><i class="fas fa-check-circle"></i>
-            <p>No admin actions recorded yet</p>
-        </div>
-    </div>
-    {% endif %}
 </div>
 
 <script>
-// Real-time dashboard via Server-Sent Events
-(function() {
-    const indicator = document.getElementById('liveIndicator');
-    const LIVE_FIELDS = ['total_users','total_teams','total_matches','total_tournaments','db_size_mb','active_users_7d','active_sessions','live_matches'];
+(function () {
+    'use strict';
 
-    function connect() {
-        if (!window.EventSource) {
-            if (indicator) indicator.textContent = 'Live updates not supported in this browser.';
-            return;
+    // ── Config ───────────────────────────────────────────────────────────────
+    const STATS_FIELDS = [
+        'total_users', 'total_teams', 'total_matches', 'total_tournaments',
+        'db_size_mb', 'active_users_7d', 'active_sessions', 'live_matches',
+        'signups_today', 'matches_today', 'failed_logins_1h',
+    ];
+    const RECONNECT_BASE    = 2000;   // ms — initial reconnect delay
+    const RECONNECT_MAX     = 60000;  // ms — cap on backoff
+    const FAIL_THRESHOLD    = 3;      // consecutive errors → "disconnected" state
+
+    // ── State ────────────────────────────────────────────────────────────────
+    let esConn          = null;
+    let reconnectDelay  = RECONNECT_BASE;
+    let failCount       = 0;
+    let lastUpdateTs    = null;   // Date object of last successful stats event
+    let reconnectTimer  = null;   // pending setTimeout handle
+    let prevValues      = {};     // track previous stat values for flash detection
+    let ageSweepTimer   = null;   // setInterval for "updated Xs ago" counter
+
+    // ── DOM refs ─────────────────────────────────────────────────────────────
+    const indicator    = document.getElementById('liveIndicator');
+    const lastUpdated  = document.getElementById('liveLastUpdated');
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function setIndicator(state, extra) {
+        if (!indicator) return;
+        switch (state) {
+            case 'live':
+                indicator.textContent  = '● live';
+                indicator.style.color  = '#22c55e';
+                break;
+            case 'reconnecting':
+                indicator.textContent  = `reconnecting in ${Math.round((extra||reconnectDelay)/1000)}s…`;
+                indicator.style.color  = 'var(--fg-secondary)';
+                break;
+            case 'disconnected':
+                indicator.textContent  = `disconnected — retrying in ${Math.round((extra||reconnectDelay)/1000)}s`;
+                indicator.style.color  = '#ef4444';
+                break;
+            case 'connecting':
+                indicator.textContent  = 'connecting…';
+                indicator.style.color  = 'var(--fg-secondary)';
+                break;
+            case 'unsupported':
+                indicator.textContent  = 'Live updates not supported in this browser.';
+                indicator.style.color  = 'var(--fg-secondary)';
+                break;
         }
-        const es = new EventSource('/admin/dashboard/stream');
-        es.onopen = () => {
-            if (indicator) { indicator.textContent = 'live'; indicator.style.color = '#22c55e'; }
+    }
+
+    /** Format a UTC ISO string as "Xm ago" / "Xh ago" / "Xd ago" */
+    function relTime(isoStr) {
+        if (!isoStr) return '';
+        const diffMs  = Date.now() - new Date(isoStr + 'Z').getTime();
+        const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+        if (diffSec < 60)            return 'just now';
+        if (diffSec < 3600)          return `${Math.floor(diffSec / 60)}m ago`;
+        if (diffSec < 86400)         return `${Math.floor(diffSec / 3600)}h ago`;
+        return `${Math.floor(diffSec / 86400)}d ago`;
+    }
+
+    /** Briefly flash a stat value element when it changes */
+    function flashEl(el) {
+        el.classList.remove('stat-changed');
+        // Force reflow so animation restarts if already running
+        void el.offsetWidth;
+        el.classList.add('stat-changed');
+    }
+
+    // ── Stats event handler ──────────────────────────────────────────────────
+    function handleStats(e) {
+        let d;
+        try { d = JSON.parse(e.data); } catch { return; }
+        if (!d || Object.keys(d).length === 0) return;
+
+        STATS_FIELDS.forEach(key => {
+            const el  = document.getElementById('live-' + key);
+            if (!el) return;
+            const val = d[key];
+            if (val === undefined) return;
+            const str = String(val);
+            if (el.textContent !== str) {
+                el.textContent = str;
+                flashEl(el);
+            }
+            prevValues[key] = str;
+        });
+
+        lastUpdateTs = new Date();
+        if (lastUpdated) lastUpdated.textContent = 'updated just now';
+    }
+
+    // ── Feed event handler ───────────────────────────────────────────────────
+    function handleFeed(e) {
+        let d;
+        try { d = JSON.parse(e.data); } catch { return; }
+        if (!d) return;
+
+        // Re-render recent audit table body
+        if (Array.isArray(d.audit)) {
+            const tbody = document.getElementById('live-audit-tbody');
+            if (tbody) {
+                tbody.innerHTML = d.audit.length === 0
+                    ? '<tr><td colspan="4" style="color:var(--fg-secondary);text-align:center;">No admin actions recorded yet</td></tr>'
+                    : d.audit.map(row => `
+                        <tr>
+                            <td><strong>${escHtml(row.admin)}</strong></td>
+                            <td><span class="a-badge a-badge-info">${escHtml(row.action)}</span></td>
+                            <td style="color:var(--fg-secondary);">${escHtml(row.target || '-')}</td>
+                            <td style="color:var(--fg-secondary);font-size:0.8rem;">${relTime(row.ts)}</td>
+                        </tr>`).join('');
+            }
+        }
+
+        // Re-render recent logins list
+        if (Array.isArray(d.logins)) {
+            const loginWrap = document.getElementById('live-logins-wrap');
+            if (loginWrap) {
+                loginWrap.innerHTML = d.logins.length === 0
+                    ? '<div class="a-empty"><p>No recent activity</p></div>'
+                    : d.logins.map(row => `
+                        <div class="admin-recent-login-row">
+                            <span><strong>${escHtml(row.email)}</strong></span>
+                            <span class="admin-recent-login-time">${relTime(row.ts)}</span>
+                        </div>`).join('');
+            }
+        }
+    }
+
+    function escHtml(s) {
+        return String(s)
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── "Updated X seconds ago" sweep ────────────────────────────────────────
+    function startAgeSweep() {
+        if (ageSweepTimer) return;
+        ageSweepTimer = setInterval(() => {
+            if (!lastUpdated || !lastUpdateTs) return;
+            const secs = Math.floor((Date.now() - lastUpdateTs.getTime()) / 1000);
+            if (secs < 5)       lastUpdated.textContent = 'updated just now';
+            else if (secs < 60) lastUpdated.textContent = `updated ${secs}s ago`;
+            else                lastUpdated.textContent = `updated ${Math.floor(secs/60)}m ago`;
+        }, 1000);
+    }
+
+    // ── Connection ───────────────────────────────────────────────────────────
+    function connect() {
+        if (!window.EventSource) { setIndicator('unsupported'); return; }
+
+        // Close any existing connection before opening a new one
+        if (esConn) { esConn.close(); esConn = null; }
+
+        setIndicator('connecting');
+        esConn = new EventSource('/admin/dashboard/stream');
+
+        esConn.onopen = () => {
+            failCount      = 0;
+            reconnectDelay = RECONNECT_BASE;
+            setIndicator('live');
+            startAgeSweep();
         };
-        es.onmessage = (e) => {
-            try {
-                const d = JSON.parse(e.data);
-                LIVE_FIELDS.forEach(key => {
-                    const el = document.getElementById('live-' + key);
-                    if (el && d[key] !== undefined) el.textContent = d[key];
-                });
-            } catch {}
-        };
-        es.onerror = () => {
-            if (indicator) { indicator.textContent = 'reconnecting...'; indicator.style.color = 'var(--fg-secondary)'; }
-            es.close();
-            setTimeout(connect, 15000);
+
+        esConn.addEventListener('stats', handleStats);
+        esConn.addEventListener('feed',  handleFeed);
+
+        esConn.onerror = () => {
+            esConn.close();
+            esConn = null;
+            failCount++;
+
+            reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX);
+            const state = failCount >= FAIL_THRESHOLD ? 'disconnected' : 'reconnecting';
+            setIndicator(state, reconnectDelay);
+
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(connect, reconnectDelay);
         };
     }
+
+    // Boot
     connect();
 })();
 </script>
