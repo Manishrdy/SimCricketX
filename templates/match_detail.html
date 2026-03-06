@@ -568,6 +568,7 @@
         console.error("Failed to parse match data", e);
         window.matchData = {};
     }
+    window.resumeMode = {{ resume_mode | default(false) | tojson }};
 </script>
 
 <!-- Load Main Logic -->

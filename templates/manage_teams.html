@@ -685,6 +685,21 @@
                 transform: translateY(0) scale(1);
             }
         }
+
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .flash {
+            transition: opacity 0.3s ease;
+        }
+
+        .flash.fade-out {
+            opacity: 0;
+        }
     </style>
 </head>
 
@@ -736,13 +751,13 @@
             </div>
             <div class="stat-card">
                 <i class="fa-solid fa-users stat-icon"></i>
-                <span class="stat-value">{{ avg_squad_size }}</span>
+                <span class="stat-value">{{ avg_squad_size | default(0) }}</span>
                 <span class="stat-label">Avg Squad Size</span>
             </div>
             <div class="stat-card">
-                <i class="fa-solid fa-trophy stat-icon"></i>
-                <span class="stat-value">Rank #1</span>
-                <span class="stat-label">Global Standing</span>
+                <i class="fa-solid fa-person-running stat-icon"></i>
+                <span class="stat-value">{{ total_players | default(0) }}</span>
+                <span class="stat-label">Total Players</span>
             </div>
         </div>
 
@@ -800,8 +815,8 @@
 
                 <div class="card-footer">
                     <div class="card-meta">
-                        <i class="fa-solid fa-clock"></i>
-                        <span>Updated just now</span>
+                        <i class="fa-solid fa-calendar"></i>
+                        <span>Created {{ t.created_at.strftime('%b %d, %Y') if t.created_at else 'N/A' }}</span>
                     </div>
                     <div class="card-actions">
                         <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team">
@@ -852,7 +867,7 @@
     </div>
 
     <script>
-        const shouldClearTeamDraft = {{ 'true' if request.args.get('clear_team_draft') == '1' else 'false' }};
+        const shouldClearTeamDraft = new URLSearchParams(window.location.search).get('clear_team_draft') === '1';
 
         function clearTeamCreateDraftIfNeeded() {
             if (!shouldClearTeamDraft) return;
@@ -986,24 +1001,13 @@
             });
         });
 
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes ripple {
-                to {
-                    transform: scale(4);
-                    opacity: 0;
-                }
-            }
-        `;
-        document.head.appendChild(style);
-
         if (window.location.hash === '#teams') {
             document.querySelector('.teams-section').scrollIntoView({
                 behavior: 'smooth'
             });
         }
 
-        document.querySelectorAll('a[href]').forEach(link => {
+        document.querySelectorAll('.main-content a[href]').forEach(link => {
             link.addEventListener('click', function () {
                 if (this.href && !this.href.includes('#')) {
                     this.style.opacity = '0.7';

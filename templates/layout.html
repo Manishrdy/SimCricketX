@@ -419,6 +419,106 @@
             color: #dc2626;
         }
 
+        /* Active match badge on avatar */
+        .profile-avatar-wrap {
+            position: relative;
+            display: flex;
+        }
+
+        .active-match-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 10px;
+            height: 10px;
+            background: #10b981;
+            border-radius: 50%;
+            border: 2px solid var(--bg);
+            animation: pulse-badge 2s infinite;
+        }
+
+        @keyframes pulse-badge {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.75; transform: scale(1.25); }
+        }
+
+        /* Active matches section in dropdown */
+        .active-matches-section {
+            padding: 0.75rem 0.75rem 0.25rem;
+        }
+
+        .active-matches-header {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--fg-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 0 0.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .active-matches-header .live-dot {
+            width: 7px;
+            height: 7px;
+            background: #10b981;
+            border-radius: 50%;
+            flex-shrink: 0;
+            animation: pulse-badge 2s infinite;
+        }
+
+        .active-match-card {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.55rem 0.65rem;
+            background: rgba(16, 185, 129, 0.06);
+            border: 1px solid var(--card-border);
+            border-left: 3px solid #10b981;
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--fg);
+            transition: all 0.2s ease;
+            margin-bottom: 0.4rem;
+        }
+
+        .active-match-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .active-match-card:hover {
+            background: rgba(16, 185, 129, 0.12);
+            border-left-color: #059669;
+        }
+
+        .active-match-card-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .active-match-teams {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--fg);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .active-match-meta {
+            font-size: 0.72rem;
+            color: var(--fg-secondary);
+            margin-top: 0.1rem;
+        }
+
+        .active-match-resume-icon {
+            font-size: 0.85rem;
+            color: #10b981;
+            flex-shrink: 0;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .profile-name {
@@ -1178,13 +1278,45 @@
             <!-- User Profile Dropdown -->
             <div class="profile-dropdown-wrapper">
                 <button class="profile-trigger" id="profileBtn">
-                    <div class="profile-avatar">{{ (current_user.display_name or current_user.id)[0]|upper }}</div>
+                    <div class="profile-avatar-wrap">
+                        <div class="profile-avatar">{{ (current_user.display_name or current_user.id)[0]|upper }}</div>
+                        {% if user_stats.active_matches %}<span class="active-match-badge"></span>{% endif %}
+                    </div>
                     <span class="profile-name">{{ current_user.display_name or current_user.id.split('@')[0] }}</span>
                     <i class="fas fa-chevron-down"></i>
                 </button>
 
                 <!-- Dropdown Menu -->
                 <div class="profile-dropdown" id="profileDropdown">
+                    <!-- Ongoing Matches -->
+                    {% if user_stats.active_matches %}
+                    <div class="active-matches-section">
+                        <div class="active-matches-header">
+                            <span class="live-dot"></span>
+                            <span>Ongoing Matches</span>
+                        </div>
+                        {% for m in user_stats.active_matches %}
+                        <a href="{{ url_for('match_detail', match_id=m.match_id) }}" class="active-match-card">
+                            <div class="active-match-card-info">
+                                <div class="active-match-teams">
+                                    {{ m.team_home.rsplit('_', 1)[0] }} vs {{ m.team_away.rsplit('_', 1)[0] }}
+                                </div>
+                                <div class="active-match-meta">
+                                    {{ m.match_format }}
+                                    &middot; Inn {{ m.innings }}
+                                    {% if m.current_over > 0 %}
+                                    &middot; Ov {{ m.current_over }} &middot; {{ m.score }}/{{ m.wickets }}
+                                    {% else %}
+                                    &middot; Not started
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <i class="fas fa-play-circle active-match-resume-icon"></i>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    <div class="profile-divider"></div>
+                    {% endif %}
                     <!-- Profile Header -->
                     <div class="profile-header">
                         <div class="profile-avatar-large">{{ (current_user.display_name or current_user.id)[0]|upper }}
