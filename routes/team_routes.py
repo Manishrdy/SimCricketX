@@ -378,7 +378,10 @@ def register_team_routes(
         except Exception as e:
             app.logger.error(f"Error loading teams from DB: {e}", exc_info=True)
 
-        return render_template("manage_teams.html", teams=teams)
+        total_players = sum(pi["player_count"] for t in teams for pi in t["profiles"])
+        avg_squad_size = total_players // len(teams) if teams else 0
+
+        return render_template("manage_teams.html", teams=teams, avg_squad_size=avg_squad_size)
 
     @app.route("/team/delete", methods=["POST"])
     @login_required

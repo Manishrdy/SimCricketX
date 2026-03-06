@@ -736,13 +736,7 @@
             </div>
             <div class="stat-card">
                 <i class="fa-solid fa-users stat-icon"></i>
-                <span class="stat-value">
-                    {% if teams %}
-                    {{ (teams|map(attribute='players')|map('length')|sum // teams|length) }}
-                    {% else %}
-                    0
-                    {% endif %}
-                </span>
+                <span class="stat-value">{{ avg_squad_size }}</span>
                 <span class="stat-label">Avg Squad Size</span>
             </div>
             <div class="stat-card">
