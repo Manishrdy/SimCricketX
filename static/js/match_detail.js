@@ -1745,3 +1745,101 @@ function soSetupInnings2(data) {
 // Expose for inline onclick handlers
 window.soPickBattingTeam = soPickBattingTeam;
 window.soStartInnings = soStartInnings;
+
+// ── MATCH RESUME LOGIC ────────────────────────────────────────────────────
+// Runs on page load when the user returns to a mid-match page.
+// Fetches the current engine state and restores the score banner before
+// continuing the simulation loop.
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (!window.resumeMode) return;
+
+    const matchId = window.location.pathname.split('/match/')[1]?.split('/')[0];
+    if (!matchId) return;
+
+    // Disable the toss button while we determine state
+    const spinBtn = document.getElementById('spin-toss');
+    if (spinBtn) spinBtn.disabled = true;
+
+    fetch(`/match/${matchId}/live-state`)
+        .then(r => r.json())
+        .then(state => {
+            if (state.status === 'completed') {
+                window.location.href = `/match/${matchId}/scoreboard`;
+                return;
+            }
+
+            if (state.status !== 'in_progress') {
+                // Nothing in memory — let user start fresh
+                if (spinBtn) spinBtn.disabled = false;
+                return;
+            }
+
+            // ── Restore score banner ──────────────────────────────────────
+            const bannerData = {
+                score: state.score,
+                wickets: state.wickets,
+                over: state.current_over,
+                ball: state.current_ball,
+                innings_number: state.innings,
+                target: state.target,
+                total_overs: matchData.overs || 20,
+                striker: state.striker.name ? {
+                    name: state.striker.name,
+                    runs: state.striker.runs,
+                    balls: state.striker.balls,
+                    fours: state.striker.fours,
+                    sixes: state.striker.sixes,
+                } : null,
+                non_striker: state.non_striker.name ? {
+                    name: state.non_striker.name,
+                    runs: state.non_striker.runs,
+                    balls: state.non_striker.balls,
+                } : null,
+                bowler: state.current_bowler.name ? {
+                    name: state.current_bowler.name,
+                    overs: state.current_bowler.overs,
+                    runs: state.current_bowler.runs,
+                    wickets: state.current_bowler.wickets,
+                } : null,
+            };
+            updateScoreBanner(bannerData);
+
+            // Set batting team name in banner
+            const batNameEl = document.getElementById('sb-bat-name');
+            if (batNameEl && state.batting_team_name) batNameEl.textContent = state.batting_team_name;
+
+            // Show current over outcomes in the strip
+            if (state.current_over_outcomes && state.current_over_outcomes.length) {
+                const thisOverEl = document.getElementById('sb-this-over');
+                if (thisOverEl) {
+                    thisOverEl.innerHTML = state.current_over_outcomes
+                        .map(o => `<span class="sb-ball-outcome">${o}</span>`)
+                        .join('');
+                }
+            }
+
+            // ── Resume notice in commentary log ──────────────────────────
+            const overLabel = `${state.current_over}.${state.current_ball}`;
+            const inningsLabel = state.innings === 1 ? '1st' : '2nd';
+            appendLog(
+                `<span style="color:#10b981;font-weight:700;">▶ RESUMED</span> — ` +
+                `${inningsLabel} innings, Over ${overLabel} | ` +
+                `${state.batting_team_name} ${state.score}/${state.wickets}` +
+                (state.target ? ` | Target: ${state.target}` : ''),
+                'comment'
+            );
+
+            currentInningsNumber = state.innings;
+
+            // ── Continue simulation ───────────────────────────────────────
+            if (simulationMode === 'auto') {
+                scheduleNextBall(1200);
+            }
+            // Manual mode: user presses Next Ball themselves — no action needed
+        })
+        .catch(err => {
+            console.error('[Resume] Failed to fetch live state:', err);
+            if (spinBtn) spinBtn.disabled = false;
+        });
+});

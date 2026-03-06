@@ -687,14 +687,30 @@ def create_app():
         """Inject user statistics for profile dropdown"""
         if current_user.is_authenticated:
             try:
+                active_matches = []
+                with MATCH_INSTANCES_LOCK:
+                    for mid, inst in list(MATCH_INSTANCES.items()):
+                        if (inst.data.get("created_by") == current_user.id and
+                                inst.data.get("current_state") != "completed"):
+                            active_matches.append({
+                                "match_id": mid,
+                                "team_home": inst.data.get("team_home", ""),
+                                "team_away": inst.data.get("team_away", ""),
+                                "match_format": inst.data.get("match_format", "T20"),
+                                "innings": getattr(inst, "innings", 1),
+                                "current_over": getattr(inst, "current_over", 0),
+                                "score": getattr(inst, "score", 0),
+                                "wickets": getattr(inst, "wickets", 0),
+                            })
                 user_stats = {
                     'teams_count': db.session.query(DBTeam).filter_by(user_id=current_user.id).count(),
                     'matches_count': db.session.query(DBMatch).filter_by(user_id=current_user.id).count(),
-                    'tournaments_count': db.session.query(Tournament).filter_by(user_id=current_user.id).count()
+                    'tournaments_count': db.session.query(Tournament).filter_by(user_id=current_user.id).count(),
+                    'active_matches': active_matches,
                 }
                 return {'user_stats': user_stats}
             except Exception:
-                return {'user_stats': {'teams_count': 0, 'matches_count': 0, 'tournaments_count': 0}}
+                return {'user_stats': {'teams_count': 0, 'matches_count': 0, 'tournaments_count': 0, 'active_matches': []}}
         return {}
 
     def _get_app_version():
