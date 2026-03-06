@@ -508,6 +508,7 @@ def register_match_routes(
             "partnership_balls": getattr(match, "partnership_balls", 0),
             "crr": crr,
             "match_format": match.data.get("match_format", "T20"),
+            "commentary_log": getattr(match, "commentary_replay_log", []),
         })
     
     @app.route("/match/<match_id>/scoreboard")
@@ -913,6 +914,13 @@ def register_match_routes(
             if match.data.get("created_by") != current_user.id:
                 return jsonify({"error": "Unauthorized"}), 403
             outcome = match.next_ball()
+
+            # Accumulate commentary for resume replay
+            commentary_html = outcome.get("commentary")
+            if commentary_html:
+                if not hasattr(match, "commentary_replay_log"):
+                    match.commentary_replay_log = []
+                match.commentary_replay_log.append(commentary_html)
 
             # Explicitly send final score and wickets clearly
             if outcome.get("match_over"):
