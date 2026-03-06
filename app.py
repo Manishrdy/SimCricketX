@@ -2105,6 +2105,13 @@ def create_app():
 
                 outcome = match.next_ball()
 
+                # Accumulate commentary for resume replay (mirrors HTTP path)
+                commentary_html = outcome.get('commentary')
+                if commentary_html:
+                    if not hasattr(match, 'commentary_replay_log'):
+                        match.commentary_replay_log = []
+                    match.commentary_replay_log.append(commentary_html)
+
                 if outcome.get('match_over'):
                     first_completion = match.data.get('current_state') != 'completed'
                     if first_completion:
