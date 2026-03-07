@@ -69,7 +69,7 @@ def register_auth_routes(
         """Redirect authenticated users who still need to re-verify their email."""
         if not current_user.is_authenticated:
             return
-        if not current_user.force_email_verify:
+        if not getattr(current_user, 'force_email_verify', False):
             session.pop("force_email_verify", None)
             return
         if request.endpoint in _FORCE_VERIFY_EXEMPT:
