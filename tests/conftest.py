@@ -184,6 +184,7 @@ def regular_user(app):
         is_admin=False,
         is_banned=False,
         force_password_reset=False,
+        email_verified=True,
         created_at=datetime.now(timezone.utc),
     )
     db.session.add(user)
@@ -202,6 +203,7 @@ def admin_user(app):
         is_admin=True,
         is_banned=False,
         force_password_reset=False,
+        email_verified=True,
         created_at=datetime.now(timezone.utc),
     )
     db.session.add(user)
@@ -220,6 +222,7 @@ def banned_user(app):
         is_admin=False,
         is_banned=True,
         force_password_reset=False,
+        email_verified=True,
         created_at=datetime.now(timezone.utc),
     )
     db.session.add(user)
