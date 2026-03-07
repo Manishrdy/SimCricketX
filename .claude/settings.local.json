@@ -12,7 +12,8 @@
       "Bash(grep:*)",
       "Bash(wc:*)",
       "Bash(find /Users/manish/Documents/SimCricketX -type f -name \"*.py\" -path \"*/engine/*\" -exec basename {} ;)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(gh run list --limit 5)"
     ]
   }
 }
