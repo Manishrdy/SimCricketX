@@ -3035,10 +3035,6 @@ class Match:
         if self.fmt.name == "ListA":
             return self._pick_bowler_lista()
 
-        print(f"\n🐛 PICK_BOWLER DEBUG: Over {self.current_over + 1}")
-        print(f"🐛 Current over >= 17? {self.current_over >= 17}")
-        print(f"🐛 Previous bowler: {self.current_bowler['name'] if self.current_bowler else 'None'}")
-
         # ================ DEATH OVERS SPECIAL HANDLING ================
         if self.current_over >= 17:  # Overs 18, 19, 20
             print(f"\n🎯 === SWITCHING TO DEATH OVERS MODE ===")
