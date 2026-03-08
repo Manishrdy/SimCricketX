@@ -562,7 +562,7 @@ class ScenarioEngine:
 
         runs_needed = self.match.target - self.match.score
         wickets_remaining = 10 - self.match.wickets
-        balls_left = (20 - current_over) * 6 - self.match.current_ball
+        balls_left = (self.match.fmt.overs - current_over) * 6 - self.match.current_ball
 
         self._endgame_checked_overs.add(current_over)
         if not self._is_endgame_scenario_feasible(runs_needed, wickets_remaining, balls_left):
@@ -621,7 +621,7 @@ class ScenarioEngine:
             return {}
 
         runs_needed = self.match.target - self.match.score
-        balls_remaining = (20 - self.match.current_over) * 6 - self.match.current_ball
+        balls_remaining = (self.match.fmt.overs - self.match.current_over) * 6 - self.match.current_ball
         wickets_remaining = 10 - self.match.wickets
 
         if balls_remaining <= 0:
@@ -726,7 +726,7 @@ class ScenarioEngine:
         """Build the finale ball sequence based on current match state."""
         runs_needed = self.match.target - self.match.score
         wickets_remaining = 10 - self.match.wickets
-        balls_left = (20 - self.match.current_over) * 6 - self.match.current_ball
+        balls_left = (self.match.fmt.overs - self.match.current_over) * 6 - self.match.current_ball
 
         logger.info(f"[Scenario] Generating finale: type={self.scenario_type}, "
                      f"runs_needed={runs_needed}, wickets={wickets_remaining}, balls={balls_left}")
