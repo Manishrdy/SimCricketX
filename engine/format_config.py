@@ -20,7 +20,7 @@ Usage
     fmt.get_phase(over)  # Phase object
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 
