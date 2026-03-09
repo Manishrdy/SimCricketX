@@ -2,3 +2,5 @@ User-agent: *
 Allow: /
 Disallow: /admin/
 Disallow: /auth/
+
+Sitemap: https://simcricketx.app/sitemap.xml
