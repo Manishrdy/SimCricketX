@@ -176,3 +176,20 @@ def register_core_routes(
     @app.route("/robots.txt")
     def robots_txt():
         return send_from_directory(basedir, "robots.txt", mimetype="text/plain")
+
+    @app.route("/sitemap.xml")
+    def sitemap_xml():
+        pages = [
+            ("https://simcricketx.app/",       "weekly",  "1.0"),
+            ("https://simcricketx.app/about",   "monthly", "0.7"),
+        ]
+        lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+                 '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+        for loc, changefreq, priority in pages:
+            lines.append(
+                f"  <url><loc>{loc}</loc>"
+                f"<changefreq>{changefreq}</changefreq>"
+                f"<priority>{priority}</priority></url>"
+            )
+        lines.append("</urlset>")
+        return "\n".join(lines), 200, {"Content-Type": "application/xml"}

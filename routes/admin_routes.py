@@ -34,6 +34,7 @@ def register_admin_routes(
     _list_backup_files,
     _verify_sqlite_integrity,
     _backup_scheduler_started,
+    get_cleanup_status,
     _persist_maintenance_mode,
     get_maintenance_mode,
     psutil,
@@ -1639,12 +1640,13 @@ def register_admin_routes(
             'last_run': _get_last_backup_time(),
         })
         # Cleanup task
+        _cleanup_started, _cleanup_last_run = get_cleanup_status()
         tasks.append({
             'name': 'Match Instance Cleanup',
-            'status': 'Active',
+            'status': 'Active' if _cleanup_started else 'Inactive',
             'interval': '6 hours',
             'description': 'Removes old in-memory match instances and orphaned JSON files',
-            'last_run': None,
+            'last_run': _cleanup_last_run,
         })
         # Backup retention
         tasks.append({

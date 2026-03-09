@@ -85,6 +85,7 @@ import traceback
 from pathlib import Path
 
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 from engine.stats_aggregator import StatsAggregator 
 from engine.stats_service import StatsService
 import glob
@@ -177,6 +178,9 @@ _rate_limit_store = {}  # {user_id: deque of timestamps}
 _rate_limit_lock = threading.Lock()
 _backup_scheduler_started = False
 _backup_scheduler_lock = threading.Lock()
+_cleanup_scheduler_started = False
+_cleanup_scheduler_lock = threading.Lock()
+_last_cleanup_run = None  # datetime of last successful cleanup_old_match_instances run
 RUNTIME_FINGERPRINT = "SCX-ADMIN-ROUTE-FIX-20260208-2358"
 
 def rate_limit(max_requests=30, window_seconds=10):
@@ -327,6 +331,7 @@ def load_app_config():
 
 def cleanup_old_match_instances(app):
     """Clean up old match instances from memory and orphaned JSON files"""
+    global _last_cleanup_run
     try:
         current_time = time.time()
         cutoff_time = current_time - (24 * 3600)  # 24 hours ago
@@ -366,18 +371,19 @@ def cleanup_old_match_instances(app):
             if removed_files:
                 app.logger.info(f"[Cleanup] Cleaned up {removed_files} orphaned JSON files")
 
+        _last_cleanup_run = datetime.utcnow()
+
     except Exception as e:
-        # app.logger.error(f"[Cleanup] Error cleaning up match instances: {e}", exc_info=True)
-        pass
+        app.logger.error(f"[Cleanup] Error cleaning up match instances: {e}", exc_info=True)
 
 def periodic_cleanup(app):
-    """Run cleanup every 6 hours"""
+    """Run cleanup every 6 hours. Runs immediately on first call, then every 6 hours."""
     while True:
         try:
-            time.sleep(6 * 3600)  # 6 hours
             cleanup_old_match_instances(app)
         except Exception as e:
             app.logger.error(f"[PeriodicCleanup] Error in cleanup thread: {e}")
+        time.sleep(6 * 3600)  # 6 hours
 
 
 def cleanup_temp_scorecard_images(logger=None):
@@ -430,6 +436,13 @@ def create_app():
     # Reset whitelist mode per app instance to avoid cross-instance state leakage in tests/workers.
     IP_WHITELIST_MODE = bool(config.get("security", {}).get("ip_whitelist_mode", False))
     trust_proxy_headers = bool(config.get("security", {}).get("trust_proxy_headers", False))
+
+    # Apply ProxyFix so request.scheme and request.host reflect the real
+    # client-facing protocol/host set by nginx via X-Forwarded-* headers.
+    # This fixes `request.base_url` (used in canonical tags) returning http://
+    # instead of https:// when gunicorn sits behind nginx.
+    if trust_proxy_headers:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
     ADMIN_CONFIG_ALLOWLIST = {
         "app": {"maintenance_mode": bool},
@@ -1294,6 +1307,17 @@ def create_app():
             else:
                 app.logger.info("[Backup] Scheduler already initialized; skipping duplicate startup backup")
 
+        # Start match-instance cleanup thread once per process (gunicorn-safe).
+        with _cleanup_scheduler_lock:
+            global _cleanup_scheduler_started
+            if not _cleanup_scheduler_started:
+                cleanup_thread = threading.Thread(target=periodic_cleanup, args=(app,), daemon=True)
+                cleanup_thread.start()
+                _cleanup_scheduler_started = True
+                app.logger.info("[Cleanup] Match instance cleanup scheduler started")
+            else:
+                app.logger.info("[Cleanup] Cleanup scheduler already initialized; skipping")
+
     # --- Admin Routes ---
 
     # --- Admin Routes (Phase 5 extraction) ---
@@ -1348,6 +1372,7 @@ def create_app():
         MATCH_INSTANCES_LOCK=MATCH_INSTANCES_LOCK,
         text=text,
         get_whitelist_mode=lambda: IP_WHITELIST_MODE,
+        get_cleanup_status=lambda: (_cleanup_scheduler_started, _last_cleanup_run),
     )
 
     # --- Request logging ---
@@ -2180,10 +2205,8 @@ if __name__ == "__main__":
         print("[INFO] Press Ctrl+C to stop the server.\n")
 
         # Cleanup tasks
-        # Cleanup tasks
         with app.app_context():
             cleanup_temp_scorecard_images()
-        threading.Thread(target=periodic_cleanup, args=(app,), daemon=True).start()
 
         # Open browser for local use only
         if is_local:
