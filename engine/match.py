@@ -1722,7 +1722,8 @@ class Match:
         # Multi-criteria selection in normal mode
         if not risk_assessment['emergency_mode']:
             # Prefer higher-rated bowlers in crucial overs
-            crucial_overs = [0, 5] + list(range(16, 20))
+            crucial_overs = ([0] + [pp.end for pp in self.fmt.powerplay_phases]
+                             + list(range(self.fmt.death_phase.start, self.fmt.overs)))
             if self.current_over in crucial_overs:
                 best_rated = max(eligible_bowlers, key=lambda b: b['bowling_rating'])
                 print(f"  ⭐ Crucial over: Selected highest rated {best_rated['name']} (rating: {best_rated['bowling_rating']})")
@@ -2046,28 +2047,28 @@ class Match:
         pattern = self.bowling_pattern
         
         if pattern == "traditional":
-            if over_number < 6:  # Powerplay (overs 1-6)
+            if self.fmt.is_powerplay(over_number):  # Powerplay
                 return "fast"
-            elif over_number < 16:  # Middle overs (7-16)
+            elif self.fmt.is_death(over_number):    # Death overs
+                return "fast"
+            else:                                    # Middle overs
                 return "spin"
-            else:  # Death overs (17-20)
-                return "fast"
-        
+
         elif pattern == "fast_heavy":
-            if over_number < 6:  # Powerplay
+            if self.fmt.is_powerplay(over_number):  # Powerplay
                 return "fast"
-            elif over_number < 14:  # Middle overs with some spin
-                return "mixed"  # Allow both, but prefer fast
-            else:  # Death overs
+            elif self.fmt.is_death(over_number):    # Death overs
                 return "fast"
-        
+            else:                                    # Middle overs — allow both
+                return "mixed"
+
         elif pattern == "spin_heavy":
-            if over_number < 3:  # Early overs
+            if over_number < 3:                      # Very early overs (new ball)
                 return "fast"
-            elif over_number < 17:  # Long spin phase
+            elif self.fmt.is_death(over_number):    # Death overs
+                return "fast"
+            else:                                    # Long spin phase
                 return "spin"
-            else:  # Death overs
-                return "fast"
         
         return "mixed"  # Fallback
 
@@ -2273,7 +2274,8 @@ class Match:
 
     def _apply_form_consideration_debug(self, eligible_bowlers):
         """Form consideration with debugging"""
-        crucial_overs = [0, 5] + list(range(16, 20))  # Overs 1, 6, 17-20
+        crucial_overs = ([0] + [pp.end for pp in self.fmt.powerplay_phases]
+                         + list(range(self.fmt.death_phase.start, self.fmt.overs)))
         is_crucial = self.current_over in crucial_overs
         
         print(f"    📈 Form Filter - Crucial over: {is_crucial}")
@@ -2517,13 +2519,13 @@ class Match:
         """Save star bowlers for crucial phases"""
         print(f"  ⭐ Star Preservation Strategy (Over {self.current_over + 1}):")
         
-        if self.current_over < 6:  # Powerplay
+        if self.fmt.is_powerplay(self.current_over):  # Powerplay
             return eligible_bowlers
-        elif self.current_over < 16:  # Middle overs - prefer regulars
+        elif self.fmt.is_middle(self.current_over):  # Middle overs - prefer regulars
             regulars = [b for b in eligible_bowlers if b in bowler_tiers['regular']]
             support = [b for b in eligible_bowlers if b in bowler_tiers['support']]
             non_stars = regulars + support
-            
+
             if non_stars:
                 print(f"    ✅ Middle overs: Using regular bowlers to save stars")
                 return non_stars
@@ -2557,16 +2559,16 @@ class Match:
 
     def _get_bowling_phase(self):
         """Get current bowling phase"""
-        if self.current_over < 6:
+        if self.fmt.is_powerplay(self.current_over):
             return "POWERPLAY"
-        elif self.current_over < 16:
-            return "MIDDLE_OVERS"
-        else:
+        elif self.fmt.is_death(self.current_over):
             return "DEATH_OVERS"
+        else:
+            return "MIDDLE_OVERS"
 
     def _apply_strict_quota_policy(self, all_bowlers, quota_analysis):
-        """Strictly enforce 4-overs-per-bowler policy"""
-        print(f"  🔒 4-Overs Policy Enforcement:")
+        """Strictly enforce bowling quota policy"""
+        print(f"  🔒 Quota Policy Enforcement ({self.fmt.max_bowler_overs} overs/bowler):")
         
         quota_eligible = []
         
@@ -3042,7 +3044,7 @@ class Match:
         
         # ================ CRITICAL 2-BOWLER SCENARIO PRE-CHECK ================
         # Check for 2-bowler scenario even before death overs (overs 16-17)
-        if self.current_over >= 15:  # Start checking from over 16
+        if self.current_over >= self.fmt.death_phase.start - 1:  # Start checking 1 over before death
             critical_2_bowler_result = self._check_critical_2_bowler_scenario()
             if critical_2_bowler_result:
                 print(f"🚨 CRITICAL 2-BOWLER SCENARIO DETECTED - EARLY INTERVENTION")
