@@ -232,7 +232,7 @@ class CommentaryEngine:
         # --- 11. High pressure dot (2nd innings, RRR >= 10, dot ball) ---
         if (innings == 2 and runs == 0 and not context.get("is_extra")
                 and state.get("required_run_rate", 0) >= 10
-                and current_over >= 15):
+                and current_over >= state.get("_fmt_death_start", 16) - 1):
             triggers.extend(self._format_narratives("high_pressure_dot",
                                                      batter=batter, bowler=bowler,
                                                      team=batting_team,
