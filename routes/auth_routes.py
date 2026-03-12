@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta
 
+import hashlib
+
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from utils.email_service import (
@@ -458,7 +460,8 @@ def register_auth_routes(
             flash("Invalid verification link.", "danger")
             return redirect(url_for("login"))
 
-        user = DBUser.query.filter_by(email_verify_token=token).first()
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        user = DBUser.query.filter_by(email_verify_token=token_hash).first()
         if not user:
             flash("Invalid or already-used verification link.", "danger")
             return redirect(url_for("login"))
@@ -730,7 +733,8 @@ def register_auth_routes(
             flash("Invalid reset link.", "danger")
             return redirect(url_for("forgot_password"))
 
-        user = DBUser.query.filter_by(reset_token=token).first()
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        user = DBUser.query.filter_by(reset_token=token_hash).first()
         if not user:
             flash("Invalid or already-used reset link.", "danger")
             return redirect(url_for("forgot_password"))

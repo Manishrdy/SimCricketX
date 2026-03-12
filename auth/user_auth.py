@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import secrets
@@ -9,6 +10,11 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from database.models import User, AdminAuditLog
 from database import db
 import json
+
+
+def _hash_token(raw_token: str) -> str:
+    """Return a SHA-256 hex digest of the raw token for safe DB storage."""
+    return hashlib.sha256(raw_token.encode()).hexdigest()
 
 EMAIL_VERIFY_TTL_MINUTES = 10
 PASSWORD_RESET_TTL_MINUTES = 10
@@ -95,7 +101,7 @@ def register_user(email: str, password: str, display_name: Optional[str] = None)
             last_login=datetime.now(timezone.utc),
             display_name=display_name,
             email_verified=False,
-            email_verify_token=token,
+            email_verify_token=_hash_token(token),
             email_verify_token_expires=datetime.utcnow() + timedelta(minutes=EMAIL_VERIFY_TTL_MINUTES),
         )
 
@@ -109,9 +115,9 @@ def register_user(email: str, password: str, display_name: Optional[str] = None)
         return False
 
 def generate_email_verify_token(email: str) -> str | None:
-    """Generate a fresh email verification token and persist it (10-min TTL).
+    """Generate a fresh email verification token and persist its hash (10-min TTL).
 
-    Returns the raw token string on success, None on failure.
+    Stores SHA-256(token) in the DB; returns the raw token to send to the user.
     Call this for both initial registration and the resend flow.
     """
     email = email.lower().strip()
@@ -119,7 +125,7 @@ def generate_email_verify_token(email: str) -> str | None:
     if not user:
         return None
     token = secrets.token_urlsafe(32)
-    user.email_verify_token = token
+    user.email_verify_token = _hash_token(token)
     user.email_verify_token_expires = datetime.utcnow() + timedelta(minutes=EMAIL_VERIFY_TTL_MINUTES)
     try:
         db.session.commit()
@@ -131,9 +137,9 @@ def generate_email_verify_token(email: str) -> str | None:
 
 
 def generate_password_reset_token(email: str) -> str | None:
-    """Generate a fresh password-reset token and persist it (10-min TTL).
+    """Generate a fresh password-reset token and persist its hash (10-min TTL).
 
-    Returns the raw token on success, None if the user doesn't exist or DB fails.
+    Stores SHA-256(token) in the DB; returns the raw token to send to the user.
     Always call this regardless of whether the email exists to avoid timing attacks —
     the caller must not reveal whether a user was found.
     """
@@ -142,7 +148,7 @@ def generate_password_reset_token(email: str) -> str | None:
     if not user:
         return None
     token = secrets.token_urlsafe(32)
-    user.reset_token = token
+    user.reset_token = _hash_token(token)
     user.reset_token_expires = datetime.utcnow() + timedelta(minutes=PASSWORD_RESET_TTL_MINUTES)
     try:
         db.session.commit()

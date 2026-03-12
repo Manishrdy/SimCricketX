@@ -12,40 +12,140 @@
 
 <div id="alertContainer"></div>
 
-<div class="a-table-wrap">
-    <table class="a-table">
+{% if sessions %}
+<div class="a-table-wrap" style="overflow-x: auto;">
+    <table class="a-table sess-table">
         <thead>
             <tr>
-                <th>User</th>
-                <th>IP Address</th>
-                <th>Login Time</th>
-                <th>Last Active</th>
-                <th>User Agent</th>
-                <th>Actions</th>
+                <th class="sess-col-user">User</th>
+                <th class="sess-col-ip">IP Address</th>
+                <th class="sess-col-time">Login Time</th>
+                <th class="sess-col-time">Last Active</th>
+                <th class="sess-col-ua">Browser / Device</th>
+                <th class="sess-col-actions" style="text-align: right;">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for s in sessions %}
             <tr id="session-{{ s.id }}">
-                <td style="font-weight: 600;">{{ s.user_id }}</td>
-                <td><code style="font-size: 0.8rem;">{{ s.ip_address or 'Unknown' }}</code></td>
-                <td>{{ s.login_at | localtime if s.login_at else 'N/A' }}</td>
-                <td>{{ s.last_active | localtime if s.last_active else 'N/A' }}</td>
-                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem;">
-                    {{ s.user_agent or 'Unknown' }}
+                <td class="sess-col-user">
+                    <div class="sess-user-cell">
+                        <div class="sess-avatar">{{ s.user_id[0] | upper }}</div>
+                        <span class="sess-email">{{ s.user_id }}</span>
+                    </div>
                 </td>
-                <td>
+                <td class="sess-col-ip">
+                    <code class="sess-ip">{{ s.ip_address or 'Unknown' }}</code>
+                </td>
+                <td class="sess-col-time">
+                    <span class="sess-time">{{ s.login_at | localtime if s.login_at else 'N/A' }}</span>
+                </td>
+                <td class="sess-col-time">
+                    <span class="sess-time">{{ s.last_active | localtime if s.last_active else 'N/A' }}</span>
+                </td>
+                <td class="sess-col-ua">
+                    <div class="sess-ua-cell" title="{{ s.user_agent or 'Unknown' }}">
+                        <i class="sess-ua-icon fas fa-desktop"></i>
+                        <span class="sess-ua-text" data-ua="{{ s.user_agent or '' }}">{{ s.user_agent or 'Unknown' }}</span>
+                    </div>
+                </td>
+                <td style="text-align: right;">
                     <button onclick="terminateSession({{ s.id }})" class="a-btn a-btn-danger a-btn-sm">
                         <i class="fas fa-times"></i> Kill
                     </button>
                 </td>
             </tr>
-            {% else %}
-            <tr><td colspan="6" class="a-empty"><p>No active sessions</p></td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% else %}
+<div class="a-card-flat">
+    <div class="a-empty">
+        <i class="fas fa-desktop"></i>
+        <p>No active sessions.</p>
+    </div>
+</div>
+{% endif %}
+
+<style>
+.sess-table { table-layout: auto; }
+
+.sess-col-user    { min-width: 180px; }
+.sess-col-ip      { width: 130px; white-space: nowrap; }
+.sess-col-time    { min-width: 155px; white-space: nowrap; }
+.sess-col-ua      { min-width: 200px; max-width: 320px; }
+.sess-col-actions { width: 90px; }
+
+/* User cell */
+.sess-user-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.sess-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent-light);
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sess-email {
+    font-weight: 600;
+    font-size: 0.85rem;
+    word-break: break-all;
+}
+
+/* IP */
+.sess-ip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    background: var(--bg-secondary);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    color: var(--fg);
+}
+
+/* Timestamps */
+.sess-time {
+    font-size: 0.82rem;
+    color: var(--fg-secondary);
+    white-space: nowrap;
+}
+
+/* User-agent */
+.sess-ua-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    cursor: default;
+}
+
+.sess-ua-icon {
+    font-size: 0.85rem;
+    color: var(--fg-secondary);
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.sess-ua-text {
+    font-size: 0.78rem;
+    color: var(--fg-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 260px;
+    display: block;
+}
+</style>
 
 <script>
 function showAlert(msg, type) {
@@ -53,6 +153,7 @@ function showAlert(msg, type) {
     c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
     setTimeout(() => c.innerHTML = '', 4000);
 }
+
 async function terminateSession(id) {
     if (!confirm('Terminate this session? The user will be logged out.')) return;
     const res = await fetch(`/admin/sessions/${id}/terminate`, { method: 'POST' });
@@ -60,11 +161,55 @@ async function terminateSession(id) {
     if (res.ok) { document.getElementById('session-' + id)?.remove(); showAlert(data.message, 'success'); }
     else showAlert(data.error, 'error');
 }
+
 async function cleanupSessions() {
     const res = await fetch('/admin/sessions/cleanup', { method: 'POST' });
     const data = await res.json();
     if (res.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
     else showAlert(data.error, 'error');
 }
+
+// Parse user-agent strings into human-readable labels + icons
+(function parseUAs() {
+    document.querySelectorAll('.sess-ua-text[data-ua]').forEach(el => {
+        const ua = el.dataset.ua;
+        if (!ua) return;
+
+        let browser = 'Unknown Browser';
+        let os = '';
+        let icon = 'fa-globe';
+
+        // Browser detection (order matters — most specific first)
+        if (/Edg\//.test(ua))           { browser = 'Edge'; icon = 'fa-edge'; }
+        else if (/OPR\//.test(ua))      { browser = 'Opera'; icon = 'fa-opera'; }
+        else if (/Chrome\//.test(ua))   { browser = 'Chrome'; icon = 'fa-chrome'; }
+        else if (/Firefox\//.test(ua))  { browser = 'Firefox'; icon = 'fa-firefox'; }
+        else if (/Safari\//.test(ua) && /Version\//.test(ua)) { browser = 'Safari'; icon = 'fa-safari'; }
+        else if (/curl\//.test(ua))     { browser = 'cURL'; icon = 'fa-terminal'; }
+        else if (/python/.test(ua.toLowerCase())) { browser = 'Python'; icon = 'fa-code'; }
+
+        // OS detection
+        if (/Windows NT/.test(ua))        os = 'Windows';
+        else if (/Mac OS X/.test(ua))     os = 'macOS';
+        else if (/Android/.test(ua))      os = 'Android';
+        else if (/iPhone|iPad/.test(ua))  os = 'iOS';
+        else if (/Linux/.test(ua))        os = 'Linux';
+        else if (/CrOS/.test(ua))         os = 'ChromeOS';
+
+        const label = os ? `${browser} on ${os}` : browser;
+        el.textContent = label;
+
+        // Update icon
+        const iconEl = el.closest('.sess-ua-cell')?.querySelector('.sess-ua-icon');
+        if (iconEl) {
+            // Try brand icon first, fallback to solid globe
+            iconEl.className = `sess-ua-icon fab ${icon}`;
+            // If it's a solid icon (terminal, code, globe), use fas
+            if (['fa-terminal', 'fa-code', 'fa-globe', 'fa-desktop'].includes(icon)) {
+                iconEl.className = `sess-ua-icon fas ${icon}`;
+            }
+        }
+    });
+})();
 </script>
 {% endblock %}

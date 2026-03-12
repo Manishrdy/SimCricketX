@@ -6,31 +6,50 @@
         <h1 class="admin-page-title">Users</h1>
         <p class="admin-page-subtitle">{{ users|length }} registered user{{ 's' if users|length != 1 }}</p>
     </div>
+    <div class="admin-page-actions">
+        <a href="/admin/users/create" class="a-btn a-btn-primary"><i class="fas fa-user-plus"></i> New User</a>
+    </div>
 </div>
 
-<div class="a-search-wrap">
-    <i class="fas fa-search a-search-icon"></i>
-    <input type="text" id="userSearch" class="a-search-input" placeholder="Search by email...">
+<div class="ul-toolbar">
+    <div class="a-search-wrap" style="max-width: 420px; margin-bottom: 0;">
+        <i class="fas fa-search a-search-icon"></i>
+        <input type="text" id="userSearch" class="a-search-input" placeholder="Search by email or name...">
+    </div>
+    <div class="ul-filter-group">
+        <button class="ul-filter-btn active" data-filter="all">All</button>
+        <button class="ul-filter-btn" data-filter="admin">Admins</button>
+        <button class="ul-filter-btn" data-filter="user">Users</button>
+    </div>
+    <span class="ul-count" id="ulCount">{{ users|length }} shown</span>
 </div>
 
-<div class="a-table-wrap">
-    <table class="a-table">
+<div class="a-table-wrap" style="overflow-x: auto;">
+    <table class="a-table ul-table">
         <thead>
             <tr>
-                <th>Email</th>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Teams</th>
-                <th>Matches</th>
-                <th>Last Login</th>
-                <th style="text-align: right;">Actions</th>
+                <th class="ul-col-email">Email / Name</th>
+                <th class="ul-col-role">Role</th>
+                <th class="ul-col-stats">Teams</th>
+                <th class="ul-col-stats">Matches</th>
+                <th class="ul-col-login">Last Login</th>
+                <th class="ul-col-actions" style="text-align: right;">Actions</th>
             </tr>
         </thead>
         <tbody id="usersTableBody">
             {% for user in users %}
-            <tr data-email="{{ user.email }}">
-                <td><strong>{{ user.email }}</strong></td>
-                <td style="color: var(--fg-secondary);">{{ user.display_name or '-' }}</td>
+            <tr data-email="{{ user.email }}" data-name="{{ (user.display_name or '') | lower }}" data-role="{{ 'admin' if user.is_admin else 'user' }}">
+                <td class="ul-col-email">
+                    <div class="ul-email-cell">
+                        <div class="ul-avatar">{{ (user.display_name or user.email)[0] | upper }}</div>
+                        <div class="ul-email-info">
+                            <span class="ul-email-primary">{{ user.email }}</span>
+                            {% if user.display_name %}
+                            <span class="ul-email-name">{{ user.display_name }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
                 <td>
                     {% if user.is_admin %}
                     <span class="a-badge a-badge-admin"><i class="fas fa-shield-alt"></i> Admin</span>
@@ -38,10 +57,18 @@
                     <span class="a-badge a-badge-user">User</span>
                     {% endif %}
                 </td>
-                <td>{{ user.teams_count }}</td>
-                <td>{{ user.matches_count }}</td>
-                <td style="color: var(--fg-secondary); font-size: 0.82rem;">
-                    {% if user.last_login %}{{ user.last_login | localtime }}{% else %}Never{% endif %}
+                <td>
+                    <span class="ul-stat">{{ user.teams_count }}</span>
+                </td>
+                <td>
+                    <span class="ul-stat">{{ user.matches_count }}</span>
+                </td>
+                <td class="ul-col-login">
+                    {% if user.last_login %}
+                    <span class="ul-login-time">{{ user.last_login | localtime }}</span>
+                    {% else %}
+                    <span class="ul-never">Never</span>
+                    {% endif %}
                 </td>
                 <td style="text-align: right;">
                     <a href="{{ url_for('admin_user_360', user_email=user.email) }}" class="a-btn a-btn-secondary a-btn-sm">
@@ -51,7 +78,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="7">
+                <td colspan="6">
                     <div class="a-empty"><i class="fas fa-users"></i><p>No users found</p></div>
                 </td>
             </tr>
@@ -60,12 +87,159 @@
     </table>
 </div>
 
+<style>
+.ul-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.ul-filter-group {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.ul-filter-btn {
+    padding: 0.4rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--fg-secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.ul-filter-btn:hover,
+.ul-filter-btn.active {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.ul-count {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--fg-secondary);
+    white-space: nowrap;
+}
+
+/* Table column widths */
+.ul-table { table-layout: auto; }
+
+.ul-col-email { min-width: 220px; }
+.ul-col-role  { width: 90px; }
+.ul-col-stats { width: 70px; text-align: center; }
+.ul-col-login { min-width: 160px; white-space: nowrap; }
+.ul-col-actions { width: 90px; }
+
+.ul-table td.ul-col-stats { text-align: center; }
+.ul-table th.ul-col-stats { text-align: center; }
+
+/* Avatar + email cell */
+.ul-email-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.ul-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent-light);
+    color: var(--accent);
+    font-size: 0.82rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ul-email-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.ul-email-primary {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--fg);
+    word-break: break-all;
+}
+
+.ul-email-name {
+    font-size: 0.78rem;
+    color: var(--fg-secondary);
+}
+
+/* Stats */
+.ul-stat {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fg);
+}
+
+/* Last login */
+.ul-login-time {
+    font-size: 0.82rem;
+    color: var(--fg-secondary);
+    white-space: nowrap;
+}
+
+.ul-never {
+    font-size: 0.82rem;
+    color: var(--fg-secondary);
+    opacity: 0.5;
+    font-style: italic;
+}
+
+/* No results row */
+#ulNoResults { display: none; }
+</style>
+
 <script>
-document.getElementById('userSearch').addEventListener('input', function(e) {
-    const q = e.target.value.toLowerCase();
-    document.querySelectorAll('#usersTableBody tr[data-email]').forEach(row => {
-        row.style.display = row.dataset.email.toLowerCase().includes(q) ? '' : 'none';
+(function() {
+    const searchInput = document.getElementById('userSearch');
+    const tbody = document.getElementById('usersTableBody');
+    const countEl = document.getElementById('ulCount');
+    const filterBtns = document.querySelectorAll('.ul-filter-btn');
+    let activeFilter = 'all';
+
+    function updateCount() {
+        const visible = tbody.querySelectorAll('tr[data-email]:not([style*="display: none"])').length;
+        countEl.textContent = visible + ' shown';
+    }
+
+    function applyFilters() {
+        const q = searchInput.value.toLowerCase().trim();
+        tbody.querySelectorAll('tr[data-email]').forEach(row => {
+            const emailMatch = row.dataset.email.toLowerCase().includes(q);
+            const nameMatch = row.dataset.name.includes(q);
+            const roleMatch = activeFilter === 'all' || row.dataset.role === activeFilter;
+            row.style.display = (emailMatch || nameMatch) && roleMatch ? '' : 'none';
+        });
+        updateCount();
+    }
+
+    searchInput.addEventListener('input', applyFilters);
+
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeFilter = btn.dataset.filter;
+            applyFilters();
+        });
     });
-});
+
+    updateCount();
+})();
 </script>
 {% endblock %}

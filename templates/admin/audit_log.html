@@ -9,41 +9,65 @@
 </div>
 
 {% if entries %}
+
+<div class="al-toolbar">
+    <div class="a-search-wrap" style="max-width: 380px; margin-bottom: 0;">
+        <i class="fas fa-search a-search-icon"></i>
+        <input type="text" id="alSearch" class="a-search-input" placeholder="Filter by admin, action, target...">
+    </div>
+    <div class="al-filter-group">
+        <button class="al-filter-btn active" data-type="all">All</button>
+        <button class="al-filter-btn" data-type="danger"><span class="al-dot al-dot-danger"></span>Destructive</button>
+        <button class="al-filter-btn" data-type="warning"><span class="al-dot al-dot-warning"></span>Sensitive</button>
+        <button class="al-filter-btn" data-type="success"><span class="al-dot al-dot-success"></span>Export</button>
+    </div>
+    <span class="al-count" id="alCount">{{ entries|length }} on page</span>
+</div>
+
 <div class="a-table-wrap" style="overflow-x: auto;">
-    <table class="a-table" style="min-width: 800px;">
+    <table class="a-table al-table">
         <thead>
             <tr>
-                <th style="width: 145px;">Timestamp</th>
-                <th style="width: 160px;">Admin</th>
-                <th style="width: 130px;">Action</th>
-                <th style="width: 150px;">Target</th>
-                <th>Details</th>
-                <th style="width: 110px;">IP</th>
+                <th class="al-col-ts">Timestamp</th>
+                <th class="al-col-admin">Admin</th>
+                <th class="al-col-action">Action</th>
+                <th class="al-col-target">Target</th>
+                <th class="al-col-details">Details</th>
+                <th class="al-col-ip">IP</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="alTableBody">
             {% for e in entries %}
-            <tr>
-                <td style="font-size: 0.78rem; color: var(--fg-secondary); white-space: nowrap;">
-                    {% if e.timestamp %}{{ e.timestamp | localtime(True) }}{% endif %}
+            {% set action_type = 'danger' if ('delete' in e.action or 'ban' in e.action) else ('warning' if 'impersonate' in e.action else ('success' if ('backup' in e.action or 'export' in e.action) else 'info')) %}
+            <tr data-admin="{{ e.admin_email | lower }}"
+                data-action="{{ e.action | lower }}"
+                data-target="{{ (e.target or '') | lower }}"
+                data-type="{{ action_type }}">
+                <td class="al-col-ts">
+                    <span class="al-ts">{% if e.timestamp %}{{ e.timestamp | localtime(True) }}{% endif %}</span>
                 </td>
-                <td style="word-break: break-all;"><strong style="font-size: 0.85rem;">{{ e.admin_email }}</strong></td>
-                <td>
-                    {% if 'delete' in e.action or 'ban' in e.action %}
-                    <span class="a-badge a-badge-danger">{{ e.action }}</span>
-                    {% elif 'impersonate' in e.action %}
-                    <span class="a-badge a-badge-warning">{{ e.action }}</span>
-                    {% elif 'backup' in e.action or 'export' in e.action %}
-                    <span class="a-badge a-badge-success">{{ e.action }}</span>
+                <td class="al-col-admin">
+                    <div class="al-admin-cell">
+                        <div class="al-admin-avatar">{{ e.admin_email[0] | upper }}</div>
+                        <span class="al-admin-email">{{ e.admin_email }}</span>
+                    </div>
+                </td>
+                <td class="al-col-action">
+                    <span class="a-badge a-badge-{{ action_type }}">{{ e.action }}</span>
+                </td>
+                <td class="al-col-target">
+                    <span class="al-target">{{ e.target or '—' }}</span>
+                </td>
+                <td class="al-col-details">
+                    {% if e.details %}
+                    <span class="al-details" title="{{ e.details }}">{{ e.details }}</span>
                     {% else %}
-                    <span class="a-badge a-badge-info">{{ e.action }}</span>
+                    <span class="al-empty-val">—</span>
                     {% endif %}
                 </td>
-                <td style="font-size: 0.85rem; color: var(--fg-secondary); word-break: break-all;">{{ e.target or '-' }}</td>
-                <td style="font-size: 0.78rem; color: var(--fg-secondary); word-break: break-word;" title="{{ e.details or '' }}">
-                    {{ e.details or '-' }}
+                <td class="al-col-ip">
+                    <code class="al-ip">{{ e.ip_address or '—' }}</code>
                 </td>
-                <td style="font-size: 0.78rem; font-family: 'IBM Plex Mono', monospace; color: var(--fg-secondary); white-space: nowrap;">{{ e.ip_address or '-' }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -63,9 +87,9 @@
         {% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
         <a href="?page={{ p }}">{{ p }}</a>
         {% elif p == 4 and page > 5 %}
-        <span style="border: none; background: none; color: var(--fg-secondary);">...</span>
+        <span class="al-ellipsis">…</span>
         {% elif p == total_pages - 2 and page < total_pages - 4 %}
-        <span style="border: none; background: none; color: var(--fg-secondary);">...</span>
+        <span class="al-ellipsis">…</span>
         {% endif %}
     {% endfor %}
 
@@ -83,4 +107,187 @@
     </div>
 </div>
 {% endif %}
+
+<style>
+/* Toolbar */
+.al-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.al-filter-group {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.al-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.38rem 0.8rem;
+    border-radius: 6px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--fg-secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.al-filter-btn:hover,
+.al-filter-btn.active {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.al-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+.al-dot-danger  { background: #dc2626; }
+.al-dot-warning { background: #d97706; }
+.al-dot-success { background: #16a34a; }
+
+.al-count {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--fg-secondary);
+    white-space: nowrap;
+}
+
+/* Table columns */
+.al-table { table-layout: auto; }
+
+.al-col-ts      { min-width: 145px; white-space: nowrap; }
+.al-col-admin   { min-width: 170px; }
+.al-col-action  { min-width: 120px; white-space: nowrap; }
+.al-col-target  { min-width: 130px; max-width: 180px; }
+.al-col-details { min-width: 160px; max-width: 300px; }
+.al-col-ip      { width: 120px; white-space: nowrap; }
+
+/* Timestamp */
+.al-ts {
+    font-size: 0.78rem;
+    color: var(--fg-secondary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Admin cell */
+.al-admin-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.al-admin-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--accent-light);
+    color: var(--accent);
+    font-size: 0.72rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.al-admin-email {
+    font-size: 0.82rem;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+/* Target */
+.al-target {
+    font-size: 0.82rem;
+    color: var(--fg-secondary);
+    word-break: break-all;
+}
+
+/* Details — truncated with tooltip */
+.al-details {
+    font-size: 0.78rem;
+    color: var(--fg-secondary);
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 280px;
+    cursor: help;
+}
+
+.al-empty-val {
+    color: var(--fg-secondary);
+    opacity: 0.4;
+}
+
+/* IP */
+.al-ip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    background: var(--bg-secondary);
+    padding: 0.12rem 0.35rem;
+    border-radius: 4px;
+    color: var(--fg-secondary);
+}
+
+/* Ellipsis in pagination */
+.al-ellipsis {
+    border: none !important;
+    background: none !important;
+    color: var(--fg-secondary) !important;
+    padding: 0.4rem 0.3rem !important;
+}
+
+/* Hidden rows */
+tr.al-hidden { display: none; }
+</style>
+
+<script>
+(function () {
+    const searchInput = document.getElementById('alSearch');
+    const filterBtns = document.querySelectorAll('.al-filter-btn');
+    const countEl = document.getElementById('alCount');
+    const tbody = document.getElementById('alTableBody');
+    if (!tbody) return;
+
+    let activeType = 'all';
+
+    function applyFilters() {
+        const q = (searchInput?.value || '').toLowerCase().trim();
+        let visible = 0;
+        tbody.querySelectorAll('tr[data-admin]').forEach(row => {
+            const typeMatch = activeType === 'all' || row.dataset.type === activeType;
+            const textMatch = !q || [row.dataset.admin, row.dataset.action, row.dataset.target].some(v => v.includes(q));
+            const show = typeMatch && textMatch;
+            row.classList.toggle('al-hidden', !show);
+            if (show) visible++;
+        });
+        if (countEl) countEl.textContent = visible + ' on page';
+    }
+
+    if (searchInput) searchInput.addEventListener('input', applyFilters);
+
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeType = btn.dataset.type;
+            applyFilters();
+        });
+    });
+})();
+</script>
 {% endblock %}
