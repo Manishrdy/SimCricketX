@@ -1,5 +1,6 @@
 """Authentication and account route registration."""
 
+import re
 from datetime import datetime, timedelta
 
 import hashlib
@@ -105,7 +106,7 @@ def register_auth_routes(
                     error=f"Security challenge failed: {challenge_msg}",
                 )
 
-            if not email or "@" not in email or "." not in email:
+            if not email or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
                 return render_template("register.html", error="Invalid email")
             if not display_name:
                 return render_template("register.html", error="Display name is required")
