@@ -1444,7 +1444,10 @@ function filterPlayersByRole(role) {
         const sel = document.getElementById(id);
         sel.innerHTML = '<option value="">Player ' + (idx + 1) + '…</option>';
         filtered.forEach(p => {
-            sel.innerHTML += '<option value="' + p.id + '">' + p.name + ' (' + (p.team || '?') + ')</option>';
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name + ' (' + (p.team || '?') + ')';
+            sel.appendChild(opt);
         });
     });
     updateCompareButton();

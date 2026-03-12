@@ -1080,30 +1080,23 @@ def register_match_routes(
     def save_commentary(match_id):
         """Receive and store the complete frontend commentary for archiving"""
         try:
-            print(f"DEBUG: Received commentary request for match {match_id}")
-            
             data = request.get_json(silent=True) or {}
             commentary_html = data.get('commentary_html', '')
-            
-            print(f"DEBUG: Commentary HTML length: {len(commentary_html)}")
-            print(f"DEBUG: Contains 'End of over': {'End of over' in commentary_html}")
-            print(f"DEBUG: First 300 chars: {commentary_html[:300]}")
-            
+
             if not commentary_html:
                 return jsonify({"error": "No commentary provided"}), 400
-            
+
             # Store commentary for the match instance
             if match_id in MATCH_INSTANCES:
                 match_instance = MATCH_INSTANCES[match_id]
                 if match_instance.data.get("created_by") != current_user.id:
                     return jsonify({"error": "Unauthorized"}), 403
-                
+
                 # Store the raw innerHTML so the HTML archive can clone it exactly
                 match_instance.frontend_commentary_html = commentary_html
 
                 # Convert HTML to clean text list (used for TXT file generation)
                 frontend_commentary = html_to_commentary_list(commentary_html)
-                print(f"DEBUG: Converted to {len(frontend_commentary)} commentary items")
 
                 # Replace the backend commentary with frontend commentary
                 match_instance.frontend_commentary_captured = frontend_commentary
@@ -1111,11 +1104,10 @@ def register_match_routes(
                 app.logger.info(f"[Commentary] Captured {len(frontend_commentary)} items for match {match_id}")
                 return jsonify({"message": "Commentary captured successfully"}), 200
             else:
-                print(f"DEBUG: Match instance {match_id} not found in MATCH_INSTANCES")
+                app.logger.warning(f"[Commentary] Match instance {match_id} not found in MATCH_INSTANCES")
                 return jsonify({"error": "Match instance not found"}), 404
-                
+
         except Exception as e:
-            print(f"DEBUG: Error in save_commentary: {e}")
             app.logger.error(f"Error saving commentary: {e}", exc_info=True)
             return jsonify({"error": "Failed to save commentary"}), 500
 
