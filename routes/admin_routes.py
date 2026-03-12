@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import secrets
 import shutil
 import time
 from datetime import datetime, timedelta
@@ -102,8 +103,8 @@ def register_admin_routes(
                 app.logger.error("[Admin] Backup token not configured")
                 return jsonify({"error": "Backup not configured. Set BACKUP_TOKEN env var or config.yaml"}), 400
 
-            # Verify token
-            if token != expected_token:
+            # Verify token (constant-time to prevent timing attacks)
+            if not secrets.compare_digest(token, expected_token):
                 app.logger.warning(f"[Admin] Invalid backup token attempt by {current_user.id}")
                 return jsonify({"error": "Invalid backup token"}), 403
 
