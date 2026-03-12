@@ -1128,6 +1128,8 @@ def create_app():
             return False
 
     def _load_match_file_for_user(match_id):
+        if not _is_valid_match_id(match_id):
+            return None, None, (jsonify({"error": "Invalid match id"}), 400)
         match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
         if not os.path.isdir(match_dir):
             return None, None, (jsonify({"error": "Match not found"}), 404)
