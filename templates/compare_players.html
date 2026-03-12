@@ -163,6 +163,12 @@
             });
     }
 
+    function esc(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
     function displayComparison(data) {
         document.getElementById('comparison-results').style.display = 'block';
 
@@ -185,7 +191,7 @@
             <tbody>
                 ${data.batting_comparison.map(p => `
                     <tr>
-                        <td class="player-name">${p.player}</td>
+                        <td class="player-name">${esc(p.player)}</td>
                         <td>${p.innings}</td>
                         <td class="highlight">${p.runs}</td>
                         <td>${p.average}</td>
@@ -217,13 +223,13 @@
             <tbody>
                 ${data.bowling_comparison.map(p => `
                     <tr>
-                        <td class="player-name">${p.player}</td>
+                        <td class="player-name">${esc(p.player)}</td>
                         <td>${p.innings}</td>
                         <td class="highlight">${p.wickets}</td>
                         <td>${p.average}</td>
                         <td>${p.economy}</td>
                         <td>${p.strike_rate}</td>
-                        <td>${p.best_figures}</td>
+                        <td>${esc(p.best_figures)}</td>
                     </tr>
                 `).join('')}
             </tbody>
@@ -247,7 +253,7 @@
             <tbody>
                 ${data.fielding_comparison.map(p => `
                     <tr>
-                        <td class="player-name">${p.player}</td>
+                        <td class="player-name">${esc(p.player)}</td>
                         <td>${p.catches}</td>
                         <td>${p.run_outs}</td>
                         <td class="highlight">${p.total_dismissals}</td>
