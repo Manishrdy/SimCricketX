@@ -17,7 +17,7 @@ def _hash_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode()).hexdigest()
 
 EMAIL_VERIFY_TTL_MINUTES = 10
-PASSWORD_RESET_TTL_MINUTES = 10
+PASSWORD_RESET_TTL_MINUTES = 360  # 6 hours
 
 # --- Helper Functions ---
 
@@ -244,6 +244,9 @@ def update_user_email(old_email: str, new_email: str, admin_email: str = None) -
         db.session.execute(text("UPDATE blocked_ips SET blocked_by = :new WHERE blocked_by = :old"), {"new": new_email, "old": old_email})
         db.session.execute(text("UPDATE failed_login_attempts SET email = :new WHERE email = :old"), {"new": new_email, "old": old_email})
         db.session.execute(text("UPDATE admin_audit_log SET admin_email = :new WHERE admin_email = :old"), {"new": new_email, "old": old_email})
+        db.session.execute(text("UPDATE login_history SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
+        # auth_event_log.user_id has ondelete='SET NULL' so we update it explicitly
+        db.session.execute(text("UPDATE auth_event_log SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
 
         # Update the primary key last
         db.session.execute(text("UPDATE users SET id = :new WHERE id = :old"), {"new": new_email, "old": old_email})
