@@ -53,6 +53,16 @@ class User(UserMixin, db.Model):
     verify_resend_count = db.Column(db.Integer, default=0, nullable=False)
     verify_resend_window_start = db.Column(db.DateTime, nullable=True)
 
+    # Account lockout (failed login attempts)
+    lockout_until = db.Column(db.DateTime, nullable=True)          # NULL = not locked
+    lockout_count = db.Column(db.Integer, default=0, nullable=False)
+    lockout_window_start = db.Column(db.DateTime, nullable=True)   # start of counting window
+
+    # Pending email change (held until new address is verified)
+    pending_email = db.Column(db.String(120), nullable=True)
+    pending_email_token = db.Column(db.String(64), nullable=True, index=True)
+    pending_email_token_expires = db.Column(db.DateTime, nullable=True)
+
     # Relationships — cascade so deleting a User removes all owned data
     teams = relationship('Team', backref='owner', lazy=True, cascade="all, delete-orphan")
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")

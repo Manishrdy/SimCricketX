@@ -1,0 +1,144 @@
+{% extends "layout.html" %}
+{% block title %}Login History | SimCricketX{% endblock %}
+{% block content %}
+
+<div style="max-width: 820px; margin: 2.5rem auto; padding: 0 1rem;">
+
+    <!-- Header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h1 style="font-size: 1.4rem; font-weight: 700; color: var(--fg); margin: 0;">Login History</h1>
+            <p style="font-size: 0.85rem; color: var(--fg-secondary); margin: 0.25rem 0 0;">
+                A record of all sign-in and sign-out events on your account.
+            </p>
+        </div>
+    </div>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div style="padding: 0.7rem 1rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem;
+                {% if category == 'success' %}background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); color: #059669;
+                {% elif category == 'danger' %}background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.3); color: #dc2626;
+                {% elif category == 'warning' %}background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); color: #d97706;
+                {% else %}background: var(--card-bg); border: 1px solid var(--card-border); color: var(--fg);
+                {% endif %}">
+        {% if category == 'success' %}<i class="fas fa-check-circle"></i>
+        {% elif category == 'danger' %}<i class="fas fa-exclamation-circle"></i>
+        {% elif category == 'warning' %}<i class="fas fa-triangle-exclamation"></i>
+        {% else %}<i class="fas fa-info-circle"></i>{% endif %}
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <!-- History table -->
+    {% if history.items %}
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.84rem;">
+                <thead>
+                    <tr style="background: var(--table-header-bg, rgba(0,0,0,0.04)); border-bottom: 1px solid var(--card-border);">
+                        <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: var(--fg-secondary); white-space: nowrap;">Event</th>
+                        <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: var(--fg-secondary); white-space: nowrap;">Date &amp; Time (UTC)</th>
+                        <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: var(--fg-secondary); white-space: nowrap;">IP Address</th>
+                        <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: var(--fg-secondary);">Device / Browser</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in history.items %}
+                    <tr style="border-bottom: 1px solid var(--card-border); transition: background 0.1s;"
+                        onmouseover="this.style.background='var(--table-hover-bg, rgba(0,0,0,0.02))'"
+                        onmouseout="this.style.background=''">
+
+                        <!-- Event badge -->
+                        <td style="padding: 0.75rem 1rem; white-space: nowrap;">
+                            {% if entry.event == 'login' %}
+                            <span style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; font-weight: 700; padding: 0.2rem 0.6rem; background: rgba(16,185,129,0.1); color: #059669; border-radius: 99px; border: 1px solid rgba(16,185,129,0.25);">
+                                <i class="fas fa-right-to-bracket"></i> Sign in
+                            </span>
+                            {% else %}
+                            <span style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; font-weight: 700; padding: 0.2rem 0.6rem; background: rgba(107,114,128,0.1); color: var(--fg-secondary); border-radius: 99px; border: 1px solid var(--card-border);">
+                                <i class="fas fa-right-from-bracket"></i> Sign out
+                            </span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Timestamp -->
+                        <td style="padding: 0.75rem 1rem; color: var(--fg); white-space: nowrap;">
+                            {{ entry.timestamp.strftime('%b %d, %Y  %H:%M') }}
+                        </td>
+
+                        <!-- IP -->
+                        <td style="padding: 0.75rem 1rem; color: var(--fg); white-space: nowrap; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">
+                            {{ entry.ip_address or '—' }}
+                        </td>
+
+                        <!-- User agent (truncated) -->
+                        <td style="padding: 0.75rem 1rem; color: var(--fg-secondary); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                            title="{{ entry.user_agent or '' }}">
+                            {% set ua = entry.user_agent | lower if entry.user_agent else '' %}
+                            {% if 'mobile' in ua or 'android' in ua or 'iphone' in ua %}
+                            <i class="fas fa-mobile-screen-button" style="color: var(--accent); margin-right: 0.35rem;"></i>
+                            {% elif 'tablet' in ua or 'ipad' in ua %}
+                            <i class="fas fa-tablet-screen-button" style="color: var(--accent); margin-right: 0.35rem;"></i>
+                            {% else %}
+                            <i class="fas fa-desktop" style="color: var(--accent); margin-right: 0.35rem;"></i>
+                            {% endif %}
+                            {{ entry.user_agent or 'Unknown' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if history.pages > 1 %}
+    <div style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1.25rem; flex-wrap: wrap;">
+        {% if history.has_prev %}
+        <a href="{{ url_for('account_login_history', page=history.prev_num) }}"
+           style="padding: 0.4rem 0.85rem; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 7px; color: var(--fg); text-decoration: none; font-size: 0.82rem;">
+            <i class="fas fa-chevron-left"></i> Prev
+        </a>
+        {% endif %}
+
+        <span style="font-size: 0.82rem; color: var(--fg-secondary);">
+            Page {{ history.page }} of {{ history.pages }}
+        </span>
+
+        {% if history.has_next %}
+        <a href="{{ url_for('account_login_history', page=history.next_num) }}"
+           style="padding: 0.4rem 0.85rem; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 7px; color: var(--fg); text-decoration: none; font-size: 0.82rem;">
+            Next <i class="fas fa-chevron-right"></i>
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div style="text-align: center; padding: 3rem 1rem; color: var(--fg-secondary); background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px;">
+        <i class="fas fa-clock-rotate-left" style="font-size: 2rem; opacity: 0.3; display: block; margin-bottom: 0.75rem;"></i>
+        No login history found.
+    </div>
+    {% endif %}
+
+    <!-- Back links -->
+    <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 1.25rem;">
+        <a href="{{ url_for('home') }}" style="font-size: 0.84rem; color: var(--fg-secondary); text-decoration: none;">
+            <i class="fas fa-arrow-left"></i> Back to home
+        </a>
+        <a href="{{ url_for('account_sessions') }}" style="font-size: 0.84rem; color: var(--fg-secondary); text-decoration: none;">
+            <i class="fas fa-shield-halved"></i> Active Sessions
+        </a>
+        <a href="{{ url_for('account_settings') }}" style="font-size: 0.84rem; color: var(--fg-secondary); text-decoration: none;">
+            <i class="fas fa-user-pen"></i> Account Settings
+        </a>
+    </div>
+
+</div>
+
+{% endblock %}

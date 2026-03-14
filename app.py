@@ -1045,6 +1045,22 @@ def create_app():
         except Exception as e:
             print(f"[WARN] Tournament format migration skipped: {e}")
 
+    # Account lockout migration (idempotent — adds lockout_* columns to users)
+    if not test_mode:
+        try:
+            from migrations.add_account_lockout import run_migration as _run_lockout_migration
+            _run_lockout_migration(db, app)
+        except Exception as e:
+            print(f"[WARN] Account lockout migration skipped: {e}")
+
+    # Pending email migration (idempotent — adds pending_email_* columns to users)
+    if not test_mode:
+        try:
+            from migrations.add_pending_email import run_migration as _run_pending_email_migration
+            _run_pending_email_migration(db, app)
+        except Exception as e:
+            print(f"[WARN] Pending email migration skipped: {e}")
+
     # --- Logging setup (logs to file + terminal) ---
     base_dir = os.path.abspath(os.path.dirname(__file__))
     log_dir = os.path.join(base_dir, "logs")
