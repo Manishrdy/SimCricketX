@@ -1096,6 +1096,27 @@ def register_admin_routes(
         log_admin_action(current_user.id, 'unban_user', user_email, 'Ban lifted', request.remote_addr)
         return jsonify({"message": f"User {user_email} unbanned"}), 200
 
+    # --- Account Lockout Unlock ---
+    @app.route('/admin/users/<user_email>/unlock', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_unlock_user(user_email):
+        """Clear account lockout for a user."""
+        user = db.session.get(DBUser, user_email)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        user.lockout_until = None
+        user.lockout_count = 0
+        user.lockout_window_start = None
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Admin] Unlock user error for {user_email}: {e}")
+            return jsonify({"error": "Failed to unlock account"}), 500
+        log_admin_action(current_user.id, 'unlock_user', user_email, 'Account lockout cleared', request.remote_addr)
+        return jsonify({"message": f"Account lockout cleared for {user_email}"}), 200
+
     # --- Force Password Reset ---
     @app.route('/admin/users/<user_email>/force-reset', methods=['POST'])
     @login_required

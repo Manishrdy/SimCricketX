@@ -1,0 +1,164 @@
+{% extends "layout.html" %}
+{% block title %}Account Settings | SimCricketX{% endblock %}
+{% block content %}
+
+<div style="max-width: 640px; margin: 2.5rem auto; padding: 0 1rem;">
+
+    <!-- Header -->
+    <div style="margin-bottom: 2rem;">
+        <h1 style="font-size: 1.4rem; font-weight: 700; color: var(--fg); margin: 0;">Account Settings</h1>
+        <p style="font-size: 0.85rem; color: var(--fg-secondary); margin: 0.25rem 0 0;">
+            Manage your display name and email address.
+        </p>
+    </div>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div style="padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.6rem;
+                {% if category == 'success' %}background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); color: #059669;
+                {% elif category == 'danger' %}background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.3); color: #dc2626;
+                {% elif category == 'warning' %}background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); color: #d97706;
+                {% else %}background: var(--card-bg); border: 1px solid var(--card-border); color: var(--fg);
+                {% endif %}">
+        {% if category == 'success' %}<i class="fas fa-check-circle"></i>
+        {% elif category == 'danger' %}<i class="fas fa-exclamation-circle"></i>
+        {% elif category == 'warning' %}<i class="fas fa-triangle-exclamation"></i>
+        {% else %}<i class="fas fa-info-circle"></i>{% endif %}
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <!-- ── Display Name Card ── -->
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h2 style="font-size: 1rem; font-weight: 700; color: var(--fg); margin: 0 0 0.25rem;">Display Name</h2>
+        <p style="font-size: 0.83rem; color: var(--fg-secondary); margin: 0 0 1.25rem;">
+            This is the name shown on your teams, matches, and tournaments.
+        </p>
+
+        <form method="POST" action="{{ url_for('account_change_display_name') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.4rem;" for="display_name">
+                    Display name
+                </label>
+                <input type="text"
+                       id="display_name"
+                       name="display_name"
+                       value="{{ current_user.display_name or '' }}"
+                       minlength="2"
+                       maxlength="50"
+                       required
+                       style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.85rem; background: var(--input-bg, var(--bg)); border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); font-size: 0.9rem; outline: none;">
+                <div style="font-size: 0.75rem; color: var(--fg-secondary); margin-top: 0.3rem;">2–50 characters.</div>
+            </div>
+
+            <button type="submit"
+                    style="padding: 0.55rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                <i class="fas fa-check"></i> Save Name
+            </button>
+        </form>
+    </div>
+
+    <!-- ── Email Address Card ── -->
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h2 style="font-size: 1rem; font-weight: 700; color: var(--fg); margin: 0 0 0.25rem;">Email Address</h2>
+        <p style="font-size: 0.83rem; color: var(--fg-secondary); margin: 0 0 1.25rem;">
+            Your current sign-in email. Changing it requires confirming the new address.
+        </p>
+
+        <!-- Current email info -->
+        <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.25rem; padding: 0.65rem 0.85rem; background: var(--accent-light, rgba(99,102,241,0.06)); border: 1px solid var(--card-border); border-radius: 8px;">
+            <i class="fas fa-envelope" style="color: var(--accent); font-size: 0.9rem;"></i>
+            <span style="font-size: 0.88rem; font-weight: 600; color: var(--fg);">{{ current_user.id }}</span>
+            {% if current_user.email_verified %}
+            <span style="margin-left: auto; font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.5rem; background: rgba(16,185,129,0.1); color: #059669; border-radius: 99px; border: 1px solid rgba(16,185,129,0.3);">
+                <i class="fas fa-check"></i> Verified
+            </span>
+            {% endif %}
+        </div>
+
+        <!-- Pending change notice -->
+        {% if current_user.pending_email %}
+        <div style="padding: 0.75rem 1rem; border-radius: 8px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); color: #d97706; font-size: 0.83rem; margin-bottom: 1.25rem; display: flex; align-items: flex-start; gap: 0.6rem; flex-wrap: wrap;">
+            <i class="fas fa-clock" style="margin-top: 0.1rem;"></i>
+            <div style="flex: 1;">
+                <strong>Pending change to {{ current_user.pending_email }}</strong><br>
+                Check that inbox for a confirmation link. The link expires in 6 hours.
+            </div>
+            <form method="POST" action="{{ url_for('account_cancel_email_change') }}" style="margin: 0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                        style="padding: 0.3rem 0.7rem; background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.3); color: #dc2626; border-radius: 6px; font-size: 0.78rem; font-weight: 600; cursor: pointer;"
+                        onclick="return confirm('Cancel this pending email change?')">
+                    Cancel
+                </button>
+            </form>
+        </div>
+        {% endif %}
+
+        <!-- Change email form -->
+        <details {% if current_user.pending_email %}{% endif %} style="margin-top: 0.5rem;">
+            <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--accent); list-style: none; display: flex; align-items: center; gap: 0.4rem; user-select: none;">
+                <i class="fas fa-pen-to-square"></i> Change email address
+            </summary>
+
+            <form method="POST" action="{{ url_for('account_request_email_change') }}" style="margin-top: 1rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div style="margin-bottom: 0.85rem;">
+                    <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.4rem;" for="new_email">
+                        New email address
+                    </label>
+                    <input type="email"
+                           id="new_email"
+                           name="new_email"
+                           placeholder="new@example.com"
+                           required
+                           style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.85rem; background: var(--input-bg, var(--bg)); border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); font-size: 0.9rem; outline: none;">
+                </div>
+
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.4rem;" for="current_password">
+                        Confirm with current password
+                    </label>
+                    <input type="password"
+                           id="current_password"
+                           name="current_password"
+                           placeholder="Your current password"
+                           required
+                           autocomplete="current-password"
+                           style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.85rem; background: var(--input-bg, var(--bg)); border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); font-size: 0.9rem; outline: none;">
+                    <div style="font-size: 0.75rem; color: var(--fg-secondary); margin-top: 0.3rem;">
+                        A verification link will be sent to the new address. Your email changes only after you click it.
+                    </div>
+                </div>
+
+                <button type="submit"
+                        style="padding: 0.55rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-paper-plane"></i> Send Verification Link
+                </button>
+            </form>
+        </details>
+    </div>
+
+    <!-- Back links -->
+    <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
+        <a href="{{ url_for('home') }}" style="font-size: 0.84rem; color: var(--fg-secondary); text-decoration: none;">
+            <i class="fas fa-arrow-left"></i> Back to home
+        </a>
+        <a href="{{ url_for('account_sessions') }}" style="font-size: 0.84rem; color: var(--fg-secondary); text-decoration: none;">
+            <i class="fas fa-shield-halved"></i> Active Sessions
+        </a>
+        <a href="{{ url_for('account_login_history') }}" style="font-size: 0.84rem; color: var(--fg-secondary); text-decoration: none;">
+            <i class="fas fa-clock-rotate-left"></i> Login History
+        </a>
+    </div>
+
+</div>
+
+{% endblock %}

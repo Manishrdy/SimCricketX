@@ -1,9 +1,9 @@
 """Authentication and account route registration."""
 
 import re
-from datetime import datetime, timedelta
-
+import secrets
 import hashlib
+from datetime import datetime, timedelta
 
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
@@ -16,6 +16,11 @@ from utils.email_service import (
 # Resend-verification rate-limit constants
 _RESEND_MAX = 3
 _RESEND_WINDOW_HOURS = 4
+
+# Account lockout constants (configurable via app.config)
+_LOCKOUT_MAX_ATTEMPTS = 5
+_LOCKOUT_DURATION_MINUTES = 30
+_LOCKOUT_WINDOW_MINUTES = 60
 
 
 def register_auth_routes(
@@ -164,6 +169,7 @@ def register_auth_routes(
 
             email = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
+            remember_me = request.form.get("remember_me") == "on"
             challenge_id = request.form.get("challenge_id", "")
             challenge_counter = request.form.get("challenge_counter", "")
             challenge_digest = request.form.get("challenge_digest", "")
@@ -182,6 +188,28 @@ def register_auth_routes(
                     error="Security check failed. Please refresh the page and try again.",
                     error_type="security",
                 )
+
+            # ── Lockout pre-check ──────────────────────────────────────────────
+            user_precheck = db.session.get(DBUser, email)
+            if user_precheck and user_precheck.lockout_until:
+                now = datetime.utcnow()
+                if user_precheck.lockout_until > now:
+                    unlock_time = user_precheck.lockout_until.strftime('%Y-%m-%d %H:%M UTC')
+                    app.logger.warning(f"[Auth] Locked account {email} attempted login")
+                    return render_template(
+                        "login.html",
+                        error=f"Account temporarily locked due to too many failed attempts. Try again after {unlock_time}.",
+                        error_type="locked",
+                    )
+                else:
+                    # Auto-expire lockout
+                    user_precheck.lockout_until = None
+                    user_precheck.lockout_count = 0
+                    user_precheck.lockout_window_start = None
+                    try:
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
 
             if verify_user(email, password):
                 user = db.session.get(DBUser, email)
@@ -215,16 +243,24 @@ def register_auth_routes(
                                 error_type="banned",
                             )
 
+                    # Clear lockout on successful login
+                    if user.lockout_count > 0 or user.lockout_until:
+                        user.lockout_count = 0
+                        user.lockout_until = None
+                        user.lockout_window_start = None
+
                     login_user(
                         user,
-                        remember=True,
-                        duration=app.config.get("REMEMBER_COOKIE_DURATION"),
+                        remember=remember_me,
+                        duration=app.config.get("REMEMBER_COOKIE_DURATION") if remember_me else None,
                     )
-                    session.permanent = True
+                    session.permanent = remember_me
                     session["show_github_star_prompt"] = True
 
                     try:
-                        import secrets
+                        # ── Enforce 1 active session: revoke all previous ──────
+                        ActiveSession.query.filter_by(user_id=email).delete(synchronize_session=False)
+                        db.session.flush()
 
                         token = secrets.token_hex(32)
                         session["session_token"] = token
@@ -260,6 +296,7 @@ def register_auth_routes(
                     app.logger.info(f"Successful login for {email}")
                     return redirect(url_for("home"))
             else:
+                # ── Record failed attempt + lockout logic ──────────────────────
                 try:
                     failed = FailedLoginAttempt(
                         email=email,
@@ -269,6 +306,35 @@ def register_auth_routes(
                         else None,
                     )
                     db.session.add(failed)
+                    db.session.flush()
+
+                    user_fail = db.session.get(DBUser, email)
+                    if user_fail:
+                        now = datetime.utcnow()
+                        lockout_max = app.config.get("LOCKOUT_MAX_ATTEMPTS", _LOCKOUT_MAX_ATTEMPTS)
+                        lockout_dur = app.config.get("LOCKOUT_DURATION_MINUTES", _LOCKOUT_DURATION_MINUTES)
+                        lockout_win = app.config.get("LOCKOUT_WINDOW_MINUTES", _LOCKOUT_WINDOW_MINUTES)
+
+                        window_expired = (
+                            user_fail.lockout_window_start is None
+                            or (now - user_fail.lockout_window_start) > timedelta(minutes=lockout_win)
+                        )
+                        if window_expired:
+                            user_fail.lockout_count = 0
+                            user_fail.lockout_window_start = now
+
+                        user_fail.lockout_count = (user_fail.lockout_count or 0) + 1
+
+                        if user_fail.lockout_count >= lockout_max:
+                            user_fail.lockout_until = now + timedelta(minutes=lockout_dur)
+                            _log_auth_event(
+                                'account_locked',
+                                email,
+                                details=f"Locked after {user_fail.lockout_count} failed attempts",
+                                user_id=email,
+                            )
+                            app.logger.warning(f"[Auth] Account {email} locked after {user_fail.lockout_count} failed attempts")
+
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
@@ -785,3 +851,155 @@ def register_auth_routes(
 
         flash("Password reset successfully! You can now sign in with your new password.", "success")
         return redirect(url_for("login"))
+
+    # ── Account Settings ────────────────────────────────────────────────────────
+
+    @app.route("/account/settings", methods=["GET"])
+    @login_required
+    def account_settings():
+        """Account settings page — display name and email change."""
+        return render_template("account_settings.html")
+
+    @app.route("/account/settings/display-name", methods=["POST"])
+    @login_required
+    @limiter.limit("5 per hour")
+    def account_change_display_name():
+        """Change the current user's display name."""
+        new_name = request.form.get("display_name", "").strip()
+        if not new_name or len(new_name) < 2:
+            flash("Display name must be at least 2 characters.", "danger")
+            return redirect(url_for("account_settings"))
+        if len(new_name) > 50:
+            flash("Display name must be 50 characters or fewer.", "danger")
+            return redirect(url_for("account_settings"))
+        try:
+            current_user.display_name = new_name
+            db.session.commit()
+            app.logger.info(f"[Auth] Display name updated for {current_user.id}: {new_name}")
+            flash("Display name updated successfully.", "success")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Auth] Display name update error: {e}")
+            flash("Failed to update display name. Please try again.", "danger")
+        return redirect(url_for("account_settings"))
+
+    @app.route("/account/settings/request-email-change", methods=["POST"])
+    @login_required
+    @limiter.limit("3 per hour")
+    def account_request_email_change():
+        """Step 1 — store pending email and send verification link to new address."""
+        from werkzeug.security import check_password_hash
+
+        new_email = request.form.get("new_email", "").strip().lower()
+        current_password = request.form.get("current_password", "")
+
+        if not new_email or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', new_email):
+            flash("Please enter a valid email address.", "danger")
+            return redirect(url_for("account_settings"))
+
+        if new_email == current_user.id:
+            flash("That is already your current email address.", "warning")
+            return redirect(url_for("account_settings"))
+
+        if db.session.get(DBUser, new_email):
+            flash("That email address is already registered to another account.", "danger")
+            return redirect(url_for("account_settings"))
+
+        if not check_password_hash(current_user.password_hash, current_password):
+            flash("Current password is incorrect.", "danger")
+            return redirect(url_for("account_settings"))
+
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        try:
+            current_user.pending_email = new_email
+            current_user.pending_email_token = token_hash
+            current_user.pending_email_token_expires = datetime.utcnow() + timedelta(hours=6)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Auth] Email change request error: {e}")
+            flash("Failed to initiate email change. Please try again.", "danger")
+            return redirect(url_for("account_settings"))
+
+        verify_link = url_for("account_confirm_email_change", token=token, _external=True)
+        sent = send_verification_email(new_email, current_user.display_name or current_user.id, verify_link)
+        if sent:
+            app.logger.info(f"[Auth] Email change requested: {current_user.id} -> {new_email}")
+            flash(f"Verification link sent to {new_email}. Click the link in that email to confirm the change.", "success")
+        else:
+            flash("Could not send verification email. Please try again later.", "danger")
+        return redirect(url_for("account_settings"))
+
+    @app.route("/account/settings/cancel-email-change", methods=["POST"])
+    @login_required
+    def account_cancel_email_change():
+        """Cancel a pending email change."""
+        try:
+            current_user.pending_email = None
+            current_user.pending_email_token = None
+            current_user.pending_email_token_expires = None
+            db.session.commit()
+            flash("Pending email change cancelled.", "success")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Auth] Cancel email change error: {e}")
+            flash("Failed to cancel. Please try again.", "danger")
+        return redirect(url_for("account_settings"))
+
+    @app.route("/account/confirm-email-change")
+    def account_confirm_email_change():
+        """Step 2 — user clicks link in new email inbox; commit the PK cascade."""
+        token = request.args.get("token", "").strip()
+        if not token:
+            flash("Invalid confirmation link.", "danger")
+            return redirect(url_for("login"))
+
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        user = DBUser.query.filter_by(pending_email_token=token_hash).first()
+        if not user:
+            flash("Invalid or already-used confirmation link.", "danger")
+            return redirect(url_for("login"))
+
+        if datetime.utcnow() > user.pending_email_token_expires:
+            flash("Confirmation link has expired. Please request a new email change from account settings.", "warning")
+            return redirect(url_for("login"))
+
+        new_email = user.pending_email
+        old_email = user.id
+
+        # Clear pending fields before the PK cascade
+        try:
+            user.pending_email = None
+            user.pending_email_token = None
+            user.pending_email_token_expires = None
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        ok, msg = update_user_email(old_email, new_email)
+        if not ok:
+            app.logger.error(f"[Auth] Email change cascade failed {old_email} -> {new_email}: {msg}")
+            flash(f"Could not complete email change: {msg}", "danger")
+            return redirect(url_for("login"))
+
+        app.logger.info(f"[Auth] Email changed: {old_email} -> {new_email}")
+        # Force re-login under the new identity
+        logout_user()
+        flash("Email changed successfully. Please sign in with your new email address.", "success")
+        return redirect(url_for("login"))
+
+    # ── Login History ────────────────────────────────────────────────────────────
+
+    @app.route("/account/login-history")
+    @login_required
+    def account_login_history():
+        """Show the current user's login history, paginated."""
+        page = request.args.get("page", 1, type=int)
+        per_page = 25
+        history = LoginHistory.query.filter_by(
+            user_id=current_user.id
+        ).order_by(LoginHistory.timestamp.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        return render_template("account_login_history.html", history=history)

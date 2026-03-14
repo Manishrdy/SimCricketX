@@ -136,6 +136,26 @@
 </div>
 {% endif %}
 
+{% set now_utc = now() if now is defined else none %}
+{% if user.lockout_until %}
+<div class="a-card-flat" style="border-color: rgba(234, 88, 12, 0.4); border-left: 4px solid #ea580c; margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+            <span class="a-badge" style="background: rgba(234,88,12,0.1); color: #ea580c; border: 1px solid rgba(234,88,12,0.3);">
+                <i class="fas fa-lock"></i> LOCKED OUT
+            </span>
+            <span style="font-size: 0.85rem; color: var(--fg); margin-left: 0.5rem;">
+                Locked until {{ user.lockout_until.strftime('%Y-%m-%d %H:%M UTC') }}
+                &mdash; {{ user.lockout_count }} failed attempt(s)
+            </span>
+        </div>
+        <button onclick="unlockUser()" class="a-btn a-btn-secondary a-btn-sm">
+            <i class="fas fa-unlock"></i> Unlock Account
+        </button>
+    </div>
+</div>
+{% endif %}
+
 <!-- Quick Actions -->
 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
     {% if not user.is_banned %}
@@ -146,6 +166,11 @@
     {% if not user.force_password_reset %}
     <button onclick="forceReset()" class="a-btn a-btn-secondary a-btn-sm">
         <i class="fas fa-key"></i> Force Password Reset
+    </button>
+    {% endif %}
+    {% if user.lockout_until %}
+    <button onclick="unlockUser()" class="a-btn a-btn-secondary a-btn-sm">
+        <i class="fas fa-unlock"></i> Unlock Account
     </button>
     {% endif %}
     <button onclick="wipeData()" class="a-btn a-btn-danger a-btn-sm">
@@ -299,6 +324,16 @@ async function unbanUser() {
     if (!confirm('Unban this user?')) return;
     try {
         const resp = await fetch(`/admin/users/${encodeURIComponent(userEmail)}/unban`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+        else showAlert(data.error || 'Failed', 'error');
+    } catch { showAlert('Network error', 'error'); }
+}
+
+async function unlockUser() {
+    if (!confirm('Clear the account lockout for this user?')) return;
+    try {
+        const resp = await fetch(`/admin/users/${encodeURIComponent(userEmail)}/unlock`, { method: 'POST' });
         const data = await resp.json();
         if (resp.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
         else showAlert(data.error || 'Failed', 'error');
