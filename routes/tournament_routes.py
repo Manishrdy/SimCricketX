@@ -11,10 +11,13 @@ def register_tournament_routes(
     app,
     *,
     db,
+    limiter,
     tournament_engine,
     Tournament,
+    TournamentPlayerStatsCache,
     DBTeam,
     DBMatch,
+    DBPlayer,
     MatchScorecard,
     MatchPartnership,
     TournamentFixture,
@@ -23,6 +26,80 @@ def register_tournament_routes(
     MATCH_INSTANCES_LOCK,
     PROJECT_ROOT,
 ):
+    # ── Shared helper ─────────────────────────────────────────────────────
+
+    def _cleanup_match_artifacts(match, *, reverse_stats=True):
+        """
+        Delete all artifacts for a single DBMatch: reverse career aggregates,
+        remove scorecards/partnerships, delete JSON file, purge memory cache.
+        Caller is responsible for deleting the DBMatch itself and committing.
+        """
+        match_id = match.id
+
+        # 1. Reverse player career stats
+        if reverse_stats:
+            scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
+            if scorecards:
+                reverse_player_aggregates(scorecards, logger=app.logger)
+
+        # 2. Delete dependent records
+        db.session.query(MatchPartnership).filter_by(match_id=match_id).delete(
+            synchronize_session=False
+        )
+        db.session.query(MatchScorecard).filter_by(match_id=match_id).delete(
+            synchronize_session=False
+        )
+
+        # 3. Delete JSON file — O(1) via stored path, O(N) fallback
+        _delete_match_json(match)
+
+        # 4. Purge from in-memory cache
+        with MATCH_INSTANCES_LOCK:
+            MATCH_INSTANCES.pop(match_id, None)
+
+    def _delete_match_json(match):
+        """Remove match JSON file from disk using stored path or fallback scan."""
+        match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
+
+        # O(1) — use stored path
+        if match.match_json_path:
+            json_path = match.match_json_path
+            if not os.path.isabs(json_path):
+                json_path = os.path.join(match_dir, json_path)
+            if os.path.isfile(json_path):
+                try:
+                    os.remove(json_path)
+                    return
+                except Exception as e:
+                    app.logger.warning(f"Failed to delete JSON via stored path {json_path}: {e}")
+
+        # O(1) — try canonical name
+        canonical = os.path.join(match_dir, f"match_{match.id}.json")
+        if os.path.isfile(canonical):
+            try:
+                os.remove(canonical)
+                return
+            except Exception:
+                pass
+
+        # O(N) fallback — only if directory exists
+        if not os.path.isdir(match_dir):
+            return
+        for fn in os.listdir(match_dir):
+            if not fn.endswith(".json"):
+                continue
+            path = os.path.join(match_dir, fn)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("match_id") == match.id:
+                    os.remove(path)
+                    break
+            except Exception:
+                continue
+
+    # ── Routes ────────────────────────────────────────────────────────────
+
     @app.route("/tournaments")
     @login_required
     def tournaments():
@@ -35,6 +112,7 @@ def register_tournament_routes(
 
     @app.route("/tournaments/create", methods=["GET", "POST"])
     @login_required
+    @limiter.limit("10 per minute")
     def create_tournament_route():
         VALID_TOURNAMENT_FORMATS = {"T20", "ListA"}
 
@@ -137,43 +215,62 @@ def register_tournament_routes(
             return "Tournament not found", 404
 
         standings = tournament_engine.get_standings(tournament_id)
-        return render_template("tournaments/dashboard.html", tournament=t, standings=standings)
+
+        # Eagerly load fixtures with relationships to avoid N+1
+        fixtures = (
+            TournamentFixture.query
+            .filter_by(tournament_id=tournament_id)
+            .order_by(TournamentFixture.round_number)
+            .all()
+        )
+
+        # Identify the next scheduled fixture for highlighting
+        next_fixture_id = None
+        for f in fixtures:
+            if f.status == "Scheduled":
+                next_fixture_id = f.id
+                break
+
+        return render_template(
+            "tournaments/dashboard.html",
+            tournament=t,
+            standings=standings,
+            fixtures=fixtures,
+            next_fixture_id=next_fixture_id,
+        )
+
+    @app.route("/tournaments/<int:tournament_id>/rename", methods=["POST"])
+    @login_required
+    @limiter.limit("10 per minute")
+    def rename_tournament(tournament_id):
+        t = db.session.get(Tournament, tournament_id)
+        if not t or t.user_id != current_user.id:
+            flash("Tournament not found.", "danger")
+            return redirect(url_for("tournaments"))
+
+        new_name = (request.form.get("name") or "").strip()
+        if not new_name:
+            flash("Tournament name cannot be empty.", "error")
+            return redirect(url_for("tournament_dashboard", tournament_id=tournament_id))
+
+        if len(new_name) > 100:
+            flash("Tournament name must be 100 characters or less.", "error")
+            return redirect(url_for("tournament_dashboard", tournament_id=tournament_id))
+
+        t.name = new_name
+        db.session.commit()
+        flash(f"Tournament renamed to '{new_name}'.", "success")
+        return redirect(url_for("tournament_dashboard", tournament_id=tournament_id))
 
     @app.route("/tournaments/<int:tournament_id>/delete", methods=["POST"])
     @login_required
+    @limiter.limit("5 per minute")
     def delete_tournament(tournament_id):
         t = db.session.get(Tournament, tournament_id)
         if t and t.user_id == current_user.id:
             tournament_matches = DBMatch.query.filter_by(tournament_id=tournament_id).all()
             for m in tournament_matches:
-                scorecards = MatchScorecard.query.filter_by(match_id=m.id).all()
-                if scorecards:
-                    reverse_player_aggregates(scorecards, logger=app.logger)
-
-                db.session.query(MatchPartnership).filter_by(match_id=m.id).delete(
-                    synchronize_session=False
-                )
-                db.session.query(MatchScorecard).filter_by(match_id=m.id).delete(
-                    synchronize_session=False
-                )
-
-                match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
-                if os.path.isdir(match_dir):
-                    for fn in os.listdir(match_dir):
-                        if not fn.endswith(".json"):
-                            continue
-                        path = os.path.join(match_dir, fn)
-                        try:
-                            with open(path, "r", encoding="utf-8") as f:
-                                data = json.load(f)
-                            if data.get("match_id") == m.id:
-                                os.remove(path)
-                                break
-                        except Exception:
-                            continue
-
-                with MATCH_INSTANCES_LOCK:
-                    MATCH_INSTANCES.pop(m.id, None)
+                _cleanup_match_artifacts(m)
                 db.session.delete(m)
 
             db.session.delete(t)
@@ -183,6 +280,7 @@ def register_tournament_routes(
 
     @app.route("/fixture/<fixture_id>/resimulate", methods=["POST"])
     @login_required
+    @limiter.limit("10 per minute")
     def resimulate_fixture(fixture_id):
         """Reset a fixture to Scheduled and clear old simulation artifacts."""
         try:
@@ -210,41 +308,13 @@ def register_tournament_routes(
                     fixture.match_id = None
                     fixture.standings_applied = False
 
-                old_scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
-                if old_scorecards:
-                    reverse_player_aggregates(old_scorecards, logger=app.logger)
-
-                db.session.query(MatchPartnership).filter_by(match_id=match_id).delete(
-                    synchronize_session=False
-                )
-                db.session.query(MatchScorecard).filter_by(match_id=match_id).delete(
-                    synchronize_session=False
-                )
+                _cleanup_match_artifacts(db_match)
                 db.session.delete(db_match)
             else:
                 fixture.status = "Scheduled"
                 fixture.winner_team_id = None
                 fixture.match_id = None
                 fixture.standings_applied = False
-
-            match_dir = os.path.join(PROJECT_ROOT, "data", "matches")
-            for fn in os.listdir(match_dir):
-                if not fn.endswith(".json"):
-                    continue
-                path = os.path.join(match_dir, fn)
-                try:
-                    with open(path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    if data.get("match_id") == match_id:
-                        os.remove(path)
-                        app.logger.info(f"Deleted match JSON: {fn}")
-                        break
-                except Exception:
-                    continue
-
-            with MATCH_INSTANCES_LOCK:
-                if match_id in MATCH_INSTANCES:
-                    del MATCH_INSTANCES[match_id]
 
             db.session.commit()
             flash("Match reset successfully. You can now re-simulate.", "success")
@@ -261,4 +331,3 @@ def register_tournament_routes(
                     tournament_id=fixture.tournament_id if fixture else 0,
                 )
             )
-

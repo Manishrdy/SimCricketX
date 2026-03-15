@@ -1,0 +1,174 @@
+{% extends "layout.html" %}
+
+{% block title %}Head-to-Head — SimCricketX{% endblock %}
+
+{% block content %}
+<style>
+.h2h-page { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem; }
+.h2h-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.5rem; }
+.h2h-header h1 { font-size: 1.35rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+.h2h-sel-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; }
+.h2h-sel-row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: end; }
+.h2h-sel-row .fg { flex: 1; min-width: 160px; }
+.h2h-sel-row label { display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.3rem; color: var(--fg-secondary); }
+.h2h-sel-row select { width: 100%; padding: 0.45rem 0.7rem; border: 1px solid var(--card-border); border-radius: 8px; background: var(--bg-secondary); color: var(--fg); font-size: 0.8rem; font-family: inherit; }
+.h2h-btn { padding: 0.5rem 1.2rem; background: var(--c1); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.8rem; }
+.h2h-btn:hover { opacity: 0.9; }
+
+.h2h-summary { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; margin-bottom: 1.5rem; align-items: center; }
+.h2h-team-box { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; text-align: center; }
+.h2h-team-name { font-size: 1rem; font-weight: 700; margin-bottom: 0.3rem; }
+.h2h-team-wins { font-size: 2rem; font-weight: 800; color: var(--c1); }
+.h2h-vs { font-size: 0.85rem; font-weight: 700; color: var(--fg-secondary); text-align: center; }
+.h2h-vs .played { font-size: 1.8rem; font-weight: 800; color: var(--fg); display: block; }
+
+.h2h-section { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+.h2h-section-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem; }
+.h2h-tbl { width: 100%; border-collapse: collapse; font-size: 0.77rem; }
+.h2h-tbl th { background: var(--bg-secondary); padding: 0.4rem 0.6rem; text-align: left; font-weight: 600; font-size: 0.7rem; color: var(--fg-secondary); text-transform: uppercase; }
+.h2h-tbl td { padding: 0.4rem 0.6rem; border-top: 1px solid var(--card-border); }
+.h2h-tbl tr:hover td { background: var(--bg-secondary); }
+.result-w { color: #15803d; font-weight: 700; }
+.result-l { color: #b91c1c; font-weight: 700; }
+
+.perf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.perf-card { background: var(--bg-secondary); border-radius: 8px; padding: 0.75rem; }
+.perf-card-title { font-size: 0.7rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.5rem; text-transform: uppercase; }
+.perf-row { display: flex; justify-content: space-between; font-size: 0.77rem; padding: 0.2rem 0; }
+.perf-row:not(:last-child) { border-bottom: 1px solid var(--card-border); }
+.perf-val { font-weight: 600; }
+
+.h2h-empty { text-align: center; padding: 2rem; color: var(--fg-secondary); }
+#h2h-results { display: none; }
+.back-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); text-decoration: none; font-size: 0.8rem; }
+.back-btn:hover { background: var(--bg-secondary); }
+@media (max-width: 640px) { .h2h-summary { grid-template-columns: 1fr; } .perf-grid { grid-template-columns: 1fr; } }
+</style>
+
+<div class="h2h-page">
+    <div class="h2h-header">
+        <h1><i class="fas fa-exchange-alt"></i> Head-to-Head</h1>
+        <a href="{{ url_for('statistics') }}" class="back-btn"><i class="fas fa-arrow-left"></i> Statistics</a>
+    </div>
+
+    <div class="h2h-sel-card">
+        <div class="h2h-sel-row">
+            <div class="fg">
+                <label>Team 1</label>
+                <select id="h2h-team1">
+                    <option value="">Select team…</option>
+                    {% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="fg">
+                <label>Team 2</label>
+                <select id="h2h-team2">
+                    <option value="">Select team…</option>
+                    {% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="fg">
+                <label>Format</label>
+                <select id="h2h-format">
+                    <option value="">All formats</option>
+                    <option value="T20">T20</option>
+                    <option value="ListA">List A</option>
+                </select>
+            </div>
+            <button class="h2h-btn" onclick="loadH2H()"><i class="fas fa-search"></i> Compare</button>
+        </div>
+    </div>
+
+    <div id="h2h-results">
+        <div class="h2h-summary">
+            <div class="h2h-team-box">
+                <div class="h2h-team-name" id="h2h-t1-name"></div>
+                <div class="h2h-team-wins" id="h2h-t1-wins">0</div>
+                <div style="font-size:0.7rem;color:var(--fg-secondary)">wins</div>
+            </div>
+            <div class="h2h-vs">
+                <span class="played" id="h2h-played">0</span>
+                matches<br>
+                <span id="h2h-ties" style="font-size:0.7rem"></span>
+            </div>
+            <div class="h2h-team-box">
+                <div class="h2h-team-name" id="h2h-t2-name"></div>
+                <div class="h2h-team-wins" id="h2h-t2-wins">0</div>
+                <div style="font-size:0.7rem;color:var(--fg-secondary)">wins</div>
+            </div>
+        </div>
+
+        <div class="perf-grid" id="h2h-performers"></div>
+
+        <div class="h2h-section" style="margin-top:1rem">
+            <div class="h2h-section-title"><i class="fas fa-list"></i> Match Results</div>
+            <div style="overflow-x:auto">
+                <table class="h2h-tbl">
+                    <thead><tr><th>Date</th><th>Home</th><th>Score</th><th>Away</th><th>Score</th><th>Result</th></tr></thead>
+                    <tbody id="h2h-match-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="h2h-empty" id="h2h-empty"><i class="fas fa-exchange-alt" style="font-size:2rem;opacity:0.3;display:block;margin-bottom:0.5rem"></i>Select two teams to compare their head-to-head record</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadH2H() {
+    const t1 = document.getElementById('h2h-team1').value;
+    const t2 = document.getElementById('h2h-team2').value;
+    const fmt = document.getElementById('h2h-format').value;
+    if (!t1 || !t2) { alert('Select both teams'); return; }
+    if (t1 === t2) { alert('Select two different teams'); return; }
+
+    let url = `/api/head-to-head?team1_id=${t1}&team2_id=${t2}`;
+    if (fmt) url += `&match_format=${encodeURIComponent(fmt)}`;
+
+    fetch(url).then(r => r.json()).then(res => {
+        if (!res.success) { alert(res.error || 'Error'); return; }
+        const d = res.data;
+        const s = d.summary;
+
+        document.getElementById('h2h-empty').style.display = 'none';
+        document.getElementById('h2h-results').style.display = '';
+
+        document.getElementById('h2h-t1-name').textContent = d.team1;
+        document.getElementById('h2h-t2-name').textContent = d.team2;
+        document.getElementById('h2h-t1-wins').textContent = s.team1_wins;
+        document.getElementById('h2h-t2-wins').textContent = s.team2_wins;
+        document.getElementById('h2h-played').textContent = s.played;
+        document.getElementById('h2h-ties').textContent = s.ties ? s.ties + ' tie(s)' : '';
+
+        // Performers
+        const perfHtml = (team, perfs) => {
+            let h = `<div class="perf-card"><div class="perf-card-title">${esc(team)} — Top Performers</div>`;
+            if (!perfs.length) { h += '<div style="font-size:0.75rem;color:var(--fg-secondary)">No data</div>'; }
+            perfs.forEach(p => {
+                h += `<div class="perf-row"><span>${esc(p.name)}</span><span class="perf-val">${p.runs}r / ${p.wickets}w (${p.matches}m)</span></div>`;
+            });
+            return h + '</div>';
+        };
+        document.getElementById('h2h-performers').innerHTML =
+            perfHtml(d.team1, d.top_performers.team1) + perfHtml(d.team2, d.top_performers.team2);
+
+        // Match list
+        let rows = '';
+        d.matches.forEach(m => {
+            rows += `<tr><td>${esc(m.date)}</td><td>${esc(m.home)}</td><td><b>${m.home_score}</b></td>`
+                  + `<td>${esc(m.away)}</td><td><b>${m.away_score}</b></td>`
+                  + `<td>${esc(m.result)}</td></tr>`;
+        });
+        document.getElementById('h2h-match-tbody').innerHTML = rows || '<tr><td colspan="6" class="h2h-empty">No matches found</td></tr>';
+    }).catch(e => { console.error(e); alert('Error loading head-to-head data'); });
+}
+
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+</script>
+{% endblock %}

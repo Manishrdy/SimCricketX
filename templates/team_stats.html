@@ -1,0 +1,175 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ stats.team }} Stats — SimCricketX{% endblock %}
+
+{% block content %}
+<style>
+.ts-page { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem; }
+.ts-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.5rem; }
+.ts-header h1 { font-size: 1.35rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+.ts-header .team-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+.ts-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.ts-controls select { padding: 0.35rem 0.7rem; border: 1px solid var(--card-border); border-radius: 8px; background: var(--bg-secondary); color: var(--fg); font-size: 0.8rem; font-family: inherit; }
+.back-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); text-decoration: none; font-size: 0.8rem; }
+.back-btn:hover { background: var(--bg-secondary); }
+
+.ts-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+.ts-kpi { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1rem; text-align: center; }
+.ts-kpi-num { font-size: 1.8rem; font-weight: 800; color: var(--c1); line-height: 1; }
+.ts-kpi-label { font-size: 0.65rem; color: var(--fg-secondary); text-transform: uppercase; margin-top: 0.2rem; }
+
+.ts-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+.ts-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1rem; }
+.ts-card-title { font-size: 0.7rem; font-weight: 600; color: var(--fg-secondary); text-transform: uppercase; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.3rem; }
+.ts-stat-row { display: flex; justify-content: space-between; padding: 0.25rem 0; font-size: 0.8rem; }
+.ts-stat-row:not(:last-child) { border-bottom: 1px solid var(--card-border); }
+.ts-stat-val { font-weight: 700; color: var(--c1); }
+
+/* Win % bar */
+.ts-pct-bar { height: 8px; border-radius: 4px; background: var(--bg-secondary); overflow: hidden; margin-top: 0.3rem; }
+.ts-pct-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+
+.ts-section { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+.ts-section-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem; }
+.ts-tbl { width: 100%; border-collapse: collapse; font-size: 0.77rem; }
+.ts-tbl th { background: var(--bg-secondary); padding: 0.4rem 0.6rem; text-align: left; font-weight: 600; font-size: 0.7rem; color: var(--fg-secondary); text-transform: uppercase; }
+.ts-tbl td { padding: 0.4rem 0.6rem; border-top: 1px solid var(--card-border); }
+.ts-tbl tr:hover td { background: var(--bg-secondary); }
+.result-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 0.65rem; font-weight: 700; }
+.result-w { background: #dcfce7; color: #15803d; }
+.result-l { background: #fee2e2; color: #b91c1c; }
+.result-t { background: #fef3c7; color: #92400e; }
+[data-theme="dark"] .result-w { background: #14532d; color: #86efac; }
+[data-theme="dark"] .result-l { background: #450a0a; color: #fca5a5; }
+[data-theme="dark"] .result-t { background: #451a03; color: #fcd34d; }
+
+.ts-form-strip { display: flex; gap: 0.3rem; margin-bottom: 0.5rem; }
+.ts-form-dot { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; }
+
+@media (max-width: 640px) { .ts-split { grid-template-columns: 1fr; } .ts-kpi-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+
+<div class="ts-page">
+    <div class="ts-header">
+        <h1>
+            <span class="team-dot" style="background:{{ stats.team_color }}"></span>
+            {{ stats.team }}
+        </h1>
+        <div class="ts-controls">
+            <select id="ts-team-select" onchange="switchTeam(this.value)">
+                {% for t in teams %}
+                <option value="{{ t.id }}" {% if t.id == stats.team_id %}selected{% endif %}>{{ t.name }}</option>
+                {% endfor %}
+            </select>
+            <select id="ts-format" onchange="switchFormat(this.value)">
+                <option value="">All formats</option>
+                <option value="T20" {% if match_format == 'T20' %}selected{% endif %}>T20</option>
+                <option value="ListA" {% if match_format == 'ListA' %}selected{% endif %}>List A</option>
+            </select>
+            <a href="{{ url_for('statistics') }}" class="back-btn"><i class="fas fa-arrow-left"></i> Statistics</a>
+        </div>
+    </div>
+
+    {% if stats.matches == 0 %}
+    <div style="text-align:center;padding:3rem;color:var(--fg-secondary)">
+        <i class="fas fa-chart-bar" style="font-size:2.5rem;opacity:0.3;display:block;margin-bottom:0.7rem"></i>
+        No matches played yet
+    </div>
+    {% else %}
+
+    <!-- Form Strip -->
+    <div class="ts-form-strip">
+        {% for m in stats.recent[:10] %}
+        <div class="ts-form-dot result-{{ m.result|lower }}" title="{{ m.opponent }} ({{ m.date }})">{{ m.result }}</div>
+        {% endfor %}
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="ts-kpi-grid">
+        <div class="ts-kpi">
+            <div class="ts-kpi-num">{{ stats.summary.played }}</div>
+            <div class="ts-kpi-label">Played</div>
+        </div>
+        <div class="ts-kpi">
+            <div class="ts-kpi-num" style="color:#15803d">{{ stats.summary.won }}</div>
+            <div class="ts-kpi-label">Won</div>
+        </div>
+        <div class="ts-kpi">
+            <div class="ts-kpi-num" style="color:#b91c1c">{{ stats.summary.lost }}</div>
+            <div class="ts-kpi-label">Lost</div>
+        </div>
+        <div class="ts-kpi">
+            <div class="ts-kpi-num">{{ stats.summary.win_pct }}%</div>
+            <div class="ts-kpi-label">Win Rate</div>
+            <div class="ts-pct-bar"><div class="ts-pct-fill" style="width:{{ stats.summary.win_pct }}%;background:{{ stats.team_color }}"></div></div>
+        </div>
+        <div class="ts-kpi">
+            <div class="ts-kpi-num">{{ stats.summary.avg_scored }}</div>
+            <div class="ts-kpi-label">Avg Score</div>
+        </div>
+        <div class="ts-kpi">
+            <div class="ts-kpi-num">{{ stats.summary.avg_conceded }}</div>
+            <div class="ts-kpi-label">Avg Conceded</div>
+        </div>
+    </div>
+
+    <!-- Batting First vs Chasing -->
+    <div class="ts-split">
+        <div class="ts-card">
+            <div class="ts-card-title"><i class="fas fa-baseball-ball"></i> Batting First</div>
+            <div class="ts-stat-row"><span>Matches</span><span class="ts-stat-val">{{ stats.batting_first.played }}</span></div>
+            <div class="ts-stat-row"><span>Won</span><span class="ts-stat-val">{{ stats.batting_first.won }}</span></div>
+            <div class="ts-stat-row"><span>Win %</span><span class="ts-stat-val">{{ stats.batting_first.win_pct }}%</span></div>
+            <div class="ts-pct-bar"><div class="ts-pct-fill" style="width:{{ stats.batting_first.win_pct }}%;background:#6366f1"></div></div>
+        </div>
+        <div class="ts-card">
+            <div class="ts-card-title"><i class="fas fa-running"></i> Chasing</div>
+            <div class="ts-stat-row"><span>Matches</span><span class="ts-stat-val">{{ stats.chasing.played }}</span></div>
+            <div class="ts-stat-row"><span>Won</span><span class="ts-stat-val">{{ stats.chasing.won }}</span></div>
+            <div class="ts-stat-row"><span>Win %</span><span class="ts-stat-val">{{ stats.chasing.win_pct }}%</span></div>
+            <div class="ts-pct-bar"><div class="ts-pct-fill" style="width:{{ stats.chasing.win_pct }}%;background:#e879f9"></div></div>
+        </div>
+    </div>
+
+    <!-- Recent Matches -->
+    <div class="ts-section">
+        <div class="ts-section-title"><i class="fas fa-history"></i> Recent Matches</div>
+        <div style="overflow-x:auto">
+            <table class="ts-tbl">
+                <thead><tr><th>Date</th><th>Opponent</th><th>Score</th><th>Opp Score</th><th>Venue</th><th>Fmt</th><th>Result</th></tr></thead>
+                <tbody>
+                    {% for m in stats.recent %}
+                    <tr>
+                        <td>{{ m.date }}</td>
+                        <td>{{ m.opponent }}</td>
+                        <td><b>{{ m.score }}</b></td>
+                        <td>{{ m.opp_score }}</td>
+                        <td>{{ m.venue }}</td>
+                        <td>{{ m.format }}</td>
+                        <td><span class="result-badge result-{{ m.result|lower }}">{{ m.result }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function switchTeam(teamId) {
+    const fmt = document.getElementById('ts-format').value;
+    let url = '/team-stats/' + teamId;
+    if (fmt) url += '?match_format=' + encodeURIComponent(fmt);
+    window.location.href = url;
+}
+function switchFormat(fmt) {
+    const teamId = document.getElementById('ts-team-select').value;
+    let url = '/team-stats/' + teamId;
+    if (fmt) url += '?match_format=' + encodeURIComponent(fmt);
+    window.location.href = url;
+}
+</script>
+{% endblock %}

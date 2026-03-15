@@ -1,8 +1,10 @@
 from database import db
 from database.models import (
     Tournament, TournamentTeam, TournamentFixture, Match, Team,
-    MatchScorecard, MatchPartnership,
+    MatchScorecard, MatchPartnership, TournamentPlayerStatsCache,
+    Player,
 )
+from sqlalchemy import func as sa_func
 from datetime import datetime
 import itertools
 import logging
@@ -606,8 +608,9 @@ class TournamentEngine:
             home_idx = match_def.get('home', 0)
             
             if home_idx not in [0, 1]:
-                 logger.warning(f"Invalid home index {home_idx} in custom series. Defaulting to 0.")
-                 home_idx = 0
+                raise ValueError(
+                    f"Custom series match {i + 1}: 'home' must be 0 or 1, got {home_idx}."
+                )
 
             match_num = match_def.get('match_num', i + 1)
 
@@ -1222,6 +1225,12 @@ class TournamentEngine:
         else:
             logger.info(f"[Standings] Skipping league standings update (stage={fixture.stage if fixture else 'unknown'})")
 
+        # Update per-player tournament stats cache
+        try:
+            self._update_player_stats_cache(match)
+        except Exception as psc_err:
+            logger.warning(f"[Standings] Failed to update player stats cache: {psc_err}")
+
         # Check tournament progression
         logger.info(f"[Standings] Checking tournament completion for tournament {match.tournament_id}")
         self._check_tournament_completion(match.tournament_id)
@@ -1347,7 +1356,193 @@ class TournamentEngine:
         else:
             run_rate_against = 0.0
 
-        team_stats.net_run_rate = round(run_rate_for - run_rate_against, 3)
+        team_stats.net_run_rate = round(run_rate_for - run_rate_against, 6)
+
+    def _update_player_stats_cache(self, match):
+        """
+        Rebuild tournament player stats cache rows for players involved in this match.
+        Uses DB-level aggregation across all scorecards in the tournament for accuracy.
+        """
+        tournament_id = match.tournament_id
+        if not tournament_id:
+            return
+
+        # Get all player IDs from this match's scorecards
+        player_ids = {
+            row[0]
+            for row in db.session.query(MatchScorecard.player_id)
+            .filter_by(match_id=match.id)
+            .distinct()
+            .all()
+        }
+        if not player_ids:
+            return
+
+        # Get all match IDs in this tournament
+        tournament_match_ids = {
+            row[0]
+            for row in db.session.query(TournamentFixture.match_id)
+            .filter(
+                TournamentFixture.tournament_id == tournament_id,
+                TournamentFixture.match_id.isnot(None),
+            )
+            .all()
+        }
+        if not tournament_match_ids:
+            return
+
+        for player_id in player_ids:
+            player = db.session.get(Player, player_id)
+            if not player:
+                continue
+
+            cache = TournamentPlayerStatsCache.query.filter_by(
+                tournament_id=tournament_id, player_id=player_id
+            ).first()
+            if not cache:
+                cache = TournamentPlayerStatsCache(
+                    tournament_id=tournament_id,
+                    player_id=player_id,
+                    team_id=player.team_id,
+                )
+                db.session.add(cache)
+
+            # Batting aggregation
+            bat = db.session.query(
+                sa_func.count(MatchScorecard.id),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.runs), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.balls), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.fours), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.sixes), 0),
+                sa_func.coalesce(sa_func.max(MatchScorecard.runs), 0),
+            ).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "batting",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+            ).first()
+
+            if bat:
+                cache.innings_batted = bat[0]
+                cache.runs_scored = bat[1]
+                cache.balls_faced = bat[2]
+                cache.fours = bat[3]
+                cache.sixes = bat[4]
+                cache.highest_score = bat[5]
+                cache.batting_strike_rate = round(
+                    (bat[1] / bat[2]) * 100, 2
+                ) if bat[2] > 0 else 0.0
+
+            # Count not-outs, fifties, centuries
+            not_outs = db.session.query(sa_func.count()).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "batting",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.is_out == False,
+                MatchScorecard.balls > 0,
+            ).scalar() or 0
+            cache.not_outs = not_outs
+
+            fifties = db.session.query(sa_func.count()).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "batting",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.runs >= 50,
+                MatchScorecard.runs < 100,
+            ).scalar() or 0
+            cache.fifties = fifties
+
+            centuries = db.session.query(sa_func.count()).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "batting",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.runs >= 100,
+            ).scalar() or 0
+            cache.centuries = centuries
+
+            dismissals = (cache.innings_batted or 0) - not_outs
+            cache.batting_average = round(
+                cache.runs_scored / dismissals, 2
+            ) if dismissals > 0 else 0.0
+
+            # Bowling aggregation
+            bowl = db.session.query(
+                sa_func.count(MatchScorecard.id),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.balls_bowled), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.runs_conceded), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.wickets), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.maidens), 0),
+                sa_func.coalesce(sa_func.max(MatchScorecard.wickets), 0),
+            ).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "bowling",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+            ).first()
+
+            if bowl:
+                cache.innings_bowled = bowl[0]
+                total_balls = bowl[1]
+                cache.overs_bowled = f"{total_balls // 6}.{total_balls % 6}"
+                cache.runs_conceded = bowl[2]
+                cache.wickets_taken = bowl[3]
+                cache.maidens = bowl[4]
+                cache.bowling_average = round(
+                    bowl[2] / bowl[3], 2
+                ) if bowl[3] > 0 else 0.0
+                cache.bowling_economy = round(
+                    (bowl[2] / (total_balls / 6.0)), 2
+                ) if total_balls > 0 else 0.0
+                cache.bowling_strike_rate = round(
+                    total_balls / bowl[3], 2
+                ) if bowl[3] > 0 else 0.0
+
+            # Best bowling
+            best_bowl = db.session.query(
+                MatchScorecard.wickets, MatchScorecard.runs_conceded
+            ).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "bowling",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+            ).order_by(
+                MatchScorecard.wickets.desc(),
+                MatchScorecard.runs_conceded.asc(),
+            ).first()
+            if best_bowl:
+                cache.best_bowling_wickets = best_bowl.wickets or 0
+                cache.best_bowling_runs = best_bowl.runs_conceded or 0
+
+            five_wkt = db.session.query(sa_func.count()).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "bowling",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.wickets >= 5,
+            ).scalar() or 0
+            cache.five_wicket_hauls = five_wkt
+
+            # Fielding aggregation
+            fielding = db.session.query(
+                sa_func.coalesce(sa_func.sum(MatchScorecard.catches), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.run_outs), 0),
+            ).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.match_id.in_(tournament_match_ids),
+            ).first()
+            if fielding:
+                cache.catches = fielding[0]
+                cache.run_outs = fielding[1]
+
+            # Matches played = distinct match IDs
+            matches_played = db.session.query(
+                sa_func.count(sa_func.distinct(MatchScorecard.match_id))
+            ).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.match_id.in_(tournament_match_ids),
+            ).scalar() or 0
+            cache.matches_played = matches_played
+
+        logger.info(
+            f"[PlayerStatsCache] Updated cache for {len(player_ids)} players "
+            f"in tournament {tournament_id}"
+        )
 
     def reverse_standings(self, match, commit=False):
         """

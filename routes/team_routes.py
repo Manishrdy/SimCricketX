@@ -1,12 +1,14 @@
 """Team management route registration."""
 
 import json
+import re
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
 VALID_FORMATS = ("T20", "ListA")
+SHORT_CODE_RE = re.compile(r'^[A-Z0-9]{2,5}$')
 
 
 def register_team_routes(
@@ -57,11 +59,28 @@ def register_team_routes(
     def _validate_profile(fmt, profile_data, is_draft):
         """
         Validate a single profile dict {captain, wicketkeeper, players: [...]}.
+        Also enforces: WK players have bowling fields cleared, duplicate names rejected.
         Returns error string or None.
         """
         players = profile_data.get("players", [])
         captain = (profile_data.get("captain") or "").strip()
         wk_name = (profile_data.get("wicketkeeper") or "").strip()
+
+        # Strip bowling fields for Wicketkeeper-role players (server-side enforcement)
+        for p in players:
+            if p.get("role") == "Wicketkeeper":
+                p["bowling_type"] = ""
+                p["bowling_hand"] = ""
+
+        # Duplicate player name check (case-insensitive)
+        seen_names = {}
+        for p in players:
+            lower_name = p["name"].strip().lower()
+            if not lower_name:
+                continue
+            if lower_name in seen_names:
+                return f"{fmt} profile: duplicate player name '{p['name']}'."
+            seen_names[lower_name] = True
 
         if is_draft:
             if len(players) < 1:
@@ -242,6 +261,12 @@ def register_team_routes(
                         error="All team fields are required.",
                     )
 
+                if not SHORT_CODE_RE.match(short_code):
+                    return render_template(
+                        "team_create.html",
+                        error="Short code must be 2-5 uppercase alphanumeric characters.",
+                    )
+
                 existing = DBTeam.query.filter_by(
                     user_id=current_user.id,
                     short_code=short_code,
@@ -380,7 +405,8 @@ def register_team_routes(
             app.logger.error(f"Error loading teams from DB: {e}", exc_info=True)
 
         total_players = sum(pi["player_count"] for t in teams for pi in t["profiles"])
-        avg_squad_size = total_players // len(teams) if teams else 0
+        total_profiles = sum(len(t["profiles"]) for t in teams)
+        avg_squad_size = total_players // total_profiles if total_profiles else 0
 
         return render_template("manage_teams.html", teams=teams, avg_squad_size=avg_squad_size, total_players=total_players)
 
@@ -443,44 +469,44 @@ def register_team_routes(
 
             if request.method == "POST":
                 try:
+                    def _edit_error(msg):
+                        """Return the edit template with an error, avoiding repetition."""
+                        db.session.rollback()
+                        return render_template(
+                            "team_create.html",
+                            team=_build_team_data_for_edit(team),
+                            edit=True,
+                            error=msg,
+                        )
+
                     team.name = request.form["team_name"].strip()
                     new_short_code = request.form["short_code"].strip().upper()
                     team.home_ground = request.form["home_ground"].strip()
                     team.pitch_preference = request.form["pitch_preference"]
                     team.team_color = request.form["team_color"]
 
+                    if not SHORT_CODE_RE.match(new_short_code):
+                        return _edit_error(
+                            "Short code must be 2-5 uppercase alphanumeric characters."
+                        )
+
                     name_conflict = _find_name_conflict(
-                        user_id,
-                        team.name,
-                        exclude_team_id=team.id,
+                        user_id, team.name, exclude_team_id=team.id,
                     )
                     if name_conflict:
-                        team_data = _build_team_data_for_edit(team)
-                        return render_template(
-                            "team_create.html",
-                            team=team_data,
-                            edit=True,
-                            error=(
-                                f"You already have a team named '{name_conflict.name}'. "
-                                "Please use a different team name."
-                            ),
+                        return _edit_error(
+                            f"You already have a team named '{name_conflict.name}'. "
+                            "Please use a different team name."
                         )
 
                     if new_short_code != team.short_code:
                         conflict = DBTeam.query.filter_by(
-                            user_id=user_id,
-                            short_code=new_short_code,
+                            user_id=user_id, short_code=new_short_code,
                         ).first()
                         if conflict:
-                            team_data = _build_team_data_for_edit(team)
-                            return render_template(
-                                "team_create.html",
-                                team=team_data,
-                                edit=True,
-                                error=(
-                                    f"You already have a team with short code "
-                                    f"'{new_short_code}'."
-                                ),
+                            return _edit_error(
+                                f"You already have a team with short code "
+                                f"'{new_short_code}'."
                             )
 
                     action = request.form.get("action", "publish")
@@ -488,36 +514,20 @@ def register_team_routes(
 
                     profiles, parse_err = _parse_profiles_payload(request.form)
                     if parse_err:
-                        team_data = _build_team_data_for_edit(team)
-                        return render_template(
-                            "team_create.html",
-                            team=team_data,
-                            edit=True,
-                            error=parse_err,
-                        )
+                        return _edit_error(parse_err)
 
                     non_empty = {
                         fmt: pd for fmt, pd in profiles.items() if pd["players"]
                     }
                     if not non_empty:
-                        team_data = _build_team_data_for_edit(team)
-                        return render_template(
-                            "team_create.html",
-                            team=team_data,
-                            edit=True,
-                            error="At least one format profile with players is required.",
+                        return _edit_error(
+                            "At least one format profile with players is required."
                         )
 
                     for fmt, pdata in non_empty.items():
                         err = _validate_profile(fmt, pdata, is_draft)
                         if err:
-                            team_data = _build_team_data_for_edit(team)
-                            return render_template(
-                                "team_create.html",
-                                team=team_data,
-                                edit=True,
-                                error=err,
-                            )
+                            return _edit_error(err)
 
                     # Replace all profiles: delete existing, recreate
                     for prof in list(team.profiles):
@@ -529,14 +539,7 @@ def register_team_routes(
 
                     save_err = _save_profiles(team.id, non_empty, is_draft)
                     if save_err:
-                        db.session.rollback()
-                        team_data = _build_team_data_for_edit(team)
-                        return render_template(
-                            "team_create.html",
-                            team=team_data,
-                            edit=True,
-                            error=save_err,
-                        )
+                        return _edit_error(save_err)
 
                     db.session.commit()
                     status_msg = "Draft" if is_draft else "Active"
@@ -563,6 +566,82 @@ def register_team_routes(
         except Exception as e:
             app.logger.error(f"Error in edit_team: {e}", exc_info=True)
             return redirect(url_for("manage_teams"))
+
+    @app.route("/team/<short_code>/clone", methods=["POST"])
+    @login_required
+    def clone_team(short_code):
+        """Duplicate an existing team as a new draft with '-Copy' suffix."""
+        user_id = current_user.id
+        try:
+            source = DBTeam.query.filter_by(
+                short_code=short_code, user_id=user_id,
+            ).first()
+            if not source:
+                flash("Team not found.", "danger")
+                return redirect(url_for("manage_teams"))
+
+            # Generate unique name and short code for clone
+            base_name = source.name + " (Copy)"
+            clone_name = base_name
+            suffix = 1
+            while _find_name_conflict(user_id, clone_name):
+                suffix += 1
+                clone_name = f"{source.name} (Copy {suffix})"
+
+            base_code = (source.short_code[:3] + "C").upper()
+            clone_code = base_code
+            code_suffix = 1
+            while DBTeam.query.filter_by(user_id=user_id, short_code=clone_code).first():
+                code_suffix += 1
+                clone_code = (source.short_code[:2] + f"C{code_suffix}").upper()
+                if not SHORT_CODE_RE.match(clone_code):
+                    clone_code = f"CP{code_suffix}".upper()
+
+            new_team = DBTeam(
+                user_id=user_id,
+                name=clone_name,
+                short_code=clone_code,
+                home_ground=source.home_ground,
+                pitch_preference=source.pitch_preference,
+                team_color=source.team_color,
+                is_draft=True,
+            )
+            db.session.add(new_team)
+            db.session.flush()
+
+            for prof in source.profiles:
+                new_prof = DBTeamProfile(
+                    team_id=new_team.id, format_type=prof.format_type,
+                )
+                db.session.add(new_prof)
+                db.session.flush()
+                for p in prof.players:
+                    db.session.add(DBPlayer(
+                        team_id=new_team.id,
+                        profile_id=new_prof.id,
+                        name=p.name,
+                        role=p.role,
+                        batting_rating=p.batting_rating,
+                        bowling_rating=p.bowling_rating,
+                        fielding_rating=p.fielding_rating,
+                        batting_hand=p.batting_hand,
+                        bowling_type=p.bowling_type,
+                        bowling_hand=p.bowling_hand,
+                        is_captain=p.is_captain,
+                        is_wicketkeeper=p.is_wicketkeeper,
+                    ))
+
+            db.session.commit()
+            app.logger.info(
+                f"Team '{source.short_code}' cloned as '{clone_code}' by {user_id}"
+            )
+            flash(f"Team cloned as draft '{clone_name}'.", "success")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error cloning team: {e}", exc_info=True)
+            flash("An error occurred while cloning the team.", "danger")
+
+        return redirect(url_for("manage_teams"))
 
     # ── Edit helper ───────────────────────────────────────────────────────────
 

@@ -208,8 +208,9 @@ def rate_limit(max_requests=30, window_seconds=10):
         return wrapped
     return decorator
 
-# How old is "too old"? 7 days -> 7*24*3600 seconds
-PROD_MAX_AGE = 7 * 24 * 3600
+# Archive expiry — read from .env, default 7 days
+ARCHIVE_MAX_AGE_DAYS = int(os.getenv("ARCHIVE_MAX_AGE_DAYS", "7"))
+ARCHIVE_MAX_AGE_SECS = ARCHIVE_MAX_AGE_DAYS * 24 * 3600
 
 # Make sure PROJECT_ROOT is defined near the top of app.py:
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -262,7 +263,9 @@ def increment_visit_counter():
         print(f"[ERROR] Could not increment visit count: {e}")
 
 
-def clean_old_archives(max_age_seconds=PROD_MAX_AGE):
+def clean_old_archives(max_age_seconds=None):
+    if max_age_seconds is None:
+        max_age_seconds = ARCHIVE_MAX_AGE_SECS
     """
     Walk through PROJECT_ROOT/data/, find any .zip files,
     and delete those whose modification time is older than max_age_seconds.
@@ -358,7 +361,7 @@ def cleanup_old_match_instances(app):
         if os.path.isdir(match_dir):
             removed_files = 0
             for fn in os.listdir(match_dir):
-                if not fn.endswith(".json") or fn.startswith("_temp_"):
+                if not fn.endswith(".json"):
                     continue
                 path = os.path.join(match_dir, fn)
                 try:
@@ -386,10 +389,11 @@ def periodic_cleanup(app):
         time.sleep(6 * 3600)  # 6 hours
 
 
-def cleanup_temp_scorecard_images(logger=None):
+def cleanup_temp_scorecard_images(logger=None, min_age_seconds=300):
     """
-    Clean up temporary scorecard images folder before starting a new match.
-    Removes the entire temp_scorecard_images folder if it exists.
+    Clean up temporary scorecard images that are older than min_age_seconds.
+    Avoids deleting images belonging to in-flight archive operations by
+    only removing files older than the threshold (default 5 minutes).
     """
     temp_images_dir = os.path.join(PROJECT_ROOT, "data", "temp_scorecard_images")
 
@@ -398,13 +402,40 @@ def cleanup_temp_scorecard_images(logger=None):
         log = current_app.logger if has_app_context() else logging.getLogger("SimCricketX")
 
     try:
-        if os.path.exists(temp_images_dir) and os.path.isdir(temp_images_dir):
-            shutil.rmtree(temp_images_dir)
-            log.info(f"[Cleanup] Removed temp scorecard images directory: {temp_images_dir}")
-        else:
+        if not os.path.isdir(temp_images_dir):
             log.debug(f"[Cleanup] Temp scorecard images directory does not exist: {temp_images_dir}")
+            return
+
+        now = time.time()
+        removed = 0
+        for root, dirs, files in os.walk(temp_images_dir, topdown=False):
+            for fn in files:
+                fpath = os.path.join(root, fn)
+                try:
+                    if now - os.path.getmtime(fpath) > min_age_seconds:
+                        os.remove(fpath)
+                        removed += 1
+                except Exception as e:
+                    log.warning(f"[Cleanup] Failed to remove {fpath}: {e}")
+            # Remove empty subdirectories
+            for d in dirs:
+                dpath = os.path.join(root, d)
+                try:
+                    if not os.listdir(dpath):
+                        os.rmdir(dpath)
+                except Exception:
+                    pass
+        # Remove top-level dir if empty
+        try:
+            if not os.listdir(temp_images_dir):
+                os.rmdir(temp_images_dir)
+        except Exception:
+            pass
+
+        if removed:
+            log.info(f"[Cleanup] Removed {removed} old scorecard images (>{min_age_seconds}s)")
     except Exception as e:
-        log.error(f"[Cleanup] Error removing temp scorecard images directory: {e}", exc_info=True)
+        log.error(f"[Cleanup] Error cleaning temp scorecard images: {e}", exc_info=True)
 
 
 
@@ -2052,7 +2083,8 @@ def create_app():
         MatchPartnership=MatchPartnership,
         load_user_teams=load_user_teams,
         clean_old_archives=clean_old_archives,
-        PROD_MAX_AGE=PROD_MAX_AGE,
+        ARCHIVE_MAX_AGE_DAYS=ARCHIVE_MAX_AGE_DAYS,
+        ARCHIVE_MAX_AGE_SECS=ARCHIVE_MAX_AGE_SECS,
         cleanup_temp_scorecard_images=cleanup_temp_scorecard_images,
         PROJECT_ROOT=PROJECT_ROOT,
         MATCH_INSTANCES=MATCH_INSTANCES,
@@ -2073,10 +2105,13 @@ def create_app():
     register_tournament_routes(
         app,
         db=db,
+        limiter=limiter,
         tournament_engine=tournament_engine,
         Tournament=Tournament,
+        TournamentPlayerStatsCache=TournamentPlayerStatsCache,
         DBTeam=DBTeam,
         DBMatch=DBMatch,
+        DBPlayer=DBPlayer,
         MatchScorecard=MatchScorecard,
         MatchPartnership=MatchPartnership,
         TournamentFixture=TournamentFixture,
