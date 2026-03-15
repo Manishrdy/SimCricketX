@@ -538,6 +538,121 @@
         transform: translateX(3px);
     }
 
+    /* ========== FILTER BAR ========== */
+    .filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-bottom: 1.25rem;
+        padding: 0.75rem 1rem;
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 14px;
+        align-items: flex-end;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        min-width: 0;
+    }
+
+    .filter-group label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--fg-secondary);
+    }
+
+    .filter-group select,
+    .filter-group input[type="date"] {
+        padding: 0.4rem 0.6rem;
+        border: 2px solid var(--card-border);
+        border-radius: 9px;
+        background: var(--bg-secondary);
+        color: var(--fg);
+        font-size: 0.8rem;
+        font-family: inherit;
+        font-weight: 600;
+        min-width: 120px;
+        transition: border-color 0.2s ease;
+    }
+
+    .filter-group select:focus,
+    .filter-group input[type="date"]:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 0.4rem;
+        align-items: flex-end;
+    }
+
+    .filter-apply-btn,
+    .filter-clear-btn {
+        padding: 0.45rem 0.9rem;
+        border: 2px solid var(--card-border);
+        border-radius: 9px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: var(--card-bg);
+        color: var(--fg);
+    }
+
+    .filter-apply-btn {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+    }
+
+    .filter-apply-btn:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .filter-clear-btn:hover {
+        border-color: var(--fg-secondary);
+    }
+
+    /* ========== LOAD MORE ========== */
+    .load-more-wrap {
+        text-align: center;
+        margin-top: 2rem;
+    }
+
+    .load-more-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.7rem 2rem;
+        background: var(--card-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 14px;
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: var(--fg);
+        cursor: pointer;
+        transition: all 0.25s ease;
+    }
+
+    .load-more-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .pagination-info {
+        font-size: 0.78rem;
+        color: var(--fg-secondary);
+        margin-top: 0.6rem;
+    }
+
     /* No-results filter message */
     .no-filter-results {
         display: none;
@@ -1266,7 +1381,7 @@
         </div>
         <div class="stat-pills">
             <div class="stat-pill">
-                <span class="pill-value" id="match-count-pill">{{ (match_history or [])|length }}</span>
+                <span class="pill-value" id="match-count-pill">{{ total_matches|default((match_history or [])|length) }}</span>
                 <span class="pill-label">Matches</span>
             </div>
             <div class="stat-pill">
@@ -1284,7 +1399,7 @@
         <button class="tab-item active" type="button" data-target="history" role="tab" aria-selected="true">
             <i class="fa-solid fa-cricket-bat-ball"></i>
             Match History
-            <span class="tab-badge" id="match-count-badge">{{ (match_history or [])|length }}</span>
+            <span class="tab-badge" id="match-count-badge">{{ total_matches|default((match_history or [])|length) }}</span>
         </button>
         <button class="tab-item" type="button" data-target="archives" role="tab" aria-selected="false">
             <i class="fa-solid fa-box-archive"></i>
@@ -1312,6 +1427,49 @@
 
 <!-- Match History Panel -->
 <section id="panel-history" class="panel active" role="tabpanel">
+    <!-- Filter Bar -->
+    <form class="filter-bar" id="filter-bar" method="GET" action="{{ url_for('my_matches') }}">
+        <div class="filter-group">
+            <label>Format</label>
+            <select name="format">
+                <option value="">All Formats</option>
+                <option value="T20" {{ 'selected' if filter_format == 'T20' }}>T20</option>
+                <option value="ListA" {{ 'selected' if filter_format == 'ListA' }}>List A</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Type</label>
+            <select name="type">
+                <option value="">All</option>
+                <option value="tournament" {{ 'selected' if filter_type == 'tournament' }}>Tournament</option>
+                <option value="exhibition" {{ 'selected' if filter_type == 'exhibition' }}>Exhibition</option>
+            </select>
+        </div>
+        {% if user_tournaments %}
+        <div class="filter-group">
+            <label>Tournament</label>
+            <select name="tournament_id">
+                <option value="">All Tournaments</option>
+                {% for t in user_tournaments %}
+                <option value="{{ t.id }}" {{ 'selected' if filter_tournament == t.id|string }}>{{ t.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="filter-group">
+            <label>From</label>
+            <input type="date" name="date_from" value="{{ filter_date_from|default('') }}">
+        </div>
+        <div class="filter-group">
+            <label>To</label>
+            <input type="date" name="date_to" value="{{ filter_date_to|default('') }}">
+        </div>
+        <div class="filter-actions">
+            <button type="submit" class="filter-apply-btn"><i class="fa-solid fa-filter"></i> Apply</button>
+            <a href="{{ url_for('my_matches') }}" class="filter-clear-btn">Clear</a>
+        </div>
+    </form>
+
     {% if match_history and match_history|length > 0 %}
     <div class="match-grid" id="match-grid">
         {% for match in match_history %}
@@ -1388,6 +1546,21 @@
         <i class="fa-solid fa-magnifying-glass"></i>
         No matches found for your search.
     </div>
+
+    {% if has_more %}
+    <div class="load-more-wrap">
+        <button class="load-more-btn" id="load-more-btn" type="button">
+            <i class="fa-solid fa-angles-down"></i> Load More
+        </button>
+        <div class="pagination-info">
+            Showing {{ match_history|length }} of {{ total_matches }} matches
+        </div>
+    </div>
+    {% elif total_matches > 0 %}
+    <div class="pagination-info" style="text-align:center;margin-top:1.5rem;">
+        Showing all {{ total_matches }} matches
+    </div>
+    {% endif %}
     {% else %}
     <div class="empty-state">
         <div class="empty-icon">
@@ -1462,7 +1635,7 @@
             <i class="fa-solid fa-box-archive"></i>
         </div>
         <h3>No archives available</h3>
-        <p>Archives are kept for 7 days after creation. Complete a match and export it to see archives here.</p>
+        <p>Archives are kept for {{ archive_max_age_days|default(7) }} days after creation. Complete a match and export it to see archives here.</p>
     </div>
     {% endif %}
 </section>
@@ -1693,7 +1866,7 @@
                 }
 
                 var left = expire - now;
-                var total = isNaN(created) ? 7 * 86400000 : (expire - created);
+                var total = isNaN(created) ? {{ archive_max_age_days|default(7) }} * 86400000 : (expire - created);
                 var pct = total > 0 ? Math.max(0, Math.min(100, (left / total) * 100)) : 0;
 
                 if (cdText) cdText.textContent = left > 0 ? fmtDuration(left) : 'Expired';
@@ -1839,7 +2012,7 @@
                                         '<div class="empty-state">' +
                                         '<div class="empty-icon"><i class="fa-solid fa-box-archive"></i></div>' +
                                         '<h3>No archives available</h3>' +
-                                        '<p>Archives are kept for 7 days after creation.</p>' +
+                                        '<p>Archives are kept for {{ archive_max_age_days|default(7) }} days after creation.</p>' +
                                         '</div>';
                                 }
                             }
@@ -1864,6 +2037,70 @@
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') closeDeleteModal();
         });
+
+        // ============ Load More (Lazy Pagination) ============
+        var currentPage = {{ page|default(1) }};
+        var loadMoreBtn = document.getElementById('load-more-btn');
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', async function () {
+                var btn = this;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+
+                currentPage++;
+                // Build URL preserving current filters
+                var params = new URLSearchParams(window.location.search);
+                params.set('page', currentPage);
+
+                try {
+                    var resp = await fetch('{{ url_for("my_matches") }}?' + params.toString());
+                    if (!resp.ok) throw new Error('Failed to load');
+                    var html = await resp.text();
+
+                    // Parse the response and extract match cards
+                    var parser = new DOMParser();
+                    var doc = parser.parseFromString(html, 'text/html');
+                    var newCards = doc.querySelectorAll('#match-grid .match-card');
+                    var grid = document.getElementById('match-grid');
+
+                    if (newCards.length === 0) {
+                        btn.closest('.load-more-wrap').remove();
+                        return;
+                    }
+
+                    var baseDelay = grid.querySelectorAll('.match-card').length;
+                    newCards.forEach(function (card, i) {
+                        card.style.animationDelay = ((baseDelay + i) * 0.05) + 's';
+                        grid.appendChild(card);
+
+                        // Wire up manage-mode checkbox if active
+                        if (isManageMode && card.getAttribute('data-type') === 'exhibition') {
+                            card.classList.add('manage-mode');
+                        }
+                    });
+
+                    // Check if more pages exist
+                    var hasMore = doc.getElementById('load-more-btn');
+                    if (!hasMore) {
+                        btn.closest('.load-more-wrap').innerHTML =
+                            '<div class="pagination-info">Showing all matches</div>';
+                    } else {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fa-solid fa-angles-down"></i> Load More';
+                        // Update the "Showing X of Y" text
+                        var infoEl = btn.closest('.load-more-wrap').querySelector('.pagination-info');
+                        var totalShowing = grid.querySelectorAll('.match-card').length;
+                        var totalMatches = {{ total_matches|default(0) }};
+                        if (infoEl) infoEl.textContent = 'Showing ' + totalShowing + ' of ' + totalMatches + ' matches';
+                    }
+                } catch (err) {
+                    console.error('Load more failed:', err);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-angles-down"></i> Load More';
+                    showToast('Failed to load more matches', 'error');
+                }
+            });
+        }
     })();
 </script>
 {% endblock %}

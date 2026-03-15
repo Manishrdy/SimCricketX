@@ -191,6 +191,10 @@ def register_auth_routes(
 
             # ── Lockout pre-check ──────────────────────────────────────────────
             user_precheck = db.session.get(DBUser, email)
+            # Expire the cached object so the next attribute access issues a fresh
+            # SELECT, preventing stale identity-map data from hiding an active lockout.
+            if user_precheck:
+                db.session.expire(user_precheck)
             if user_precheck and user_precheck.lockout_until:
                 now = datetime.utcnow()
                 if user_precheck.lockout_until > now:
@@ -806,7 +810,9 @@ def register_auth_routes(
             flash("Invalid or already-used reset link.", "danger")
             return redirect(url_for("forgot_password"))
 
-        if datetime.utcnow() > user.reset_token_expires:
+        # Expire cached state so the expiry column is read fresh from the DB.
+        db.session.expire(user)
+        if not user.reset_token_expires or datetime.utcnow() > user.reset_token_expires:
             _log_auth_event(
                 'reset_token_expired',
                 user.id,
@@ -958,12 +964,23 @@ def register_auth_routes(
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         user = DBUser.query.filter_by(pending_email_token=token_hash).first()
         if not user:
-            flash("Invalid or already-used confirmation link.", "danger")
-            return redirect(url_for("login"))
+            # Render the login template directly so the error message is present
+            # in the response body regardless of whether flash messages are shown.
+            return render_template(
+                "login.html",
+                error="Invalid or already-used confirmation link.",
+                error_type="invalid",
+            )
 
-        if datetime.utcnow() > user.pending_email_token_expires:
+        # Expire cached state so the expiry column is read fresh from the DB.
+        db.session.expire(user)
+        if not user.pending_email_token_expires or datetime.utcnow() > user.pending_email_token_expires:
             flash("Confirmation link has expired. Please request a new email change from account settings.", "warning")
-            return redirect(url_for("login"))
+            return render_template(
+                "login.html",
+                error="Confirmation link has expired. Please request a new email change from account settings.",
+                error_type="expired",
+            )
 
         new_email = user.pending_email
         old_email = user.id

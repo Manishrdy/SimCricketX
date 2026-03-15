@@ -2,152 +2,258 @@
 
 {% block admin_content %}
 <style>
-    .admin-quick-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.55rem;
-    }
-
-    .admin-recent-logins {
-        max-height: 300px;
-        overflow-y: auto;
-    }
-
-    .admin-recent-login-row {
-        padding: 0.52rem 0;
-        border-bottom: 1px solid var(--card-border);
-        font-size: 0.85rem;
-        display: flex;
-        align-items: center;
+    /* ── Dashboard-specific overrides ── */
+    .dash-login-row {
+        padding:         .52rem 0;
+        border-bottom:   1px solid var(--card-border);
+        font-size:       .85rem;
+        display:         flex;
+        align-items:     center;
         justify-content: space-between;
-        gap: 0.7rem;
+        gap:             .7rem;
     }
+    .dash-login-row:last-child { border-bottom: none; }
 
-    .admin-recent-login-row:last-child {
-        border-bottom: none;
-    }
-
-    .admin-recent-login-time {
-        color: var(--fg-secondary);
-        font-size: 0.78rem;
+    .dash-login-time {
+        color:       var(--fg-secondary);
+        font-size:   .77rem;
         white-space: nowrap;
     }
 
+    .dash-login-email {
+        font-weight:  600;
+        color:        var(--fg);
+        font-size:    .84rem;
+        overflow:     hidden;
+        text-overflow: ellipsis;
+        white-space:  nowrap;
+    }
+
+    /* Live indicator dot pulse */
+    @keyframes pulse-dot {
+        0%,100% { opacity: 1; }
+        50%      { opacity: .35; }
+    }
+    .live-dot {
+        display:       inline-block;
+        width:         7px;
+        height:        7px;
+        border-radius: 50%;
+        background:    #22c55e;
+        margin-right:  .3rem;
+        animation:     pulse-dot 2s ease-in-out infinite;
+        vertical-align: middle;
+    }
+    .live-dot.reconnecting { background: var(--fg-secondary); animation: none; }
+    .live-dot.disconnected { background: #ef4444;             animation: none; }
+
+    /* Stat value flash */
     @keyframes stat-flash {
         0%   { background-color: transparent; }
-        20%  { background-color: rgba(34, 197, 94, 0.18); }
+        18%  { background-color: rgba(34,197,94,.18); }
         100% { background-color: transparent; }
     }
     .stat-changed {
-        animation: stat-flash 0.9s ease-out;
+        animation:    stat-flash .9s ease-out;
         border-radius: 4px;
+    }
+
+    /* Quick-actions row */
+    .dash-quick-actions {
+        display:   flex;
+        flex-wrap: wrap;
+        gap:       .55rem;
     }
 </style>
 
+{# ── Page header ── #}
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Dashboard</h1>
-        <p class="admin-page-subtitle">System overview and quick actions &mdash; <span id="liveIndicator" style="font-size:0.78rem;color:var(--fg-secondary);">connecting…</span><span id="liveLastUpdated" style="font-size:0.75rem;color:var(--fg-secondary);margin-left:0.6rem;"></span></p>
+        <p class="admin-page-subtitle">
+            Live system overview
+            &mdash;
+            <span id="liveIndicator" style="font-size:.78rem;color:var(--fg-secondary);">
+                <span class="live-dot reconnecting" id="liveDot"></span>connecting…
+            </span>
+            <span id="liveLastUpdated" style="font-size:.75rem;color:var(--fg-secondary);margin-left:.5rem;"></span>
+        </p>
     </div>
 </div>
 
+{# ── Stats grid ── #}
 <div class="a-stats-grid">
-    <div class="a-stat-card">
+
+    {# Total Users — indigo #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#6366f1; --a-stat-accent-lt:rgba(99,102,241,.1)">
         <div class="a-stat-icon"><i class="fas fa-users"></i></div>
-        <div class="a-stat-label">Total Users</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-users"></i></div>
+            <div class="a-stat-label">Total Users</div>
+        </div>
         <div class="a-stat-value" id="live-total_users">{{ stats.total_users }}</div>
     </div>
-    <div class="a-stat-card">
+
+    {# Teams — violet #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#8b5cf6; --a-stat-accent-lt:rgba(139,92,246,.1)">
         <div class="a-stat-icon"><i class="fas fa-layer-group"></i></div>
-        <div class="a-stat-label">Teams</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-layer-group"></i></div>
+            <div class="a-stat-label">Teams</div>
+        </div>
         <div class="a-stat-value" id="live-total_teams">{{ stats.total_teams }}</div>
     </div>
-    <div class="a-stat-card">
+
+    {# Matches — blue #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#3b82f6; --a-stat-accent-lt:rgba(59,130,246,.1)">
         <div class="a-stat-icon"><i class="fas fa-baseball-ball"></i></div>
-        <div class="a-stat-label">Matches</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-baseball-ball"></i></div>
+            <div class="a-stat-label">Matches</div>
+        </div>
         <div class="a-stat-value" id="live-total_matches">{{ stats.total_matches }}</div>
     </div>
-    <div class="a-stat-card">
+
+    {# Tournaments — amber #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#f59e0b; --a-stat-accent-lt:rgba(245,158,11,.1)">
         <div class="a-stat-icon"><i class="fas fa-trophy"></i></div>
-        <div class="a-stat-label">Tournaments</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-trophy"></i></div>
+            <div class="a-stat-label">Tournaments</div>
+        </div>
         <div class="a-stat-value" id="live-total_tournaments">{{ stats.total_tournaments }}</div>
     </div>
-    <div class="a-stat-card">
+
+    {# Database — emerald #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#10b981; --a-stat-accent-lt:rgba(16,185,129,.1)">
         <div class="a-stat-icon"><i class="fas fa-database"></i></div>
-        <div class="a-stat-label">Database</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-database"></i></div>
+            <div class="a-stat-label">Database</div>
+        </div>
         <div class="a-stat-value" id="live-db_size_mb">{{ stats.db_size_mb }}</div>
         <div class="a-stat-sub">MB</div>
     </div>
-    <div class="a-stat-card">
+
+    {# Active 7d — cyan #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#06b6d4; --a-stat-accent-lt:rgba(6,182,212,.1)">
         <div class="a-stat-icon"><i class="fas fa-signal"></i></div>
-        <div class="a-stat-label">Active (7d)</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-signal"></i></div>
+            <div class="a-stat-label">Active (7d)</div>
+        </div>
         <div class="a-stat-value" id="live-active_users_7d">{{ stats.active_users_7d }}</div>
     </div>
-    <div class="a-stat-card">
+
+    {# Live sessions — sky #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#0ea5e9; --a-stat-accent-lt:rgba(14,165,233,.1)">
         <div class="a-stat-icon"><i class="fas fa-desktop"></i></div>
-        <div class="a-stat-label">Live Sessions</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-desktop"></i></div>
+            <div class="a-stat-label">Live Sessions</div>
+        </div>
         <div class="a-stat-value" id="live-active_sessions">{{ stats.active_sessions }}</div>
     </div>
-    <div class="a-stat-card">
+
+    {# Live matches — orange #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#f97316; --a-stat-accent-lt:rgba(249,115,22,.1)">
         <div class="a-stat-icon"><i class="fas fa-gamepad"></i></div>
-        <div class="a-stat-label">Live Matches</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-gamepad"></i></div>
+            <div class="a-stat-label">Live Matches</div>
+        </div>
         <div class="a-stat-value" id="live-live_matches">{{ stats.live_matches }}</div>
     </div>
-    <div class="a-stat-card">
+
+    {# Signups today — green #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#22c55e; --a-stat-accent-lt:rgba(34,197,94,.1)">
         <div class="a-stat-icon"><i class="fas fa-user-plus"></i></div>
-        <div class="a-stat-label">Signups Today</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-user-plus"></i></div>
+            <div class="a-stat-label">Signups Today</div>
+        </div>
         <div class="a-stat-value" id="live-signups_today">{{ stats.signups_today }}</div>
     </div>
-    <div class="a-stat-card">
+
+    {# Matches today — blue (lighter) #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#60a5fa; --a-stat-accent-lt:rgba(96,165,250,.1)">
         <div class="a-stat-icon"><i class="fas fa-play-circle"></i></div>
-        <div class="a-stat-label">Matches Today</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-play-circle"></i></div>
+            <div class="a-stat-label">Matches Today</div>
+        </div>
         <div class="a-stat-value" id="live-matches_today">{{ stats.matches_today }}</div>
     </div>
-    <div class="a-stat-card">
+
+    {# Failed logins 1h — red #}
+    <div class="a-stat-card"
+         style="--a-stat-accent:#ef4444; --a-stat-accent-lt:rgba(239,68,68,.1)">
         <div class="a-stat-icon"><i class="fas fa-shield-alt"></i></div>
-        <div class="a-stat-label">Failed Logins (1h)</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-shield-alt"></i></div>
+            <div class="a-stat-label">Failed Logins (1h)</div>
+        </div>
         <div class="a-stat-value" id="live-failed_logins_1h">{{ stats.failed_logins_1h }}</div>
     </div>
-</div>
 
+</div>{# /a-stats-grid #}
+
+{# ── Two-column row ── #}
 <div class="a-grid-2">
-    <!-- Quick Actions -->
+
+    {# Quick Actions #}
     <div class="a-section">
         <h3 class="a-section-title"><i class="fas fa-bolt"></i> Quick Actions</h3>
-        <div class="admin-quick-actions">
-            <a href="/admin/users" class="a-btn a-btn-primary"><i class="fas fa-users"></i> Manage Users</a>
-            <a href="/admin/database/stats" class="a-btn a-btn-secondary"><i class="fas fa-database"></i> Database</a>
-            <a href="/admin/backups" class="a-btn a-btn-secondary"><i class="fas fa-archive"></i> Backups</a>
-            <a href="/admin/health" class="a-btn a-btn-secondary"><i class="fas fa-heartbeat"></i> Health</a>
-            <button onclick="downloadDatabase()" class="a-btn a-btn-secondary"><i class="fas fa-download"></i> Download
-                DB</button>
+        <div class="a-card-flat">
+            <div class="dash-quick-actions">
+                <a href="/admin/users"            class="a-btn a-btn-primary"><i class="fas fa-users"></i> Manage Users</a>
+                <a href="/admin/database/stats"   class="a-btn a-btn-secondary"><i class="fas fa-database"></i> Database</a>
+                <a href="/admin/backups"          class="a-btn a-btn-secondary"><i class="fas fa-archive"></i> Backups</a>
+                <a href="/admin/health"           class="a-btn a-btn-secondary"><i class="fas fa-heartbeat"></i> Health</a>
+                <a href="/admin/audit-log"        class="a-btn a-btn-secondary"><i class="fas fa-scroll"></i> Audit Log</a>
+                <button onclick="downloadDatabase()" class="a-btn a-btn-secondary">
+                    <i class="fas fa-download"></i> Download DB
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- Recent User Logins -->
+    {# Recent logins #}
     <div class="a-section">
         <h3 class="a-section-title"><i class="fas fa-clock"></i> Recent Logins</h3>
-        <div class="a-card-flat">
-            <div id="live-logins-wrap" class="admin-recent-logins">
+        <div class="a-card-flat" style="max-height:260px; overflow-y:auto;">
+            <div id="live-logins-wrap">
                 {% if recent_activity %}
                     {% for activity in recent_activity %}
-                    <div class="admin-recent-login-row">
-                        <span><strong>{{ activity.email }}</strong></span>
-                        <span class="admin-recent-login-time">{{ activity.time }}</span>
+                    <div class="dash-login-row">
+                        <span class="dash-login-email">{{ activity.email }}</span>
+                        <span class="dash-login-time">{{ activity.time }}</span>
                     </div>
                     {% endfor %}
                 {% else %}
-                <div class="a-empty">
-                    <p>No recent activity</p>
+                <div class="a-empty" style="padding:1.5rem 1rem;">
+                    <i class="fas fa-clock"></i>
+                    <p>No recent logins</p>
                 </div>
                 {% endif %}
             </div>
         </div>
     </div>
+
 </div>
 
-<!-- Audit Trail -->
-<div class="a-section" style="margin-top: 1rem;">
+{# ── Audit trail ── #}
+<div class="a-section" style="margin-top:.5rem;">
     <h3 class="a-section-title"><i class="fas fa-scroll"></i> Recent Admin Actions</h3>
     <div class="a-table-wrap">
         <table class="a-table">
@@ -165,182 +271,179 @@
                     <tr>
                         <td><strong>{{ e.admin }}</strong></td>
                         <td><span class="a-badge a-badge-info">{{ e.action }}</span></td>
-                        <td style="color: var(--fg-secondary);">{{ e.target or '-' }}</td>
-                        <td style="color: var(--fg-secondary); font-size: 0.8rem;">{{ e.time }}</td>
+                        <td style="color:var(--fg-secondary);">{{ e.target or '—' }}</td>
+                        <td style="color:var(--fg-secondary);font-size:.8rem;">{{ e.time }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
                 <tr>
-                    <td colspan="4" style="color: var(--fg-secondary); text-align: center; padding: 1rem;">
-                        <i class="fas fa-check-circle"></i> No admin actions recorded yet
+                    <td colspan="4">
+                        <div class="a-empty" style="padding:1.5rem;">
+                            <i class="fas fa-check-circle"></i>
+                            <p>No admin actions recorded yet</p>
+                        </div>
                     </td>
                 </tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
-    <div style="margin-top: 0.75rem;">
-        <a href="/admin/audit-log" class="a-btn a-btn-ghost a-btn-sm">View Full Audit Log <i
-                class="fas fa-arrow-right"></i></a>
+    <div style="margin-top:.65rem;">
+        <a href="/admin/audit-log" class="a-btn a-btn-ghost a-btn-sm">
+            View Full Audit Log <i class="fas fa-arrow-right"></i>
+        </a>
     </div>
 </div>
 
+{# ── SSE live-update script ── #}
 <script>
 (function () {
     'use strict';
 
-    // ── Config ───────────────────────────────────────────────────────────────
-    const STATS_FIELDS = [
-        'total_users', 'total_teams', 'total_matches', 'total_tournaments',
-        'db_size_mb', 'active_users_7d', 'active_sessions', 'live_matches',
-        'signups_today', 'matches_today', 'failed_logins_1h',
+    /* ── Config ── */
+    const STATS_FIELDS   = [
+        'total_users','total_teams','total_matches','total_tournaments',
+        'db_size_mb','active_users_7d','active_sessions','live_matches',
+        'signups_today','matches_today','failed_logins_1h',
     ];
-    const RECONNECT_BASE    = 2000;   // ms — initial reconnect delay
-    const RECONNECT_MAX     = 60000;  // ms — cap on backoff
-    const FAIL_THRESHOLD    = 3;      // consecutive errors → "disconnected" state
+    const RECONNECT_BASE  = 2000;
+    const RECONNECT_MAX   = 60000;
+    const FAIL_THRESHOLD  = 3;
 
-    // ── State ────────────────────────────────────────────────────────────────
-    let esConn          = null;
-    let reconnectDelay  = RECONNECT_BASE;
-    let failCount       = 0;
-    let lastUpdateTs    = null;   // Date object of last successful stats event
-    let reconnectTimer  = null;   // pending setTimeout handle
-    let prevValues      = {};     // track previous stat values for flash detection
-    let ageSweepTimer   = null;   // setInterval for "updated Xs ago" counter
+    /* ── State ── */
+    let esConn         = null;
+    let reconnectDelay = RECONNECT_BASE;
+    let failCount      = 0;
+    let lastUpdateTs   = null;
+    let reconnectTimer = null;
+    let ageSweepTimer  = null;
 
-    // ── DOM refs ─────────────────────────────────────────────────────────────
-    const indicator    = document.getElementById('liveIndicator');
-    const lastUpdated  = document.getElementById('liveLastUpdated');
+    /* ── DOM refs ── */
+    const indicator   = document.getElementById('liveIndicator');
+    const liveDot     = document.getElementById('liveDot');
+    const lastUpdated = document.getElementById('liveLastUpdated');
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    /* ── Indicator ── */
     function setIndicator(state, extra) {
-        if (!indicator) return;
+        if (!liveDot || !indicator) return;
+        liveDot.className = 'live-dot';          /* reset */
+        const innerText = indicator.childNodes;  /* preserve dot node */
+
         switch (state) {
             case 'live':
-                indicator.textContent  = '● live';
-                indicator.style.color  = '#22c55e';
+                indicator.innerHTML = '<span class="live-dot" id="liveDot"></span>live';
+                indicator.style.color = '#22c55e';
                 break;
             case 'reconnecting':
-                indicator.textContent  = `reconnecting in ${Math.round((extra||reconnectDelay)/1000)}s…`;
-                indicator.style.color  = 'var(--fg-secondary)';
+                indicator.innerHTML = `<span class="live-dot reconnecting" id="liveDot"></span>reconnecting in ${Math.round((extra||reconnectDelay)/1000)}s…`;
+                indicator.style.color = 'var(--fg-secondary)';
                 break;
             case 'disconnected':
-                indicator.textContent  = `disconnected — retrying in ${Math.round((extra||reconnectDelay)/1000)}s`;
-                indicator.style.color  = '#ef4444';
+                indicator.innerHTML = `<span class="live-dot disconnected" id="liveDot"></span>disconnected — retrying in ${Math.round((extra||reconnectDelay)/1000)}s`;
+                indicator.style.color = '#ef4444';
                 break;
             case 'connecting':
-                indicator.textContent  = 'connecting…';
-                indicator.style.color  = 'var(--fg-secondary)';
+                indicator.innerHTML = '<span class="live-dot reconnecting" id="liveDot"></span>connecting…';
+                indicator.style.color = 'var(--fg-secondary)';
                 break;
             case 'unsupported':
-                indicator.textContent  = 'Live updates not supported in this browser.';
-                indicator.style.color  = 'var(--fg-secondary)';
+                indicator.innerHTML = 'Live updates not supported in this browser.';
+                indicator.style.color = 'var(--fg-secondary)';
                 break;
         }
     }
 
-    /** Format a UTC ISO string as "Xm ago" / "Xh ago" / "Xd ago" */
+    /* ── Relative time ── */
     function relTime(isoStr) {
         if (!isoStr) return '';
-        const diffMs  = Date.now() - new Date(isoStr + 'Z').getTime();
-        const diffSec = Math.max(0, Math.floor(diffMs / 1000));
-        if (diffSec < 60)            return 'just now';
-        if (diffSec < 3600)          return `${Math.floor(diffSec / 60)}m ago`;
-        if (diffSec < 86400)         return `${Math.floor(diffSec / 3600)}h ago`;
+        const diffSec = Math.max(0, Math.floor((Date.now() - new Date(isoStr + 'Z').getTime()) / 1000));
+        if (diffSec < 60)   return 'just now';
+        if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+        if (diffSec < 86400)return `${Math.floor(diffSec / 3600)}h ago`;
         return `${Math.floor(diffSec / 86400)}d ago`;
     }
 
-    /** Briefly flash a stat value element when it changes */
+    /* ── Flash changed value ── */
     function flashEl(el) {
         el.classList.remove('stat-changed');
-        // Force reflow so animation restarts if already running
         void el.offsetWidth;
         el.classList.add('stat-changed');
     }
 
-    // ── Stats event handler ──────────────────────────────────────────────────
-    function handleStats(e) {
-        let d;
-        try { d = JSON.parse(e.data); } catch { return; }
-        if (!d || Object.keys(d).length === 0) return;
-
-        STATS_FIELDS.forEach(key => {
-            const el  = document.getElementById('live-' + key);
-            if (!el) return;
-            const val = d[key];
-            if (val === undefined) return;
-            const str = String(val);
-            if (el.textContent !== str) {
-                el.textContent = str;
-                flashEl(el);
-            }
-            prevValues[key] = str;
-        });
-
-        lastUpdateTs = new Date();
-        if (lastUpdated) lastUpdated.textContent = 'updated just now';
-    }
-
-    // ── Feed event handler ───────────────────────────────────────────────────
-    function handleFeed(e) {
-        let d;
-        try { d = JSON.parse(e.data); } catch { return; }
-        if (!d) return;
-
-        // Re-render recent audit table body
-        if (Array.isArray(d.audit)) {
-            const tbody = document.getElementById('live-audit-tbody');
-            if (tbody) {
-                tbody.innerHTML = d.audit.length === 0
-                    ? '<tr><td colspan="4" style="color:var(--fg-secondary);text-align:center;">No admin actions recorded yet</td></tr>'
-                    : d.audit.map(row => `
-                        <tr>
-                            <td><strong>${escHtml(row.admin)}</strong></td>
-                            <td><span class="a-badge a-badge-info">${escHtml(row.action)}</span></td>
-                            <td style="color:var(--fg-secondary);">${escHtml(row.target || '-')}</td>
-                            <td style="color:var(--fg-secondary);font-size:0.8rem;">${relTime(row.ts)}</td>
-                        </tr>`).join('');
-            }
-        }
-
-        // Re-render recent logins list
-        if (Array.isArray(d.logins)) {
-            const loginWrap = document.getElementById('live-logins-wrap');
-            if (loginWrap) {
-                loginWrap.innerHTML = d.logins.length === 0
-                    ? '<div class="a-empty"><p>No recent activity</p></div>'
-                    : d.logins.map(row => `
-                        <div class="admin-recent-login-row">
-                            <span><strong>${escHtml(row.email)}</strong></span>
-                            <span class="admin-recent-login-time">${relTime(row.ts)}</span>
-                        </div>`).join('');
-            }
-        }
-    }
-
+    /* ── XSS-safe HTML escape ── */
     function escHtml(s) {
         return String(s)
             .replace(/&/g,'&amp;').replace(/</g,'&lt;')
             .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    // ── "Updated X seconds ago" sweep ────────────────────────────────────────
+    /* ── Stats event ── */
+    function handleStats(e) {
+        let d;
+        try { d = JSON.parse(e.data); } catch { return; }
+        if (!d || !Object.keys(d).length) return;
+
+        STATS_FIELDS.forEach(key => {
+            const el  = document.getElementById('live-' + key);
+            if (!el) return;
+            const str = String(d[key] ?? '');
+            if (el.textContent !== str) { el.textContent = str; flashEl(el); }
+        });
+
+        lastUpdateTs = new Date();
+        if (lastUpdated) lastUpdated.textContent = 'updated just now';
+    }
+
+    /* ── Feed event ── */
+    function handleFeed(e) {
+        let d;
+        try { d = JSON.parse(e.data); } catch { return; }
+        if (!d) return;
+
+        if (Array.isArray(d.audit)) {
+            const tbody = document.getElementById('live-audit-tbody');
+            if (tbody) {
+                tbody.innerHTML = d.audit.length === 0
+                    ? '<tr><td colspan="4"><div class="a-empty" style="padding:1.5rem"><i class="fas fa-check-circle"></i><p>No admin actions recorded yet</p></div></td></tr>'
+                    : d.audit.map(row => `
+                        <tr>
+                            <td><strong>${escHtml(row.admin)}</strong></td>
+                            <td><span class="a-badge a-badge-info">${escHtml(row.action)}</span></td>
+                            <td style="color:var(--fg-secondary);">${escHtml(row.target || '—')}</td>
+                            <td style="color:var(--fg-secondary);font-size:.8rem;">${relTime(row.ts)}</td>
+                        </tr>`).join('');
+            }
+        }
+
+        if (Array.isArray(d.logins)) {
+            const wrap = document.getElementById('live-logins-wrap');
+            if (wrap) {
+                wrap.innerHTML = d.logins.length === 0
+                    ? '<div class="a-empty" style="padding:1.5rem 1rem"><i class="fas fa-clock"></i><p>No recent logins</p></div>'
+                    : d.logins.map(row => `
+                        <div class="dash-login-row">
+                            <span class="dash-login-email">${escHtml(row.email)}</span>
+                            <span class="dash-login-time">${relTime(row.ts)}</span>
+                        </div>`).join('');
+            }
+        }
+    }
+
+    /* ── "Updated X ago" sweep ── */
     function startAgeSweep() {
         if (ageSweepTimer) return;
         ageSweepTimer = setInterval(() => {
             if (!lastUpdated || !lastUpdateTs) return;
             const secs = Math.floor((Date.now() - lastUpdateTs.getTime()) / 1000);
-            if (secs < 5)       lastUpdated.textContent = 'updated just now';
+            if      (secs < 5)  lastUpdated.textContent = 'updated just now';
             else if (secs < 60) lastUpdated.textContent = `updated ${secs}s ago`;
             else                lastUpdated.textContent = `updated ${Math.floor(secs/60)}m ago`;
         }, 1000);
     }
 
-    // ── Connection ───────────────────────────────────────────────────────────
+    /* ── Connect ── */
     function connect() {
         if (!window.EventSource) { setIndicator('unsupported'); return; }
-
-        // Close any existing connection before opening a new one
         if (esConn) { esConn.close(); esConn = null; }
 
         setIndicator('connecting');
@@ -360,17 +463,14 @@
             esConn.close();
             esConn = null;
             failCount++;
-
-            reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX);
-            const state = failCount >= FAIL_THRESHOLD ? 'disconnected' : 'reconnecting';
+            reconnectDelay  = Math.min(reconnectDelay * 2, RECONNECT_MAX);
+            const state     = failCount >= FAIL_THRESHOLD ? 'disconnected' : 'reconnecting';
             setIndicator(state, reconnectDelay);
-
             if (reconnectTimer) clearTimeout(reconnectTimer);
-            reconnectTimer = setTimeout(connect, reconnectDelay);
+            reconnectTimer  = setTimeout(connect, reconnectDelay);
         };
     }
 
-    // Boot
     connect();
 })();
 </script>

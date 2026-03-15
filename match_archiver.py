@@ -32,6 +32,8 @@ from tabulate import tabulate
 from typing import Dict, List, Any, Optional, Union
 import zipfile
 
+from sqlalchemy import func as sa_func
+
 from database import db
 from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, MatchPartnership
 
@@ -96,8 +98,7 @@ def reverse_player_aggregates(scorecards, logger=None):
             if card.wickets and card.wickets >= 5:
                 player.five_wicket_hauls = max(0, player.five_wicket_hauls - 1)
 
-    # Recalculate high water mark stats from remaining scorecards.
-    # These cannot be simply decremented — we must scan what's left.
+    # Recalculate high-water-mark stats using DB-level aggregation (O(1) per player).
     match_id = scorecards[0].match_id if scorecards else None
     if match_id:
         for player_id in updated_players:
@@ -105,25 +106,30 @@ def reverse_player_aggregates(scorecards, logger=None):
             if not player:
                 continue
 
-            remaining_batting = MatchScorecard.query.filter(
+            # Highest score — single DB query instead of loading all rows
+            best_score = db.session.query(
+                sa_func.coalesce(sa_func.max(MatchScorecard.runs), 0)
+            ).filter(
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "batting",
                 MatchScorecard.match_id != match_id,
-            ).all()
-            if remaining_batting:
-                player.highest_score = max(c.runs or 0 for c in remaining_batting)
-            else:
-                player.highest_score = 0
+            ).scalar()
+            player.highest_score = best_score or 0
 
-            remaining_bowling = MatchScorecard.query.filter(
+            # Best bowling — single DB query
+            best_bowling = db.session.query(
+                MatchScorecard.wickets, MatchScorecard.runs_conceded
+            ).filter(
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "bowling",
                 MatchScorecard.match_id != match_id,
-            ).all()
-            if remaining_bowling:
-                best = max(remaining_bowling, key=lambda c: (c.wickets or 0, -(c.runs_conceded or 0)))
-                player.best_bowling_wickets = best.wickets or 0
-                player.best_bowling_runs = best.runs_conceded or 0
+            ).order_by(
+                MatchScorecard.wickets.desc(),
+                MatchScorecard.runs_conceded.asc(),
+            ).first()
+            if best_bowling:
+                player.best_bowling_wickets = best_bowling.wickets or 0
+                player.best_bowling_runs = best_bowling.runs_conceded or 0
             else:
                 player.best_bowling_wickets = 0
                 player.best_bowling_runs = 0
@@ -171,6 +177,10 @@ class MatchArchiver:
         if not self.team_home or not self.team_away:
             raise MatchArchiverError("Invalid team names in match data")
         
+        # Match format tag for embedding in filename
+        raw_fmt = str(self.match_data.get("match_format") or "T20").strip()
+        self.format_tag = re.sub(r'[^\w]', '', raw_fmt) or "T20"
+
         # Generate standardized names
         self.folder_name = self._generate_folder_name()
         self.archive_path = Path("data") / self.folder_name
@@ -181,6 +191,7 @@ class MatchArchiver:
         # Initialize tracking
         self.created_files = []
         self.temp_files = []
+        self._milestones = []  # Populated after save_to_database
         
         self.logger.info(f"MatchArchiver initialized for {self.team_home} vs {self.team_away} (ID: {self.match_id})")
 
@@ -235,7 +246,7 @@ class MatchArchiver:
         safe_username = re.sub(r'[^\w@.]', '', self.username)
         safe_timestamp = re.sub(r'[^\w]', '', self.timestamp)
         
-        return f"playing_{safe_home}_vs_{safe_away}_{safe_username}_{safe_timestamp}"
+        return f"playing_{safe_home}_vs_{safe_away}_{safe_username}_{safe_timestamp}_fmt-{self.format_tag}"
 
     def _generate_filenames(self) -> Dict[str, str]:
         """Generate all required filenames with consistent naming"""
@@ -586,14 +597,26 @@ class MatchArchiver:
                 db_match.is_day_night = bool(self.match_data.get('is_day_night', False))
                 
                 # Bug Fix B4: Reverse old aggregate stats before deletion to prevent double-counting
-                old_scorecards = MatchScorecard.query.filter_by(match_id=self.match_id).all()
-                self._reverse_player_aggregates(old_scorecards)
-                
-                # Clear existing scorecards to avoid duplication/stale data
-                MatchScorecard.query.filter_by(match_id=self.match_id).delete()
-                
-                # Clear existing partnerships
-                MatchPartnership.query.filter_by(match_id=self.match_id).delete()
+                # Wrap in a savepoint so reversal + deletion is atomic — if a player
+                # was deleted between saves the partial reversal is rolled back cleanly.
+                nested = db.session.begin_nested()
+                try:
+                    old_scorecards = MatchScorecard.query.filter_by(match_id=self.match_id).all()
+                    self._reverse_player_aggregates(old_scorecards)
+                    # Clear existing scorecards to avoid duplication/stale data
+                    MatchScorecard.query.filter_by(match_id=self.match_id).delete()
+                    # Clear existing partnerships
+                    MatchPartnership.query.filter_by(match_id=self.match_id).delete()
+                    nested.commit()
+                except Exception as rev_err:
+                    nested.rollback()
+                    self.logger.warning(
+                        f"Aggregate reversal failed (match {self.match_id}), "
+                        f"falling back to full delete: {rev_err}"
+                    )
+                    # Scorecards may not have been deleted yet — ensure cleanup
+                    MatchScorecard.query.filter_by(match_id=self.match_id).delete()
+                    MatchPartnership.query.filter_by(match_id=self.match_id).delete()
             else:
                 self.logger.info(f"Creating new DB record for Match {self.match_id}")
                 db_match = DBMatch(
@@ -815,6 +838,19 @@ class MatchArchiver:
             
             self._save_partnerships_to_db(self.match.first_innings_partnerships, 1, first_bat_team_id)
             self._save_partnerships_to_db(self.match.second_innings_partnerships, 2, second_bat_team_id)
+
+            # Detect career milestones after aggregate updates
+            all_milestones = []
+            try:
+                from engine.stats_service import StatsService
+                for pid in updated_players:
+                    ms = StatsService.detect_milestones(pid)
+                    all_milestones.extend(ms)
+                if all_milestones:
+                    self.logger.info(f"Milestones reached: {all_milestones}")
+            except Exception as ms_err:
+                self.logger.warning(f"Milestone detection failed (non-fatal): {ms_err}")
+            self._milestones = all_milestones
 
             db.session.commit()
             return True
