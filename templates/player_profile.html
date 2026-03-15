@@ -1,0 +1,193 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ profile.player }} — SimCricketX{% endblock %}
+
+{% block content %}
+<style>
+.pp-page { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem; }
+.pp-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+.pp-info h1 { font-size: 1.35rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; }
+.pp-info .pp-sub { font-size: 0.8rem; color: var(--fg-secondary); display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.pp-badge { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.65rem; font-weight: 700; }
+.pp-badge-captain { background: #fef3c7; color: #92400e; }
+.pp-badge-keeper { background: #dbeafe; color: #1e40af; }
+[data-theme="dark"] .pp-badge-captain { background: #451a03; color: #fcd34d; }
+[data-theme="dark"] .pp-badge-keeper { background: #172554; color: #93c5fd; }
+.pp-format-filter { display: flex; gap: 0.5rem; align-items: center; }
+.pp-format-filter select { padding: 0.35rem 0.7rem; border: 1px solid var(--card-border); border-radius: 8px; background: var(--bg-secondary); color: var(--fg); font-size: 0.8rem; }
+.back-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); text-decoration: none; font-size: 0.8rem; }
+.back-btn:hover { background: var(--bg-secondary); }
+
+.pp-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.pp-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1rem; }
+.pp-card-title { font-size: 0.7rem; font-weight: 600; color: var(--fg-secondary); text-transform: uppercase; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.3rem; }
+.pp-stat-row { display: flex; justify-content: space-between; padding: 0.25rem 0; font-size: 0.8rem; }
+.pp-stat-row:not(:last-child) { border-bottom: 1px solid var(--card-border); }
+.pp-stat-val { font-weight: 700; color: var(--c1); }
+.pp-big-stat { text-align: center; }
+.pp-big-num { font-size: 2rem; font-weight: 800; color: var(--c1); line-height: 1; }
+.pp-big-label { font-size: 0.65rem; color: var(--fg-secondary); text-transform: uppercase; }
+
+.pp-milestones { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.pp-milestone { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.7rem; background: #dcfce7; color: #15803d; border-radius: 6px; font-size: 0.72rem; font-weight: 600; }
+[data-theme="dark"] .pp-milestone { background: #14532d; color: #86efac; }
+
+.pp-section { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+.pp-section-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem; }
+.pp-tbl { width: 100%; border-collapse: collapse; font-size: 0.77rem; }
+.pp-tbl th { background: var(--bg-secondary); padding: 0.4rem 0.6rem; text-align: left; font-weight: 600; font-size: 0.7rem; color: var(--fg-secondary); text-transform: uppercase; }
+.pp-tbl td { padding: 0.4rem 0.6rem; border-top: 1px solid var(--card-border); }
+.pp-tbl tr:hover td { background: var(--bg-secondary); }
+.pp-tbl .kc { font-weight: 700; color: var(--c1); }
+.result-w { color: #15803d; font-weight: 600; }
+.result-l { color: #b91c1c; font-weight: 600; }
+@media (max-width: 640px) { .pp-stats-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+
+<div class="pp-page">
+    <div class="pp-header">
+        <div class="pp-info">
+            <h1>
+                <i class="fas fa-user-circle"></i> {{ profile.player }}
+                {% if profile.is_captain %}<span class="pp-badge pp-badge-captain"><i class="fas fa-crown"></i> Captain</span>{% endif %}
+                {% if profile.is_wicketkeeper %}<span class="pp-badge pp-badge-keeper"><i class="fas fa-hands"></i> WK</span>{% endif %}
+            </h1>
+            <div class="pp-sub">
+                <span><i class="fas fa-users"></i> {{ profile.team }}</span>
+                <span><i class="fas fa-tag"></i> {{ profile.role }}</span>
+                {% if profile.batting_hand %}<span>{{ profile.batting_hand }}-hand bat</span>{% endif %}
+                {% if profile.bowling_type %}<span>{{ profile.bowling_type }}</span>{% endif %}
+            </div>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+            <div class="pp-format-filter">
+                <select id="pp-fmt">
+                    <option value="">All formats</option>
+                    <option value="T20" {% if match_format == 'T20' %}selected{% endif %}>T20</option>
+                    <option value="ListA" {% if match_format == 'ListA' %}selected{% endif %}>List A</option>
+                </select>
+            </div>
+            <a href="{{ url_for('statistics') }}" class="back-btn"><i class="fas fa-arrow-left"></i> Statistics</a>
+        </div>
+    </div>
+
+    {% if profile.milestones %}
+    <div class="pp-milestones">
+        {% for m in profile.milestones %}
+        <span class="pp-milestone"><i class="fas fa-trophy"></i> {{ m }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Overview Cards -->
+    <div class="pp-stats-grid">
+        <div class="pp-card pp-big-stat">
+            <div class="pp-big-num">{{ profile.matches }}</div>
+            <div class="pp-big-label">Matches</div>
+        </div>
+        <div class="pp-card pp-big-stat">
+            <div class="pp-big-num">{{ profile.batting.get('runs', 0) }}</div>
+            <div class="pp-big-label">Runs</div>
+        </div>
+        <div class="pp-card pp-big-stat">
+            <div class="pp-big-num">{{ profile.bowling.get('wickets', 0) }}</div>
+            <div class="pp-big-label">Wickets</div>
+        </div>
+        <div class="pp-card pp-big-stat">
+            <div class="pp-big-num">{{ profile.fielding.total }}</div>
+            <div class="pp-big-label">Dismissals</div>
+        </div>
+    </div>
+
+    <!-- Batting & Bowling Detail Cards -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+        {% if profile.batting %}
+        <div class="pp-card">
+            <div class="pp-card-title"><i class="fas fa-baseball-ball"></i> Batting</div>
+            <div class="pp-stat-row"><span>Innings</span><span class="pp-stat-val">{{ profile.batting.innings }}</span></div>
+            <div class="pp-stat-row"><span>Runs</span><span class="pp-stat-val">{{ profile.batting.runs }}</span></div>
+            <div class="pp-stat-row"><span>Average</span><span class="pp-stat-val">{{ profile.batting.average }}</span></div>
+            <div class="pp-stat-row"><span>Strike Rate</span><span class="pp-stat-val">{{ profile.batting.strike_rate }}</span></div>
+            <div class="pp-stat-row"><span>High Score</span><span class="pp-stat-val">{{ profile.batting.high_score }}</span></div>
+            <div class="pp-stat-row"><span>Not Outs</span><span class="pp-stat-val">{{ profile.batting.not_outs }}</span></div>
+            <div class="pp-stat-row"><span>4s / 6s</span><span class="pp-stat-val">{{ profile.batting.fours }} / {{ profile.batting.sixes }}</span></div>
+            <div class="pp-stat-row"><span>50s / 100s</span><span class="pp-stat-val">{{ profile.batting.fifties }} / {{ profile.batting.hundreds }}</span></div>
+        </div>
+        {% else %}
+        <div class="pp-card"><div class="pp-card-title"><i class="fas fa-baseball-ball"></i> Batting</div><div style="color:var(--fg-secondary);font-size:0.8rem">No batting data</div></div>
+        {% endif %}
+
+        {% if profile.bowling %}
+        <div class="pp-card">
+            <div class="pp-card-title"><i class="fas fa-bowling-ball"></i> Bowling</div>
+            <div class="pp-stat-row"><span>Innings</span><span class="pp-stat-val">{{ profile.bowling.innings }}</span></div>
+            <div class="pp-stat-row"><span>Wickets</span><span class="pp-stat-val">{{ profile.bowling.wickets }}</span></div>
+            <div class="pp-stat-row"><span>Average</span><span class="pp-stat-val">{{ profile.bowling.average }}</span></div>
+            <div class="pp-stat-row"><span>Economy</span><span class="pp-stat-val">{{ profile.bowling.economy }}</span></div>
+            <div class="pp-stat-row"><span>Strike Rate</span><span class="pp-stat-val">{{ profile.bowling.strike_rate }}</span></div>
+            <div class="pp-stat-row"><span>Best Figures</span><span class="pp-stat-val">{{ profile.bowling.best_figures }}</span></div>
+        </div>
+        {% else %}
+        <div class="pp-card"><div class="pp-card-title"><i class="fas fa-bowling-ball"></i> Bowling</div><div style="color:var(--fg-secondary);font-size:0.8rem">No bowling data</div></div>
+        {% endif %}
+    </div>
+
+    <!-- Fielding -->
+    <div class="pp-card" style="margin-bottom:1.5rem">
+        <div class="pp-card-title"><i class="fas fa-hand-paper"></i> Fielding</div>
+        <div style="display:flex;gap:2rem">
+            <div class="pp-stat-row" style="flex:1"><span>Catches</span><span class="pp-stat-val">{{ profile.fielding.catches }}</span></div>
+            <div class="pp-stat-row" style="flex:1"><span>Run Outs</span><span class="pp-stat-val">{{ profile.fielding.run_outs }}</span></div>
+        </div>
+    </div>
+
+    <!-- Match Log -->
+    <div class="pp-section">
+        <div class="pp-section-title"><i class="fas fa-list"></i> Match Log</div>
+        {% if profile.match_log %}
+        <div style="overflow-x:auto">
+            <table class="pp-tbl">
+                <thead>
+                    <tr>
+                        <th>Date</th><th>Venue</th><th>Format</th>
+                        <th>Runs</th><th>Balls</th><th>Out</th>
+                        <th>Wkts</th><th>Conc</th><th>Overs</th>
+                        <th>Ct</th><th>RO</th><th>Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in profile.match_log %}
+                    <tr>
+                        <td>{{ m.date }}</td>
+                        <td>{{ m.venue }}</td>
+                        <td>{{ m.format }}</td>
+                        <td class="kc">{{ m.bat_runs if m.bat_runs is not none else '-' }}</td>
+                        <td>{{ m.bat_balls if m.bat_balls is not none else '-' }}</td>
+                        <td>{% if m.bat_out is not none %}{{ 'Out' if m.bat_out else 'NO' }}{% else %}-{% endif %}</td>
+                        <td class="kc">{{ m.bowl_wkts if m.bowl_wkts is not none else '-' }}</td>
+                        <td>{{ m.bowl_runs if m.bowl_runs is not none else '-' }}</td>
+                        <td>{{ m.bowl_overs if m.bowl_overs is not none else '-' }}</td>
+                        <td>{{ m.catches }}</td>
+                        <td>{{ m.run_outs }}</td>
+                        <td>{{ m.result[:40] if m.result else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:1rem;color:var(--fg-secondary)">No matches played</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('pp-fmt')?.addEventListener('change', function() {
+    let url = '/player/{{ profile.player_id }}';
+    if (this.value) url += '?match_format=' + encodeURIComponent(this.value);
+    window.location.href = url;
+});
+</script>
+{% endblock %}

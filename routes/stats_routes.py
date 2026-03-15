@@ -2,6 +2,7 @@
 
 from flask import Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from markupsafe import escape
 
 
 def register_stats_routes(
@@ -447,3 +448,138 @@ def register_stats_routes(
         except Exception as e:
             app.logger.error(f"Error fetching overall partnerships: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
+
+    # ===== Head-to-Head =====
+
+    @app.route("/head-to-head")
+    @login_required
+    def head_to_head_page():
+        teams = DBTeam.query.filter_by(user_id=current_user.id).filter(DBTeam.is_placeholder != True).all()
+        return render_template("head_to_head.html", teams=teams)
+
+    @app.route("/api/head-to-head")
+    @login_required
+    @limiter.limit("30 per minute")
+    def api_head_to_head():
+        try:
+            team1_id = request.args.get("team1_id", type=int)
+            team2_id = request.args.get("team2_id", type=int)
+            match_format = request.args.get("match_format") or None
+            if not team1_id or not team2_id:
+                return jsonify({"error": "Select two teams"}), 400
+            if team1_id == team2_id:
+                return jsonify({"error": "Select two different teams"}), 400
+            stats_service = StatsService(app.logger)
+            data = stats_service.get_head_to_head(current_user.id, team1_id, team2_id, match_format)
+            if "error" in data:
+                return jsonify(data), 400
+            return jsonify({"success": True, "data": data})
+        except Exception as e:
+            app.logger.error(f"Error in head-to-head API: {e}", exc_info=True)
+            return jsonify({"error": "An internal error occurred"}), 500
+
+    # ===== Player Profile =====
+
+    @app.route("/player/<int:player_id>")
+    @login_required
+    def player_profile_page(player_id):
+        try:
+            match_format = request.args.get("match_format") or None
+            stats_service = StatsService(app.logger)
+            profile = stats_service.get_player_profile(player_id, current_user.id, match_format)
+            if "error" in profile:
+                flash(profile["error"], "danger")
+                return redirect(url_for("statistics"))
+            return render_template("player_profile.html", profile=profile, match_format=match_format)
+        except Exception as e:
+            app.logger.error(f"Error loading player profile: {e}", exc_info=True)
+            flash("Error loading player profile", "danger")
+            return redirect(url_for("statistics"))
+
+    # ===== Team Stats Dashboard =====
+
+    @app.route("/team-stats/<int:team_id>")
+    @login_required
+    def team_stats_page(team_id):
+        try:
+            match_format = request.args.get("match_format") or None
+            stats_service = StatsService(app.logger)
+            data = stats_service.get_team_stats(current_user.id, team_id, match_format)
+            if "error" in data:
+                flash(data["error"], "danger")
+                return redirect(url_for("statistics"))
+            teams = DBTeam.query.filter_by(user_id=current_user.id).filter(DBTeam.is_placeholder != True).all()
+            return render_template("team_stats.html", stats=data, teams=teams, match_format=match_format)
+        except Exception as e:
+            app.logger.error(f"Error loading team stats: {e}", exc_info=True)
+            flash("Error loading team stats", "danger")
+            return redirect(url_for("statistics"))
+
+    # ===== PDF Export =====
+
+    @app.route("/statistics/export/<stat_type>/pdf")
+    @login_required
+    def export_statistics_pdf(stat_type):
+        try:
+            stats_service = StatsService(app.logger)
+            view_type = request.args.get("view", "overall")
+            tournament_id = request.args.get("tournament_id", type=int)
+            match_format = request.args.get("match_format") or None
+
+            if view_type == "overall":
+                stats_data = stats_service.get_overall_stats(current_user.id, match_format)
+            elif tournament_id:
+                stats_data = stats_service.get_tournament_stats(current_user.id, tournament_id, match_format)
+            else:
+                return jsonify({"error": "Please select a tournament"}), 400
+
+            if stat_type == "batting":
+                data = stats_data["batting"]
+            elif stat_type == "bowling":
+                data = stats_data["bowling"]
+            elif stat_type == "fielding":
+                data = stats_data["fielding"]
+            else:
+                return jsonify({"error": "Invalid stat type"}), 400
+
+            if not data:
+                return jsonify({"error": f"No {stat_type} data available"}), 404
+
+            # Build HTML for PDF
+            txt_content = stats_service.export_to_txt(data, stat_type)
+            view_label = f"tournament_{tournament_id}" if view_type == "tournament" else "overall"
+            title = f"{view_label} — {stat_type.title()} Statistics"
+
+            html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>{escape(title)}</title>
+<style>
+body {{ font-family: 'Courier New', monospace; font-size: 10px; margin: 20px; }}
+h1 {{ font-size: 14px; border-bottom: 2px solid #333; padding-bottom: 5px; }}
+pre {{ white-space: pre-wrap; word-wrap: break-word; }}
+.footer {{ margin-top: 20px; font-size: 8px; color: #666; border-top: 1px solid #ccc; padding-top: 5px; }}
+</style></head><body>
+<h1>{escape(title)}</h1>
+<pre>{escape(txt_content)}</pre>
+<div class="footer">Generated by SimCricketX</div>
+</body></html>"""
+
+            try:
+                from weasyprint import HTML as WeasyHTML
+                pdf_bytes = WeasyHTML(string=html).write_pdf()
+                filename = f"{view_label}_{stat_type}_stats.pdf"
+                return Response(
+                    pdf_bytes,
+                    mimetype="application/pdf",
+                    headers={"Content-Disposition": f"attachment;filename={filename}"},
+                )
+            except ImportError:
+                # Fallback: serve as downloadable HTML
+                filename = f"{view_label}_{stat_type}_stats.html"
+                return Response(
+                    html,
+                    mimetype="text/html",
+                    headers={"Content-Disposition": f"attachment;filename={filename}"},
+                )
+        except Exception as e:
+            app.logger.error(f"Error exporting PDF: {e}", exc_info=True)
+            return jsonify({"error": "Error exporting statistics"}), 500

@@ -94,7 +94,6 @@
         }
 
         * {
-            box-sizing: border-box;
             outline: none;
         }
 
@@ -102,7 +101,6 @@
             background-color: var(--bg-body);
             color: var(--text-main);
             font-family: var(--font-sans);
-            margin: 0;
             padding: 0;
             line-height: 1.6;
             transition: background-color 0.3s ease, color 0.3s ease;
@@ -121,73 +119,17 @@
             z-index: -1;
         }
 
-        h1,
-        h2,
-        h3,
-        h4 {
-            margin: 0;
-            font-weight: 700;
+        h1, h2, h3, h4 {
             letter-spacing: -0.03em;
         }
 
-        p {
-            margin: 0;
-        }
-
-        a {
-            color: inherit;
-        }
-
-        .flash {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            font-size: 0.9rem;
-        }
-
-        .flash-success {
-            background: rgba(16, 185, 129, 0.15);
-            color: #10b981;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        .flash-error {
-            background: rgba(239, 68, 68, 0.15);
-            color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        .main-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 120px 2rem 100px;
-        }
-
         .nav-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 72px;
             background: var(--bg-glass);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--border-light);
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 2rem;
-            transition: all 0.3s ease;
         }
 
         .nav-brand {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            font-weight: 700;
             color: var(--text-main);
-            font-size: 1.2rem;
         }
 
         .brand-mark {
@@ -206,17 +148,8 @@
         }
 
         .home-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: var(--radius-full);
-            background: transparent;
             border: 1px solid var(--border-light);
-            display: flex;
-            align-items: center;
-            justify-content: center;
             color: var(--text-muted);
-            text-decoration: none;
-            transition: all 0.2s var(--ease-elastic);
         }
 
         .home-btn:hover {
@@ -228,19 +161,13 @@
         }
 
         .theme-toggle {
-            background: transparent;
-            border: 1px solid transparent;
-            font-size: 1.1rem;
-            cursor: pointer;
-            padding: 8px;
             color: var(--text-muted);
-            transition: transform 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+            border: 1px solid transparent;
             border-radius: var(--radius-full);
         }
 
         .theme-toggle:hover {
             color: var(--text-main);
-            transform: rotate(12deg) scale(1.05);
             border-color: var(--border-light);
             background: var(--bg-raised);
         }
@@ -275,14 +202,7 @@
         }
 
         .dynamic-title {
-            font-size: clamp(2.4rem, 4vw, 3.4rem);
-            line-height: 1.1;
-            font-weight: 800;
             background: var(--brand-gradient);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -0.04em;
         }
 
         .page-subtitle {
@@ -511,10 +431,48 @@
             background: var(--bg-body);
         }
 
+        .action-btn.clone:hover {
+            color: var(--warning);
+            border-color: var(--warning);
+            background: rgba(217, 119, 6, 0.12);
+        }
+
         .action-btn.delete:hover {
             color: var(--danger);
             border-color: var(--danger);
             background: rgba(220, 38, 38, 0.12);
+        }
+
+        .search-bar {
+            width: 100%;
+            max-width: 400px;
+            padding: 0.7rem 1rem 0.7rem 2.6rem;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-full);
+            font-size: 0.95rem;
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            transition: all 0.2s ease;
+        }
+
+        .search-bar:focus {
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+        }
+
+        .search-wrap {
+            position: relative;
+            margin-bottom: 2rem;
+        }
+
+        .search-wrap i {
+            position: absolute;
+            left: 0.9rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
         }
 
         .empty-state {
@@ -640,14 +598,6 @@
                 gap: 1rem;
             }
 
-            .nav-header {
-                padding: 0 1rem;
-            }
-
-            .main-content {
-                padding: 100px 1rem 4rem;
-            }
-
             .desktop-only {
                 display: none;
             }
@@ -660,45 +610,6 @@
                 flex-direction: column;
                 align-items: flex-start;
             }
-        }
-
-        @keyframes fadeUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes floatIn {
-            from {
-                opacity: 0;
-                transform: translateY(18px) scale(0.98);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-
-        @keyframes ripple {
-            to {
-                transform: scale(4);
-                opacity: 0;
-            }
-        }
-
-        .flash {
-            transition: opacity 0.3s ease;
-        }
-
-        .flash.fade-out {
-            opacity: 0;
         }
     </style>
 </head>
@@ -759,6 +670,11 @@
                 <span class="stat-value">{{ total_players | default(0) }}</span>
                 <span class="stat-label">Total Players</span>
             </div>
+        </div>
+
+        <div class="search-wrap">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" class="search-bar" id="team-search" placeholder="Search teams by name, code, captain, ground..." autocomplete="off">
         </div>
 
         <div class="teams-grid teams-section">
@@ -822,6 +738,9 @@
                         <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
+                        <button class="action-btn clone" onclick="cloneTeam('{{ t.short_code }}')" title="Clone Team">
+                            <i class="fa-solid fa-clone"></i>
+                        </button>
                         <button class="action-btn delete" onclick="confirmDelete('{{ t.short_code }}')"
                             title="Delete Team">
                             <i class="fa-solid fa-trash-can"></i>
@@ -841,6 +760,11 @@
             {% endif %}
         </div>
     </main>
+
+    <!-- Hidden clone form -->
+    <form id="clone-form" method="POST" style="display:none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
 
     <div class="modal" id="confirmModal">
         <div class="modal-content">
@@ -907,6 +831,25 @@
             card.style.opacity = '0.7';
             card.style.pointerEvents = 'none';
             window.location.href = `/team/${code}/edit`;
+        }
+
+        function cloneTeam(code) {
+            if (!confirm('Clone this team as a new draft?')) return;
+            const form = document.getElementById('clone-form');
+            form.action = `/team/${code}/clone`;
+            form.submit();
+        }
+
+        // ─── Team search / filter ──────────────────────────────────
+        const searchInput = document.getElementById('team-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                const q = searchInput.value.trim().toLowerCase();
+                document.querySelectorAll('.glass-card[data-code]').forEach(card => {
+                    const text = card.textContent.toLowerCase();
+                    card.style.display = (!q || text.includes(q)) ? '' : 'none';
+                });
+            });
         }
 
         function confirmDelete(code) {

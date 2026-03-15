@@ -7,7 +7,7 @@ Handles all statistics calculations and queries for the SimCricketX application.
 from sqlalchemy import func
 from sqlalchemy.orm import aliased
 from datetime import datetime
-from database.models import Match, MatchScorecard, Tournament, Player, Team
+from database.models import Match, MatchScorecard, Tournament, Player, Team, TournamentPlayerStatsCache
 from database import db
 from collections import defaultdict
 import csv
@@ -68,6 +68,10 @@ class StatsService:
         """
         Get statistics for a specific tournament.
 
+        Uses TournamentPlayerStatsCache when available (and no format filter
+        is applied, since the cache is format-agnostic). Falls back to full
+        scorecard computation otherwise.
+
         Args:
             user_id (str): User ID
             tournament_id (int): Tournament ID
@@ -78,7 +82,13 @@ class StatsService:
         """
         self._log(f"Fetching tournament stats for user {user_id}, tournament {tournament_id}, format={match_format}")
 
-        # Query scorecards for specific tournament
+        # Try the pre-computed cache when no format filter is active
+        if not match_format:
+            cached = self._try_cache_tournament_stats(tournament_id)
+            if cached:
+                return cached
+
+        # Full computation fallback
         query = (
             db.session.query(MatchScorecard, Match, Player, Team)
             .join(Match, MatchScorecard.match_id == Match.id)
@@ -93,11 +103,97 @@ class StatsService:
 
         records = query.all()
         self._log(f"Found {len(records)} scorecard records for tournament {tournament_id}")
-        
+
         if not records:
             return self._empty_stats()
-        
+
         return self._calculate_stats_from_records(records)
+
+    def _try_cache_tournament_stats(self, tournament_id):
+        """Attempt to serve tournament stats from TournamentPlayerStatsCache.
+
+        Returns the same dict shape as _calculate_stats_from_records() on
+        cache hit, or None on cache miss so the caller can fall back to the
+        full computation path.
+        """
+        cached = (
+            db.session.query(TournamentPlayerStatsCache, Player, Team)
+            .join(Player, TournamentPlayerStatsCache.player_id == Player.id)
+            .join(Team, TournamentPlayerStatsCache.team_id == Team.id)
+            .filter(TournamentPlayerStatsCache.tournament_id == tournament_id)
+            .all()
+        )
+        if not cached:
+            return None
+
+        self._log(f"Serving tournament {tournament_id} stats from cache ({len(cached)} players)")
+
+        batting_stats = []
+        bowling_stats = []
+        fielding_stats = []
+
+        for cache, player, team in cached:
+            matches = cache.matches_played or 0
+            if matches == 0:
+                continue
+
+            # Batting
+            innings = cache.innings_batted or 0
+            if innings > 0:
+                batting_stats.append({
+                    'player': player.name, 'team': team.name,
+                    'matches': matches, 'innings': innings,
+                    'runs': cache.runs_scored or 0,
+                    'balls': cache.balls_faced or 0,
+                    'not_outs': cache.not_outs or 0,
+                    'strike_rate': cache.batting_strike_rate or 0.0,
+                    'average': cache.batting_average or 0.0,
+                    'zeros': 0, 'ones': 0, 'twos': 0, 'threes': 0,
+                    'fours': cache.fours or 0,
+                    'sixes': cache.sixes or 0,
+                    'thirties': 0,
+                    'fifties': cache.fifties or 0,
+                    'hundreds': cache.centuries or 0,
+                })
+
+            # Bowling
+            bowl_innings = cache.innings_bowled or 0
+            if bowl_innings > 0 or (cache.wickets_taken or 0) > 0:
+                best_w = cache.best_bowling_wickets or 0
+                best_r = cache.best_bowling_runs or 0
+                bowling_stats.append({
+                    'team': team.name, 'player': player.name,
+                    'matches': matches, 'innings': bowl_innings,
+                    'overs': cache.overs_bowled or '0.0',
+                    'runs': cache.runs_conceded or 0,
+                    'wickets': cache.wickets_taken or 0,
+                    'best': f"{best_w}/{best_r}" if best_w > 0 else '-',
+                    'average': cache.bowling_average or 0.0,
+                    'economy': cache.bowling_economy or 0.0,
+                    'dots': 0, 'bowled': 0, 'lbw': 0,
+                    'byes': 0, 'leg_byes': 0,
+                    'wides': 0, 'no_balls': 0,
+                })
+
+            # Fielding
+            fielding_stats.append({
+                'player': player.name, 'team': team.name,
+                'matches': matches,
+                'catches': cache.catches or 0,
+                'run_outs': cache.run_outs or 0,
+            })
+
+        batting_stats.sort(key=lambda x: x['runs'], reverse=True)
+        bowling_stats.sort(key=lambda x: (-x['wickets'], x['economy']))
+        fielding_stats.sort(key=lambda x: (x['catches'] + x['run_outs'], x['matches']), reverse=True)
+
+        leaderboards = self._calculate_leaderboards(batting_stats, bowling_stats)
+        return {
+            'batting': batting_stats,
+            'bowling': bowling_stats,
+            'fielding': fielding_stats,
+            'leaderboards': leaderboards,
+        }
 
     def get_insights(self, user_id, tournament_id=None, match_format=None):
         """
@@ -234,6 +330,25 @@ class StatsService:
         impact_list.sort(key=lambda x: x["impact"], reverse=True)
         insights["impact"] = impact_list[:5]
 
+        def _calc_trend(values):
+            """Return 'up', 'down', or 'stable' comparing recent vs older half."""
+            if len(values) < 2:
+                return "stable"
+            mid = len(values) // 2
+            older = values[:mid]
+            recent = values[mid:]
+            avg_old = sum(older) / len(older)
+            avg_new = sum(recent) / len(recent)
+            # Need >15 % change to count as a trend
+            if avg_old == 0:
+                return "up" if avg_new > 0 else "stable"
+            pct = (avg_new - avg_old) / avg_old
+            if pct > 0.15:
+                return "up"
+            elif pct < -0.15:
+                return "down"
+            return "stable"
+
         def _top_form(form_map, key, limit=3):
             items = []
             for pid, data in form_map.items():
@@ -242,11 +357,15 @@ class StatsService:
                 total = sum(v for _, v in data["series"])
                 series_sorted = sorted(data["series"], key=lambda x: x[0], reverse=True)[:5]
                 series_sorted.reverse()
+                values = [v for _, v in series_sorted]
+                trend = _calc_trend(values)
                 items.append({
                     "player": data["player"],
                     "team": data["team"],
-                    "series": [v for _, v in series_sorted],
-                    "total": total
+                    "series": values,
+                    "total": total,
+                    "trend": trend,
+                    "recent_avg": round(sum(values[-3:]) / min(3, len(values)), 1) if values else 0,
                 })
             items.sort(key=lambda x: x["total"], reverse=True)
             return items[:limit]
@@ -284,6 +403,8 @@ class StatsService:
         player_data = defaultdict(lambda: {
             'name': '',
             'team': '',
+            'role': '',
+            'player_id': 0,
             'bat_innings_data': [],  # List of individual innings
             'bat_runs': 0,
             'bat_balls': 0,
@@ -315,6 +436,8 @@ class StatsService:
             pid = player.id
             player_data[pid]['name'] = player.name
             player_data[pid]['team'] = team.name
+            player_data[pid]['role'] = player.role or ''
+            player_data[pid]['player_id'] = player.id
             player_data[pid]['matches'].add(match.id)
             
             # Batting stats
@@ -411,6 +534,8 @@ class StatsService:
             batting_stats.append({
                 'player': data['name'],
                 'team': data['team'],
+                'role': data['role'],
+                'player_id': data['player_id'],
                 'matches': matches,
                 'innings': innings,
                 'runs': runs,
@@ -459,6 +584,8 @@ class StatsService:
             bowling_stats.append({
                 'team': data['team'],
                 'player': data['name'],
+                'role': data['role'],
+                'player_id': data['player_id'],
                 'matches': matches,
                 'innings': innings,
                 'overs': round(overs, 1),
@@ -499,6 +626,8 @@ class StatsService:
                 fielding_stats.append({
                     'player': data['name'],
                     'team': data['team'],
+                    'role': data['role'],
+                    'player_id': data['player_id'],
                     'matches': matches,
                     'catches': catches,
                     'run_outs': run_outs
@@ -511,58 +640,60 @@ class StatsService:
         return fielding_stats
     
     def _calculate_leaderboards(self, batting_stats, bowling_stats):
-        """Calculate leaderboard data for dashboard widgets"""
+        """Calculate leaderboard data for dashboard widgets.
+
+        Qualification thresholds scale with the dataset so that small
+        tournaments still produce meaningful leaderboards:
+          - SR: min balls = max(10, median_balls * 0.5), capped at 50
+          - Avg: min innings = max(1, total_players // 4), capped at 3
+        """
         leaderboards = {
             'most_runs': [],
             'most_wickets': [],
             'highest_sr': [],
             'best_average': []
         }
-        
+
         # Top 5 run scorers
         leaderboards['most_runs'] = [
-            {
-                'player': b['player'],
-                'team': b['team'],
-                'runs': b['runs']
-            }
+            {'player': b['player'], 'team': b['team'], 'runs': b['runs']}
             for b in batting_stats[:5]
         ]
-        
+
         # Top 5 wicket takers
         leaderboards['most_wickets'] = [
-            {
-                'player': b['player'],
-                'team': b['team'],
-                'wickets': b['wickets']
-            }
+            {'player': b['player'], 'team': b['team'], 'wickets': b['wickets']}
             for b in bowling_stats[:5]
         ]
-        
-        # Top 5 strike rates (minimum 50 balls faced)
-        sr_qualified = [b for b in batting_stats if b['balls'] >= 50]
+
+        # Dynamic SR threshold
+        if batting_stats:
+            sorted_balls = sorted(b['balls'] for b in batting_stats if b['balls'] > 0)
+            median_balls = sorted_balls[len(sorted_balls) // 2] if sorted_balls else 0
+            min_balls = max(10, int(median_balls * 0.5))
+            min_balls = min(min_balls, 50)
+        else:
+            min_balls = 50
+
+        sr_qualified = [b for b in batting_stats if b['balls'] >= min_balls]
         sr_sorted = sorted(sr_qualified, key=lambda x: x['strike_rate'], reverse=True)
         leaderboards['highest_sr'] = [
-            {
-                'player': b['player'],
-                'team': b['team'],
-                'sr': b['strike_rate']
-            }
+            {'player': b['player'], 'team': b['team'], 'sr': b['strike_rate']}
             for b in sr_sorted[:5]
         ]
-        
-        # Top 5 averages (minimum 3 innings)
-        avg_qualified = [b for b in batting_stats if b['innings'] >= 3]
+
+        # Dynamic average threshold
+        num_batsmen = len(batting_stats)
+        min_innings = max(1, num_batsmen // 4)
+        min_innings = min(min_innings, 3)
+
+        avg_qualified = [b for b in batting_stats if b['innings'] >= min_innings]
         avg_sorted = sorted(avg_qualified, key=lambda x: x['average'], reverse=True)
         leaderboards['best_average'] = [
-            {
-                'player': b['player'],
-                'team': b['team'],
-                'average': b['average']
-            }
+            {'player': b['player'], 'team': b['team'], 'average': b['average']}
             for b in avg_sorted[:5]
         ]
-        
+
         return leaderboards
     
     def export_to_csv(self, data, stat_type):
@@ -1210,3 +1341,338 @@ class StatsService:
         except Exception as e:
             self._log(f"Error fetching partnership leaderboard: {e}", level='error')
             return []
+
+    # ========================================================================
+    # Head-to-Head Team Comparison
+    # ========================================================================
+
+    def get_head_to_head(self, user_id, team1_id, team2_id, match_format=None):
+        """Compare two teams' records against each other."""
+        try:
+            team1 = Team.query.get(team1_id)
+            team2 = Team.query.get(team2_id)
+            if not team1 or not team2:
+                return {"error": "One or both teams not found"}
+            if team1.user_id != user_id or team2.user_id != user_id:
+                return {"error": "Unauthorized"}
+
+            query = Match.query.filter(
+                Match.user_id == user_id,
+                db.or_(
+                    db.and_(Match.home_team_id == team1_id, Match.away_team_id == team2_id),
+                    db.and_(Match.home_team_id == team2_id, Match.away_team_id == team1_id),
+                ),
+            )
+            if match_format:
+                query = query.filter(Match.match_format == match_format)
+
+            matches = query.order_by(Match.date.desc()).all()
+            if not matches:
+                return {
+                    "team1": team1.name, "team2": team2.name,
+                    "matches": [], "summary": {"played": 0, "team1_wins": 0, "team2_wins": 0, "ties": 0},
+                    "top_performers": {"team1": [], "team2": []},
+                }
+
+            t1_wins = t2_wins = ties = 0
+            match_list = []
+            match_ids = []
+            for m in matches:
+                match_ids.append(m.id)
+                if m.winner_team_id == team1_id:
+                    t1_wins += 1
+                elif m.winner_team_id == team2_id:
+                    t2_wins += 1
+                else:
+                    ties += 1
+                match_list.append({
+                    "match_id": m.id,
+                    "date": m.date.strftime("%Y-%m-%d") if m.date else "",
+                    "venue": m.venue or "",
+                    "home": team1.name if m.home_team_id == team1_id else team2.name,
+                    "away": team2.name if m.home_team_id == team1_id else team1.name,
+                    "result": m.result_description or "",
+                    "home_score": f"{m.home_team_score or 0}/{m.home_team_wickets or 0}",
+                    "away_score": f"{m.away_team_score or 0}/{m.away_team_wickets or 0}",
+                    "format": m.match_format or "T20",
+                })
+
+            # Top performers in these H2H matches
+            def _top_performers(team_id):
+                cards = (
+                    db.session.query(
+                        Player.name,
+                        func.sum(db.case((MatchScorecard.record_type == "batting", MatchScorecard.runs), else_=0)).label("runs"),
+                        func.sum(db.case((MatchScorecard.record_type == "bowling", MatchScorecard.wickets), else_=0)).label("wkts"),
+                        func.count(func.distinct(MatchScorecard.match_id)).label("mat"),
+                    )
+                    .join(Player, MatchScorecard.player_id == Player.id)
+                    .filter(
+                        MatchScorecard.match_id.in_(match_ids),
+                        MatchScorecard.team_id == team_id,
+                    )
+                    .group_by(Player.name)
+                    .all()
+                )
+                perfs = []
+                for name, runs, wkts, mat in cards:
+                    impact = (runs or 0) + (wkts or 0) * 20
+                    perfs.append({"name": name, "runs": runs or 0, "wickets": wkts or 0, "matches": mat, "impact": impact})
+                perfs.sort(key=lambda x: x["impact"], reverse=True)
+                return perfs[:5]
+
+            return {
+                "team1": team1.name, "team2": team2.name,
+                "team1_id": team1_id, "team2_id": team2_id,
+                "matches": match_list,
+                "summary": {"played": len(matches), "team1_wins": t1_wins, "team2_wins": t2_wins, "ties": ties},
+                "top_performers": {"team1": _top_performers(team1_id), "team2": _top_performers(team2_id)},
+            }
+        except Exception as e:
+            self._log(f"Error in head-to-head: {e}", level="error")
+            return {"error": str(e)}
+
+    # ========================================================================
+    # Player Profile
+    # ========================================================================
+
+    def get_player_profile(self, player_id, user_id, match_format=None):
+        """Get full career stats + match log for a single player."""
+        try:
+            player = Player.query.get(player_id)
+            if not player:
+                return {"error": "Player not found"}
+            team = Team.query.get(player.team_id)
+            if not team or team.user_id != user_id:
+                return {"error": "Unauthorized"}
+
+            query = (
+                db.session.query(MatchScorecard, Match)
+                .join(Match, MatchScorecard.match_id == Match.id)
+                .filter(MatchScorecard.player_id == player_id, Match.user_id == user_id)
+            )
+            if match_format:
+                query = query.filter(Match.match_format == match_format)
+
+            records = query.order_by(Match.date.desc()).all()
+
+            batting_innings = []
+            bowling_innings = []
+            catches = run_outs = 0
+            match_set = set()
+            match_log = {}
+
+            for card, match in records:
+                match_set.add(match.id)
+                ml = match_log.setdefault(match.id, {
+                    "match_id": match.id,
+                    "date": match.date.strftime("%Y-%m-%d") if match.date else "",
+                    "venue": match.venue or "",
+                    "format": match.match_format or "T20",
+                    "result": match.result_description or "",
+                    "bat_runs": None, "bat_balls": None, "bat_out": None,
+                    "bowl_wkts": None, "bowl_runs": None, "bowl_overs": None,
+                    "catches": 0, "run_outs": 0,
+                })
+                ml["catches"] += card.catches or 0
+                ml["run_outs"] += card.run_outs or 0
+                catches += card.catches or 0
+                run_outs += card.run_outs or 0
+
+                if card.record_type == "batting" and ((card.balls or 0) > 0 or (card.runs or 0) > 0 or card.is_out):
+                    batting_innings.append({
+                        "runs": card.runs or 0, "balls": card.balls or 0,
+                        "is_out": card.is_out, "fours": card.fours or 0, "sixes": card.sixes or 0,
+                    })
+                    ml["bat_runs"] = card.runs or 0
+                    ml["bat_balls"] = card.balls or 0
+                    ml["bat_out"] = card.is_out
+
+                if card.record_type == "bowling" and (card.balls_bowled or 0) > 0:
+                    bowling_innings.append({
+                        "wickets": card.wickets or 0, "runs": card.runs_conceded or 0,
+                        "balls": card.balls_bowled or 0,
+                    })
+                    ml["bowl_wkts"] = card.wickets or 0
+                    ml["bowl_runs"] = card.runs_conceded or 0
+                    balls = card.balls_bowled or 0
+                    ml["bowl_overs"] = f"{balls // 6}.{balls % 6}"
+
+            batting = self._calculate_batting_metrics(batting_innings)
+            bowling = self._calculate_bowling_metrics(bowling_innings)
+
+            # Milestones
+            milestones = []
+            if batting.get("hundreds", 0) > 0:
+                milestones.append(f"{batting['hundreds']} centuries")
+            if batting.get("fifties", 0) > 0:
+                milestones.append(f"{batting['fifties']} half-centuries")
+            if bowling.get("wickets", 0) >= 50:
+                milestones.append(f"{bowling['wickets']} career wickets")
+            if batting.get("runs", 0) >= 500:
+                milestones.append(f"{batting['runs']} career runs")
+
+            return {
+                "player_id": player.id,
+                "player": player.name,
+                "team": team.name,
+                "team_id": team.id,
+                "role": player.role or "Unknown",
+                "batting_hand": player.batting_hand or "",
+                "bowling_type": player.bowling_type or "",
+                "is_captain": player.is_captain,
+                "is_wicketkeeper": player.is_wicketkeeper,
+                "matches": len(match_set),
+                "batting": batting,
+                "bowling": bowling,
+                "fielding": {"catches": catches, "run_outs": run_outs, "total": catches + run_outs},
+                "milestones": milestones,
+                "match_log": sorted(match_log.values(), key=lambda x: x["date"], reverse=True),
+            }
+        except Exception as e:
+            self._log(f"Error in player profile: {e}", level="error")
+            return {"error": str(e)}
+
+    # ========================================================================
+    # Team Statistics Dashboard
+    # ========================================================================
+
+    def get_team_stats(self, user_id, team_id, match_format=None):
+        """Get aggregate team-level statistics."""
+        try:
+            team = Team.query.get(team_id)
+            if not team or team.user_id != user_id:
+                return {"error": "Team not found or unauthorized"}
+
+            query = Match.query.filter(
+                Match.user_id == user_id,
+                db.or_(Match.home_team_id == team_id, Match.away_team_id == team_id),
+            )
+            if match_format:
+                query = query.filter(Match.match_format == match_format)
+
+            matches = query.order_by(Match.date.desc()).all()
+            if not matches:
+                return {"team": team.name, "matches": 0, "summary": {}, "recent": [], "batting_first": {}, "chasing": {}}
+
+            wins = losses = ties = 0
+            bat_first_wins = bat_first_total = 0
+            chase_wins = chase_total = 0
+            total_scored = total_conceded = 0
+            recent = []
+
+            for m in matches:
+                is_home = m.home_team_id == team_id
+                team_score = m.home_team_score if is_home else m.away_team_score
+                opp_score = m.away_team_score if is_home else m.home_team_score
+                total_scored += team_score or 0
+                total_conceded += opp_score or 0
+
+                if m.winner_team_id == team_id:
+                    wins += 1
+                elif m.winner_team_id is not None:
+                    losses += 1
+                else:
+                    ties += 1
+
+                # Determine if team batted first
+                first_bat_home = True  # default assumption
+                if m.toss_winner_team_id and m.toss_decision:
+                    toss_is_home = m.toss_winner_team_id == m.home_team_id
+                    chose_bat = m.toss_decision.lower() == "bat"
+                    first_bat_home = (toss_is_home and chose_bat) or (not toss_is_home and not chose_bat)
+
+                team_batted_first = (is_home and first_bat_home) or (not is_home and not first_bat_home)
+                if team_batted_first:
+                    bat_first_total += 1
+                    if m.winner_team_id == team_id:
+                        bat_first_wins += 1
+                else:
+                    chase_total += 1
+                    if m.winner_team_id == team_id:
+                        chase_wins += 1
+
+                opp_team = Team.query.get(m.away_team_id if is_home else m.home_team_id)
+                if len(recent) < 10:
+                    recent.append({
+                        "date": m.date.strftime("%Y-%m-%d") if m.date else "",
+                        "opponent": opp_team.name if opp_team else "Unknown",
+                        "result": "W" if m.winner_team_id == team_id else ("L" if m.winner_team_id else "T"),
+                        "score": f"{team_score or 0}/{m.home_team_wickets if is_home else m.away_team_wickets or 0}",
+                        "opp_score": f"{opp_score or 0}/{m.away_team_wickets if is_home else m.home_team_wickets or 0}",
+                        "venue": m.venue or "",
+                        "format": m.match_format or "T20",
+                    })
+
+            played = len(matches)
+            avg_scored = round(total_scored / played, 1) if played else 0
+            avg_conceded = round(total_conceded / played, 1) if played else 0
+
+            return {
+                "team": team.name,
+                "team_id": team_id,
+                "team_color": team.team_color or "#6366f1",
+                "matches": played,
+                "summary": {
+                    "played": played, "won": wins, "lost": losses, "tied": ties,
+                    "win_pct": round(wins * 100 / played, 1) if played else 0,
+                    "avg_scored": avg_scored,
+                    "avg_conceded": avg_conceded,
+                },
+                "batting_first": {
+                    "played": bat_first_total,
+                    "won": bat_first_wins,
+                    "win_pct": round(bat_first_wins * 100 / bat_first_total, 1) if bat_first_total else 0,
+                },
+                "chasing": {
+                    "played": chase_total,
+                    "won": chase_wins,
+                    "win_pct": round(chase_wins * 100 / chase_total, 1) if chase_total else 0,
+                },
+                "recent": recent,
+            }
+        except Exception as e:
+            self._log(f"Error in team stats: {e}", level="error")
+            return {"error": str(e)}
+
+    # ========================================================================
+    # Milestone Detection (used during match archival)
+    # ========================================================================
+
+    @staticmethod
+    def detect_milestones(player_id):
+        """Check if a player has reached any career milestones.
+
+        Returns a list of milestone strings (empty if none reached).
+        Called after aggregates are updated during match archival.
+        """
+        player = Player.query.get(player_id)
+        if not player:
+            return []
+
+        milestones = []
+        run_marks = [500, 1000, 2000, 3000, 5000]
+        for mark in run_marks:
+            if player.total_runs >= mark and (player.total_runs - (player.matches_played and 1 or 0)) < mark:
+                milestones.append(f"{player.name} reached {mark} career runs!")
+
+        wkt_marks = [25, 50, 100, 150, 200]
+        for mark in wkt_marks:
+            if player.total_wickets >= mark:
+                # check if they just crossed
+                prev_approx = player.total_wickets - 1  # rough — exact would need the scorecard delta
+                if prev_approx < mark:
+                    milestones.append(f"{player.name} reached {mark} career wickets!")
+
+        catch_total = (
+            db.session.query(func.coalesce(func.sum(MatchScorecard.catches), 0))
+            .filter(MatchScorecard.player_id == player_id)
+            .scalar()
+        ) or 0
+        for mark in [10, 25, 50]:
+            if catch_total >= mark:
+                prev = catch_total - 1
+                if prev < mark:
+                    milestones.append(f"{player.name} reached {mark} career catches!")
+
+        return milestones

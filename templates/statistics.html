@@ -353,6 +353,19 @@
 .form-player-team { font-size: 0.62rem; color: var(--fg-secondary); }
 .sparkline { flex-shrink: 0; width: 80px; height: 28px; overflow: visible; }
 
+/* Trend badges */
+.trend-badge {
+    display: inline-flex; align-items: center; gap: 0.2rem;
+    font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.35rem;
+    border-radius: 4px; flex-shrink: 0; letter-spacing: 0.02em;
+}
+.trend-up   { background: #dcfce7; color: #15803d; }
+.trend-down { background: #fee2e2; color: #b91c1c; }
+.trend-stable { background: var(--bg-secondary); color: var(--fg-secondary); }
+[data-theme="dark"] .trend-up   { background: #14532d; color: #86efac; }
+[data-theme="dark"] .trend-down { background: #450a0a; color: #fca5a5; }
+.form-recent-avg { font-size: 0.6rem; color: var(--fg-secondary); margin-left: auto; }
+
 /* Conditions */
 .cond-label {
     font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
@@ -532,7 +545,7 @@
 }
 .tbl-search::placeholder { color: var(--fg-secondary); }
 
-.tbl-team-sel {
+.tbl-team-sel, .tbl-role-sel {
     appearance: none;
     padding: 0.35rem 1.8rem 0.35rem 0.7rem;
     border: 1px solid var(--card-border); border-radius: 8px;
@@ -556,7 +569,29 @@
 .table-panel { display: none; }
 .table-panel.active { display: block; }
 
-.tbl-wrap { overflow-x: auto; max-height: 460px; overflow-y: auto; }
+.tbl-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+
+/* Pagination */
+.tbl-pagination {
+    display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+    padding: 0.5rem 1rem; border-top: 1px solid var(--card-border);
+    font-size: 0.75rem;
+}
+.tbl-pagination button {
+    padding: 0.25rem 0.55rem; border: 1px solid var(--card-border);
+    border-radius: 6px; background: var(--bg-secondary); color: var(--fg);
+    cursor: pointer; font-size: 0.72rem; font-family: inherit;
+}
+.tbl-pagination button:hover:not(:disabled) { background: var(--c1); color: #fff; }
+.tbl-pagination button:disabled { opacity: 0.4; cursor: default; }
+.tbl-pagination button.pg-active { background: var(--c1); color: #fff; font-weight: 700; }
+.tbl-pagination .pg-info { color: var(--fg-secondary); margin: 0 0.3rem; }
+.pg-size-sel {
+    appearance: none; padding: 0.25rem 1.4rem 0.25rem 0.5rem;
+    border: 1px solid var(--card-border); border-radius: 6px;
+    background: var(--bg-secondary); color: var(--fg); font-size: 0.72rem;
+    font-family: inherit; cursor: pointer; margin-left: auto;
+}
 
 .stats-tbl {
     width: 100%; border-collapse: collapse; font-size: 0.77rem;
@@ -660,6 +695,11 @@
             <button class="pill-btn {% if not match_format %}active{% endif %}" onclick="selectFormat('')">All</button>
             <button class="pill-btn {% if match_format == 'T20' %}active{% endif %}" onclick="selectFormat('T20')">T20</button>
             <button class="pill-btn {% if match_format == 'ListA' %}active{% endif %}" onclick="selectFormat('ListA')">List A</button>
+        </div>
+
+        <div class="pill-group" style="margin-left:0.5rem">
+            <a href="{{ url_for('head_to_head_page') }}" class="pill-btn" style="text-decoration:none"><i class="fas fa-exchange-alt"></i> H2H</a>
+            <a href="{{ url_for('compare_players_page') }}" class="pill-btn" style="text-decoration:none"><i class="fas fa-balance-scale"></i> Compare</a>
         </div>
     </div>
 
@@ -887,6 +927,11 @@
                             <div class="form-player-team">{{ p.team }}</div>
                         </div>
                         <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 80 28" preserveAspectRatio="none"></svg>
+                        <span class="trend-badge trend-{{ p.trend|default('stable') }}">
+                            {% if p.trend == 'up' %}<i class="fas fa-arrow-up"></i>{% elif p.trend == 'down' %}<i class="fas fa-arrow-down"></i>{% else %}<i class="fas fa-minus"></i>{% endif %}
+                            {{ p.trend|default('stable')|capitalize }}
+                        </span>
+                        {% if p.recent_avg is defined %}<span class="form-recent-avg" title="Avg last 3 innings">avg {{ p.recent_avg }}</span>{% endif %}
                     </div>
                     {% endfor %}
                     {% endif %}
@@ -900,6 +945,11 @@
                             <div class="form-player-team">{{ p.team }}</div>
                         </div>
                         <svg class="sparkline" data-series="{{ p.series|join(',') }}" viewBox="0 0 80 28" preserveAspectRatio="none"></svg>
+                        <span class="trend-badge trend-{{ p.trend|default('stable') }}">
+                            {% if p.trend == 'up' %}<i class="fas fa-arrow-up"></i>{% elif p.trend == 'down' %}<i class="fas fa-arrow-down"></i>{% else %}<i class="fas fa-minus"></i>{% endif %}
+                            {{ p.trend|default('stable')|capitalize }}
+                        </span>
+                        {% if p.recent_avg is defined %}<span class="form-recent-avg" title="Avg last 3 innings">avg {{ p.recent_avg }}</span>{% endif %}
                     </div>
                     {% endfor %}
                     {% endif %}
@@ -1021,6 +1071,9 @@
                     <i class="fas fa-hand-paper"></i> Fielding
                     {% if fielding_stats %}<span class="tab-badge">{{ fielding_stats|length }}</span>{% endif %}
                 </button>
+                <button class="stab" data-tab="partnerships">
+                    <i class="fas fa-user-friends"></i> Partnerships
+                </button>
             </div>
 
             <!-- BATTING PANEL -->
@@ -1029,6 +1082,13 @@
                 <div class="table-controls">
                     <input class="tbl-search" type="text" placeholder="Search player or team…" oninput="applyFilter('batting')">
                     <select class="tbl-team-sel" onchange="applyFilter('batting')"><option value="">All teams</option></select>
+                    <select class="tbl-role-sel" onchange="applyFilter('batting')">
+                        <option value="">All roles</option>
+                        <option value="Batsman">Batsman</option>
+                        <option value="Bowler">Bowler</option>
+                        <option value="All-rounder">All-rounder</option>
+                        <option value="Wicketkeeper">Wicketkeeper</option>
+                    </select>
                     <span class="tbl-count" id="batting-count">{{ batting_stats|length }} players</span>
                     <div class="export-grp">
                         <button class="btn-exp" onclick="exportFiltered('batting','csv')"><i class="fas fa-file-csv"></i> CSV</button>
@@ -1058,8 +1118,8 @@
                         </thead>
                         <tbody>
                             {% for row in batting_stats %}
-                            <tr>
-                                <td>{{ row.player }}</td>
+                            <tr data-role="{{ row.role|default('') }}">
+                                <td>{% if row.player_id %}<a href="/player/{{ row.player_id }}" style="color:var(--fg);text-decoration:none;border-bottom:1px dotted var(--fg-secondary)">{{ row.player }}</a>{% else %}{{ row.player }}{% endif %}</td>
                                 <td>{{ row.team }}</td>
                                 <td>{{ row.matches }}</td>
                                 <td>{{ row.innings }}</td>
@@ -1078,6 +1138,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="tbl-pagination" id="batting-pagination"></div>
                 {% else %}
                 <div class="no-data"><i class="fas fa-info-circle"></i>No batting data available</div>
                 {% endif %}
@@ -1089,6 +1150,13 @@
                 <div class="table-controls">
                     <input class="tbl-search" type="text" placeholder="Search player or team…" oninput="applyFilter('bowling')">
                     <select class="tbl-team-sel" onchange="applyFilter('bowling')"><option value="">All teams</option></select>
+                    <select class="tbl-role-sel" onchange="applyFilter('bowling')">
+                        <option value="">All roles</option>
+                        <option value="Batsman">Batsman</option>
+                        <option value="Bowler">Bowler</option>
+                        <option value="All-rounder">All-rounder</option>
+                        <option value="Wicketkeeper">Wicketkeeper</option>
+                    </select>
                     <span class="tbl-count" id="bowling-count">{{ bowling_stats|length }} bowlers</span>
                     <div class="export-grp">
                         <button class="btn-exp" onclick="exportFiltered('bowling','csv')"><i class="fas fa-file-csv"></i> CSV</button>
@@ -1117,8 +1185,8 @@
                         </thead>
                         <tbody>
                             {% for row in bowling_stats %}
-                            <tr>
-                                <td>{{ row.player }}</td>
+                            <tr data-role="{{ row.role|default('') }}">
+                                <td>{% if row.player_id %}<a href="/player/{{ row.player_id }}" style="color:var(--fg);text-decoration:none;border-bottom:1px dotted var(--fg-secondary)">{{ row.player }}</a>{% else %}{{ row.player }}{% endif %}</td>
                                 <td>{{ row.team }}</td>
                                 <td>{{ row.matches }}</td>
                                 <td>{{ row.innings }}</td>
@@ -1136,6 +1204,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="tbl-pagination" id="bowling-pagination"></div>
                 {% else %}
                 <div class="no-data"><i class="fas fa-info-circle"></i>No bowling data available</div>
                 {% endif %}
@@ -1147,6 +1216,13 @@
                 <div class="table-controls">
                     <input class="tbl-search" type="text" placeholder="Search player or team…" oninput="applyFilter('fielding')">
                     <select class="tbl-team-sel" onchange="applyFilter('fielding')"><option value="">All teams</option></select>
+                    <select class="tbl-role-sel" onchange="applyFilter('fielding')">
+                        <option value="">All roles</option>
+                        <option value="Batsman">Batsman</option>
+                        <option value="Bowler">Bowler</option>
+                        <option value="All-rounder">All-rounder</option>
+                        <option value="Wicketkeeper">Wicketkeeper</option>
+                    </select>
                     <span class="tbl-count" id="fielding-count">{{ fielding_stats|length }} players</span>
                     <div class="export-grp">
                         <button class="btn-exp" onclick="exportFiltered('fielding','csv')"><i class="fas fa-file-csv"></i> CSV</button>
@@ -1167,8 +1243,8 @@
                         </thead>
                         <tbody>
                             {% for row in fielding_stats %}
-                            <tr>
-                                <td>{{ row.player }}</td>
+                            <tr data-role="{{ row.role|default('') }}">
+                                <td>{% if row.player_id %}<a href="/player/{{ row.player_id }}" style="color:var(--fg);text-decoration:none;border-bottom:1px dotted var(--fg-secondary)">{{ row.player }}</a>{% else %}{{ row.player }}{% endif %}</td>
                                 <td>{{ row.team }}</td>
                                 <td>{{ row.matches }}</td>
                                 <td class="kc">{{ row.catches }}</td>
@@ -1178,9 +1254,41 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="tbl-pagination" id="fielding-pagination"></div>
                 {% else %}
                 <div class="no-data"><i class="fas fa-info-circle"></i>No fielding data available</div>
                 {% endif %}
+            </div>
+
+            <!-- PARTNERSHIPS PANEL -->
+            <div class="table-panel" id="partnerships">
+                <div class="table-controls">
+                    <input class="tbl-search" type="text" placeholder="Search batsmen…" oninput="filterPartnerships()">
+                    <span class="tbl-count" id="partnerships-count"></span>
+                    <div class="export-grp">
+                        <button class="btn-exp" onclick="exportFiltered('partnerships','csv')"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn-exp" onclick="exportFiltered('partnerships','txt')"><i class="fas fa-file-alt"></i> TXT</button>
+                    </div>
+                </div>
+                <div class="tbl-wrap">
+                    <table class="stats-tbl" id="partnerships-table">
+                        <thead>
+                            <tr>
+                                <th onclick="handleSort('partnerships-table',0)"># <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('partnerships-table',1)">Batsman 1 <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('partnerships-table',2)">Batsman 2 <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('partnerships-table',3)">Runs <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('partnerships-table',4)">Balls <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('partnerships-table',5)">Wicket <span class="sa">⇕</span></th>
+                                <th>Contribution</th>
+                            </tr>
+                        </thead>
+                        <tbody id="partnerships-tbody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="tbl-pagination" id="partnerships-pagination"></div>
+                <div class="no-data" id="partnerships-empty" style="display:none;"><i class="fas fa-user-friends"></i>No partnership data available</div>
             </div>
 
         </div>
@@ -1238,19 +1346,19 @@ function applyFilter(type) {
     const panel = document.getElementById(type);
     const search = (panel.querySelector('.tbl-search')?.value || '').toLowerCase();
     const team   = (panel.querySelector('.tbl-team-sel')?.value || '').toLowerCase();
-    let count = 0;
+    const role   = (panel.querySelector('.tbl-role-sel')?.value || '');
     table.querySelectorAll('tbody tr').forEach(row => {
         const cells = row.querySelectorAll('td');
         const playerText = (cells[0]?.textContent || '').toLowerCase();
         const teamText   = (cells[1]?.textContent || '').toLowerCase();
+        const rowRole    = row.dataset.role || '';
         const show = (!search || playerText.includes(search) || teamText.includes(search))
-                  && (!team   || teamText === team);
-        row.style.display = show ? '' : 'none';
-        if (show) count++;
+                  && (!team   || teamText === team)
+                  && (!role   || rowRole === role);
+        row.dataset.filtered = show ? '' : 'out';
     });
-    const unit = type === 'bowling' ? 'bowlers' : 'players';
-    const el = document.getElementById(type + '-count');
-    if (el) el.textContent = count + ' ' + unit;
+    if (pgState[type]) pgState[type].page = 1;
+    applyPagination(type);
 }
 
 function initTeamDropdowns() {
@@ -1295,6 +1403,74 @@ function handleSort(tableId, colIdx) {
             return dir === 'asc' ? at.localeCompare(bt) : bt.localeCompare(at);
         })
         .forEach(r => tbody.appendChild(r));
+    applyPagination(type.replace('-table', ''));
+}
+
+// ===== PAGINATION =====
+const pgState = {};
+function initPagination() {
+    ['batting', 'bowling', 'fielding'].forEach(type => {
+        pgState[type] = { page: 1, size: 25 };
+        applyPagination(type);
+    });
+}
+function applyPagination(type) {
+    const table = document.getElementById(type + '-table');
+    const nav = document.getElementById(type + '-pagination');
+    if (!table || !nav) return;
+    const st = pgState[type] || { page: 1, size: 25 };
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    // collect visible (not filtered-out) rows
+    const visible = rows.filter(r => r.dataset.filtered !== 'out');
+    const total = visible.length;
+    const totalPages = st.size === 0 ? 1 : Math.max(1, Math.ceil(total / st.size));
+    if (st.page > totalPages) st.page = totalPages;
+    // hide/show
+    rows.forEach(r => r.style.display = 'none');
+    if (st.size === 0) {
+        visible.forEach(r => r.style.display = '');
+    } else {
+        const start = (st.page - 1) * st.size;
+        visible.slice(start, start + st.size).forEach(r => r.style.display = '');
+    }
+    // update count
+    const unit = type === 'bowling' ? 'bowlers' : 'players';
+    const el = document.getElementById(type + '-count');
+    if (el) el.textContent = total + ' ' + unit;
+    // render nav
+    let html = '';
+    if (st.size > 0 && totalPages > 1) {
+        html += `<button onclick="pgGo('${type}',-1)" ${st.page<=1?'disabled':''}>&#8249;</button>`;
+        const range = [];
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || Math.abs(i - st.page) <= 2) range.push(i);
+            else if (range[range.length-1] !== '...') range.push('...');
+        }
+        range.forEach(p => {
+            if (p === '...') { html += `<span class="pg-info">…</span>`; }
+            else { html += `<button class="${p===st.page?'pg-active':''}" onclick="pgGo('${type}',0,${p})">${p}</button>`; }
+        });
+        html += `<button onclick="pgGo('${type}',1)" ${st.page>=totalPages?'disabled':''}>&#8250;</button>`;
+        html += `<span class="pg-info">Page ${st.page} of ${totalPages}</span>`;
+    }
+    html += `<select class="pg-size-sel" onchange="pgSize('${type}',this.value)">`;
+    [10,25,50,100,0].forEach(n => {
+        const label = n === 0 ? 'All' : n;
+        html += `<option value="${n}" ${st.size===n?'selected':''}>${label}</option>`;
+    });
+    html += '</select>';
+    nav.innerHTML = html;
+}
+function pgGo(type, delta, page) {
+    const st = pgState[type];
+    if (page !== undefined) st.page = page;
+    else st.page += delta;
+    applyPagination(type);
+}
+function pgSize(type, val) {
+    pgState[type].size = parseInt(val);
+    pgState[type].page = 1;
+    applyPagination(type);
 }
 
 // ===== EXPORT =====
@@ -1381,38 +1557,97 @@ function loadPartnerships() {
     const p = new URLSearchParams(window.location.search);
     const view = p.get('view') || 'overall';
     const tid  = p.get('tournament_id') || '';
-    const url  = view === 'tournament' && tid
-        ? '/api/tournament/' + tid + '/partnerships?limit=10'
-        : '/api/partnerships?limit=10';
+    const mf   = p.get('match_format') || '';
+    let url = view === 'tournament' && tid
+        ? '/api/tournament/' + tid + '/partnerships?limit=50'
+        : '/api/partnerships?limit=50';
+    if (mf) url += '&match_format=' + encodeURIComponent(mf);
+
+    const tbody = document.getElementById('partnerships-tbody');
+    const empty = document.getElementById('partnerships-empty');
+    const oldC  = document.getElementById('partnerships-container');
 
     fetch(url).then(r => r.json()).then(data => {
-        const c = document.getElementById('partnerships-container');
+        // Also populate legacy container if it exists
+        if (oldC) {
+            if (!data.success || !data.data?.length) {
+                oldC.innerHTML = '<div class="no-data"><i class="fas fa-user-friends"></i>No partnerships yet</div>';
+            } else {
+                let h = '<table class="p-table"><thead><tr><th>#</th><th>Partnership</th><th>Runs</th><th>Balls</th><th>Wkt</th>';
+                if (view === 'overall') h += '<th>Tournament</th>';
+                h += '</tr></thead><tbody>';
+                data.data.slice(0, 10).forEach((pt, i) => {
+                    const b1 = pt.batsman1.split(' ').pop(), b2 = pt.batsman2.split(' ').pop();
+                    const contrib = (pt.batsman1_contribution != null)
+                        ? '<div class="p-contrib">' + pt.batsman1_contribution + ' / ' + pt.batsman2_contribution + '</div>' : '';
+                    h += '<tr><td><span class="rank-chip ' + (i===0?'gold':i===1?'silver':i===2?'bronze':'') + '">' + (i+1) + '</span></td>'
+                       + '<td><div class="p-names">' + b1 + ' &amp; ' + b2 + '</div>' + contrib + '</td>'
+                       + '<td class="p-runs">' + pt.runs + '</td><td>' + pt.balls + '</td><td>' + formatOrdinal(pt.wicket) + '</td>';
+                    if (view === 'overall') h += '<td>' + (pt.tournament || '\u2014') + '</td>';
+                    h += '</tr>';
+                });
+                h += '</tbody></table>';
+                oldC.innerHTML = h;
+            }
+        }
+
+        // Populate partnerships tab table
+        if (!tbody) return;
         if (!data.success || !data.data?.length) {
-            c.innerHTML = '<div class="no-data"><i class="fas fa-user-friends"></i>No partnerships yet</div>';
+            tbody.innerHTML = '';
+            if (empty) empty.style.display = '';
             return;
         }
-        let html = '<table class="p-table"><thead><tr><th>#</th><th>Partnership</th><th>Runs</th><th>Balls</th><th>Wkt</th>';
-        if (view === 'overall') html += '<th>Tournament</th>';
-        html += '</tr></thead><tbody>';
+        if (empty) empty.style.display = 'none';
+        let html = '';
         data.data.forEach((pt, i) => {
-            const b1 = pt.batsman1.split(' ').pop(), b2 = pt.batsman2.split(' ').pop();
-            const contrib = (pt.batsman1_contribution != null)
-                ? '<div class="p-contrib">' + pt.batsman1_contribution + ' / ' + pt.batsman2_contribution + '</div>' : '';
-            html += '<tr>'
-                  + '<td><span class="rank-chip ' + (i===0?'gold':i===1?'silver':i===2?'bronze':'') + '">' + (i+1) + '</span></td>'
-                  + '<td><div class="p-names">' + b1 + ' &amp; ' + b2 + '</div>' + contrib + '</td>'
-                  + '<td class="p-runs">' + pt.runs + '</td>'
-                  + '<td>' + pt.balls + '</td>'
-                  + '<td>' + formatOrdinal(pt.wicket) + '</td>';
-            if (view === 'overall') html += '<td>' + (pt.tournament || '—') + '</td>';
-            html += '</tr>';
+            const contribBar = (pt.batsman1_contribution != null && pt.runs > 0)
+                ? (() => {
+                    const pct1 = Math.round((pt.batsman1_contribution / pt.runs) * 100);
+                    return `<div style="display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;background:var(--bg-secondary)">`
+                         + `<div style="width:${pct1}%;background:var(--c1);border-radius:3px 0 0 3px" title="${pt.batsman1_contribution}"></div>`
+                         + `<div style="flex:1;background:#e879f9;border-radius:0 3px 3px 0" title="${pt.batsman2_contribution}"></div></div>`
+                         + `<div style="font-size:0.6rem;color:var(--fg-secondary)">${pt.batsman1_contribution} / ${pt.batsman2_contribution}</div>`;
+                  })()
+                : '-';
+            html += `<tr>`
+                  + `<td>${i + 1}</td>`
+                  + `<td>${pt.batsman1}</td>`
+                  + `<td>${pt.batsman2}</td>`
+                  + `<td class="kc">${pt.runs}</td>`
+                  + `<td>${pt.balls || '-'}</td>`
+                  + `<td>${formatOrdinal(pt.wicket)}</td>`
+                  + `<td>${contribBar}</td>`
+                  + `</tr>`;
         });
-        html += '</tbody></table>';
-        c.innerHTML = html;
+        tbody.innerHTML = html;
+        const countEl = document.getElementById('partnerships-count');
+        if (countEl) countEl.textContent = data.data.length + ' partnerships';
+        // Init pagination for partnerships tab
+        pgState['partnerships'] = { page: 1, size: 25 };
+        applyPagination('partnerships');
     }).catch(() => {
-        document.getElementById('partnerships-container').innerHTML =
-            '<div class="no-data"><i class="fas fa-exclamation-circle"></i>Error loading partnerships</div>';
+        if (oldC) oldC.innerHTML = '<div class="no-data"><i class="fas fa-exclamation-circle"></i>Error loading partnerships</div>';
+        if (tbody) tbody.innerHTML = '';
+        if (empty) { empty.style.display = ''; empty.innerHTML = '<i class="fas fa-exclamation-circle"></i>Error loading partnerships'; }
     });
+}
+
+function filterPartnerships() {
+    const panel = document.getElementById('partnerships');
+    if (!panel) return;
+    const search = (panel.querySelector('.tbl-search')?.value || '').toLowerCase();
+    const table = document.getElementById('partnerships-table');
+    if (!table) return;
+    table.querySelectorAll('tbody tr').forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const b1 = (cells[1]?.textContent || '').toLowerCase();
+        const b2 = (cells[2]?.textContent || '').toLowerCase();
+        const show = !search || b1.includes(search) || b2.includes(search);
+        row.dataset.filtered = show ? '' : 'out';
+    });
+    if (pgState['partnerships']) pgState['partnerships'].page = 1;
+    applyPagination('partnerships');
 }
 
 function formatOrdinal(n) {
@@ -1574,6 +1809,7 @@ function renderInsights() {
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
     initTeamDropdowns();
+    initPagination();
     computeKPIs();
     loadPartnerships();
     loadPlayersForComparison();

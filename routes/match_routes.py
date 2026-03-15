@@ -3,6 +3,7 @@
 import json
 import os
 import random
+import re
 import time
 import uuid
 import zipfile
@@ -28,7 +29,8 @@ def register_match_routes(
     MatchPartnership,
     load_user_teams,
     clean_old_archives,
-    PROD_MAX_AGE,
+    ARCHIVE_MAX_AGE_DAYS,
+    ARCHIVE_MAX_AGE_SECS,
     cleanup_temp_scorecard_images,
     PROJECT_ROOT,
     MATCH_INSTANCES,
@@ -77,7 +79,7 @@ def register_match_routes(
         teams = load_user_teams(current_user.id, match_format=tournament_format or "T20")
 
         if request.method == "POST":
-            clean_old_archives(PROD_MAX_AGE)
+            clean_old_archives(ARCHIVE_MAX_AGE_SECS)
             cleanup_temp_scorecard_images()
 
             data = request.get_json(silent=True) or {}
@@ -1257,12 +1259,18 @@ def register_match_routes(
             # ??? H) Stream the ZIP file back to the browser ?????????????????????
             try:
                 app.logger.debug(f"[DownloadArchive] Sending ZIP to client: '{zip_path}'")
-                return send_file(
+                # Include milestone notifications as a response header
+                milestones = getattr(archiver, '_milestones', [])
+                response = send_file(
                     zip_path,
                     mimetype="application/zip",
                     as_attachment=True,
                     download_name=zip_name
                 )
+                if milestones:
+                    import json as _json
+                    response.headers['X-Milestones'] = _json.dumps(milestones)
+                return response
             except Exception as send_err:
                 app.logger.error(f"[DownloadArchive] Error sending ZIP file for match '{match_id}': {send_err}", exc_info=True)
                 return jsonify({"error": "Failed to send archive file"}), 500
@@ -1297,7 +1305,16 @@ def register_match_routes(
             }
             return format_map.get(normalized, ("T20", "T20"))
 
+        _FMT_TAG_RE = re.compile(r'_fmt-(\w+)')
+
         def _get_archive_format(zip_path):
+            """Extract format from filename tag (fast) or ZIP contents (legacy fallback)."""
+            filename = os.path.basename(zip_path)
+            tag_match = _FMT_TAG_RE.search(filename)
+            if tag_match:
+                return _normalize_match_format(tag_match.group(1))
+
+            # Legacy fallback: open ZIP and read JSON
             try:
                 with zipfile.ZipFile(zip_path, "r") as zf:
                     json_members = [name for name in zf.namelist() if name.lower().endswith(".json")]
@@ -1327,7 +1344,7 @@ def register_match_routes(
                 app.logger.warning(f"'{files_dir}' does not exist for user '{username}'")
             else:
                 now = time.time()
-                max_age = 7 * 24 * 3600  # 7 days in seconds
+                max_age = ARCHIVE_MAX_AGE_SECS
 
                 for fn in os.listdir(files_dir):
                     # Only consider ".zip" and filenames containing "_<username>_"
@@ -1346,7 +1363,7 @@ def register_match_routes(
                         app.logger.info(f"Skipping old archive '{fn}' (age {age//3600}h > 7d)")
                         continue
                     created_at = datetime.fromtimestamp(os.path.getmtime(full_path))
-                    expires_at = created_at + timedelta(days=7)
+                    expires_at = created_at + timedelta(days=ARCHIVE_MAX_AGE_DAYS)
 
                     # Build URLs for download & delete
                     download_url = f"/archives/{username}/{fn}"
@@ -1368,13 +1385,51 @@ def register_match_routes(
         except Exception as e:
             app.logger.error(f"Error listing archives in '{files_dir}' for '{username}': {e}", exc_info=True)
 
+        # ── Pagination & filter params ──────────────────────────────────
+        PAGE_SIZE = 12
+        page = max(1, request.args.get("page", 1, type=int))
+        filter_format = request.args.get("format", "").strip()
+        filter_type = request.args.get("type", "").strip()        # "tournament" | "exhibition"
+        filter_tournament = request.args.get("tournament_id", "", type=str).strip()
+        filter_date_from = request.args.get("date_from", "").strip()
+        filter_date_to = request.args.get("date_to", "").strip()
+        total_matches = 0
+
         try:
-            # Fetch ALL matches for the user, joined with Tournament to get names
-            all_matches = (
+            query = (
                 db.session.query(DBMatch, Tournament.name)
                 .outerjoin(Tournament, DBMatch.tournament_id == Tournament.id)
                 .filter(DBMatch.user_id == current_user.id)
-                .order_by(DBMatch.date.desc())
+            )
+
+            # Apply filters
+            if filter_format:
+                query = query.filter(DBMatch.match_format == filter_format)
+            if filter_type == "tournament":
+                query = query.filter(DBMatch.tournament_id.isnot(None))
+            elif filter_type == "exhibition":
+                query = query.filter(DBMatch.tournament_id.is_(None))
+            if filter_tournament:
+                query = query.filter(DBMatch.tournament_id == int(filter_tournament))
+            if filter_date_from:
+                try:
+                    dt_from = datetime.strptime(filter_date_from, "%Y-%m-%d")
+                    query = query.filter(DBMatch.date >= dt_from)
+                except ValueError:
+                    pass
+            if filter_date_to:
+                try:
+                    dt_to = datetime.strptime(filter_date_to, "%Y-%m-%d")
+                    dt_to = dt_to.replace(hour=23, minute=59, second=59)
+                    query = query.filter(DBMatch.date <= dt_to)
+                except ValueError:
+                    pass
+
+            total_matches = query.count()
+            all_matches = (
+                query.order_by(DBMatch.date.desc())
+                .offset((page - 1) * PAGE_SIZE)
+                .limit(PAGE_SIZE)
                 .all()
             )
 
@@ -1396,7 +1451,7 @@ def register_match_routes(
                 home_name = teams_by_id.get(m.home_team_id).name if m.home_team_id in teams_by_id else "Home"
                 away_name = teams_by_id.get(m.away_team_id).name if m.away_team_id in teams_by_id else "Away"
                 format_code, format_label = _normalize_match_format(getattr(m, "match_format", None))
-                
+
                 match_history.append({
                     "match_id": m.id,
                     "home_team": home_name,
@@ -1418,7 +1473,30 @@ def register_match_routes(
         except Exception as e:
             app.logger.error(f"Error loading match history for '{username}': {e}", exc_info=True)
 
-        return render_template("my_matches.html", files=valid_files, match_history=match_history)
+        # Build list of user's tournaments for the filter dropdown
+        user_tournaments = []
+        try:
+            user_tournaments = Tournament.query.filter_by(user_id=current_user.id).order_by(Tournament.name).all()
+        except Exception:
+            pass
+
+        has_more = (page * PAGE_SIZE) < total_matches
+
+        return render_template(
+            "my_matches.html",
+            files=valid_files,
+            match_history=match_history,
+            archive_max_age_days=ARCHIVE_MAX_AGE_DAYS,
+            page=page,
+            has_more=has_more,
+            total_matches=total_matches,
+            filter_format=filter_format,
+            filter_type=filter_type,
+            filter_tournament=filter_tournament,
+            filter_date_from=filter_date_from,
+            filter_date_to=filter_date_to,
+            user_tournaments=user_tournaments,
+        )
 
 
     @app.route("/archives/<username>/<filename>", methods=["GET"])

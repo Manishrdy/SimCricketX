@@ -11,7 +11,21 @@
                     <i class="fas fa-trophy"></i>
                 </div>
                 <div class="hero-text">
-                    <h1 class="hero-title">{{ tournament.name }}</h1>
+                    <h1 class="hero-title" id="tournament-name">{{ tournament.name }}
+                        <button type="button" class="rename-icon-btn" onclick="toggleRenameForm()" title="Rename">
+                            <i class="fas fa-pen" style="font-size:0.6em;opacity:0.5;margin-left:0.4rem;cursor:pointer;"></i>
+                        </button>
+                    </h1>
+                    <form id="rename-form" action="{{ url_for('rename_tournament', tournament_id=tournament.id) }}"
+                        method="POST" style="display:none;margin-bottom:0.5rem;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div style="display:flex;gap:0.5rem;align-items:center;">
+                            <input type="text" name="name" value="{{ tournament.name }}" maxlength="100"
+                                style="padding:0.4rem 0.7rem;border:2px solid var(--card-border);border-radius:8px;background:var(--bg);color:var(--fg);font-size:1.1rem;font-weight:700;width:300px;">
+                            <button type="submit" class="action-btn play-btn" style="padding:0.4rem 0.8rem;font-size:0.8rem;">Save</button>
+                            <button type="button" class="action-btn outline-btn" style="padding:0.4rem 0.8rem;font-size:0.8rem;" onclick="toggleRenameForm()">Cancel</button>
+                        </div>
+                    </form>
                     <div class="hero-meta">
                         <span class="status-pill {{ tournament.status|lower }}">
                             <i class="fas fa-circle"></i> {{ tournament.status }}
@@ -140,13 +154,27 @@
             </div>
 
             <div class="fixtures-grid">
-                {% for fixture in tournament.fixtures %}
-                <div class="fixture-card {% if fixture.status == 'Completed' %}completed{% else %}scheduled{% endif %}">
+                {% for fixture in fixtures %}
+                <div class="fixture-card {% if fixture.status == 'Completed' %}completed{% elif fixture.status == 'Locked' %}locked{% else %}scheduled{% endif %}{% if fixture.id == next_fixture_id %} next-up{% endif %}"
+                    id="fixture-{{ fixture.id }}">
+
+                    {% if fixture.id == next_fixture_id %}
+                    <div class="next-up-badge"><i class="fas fa-bolt"></i> Next Up</div>
+                    {% endif %}
+
                     <div class="fixture-header">
-                        <span class="round-badge">Match {{ fixture.round_number }}</span>
+                        <span class="round-badge">
+                            {% if fixture.stage and fixture.stage != 'league' %}
+                                {{ fixture.stage_description or fixture.stage|replace('_',' ')|title }}
+                            {% else %}
+                                Match {{ fixture.round_number }}
+                            {% endif %}
+                        </span>
                         <span class="status-badge {{ fixture.status|lower }}">
                             {% if fixture.status == 'Completed' %}
                             <i class="fas fa-check-circle"></i> Game Over
+                            {% elif fixture.status == 'Locked' %}
+                            <i class="fas fa-lock"></i> Locked
                             {% else %}
                             <i class="fas fa-clock"></i> Scheduled
                             {% endif %}
@@ -154,11 +182,11 @@
                     </div>
 
                     <div class="teams-versus">
-                        <!-- Home Team -->
                         <div class="team-block">
+                            {% if fixture.home_team %}
                             <div class="team-logo-circle"
-                                style="--team-color: {{ fixture.home_team.team_color }}; background: var(--team-color);">
-                                {{ fixture.home_team.short_code }}
+                                style="--team-color: {{ fixture.home_team.team_color or '#666' }}; background: var(--team-color);">
+                                {{ fixture.home_team.short_code or '?' }}
                             </div>
                             <div class="team-name-display">{{ fixture.home_team.name }}</div>
                             {% if fixture.status == 'Completed' and fixture.match %}
@@ -167,15 +195,19 @@
                                 <span class="overs">({{ fixture.match.home_team_overs }})</span>
                             </div>
                             {% endif %}
+                            {% else %}
+                            <div class="team-logo-circle" style="background:#555;">TBD</div>
+                            <div class="team-name-display">TBD</div>
+                            {% endif %}
                         </div>
 
                         <div class="vs-divider">VS</div>
 
-                        <!-- Away Team -->
                         <div class="team-block">
+                            {% if fixture.away_team %}
                             <div class="team-logo-circle"
-                                style="--team-color: {{ fixture.away_team.team_color }}; background: var(--team-color);">
-                                {{ fixture.away_team.short_code }}
+                                style="--team-color: {{ fixture.away_team.team_color or '#666' }}; background: var(--team-color);">
+                                {{ fixture.away_team.short_code or '?' }}
                             </div>
                             <div class="team-name-display">{{ fixture.away_team.name }}</div>
                             {% if fixture.status == 'Completed' and fixture.match %}
@@ -184,10 +216,14 @@
                                 <span class="overs">({{ fixture.match.away_team_overs }})</span>
                             </div>
                             {% endif %}
+                            {% else %}
+                            <div class="team-logo-circle" style="background:#555;">TBD</div>
+                            <div class="team-name-display">TBD</div>
+                            {% endif %}
                         </div>
                     </div>
 
-                    {% if fixture.status == 'Completed' and fixture.match %}
+                    {% if fixture.status == 'Completed' and fixture.match and fixture.match.result_description %}
                     <div class="result-banner">
                         <i class="fas fa-trophy"></i> {{ fixture.match.result_description }}
                     </div>
@@ -196,7 +232,7 @@
                     <div class="fixture-footer">
                         {% if fixture.status == 'Locked' %}
                         <button class="action-btn outline-btn" disabled style="opacity: 0.6; cursor: not-allowed;">
-                            <i class="fas fa-lock"></i> Locked
+                            <i class="fas fa-lock"></i> Awaiting Previous Results
                         </button>
                         {% elif fixture.status != 'Completed' %}
                         <form action="{{ url_for('match_setup') }}" method="GET" class="full-width-form">
@@ -213,8 +249,6 @@
                                 class="action-btn outline-btn">
                                 <i class="fas fa-list-ol"></i> Scoreboard
                             </a>
-
-                            <!-- Re-simulate Button -->
                             <form action="{{ url_for('resimulate_fixture', fixture_id=fixture.id) }}" method="POST"
                                 class="inline-form"
                                 onsubmit="return confirm('Re-simulating will delete the current match result and stats. Continue?');">
@@ -751,6 +785,39 @@
             border-left: 3px solid var(--warning);
         }
 
+        .fixture-card.locked {
+            border-left: 3px solid var(--fg-secondary);
+            opacity: 0.7;
+        }
+
+        .fixture-card.next-up {
+            border-left: 3px solid var(--accent);
+            box-shadow: 0 0 0 1px var(--accent), 0 4px 16px var(--shadow);
+            position: relative;
+        }
+
+        .next-up-badge {
+            position: absolute;
+            top: -1px;
+            right: -1px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 0.2rem 0.6rem;
+            border-radius: 0 14px 0 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .rename-icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            vertical-align: middle;
+        }
+
         .fixture-header {
             display: flex;
             justify-content: space-between;
@@ -1011,4 +1078,28 @@
             }
         }
     </style>
+    <script>
+        function toggleRenameForm() {
+            var nameEl = document.getElementById('tournament-name');
+            var formEl = document.getElementById('rename-form');
+            if (formEl.style.display === 'none') {
+                formEl.style.display = 'block';
+                nameEl.style.display = 'none';
+                formEl.querySelector('input[name=name]').focus();
+            } else {
+                formEl.style.display = 'none';
+                nameEl.style.display = '';
+            }
+        }
+
+        // Auto-scroll to next fixture if exists
+        (function () {
+            var nextUp = document.querySelector('.fixture-card.next-up');
+            if (nextUp) {
+                setTimeout(function () {
+                    nextUp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 500);
+            }
+        })();
+    </script>
     {% endblock %}
