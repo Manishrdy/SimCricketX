@@ -12,6 +12,7 @@ import yaml
 from flask import Response, after_this_request, flash, jsonify, redirect, render_template, request, send_file, session, stream_with_context, url_for
 from flask_login import current_user, login_user
 from sqlalchemy import func
+from utils.exception_tracker import log_exception
 from werkzeug.utils import secure_filename
 
 
@@ -135,6 +136,7 @@ def register_admin_routes(
             )
 
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Database backup failed: {e}", exc_info=True)
             return jsonify({"error": "Backup failed"}), 500
 
@@ -222,6 +224,7 @@ def register_admin_routes(
                                    recent_activity=recent_activity,
                                    audit_entries=audit_entries)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Dashboard error: {e}", exc_info=True)
             return "Error loading dashboard", 500
 
@@ -245,6 +248,7 @@ def register_admin_routes(
 
             return render_template('admin/users_list.html', users=user_data)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Users list error: {e}", exc_info=True)
             return "Error loading users", 500
 
@@ -311,6 +315,7 @@ def register_admin_routes(
 
             return render_template('admin/user_detail.html', user=user, teams=teams, matches=matches, sessions=sessions)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] User detail error: {e}", exc_info=True)
             return "Error loading user", 500
 
@@ -374,6 +379,7 @@ def register_admin_routes(
                 security_overview=security_overview,
             )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] User 360 error: {e}", exc_info=True)
             return "Error loading user 360", 500
 
@@ -396,6 +402,7 @@ def register_admin_routes(
             else:
                 return jsonify({"error": message}), 400
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Change email error: {e}", exc_info=True)
             return jsonify({"error": "Failed to change email"}), 500
 
@@ -418,6 +425,7 @@ def register_admin_routes(
             else:
                 return jsonify({"error": message}), 400
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Reset password error: {e}", exc_info=True)
             return jsonify({"error": "Failed to reset password"}), 500
 
@@ -440,6 +448,7 @@ def register_admin_routes(
             else:
                 return jsonify({"error": "Failed to delete user"}), 400
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Delete user error: {e}", exc_info=True)
             return jsonify({"error": "Failed to delete user"}), 500
 
@@ -468,6 +477,7 @@ def register_admin_routes(
 
             return render_template('admin/database_stats.html', stats=stats)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Database stats error: {e}", exc_info=True)
             return "Error loading database stats", 500
 
@@ -483,6 +493,7 @@ def register_admin_routes(
             log_admin_action(current_user.id, 'optimize_db', None, 'Database VACUUM executed', request.remote_addr)
             return jsonify({"message": "Database optimized successfully"}), 200
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Database optimize error: {e}", exc_info=True)
             return jsonify({"error": "Failed to optimize database"}), 500
 
@@ -547,6 +558,7 @@ def register_admin_routes(
                                    top_users=top_users,
                                    audit_log=audit_log)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Activity page error: {e}", exc_info=True)
             return "Error loading activity", 500
 
@@ -633,6 +645,7 @@ def register_admin_routes(
 
             return render_template('admin/health.html', health=health)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Health page error: {e}", exc_info=True)
             return "Error loading health page", 500
 
@@ -646,6 +659,7 @@ def register_admin_routes(
             backups = _list_backup_files(prefix_filter=None)
             return render_template('admin/backups.html', backups=backups)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Backups page error: {e}", exc_info=True)
             return "Error loading backups", 500
 
@@ -674,6 +688,7 @@ def register_admin_routes(
                 current_db=current_db,
             )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Restore center error: {e}", exc_info=True)
             return "Error loading restore center", 500
 
@@ -735,6 +750,7 @@ def register_admin_routes(
                 "maintenance_mode": True
             }), 200
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Restore apply error: {e}", exc_info=True)
             return jsonify({"error": "Failed to restore database"}), 500
 
@@ -748,6 +764,7 @@ def register_admin_routes(
             log_admin_action(current_user.id, 'create_backup', None, 'Manual backup created', request.remote_addr)
             return jsonify({"message": "Backup created successfully"}), 200
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Manual backup error: {e}", exc_info=True)
             return jsonify({"error": "Failed to create backup"}), 500
 
@@ -764,6 +781,7 @@ def register_admin_routes(
             log_admin_action(current_user.id, 'download_backup', safe_name, 'Backup file downloaded', request.remote_addr)
             return send_file(path, as_attachment=True, download_name=safe_name, mimetype='application/x-sqlite3')
         except Exception as e:
+            log_exception(e)
             return jsonify({"error": "Download failed"}), 500
 
     @app.route('/admin/backups/<filename>/delete', methods=['POST'])
@@ -780,6 +798,7 @@ def register_admin_routes(
             log_admin_action(current_user.id, 'delete_backup', safe_name, 'Backup file deleted', request.remote_addr)
             return jsonify({"message": f"Backup {safe_name} deleted"}), 200
         except Exception as e:
+            log_exception(e)
             return jsonify({"error": "Failed to delete backup"}), 500
 
     # --- User Impersonation ---
@@ -819,6 +838,7 @@ def register_admin_routes(
             flash(f"Now viewing as {user_email}. Click 'Stop Impersonating' to return.", "info")
             return redirect(url_for('home'))
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Impersonate error: {e}", exc_info=True)
             return jsonify({"error": "Failed to impersonate"}), 500
 
@@ -867,6 +887,7 @@ def register_admin_routes(
             else:
                 return redirect(url_for('home'))
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Stop impersonate error: {e}", exc_info=True)
             return redirect(url_for('home'))
 
@@ -896,6 +917,7 @@ def register_admin_routes(
 
             return render_template('admin/config.html', display_config=display_config)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Config page error: {e}", exc_info=True)
             return "Error loading config", 500
 
@@ -946,8 +968,10 @@ def register_admin_routes(
             log_admin_action(current_user.id, 'update_config', f"{section}.{key}", f"Changed from '{old_safe}' to '{new_safe}'", get_client_ip())
             return jsonify({"message": f"Config {section}.{key} updated"}), 200
         except ValueError as ve:
+            log_exception(ve)
             return jsonify({"error": str(ve)}), 400
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Config update error: {e}", exc_info=True)
             return jsonify({"error": "Failed to update config"}), 500
 
@@ -992,6 +1016,7 @@ def register_admin_routes(
                                    active_tournaments=active_tournaments,
                                    completed_tournaments=completed_tournaments)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Matches page error: {e}", exc_info=True)
             return "Error loading matches", 500
 
@@ -1009,6 +1034,7 @@ def register_admin_routes(
                 else:
                     return jsonify({"error": "Match not found in active instances"}), 404
         except Exception as e:
+            log_exception(e)
             return jsonify({"error": "Failed to terminate match"}), 500
 
     # --- Audit Log ---
@@ -1033,6 +1059,7 @@ def register_admin_routes(
                                    total_pages=total_pages,
                                    total=total)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Audit log error: {e}", exc_info=True)
             return "Error loading audit log", 500
 
@@ -1111,6 +1138,7 @@ def register_admin_routes(
         try:
             db.session.commit()
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Admin] Unlock user error for {user_email}: {e}")
             return jsonify({"error": "Failed to unlock account"}), 500
@@ -1309,6 +1337,7 @@ def register_admin_routes(
             log_admin_action(current_user.id, 'update_rate_limits', None, json.dumps(cfg['rate_limits']), request.remote_addr)
             return jsonify({"message": "Rate limits updated (restart required for full effect)"}), 200
         except Exception as e:
+            log_exception(e)
             return jsonify({"error": str(e)}), 500
 
     @app.route('/admin/bot-defense')
@@ -1365,6 +1394,7 @@ def register_admin_routes(
         except ValueError:
             return jsonify({"error": "All numeric fields must be valid integers"}), 400
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Admin] Bot defense update error: {e}", exc_info=True)
             return jsonify({"error": "Failed to update bot defense settings"}), 500
 
@@ -1486,6 +1516,7 @@ def register_admin_routes(
                 "position": banner.position,
             }), 200
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Admin] Announcement banner update error: {e}", exc_info=True)
             return jsonify({"error": "Failed to update announcement banner"}), 500
@@ -1805,6 +1836,7 @@ def register_admin_routes(
             log_admin_action(current_user.id, 'delete_file', file_path, 'File deleted from admin explorer', get_client_ip())
             return jsonify({'success': True})
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[FileExplorer] Error deleting file {file_path}: {e}")
             return jsonify({'error': str(e)}), 500
 
@@ -1947,6 +1979,7 @@ def register_admin_routes(
                              f'Wiped {match_count} matches, {tourn_count} tournaments, {team_count} teams', get_client_ip())
             return jsonify({"message": f"Wiped data for {user_email}: {team_count} teams, {match_count} matches, {tourn_count} tournaments"}), 200
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Admin] Wipe data error for {user_email}: {e}", exc_info=True)
             return jsonify({"error": "Failed to wipe data"}), 500
@@ -2041,6 +2074,7 @@ def register_admin_routes(
             log_admin_action(current_user.id, 'reset_tournament', tourn.name, 'All fixtures and standings cleared', get_client_ip())
             return jsonify({"message": f"Tournament '{tourn.name}' reset to initial state"}), 200
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Admin] Reset tournament error: {e}", exc_info=True)
             return jsonify({"error": "Failed to reset tournament"}), 500
@@ -2152,6 +2186,7 @@ def register_admin_routes(
                         yield f"event: feed\ndata: {feed_payload}\n\n"
 
                 except Exception as e:
+                    log_exception(e)
                     app.logger.warning(f"[Admin SSE] Stream error on tick {tick}: {e}")
                     yield "event: stats\ndata: {}\n\n"
 
@@ -2279,6 +2314,7 @@ def register_admin_routes(
                         result_rows = [list(row) for row in result.fetchmany(500)]
                     log_admin_action(current_user.id, 'sql_query', None, query_sql[:200], get_client_ip())
                 except Exception as e:
+                    log_exception(e)
                     error = str(e)
         return render_template('admin/sql_runner.html',
                                query=query_sql, result_cols=result_cols,
@@ -2516,6 +2552,7 @@ def register_admin_routes(
                              ip_address=get_client_ip())
             return jsonify({'ok': True, 'status': new_status})
         except Exception as exc:
+            log_exception(exc)
             db.session.rollback()
             app.logger.error(f"[Admin] auth_event_update error: {exc}")
             return jsonify({'error': 'Database error'}), 500
@@ -2533,6 +2570,7 @@ def register_admin_routes(
                              ip_address=get_client_ip())
             return jsonify({'ok': True, 'deleted': deleted})
         except Exception as exc:
+            log_exception(exc)
             db.session.rollback()
             app.logger.error(f"[Admin] auth_events_clear_resolved error: {exc}")
             return jsonify({'error': 'Database error'}), 500

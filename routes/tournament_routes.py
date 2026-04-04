@@ -5,6 +5,7 @@ import os
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from utils.exception_tracker import log_exception
 
 
 def register_tournament_routes(
@@ -71,6 +72,7 @@ def register_tournament_routes(
                     os.remove(json_path)
                     return
                 except Exception as e:
+                    log_exception(e)
                     app.logger.warning(f"Failed to delete JSON via stored path {json_path}: {e}")
 
         # O(1) — try canonical name
@@ -182,9 +184,11 @@ def register_tournament_routes(
                 flash(f"Tournament '{name}' created successfully!", "success")
                 return redirect(url_for("tournament_dashboard", tournament_id=t.id))
             except ValueError as e:
+                log_exception(e)
                 flash(str(e), "error")
                 return redirect(url_for("create_tournament_route"))
             except Exception as e:
+                log_exception(e)
                 app.logger.error(f"Error creating tournament: {e}", exc_info=True)
                 flash("An error occurred while creating the tournament.", "error")
                 return redirect(url_for("create_tournament_route"))
@@ -322,6 +326,7 @@ def register_tournament_routes(
                 url_for("match_setup", fixture_id=fixture.id, tournament_id=fixture.tournament_id)
             )
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"Resimulation error: {e}", exc_info=True)
             flash("Failed to reset match.", "danger")

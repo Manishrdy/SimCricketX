@@ -19,6 +19,8 @@ from pathlib import Path
 import resend
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from utils.exception_tracker import log_exception
+
 log = logging.getLogger(__name__)
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "email_templates"
@@ -87,6 +89,7 @@ def send_email(to: str, subject: str, html: str) -> bool:
         log.info("[Email] '%s' sent to %s", subject, to)
         return True
     except Exception as exc:
+        log_exception(exc)
         log.error("[Email] Failed to send '%s' to %s: %s", subject, to, exc)
         return False
 

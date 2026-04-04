@@ -19,6 +19,8 @@ import yaml
 import logging
 import copy
 
+from utils.exception_tracker import log_exception
+
 logger = logging.getLogger(__name__)
 
 _CONFIG_PATH = os.path.join(
@@ -54,6 +56,7 @@ def _load():
         _validate_matrices()
         logger.info("Ground conditions config loaded")
     except Exception as e:
+        log_exception(e)
         logger.error(f"Failed to load ground_conditions.yaml: {e}")
         _cached_config = None
 
@@ -222,6 +225,7 @@ def get_user_config(user_id):
         row = db.session.query(UserGroundConfig).filter_by(user_id=user_id).first()
         return row.config_json if row else None
     except Exception as e:
+        log_exception(e)
         logger.error(f"get_user_config({user_id}): {e}")
         return None
 
@@ -235,6 +239,7 @@ def get_effective_config(user_id):
         with open(_DEFAULTS_PATH, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception as e:
+        log_exception(e)
         logger.error(f"get_effective_config — could not read defaults: {e}")
         return get_config() or {}
 
@@ -260,6 +265,7 @@ def save_user_config(user_id, config_dict):
         db.session.commit()
         return True, None
     except Exception as e:
+        log_exception(e)
         logger.error(f"save_user_config({user_id}): {e}")
         return False, str(e)
 
@@ -278,6 +284,7 @@ def reset_user_config(user_id):
             db.session.commit()
         return True, None
     except Exception as e:
+        log_exception(e)
         logger.error(f"reset_user_config({user_id}): {e}")
         return False, str(e)
 
@@ -299,6 +306,7 @@ def save_config(config_dict):
         reload()
         return True, None
     except Exception as e:
+        log_exception(e)
         logger.error(f"Failed to save ground_conditions.yaml: {e}")
         return False, str(e)
 
@@ -316,6 +324,7 @@ def reset_to_defaults():
         reload()
         return True, None
     except Exception as e:
+        log_exception(e)
         logger.error(f"Failed to reset ground conditions: {e}")
         return False, str(e)
 

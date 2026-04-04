@@ -638,3 +638,23 @@ class AuthEventLog(db.Model):
     __table_args__ = (
         db.Index('ix_auth_event_log_status_type', 'status', 'event_type'),
     )
+
+
+class ExceptionLog(db.Model):
+    """App-wide exception / error tracking.
+
+    Every caught or unhandled exception is recorded here so that admins
+    can trace, evaluate, and debug issues across the entire application.
+    """
+    __tablename__ = 'exception_log'
+
+    id                = db.Column(db.Integer, primary_key=True)
+    exception_type    = db.Column(db.String(200), nullable=False)
+    exception_message = db.Column(db.Text, nullable=False, default='')
+    traceback         = db.Column(db.Text, nullable=True)
+    module            = db.Column(db.String(200), nullable=True)
+    function          = db.Column(db.String(200), nullable=True)
+    line_number       = db.Column(db.Integer, nullable=True)
+    filename          = db.Column(db.String(300), nullable=True)
+    user_email        = db.Column(db.String(120), nullable=True)
+    timestamp         = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
