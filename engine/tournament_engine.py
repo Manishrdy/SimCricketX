@@ -11,6 +11,8 @@ import logging
 import json
 import math
 
+from utils.exception_tracker import log_exception
+
 logger = logging.getLogger(__name__)
 
 
@@ -236,6 +238,7 @@ class TournamentEngine:
             return tournament
 
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             logger.error(f"Failed to create tournament: {e}")
             raise
@@ -1229,6 +1232,7 @@ class TournamentEngine:
         try:
             self._update_player_stats_cache(match)
         except Exception as psc_err:
+            log_exception(psc_err)
             logger.warning(f"[Standings] Failed to update player stats cache: {psc_err}")
 
         # Check tournament progression

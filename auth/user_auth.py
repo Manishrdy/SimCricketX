@@ -10,6 +10,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from database.models import User, AdminAuditLog
 from database import db
 import json
+from utils.exception_tracker import log_exception
 
 
 def _hash_token(raw_token: str) -> str:
@@ -67,6 +68,7 @@ def log_admin_action(admin_email: str, action: str, target: str = None, details:
         db.session.add(entry)
         db.session.commit()
     except Exception as e:
+        log_exception(e)
         db.session.rollback()
         logging.error(f"[AuditLog] Failed to record action: {e}")
 
@@ -110,6 +112,7 @@ def register_user(email: str, password: str, display_name: Optional[str] = None)
         logging.info(f"[Auth] Registered user: {email}")
         return True
     except Exception as e:
+        log_exception(e)
         db.session.rollback()
         logging.error(f"[Auth] Registration failed for {email}: {e}")
         return False
@@ -131,6 +134,7 @@ def generate_email_verify_token(email: str) -> str | None:
         db.session.commit()
         return token
     except Exception as e:
+        log_exception(e)
         db.session.rollback()
         logging.error(f"[Auth] Failed to generate verify token for {email}: {e}")
         return None
@@ -154,6 +158,7 @@ def generate_password_reset_token(email: str) -> str | None:
         db.session.commit()
         return token
     except Exception as e:
+        log_exception(e)
         db.session.rollback()
         logging.error(f"[Auth] Failed to generate reset token for {email}: {e}")
         return None
@@ -202,6 +207,7 @@ def delete_user(email: str, requesting_user_email: str = None) -> bool:
             log_admin_action(requesting_user_email, 'delete_user', email, 'User account and all data deleted')
         return True
     except Exception as e:
+        log_exception(e)
         db.session.rollback()
         logging.error(f"[Auth] Delete failed: {e}")
         return False
@@ -231,6 +237,10 @@ def update_user_email(old_email: str, new_email: str, admin_email: str = None) -
     user = db.session.get(User, old_email)
     if not user:
         return False, f"User {old_email} not found"
+
+    # Detach the loaded ORM instance before raw SQL PK updates.
+    # This avoids stale identity-map state for callers still holding the old object.
+    db.session.expunge(user)
 
     try:
         from sqlalchemy import text
@@ -262,6 +272,7 @@ def update_user_email(old_email: str, new_email: str, admin_email: str = None) -
         return True, f"Email successfully updated to {new_email}"
 
     except Exception as e:
+        log_exception(e)
         db.session.rollback()
         logging.error(f"[Admin] Email update failed: {e}")
         return False, f"Failed to update email: {str(e)}"
@@ -295,6 +306,7 @@ def update_user_password(email: str, new_password: str, admin_email: str = None)
         return True, "Password successfully reset"
 
     except Exception as e:
+        log_exception(e)
         db.session.rollback()
         logging.error(f"[Admin] Password reset failed for {email}: {e}")
         return False, f"Failed to reset password: {str(e)}"

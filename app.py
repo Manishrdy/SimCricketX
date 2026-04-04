@@ -100,6 +100,7 @@ from routes.team_routes import register_team_routes
 from routes.core_routes import register_core_routes
 from routes.match_routes import register_match_routes
 from routes.admin_routes import register_admin_routes
+from utils.exception_tracker import log_exception
 
 # SocketIO optional dependency — app works normally via HTTP if not installed
 _SOCKETIO_AVAILABLE = False
@@ -238,6 +239,7 @@ def increment_matches_simulated():
             db.session.add(SiteCounter(key='matches_simulated', value=1))
         db.session.commit()
     except Exception as e:
+        log_exception(e)
         db.session.rollback()
         print(f"[ERROR] Failed to increment matches_simulated: {e}")
 
@@ -259,6 +261,7 @@ def increment_visit_counter():
             db.session.add(SiteCounter(key='total_visits', value=1))
         db.session.commit()
     except Exception as e:
+        log_exception(e)
         db.session.rollback()
         print(f"[ERROR] Could not increment visit count: {e}")
 
@@ -291,6 +294,7 @@ def clean_old_archives(max_age_seconds=None):
                 os.remove(full_path)
                 logger.info(f"Deleted old archive: {filename} (age {age//3600}h)")
             except Exception as e:
+                log_exception(e)
                 logger.error(f"Failed to delete {full_path}: {e}", exc_info=True)
 
 
@@ -370,6 +374,7 @@ def cleanup_old_match_instances(app):
                         removed_files += 1
                         app.logger.info(f"[Cleanup] Removed orphaned JSON: {fn}")
                 except Exception as e:
+                    log_exception(e)
                     app.logger.warning(f"[Cleanup] Failed to remove {fn}: {e}")
             if removed_files:
                 app.logger.info(f"[Cleanup] Cleaned up {removed_files} orphaned JSON files")
@@ -377,6 +382,7 @@ def cleanup_old_match_instances(app):
         _last_cleanup_run = datetime.utcnow()
 
     except Exception as e:
+        log_exception(e)
         app.logger.error(f"[Cleanup] Error cleaning up match instances: {e}", exc_info=True)
 
 def periodic_cleanup(app):
@@ -385,6 +391,7 @@ def periodic_cleanup(app):
         try:
             cleanup_old_match_instances(app)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[PeriodicCleanup] Error in cleanup thread: {e}")
         time.sleep(6 * 3600)  # 6 hours
 
@@ -416,6 +423,7 @@ def cleanup_temp_scorecard_images(logger=None, min_age_seconds=300):
                         os.remove(fpath)
                         removed += 1
                 except Exception as e:
+                    log_exception(e)
                     log.warning(f"[Cleanup] Failed to remove {fpath}: {e}")
             # Remove empty subdirectories
             for d in dirs:
@@ -435,6 +443,7 @@ def cleanup_temp_scorecard_images(logger=None, min_age_seconds=300):
         if removed:
             log.info(f"[Cleanup] Removed {removed} old scorecard images (>{min_age_seconds}s)")
     except Exception as e:
+        log_exception(e)
         log.error(f"[Cleanup] Error cleaning temp scorecard images: {e}", exc_info=True)
 
 
@@ -895,6 +904,7 @@ def create_app():
 
             return None
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[DisplayName Check] Guard error: {e}", exc_info=True)
             # Fail closed for authenticated users if guard errors unexpectedly.
             if current_user.is_authenticated and request.endpoint != 'set_display_name':
@@ -987,6 +997,7 @@ def create_app():
         if not secret or not isinstance(secret, str):
             raise ValueError("Invalid secret_key in config")
     except Exception as e:
+        log_exception(e)
         print(f"[WARN] Could not read secret_key from config.yaml: {e}")
 
     if secret and secret.strip().lower() in {"change_me", "replace_me", "default", "your_secret_here"}:
@@ -1008,6 +1019,7 @@ def create_app():
                         f.write(secret)
                     print(f"[WARN] Generated persistent SECRET_KEY at {secret_file}")
             except Exception as e:
+                log_exception(e)
                 print(f"[WARN] Failed to load/write persistent SECRET_KEY: {e}")
                 secret = os.urandom(24).hex()
                 print("[WARN] Using random Flask SECRET_KEY--sessions won't persist across restarts")
@@ -1091,6 +1103,14 @@ def create_app():
             _run_pending_email_migration(db, app)
         except Exception as e:
             print(f"[WARN] Pending email migration skipped: {e}")
+
+    # Exception log migration (idempotent — creates exception_log table)
+    if not test_mode:
+        try:
+            from migrations.add_exception_log import run_migration as _run_exception_log_migration
+            _run_exception_log_migration(db, app)
+        except Exception as e:
+            print(f"[WARN] Exception log migration skipped: {e}")
 
     # --- Logging setup (logs to file + terminal) ---
     base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -1191,6 +1211,7 @@ def create_app():
                     return None, None, (jsonify({"error": "Unauthorized"}), 403)
                 return data, direct_path, None
             except Exception as e:
+                log_exception(e)
                 app.logger.error(f"[MatchAuth] error loading match_{match_id}.json: {e}", exc_info=True)
 
         # Fallback: O(N) scan for legacy files (old naming convention)
@@ -1206,6 +1227,7 @@ def create_app():
                         return None, None, (jsonify({"error": "Unauthorized"}), 403)
                     return data, path, None
             except Exception as e:
+                log_exception(e)
                 app.logger.error(f"[MatchAuth] error loading {fn}: {e}", exc_info=True)
                 continue
 
@@ -1265,6 +1287,7 @@ def create_app():
             # Clean up backups older than 7 days
             _cleanup_old_backups()
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Backup] Scheduled backup failed: {e}")
 
     def _cleanup_old_backups(max_age_days=7):
@@ -1279,6 +1302,7 @@ def create_app():
                     os.remove(path)
                     app.logger.info(f"[Backup] Deleted old backup: {fn}")
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[Backup] Cleanup failed: {e}")
 
     def _list_backup_files(prefix_filter=None):
@@ -1315,6 +1339,7 @@ def create_app():
                 with open(config_path, "w") as f:
                     yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
             except Exception as e:
+                log_exception(e)
                 app.logger.error(f"[Admin] Failed to persist maintenance mode to config: {e}")
 
     def _verify_sqlite_integrity(db_file: str):
@@ -1325,6 +1350,7 @@ def create_app():
             status = (row[0] if row and row[0] else "").strip().lower()
             return status == "ok", (row[0] if row and row[0] else "integrity check failed")
         except Exception as e:
+            log_exception(e)
             return False, str(e)
         finally:
             if conn:
@@ -1338,6 +1364,7 @@ def create_app():
                 with app.app_context():
                     _run_scheduled_backup()
             except Exception as e:
+                log_exception(e)
                 app.logger.error(f"[Backup] Scheduler error: {e}")
 
     # Start backup scheduler + initial backup only once per process.
@@ -1435,6 +1462,7 @@ def create_app():
                 endpoint, values = adapter.match(request.path, method=request.method)
                 app.logger.info(f"[RouteMatch] path={request.path} endpoint={endpoint} values={values}")
             except Exception as e:
+                log_exception(e)
                 admin_routes = sorted([r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/admin')])
                 app.logger.error(
                     f"[RouteMatch] no-match path={request.path} method={request.method} err={e} "
@@ -1461,6 +1489,16 @@ def create_app():
     @admin_required
     def codex_probe_dot():
         return codex_probe()
+
+    @app.errorhandler(Exception)
+    def handle_unhandled_exception(exc):
+        from utils.exception_tracker import log_exception
+        log_exception(exc)
+        if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+            return jsonify({"error": "Internal Server Error"}), 500
+        return render_template('500.html') if os.path.exists(
+            os.path.join(app.template_folder or 'templates', '500.html')
+        ) else ("Internal Server Error", 500)
 
     @app.errorhandler(404)
     def handle_not_found(err):
@@ -1534,6 +1572,7 @@ def create_app():
                         db.session.query(MatchPartnership).filter_by(match_id=match_id).delete(synchronize_session=False)
                         db.session.query(MatchScorecard).filter_by(match_id=match_id).delete(synchronize_session=False)
                     except Exception as cleanup_err:
+                        log_exception(cleanup_err)
                         logger.error(f"[Tournament] Failed to clean dependent rows for match {match_id}: {cleanup_err}", exc_info=True)
                         raise
                     db.session.delete(existing_match)
@@ -1689,6 +1728,7 @@ def create_app():
                         archiver._save_to_database()
                         logger.info(f"[Tournament] Scorecard saved successfully for {match_id}")
                     except Exception as scorecard_err:
+                        log_exception(scorecard_err)
                         logger.error(f"[Tournament] Scorecard save failed: {scorecard_err}", exc_info=True)
                         # Continue - scorecard is supplementary data
                 
@@ -1729,12 +1769,14 @@ def create_app():
                 )
                 
             except ValueError as ve:
+                log_exception(ve)
                 # Validation errors - log and rollback
                 logger.error(f"[Tournament] Validation error for match {match_id}: {ve}", exc_info=True)
                 db.session.rollback()
                 raise
                 
             except Exception as db_err:
+                log_exception(db_err)
                 # Database or processing errors - rollback and log
                 logger.error(
                     f"[Tournament] Database error during match {match_id} completion: {db_err}",
@@ -1744,6 +1786,7 @@ def create_app():
                 raise
                 
         except Exception as outer_err:
+            log_exception(outer_err)
             # Catch-all for any unexpected errors
             logger.error(
                 f"[Tournament] Critical error in match completion handler for {match_id}: {outer_err}",
@@ -1770,6 +1813,7 @@ def create_app():
             archiver._save_to_database()
             logger.info(f"[MatchHistory] Persisted non-tournament match {match_id}")
         except Exception as e:
+            log_exception(e)
             logger.error(f"[MatchHistory] Failed to persist match {match_id}: {e}", exc_info=True)
 
     def _compute_tournament_stats(user_id, tournament_id, use_cache=False):
@@ -1792,6 +1836,7 @@ def create_app():
                 total = MatchScorecard.query.join(DBMatch).filter(DBMatch.tournament_id == tournament_id).count()
                 app.logger.info(f"STATS DEBUG: Total scorecards for tournament {tournament_id} (ignoring user filter): {total}")
             except Exception as e:
+                log_exception(e)
                 app.logger.error(f"STATS DEBUG: Error checking total: {e}")
             return [], [], [], {}
 
@@ -1964,6 +2009,7 @@ def create_app():
                 bowling_filename=f"tournament_{selected_tid}_bowling"
             )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error in _render_statistics_page for user {user_id}: {e}", exc_info=True)
             return render_template("statistics.html", has_stats=False, user=current_user)
 
@@ -2055,6 +2101,7 @@ def create_app():
                 }
                 teams.append(team_dict)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error loading teams from DB: {e}", exc_info=True)
         return teams
 
@@ -2203,6 +2250,7 @@ def create_app():
                     ws_emit('ball_result', outcome)
 
             except Exception as exc:
+                log_exception(exc)
                 app.logger.error(f'[WS next_ball] match={match_id}: {exc}', exc_info=True)
                 ws_emit('ws_error', {'message': 'Internal error', 'details': str(exc)})
 
@@ -2274,5 +2322,6 @@ if __name__ == "__main__":
             app.run(host=HOST, port=PORT, debug=is_local, use_reloader=False)
 
     except Exception as e:
+        log_exception(e)
         print("[ERROR] Failed to start SimCricketX:")
         traceback.print_exc()

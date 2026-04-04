@@ -6,6 +6,7 @@ import re
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
+from utils.exception_tracker import log_exception
 
 VALID_FORMATS = ("T20", "ListA")
 SHORT_CODE_RE = re.compile(r'^[A-Z0-9]{2,5}$')
@@ -344,6 +345,7 @@ def register_team_routes(
                     return redirect(url_for("home", clear_team_draft=1))
 
                 except Exception as db_err:
+                    log_exception(db_err)
                     db.session.rollback()
                     app.logger.error(
                         f"Database error saving team: {db_err}", exc_info=True
@@ -353,6 +355,7 @@ def register_team_routes(
                     )
 
             except Exception as e:
+                log_exception(e)
                 app.logger.error(
                     f"Unexpected error saving team: {e}", exc_info=True
                 )
@@ -402,6 +405,7 @@ def register_team_routes(
                     "created_at": t.created_at,
                 })
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error loading teams from DB: {e}", exc_info=True)
 
         total_players = sum(pi["player_count"] for t in teams for pi in t["profiles"])
@@ -445,6 +449,7 @@ def register_team_routes(
             )
             flash(f"Team '{team_name}' has been deleted.", "success")
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"Error deleting team from DB: {e}", exc_info=True)
             flash("An error occurred while deleting the team. Please try again.", "danger")
@@ -551,6 +556,7 @@ def register_team_routes(
                     return redirect(url_for("manage_teams"))
 
                 except Exception as e:
+                    log_exception(e)
                     db.session.rollback()
                     app.logger.error(f"Error updating team: {e}", exc_info=True)
                     flash(
@@ -564,6 +570,7 @@ def register_team_routes(
             return render_template("team_create.html", team=team_data, edit=True)
 
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error in edit_team: {e}", exc_info=True)
             return redirect(url_for("manage_teams"))
 
@@ -637,6 +644,7 @@ def register_team_routes(
             )
             flash(f"Team cloned as draft '{clone_name}'.", "success")
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"Error cloning team: {e}", exc_info=True)
             flash("An error occurred while cloning the team.", "danger")

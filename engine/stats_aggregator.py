@@ -3,6 +3,8 @@ import os
 import logging
 from datetime import datetime
 
+from utils.exception_tracker import log_exception
+
 class StatsAggregator:
     REQUIRED_BATTING_COLS = {'Player Name', 'Team Name', 'Runs', 'Balls', 'Status',
                              '1s', '2s', '3s', 'Fours', 'Sixes', 'Dots'}
@@ -37,6 +39,7 @@ class StatsAggregator:
                 df['match_id'] = os.path.basename(file_path).split('_')[0]
                 df_list.append(df)
             except Exception as e:
+                log_exception(e)
                 logging.error(f"Error reading {file_path}: {e}")
         return pd.concat(df_list, ignore_index=True) if df_list else pd.DataFrame()
 

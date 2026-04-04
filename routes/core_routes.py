@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from flask import jsonify, render_template, request, send_from_directory, session
 from flask_login import current_user, login_required
+from utils.exception_tracker import log_exception
 
 
 def register_core_routes(
@@ -119,6 +120,7 @@ def register_core_routes(
 
             return jsonify({"message": "Announcement banner dismissed"}), 200
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"Failed to dismiss announcement banner: {e}", exc_info=True)
             return jsonify({"error": "Failed to dismiss announcement banner"}), 500

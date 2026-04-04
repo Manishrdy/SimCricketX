@@ -36,6 +36,7 @@ from sqlalchemy import func as sa_func
 
 from database import db
 from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, MatchPartnership
+from utils.exception_tracker import log_exception
 
 # ─── Define PROJECT_ROOT so that we can write to /<project_root>/data/… ─────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -318,6 +319,7 @@ class MatchArchiver:
             return True
             
         except Exception as e:
+            log_exception(e)
             self.logger.error(f"Archive creation failed: {e}", exc_info=True)
             self._cleanup_on_error()
             return False
@@ -337,6 +339,7 @@ class MatchArchiver:
             self.logger.debug(f"Archive directory created: {self.archive_path}")
             
         except Exception as e:
+            log_exception(e)
             raise MatchArchiverError(f"Failed to create archive directory: {e}")
 
     def _calculate_margin_of_victory(self) -> tuple:
@@ -544,6 +547,7 @@ class MatchArchiver:
                         away_team = DBTeam.query.filter_by(short_code=a_code, user_id=a_user).first()
 
                 except Exception as parse_err:
+                     log_exception(parse_err)
                      self.logger.warning(f"Team string parsing failed: {parse_err}")
 
             if not home_team or not away_team:
@@ -609,6 +613,7 @@ class MatchArchiver:
                     MatchPartnership.query.filter_by(match_id=self.match_id).delete()
                     nested.commit()
                 except Exception as rev_err:
+                    log_exception(rev_err)
                     nested.rollback()
                     self.logger.warning(
                         f"Aggregate reversal failed (match {self.match_id}), "
@@ -849,6 +854,7 @@ class MatchArchiver:
                 if all_milestones:
                     self.logger.info(f"Milestones reached: {all_milestones}")
             except Exception as ms_err:
+                log_exception(ms_err)
                 self.logger.warning(f"Milestone detection failed (non-fatal): {ms_err}")
             self._milestones = all_milestones
 
@@ -856,6 +862,7 @@ class MatchArchiver:
             return True
             
         except Exception as e:
+            log_exception(e)
             self.logger.error(f"DB Save Error: {e}", exc_info=True)
             db.session.rollback()
             return False
@@ -937,8 +944,10 @@ class MatchArchiver:
             self.logger.debug(f"JSON file copied: {self.filenames['json']}")
             
         except json.JSONDecodeError as e:
+            log_exception(e)
             raise MatchArchiverError(f"Invalid JSON in original file: {e}")
         except Exception as e:
+            log_exception(e)
             raise MatchArchiverError(f"Failed to copy JSON file: {e}")
 
     def _create_commentary_text_file(self, commentary_log: List[str]) -> None:
@@ -966,6 +975,7 @@ class MatchArchiver:
             self.logger.debug(f"Text file created: {self.filenames['txt']}")
             
         except Exception as e:
+            log_exception(e)
             raise MatchArchiverError(f"Failed to create text file: {e}")
 
     def _generate_text_header(self) -> str:
@@ -1013,6 +1023,7 @@ class MatchArchiver:
             lines.extend(["", ""])
             
         except Exception as e:
+            log_exception(e)
             self.logger.warning(f"Error formatting playing XI: {e}")
             lines.extend(["Playing XI information unavailable", "", ""])
         
@@ -1078,6 +1089,7 @@ class MatchArchiver:
                 ])
         
         except Exception as e:
+            log_exception(e)
             self.logger.warning(f"Error formatting scorecards: {e}")
             lines.append("Scorecard information unavailable due to data formatting issues")
         
@@ -1221,6 +1233,7 @@ class MatchArchiver:
             ])
         
         except Exception as e:
+            log_exception(e)
             self.logger.warning(f"Error generating match summary: {e}")
             lines.append("Match summary unavailable")
         
@@ -1277,6 +1290,7 @@ class MatchArchiver:
             self.logger.debug("All CSV files created successfully")
             
         except Exception as e:
+            log_exception(e)
             raise MatchArchiverError(f"Failed to create CSV files: {e}")
 
     def _create_batting_csv(self, filename: str, stats: Dict, team_name: str, full_lineup: List) -> None:
@@ -1346,6 +1360,7 @@ class MatchArchiver:
             self.logger.debug(f"Batting CSV created: {filename}")
             
         except Exception as e:
+            log_exception(e)
             raise MatchArchiverError(f"Failed to create batting CSV {filename}: {e}")
 
     def _create_bowling_csv(self, filename: str, stats: Dict, team_name: str) -> None:
@@ -1388,6 +1403,7 @@ class MatchArchiver:
             self.logger.debug(f"Bowling CSV created: {filename}")
             
         except Exception as e:
+            log_exception(e)
             raise MatchArchiverError(f"Failed to create bowling CSV {filename}: {e}")
 
     def _create_html_file(self, commentary_log: List[str], commentary_raw_html: Optional[str] = None) -> None:
@@ -1400,6 +1416,7 @@ class MatchArchiver:
             self.created_files.append(html_path)
             self.logger.debug(f"HTML file created: {self.filenames['html']}")
         except Exception as e:
+            log_exception(e)
             raise MatchArchiverError(f"Failed to create HTML file: {e}")
 
     def _classify_commentary_entry(self, entry: str) -> str:
@@ -1732,6 +1749,7 @@ class MatchArchiver:
             return str(zip_path)
 
         except Exception as e:
+            log_exception(e)
             msg = f"❌ ERROR: Failed to create ZIP archive at {zip_path}: {e}"
             self.logger.error(msg)
             raise MatchArchiverError(msg)
@@ -1773,6 +1791,7 @@ class MatchArchiver:
             return True
             
         except Exception as e:
+            log_exception(e)
             self.logger.error(f"Archive validation failed: {e}")
             return False
         
@@ -1798,6 +1817,7 @@ class MatchArchiver:
                     self.logger.info(f"✅ Successfully removed archive directory: {self.archive_path}")
                     
                 except PermissionError as pe:
+                    log_exception(pe)
                     self.logger.warning(f"⚠️ Permission error during standard cleanup: {pe}")
                     cleanup_success = False
                     
@@ -1809,9 +1829,11 @@ class MatchArchiver:
                         cleanup_success = True
                         
                     except Exception as force_error:
+                        log_exception(force_error)
                         self.logger.error(f"❌ Force removal failed: {force_error}")
                         
                 except Exception as std_error:
+                    log_exception(std_error)
                     self.logger.warning(f"⚠️ Standard removal failed: {std_error}")
                     cleanup_success = False
                     
@@ -1823,11 +1845,13 @@ class MatchArchiver:
                         cleanup_success = True
                         
                     except Exception as individual_error:
+                        log_exception(individual_error)
                         self.logger.error(f"❌ Individual removal failed: {individual_error}")
             else:
                 self.logger.debug("Directory does not exist, skipping archive cleanup")
                 
         except Exception as phase1_error:
+            log_exception(phase1_error)
             self.logger.error(f"❌ Phase 1 cleanup failed completely: {phase1_error}")
             cleanup_success = False
 
@@ -1844,10 +1868,12 @@ class MatchArchiver:
                         self.logger.debug(f"Tracked file already gone: {temp_file}")
                         
                 except Exception as file_error:
+                    log_exception(file_error)
                     self.logger.warning(f"⚠️ Failed to remove tracked file {temp_file}: {file_error}")
                     cleanup_success = False
                     
         except Exception as phase2_error:
+            log_exception(phase2_error)
             self.logger.error(f"❌ Phase 2 cleanup failed: {phase2_error}")
             cleanup_success = False
 
@@ -1874,6 +1900,7 @@ class MatchArchiver:
                             self.logger.debug(f"Scorecard image not found: {img_path.name}")
                             
                     except Exception as img_error:
+                        log_exception(img_error)
                         self.logger.warning(f"⚠️ Failed to remove image {img_path.name}: {img_error}")
                         cleanup_success = False
                 
@@ -1889,6 +1916,7 @@ class MatchArchiver:
                 self.logger.debug("Scorecard temp directory does not exist")
                 
         except Exception as phase3_error:
+            log_exception(phase3_error)
             self.logger.error(f"❌ Phase 3 cleanup failed: {phase3_error}")
             cleanup_success = False
 
@@ -1909,6 +1937,7 @@ class MatchArchiver:
                 self.logger.warning(f"⚠️ Partial cleanup completed with some issues for match {self.match_id}")
                 
         except Exception as phase4_error:
+            log_exception(phase4_error)
             self.logger.error(f"❌ Phase 4 validation failed: {phase4_error}")
 
     def _force_remove_directory(self, directory_path: Path) -> None:
@@ -1930,6 +1959,7 @@ class MatchArchiver:
             shutil.rmtree(directory_path, onerror=handle_remove_readonly)
             
         except Exception as e:
+            log_exception(e)
             self.logger.debug(f"Force removal attempt failed: {e}")
             raise
 
@@ -1952,6 +1982,7 @@ class MatchArchiver:
                     files_removed += 1
                     self.logger.debug(f"Individually removed file: {item.name}")
                 except Exception as e:
+                    log_exception(e)
                     self.logger.debug(f"Failed to remove file {item.name}: {e}")
                     # Try force removal for this file
                     try:
@@ -1961,6 +1992,7 @@ class MatchArchiver:
                         files_removed += 1
                         self.logger.debug(f"Force removed file: {item.name}")
                     except Exception as force_e:
+                        log_exception(force_e)
                         self.logger.warning(f"Could not force remove file {item.name}: {force_e}")
         
         # Second pass: Remove empty directories (bottom-up)
@@ -1979,6 +2011,7 @@ class MatchArchiver:
             dirs_removed += 1
             self.logger.debug(f"Removed main directory: {directory_path.name}")
         except OSError as e:
+            log_exception(e)
             remaining = list(directory_path.iterdir()) if directory_path.exists() else []
             self.logger.warning(f"Could not remove main directory: {e}. Remaining items: {[item.name for item in remaining]}")
         
@@ -2001,12 +2034,14 @@ class MatchArchiver:
                             old_files_removed += 1
                             self.logger.debug(f"Removed old scorecard image: {file_path.name}")
                 except Exception as old_cleanup_error:
+                    log_exception(old_cleanup_error)
                     self.logger.debug(f"Error removing old file {file_path.name}: {old_cleanup_error}")
             
             if old_files_removed > 0:
                 self.logger.debug(f"Cleaned up {old_files_removed} old scorecard images")
                 
         except Exception as e:
+            log_exception(e)
             self.logger.debug(f"Error during old image cleanup: {e}")
 
     def _cleanup_empty_temp_directory(self, temp_dir: Path) -> None:
@@ -2020,6 +2055,7 @@ class MatchArchiver:
                 else:
                     self.logger.debug(f"Temp directory not empty, contains: {[item.name for item in contents]}")
         except Exception as e:
+            log_exception(e)
             self.logger.debug(f"Could not remove temp directory: {e}")
 
 
@@ -2035,6 +2071,7 @@ class MatchArchiver:
                 self.logger.debug("Removed partial ZIP file after error")
                 
         except Exception as e:
+            log_exception(e)
             self.logger.warning(f"Error cleanup failed (non-critical): {e}")
 
     def get_archive_info(self) -> Dict[str, Any]:
@@ -2070,6 +2107,7 @@ class MatchArchiver:
                 }
                 
         except Exception as e:
+            log_exception(e)
             return {"error": f"Failed to read archive info: {e}"}
 
 
@@ -2122,6 +2160,7 @@ def find_original_json_file(match_id: str, base_path: str = "data/matches") -> O
                     return str(json_file)
 
             except (json.JSONDecodeError, IOError) as e:
+                log_exception(e)
                 logger.warning(f"Error reading {json_file}: {e}")
                 continue
 
@@ -2129,6 +2168,7 @@ def find_original_json_file(match_id: str, base_path: str = "data/matches") -> O
         return None
         
     except Exception as e:
+        log_exception(e)
         logger.error(f"Error searching for match file: {e}")
         return None
 

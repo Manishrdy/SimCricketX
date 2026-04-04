@@ -12,6 +12,7 @@ from utils.email_service import (
     send_password_reset_email,
     send_account_deletion_email,
 )
+from utils.exception_tracker import log_exception
 
 # Resend-verification rate-limit constants
 _RESEND_MAX = 3
@@ -58,6 +59,7 @@ def register_auth_routes(
             db.session.add(entry)
             db.session.commit()
         except Exception as exc:
+            log_exception(exc)
             db.session.rollback()
             app.logger.error(f"[AuthEvent] Failed to log {event_type} for {email}: {exc}")
 
@@ -155,6 +157,7 @@ def register_auth_routes(
                 error="Registration failed. Please try a different email.",
             )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Registration error: {e}")
             return render_template("register.html", error="System error")
 
@@ -285,6 +288,7 @@ def register_auth_routes(
                         ))
                         db.session.commit()
                     except Exception as e:
+                        log_exception(e)
                         db.session.rollback()
                         app.logger.error(f"[Auth] Session tracking error: {e}")
 
@@ -345,6 +349,7 @@ def register_auth_routes(
                 return render_template("login.html", error="Invalid email or password.", error_type="credentials")
 
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Login error: {e}")
             return render_template("login.html", error="A system error occurred. Please try again.", error_type="system")
 
@@ -382,6 +387,7 @@ def register_auth_routes(
             flash("Password changed successfully.", "success")
             return redirect(url_for("home"))
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Auth] Force password change error: {e}")
             return render_template("force_change_password.html", error="Failed to change password")
@@ -414,6 +420,7 @@ def register_auth_routes(
             flash("Display name set successfully!", "success")
             return redirect(url_for("home"))
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Auth] Set display name error: {e}")
             return render_template("set_display_name.html", error="Failed to set display name")
@@ -439,6 +446,7 @@ def register_auth_routes(
             try:
                 send_account_deletion_email(email, display_name, deletion_date)
             except Exception as exc:
+                log_exception(exc)
                 app.logger.error(f"[Auth] Deletion email failed for {email}: {exc}")
             return redirect(url_for("register"))
 
@@ -479,6 +487,7 @@ def register_auth_routes(
             app.logger.info(f"[Auth] Session {session_id} revoked by {current_user.id}")
             flash("Session revoked successfully.", "success")
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Auth] Session revoke error: {e}")
             flash("Failed to revoke session.", "danger")
@@ -498,6 +507,7 @@ def register_auth_routes(
             app.logger.info(f"[Auth] {deleted} other session(s) revoked by {current_user.id}")
             flash(f"Signed out of {deleted} other device(s).", "success")
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Auth] Revoke-all error: {e}")
             flash("Failed to sign out other devices.", "danger")
@@ -556,6 +566,7 @@ def register_auth_routes(
             db.session.commit()
             app.logger.info(f"[Auth] Email verified for {user.id}")
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Auth] Email verification DB error: {e}")
             flash("Something went wrong. Please try again.", "danger")
@@ -648,6 +659,7 @@ def register_auth_routes(
             new_user.force_email_verify = True
             db.session.commit()
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Auth] force_verify_email_change: flag reset failed: {e}")
 
@@ -851,6 +863,7 @@ def register_auth_routes(
             db.session.commit()
             app.logger.info(f"[Auth] Password reset completed for {user.id}")
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Auth] Password reset DB error for {user.id}: {e}")
             return render_template("reset_password.html", token=token, error="Something went wrong. Please try again.")
@@ -884,6 +897,7 @@ def register_auth_routes(
             app.logger.info(f"[Auth] Display name updated for {current_user.id}: {new_name}")
             flash("Display name updated successfully.", "success")
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Auth] Display name update error: {e}")
             flash("Failed to update display name. Please try again.", "danger")
@@ -923,6 +937,7 @@ def register_auth_routes(
             current_user.pending_email_token_expires = datetime.utcnow() + timedelta(hours=6)
             db.session.commit()
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Auth] Email change request error: {e}")
             flash("Failed to initiate email change. Please try again.", "danger")
@@ -948,6 +963,7 @@ def register_auth_routes(
             db.session.commit()
             flash("Pending email change cancelled.", "success")
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"[Auth] Cancel email change error: {e}")
             flash("Failed to cancel. Please try again.", "danger")

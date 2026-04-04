@@ -14,6 +14,8 @@ import csv
 import io
 from tabulate import tabulate
 
+from utils.exception_tracker import log_exception
+
 
 class StatsService:
     """Service class for calculating and exporting cricket statistics"""
@@ -854,6 +856,7 @@ class StatsService:
             return bowling_figures[:limit]
             
         except Exception as e:
+            log_exception(e)
             self._log(f"Error fetching bowling figures: {e}", level='error')
             return []
     
@@ -921,6 +924,7 @@ class StatsService:
             return comparison
             
         except Exception as e:
+            log_exception(e)
             self._log(f"Error in player comparison: {e}", level='error')
             return {'error': str(e)}
     
@@ -1009,6 +1013,7 @@ class StatsService:
             }
             
         except Exception as e:
+            log_exception(e)
             self._log(f"Error getting player stats for {player_id}: {e}", level='error')
             return None
     
@@ -1164,6 +1169,7 @@ class StatsService:
             return self._analyze_partnerships(player_id, player.name, partnerships)
             
         except Exception as e:
+            log_exception(e)
             self._log(f"Error fetching partnership stats: {e}", level='error')
             return {'error': str(e)}
     
@@ -1339,6 +1345,7 @@ class StatsService:
             return leaderboard
             
         except Exception as e:
+            log_exception(e)
             self._log(f"Error fetching partnership leaderboard: {e}", level='error')
             return []
 
@@ -1429,6 +1436,7 @@ class StatsService:
                 "top_performers": {"team1": _top_performers(team1_id), "team2": _top_performers(team2_id)},
             }
         except Exception as e:
+            log_exception(e)
             self._log(f"Error in head-to-head: {e}", level="error")
             return {"error": str(e)}
 
@@ -1530,6 +1538,7 @@ class StatsService:
                 "match_log": sorted(match_log.values(), key=lambda x: x["date"], reverse=True),
             }
         except Exception as e:
+            log_exception(e)
             self._log(f"Error in player profile: {e}", level="error")
             return {"error": str(e)}
 
@@ -1632,6 +1641,7 @@ class StatsService:
                 "recent": recent,
             }
         except Exception as e:
+            log_exception(e)
             self._log(f"Error in team stats: {e}", level="error")
             return {"error": str(e)}
 
