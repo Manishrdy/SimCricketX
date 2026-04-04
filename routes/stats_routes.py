@@ -3,6 +3,7 @@
 from flask import Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from markupsafe import escape
+from utils.exception_tracker import log_exception
 
 
 def register_stats_routes(
@@ -130,6 +131,7 @@ def register_stats_routes(
                 user=current_user,
             )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error in statistics route: {e}", exc_info=True)
             flash("Error loading statistics", "danger")
             return render_template("statistics.html", has_stats=False, user=current_user)
@@ -182,6 +184,7 @@ def register_stats_routes(
                 headers={"Content-Disposition": f"attachment;filename={filename}"},
             )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error exporting statistics: {e}", exc_info=True)
             return jsonify({"error": "Error exporting statistics"}), 500
 
@@ -199,6 +202,7 @@ def register_stats_routes(
                 tournaments=tournaments,
             )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error loading comparison page: {e}", exc_info=True)
             flash("Error loading comparison page", "danger")
             return redirect(url_for("home"))
@@ -232,6 +236,7 @@ def register_stats_routes(
                 }
             )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error fetching bowling figures: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
 
@@ -328,6 +333,7 @@ def register_stats_routes(
 
             return jsonify({"success": True, "data": normalized})
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error comparing players: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
 
@@ -354,6 +360,7 @@ def register_stats_routes(
 
             return jsonify({"success": True, "data": partnership_stats})
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error fetching partnership stats: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
 
@@ -385,6 +392,7 @@ def register_stats_routes(
                 }
             )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error fetching tournament partnerships: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
 
@@ -446,6 +454,7 @@ def register_stats_routes(
 
             return jsonify({"success": True, "data": result, "count": len(result)})
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error fetching overall partnerships: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
 
@@ -475,6 +484,7 @@ def register_stats_routes(
                 return jsonify(data), 400
             return jsonify({"success": True, "data": data})
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error in head-to-head API: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
 
@@ -492,6 +502,7 @@ def register_stats_routes(
                 return redirect(url_for("statistics"))
             return render_template("player_profile.html", profile=profile, match_format=match_format)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error loading player profile: {e}", exc_info=True)
             flash("Error loading player profile", "danger")
             return redirect(url_for("statistics"))
@@ -511,6 +522,7 @@ def register_stats_routes(
             teams = DBTeam.query.filter_by(user_id=current_user.id).filter(DBTeam.is_placeholder != True).all()
             return render_template("team_stats.html", stats=data, teams=teams, match_format=match_format)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error loading team stats: {e}", exc_info=True)
             flash("Error loading team stats", "danger")
             return redirect(url_for("statistics"))
@@ -581,5 +593,6 @@ pre {{ white-space: pre-wrap; word-wrap: break-word; }}
                     headers={"Content-Disposition": f"attachment;filename={filename}"},
                 )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error exporting PDF: {e}", exc_info=True)
             return jsonify({"error": "Error exporting statistics"}), 500

@@ -16,6 +16,7 @@ from engine.game_state_engine import (
 )
 from engine.format_config import get_format
 from engine.bowler_manager import BowlerManager
+from utils.exception_tracker import log_exception
 
 
 logger = logging.getLogger(__name__)
@@ -839,6 +840,7 @@ class Match:
                     os.remove(original_json_path)
                     print(f"🧹 Cleaned up temp JSON: {original_json_path}")
                 except Exception as cleanup_err:
+                    log_exception(cleanup_err)
                     print(f"⚠️ JSON cleanup failed (non-critical): {cleanup_err}")
                 return True
             else:
@@ -846,6 +848,7 @@ class Match:
                 return False
                 
         except Exception as e:
+            log_exception(e)
             print(f"❌ Error creating match archive: {e}")
             return False
 
@@ -3610,6 +3613,7 @@ class Match:
                 try:
                     self.current_bowler = self.pick_bowler()
                 except Exception as e:
+                    log_exception(e)
                     logger.exception("Bowler selection failed at over %s.%s: %s", self.current_over, self.current_ball, e)
 
                     eligible = [p for p in self.bowling_team if p.get("will_bowl", False)]

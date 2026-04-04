@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
+from utils.exception_tracker import log_exception
 from werkzeug.utils import secure_filename
 
 
@@ -797,6 +798,7 @@ def register_match_routes(
             }), 200
 
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[ImpactSwap] Unexpected error for match {match_id}: {e}", exc_info=True)
             return jsonify({"error": "Internal server error"}), 500
 
@@ -893,6 +895,7 @@ def register_match_routes(
             return jsonify({"success": True}), 200
 
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error updating final lineups: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
         
@@ -951,6 +954,7 @@ def register_match_routes(
 
             return jsonify(outcome)
         except Exception as e:
+            log_exception(e)
             # Log the complete error with stack trace to execution.log
             app.logger.error(f"[NextBall] Error processing ball for match {match_id}: {e}", exc_info=True)
             
@@ -1072,6 +1076,7 @@ def register_match_routes(
             result = match.next_super_over_ball()
             return jsonify(result)
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error in super over: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
     
@@ -1110,6 +1115,7 @@ def register_match_routes(
                 return jsonify({"error": "Match instance not found"}), 404
 
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error saving commentary: {e}", exc_info=True)
             return jsonify({"error": "Failed to save commentary"}), 500
 
@@ -1234,9 +1240,11 @@ def register_match_routes(
                     app.logger.error(f"[DownloadArchive] MatchArchiver reported failure for '{match_id}'")
                     return jsonify({"error": "Failed to create archive"}), 500
             except ValueError as ve:
+                log_exception(ve)
                 app.logger.error(f"[DownloadArchive] Validation error during archiving: {ve}", exc_info=True)
                 return jsonify({"error": "Invalid archive data provided"}), 400
             except Exception as arch_err:
+                log_exception(arch_err)
                 app.logger.error(f"[DownloadArchive] Failed to create archive for match '{match_id}': {arch_err}", exc_info=True)
                 return jsonify({"error": "Failed to create archive"}), 500
             finally:
@@ -1272,10 +1280,12 @@ def register_match_routes(
                     response.headers['X-Milestones'] = _json.dumps(milestones)
                 return response
             except Exception as send_err:
+                log_exception(send_err)
                 app.logger.error(f"[DownloadArchive] Error sending ZIP file for match '{match_id}': {send_err}", exc_info=True)
                 return jsonify({"error": "Failed to send archive file"}), 500
 
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"[DownloadArchive] Unexpected error: {e}", exc_info=True)
             return jsonify({"error": "An unexpected error occurred while creating the archive"}), 500
 
@@ -1329,6 +1339,7 @@ def register_match_routes(
                             if raw_format is not None and str(raw_format).strip():
                                 return _normalize_match_format(raw_format)
             except Exception as exc:
+                log_exception(exc)
                 app.logger.debug(f"Could not infer format for archive '{zip_path}': {exc}")
             return ("T20", "T20")
 
@@ -1383,6 +1394,7 @@ def register_match_routes(
                 valid_files.sort(key=lambda x: x.get("created_at") or datetime.min, reverse=True)
 
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error listing archives in '{files_dir}' for '{username}': {e}", exc_info=True)
 
         # ── Pagination & filter params ──────────────────────────────────
@@ -1471,6 +1483,7 @@ def register_match_routes(
                     "format_label": format_label,
                 })
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error loading match history for '{username}': {e}", exc_info=True)
 
         # Build list of user's tournaments for the filter dropdown
@@ -1535,6 +1548,7 @@ def register_match_routes(
                 download_name=filename
             )
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error sending archive {zip_path}: {e}", exc_info=True)
             return jsonify({"error": "Failed to send file"}), 500
 
@@ -1582,6 +1596,7 @@ def register_match_routes(
                             # Import here or rely on global scope? assuming global scope based on view_file earlier
                             reverse_player_aggregates(scorecards, logger=app.logger)
                         except Exception as rev_err:
+                            log_exception(rev_err)
                             app.logger.error(f"Error reversing stats for match {match_id}: {rev_err}", exc_info=True)
                     
                     # 3. Delete dependent records explicitly
@@ -1610,6 +1625,7 @@ def register_match_routes(
                         try:
                             os.remove(json_path)
                         except Exception as e:
+                            log_exception(e)
                             app.logger.warning(f"Failed to delete JSON file {json_path}: {e}")
                     else:
                         # Fallback search if path wasn't stored or file wasn't found
@@ -1622,9 +1638,11 @@ def register_match_routes(
                                         if os.path.isfile(full_path):
                                             os.remove(full_path)
                                     except Exception as e:
+                                        log_exception(e)
                                         app.logger.warning(f"Failed to delete fallback JSON {fn}: {e}")
 
                 except Exception as inner_e:
+                    log_exception(inner_e)
                     app.logger.error(f"Error deleting individual match {match_id}: {inner_e}", exc_info=True)
                     continue
             
@@ -1633,6 +1651,7 @@ def register_match_routes(
             return jsonify({'success': True, 'deleted_count': deleted_count}), 200
             
         except Exception as e:
+            log_exception(e)
             db.session.rollback()
             app.logger.error(f"Error deleting matches: {e}", exc_info=True)
             return jsonify({'error': str(e)}), 500
@@ -1763,5 +1782,6 @@ def register_match_routes(
             })
 
         except Exception as e:
+            log_exception(e)
             app.logger.error(f"Error saving scorecard images: {e}", exc_info=True)
             return jsonify({"error": "An error occurred while saving images"}), 500

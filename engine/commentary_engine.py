@@ -4,6 +4,8 @@ import random
 import logging
 import os
 
+from utils.exception_tracker import log_exception
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,6 +26,7 @@ class CommentaryEngine:
             with open(self.data_path, 'r') as f:
                 return json.load(f)
         except Exception as e:
+            log_exception(e)
             logger.error(f"Failed to load commentary pack from {self.data_path}: {e}")
             return {"events": {}, "narratives": {}}
 
