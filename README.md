@@ -165,6 +165,12 @@ Authentication and authorization are not bolted on — they are integrated at ev
 - `AdminAuditLog` persists every admin action with actor email, action type, target, and timestamp
 - Indexed for efficient querying across large audit histories
 
+**Exception Observability (DB + GitHub)**
+- All backend/python/sqlite exception handlers call `log_exception(...)` to persist structured records in `exception_log`
+- Production idempotency is enforced via exception fingerprinting: one canonical row per unique exception signature
+- Repeated occurrences do not duplicate rows; instead `occurrence_count` is incremented and `last_seen_at` is updated
+- Optional GitHub issue creation is triggered only for first-seen fingerprints, then linked back with `github_issue_number` and `github_issue_url`
+
 **CSRF**
 - Flask-WTF CSRF protection on all state-changing POST endpoints
 
@@ -259,6 +265,23 @@ docker run -p 7860:7860 simcricketx
 ```bash
 pytest
 ```
+
+### Optional: Auto-create GitHub issues for exceptions
+
+Configure `.env` with:
+
+```bash
+GITHUB_ISSUE_ON_EXCEPTION_ENABLED=true
+GITHUB_TOKEN=your_token_here
+GITHUB_REPOSITORY=owner/repo
+GITHUB_ISSUE_TITLE_PREFIX=[Auto Exception]
+GITHUB_ISSUE_LABELS=auto-exception
+GITHUB_ISSUE_ASSIGNEES=
+```
+
+Token permissions:
+- Fine-grained PAT: repository selected + `Issues: Read and write`
+- Classic PAT: `public_repo` (public) or `repo` (private)
 
 ---
 

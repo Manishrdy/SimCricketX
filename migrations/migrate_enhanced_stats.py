@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import db
 from database.models import Match, MatchScorecard, MatchPartnership
 from app import create_app
+from utils.exception_tracker import log_exception
 
 def migrate_database():
     """Apply database migrations for enhanced stats"""
@@ -63,6 +64,7 @@ def migrate_database():
             print()
             
         except Exception as e:
+            log_exception(e, source="sqlite", context={"migration": "migrate_enhanced_stats"})
             print(f"❌ Migration failed: {e}")
             print()
             print("Please check the error message and try again.")

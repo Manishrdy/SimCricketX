@@ -834,6 +834,7 @@ def register_admin_routes(
                 db.session.add(active)
                 db.session.commit()
             except Exception:
+                log_exception(source="sqlite")
                 db.session.rollback()
             flash(f"Now viewing as {user_email}. Click 'Stop Impersonating' to return.", "info")
             return redirect(url_for('home'))
@@ -1278,6 +1279,7 @@ def register_admin_routes(
                 with open(log_path, "r", encoding="utf-8", errors="replace") as f:
                     lines = f.readlines()
             except Exception:
+                log_exception(source="backend")
                 lines = ["Error reading log file"]
         # Show last 500 lines by default, most recent first
         lines = lines[-500:]
@@ -1317,6 +1319,7 @@ def register_admin_routes(
                 window_seconds = int(request.form.get('window_seconds', 10))
                 admin_multiplier = int(request.form.get('admin_multiplier', 3))
             except (ValueError, TypeError):
+                log_exception(source="backend")
                 return jsonify({"error": "max_requests, window_seconds, and admin_multiplier must be integers"}), 400
             if max_requests < 1 or window_seconds < 1 or admin_multiplier < 1:
                 return jsonify({"error": "Rate limit values must be greater than zero"}), 400
@@ -1781,8 +1784,10 @@ def register_admin_routes(
                             'is_dir': is_dir
                         })
                     except OSError:
+                        log_exception(source="backend")
                         continue # Skip inaccessible items
         except PermissionError:
+             log_exception(source="backend")
              return jsonify({'error': 'Permission denied'}), 403
 
         # Sort: Directories first, then files (alphabetical)

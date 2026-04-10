@@ -15,6 +15,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import create_app, db
 from database.models import User
+from utils.exception_tracker import log_exception
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -35,6 +36,7 @@ def load_key():
         with open(KEY_FILE, 'rb') as f:
             return f.read()
     except Exception:
+        log_exception(source="backend", context={"script": "standalone_migrate", "scope": "load_key"})
         return None
 
 def decrypt_password(encrypted: str) -> str:
@@ -47,6 +49,7 @@ def decrypt_password(encrypted: str) -> str:
         f = Fernet(key)
         return f.decrypt(encrypted.encode()).decode()
     except Exception as e:
+        log_exception(e, source="backend", context={"script": "standalone_migrate", "scope": "decrypt_password"})
         logger.error(f"Decryption failed: {e}")
         return None
 
@@ -57,6 +60,7 @@ def load_legacy_credentials() -> dict:
         with open(CREDENTIALS_FILE, 'r') as f:
             return json.load(f)
     except Exception as e:
+        log_exception(e, source="backend", context={"script": "standalone_migrate", "scope": "load_legacy_credentials"})
         logger.error(f"Failed to read credentials.json: {e}")
         return {}
 
@@ -115,6 +119,7 @@ def run_migration():
                     try:
                         new_user.last_login = datetime.fromisoformat(data.get("login_time"))
                     except:
+                        log_exception(source="backend", context={"script": "standalone_migrate", "scope": "parse_login_time", "email": user_id})
                         pass
                         
                 db.session.add(new_user)
@@ -123,13 +128,16 @@ def run_migration():
                     success_count += 1
                     logger.info(f"✅ Migrated: {user_id}")
                 except IntegrityError:
+                    log_exception(source="sqlite", context={"script": "standalone_migrate", "scope": "commit_integrity", "email": user_id})
                     db.session.rollback()
                     logger.warning(f"Failed to commit {user_id} (IntegrityError)")
                 except Exception as e:
+                    log_exception(e, source="sqlite", context={"script": "standalone_migrate", "scope": "commit", "email": user_id})
                     db.session.rollback()
                     logger.error(f"Failed to commit {user_id}: {e}")
                     
             except Exception as e:
+                log_exception(e, source="sqlite", context={"script": "standalone_migrate", "scope": "process_user", "email": user_id})
                 logger.error(f"Error processing {user_id}: {e}")
                 
         logger.info("-" * 30)

@@ -2003,6 +2003,7 @@ class MatchArchiver:
                     dirs_removed += 1
                     self.logger.debug(f"Removed empty directory: {item.name}")
                 except OSError:
+                    log_exception(source="backend")
                     pass  # Directory not empty, skip
         
         # Finally remove the main directory
@@ -2145,6 +2146,7 @@ def find_original_json_file(match_id: str, base_path: str = "data/matches") -> O
                     logger.debug(f"Found match file (direct): {direct_path}")
                     return str(direct_path)
             except (json.JSONDecodeError, IOError) as e:
+                log_exception(e, source="backend")
                 logger.warning(f"Error reading {direct_path}: {e}")
 
         # Fallback: O(N) scan for legacy files
@@ -2192,6 +2194,7 @@ def validate_archive_environment() -> Dict[str, Any]:
         try:
             __import__(module)
         except ImportError:
+            log_exception(source="backend")
             issues.append(f"Required module missing: {module}")
     
     # Check disk space (if more than 100MB available)
@@ -2201,6 +2204,7 @@ def validate_archive_environment() -> Dict[str, Any]:
         if free_space < 100 * 1024 * 1024:  # Less than 100MB
             issues.append(f"Low disk space: {free_space / 1024 / 1024:.1f}MB available")
     except (AttributeError, OSError):
+        log_exception(source="backend")
         # os.statvfs not available on Windows
         pass
     

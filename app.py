@@ -109,12 +109,14 @@ try:
     socketio = SocketIO()
     _SOCKETIO_AVAILABLE = True
 except ImportError:
+    log_exception(source="backend")
     socketio = None
 
 # Add this import for system monitoring
 try:
     import psutil
 except ImportError:
+    log_exception(source="backend")
     psutil = None
 
 from database import db
@@ -227,6 +229,7 @@ def get_matches_simulated():
         row = db.session.get(SiteCounter, 'matches_simulated')
         return row.value if row else 0
     except Exception:
+        log_exception(source="backend")
         return 0
 
 def increment_matches_simulated():
@@ -249,6 +252,7 @@ def get_visit_counter():
         row = db.session.get(SiteCounter, 'total_visits')
         return row.value if row else 0
     except Exception:
+        log_exception(source="backend")
         return 0
 
 def increment_visit_counter():
@@ -312,6 +316,7 @@ def load_match_metadata(match_id):
             with open(direct_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
+            log_exception(source="backend")
             pass
 
     # Fallback: O(N) scan for legacy files
@@ -327,6 +332,7 @@ def load_match_metadata(match_id):
             if d.get("match_id") == match_id:
                 return d
         except Exception:
+            log_exception(source="backend")
             continue
     return None
 
@@ -432,12 +438,14 @@ def cleanup_temp_scorecard_images(logger=None, min_age_seconds=300):
                     if not os.listdir(dpath):
                         os.rmdir(dpath)
                 except Exception:
+                    log_exception(source="backend")
                     pass
         # Remove top-level dir if empty
         try:
             if not os.listdir(temp_images_dir):
                 os.rmdir(temp_images_dir)
         except Exception:
+            log_exception(source="backend")
             pass
 
         if removed:
@@ -535,6 +543,7 @@ def create_app():
         try:
             return ipaddress.ip_address((value or "").strip())
         except ValueError:
+            log_exception(source="backend")
             return None
 
     def is_path_within_base(base_dir: str, candidate_path: str) -> bool:
@@ -545,6 +554,7 @@ def create_app():
             target_path.relative_to(base_path)
             return True
         except Exception:
+            log_exception(source="backend")
             return False
 
     def is_ip_blocked(client_ip: str) -> bool:
@@ -562,6 +572,7 @@ def create_app():
                     if ip_obj in ipaddress.ip_network(raw, strict=False):
                         return True
                 except ValueError:
+                    log_exception(source="backend")
                     continue
             elif raw == str(ip_obj):
                 return True
@@ -601,6 +612,7 @@ def create_app():
                 elif ip_text == rule:
                     return True
             except Exception:
+                log_exception(source="backend")
                 continue
         return False
 
@@ -628,6 +640,7 @@ def create_app():
                 FailedLoginAttempt.timestamp >= cutoff
             ).count()
         except Exception:
+            log_exception(source="backend")
             recent_failures = 0
 
         high_threshold = max(1, int(bot_defense_settings.get("high_threshold", 20)))
@@ -693,6 +706,7 @@ def create_app():
         try:
             counter = int((counter_raw or "").strip())
         except Exception:
+            log_exception(source="backend")
             return False, "Invalid challenge counter"
         if counter < 0 or counter > max(10_000, int(bot_defense_settings.get("max_counter", 10_000_000))):
             return False, "Invalid challenge counter"
@@ -763,6 +777,7 @@ def create_app():
                 }
                 return {'user_stats': user_stats}
             except Exception:
+                log_exception(source="backend")
                 return {'user_stats': {'teams_count': 0, 'matches_count': 0, 'tournaments_count': 0, 'active_matches': []}}
         return {}
 
@@ -771,6 +786,7 @@ def create_app():
             with open(os.path.join(app.root_path, "version.txt"), encoding="utf-8") as f:
                 return f.read().strip()
         except Exception:
+            log_exception(source="backend")
             return "0.0.0"
 
     @app.context_processor
@@ -821,6 +837,7 @@ def create_app():
             if is_ip_blocked(client_ip):
                 return jsonify({"error": "Access denied"}), 403
         except Exception:
+            log_exception(source="backend")
             pass
         return None
 
@@ -845,6 +862,7 @@ def create_app():
                 return render_template('maintenance.html',
                                        reason='Access restricted to whitelisted IPs only.'), 403
         except Exception:
+            log_exception(source="backend")
             pass
         return None
 
@@ -982,6 +1000,7 @@ def create_app():
             active.last_active = datetime.utcnow()
             db.session.commit()
         except Exception:
+            log_exception(source="backend")
             db.session.rollback()
         return None
 
@@ -1070,6 +1089,7 @@ def create_app():
             with app.app_context():
                 ensure_schema(db.engine, db)
         except Exception as e:
+            log_exception(e, source="sqlite")
             print(f"[WARN] Schema check skipped: {e}")
 
     # Team format-profiles migration (idempotent — safe to run on every startup)
@@ -1078,6 +1098,7 @@ def create_app():
             from migrations.add_team_profiles import run_migration as _run_profiles_migration
             _run_profiles_migration(db, app)
         except Exception as e:
+            log_exception(e, source="sqlite")
             print(f"[WARN] Team profiles migration skipped: {e}")
 
     # Tournament format migration (idempotent — adds format_type to tournaments)
@@ -1086,6 +1107,7 @@ def create_app():
             from migrations.add_tournament_format import run_migration as _run_tournament_fmt_migration
             _run_tournament_fmt_migration(db, app)
         except Exception as e:
+            log_exception(e, source="sqlite")
             print(f"[WARN] Tournament format migration skipped: {e}")
 
     # Account lockout migration (idempotent — adds lockout_* columns to users)
@@ -1094,6 +1116,7 @@ def create_app():
             from migrations.add_account_lockout import run_migration as _run_lockout_migration
             _run_lockout_migration(db, app)
         except Exception as e:
+            log_exception(e, source="sqlite")
             print(f"[WARN] Account lockout migration skipped: {e}")
 
     # Pending email migration (idempotent — adds pending_email_* columns to users)
@@ -1102,6 +1125,7 @@ def create_app():
             from migrations.add_pending_email import run_migration as _run_pending_email_migration
             _run_pending_email_migration(db, app)
         except Exception as e:
+            log_exception(e, source="sqlite")
             print(f"[WARN] Pending email migration skipped: {e}")
 
     # Exception log migration (idempotent — creates exception_log table)
@@ -1110,7 +1134,26 @@ def create_app():
             from migrations.add_exception_log import run_migration as _run_exception_log_migration
             _run_exception_log_migration(db, app)
         except Exception as e:
+            log_exception(e, source="sqlite")
             print(f"[WARN] Exception log migration skipped: {e}")
+
+    # Exception log metadata migration (idempotent — adds structured logging fields)
+    if not test_mode:
+        try:
+            from migrations.add_exception_log_metadata import run_migration as _run_exception_log_meta_migration
+            _run_exception_log_meta_migration(db, app)
+        except Exception as e:
+            log_exception(e, source="sqlite")
+            print(f"[WARN] Exception log metadata migration skipped: {e}")
+
+    # Exception log dedup migration (idempotent — adds fingerprint/occurrence fields)
+    if not test_mode:
+        try:
+            from migrations.add_exception_log_dedup import run_migration as _run_exception_log_dedup_migration
+            _run_exception_log_dedup_migration(db, app)
+        except Exception as e:
+            log_exception(e, source="sqlite")
+            print(f"[WARN] Exception log dedup migration skipped: {e}")
 
     # --- Logging setup (logs to file + terminal) ---
     base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -1192,6 +1235,7 @@ def create_app():
         try:
             return str(uuid.UUID(match_id)).lower() == match_id.lower()
         except Exception:
+            log_exception(source="backend")
             return False
 
     def _load_match_file_for_user(match_id):
@@ -1377,6 +1421,7 @@ def create_app():
                 try:
                     _run_scheduled_backup()
                 except Exception:
+                    log_exception(source="backend")
                     pass
 
                 _backup_scheduler_started = True
@@ -1552,6 +1597,7 @@ def create_app():
             try:
                 fixture_id = int(fixture_id)
             except Exception:
+                log_exception(source="backend")
                 raise ValueError(f"Invalid fixture_id '{fixture_id}' for match {match_id}")
             logger.info(f"[Tournament] Starting completion handler for match {match_id} in tournament {tournament_id}")
             
@@ -1796,6 +1842,7 @@ def create_app():
             try:
                 db.session.rollback()
             except Exception:  # Fix D7: Don't swallow SystemExit/KeyboardInterrupt
+                log_exception(source="backend")
                 pass
 
     def _persist_non_tournament_match_completion(match, match_id, outcome, logger):

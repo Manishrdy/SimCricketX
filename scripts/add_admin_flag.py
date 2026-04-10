@@ -14,6 +14,7 @@ from database import db
 from database.models import User
 from sqlalchemy import inspect, text
 import logging
+from utils.exception_tracker import log_exception
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -100,6 +101,7 @@ def add_admin_flag_migration():
         return True
 
     except Exception as e:
+        log_exception(e, source="sqlite", context={"script": "add_admin_flag"})
         logger.error(f"Migration failed: {e}")
         db.session.rollback()
         return False

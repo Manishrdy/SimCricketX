@@ -657,4 +657,26 @@ class ExceptionLog(db.Model):
     line_number       = db.Column(db.Integer, nullable=True)
     filename          = db.Column(db.String(300), nullable=True)
     user_email        = db.Column(db.String(120), nullable=True)
+    severity          = db.Column(db.String(10), nullable=False, default='error')
+    source            = db.Column(db.String(30), nullable=False, default='backend')
+    context_json      = db.Column(db.Text, nullable=True)
+    request_id        = db.Column(db.String(64), nullable=True)
+    handled           = db.Column(db.Boolean, nullable=False, default=True)
+    resolved          = db.Column(db.Boolean, nullable=False, default=False)
+    resolved_at       = db.Column(db.DateTime, nullable=True)
+    resolved_by       = db.Column(db.String(120), nullable=True)
+    fingerprint       = db.Column(db.String(64), nullable=True)
+    occurrence_count  = db.Column(db.Integer, nullable=False, default=1)
+    first_seen_at     = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_seen_at      = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    github_issue_number = db.Column(db.Integer, nullable=True)
+    github_issue_url  = db.Column(db.String(300), nullable=True)
     timestamp         = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index('ix_exception_timestamp', 'timestamp'),
+        db.Index('ix_exception_type_ts', 'exception_type', 'timestamp'),
+        db.Index('ix_exception_source_ts', 'source', 'timestamp'),
+        db.Index('ix_exception_resolved_ts', 'resolved', 'timestamp'),
+        db.Index('ix_exception_fingerprint', 'fingerprint'),
+    )
