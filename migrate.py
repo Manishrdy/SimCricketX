@@ -14,6 +14,7 @@ import os
 import sys
 import shutil
 from datetime import datetime
+from utils.exception_tracker import log_exception
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_NAME = "cricket_sim.db"
@@ -49,6 +50,7 @@ def _import_all_models():
         AdminAuditLog, FailedLoginAttempt, BlockedIP,
         ActiveSession, SiteCounter, LoginHistory, IPWhitelistEntry,
         UserGroundConfig, AnnouncementBanner, UserBannerDismissal,
+        AuthEventLog, ExceptionLog,
     )
 
 
@@ -133,6 +135,7 @@ def migrate_counters(app, db):
                     with open(filepath, 'r') as f:
                         value = int(f.read().strip())
                 except Exception:
+                    log_exception(source="sqlite", context={"migration": "counter_file_read", "file": filepath})
                     value = 0
 
             db.session.add(SiteCounter(key=key, value=value))
@@ -184,6 +187,7 @@ def check_admin(app, db):
                 else:
                     print("  Invalid number, try again.")
             except ValueError:
+                log_exception(source="backend", context={"scope": "check_admin_choice", "value": choice})
                 print("  Invalid input, try again.")
 
 

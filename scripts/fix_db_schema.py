@@ -1,4 +1,5 @@
 from database import db
+from utils.exception_tracker import log_exception
 
 
 def ensure_schema(engine, db_obj=None):
@@ -67,6 +68,7 @@ def ensure_schema(engine, db_obj=None):
                 "UPDATE users SET email_verified = 1 WHERE email_verified = 0 AND email_verify_token IS NULL"
             ))
     except Exception:
+        log_exception(source="sqlite", context={"scope": "fix_db_schema_backfill_email_verified"})
         pass
 
     # Backfill: when force_email_verify is first added, flag all currently-verified
@@ -79,6 +81,7 @@ def ensure_schema(engine, db_obj=None):
                     "UPDATE users SET force_email_verify = 1 WHERE email_verified = 1"
                 ))
         except Exception:
+            log_exception(source="sqlite", context={"scope": "fix_db_schema_backfill_force_verify"})
             pass
 
     # ── teams ──
@@ -192,6 +195,7 @@ def ensure_schema(engine, db_obj=None):
                 WHERE team_id IS NULL
             """))
     except Exception:
+        log_exception(source="sqlite", context={"scope": "fix_db_schema_backfill_team_id"})
         # Keep schema guard non-fatal during startup.
         pass
 
@@ -209,13 +213,43 @@ def ensure_schema(engine, db_obj=None):
         "resolved_by": "VARCHAR(120)",
     })
 
+    # ── exception_log ──
+    _add_missing_cols("exception_log", {
+        "severity": "VARCHAR(10) NOT NULL DEFAULT 'error'",
+        "source": "VARCHAR(30) NOT NULL DEFAULT 'backend'",
+        "context_json": "TEXT",
+        "request_id": "VARCHAR(64)",
+        "handled": "BOOLEAN NOT NULL DEFAULT 1",
+        "resolved": "BOOLEAN NOT NULL DEFAULT 0",
+        "resolved_at": "DATETIME",
+        "resolved_by": "VARCHAR(120)",
+        "fingerprint": "VARCHAR(64)",
+        "occurrence_count": "INTEGER NOT NULL DEFAULT 1",
+        "first_seen_at": "DATETIME",
+        "last_seen_at": "DATETIME",
+        "github_issue_number": "INTEGER",
+        "github_issue_url": "VARCHAR(300)",
+    })
+
+    # Indexes for exception_log query performance
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_timestamp ON exception_log(timestamp)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_type_ts ON exception_log(exception_type, timestamp)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_source_ts ON exception_log(source, timestamp)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_resolved_ts ON exception_log(resolved, timestamp)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_fingerprint ON exception_log(fingerprint)"))
+    except Exception:
+        log_exception(source="sqlite", context={"scope": "fix_db_schema_exception_indexes"})
+        pass
+
     # ── Ensure all tables exist (creates any missing ones) ──
     all_required_tables = (
         "tournament_player_stats_cache", "admin_audit_log",
         "match_partnerships", "failed_login_attempts",
         "blocked_ips", "active_sessions", "site_counters",
         "login_history", "ip_whitelist", "announcement_banner",
-        "user_banner_dismissals", "auth_event_log",
+        "user_banner_dismissals", "auth_event_log", "exception_log",
     )
     missing = [t for t in all_required_tables if t not in tables]
     if missing and db_obj is not None:
@@ -224,7 +258,7 @@ def ensure_schema(engine, db_obj=None):
             TournamentPlayerStatsCache, AdminAuditLog, MatchPartnership,
             FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter,
             LoginHistory, IPWhitelistEntry, AnnouncementBanner,
-            UserBannerDismissal, AuthEventLog,
+            UserBannerDismissal, AuthEventLog, ExceptionLog,
         )
         db_obj.create_all()
 
@@ -240,6 +274,7 @@ def fix_db_schema():
             ensure_schema(db.engine, db)
             print("Schema check complete.")
         except Exception as e:
+            log_exception(e, source="sqlite", context={"scope": "fix_db_schema"})
             print(f"Error creating tables: {e}")
 
 

@@ -17,6 +17,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import text
+from utils.exception_tracker import log_exception
 
 
 def run_migration(db, app):
@@ -43,6 +44,7 @@ def run_migration(db, app):
             trans.commit()
             print("[Migration] add_team_profiles: completed successfully.")
         except Exception as exc:
+            log_exception(exc, source="sqlite", context={"migration": "add_team_profiles"})
             trans.rollback()
             print(f"[Migration] add_team_profiles: FAILED — {exc}")
             raise

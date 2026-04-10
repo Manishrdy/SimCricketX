@@ -1,5 +1,6 @@
 import os
 import yaml
+from utils.exception_tracker import log_exception
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -20,6 +21,7 @@ def safe_print(*args, **kwargs):
     try:
         builtins.print(*args, **kwargs)
     except (OSError, UnicodeEncodeError):
+        log_exception(source="backend")
         sanitized = []
         for arg in args:
             if isinstance(arg, str):
@@ -30,5 +32,6 @@ def safe_print(*args, **kwargs):
         try:
             builtins.print(*sanitized, **kwargs)
         except (OSError, UnicodeEncodeError):
+            log_exception(source="backend")
             pass # If it still fails, just suppress it
 

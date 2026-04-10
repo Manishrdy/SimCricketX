@@ -42,6 +42,7 @@ def register_team_routes(
                 bowl = int(item.get("bowling_rating", 0))
                 field = int(item.get("fielding_rating", 0))
             except (TypeError, ValueError):
+                log_exception(source="backend")
                 return None, f"Player {idx}: ratings must be valid integers."
             if not (0 <= bat <= 100 and 0 <= bowl <= 100 and 0 <= field <= 100):
                 return None, f"Player {idx}: ratings must be between 0 and 100."
@@ -171,6 +172,7 @@ def register_team_routes(
         try:
             payload = json.loads(raw)
         except Exception:
+            log_exception(source="backend")
             return None, "Invalid profiles payload format."
 
         if not isinstance(payload, dict):

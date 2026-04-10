@@ -12,6 +12,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from app import create_app, db
 from database.models import User
 from auth.user_auth import decrypt_password, load_credentials, CREDENTIALS_FILE
+from utils.exception_tracker import log_exception
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -54,6 +55,7 @@ def migrate_users():
         try:
             creds = load_credentials()
         except Exception as e:
+            log_exception(e, source="sqlite", context={"script": "migrate_auth", "phase": "load_credentials"})
             logger.error(f"Failed to load credentials: {e}")
             return
 
@@ -99,6 +101,7 @@ def migrate_users():
                         # ISO format
                         new_user.last_login = datetime.fromisoformat(data["login_time"])
                     except:
+                        log_exception(source="backend", context={"script": "migrate_auth", "phase": "parse_login_time", "email": email})
                         pass
 
                 db.session.add(new_user)
@@ -106,6 +109,7 @@ def migrate_users():
                 logger.info(f"Prepared migration for: {user_id}")
                 
             except Exception as e:
+                log_exception(e, source="sqlite", context={"script": "migrate_auth", "phase": "migrate_user", "email": email})
                 logger.error(f"Error migrating {email}: {e}")
         
         if migrated_count > 0:
@@ -119,6 +123,7 @@ def migrate_users():
                 # logger.info(f"Renamed credentials.json to {backup_path}")
                 
             except Exception as e:
+                log_exception(e, source="sqlite", context={"script": "migrate_auth", "phase": "commit"})
                 db.session.rollback()
                 logger.error(f"Database commit failed: {e}")
         else:

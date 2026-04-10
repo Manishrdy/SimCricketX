@@ -35,6 +35,7 @@ def get_ip_address() -> str:
                     return first
         return (request.remote_addr or "").strip()
     except Exception:
+        log_exception(source="backend")
         return ""
 
 # C4: Unified password policy
@@ -179,6 +180,7 @@ def verify_user(email: str, password: str) -> bool:
                 user.last_login = datetime.now(timezone.utc)
                 db.session.commit()
             except Exception:
+                log_exception(source="sqlite")
                 db.session.rollback()
             return True
 

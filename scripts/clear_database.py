@@ -38,6 +38,7 @@ from database.models import (
     MatchPartnership
 )
 from app import create_app
+from utils.exception_tracker import log_exception
 
 
 def get_table_counts():
@@ -56,6 +57,7 @@ def get_table_counts():
             result = db.session.execute(db.text(f"SELECT COUNT(*) FROM {table}"))
             counts[table] = result.scalar() or 0
         except Exception:
+            log_exception(source="sqlite", context={"script": "clear_database", "table": table})
             counts[table] = 0
     
     return counts
@@ -129,6 +131,7 @@ def clear_database():
                 deleted = result.rowcount
                 print(f"    ✓ Deleted {deleted:,} records")
             except Exception as e:
+                log_exception(e, source="sqlite", context={"script": "clear_database", "table": table_name})
                 print(f"    ⚠️  Warning: Could not delete from {table_name}: {e}")
                 # Continue with other tables even if one fails
         
@@ -144,6 +147,7 @@ def clear_database():
         return True
         
     except Exception as e:
+        log_exception(e, source="sqlite", context={"script": "clear_database"})
         print(f"\n❌ ERROR: {e}")
         print("🔄 Rolling back changes...")
         db.session.rollback()

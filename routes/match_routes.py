@@ -138,6 +138,7 @@ def register_match_routes(
                 home_id = int(home_id)
                 away_id = int(away_id)
             except (TypeError, ValueError):
+                log_exception(source="backend")
                 return jsonify({"error": "Invalid team selection"}), 400
             
             # Tournament context
@@ -1253,6 +1254,7 @@ def register_match_routes(
                     try:
                         os.remove(original_json_path)
                     except Exception:
+                        log_exception(source="backend")
                         pass
 
             # ??? G) Compute and confirm ZIP path on disk ?????????????????????????
@@ -1333,6 +1335,7 @@ def register_match_routes(
                             with zf.open(member, "r") as raw_json:
                                 payload = json.load(raw_json)
                         except Exception:
+                            log_exception(source="backend")
                             continue
                         if isinstance(payload, dict):
                             raw_format = payload.get("match_format")
@@ -1428,6 +1431,7 @@ def register_match_routes(
                     dt_from = datetime.strptime(filter_date_from, "%Y-%m-%d")
                     query = query.filter(DBMatch.date >= dt_from)
                 except ValueError:
+                    log_exception(source="backend")
                     pass
             if filter_date_to:
                 try:
@@ -1435,6 +1439,7 @@ def register_match_routes(
                     dt_to = dt_to.replace(hour=23, minute=59, second=59)
                     query = query.filter(DBMatch.date <= dt_to)
                 except ValueError:
+                    log_exception(source="backend")
                     pass
 
             total_matches = query.count()
@@ -1491,6 +1496,7 @@ def register_match_routes(
         try:
             user_tournaments = Tournament.query.filter_by(user_id=current_user.id).order_by(Tournament.name).all()
         except Exception:
+            log_exception(source="sqlite")
             pass
 
         has_more = (page * PAGE_SIZE) < total_matches
@@ -1706,10 +1712,12 @@ def register_match_routes(
             return jsonify({'message': 'Archive deleted successfully'}), 200
 
         except PermissionError:
+            log_exception(source="backend")
             app.logger.exception(f"Permission denied deleting {file_path}")
             return jsonify({'error': 'Permission denied'}), 403
 
         except Exception:
+            log_exception(source="backend")
             app.logger.exception(f"Unexpected error deleting {file_path}")
             return jsonify({'error': 'Internal server error'}), 500
         

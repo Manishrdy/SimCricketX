@@ -216,6 +216,7 @@ def register_auth_routes(
                     try:
                         db.session.commit()
                     except Exception:
+                        log_exception(source="sqlite")
                         db.session.rollback()
 
             if verify_user(email, password):
@@ -345,6 +346,7 @@ def register_auth_routes(
 
                     db.session.commit()
                 except Exception:
+                    log_exception(source="sqlite")
                     db.session.rollback()
                 return render_template("login.html", error="Invalid email or password.", error_type="credentials")
 
@@ -522,6 +524,7 @@ def register_auth_routes(
                 ActiveSession.query.filter_by(session_token=token).delete()
                 db.session.commit()
             except Exception:
+                log_exception(source="sqlite")
                 db.session.rollback()
         session.pop("visit_counted", None)
         session.pop("session_token", None)
@@ -748,6 +751,7 @@ def register_auth_routes(
                     try:
                         db.session.commit()
                     except Exception:
+                        log_exception(source="sqlite")
                         db.session.rollback()
                     app.logger.info(f"[Auth] Verification email resent to {email} "
                                     f"(attempt {user.verify_resend_count}/{_RESEND_MAX})")
@@ -1008,6 +1012,7 @@ def register_auth_routes(
             user.pending_email_token_expires = None
             db.session.commit()
         except Exception:
+            log_exception(source="sqlite")
             db.session.rollback()
 
         ok, msg = update_user_email(old_email, new_email)

@@ -877,6 +877,7 @@ class StatsService:
             else:
                 return match.home_team.name if hasattr(match, 'home_team') else 'N/A'
         except:
+            log_exception(source="backend")
             return 'N/A'
     
     # ============================================================================

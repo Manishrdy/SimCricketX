@@ -16,6 +16,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import engine.match as match_module
+from utils.exception_tracker import log_exception
 match_module.print = lambda *a, **k: None   # silence match prints
 
 
@@ -93,6 +94,7 @@ def _simulate_full_match(pitch, seed, is_day_night):
         try:
             resp = match.next_ball()
         except Exception:
+            log_exception(source="backend", context={"script": "bench_dew", "pitch": pitch, "seed": seed, "is_day_night": is_day_night})
             break
 
         # 1st innings end — always accompanied by innings_end + innings_number=1
