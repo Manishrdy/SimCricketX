@@ -585,6 +585,7 @@ pre {{ white-space: pre-wrap; word-wrap: break-word; }}
                     headers={"Content-Disposition": f"attachment;filename={filename}"},
                 )
             except ImportError:
+                log_exception(source="backend")
                 # Fallback: serve as downloadable HTML
                 filename = f"{view_label}_{stat_type}_stats.html"
                 return Response(

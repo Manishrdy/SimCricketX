@@ -82,6 +82,7 @@ def register_tournament_routes(
                 os.remove(canonical)
                 return
             except Exception:
+                log_exception(source="backend")
                 pass
 
         # O(N) fallback — only if directory exists
@@ -98,6 +99,7 @@ def register_tournament_routes(
                     os.remove(path)
                     break
             except Exception:
+                log_exception(source="backend")
                 continue
 
     # ── Routes ────────────────────────────────────────────────────────────

@@ -1,3 +1,10 @@
+[2.3.2] 2026-04-10
+- Added production-grade exception idempotency: each unique exception fingerprint is stored once in `exception_log`; repeat events increment `occurrence_count` and update `last_seen_at` instead of creating duplicate rows
+- Added exception fingerprint + dedupe metadata columns: `fingerprint`, `occurrence_count`, `first_seen_at`, `last_seen_at`, `github_issue_number`, `github_issue_url`
+- Added idempotent migration `migrations/add_exception_log_dedup.py` and startup wiring in `app.py`
+- Updated exception logger to create GitHub issue only on first-seen fingerprint and persist created issue number/URL back to DB
+- Extended schema guard (`scripts/fix_db_schema.py`) with dedupe columns and `ix_exception_fingerprint` index
+
 [2.3.1] 2026-03-06
 - Added ongoing match indicator to profile dropdown — active simulations appear at the top with team names, format, innings, over, and current score
 - Added pulsing green badge on profile avatar when one or more matches are in progress

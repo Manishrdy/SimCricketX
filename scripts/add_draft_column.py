@@ -1,6 +1,7 @@
 import sqlite3
 import sys
 import os
+from utils.exception_tracker import log_exception
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'cricket_sim.db')
 
@@ -27,6 +28,7 @@ def migrate():
             print("'is_draft' column already exists.")
 
     except Exception as e:
+        log_exception(e, source="sqlite", context={"script": "add_draft_column"})
         print(f"Error during migration: {e}")
         conn.rollback()
     finally:

@@ -28,6 +28,7 @@ def register_core_routes(
             with open(os.path.join(app.root_path, "changelog.txt")) as f:
                 lines = f.readlines()
         except Exception:
+            log_exception(source="backend")
             return []
 
         entries = []

@@ -11,6 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from app import create_app
 from database import db
 from database.models import User, Team, Player, Match, MatchScorecard
+from utils.exception_tracker import log_exception
 
 def migrate_data():
     app = create_app()
@@ -98,6 +99,7 @@ def migrate_data():
                     
                     print(f"Migrated Team: {new_team.name} ({len(data.get('players', []))} players)")
             except Exception as e:
+                log_exception(e, source="sqlite", context={"script": "migrate_data", "file": os.path.basename(json_file)})
                 print(f"Error migrating {os.path.basename(json_file)}: {e}")
         
         db.session.commit()

@@ -33,6 +33,7 @@ def _cfg() -> dict:
         from utils.helpers import load_config
         return load_config()
     except Exception:
+        log_exception(source="backend")
         return {}
 
 

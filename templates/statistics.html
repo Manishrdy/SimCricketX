@@ -20,17 +20,33 @@
 /* ===== STICKY CONTROLS BAR ===== */
 .stats-bar {
     position: sticky;
-    top: var(--nav-height, 64px);
+    top: calc(var(--nav-height, 64px) + 0.5rem);
     z-index: 80;
-    background: var(--bg);
-    border-bottom: 1px solid var(--card-border);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 100px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.625rem 0;
-    margin-bottom: 1.5rem;
+    padding: 0.625rem 1.25rem;
+    margin-top: 1rem;
+    margin-bottom: 2rem;
     flex-wrap: wrap;
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
+
+[data-theme="dark"] .stats-bar {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 860px) {
+    .stats-bar {
+        border-radius: 24px;
+        padding: 1rem;
+    }
+}
+
 
 .stats-bar-title {
     font-size: 1rem;

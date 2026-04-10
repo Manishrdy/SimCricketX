@@ -66,6 +66,7 @@ def safe_print(*args, **kwargs):
     try:
         builtins.print(*args, **kwargs)
     except OSError:
+        log_exception(source="backend")
         sanitized = []
         for arg in args:
             if isinstance(arg, str):
@@ -433,6 +434,7 @@ class Match:
         try:
             selected_index = int(selected_index)
         except Exception:
+            log_exception(source="backend")
             return {"error": "Invalid selected index"}, 400
 
         if selected_index not in option_indices:

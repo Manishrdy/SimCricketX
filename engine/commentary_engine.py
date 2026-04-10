@@ -255,5 +255,6 @@ class CommentaryEngine:
             try:
                 formatted.append(text.format(**kwargs))
             except (KeyError, IndexError):
+                log_exception(source="backend")
                 formatted.append(text)
         return formatted

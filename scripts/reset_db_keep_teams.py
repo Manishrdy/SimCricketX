@@ -8,6 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import create_app
 from database import db
 from database.models import MatchScorecard, TournamentFixture, TournamentTeam, Match, Tournament, Player
+from utils.exception_tracker import log_exception
 
 def reset_database():
     app = create_app()
@@ -65,6 +66,7 @@ def reset_database():
             print("Database cleanup completed successfully!")
             
         except Exception as e:
+            log_exception(e, source="sqlite", context={"script": "reset_db_keep_teams"})
             db.session.rollback()
             print(f"Error during cleanup: {e}")
             sys.exit(1)
