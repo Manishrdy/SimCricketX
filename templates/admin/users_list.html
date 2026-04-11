@@ -1,44 +1,67 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Users</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Users</h1>
         <p class="admin-page-subtitle">{{ users|length }} registered user{{ 's' if users|length != 1 }}</p>
     </div>
     <div class="admin-page-actions">
-        <a href="/admin/users/create" class="a-btn a-btn-primary"><i class="fas fa-user-plus"></i> New User</a>
+        <a href="/admin/users/create" class="a-btn a-btn-primary">
+            <i class="fas fa-user-plus"></i> New User
+        </a>
     </div>
 </div>
 
-<div class="ul-toolbar">
-    <div class="a-search-wrap" style="max-width: 420px; margin-bottom: 0;">
-        <i class="fas fa-search a-search-icon"></i>
-        <input type="text" id="userSearch" class="a-search-input" placeholder="Search by email or name...">
+{# ── Canonical toolbar ── #}
+<div class="a-toolbar">
+    <div class="a-toolbar-left">
+        <div class="a-search-wrap">
+            <i class="fas fa-search a-search-icon"></i>
+            <input type="text" id="userSearch" class="a-search-input" placeholder="Search by email or name…">
+        </div>
+        <div class="a-chip-group">
+            <button class="a-chip active" data-filter="all">All <span class="count" id="cnt-all">{{ users|length }}</span></button>
+            <button class="a-chip" data-filter="admin">Admins <span class="count" id="cnt-admin">{{ users|selectattr('is_admin')|list|length }}</span></button>
+            <button class="a-chip" data-filter="user">Users <span class="count" id="cnt-user">{{ users|rejectattr('is_admin')|list|length }}</span></button>
+        </div>
     </div>
-    <div class="ul-filter-group">
-        <button class="ul-filter-btn active" data-filter="all">All</button>
-        <button class="ul-filter-btn" data-filter="admin">Admins</button>
-        <button class="ul-filter-btn" data-filter="user">Users</button>
+    <div class="a-toolbar-right">
+        <div class="a-density-toggle">
+            <button data-density="compact" class="active" title="Compact rows">
+                <i class="fas fa-grip-lines"></i>
+            </button>
+            <button data-density="comfy" title="Comfortable rows">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        <span class="a-toolbar-count" id="ulCount">{{ users|length }} shown</span>
     </div>
-    <span class="ul-count" id="ulCount">{{ users|length }} shown</span>
 </div>
 
-<div class="a-table-wrap" style="overflow-x: auto;">
-    <table class="a-table ul-table">
+<div class="a-table-wrap">
+    <table class="a-table a-table-pro ul-table">
         <thead>
             <tr>
-                <th class="ul-col-email">Email / Name</th>
-                <th class="ul-col-role">Role</th>
-                <th class="ul-col-stats">Teams</th>
-                <th class="ul-col-stats">Matches</th>
-                <th class="ul-col-login">Last Login</th>
+                <th class="sortable ul-col-email">Email / Name</th>
+                <th class="sortable ul-col-role">Role</th>
+                <th class="sortable ul-col-stats">Teams</th>
+                <th class="sortable ul-col-stats">Matches</th>
+                <th class="sortable ul-col-login">Last Login</th>
                 <th class="ul-col-actions" style="text-align: right;">Actions</th>
             </tr>
         </thead>
         <tbody id="usersTableBody">
             {% for user in users %}
-            <tr data-email="{{ user.email }}" data-name="{{ (user.display_name or '') | lower }}" data-role="{{ 'admin' if user.is_admin else 'user' }}">
+            <tr data-email="{{ user.email }}"
+                data-name="{{ (user.display_name or '') | lower }}"
+                data-role="{{ 'admin' if user.is_admin else 'user' }}">
                 <td class="ul-col-email">
                     <div class="ul-email-cell">
                         <div class="ul-avatar">{{ (user.display_name or user.email)[0] | upper }}</div>
@@ -57,21 +80,22 @@
                     <span class="a-badge a-badge-user">User</span>
                     {% endif %}
                 </td>
-                <td>
+                <td class="a-cell-num" data-sort="{{ user.teams_count }}">
                     <span class="ul-stat">{{ user.teams_count }}</span>
                 </td>
-                <td>
+                <td class="a-cell-num" data-sort="{{ user.matches_count }}">
                     <span class="ul-stat">{{ user.matches_count }}</span>
                 </td>
-                <td class="ul-col-login">
+                <td class="ul-col-login" data-sort="{{ user.last_login or '' }}">
                     {% if user.last_login %}
                     <span class="ul-login-time">{{ user.last_login | localtime }}</span>
                     {% else %}
                     <span class="ul-never">Never</span>
                     {% endif %}
                 </td>
-                <td style="text-align: right;">
-                    <a href="{{ url_for('admin_user_360', user_email=user.email) }}" class="a-btn a-btn-secondary a-btn-sm">
+                <td class="a-cell-actions">
+                    <a href="{{ url_for('admin_user_360', user_email=user.email) }}"
+                       class="a-btn a-btn-secondary a-btn-sm">
                         <i class="fas fa-compass"></i> 360
                     </a>
                 </td>
@@ -88,71 +112,31 @@
 </div>
 
 <style>
-.ul-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.25rem;
-    flex-wrap: wrap;
-}
-
-.ul-filter-group {
-    display: flex;
-    gap: 0.35rem;
-}
-
-.ul-filter-btn {
-    padding: 0.4rem 0.85rem;
-    border-radius: 6px;
-    border: 1px solid var(--card-border);
-    background: var(--card-bg);
-    color: var(--fg-secondary);
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-}
-
-.ul-filter-btn:hover,
-.ul-filter-btn.active {
-    background: var(--accent-light);
-    border-color: var(--accent);
-    color: var(--accent);
-}
-
-.ul-count {
-    margin-left: auto;
-    font-size: 0.78rem;
-    color: var(--fg-secondary);
-    white-space: nowrap;
-}
-
-/* Table column widths */
+/* Column widths — compact friendly */
 .ul-table { table-layout: auto; }
 
-.ul-col-email { min-width: 220px; }
-.ul-col-role  { width: 90px; }
-.ul-col-stats { width: 70px; text-align: center; }
-.ul-col-login { min-width: 160px; white-space: nowrap; }
-.ul-col-actions { width: 90px; }
+.ul-col-email    { min-width: 220px; }
+.ul-col-role     { width: 90px; }
+.ul-col-stats    { width: 72px; text-align: center !important; }
+.ul-col-login    { min-width: 150px; white-space: nowrap; }
+.ul-col-actions  { width: 90px; text-align: right; }
 
-.ul-table td.ul-col-stats { text-align: center; }
-.ul-table th.ul-col-stats { text-align: center; }
+.ul-table td.a-cell-num { text-align: center; }
 
 /* Avatar + email cell */
 .ul-email-cell {
     display: flex;
     align-items: center;
-    gap: 0.65rem;
+    gap: .6rem;
 }
 
 .ul-avatar {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: var(--accent-light);
     color: var(--accent);
-    font-size: 0.82rem;
+    font-size: .76rem;
     font-weight: 700;
     display: flex;
     align-items: center;
@@ -160,57 +144,58 @@
     flex-shrink: 0;
 }
 
+.admin-layout.density-comfy .ul-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: .84rem;
+}
+
 .ul-email-info {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
+    gap: .05rem;
     min-width: 0;
 }
 
 .ul-email-primary {
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: .82rem;
     color: var(--fg);
     word-break: break-all;
 }
 
 .ul-email-name {
-    font-size: 0.78rem;
+    font-size: .74rem;
     color: var(--fg-secondary);
 }
 
-/* Stats */
 .ul-stat {
-    font-size: 0.875rem;
+    font-size: .82rem;
     font-weight: 600;
     color: var(--fg);
 }
 
-/* Last login */
 .ul-login-time {
-    font-size: 0.82rem;
+    font-size: .78rem;
     color: var(--fg-secondary);
     white-space: nowrap;
 }
 
 .ul-never {
-    font-size: 0.82rem;
+    font-size: .78rem;
     color: var(--fg-secondary);
-    opacity: 0.5;
+    opacity: .5;
     font-style: italic;
 }
-
-/* No results row */
-#ulNoResults { display: none; }
 </style>
 
 <script>
 (function() {
     const searchInput = document.getElementById('userSearch');
-    const tbody = document.getElementById('usersTableBody');
-    const countEl = document.getElementById('ulCount');
-    const filterBtns = document.querySelectorAll('.ul-filter-btn');
-    let activeFilter = 'all';
+    const tbody       = document.getElementById('usersTableBody');
+    const countEl     = document.getElementById('ulCount');
+    const filterBtns  = document.querySelectorAll('.a-chip[data-filter]');
+    let activeFilter  = 'all';
 
     function updateCount() {
         const visible = tbody.querySelectorAll('tr[data-email]:not([style*="display: none"])').length;
@@ -221,8 +206,8 @@
         const q = searchInput.value.toLowerCase().trim();
         tbody.querySelectorAll('tr[data-email]').forEach(row => {
             const emailMatch = row.dataset.email.toLowerCase().includes(q);
-            const nameMatch = row.dataset.name.includes(q);
-            const roleMatch = activeFilter === 'all' || row.dataset.role === activeFilter;
+            const nameMatch  = row.dataset.name.includes(q);
+            const roleMatch  = activeFilter === 'all' || row.dataset.role === activeFilter;
             row.style.display = (emailMatch || nameMatch) && roleMatch ? '' : 'none';
         });
         updateCount();

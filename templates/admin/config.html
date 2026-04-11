@@ -1,6 +1,12 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Configuration</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Configuration</h1>
@@ -10,27 +16,46 @@
 
 <div id="alertContainer"></div>
 
+<style>
+.cfg-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: .65rem 0;
+    border-bottom: 1px solid var(--card-border);
+    flex-wrap: wrap;
+}
+.cfg-row:last-child { border-bottom: none; }
+.cfg-key {
+    min-width: 160px;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--fg);
+    font-family: 'IBM Plex Mono', monospace;
+}
+.cfg-value { flex: 1; min-width: 220px; }
+.cfg-actions { display: flex; gap: .3rem; }
+</style>
+
 {% for section, values in display_config.items() %}
 <div class="a-section">
     <h3 class="a-section-title"><i class="fas fa-folder"></i> {{ section }}</h3>
     <div class="a-card-flat">
         {% if values is mapping %}
         {% for key, val in values.items() %}
-        <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--card-border); flex-wrap: wrap;">
-            <div style="min-width: 140px;">
-                <span style="font-size: 0.82rem; font-weight: 600; color: var(--fg); font-family: monospace;">{{ key }}</span>
-            </div>
-            <div style="flex: 1; min-width: 200px;">
+        <div class="cfg-row">
+            <div class="cfg-key">{{ key }}</div>
+            <div class="cfg-value">
                 {% set is_secret = 'token' in key|lower or 'secret' in key|lower or 'password' in key|lower or 'key' in key|lower %}
                 {% if is_secret %}
-                <input type="password" value="{{ val }}" class="a-form-input" style="max-width: 100%; font-family: monospace; font-size: 0.82rem;"
+                <input type="password" value="{{ val }}" class="a-form-input" style="max-width: 100%; font-family: 'IBM Plex Mono', monospace; font-size: .8rem;"
                     id="cfg-{{ section }}-{{ key }}" readonly>
                 {% else %}
-                <input type="text" value="{{ val }}" class="a-form-input" style="max-width: 100%; font-size: 0.88rem;"
+                <input type="text" value="{{ val }}" class="a-form-input" style="max-width: 100%; font-size: .84rem;"
                     id="cfg-{{ section }}-{{ key }}">
                 {% endif %}
             </div>
-            <div style="display: flex; gap: 0.25rem;">
+            <div class="cfg-actions">
                 {% if is_secret %}
                 <button onclick="toggleVisibility('cfg-{{ section }}-{{ key }}')" class="a-btn a-btn-ghost a-btn-sm" title="Toggle visibility">
                     <i class="fas fa-eye"></i>
@@ -43,16 +68,16 @@
         </div>
         {% endfor %}
         {% else %}
-        <div style="padding: 0.75rem 0; font-size: 0.88rem; color: var(--fg);">
-            <span style="font-family: monospace;">{{ values }}</span>
+        <div style="padding: .65rem 0; font-size: .84rem; color: var(--fg); font-family: 'IBM Plex Mono', monospace;">
+            {{ values }}
         </div>
         {% endif %}
     </div>
 </div>
 {% endfor %}
 
-<div class="a-card-flat" style="border-left: 4px solid #f59e0b; margin-top: 1rem;">
-    <p style="font-size: 0.85rem; color: var(--fg-secondary);">
+<div class="a-card-flat" style="border-left: 3px solid #f59e0b; margin-top: 1rem;">
+    <p style="font-size: .82rem; color: var(--fg-secondary); margin: 0;">
         <i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i>
         Changes are written directly to <code>config.yaml</code>. Some settings may require a server restart.
         Sensitive values (tokens, secrets) are masked but can be revealed with the eye icon.

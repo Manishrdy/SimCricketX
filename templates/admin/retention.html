@@ -1,6 +1,12 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Retention</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Retention Cohorts</h1>
@@ -8,74 +14,86 @@
     </div>
 </div>
 
-<div class="a-stats-grid" style="margin-bottom:1.5rem;">
-    <div class="a-stat-card">
+<div class="a-stats-grid" style="margin-bottom:1rem;">
+    <div class="a-stat-card" style="--a-stat-accent:#6366f1; --a-stat-accent-lt:rgba(99,102,241,.1)">
         <div class="a-stat-icon"><i class="fas fa-users"></i></div>
-        <div class="a-stat-label">Total Users</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-users"></i></div>
+            <div class="a-stat-label">Total Users</div>
+        </div>
         <div class="a-stat-value">{{ total_users }}</div>
     </div>
-    <div class="a-stat-card">
+    <div class="a-stat-card" style="--a-stat-accent:#06b6d4; --a-stat-accent-lt:rgba(6,182,212,.1)">
         <div class="a-stat-icon"><i class="fas fa-signal"></i></div>
-        <div class="a-stat-label">Active (30d)</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-signal"></i></div>
+            <div class="a-stat-label">Active (30d)</div>
+        </div>
         <div class="a-stat-value">{{ active_users_30d }}</div>
     </div>
-    <div class="a-stat-card">
+    <div class="a-stat-card" style="--a-stat-accent:#22c55e; --a-stat-accent-lt:rgba(34,197,94,.1)">
         <div class="a-stat-icon"><i class="fas fa-percentage"></i></div>
-        <div class="a-stat-label">30d Retention</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-percentage"></i></div>
+            <div class="a-stat-label">30d Retention</div>
+        </div>
         <div class="a-stat-value">{{ (active_users_30d / total_users * 100)|round(1) if total_users else 0 }}%</div>
     </div>
-    <div class="a-stat-card">
+    <div class="a-stat-card" style="--a-stat-accent:#f59e0b; --a-stat-accent-lt:rgba(245,158,11,.1)">
         <div class="a-stat-icon"><i class="fas fa-calendar"></i></div>
-        <div class="a-stat-label">Cohorts</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-calendar"></i></div>
+            <div class="a-stat-label">Cohorts</div>
+        </div>
         <div class="a-stat-value">{{ cohorts|length }}</div>
     </div>
 </div>
 
 {% if cohorts %}
 <div class="a-table-wrap">
-    <table class="a-table">
+    <table class="a-table a-table-pro">
         <thead>
             <tr>
-                <th>Cohort Month</th>
-                <th>Signups</th>
-                <th>Played Match</th>
-                <th>Activation Rate</th>
-                <th>Active 30d</th>
-                <th>Retention 30d</th>
-                <th>Active 7d</th>
-                <th>Retention 7d</th>
+                <th class="sortable">Cohort Month</th>
+                <th class="sortable" style="width:90px;text-align:right;">Signups</th>
+                <th class="sortable" style="width:110px;text-align:right;">Played Match</th>
+                <th class="sortable" style="width:180px;">Activation Rate</th>
+                <th class="sortable" style="width:100px;text-align:right;">Active 30d</th>
+                <th class="sortable" style="width:180px;">Retention 30d</th>
+                <th class="sortable" style="width:100px;text-align:right;">Active 7d</th>
+                <th class="sortable" style="width:180px;">Retention 7d</th>
             </tr>
         </thead>
         <tbody>
             {% for c in cohorts|reverse %}
             <tr>
-                <td style="font-weight:600;">{{ c.month }}</td>
-                <td>{{ c.signups }}</td>
-                <td>{{ c.played_match }}</td>
-                <td>
-                    <div style="display:flex;align-items:center;gap:0.5rem;">
-                        <div style="width:60px;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;">
+                <td class="a-cell-strong">{{ c.month }}</td>
+                <td class="a-cell-num">{{ c.signups }}</td>
+                <td class="a-cell-num">{{ c.played_match }}</td>
+                <td data-sort="{{ c.activation_rate }}">
+                    <div style="display:flex;align-items:center;gap:.5rem;">
+                        <div style="flex:1;max-width:80px;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;">
                             <div style="width:{{ c.activation_rate }}%;height:100%;background:#22c55e;border-radius:3px;"></div>
                         </div>
-                        <span style="font-size:0.82rem;">{{ c.activation_rate }}%</span>
+                        <span style="font-size:.78rem;">{{ c.activation_rate }}%</span>
                     </div>
                 </td>
-                <td>{{ c.active_30d }}</td>
-                <td>
-                    <div style="display:flex;align-items:center;gap:0.5rem;">
-                        <div style="width:60px;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;">
+                <td class="a-cell-num">{{ c.active_30d }}</td>
+                <td data-sort="{{ c.retention_30d }}">
+                    <div style="display:flex;align-items:center;gap:.5rem;">
+                        <div style="flex:1;max-width:80px;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;">
                             <div style="width:{{ c.retention_30d }}%;height:100%;background:{% if c.retention_30d >= 50 %}#22c55e{% elif c.retention_30d >= 20 %}#f59e0b{% else %}#dc2626{% endif %};border-radius:3px;"></div>
                         </div>
-                        <span style="font-size:0.82rem;">{{ c.retention_30d }}%</span>
+                        <span style="font-size:.78rem;">{{ c.retention_30d }}%</span>
                     </div>
                 </td>
-                <td>{{ c.active_7d }}</td>
-                <td>
-                    <div style="display:flex;align-items:center;gap:0.5rem;">
-                        <div style="width:60px;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;">
+                <td class="a-cell-num">{{ c.active_7d }}</td>
+                <td data-sort="{{ c.retention_7d }}">
+                    <div style="display:flex;align-items:center;gap:.5rem;">
+                        <div style="flex:1;max-width:80px;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;">
                             <div style="width:{{ c.retention_7d }}%;height:100%;background:{% if c.retention_7d >= 30 %}#22c55e{% elif c.retention_7d >= 10 %}#f59e0b{% else %}#dc2626{% endif %};border-radius:3px;"></div>
                         </div>
-                        <span style="font-size:0.82rem;">{{ c.retention_7d }}%</span>
+                        <span style="font-size:.78rem;">{{ c.retention_7d }}%</span>
                     </div>
                 </td>
             </tr>
@@ -83,14 +101,14 @@
         </tbody>
     </table>
 </div>
-<div style="font-size:0.78rem;color:var(--fg-secondary);margin-top:0.75rem;">
+<p style="font-size:.76rem;color:var(--fg-secondary);margin-top:.65rem;">
     <i class="fas fa-info-circle"></i>
     Retention is based on login activity recorded since the login history feature was enabled.
     Cohorts with no login records will show 0% retention even if users are active.
-</div>
+</p>
 {% else %}
 <div class="a-card-flat">
-    <div class="a-empty"><i class="fas fa-chart-line"></i><p>No cohort data available yet.</p></div>
+    <div class="a-empty"><i class="fas fa-chart-line"></i><p>No cohort data available yet</p></div>
 </div>
 {% endif %}
 {% endblock %}

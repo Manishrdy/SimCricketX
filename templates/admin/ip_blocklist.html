@@ -1,5 +1,11 @@
 {% extends "admin/layout.html" %}
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">IP Blocklist</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">IP Blocklist</h1>
@@ -9,10 +15,9 @@
 
 <div id="alertContainer"></div>
 
-<!-- Add IP Form -->
-<div class="a-card-flat" style="margin-bottom: 1.5rem;">
-    <h3 class="a-section-title"><i class="fas fa-plus"></i> Block an IP</h3>
-    <form id="blockForm" onsubmit="addBlock(event)" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
+<div class="a-card-flat" style="margin-bottom: 1rem;">
+    <h3 class="a-section-title" style="margin-bottom: .75rem;"><i class="fas fa-plus"></i> Block an IP</h3>
+    <form id="blockForm" onsubmit="addBlock(event)" style="display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="a-form-group" style="margin-bottom: 0;">
             <label class="a-form-label">IP Address</label>
@@ -23,36 +28,38 @@
             <label class="a-form-label">Reason</label>
             <input type="text" name="reason" class="a-form-input" placeholder="Optional reason">
         </div>
-        <button type="submit" class="a-btn a-btn-primary" style="height: 38px;"><i class="fas fa-ban"></i> Block</button>
+        <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-ban"></i> Block</button>
     </form>
 </div>
 
 <div class="a-table-wrap">
-    <table class="a-table">
+    <table class="a-table a-table-pro">
         <thead>
             <tr>
-                <th>IP Address</th>
-                <th>Reason</th>
-                <th>Blocked By</th>
-                <th>Blocked At</th>
-                <th>Actions</th>
+                <th class="sortable" style="width:160px;">IP Address</th>
+                <th class="sortable">Reason</th>
+                <th class="sortable" style="width:160px;">Blocked By</th>
+                <th class="sortable" style="width:160px;">Blocked At</th>
+                <th style="width:120px;text-align:right;">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for b in blocked %}
             <tr id="block-{{ b.id }}">
-                <td><code style="font-weight: 600;">{{ b.ip_address }}</code></td>
-                <td>{{ b.reason or '-' }}</td>
-                <td>{{ b.blocked_by }}</td>
-                <td>{{ b.blocked_at.strftime('%Y-%m-%d %H:%M') if b.blocked_at else 'N/A' }}</td>
-                <td>
+                <td><code class="a-cell-mono a-cell-strong">{{ b.ip_address }}</code></td>
+                <td>{{ b.reason or '—' }}</td>
+                <td class="a-cell-dim">{{ b.blocked_by }}</td>
+                <td class="a-cell-dim" data-sort="{{ b.blocked_at.isoformat() if b.blocked_at else '' }}">
+                    {{ b.blocked_at.strftime('%Y-%m-%d %H:%M') if b.blocked_at else 'N/A' }}
+                </td>
+                <td class="a-cell-actions">
                     <button onclick="unblock({{ b.id }}, '{{ b.ip_address }}')" class="a-btn a-btn-secondary a-btn-sm">
                         <i class="fas fa-unlock"></i> Unblock
                     </button>
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="5" class="a-empty"><p>No blocked IPs</p></td></tr>
+            <tr><td colspan="5"><div class="a-empty"><i class="fas fa-ban"></i><p>No blocked IPs</p></div></td></tr>
             {% endfor %}
         </tbody>
     </table>

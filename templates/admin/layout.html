@@ -21,6 +21,10 @@
                     <span class="admin-sidebar-brand-sub">SimCricketX</span>
                 </div>
             </a>
+            <button type="button" class="admin-rail-toggle" id="adminRailToggle"
+                    title="Collapse sidebar" aria-label="Collapse sidebar">
+                <i class="fas fa-angles-left"></i>
+            </button>
         </div>
 
         {# Nav filter #}
@@ -36,21 +40,21 @@
             <div class="admin-nav-section">
                 <div class="admin-nav-label">Overview</div>
                 <ul class="admin-nav-items">
-                    <li><a href="/admin/dashboard"
+                    <li><a href="/admin/dashboard" data-label="Dashboard"
                             class="admin-nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
-                            <i class="fas fa-th-large"></i> Dashboard
+                            <i class="fas fa-th-large"></i> <span>Dashboard</span>
                         </a></li>
-                    <li><a href="/admin/activity"
+                    <li><a href="/admin/activity" data-label="Activity"
                             class="admin-nav-link {% if request.endpoint == 'admin_activity' %}active{% endif %}">
-                            <i class="fas fa-chart-bar"></i> Activity
+                            <i class="fas fa-chart-bar"></i> <span>Activity</span>
                         </a></li>
-                    <li><a href="/admin/search"
+                    <li><a href="/admin/search" data-label="Global Search"
                             class="admin-nav-link {% if request.endpoint == 'admin_search' %}active{% endif %}">
-                            <i class="fas fa-search"></i> Global Search
+                            <i class="fas fa-search"></i> <span>Global Search</span>
                         </a></li>
-                    <li><a href="/admin/health"
+                    <li><a href="/admin/health" data-label="System Health"
                             class="admin-nav-link {% if request.endpoint == 'admin_health' %}active{% endif %}">
-                            <i class="fas fa-heartbeat"></i> System Health
+                            <i class="fas fa-heartbeat"></i> <span>System Health</span>
                         </a></li>
                 </ul>
             </div>
@@ -59,25 +63,25 @@
             <div class="admin-nav-section">
                 <div class="admin-nav-label">Management</div>
                 <ul class="admin-nav-items">
-                    <li><a href="/admin/users"
+                    <li><a href="/admin/users" data-label="Users"
                             class="admin-nav-link {% if request.endpoint in ['admin_users','admin_user_detail','admin_user_360'] %}active{% endif %}">
-                            <i class="fas fa-users"></i> Users
+                            <i class="fas fa-users"></i> <span>Users</span>
                         </a></li>
-                    <li><a href="/admin/users/create"
+                    <li><a href="/admin/users/create" data-label="Create User"
                             class="admin-nav-link {% if request.endpoint == 'admin_create_user' %}active{% endif %}">
-                            <i class="fas fa-user-plus"></i> Create User
+                            <i class="fas fa-user-plus"></i> <span>Create User</span>
                         </a></li>
-                    <li><a href="/admin/matches"
+                    <li><a href="/admin/matches" data-label="Matches"
                             class="admin-nav-link {% if request.endpoint == 'admin_matches' %}active{% endif %}">
-                            <i class="fas fa-cricket-bat-ball"></i> Matches
+                            <i class="fas fa-cricket-bat-ball"></i> <span>Matches</span>
                         </a></li>
-                    <li><a href="/admin/global-teams"
+                    <li><a href="/admin/global-teams" data-label="All Teams"
                             class="admin-nav-link {% if request.endpoint == 'admin_global_teams' %}active{% endif %}">
-                            <i class="fas fa-shield-alt"></i> All Teams
+                            <i class="fas fa-shield-alt"></i> <span>All Teams</span>
                         </a></li>
-                    <li><a href="/admin/global-matches"
+                    <li><a href="/admin/global-matches" data-label="All Matches"
                             class="admin-nav-link {% if request.endpoint == 'admin_global_matches' %}active{% endif %}">
-                            <i class="fas fa-list"></i> All Matches
+                            <i class="fas fa-list"></i> <span>All Matches</span>
                         </a></li>
                 </ul>
             </div>
@@ -86,33 +90,33 @@
             <div class="admin-nav-section">
                 <div class="admin-nav-label">Security</div>
                 <ul class="admin-nav-items">
-                    <li><a href="/admin/sessions"
+                    <li><a href="/admin/sessions" data-label="Sessions"
                             class="admin-nav-link {% if request.endpoint == 'admin_sessions' %}active{% endif %}">
-                            <i class="fas fa-desktop"></i> Sessions
+                            <i class="fas fa-desktop"></i> <span>Sessions</span>
                         </a></li>
-                    <li><a href="/admin/failed-logins"
+                    <li><a href="/admin/failed-logins" data-label="Failed Logins"
                             class="admin-nav-link {% if request.endpoint == 'admin_failed_logins' %}active{% endif %}">
-                            <i class="fas fa-exclamation-triangle"></i> Failed Logins
+                            <i class="fas fa-exclamation-triangle"></i> <span>Failed Logins</span>
                         </a></li>
-                    <li><a href="/admin/ip-blocklist"
+                    <li><a href="/admin/ip-blocklist" data-label="IP Blocklist"
                             class="admin-nav-link {% if request.endpoint == 'admin_ip_blocklist' %}active{% endif %}">
-                            <i class="fas fa-ban"></i> IP Blocklist
+                            <i class="fas fa-ban"></i> <span>IP Blocklist</span>
                         </a></li>
-                    <li><a href="/admin/ip-whitelist"
+                    <li><a href="/admin/ip-whitelist" data-label="IP Whitelist"
                             class="admin-nav-link {% if request.endpoint == 'admin_ip_whitelist' %}active{% endif %}">
-                            <i class="fas fa-lock"></i> IP Whitelist
+                            <i class="fas fa-lock"></i> <span>IP Whitelist</span>
                         </a></li>
-                    <li><a href="/admin/rate-limits"
+                    <li><a href="/admin/rate-limits" data-label="Rate Limits"
                             class="admin-nav-link {% if request.endpoint == 'admin_rate_limits' %}active{% endif %}">
-                            <i class="fas fa-tachometer-alt"></i> Rate Limits
+                            <i class="fas fa-tachometer-alt"></i> <span>Rate Limits</span>
                         </a></li>
-                    <li><a href="/admin/bot-defense"
+                    <li><a href="/admin/bot-defense" data-label="Bot Defense"
                             class="admin-nav-link {% if request.endpoint == 'admin_bot_defense' %}active{% endif %}">
-                            <i class="fas fa-shield-virus"></i> Bot Defense
+                            <i class="fas fa-shield-virus"></i> <span>Bot Defense</span>
                         </a></li>
-                    <li><a href="/admin/auth-events"
+                    <li><a href="/admin/auth-events" data-label="Auth Events"
                             class="admin-nav-link {% if request.endpoint == 'admin_auth_events' %}active{% endif %}">
-                            <i class="fas fa-envelope-open-text"></i> Auth Events
+                            <i class="fas fa-envelope-open-text"></i> <span>Auth Events</span>
                         </a></li>
                 </ul>
             </div>
@@ -121,57 +125,57 @@
             <div class="admin-nav-section">
                 <div class="admin-nav-label">System</div>
                 <ul class="admin-nav-items">
-                    <li><a href="/admin/database/stats"
+                    <li><a href="/admin/database/stats" data-label="Database"
                             class="admin-nav-link {% if request.endpoint == 'admin_database_stats' %}active{% endif %}">
-                            <i class="fas fa-database"></i> Database
+                            <i class="fas fa-database"></i> <span>Database</span>
                         </a></li>
-                    <li><a href="/admin/backups"
+                    <li><a href="/admin/backups" data-label="Backups"
                             class="admin-nav-link {% if request.endpoint == 'admin_backups' %}active{% endif %}">
-                            <i class="fas fa-archive"></i> Backups
+                            <i class="fas fa-archive"></i> <span>Backups</span>
                         </a></li>
-                    <li><a href="/admin/restore-center"
+                    <li><a href="/admin/restore-center" data-label="Restore Center"
                             class="admin-nav-link {% if request.endpoint == 'admin_restore_center' %}active{% endif %}">
-                            <i class="fas fa-history"></i> Restore Center
+                            <i class="fas fa-history"></i> <span>Restore Center</span>
                         </a></li>
-                    <li><a href="/admin/config"
+                    <li><a href="/admin/config" data-label="Config"
                             class="admin-nav-link {% if request.endpoint == 'admin_config' %}active{% endif %}">
-                            <i class="fas fa-cog"></i> Config
+                            <i class="fas fa-cog"></i> <span>Config</span>
                         </a></li>
-                    <li><a href="/admin/banner"
+                    <li><a href="/admin/banner" data-label="Banner"
                             class="admin-nav-link {% if request.endpoint == 'admin_banner' %}active{% endif %}">
-                            <i class="fas fa-bullhorn"></i> Banner
+                            <i class="fas fa-bullhorn"></i> <span>Banner</span>
                         </a></li>
-                    <li><a href="/admin/logs"
+                    <li><a href="/admin/logs" data-label="Logs"
                             class="admin-nav-link {% if request.endpoint == 'admin_logs' %}active{% endif %}">
-                            <i class="fas fa-file-alt"></i> Logs
+                            <i class="fas fa-file-alt"></i> <span>Logs</span>
                         </a></li>
-                    <li><a href="/admin/files"
+                    <li><a href="/admin/files" data-label="Files"
                             class="admin-nav-link {% if request.endpoint == 'admin_files' %}active{% endif %}">
-                            <i class="fas fa-folder-open"></i> Files
+                            <i class="fas fa-folder-open"></i> <span>Files</span>
                         </a></li>
-                    <li><a href="/admin/export"
+                    <li><a href="/admin/export" data-label="Export"
                             class="admin-nav-link {% if request.endpoint == 'admin_export_page' %}active{% endif %}">
-                            <i class="fas fa-file-export"></i> Export
+                            <i class="fas fa-file-export"></i> <span>Export</span>
                         </a></li>
-                    <li><a href="/admin/scheduled-tasks"
+                    <li><a href="/admin/scheduled-tasks" data-label="Tasks"
                             class="admin-nav-link {% if request.endpoint == 'admin_scheduled_tasks' %}active{% endif %}">
-                            <i class="fas fa-clock"></i> Tasks
+                            <i class="fas fa-clock"></i> <span>Tasks</span>
                         </a></li>
-                    <li><a href="/admin/audit-log"
+                    <li><a href="/admin/audit-log" data-label="Audit Log"
                             class="admin-nav-link {% if request.endpoint == 'admin_audit_log' %}active{% endif %}">
-                            <i class="fas fa-scroll"></i> Audit Log
+                            <i class="fas fa-scroll"></i> <span>Audit Log</span>
                         </a></li>
-                    <li><a href="/admin/issues"
+                    <li><a href="/admin/issues" data-label="Issues"
                             class="admin-nav-link {% if request.endpoint and request.endpoint.startswith('admin_issue') %}active{% endif %}">
-                            <i class="fas fa-bug"></i> Issues
+                            <i class="fas fa-bug"></i> <span>Issues</span>
                         </a></li>
-                    <li><a href="/admin/sql"
+                    <li><a href="/admin/sql" data-label="SQL Runner"
                             class="admin-nav-link {% if request.endpoint == 'admin_sql_runner' %}active{% endif %}">
-                            <i class="fas fa-code"></i> SQL Runner
+                            <i class="fas fa-code"></i> <span>SQL Runner</span>
                         </a></li>
-                    <li><a href="/admin/retention"
+                    <li><a href="/admin/retention" data-label="Retention"
                             class="admin-nav-link {% if request.endpoint == 'admin_retention' %}active{% endif %}">
-                            <i class="fas fa-chart-line"></i> Retention
+                            <i class="fas fa-chart-line"></i> <span>Retention</span>
                         </a></li>
                 </ul>
             </div>
@@ -183,6 +187,7 @@
                     <li>
                         <a href="#" onclick="toggleMaintenance(); return false;"
                             id="maintenance-toggle-link"
+                            data-label="{% if maintenance_mode %}Maintenance: ON{% else %}Maintenance: OFF{% endif %}"
                             class="admin-nav-link {% if maintenance_mode %}is-maintenance-on{% endif %}">
                             <i class="fas fa-{% if maintenance_mode %}toggle-on{% else %}toggle-off{% endif %}"
                                 id="maintenance-toggle-icon"></i>
@@ -192,8 +197,9 @@
                         </a>
                     </li>
                     <li>
-                        <a href="#" onclick="downloadDatabase(); return false;" class="admin-nav-link">
-                            <i class="fas fa-download"></i> Download DB
+                        <a href="#" onclick="downloadDatabase(); return false;"
+                            data-label="Download DB" class="admin-nav-link">
+                            <i class="fas fa-download"></i> <span>Download DB</span>
                         </a>
                     </li>
                 </ul>
@@ -203,8 +209,8 @@
 
         {# Sidebar footer #}
         <div class="admin-sidebar-footer">
-            <a href="{{ url_for('home') }}">
-                <i class="fas fa-arrow-left"></i> Return to App
+            <a href="{{ url_for('home') }}" data-label="Return to App">
+                <i class="fas fa-arrow-left"></i> <span>Return to App</span>
             </a>
         </div>
 
@@ -230,6 +236,124 @@ function toggleAdminNav(force) {
     if (force === false) { layout.classList.remove('nav-open'); return; }
     layout.classList.toggle('nav-open');
 }
+
+/* ── Sidebar rail collapse (desktop) ──────────────────────────────── */
+(function setupRailToggle() {
+    const KEY = 'admin.rail.collapsed';
+    const layout = document.querySelector('.admin-layout');
+    const btn    = document.getElementById('adminRailToggle');
+    if (!layout) return;
+
+    /* Restore persisted state */
+    try {
+        if (localStorage.getItem(KEY) === '1') layout.classList.add('rail-collapsed');
+    } catch (e) {}
+
+    if (btn) {
+        btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            layout.classList.toggle('rail-collapsed');
+            try {
+                localStorage.setItem(KEY, layout.classList.contains('rail-collapsed') ? '1' : '0');
+            } catch (e) {}
+        });
+    }
+
+    /* Allow expanding from rail by clicking the brand icon */
+    const brand = layout.querySelector('.admin-sidebar-brand');
+    if (brand) {
+        brand.addEventListener('click', (ev) => {
+            if (layout.classList.contains('rail-collapsed')) {
+                ev.preventDefault();
+                layout.classList.remove('rail-collapsed');
+                try { localStorage.setItem(KEY, '0'); } catch (e) {}
+            }
+        });
+    }
+})();
+
+/* ── Reusable table sorter for .a-table-pro ──────────────────────── */
+(function setupTablePro() {
+    function sortTable(table, th) {
+        const idx   = Array.from(th.parentNode.children).indexOf(th);
+        const tbody = table.tBodies[0];
+        if (!tbody) return;
+        const rows  = Array.from(tbody.querySelectorAll('tr'));
+        const asc   = !th.classList.contains('sort-asc');
+
+        /* Reset siblings */
+        th.parentNode.querySelectorAll('th').forEach(h => {
+            h.classList.remove('sort-asc', 'sort-desc');
+        });
+        th.classList.toggle('sort-asc',  asc);
+        th.classList.toggle('sort-desc', !asc);
+
+        const getVal = (row) => {
+            const cell = row.children[idx];
+            if (!cell) return '';
+            const dv = cell.getAttribute('data-sort');
+            if (dv !== null) return dv;
+            return cell.textContent.trim();
+        };
+
+        rows.sort((a, b) => {
+            const av = getVal(a);
+            const bv = getVal(b);
+            const an = parseFloat(av);
+            const bn = parseFloat(bv);
+            let cmp;
+            if (!isNaN(an) && !isNaN(bn) && av.trim() !== '' && bv.trim() !== '') {
+                cmp = an - bn;
+            } else {
+                cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+            }
+            return asc ? cmp : -cmp;
+        });
+
+        rows.forEach(r => tbody.appendChild(r));
+    }
+
+    document.querySelectorAll('.a-table-pro').forEach(table => {
+        table.querySelectorAll('thead th.sortable').forEach(th => {
+            th.addEventListener('click', () => sortTable(table, th));
+        });
+    });
+})();
+
+/* ── Density toggle ──────────────────────────────────────────────── */
+(function setupDensity() {
+    const KEY = 'admin.density';
+    const layout = document.querySelector('.admin-layout');
+    if (!layout) return;
+
+    try {
+        if (localStorage.getItem(KEY) === 'comfy') layout.classList.add('density-comfy');
+    } catch (e) {}
+
+    document.querySelectorAll('.a-density-toggle').forEach(group => {
+        const syncActive = () => {
+            const isComfy = layout.classList.contains('density-comfy');
+            group.querySelectorAll('button').forEach(b => {
+                b.classList.toggle('active',
+                    (b.dataset.density === 'comfy')  ===  isComfy);
+            });
+        };
+        syncActive();
+        group.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.dataset.density;
+                layout.classList.toggle('density-comfy', mode === 'comfy');
+                try { localStorage.setItem(KEY, mode); } catch (e) {}
+                document.querySelectorAll('.a-density-toggle').forEach(g => {
+                    g.querySelectorAll('button').forEach(b => {
+                        b.classList.toggle('active', b.dataset.density === mode);
+                    });
+                });
+            });
+        });
+    });
+})();
 
 /* Close sidebar when clicking outside or on a nav link */
 document.addEventListener('click', (e) => {

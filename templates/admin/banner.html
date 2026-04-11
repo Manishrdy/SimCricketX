@@ -1,15 +1,21 @@
 {% extends "admin/layout.html" %}
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Announcement Banner</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Announcement Banner</h1>
-        <p class="admin-page-subtitle">Configure a global banner shown on the home dashboard.</p>
+        <p class="admin-page-subtitle">Configure a global banner shown on the home dashboard</p>
     </div>
 </div>
 
 <div id="alertContainer"></div>
 
-<div class="a-card-flat" style="max-width: 900px;">
+<div class="a-card-flat" style="max-width: 920px;">
     <form id="bannerForm" onsubmit="saveBanner(event)">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -53,13 +59,13 @@
                 rows="5"
                 maxlength="2000"
                 style="max-width: 100%;"
-                placeholder="Write the announcement users should see..."
+                placeholder="Write the announcement users should see…"
             >{{ banner.message if banner else '' }}</textarea>
-            <p style="font-size:0.78rem;color:var(--fg-secondary);margin-top:0.45rem;">
+            <p class="a-form-hint">
                 Current version: <strong id="banner-version">{{ banner.version if banner else 1 }}</strong>.
                 Updating text creates a new version and users will see it again unless they dismiss that new version.
             </p>
-            <p style="font-size:0.78rem;color:var(--fg-secondary);margin-top:0.3rem;">
+            <p class="a-form-hint">
                 Changing color/position does not bump version, so dismissed users stay dismissed while you experiment.
             </p>
         </div>
