@@ -1,5 +1,11 @@
 {% extends "admin/layout.html" %}
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">All Matches</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">All Matches</h1>
@@ -7,48 +13,62 @@
     </div>
 </div>
 
-<!-- Search -->
-<div class="a-search-wrap">
-    <i class="fas fa-search a-search-icon"></i>
-    <form method="GET" style="width: 100%;">
-        <input type="text" name="q" class="a-search-input" placeholder="Search by owner or result..." value="{{ search }}">
-    </form>
+<div class="a-toolbar">
+    <div class="a-toolbar-left">
+        <form method="GET" class="a-search-wrap" style="margin:0;">
+            <i class="fas fa-search a-search-icon"></i>
+            <input type="text" name="q" class="a-search-input"
+                   placeholder="Search by owner or result…" value="{{ search }}">
+        </form>
+    </div>
+    <div class="a-toolbar-right">
+        <div class="a-density-toggle">
+            <button data-density="compact" class="active" title="Compact rows">
+                <i class="fas fa-grip-lines"></i>
+            </button>
+            <button data-density="comfy" title="Comfortable rows">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        <span class="a-toolbar-count">{{ matches|length }} shown · {{ total }} total</span>
+    </div>
 </div>
 
 <div class="a-table-wrap">
-    <table class="a-table">
+    <table class="a-table a-table-pro">
         <thead>
             <tr>
-                <th>ID</th>
-                <th>Owner</th>
-                <th>Result</th>
-                <th>Score</th>
-                <th>Venue</th>
-                <th>Date</th>
+                <th class="sortable" style="width:90px;">ID</th>
+                <th class="sortable" style="width:180px;">Owner</th>
+                <th class="sortable">Result</th>
+                <th class="sortable">Score</th>
+                <th class="sortable">Venue</th>
+                <th class="sortable" style="width:120px;">Date</th>
             </tr>
         </thead>
         <tbody>
             {% for m in matches %}
             <tr>
-                <td style="font-size: 0.78rem; font-family: 'IBM Plex Mono', monospace;">{{ m.id[:8] }}...</td>
+                <td class="a-cell-mono a-cell-dim" data-sort="{{ m.id }}">{{ m.id[:8] }}…</td>
                 <td>
-                    <a href="{{ url_for('admin_user_360', user_email=m.user_id) }}" style="color: var(--accent); text-decoration: none;">
+                    <a href="{{ url_for('admin_user_360', user_email=m.user_id) }}"
+                       style="color: var(--accent); text-decoration: none;">
                         {{ m.user_id }}
                     </a>
                 </td>
-                <td style="font-weight: 600; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    {{ m.result_description or 'N/A' }}
-                </td>
-                <td style="font-size: 0.82rem;">
+                <td class="a-cell-strong a-cell-trunc">{{ m.result_description or 'N/A' }}</td>
+                <td class="a-cell-dim">
                     {{ m.home_team_score or 0 }}/{{ m.home_team_wickets or 0 }}
                     vs
                     {{ m.away_team_score or 0 }}/{{ m.away_team_wickets or 0 }}
                 </td>
-                <td>{{ m.venue or '-' }}</td>
-                <td>{{ m.date.strftime('%Y-%m-%d') if m.date else 'N/A' }}</td>
+                <td class="a-cell-dim">{{ m.venue or '—' }}</td>
+                <td class="a-cell-dim" data-sort="{{ m.date.isoformat() if m.date else '' }}">
+                    {{ m.date.strftime('%Y-%m-%d') if m.date else 'N/A' }}
+                </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="a-empty"><p>No matches found</p></td></tr>
+            <tr><td colspan="6"><div class="a-empty"><i class="fas fa-baseball-ball"></i><p>No matches found</p></div></td></tr>
             {% endfor %}
         </tbody>
     </table>

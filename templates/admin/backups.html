@@ -1,6 +1,12 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Backups</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Backups</h1>
@@ -17,23 +23,23 @@
 
 {% if backups %}
 <div class="a-table-wrap">
-    <table class="a-table">
+    <table class="a-table a-table-pro">
         <thead>
             <tr>
-                <th>Filename</th>
-                <th>Size</th>
-                <th>Created</th>
-                <th>Age</th>
-                <th style="text-align: right;">Actions</th>
+                <th class="sortable">Filename</th>
+                <th class="sortable" style="width:110px;">Size</th>
+                <th class="sortable" style="width:180px;">Created</th>
+                <th class="sortable" style="width:100px;">Age</th>
+                <th style="width:120px;text-align:right;">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for b in backups %}
             <tr id="row-{{ loop.index }}">
-                <td style="font-family: monospace; font-size: 0.82rem;">{{ b.name }}</td>
-                <td><span class="a-badge a-badge-info">{{ b.size_mb }} MB</span></td>
-                <td style="color: var(--fg-secondary); font-size: 0.82rem;">{{ b.date }}</td>
-                <td>
+                <td class="a-cell-mono">{{ b.name }}</td>
+                <td data-sort="{{ b.size_mb }}"><span class="a-badge a-badge-info">{{ b.size_mb }} MB</span></td>
+                <td class="a-cell-dim">{{ b.date }}</td>
+                <td data-sort="{{ b.age_days }}">
                     {% if b.age_days < 1 %}
                     <span class="a-badge a-badge-success">Today</span>
                     {% elif b.age_days < 3 %}
@@ -44,11 +50,11 @@
                     <span class="a-badge a-badge-danger">{{ b.age_days|round(0)|int }}d</span>
                     {% endif %}
                 </td>
-                <td style="text-align: right;">
-                    <a href="/admin/backups/{{ b.name }}/download" class="a-btn a-btn-secondary a-btn-sm">
+                <td class="a-cell-actions">
+                    <a href="/admin/backups/{{ b.name }}/download" class="a-btn a-btn-secondary a-btn-sm" title="Download">
                         <i class="fas fa-download"></i>
                     </a>
-                    <button onclick="deleteBackup('{{ b.name }}', 'row-{{ loop.index }}')" class="a-btn a-btn-danger a-btn-sm">
+                    <button onclick="deleteBackup('{{ b.name }}', 'row-{{ loop.index }}')" class="a-btn a-btn-danger a-btn-sm" title="Delete">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -66,8 +72,8 @@
 </div>
 {% endif %}
 
-<div class="a-card-flat" style="margin-top: 1.5rem; border-left: 4px solid var(--accent);">
-    <p style="font-size: 0.85rem; color: var(--fg-secondary);">
+<div class="a-card-flat" style="margin-top: 1rem; border-left: 3px solid var(--accent);">
+    <p style="font-size: .82rem; color: var(--fg-secondary); margin: 0;">
         <i class="fas fa-info-circle" style="color: var(--accent);"></i>
         Automatic backups run every 24 hours. Backups older than 7 days are automatically deleted.
         You can also trigger a manual backup or download the live database via the backup token modal.
@@ -85,7 +91,7 @@ function showAlert(msg, type) {
 async function createBackup() {
     const btn = document.getElementById('createBtn');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating…';
     try {
         const resp = await fetch('/admin/backups/create', { method: 'POST' });
         const data = await resp.json();

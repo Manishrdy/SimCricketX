@@ -1,16 +1,32 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <a href="/admin/users">Users</a>
+    <span class="sep">/</span>
+    <span class="current">{{ user.id }}</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">{{ user.id }}</h1>
         <p class="admin-page-subtitle">User account management</p>
     </div>
     <div class="admin-page-actions">
-        <a href="{{ url_for('admin_users') }}" class="a-btn a-btn-ghost"><i class="fas fa-arrow-left"></i> Back</a>
-        <a href="{{ url_for('admin_user_analytics', user_email=user.id) }}" class="a-btn a-btn-secondary"><i class="fas fa-chart-bar"></i> Analytics</a>
-        <a href="{{ url_for('admin_user_login_history', user_email=user.id) }}" class="a-btn a-btn-secondary"><i class="fas fa-history"></i> Login History</a>
-        <a href="{{ url_for('admin_export_user', user_email=user.id) }}" class="a-btn a-btn-secondary"><i class="fas fa-download"></i> Export JSON</a>
+        <a href="{{ url_for('admin_users') }}" class="a-btn a-btn-ghost">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+        <a href="{{ url_for('admin_user_analytics', user_email=user.id) }}" class="a-btn a-btn-secondary">
+            <i class="fas fa-chart-bar"></i> Analytics
+        </a>
+        <a href="{{ url_for('admin_user_login_history', user_email=user.id) }}" class="a-btn a-btn-secondary">
+            <i class="fas fa-history"></i> Login History
+        </a>
+        <a href="{{ url_for('admin_export_user', user_email=user.id) }}" class="a-btn a-btn-secondary">
+            <i class="fas fa-download"></i> Export JSON
+        </a>
         {% if not user.is_admin %}
         <form method="POST" action="{{ url_for('admin_impersonate', user_email=user.id) }}" style="display:inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -24,19 +40,27 @@
 
 <div id="alertContainer"></div>
 
-<!-- User Info Cards -->
-<div class="a-stats-grid" style="margin-bottom: 2rem;">
+<div class="a-stats-grid" style="margin-bottom: 1.25rem;">
     <div class="a-stat-card">
-        <div class="a-stat-label">Email</div>
-        <div style="font-size: 0.95rem; font-weight: 600; color: var(--fg); word-break: break-all;">{{ user.id }}</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-envelope"></i></div>
+            <div class="a-stat-label">Email</div>
+        </div>
+        <div style="font-size: .88rem; font-weight: 600; color: var(--fg); word-break: break-all;">{{ user.id }}</div>
     </div>
     <div class="a-stat-card">
-        <div class="a-stat-label">Display Name</div>
-        <div style="font-size: 0.95rem; font-weight: 600; color: var(--fg);">{{ user.display_name or 'Not set' }}</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-id-badge"></i></div>
+            <div class="a-stat-label">Display Name</div>
+        </div>
+        <div style="font-size: .88rem; font-weight: 600; color: var(--fg);">{{ user.display_name or 'Not set' }}</div>
     </div>
     <div class="a-stat-card">
-        <div class="a-stat-label">Role</div>
-        <div style="font-size: 0.95rem; font-weight: 600;">
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-user-shield"></i></div>
+            <div class="a-stat-label">Role</div>
+        </div>
+        <div style="font-size: .88rem; font-weight: 600;">
             {% if user.is_admin %}
             <span style="color: var(--accent);"><i class="fas fa-shield-alt"></i> Administrator</span>
             {% else %}
@@ -44,53 +68,66 @@
             {% endif %}
         </div>
     </div>
-    <div class="a-stat-card">
-        <div class="a-stat-label">Teams</div>
+    <div class="a-stat-card" style="--a-stat-accent:#8b5cf6; --a-stat-accent-lt:rgba(139,92,246,.1)">
+        <div class="a-stat-icon"><i class="fas fa-shield-alt"></i></div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-shield-alt"></i></div>
+            <div class="a-stat-label">Teams</div>
+        </div>
         <div class="a-stat-value">{{ teams|length }}</div>
     </div>
-    <div class="a-stat-card">
-        <div class="a-stat-label">Matches</div>
+    <div class="a-stat-card" style="--a-stat-accent:#3b82f6; --a-stat-accent-lt:rgba(59,130,246,.1)">
+        <div class="a-stat-icon"><i class="fas fa-cricket-bat-ball"></i></div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-cricket-bat-ball"></i></div>
+            <div class="a-stat-label">Matches</div>
+        </div>
         <div class="a-stat-value">{{ matches|length }}</div>
     </div>
     <div class="a-stat-card">
-        <div class="a-stat-label">Last Login</div>
-        <div style="font-size: 0.88rem; font-weight: 600; color: var(--fg);">
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-clock"></i></div>
+            <div class="a-stat-label">Last Login</div>
+        </div>
+        <div style="font-size: .8rem; font-weight: 600; color: var(--fg); margin-top: .2rem;">
             {% if user.last_login %}{{ user.last_login | localtime }}{% else %}Never{% endif %}
         </div>
     </div>
 </div>
 
-<!-- Login IP History -->
 {% if sessions %}
-<div class="a-card-flat" style="margin-bottom: 1.5rem;">
-    <h3 class="a-section-title"><i class="fas fa-network-wired"></i> Login IP History ({{ sessions|length }} session{{ 's' if sessions|length != 1 }})</h3>
-    <div class="a-table-wrap" style="overflow-x: auto;">
-        <table class="a-table" style="min-width: 600px;">
+<div class="a-card-flat" style="margin-bottom: 1rem;">
+    <h3 class="a-section-title">
+        <i class="fas fa-network-wired"></i> Login IP History
+        <span class="count">{{ sessions|length }}</span>
+    </h3>
+    <div class="a-table-wrap">
+        <table class="a-table a-table-pro" style="min-width: 600px;">
             <thead>
                 <tr>
-                    <th style="width: 140px;">IP Address</th>
-                    <th style="width: 155px;">Login Time</th>
-                    <th style="width: 155px;">Last Active</th>
+                    <th class="sortable" style="width: 140px;">IP Address</th>
+                    <th class="sortable" style="width: 160px;">Login Time</th>
+                    <th class="sortable" style="width: 160px;">Last Active</th>
                     <th>User Agent</th>
-                    <th style="width: 80px;">Action</th>
+                    <th style="width: 70px;text-align:right;">Action</th>
                 </tr>
             </thead>
             <tbody>
                 {% for s in sessions %}
                 <tr>
-                    <td style="font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem;">{{ s.ip_address or '-' }}</td>
-                    <td style="font-size: 0.78rem; color: var(--fg-secondary); white-space: nowrap;">
+                    <td><code class="a-cell-mono">{{ s.ip_address or '—' }}</code></td>
+                    <td class="a-cell-dim" data-sort="{{ s.login_at.isoformat() if s.login_at else '' }}">
                         {% if s.login_at %}{{ s.login_at | localtime(True) }}{% endif %}
                     </td>
-                    <td style="font-size: 0.78rem; color: var(--fg-secondary); white-space: nowrap;">
+                    <td class="a-cell-dim" data-sort="{{ s.last_active.isoformat() if s.last_active else '' }}">
                         {% if s.last_active %}{{ s.last_active | localtime(True) }}{% endif %}
                     </td>
-                    <td style="font-size: 0.75rem; color: var(--fg-secondary); word-break: break-word;" title="{{ s.user_agent or '' }}">
-                        {{ s.user_agent[:80] if s.user_agent else '-' }}{{ '...' if s.user_agent and s.user_agent|length > 80 }}
+                    <td class="a-cell-dim a-cell-trunc" title="{{ s.user_agent or '' }}">
+                        {{ s.user_agent[:80] if s.user_agent else '—' }}{{ '…' if s.user_agent and s.user_agent|length > 80 }}
                     </td>
-                    <td>
+                    <td class="a-cell-actions">
                         {% if s.ip_address %}
-                        <button onclick="blockIPFromHistory('{{ s.ip_address }}')" class="a-btn a-btn-danger a-btn-sm" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Block this IP">
+                        <button onclick="blockIPFromHistory('{{ s.ip_address }}')" class="a-btn a-btn-danger a-btn-sm" title="Block this IP">
                             <i class="fas fa-ban"></i>
                         </button>
                         {% endif %}
@@ -102,24 +139,20 @@
     </div>
 </div>
 {% else %}
-<div class="a-card-flat" style="margin-bottom: 1.5rem;">
+<div class="a-card-flat" style="margin-bottom: 1rem;">
     <h3 class="a-section-title"><i class="fas fa-network-wired"></i> Login IP History</h3>
-    <div class="a-empty" style="padding: 1.5rem;">
-        <i class="fas fa-desktop"></i>
-        <p>No session records found for this user.</p>
-    </div>
+    <div class="a-empty"><i class="fas fa-desktop"></i><p>No session records found for this user</p></div>
 </div>
 {% endif %}
 
 {% if not user.is_admin %}
 
-<!-- Ban Status -->
 {% if user.is_banned %}
-<div class="a-card-flat" style="border-color: rgba(220, 38, 38, 0.4); border-left: 4px solid #dc2626; margin-bottom: 1.5rem;">
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+<div class="a-card-flat" style="border-color: rgba(220, 38, 38, 0.4); border-left: 3px solid #dc2626; margin-bottom: 1rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem;">
         <div>
             <span class="a-badge a-badge-danger"><i class="fas fa-ban"></i> BANNED</span>
-            <span style="font-size: 0.85rem; color: var(--fg); margin-left: 0.5rem;">
+            <span style="font-size: .82rem; color: var(--fg); margin-left: .5rem;">
                 {{ user.ban_reason or 'No reason' }}
                 {% if user.banned_until %} &mdash; until {{ user.banned_until.strftime('%Y-%m-%d %H:%M UTC') }}{% else %} (permanent){% endif %}
             </span>
@@ -130,21 +163,20 @@
 {% endif %}
 
 {% if user.force_password_reset %}
-<div class="a-card-flat" style="border-color: rgba(245, 158, 11, 0.4); border-left: 4px solid #f59e0b; margin-bottom: 1.5rem;">
+<div class="a-card-flat" style="border-color: rgba(245, 158, 11, 0.4); border-left: 3px solid #f59e0b; margin-bottom: 1rem;">
     <span class="a-badge a-badge-warning"><i class="fas fa-key"></i> Password Reset Pending</span>
-    <span style="font-size: 0.85rem; color: var(--fg); margin-left: 0.5rem;">User will be forced to change password on next login.</span>
+    <span style="font-size: .82rem; color: var(--fg); margin-left: .5rem;">User will be forced to change password on next login.</span>
 </div>
 {% endif %}
 
-{% set now_utc = now() if now is defined else none %}
 {% if user.lockout_until %}
-<div class="a-card-flat" style="border-color: rgba(234, 88, 12, 0.4); border-left: 4px solid #ea580c; margin-bottom: 1.5rem;">
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+<div class="a-card-flat" style="border-color: rgba(234, 88, 12, 0.4); border-left: 3px solid #ea580c; margin-bottom: 1rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem;">
         <div>
             <span class="a-badge" style="background: rgba(234,88,12,0.1); color: #ea580c; border: 1px solid rgba(234,88,12,0.3);">
                 <i class="fas fa-lock"></i> LOCKED OUT
             </span>
-            <span style="font-size: 0.85rem; color: var(--fg); margin-left: 0.5rem;">
+            <span style="font-size: .82rem; color: var(--fg); margin-left: .5rem;">
                 Locked until {{ user.lockout_until.strftime('%Y-%m-%d %H:%M UTC') }}
                 &mdash; {{ user.lockout_count }} failed attempt(s)
             </span>
@@ -156,8 +188,7 @@
 </div>
 {% endif %}
 
-<!-- Quick Actions -->
-<div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+<div style="display: flex; gap: .45rem; flex-wrap: wrap; margin-bottom: 1rem;">
     {% if not user.is_banned %}
     <button onclick="document.getElementById('banModal').style.display='flex'" class="a-btn a-btn-danger a-btn-sm">
         <i class="fas fa-ban"></i> Ban User
@@ -178,10 +209,9 @@
     </button>
 </div>
 
-<!-- Ban Modal -->
 <div id="banModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
-    <div style="background:var(--card-bg); border:1px solid var(--card-border); border-radius:12px; padding:1.5rem; max-width:400px; width:90%;">
-        <h3 style="margin:0 0 1rem; font-size:1.1rem; color:var(--fg);"><i class="fas fa-ban" style="color:#dc2626;"></i> Ban {{ user.id }}</h3>
+    <div style="background:var(--card-bg); border:1px solid var(--card-border); border-radius: var(--a-r-lg); padding:1.25rem; max-width:420px; width:90%; box-shadow: var(--a-shadow-floating);">
+        <h3 style="margin:0 0 .9rem; font-size:1rem; color:var(--fg);"><i class="fas fa-ban" style="color:#dc2626;"></i> Ban {{ user.id }}</h3>
         <div class="a-form-group">
             <label class="a-form-label">Reason</label>
             <input type="text" id="banReason" class="a-form-input" placeholder="Reason for ban">
@@ -190,16 +220,14 @@
             <label class="a-form-label">Duration (days)</label>
             <input type="number" id="banDuration" class="a-form-input" placeholder="Leave empty for permanent" min="1">
         </div>
-        <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+        <div style="display:flex; gap:.5rem; justify-content:flex-end;">
             <button onclick="document.getElementById('banModal').style.display='none'" class="a-btn a-btn-ghost">Cancel</button>
             <button onclick="banUser()" class="a-btn a-btn-danger">Ban User</button>
         </div>
     </div>
 </div>
 
-<!-- Admin actions only for non-admin users -->
 <div class="a-grid-2">
-    <!-- Change Email -->
     <div class="a-card-flat">
         <h3 class="a-section-title"><i class="fas fa-envelope"></i> Change Email</h3>
         <form id="emailForm" onsubmit="changeEmail(event)">
@@ -212,7 +240,6 @@
         </form>
     </div>
 
-    <!-- Reset Password -->
     <div class="a-card-flat">
         <h3 class="a-section-title"><i class="fas fa-key"></i> Reset Password</h3>
         <form id="passwordForm" onsubmit="resetPassword(event)">
@@ -226,20 +253,18 @@
     </div>
 </div>
 
-<!-- Danger Zone -->
-<div class="a-card-flat" style="border-color: rgba(220, 38, 38, 0.3); margin-top: 1.5rem;">
+<div class="a-card-flat" style="border-color: rgba(220, 38, 38, 0.3); margin-top: 1rem;">
     <h3 class="a-section-title" style="color: #dc2626;"><i class="fas fa-exclamation-triangle"></i> Danger Zone</h3>
-    <p style="color: var(--fg-secondary); font-size: 0.88rem; margin-bottom: 1rem;">
+    <p style="color: var(--fg-secondary); font-size: .82rem; margin-bottom: .85rem;">
         Deleting this user will permanently remove all their teams, matches, and tournaments.
     </p>
-    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+    <div style="display:flex;gap:.45rem;flex-wrap:wrap;">
         <button onclick="deleteUser()" class="a-btn a-btn-danger"><i class="fas fa-trash"></i> Delete User Account</button>
     </div>
 </div>
 {% else %}
-<!-- Admin account: show promote/demote only -->
-<div class="a-card-flat" style="border-color: var(--accent); border-left: 4px solid var(--accent); margin-top:1rem;">
-    <p style="color: var(--fg); font-size: 0.9rem; margin-bottom:1rem;">
+<div class="a-card-flat" style="border-left: 3px solid var(--accent); margin-top: 1rem;">
+    <p style="color: var(--fg); font-size: .84rem; margin-bottom: .85rem;">
         <i class="fas fa-info-circle" style="color: var(--accent);"></i>
         This is an admin account. Destructive actions are restricted.
     </p>
@@ -249,11 +274,10 @@
 </div>
 {% endif %}
 
-<!-- Promote / Demote admin (shown for non-admin users at bottom too) -->
 {% if not user.is_admin %}
-<div class="a-card-flat" style="margin-top:1rem;">
+<div class="a-card-flat" style="margin-top: 1rem;">
     <h3 class="a-section-title"><i class="fas fa-user-shield"></i> Admin Role</h3>
-    <p style="font-size:0.88rem;color:var(--fg-secondary);margin-bottom:0.75rem;">Promote this user to administrator. Admins have full access to all admin panel features.</p>
+    <p style="font-size:.82rem;color:var(--fg-secondary);margin-bottom:.65rem;">Promote this user to administrator. Admins have full access to all admin panel features.</p>
     <button onclick="toggleAdmin()" class="a-btn a-btn-secondary a-btn-sm">
         <i class="fas fa-shield-alt"></i> Promote to Admin
     </button>

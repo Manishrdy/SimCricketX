@@ -1,50 +1,57 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Files</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">File Explorer</h1>
         <p class="admin-page-subtitle">View project files and directories</p>
     </div>
     <div class="admin-page-actions">
-        <button id="refresh-btn" class="a-btn a-btn-secondary"><i class="fas fa-sync-alt"></i> Refresh</button>
+        <button id="refresh-btn" class="a-btn a-btn-secondary">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
     </div>
 </div>
 
-<div class="a-section">
-    <!-- Breadcrumb -->
-    <div class="a-card-flat"
-        style="margin-bottom: 1rem; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.5rem; background: var(--bg-secondary);">
-        <button id="up-dir-btn" class="a-btn a-btn-ghost a-btn-sm" title="Go up"><i
-                class="fas fa-level-up-alt"></i></button>
-        <div id="breadcrumb" style="font-family: monospace; font-size: 0.9rem; color: var(--fg);">
+<div class="a-toolbar">
+    <div class="a-toolbar-left">
+        <button id="up-dir-btn" class="a-btn a-btn-ghost a-btn-sm" title="Go up">
+            <i class="fas fa-level-up-alt"></i> Up
+        </button>
+        <div id="breadcrumb" style="font-family: 'IBM Plex Mono', monospace; font-size: .82rem; color: var(--fg); margin-left: .5rem;">
             /
         </div>
     </div>
+</div>
 
-    <!-- File List -->
-    <div class="a-table-wrap">
-        <table class="a-table" id="file-table">
-            <thead>
-                <tr>
-                    <th style="width: 40px;"></th>
-                    <th>Name</th>
-                    <th style="width: 120px;">Size</th>
-                    <th style="width: 180px;">Modified</th>
-                </tr>
-            </thead>
-            <tbody id="file-list-body">
-                <tr>
-                    <td colspan="4" class="a-empty">Loading...</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+<div class="a-table-wrap">
+    <table class="a-table a-table-pro" id="file-table">
+        <thead>
+            <tr>
+                <th style="width: 40px;"></th>
+                <th class="sortable">Name</th>
+                <th class="sortable" style="width: 110px;">Size</th>
+                <th class="sortable" style="width: 180px;">Modified</th>
+            </tr>
+        </thead>
+        <tbody id="file-list-body">
+            <tr>
+                <td colspan="4"><div class="a-empty"><i class="fas fa-spinner fa-spin"></i><p>Loading…</p></div></td>
+            </tr>
+        </tbody>
+    </table>
 </div>
 
 {% endblock %}
 
 {% block extra_js %}
+{{ super() }}
 <script>
     let currentPath = '';
 
@@ -56,9 +63,7 @@
         });
 
         document.getElementById('up-dir-btn').addEventListener('click', () => {
-            // Logic handled by API response parent_path, but as a fallback/quick action:
             if (currentPath) {
-                // Simple string manipulation fallback if state not yet loaded
                 const parts = currentPath.split('/');
                 parts.pop();
                 loadpath(parts.join('/'));
@@ -68,7 +73,7 @@
 
     async function loadpath(path) {
         const tbody = document.getElementById('file-list-body');
-        tbody.innerHTML = '<tr><td colspan="4" class="a-empty"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4"><div class="a-empty"><i class="fas fa-spinner fa-spin"></i><p>Loading…</p></div></td></tr>';
 
         try {
             const res = await fetch(`/admin/api/files?path=${encodeURIComponent(path)}`);
@@ -79,7 +84,7 @@
             const data = await res.json();
             renderFiles(data);
         } catch (error) {
-            tbody.innerHTML = `<tr><td colspan="4" class="a-empty" style="color: var(--danger);"><i class="fas fa-exclamation-circle"></i> ${error.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4"><div class="a-empty"><i class="fas fa-exclamation-circle"></i><p>${error.message}</p></div></td></tr>`;
         }
     }
 
@@ -90,8 +95,6 @@
 
         currentPath = data.current_path;
 
-        // Update Breadcrumb
-        // Format: Root > Folder > Subfolder
         if (!data.current_path) {
             breadcrumb.innerHTML = '<span style="font-weight:bold;">Root</span>';
             upBtn.disabled = true;
@@ -103,9 +106,9 @@
             parts.forEach((part, index) => {
                 builtPath += (builtPath ? '/' : '') + part;
                 if (index === parts.length - 1) {
-                    html += ` <i class="fas fa-chevron-right" style="font-size:0.7em; opacity:0.5; margin:0 0.3rem;"></i> <span>${part}</span>`;
+                    html += ` <i class="fas fa-chevron-right" style="font-size:.68em; opacity:.5; margin:0 .28rem;"></i> <span>${part}</span>`;
                 } else {
-                    html += ` <i class="fas fa-chevron-right" style="font-size:0.7em; opacity:0.5; margin:0 0.3rem;"></i> <span class="breadcrumb-link" onclick="loadpath('${builtPath}')" style="cursor:pointer; color:var(--accent);">${part}</span>`;
+                    html += ` <i class="fas fa-chevron-right" style="font-size:.68em; opacity:.5; margin:0 .28rem;"></i> <span class="breadcrumb-link" onclick="loadpath('${builtPath}')" style="cursor:pointer; color:var(--accent);">${part}</span>`;
                 }
             });
             breadcrumb.innerHTML = html;
@@ -114,28 +117,25 @@
             upBtn.onclick = () => loadpath(data.parent_path);
         }
 
-        // Update Table
         if (data.items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="a-empty">This folder is empty</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4"><div class="a-empty"><i class="fas fa-folder-open"></i><p>This folder is empty</p></div></td></tr>';
             return;
         }
 
         tbody.innerHTML = data.items.map(item => {
             const iconClass = item.is_dir ? 'fa-folder' : getFileIcon(item.name);
-            const iconColor = item.is_dir ? '#fbbf24' : 'var(--fg-secondary)'; // Folder yellow
+            const iconColor = item.is_dir ? '#fbbf24' : 'var(--fg-secondary)';
             const nameStyle = item.is_dir ? 'font-weight:600; cursor:pointer; color:var(--fg);' : 'color:var(--fg);';
             const clickAction = item.is_dir ? `onclick="loadpath('${item.path}')"` : '';
 
             return `
                 <tr ${item.is_dir ? 'style="cursor:pointer;" class="folder-row"' : ''} ${clickAction}>
-                    <td style="text-align:center;"><i class="fas ${iconClass}" style="color:${iconColor}; font-size:1.1rem;"></i></td>
-                    <td>
-                        <div style="${nameStyle}">${item.name}</div>
-                    </td>
-                    <td style="font-family:monospace; font-size:0.85rem; color:var(--fg-secondary);">${formatSize(item.size)}</td>
-                    <td style="font-size:0.85rem; color:var(--fg-secondary); display:flex; justify-content:space-between; align-items:center;">
-                        ${item.modified}
-                        ${!item.is_dir ? `<button onclick="deleteFile('${item.path}', '${item.name}', event)" class="a-btn a-btn-ghost a-btn-sm" style="color:var(--danger); padding:0.1rem 0.4rem;" title="Delete File"><i class="fas fa-trash-alt"></i></button>` : ''}
+                    <td style="text-align:center;"><i class="fas ${iconClass}" style="color:${iconColor}; font-size:1rem;"></i></td>
+                    <td><div style="${nameStyle}">${item.name}</div></td>
+                    <td class="a-cell-mono a-cell-dim" data-sort="${item.size}">${formatSize(item.size)}</td>
+                    <td class="a-cell-dim" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>${item.modified}</span>
+                        ${!item.is_dir ? `<button onclick="deleteFile('${item.path}', '${item.name}', event)" class="a-btn a-btn-ghost a-btn-sm" style="color:#dc2626; padding:.1rem .4rem;" title="Delete File"><i class="fas fa-trash-alt"></i></button>` : ''}
                     </td>
                 </tr>
             `;
@@ -143,7 +143,7 @@
     }
 
     async function deleteFile(path, name, event) {
-        event.stopPropagation(); // Prevent row click
+        event.stopPropagation();
 
         if (!confirm(`Are you sure you want to delete "${name}"?\nThis action cannot be undone.`)) {
             return;
@@ -158,9 +158,7 @@
             });
 
             if (res.ok) {
-                // Refresh current view
                 loadpath(currentPath);
-                // Optionally show success toast/alert
             } else {
                 const data = await res.json();
                 alert(`Error deleting file: ${data.error}`);
@@ -187,8 +185,7 @@
             case 'js': return 'fa-js';
             case 'json': return 'fa-code';
             case 'db': return 'fa-database';
-            case 'md': return 'fa-file-alt';
-            case 'txt': return 'fa-file-alt';
+            case 'md': case 'txt': return 'fa-file-alt';
             case 'jpg': case 'jpeg': case 'png': case 'gif': case 'webp': return 'fa-image';
             case 'zip': case 'rar': case '7z': return 'fa-file-archive';
             default: return 'fa-file';
@@ -197,12 +194,7 @@
 </script>
 
 <style>
-    .folder-row:hover {
-        background-color: var(--accent-light) !important;
-    }
-
-    .breadcrumb-link:hover {
-        text-decoration: underline;
-    }
+    .folder-row:hover { background-color: var(--accent-light) !important; }
+    .breadcrumb-link:hover { text-decoration: underline; }
 </style>
 {% endblock %}

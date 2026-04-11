@@ -6,26 +6,33 @@
 {% endblock %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <a href="{{ url_for('admin_issues') }}">Issues</a>
+    <span class="sep">/</span>
+    <span class="current">{{ row.public_id }}</span>
+</div>
 
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">
-            <code>{{ row.public_id }}</code> — {{ row.title }}
+            <code>{{ row.public_id }}</code> &mdash; {{ row.title }}
         </h1>
         <p class="admin-page-subtitle">
             <span class="a-tag">{{ row.category }}</span>
             <span class="a-tag a-tag-{{ row.status }}">{{ row.status }}</span>
-            · submitted by {{ row.user_email }}
-            · {{ row.created_at | localtime if row.created_at else '-' }}
+            &middot; submitted by {{ row.user_email }}
+            &middot; {{ row.created_at | localtime if row.created_at else '—' }}
         </p>
     </div>
     <div class="admin-page-actions">
         <a href="{{ url_for('admin_issues') }}" class="a-btn a-btn-secondary">
-            <i class="fas fa-arrow-left"></i> Back to list
+            <i class="fas fa-arrow-left"></i> Back
         </a>
         {% if row.github_issue_url %}
         <a href="{{ row.github_issue_url }}" target="_blank" rel="noopener" class="a-btn a-btn-primary">
-            <i class="fab fa-github"></i> Open issue #{{ row.github_issue_number }}
+            <i class="fab fa-github"></i> Issue #{{ row.github_issue_number }}
         </a>
         {% elif row.github_sync_status == 'failed' %}
         <button type="button" class="a-btn a-btn-secondary" onclick="retrySync({{ row.id }})">
@@ -37,10 +44,12 @@
 
 <div id="alertContainer"></div>
 
-{# ── Metadata grid ──────────────────────────────────────────────── #}
-<div class="a-stats-grid" style="margin-bottom:1.5rem;">
+<div class="a-stats-grid" style="margin-bottom:1rem;">
     <div class="a-stat-card">
-        <div class="a-stat-label">GitHub sync</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fab fa-github"></i></div>
+            <div class="a-stat-label">GitHub sync</div>
+        </div>
         <div class="a-stat-value" style="font-size:1rem;">
             {% if row.github_sync_status == 'synced' %}
             <span style="color:#16a34a;">synced</span>
@@ -51,66 +60,70 @@
             {% endif %}
         </div>
         <div class="a-stat-sub">
-            {% if row.github_last_synced_at %}
-            last: {{ row.github_last_synced_at | localtime }}
-            {% else %}
-            never
-            {% endif %}
+            {% if row.github_last_synced_at %}last: {{ row.github_last_synced_at | localtime }}{% else %}never{% endif %}
         </div>
     </div>
     <div class="a-stat-card">
-        <div class="a-stat-label">App version</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-code-branch"></i></div>
+            <div class="a-stat-label">App version</div>
+        </div>
         <div class="a-stat-value" style="font-size:1rem;">{{ row.app_version or 'unknown' }}</div>
         <div class="a-stat-sub">at submission</div>
     </div>
     <div class="a-stat-card">
-        <div class="a-stat-label">Linked exceptions</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-link"></i></div>
+            <div class="a-stat-label">Linked exceptions</div>
+        </div>
         <div class="a-stat-value">{{ linked_exceptions | length }}</div>
         <div class="a-stat-sub">last 30 min before report</div>
     </div>
 </div>
 
-{# ── Description ────────────────────────────────────────────────── #}
-<section style="margin-bottom:1.5rem;">
-    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Description</h2>
-    <pre style="white-space:pre-wrap; padding:1rem; background:var(--bg-secondary); border:1px solid var(--card-border); border-radius:6px;">{{ row.description }}</pre>
+<section style="margin-bottom:1rem;">
+    <h2 class="a-section-title"><i class="fas fa-comment-alt"></i> Description</h2>
+    <pre style="white-space:pre-wrap; padding:.85rem 1rem; background:var(--bg-secondary); border:1px solid var(--card-border); border-radius: var(--a-r-md); font-size: .84rem;">{{ row.description }}</pre>
 </section>
 
-{# ── Page context ──────────────────────────────────────────────── #}
-<section style="margin-bottom:1.5rem;">
-    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Page context</h2>
-    <table class="a-table">
-        <tbody>
-            <tr><th style="width:160px;">Page URL</th><td>{{ row.page_url or '-' }}</td></tr>
-            <tr><th>User-Agent</th><td><code style="font-size:0.8em;">{{ row.user_agent or '-' }}</code></td></tr>
-            <tr><th>GitHub sync error</th><td>{{ row.github_sync_error or '-' }}</td></tr>
-        </tbody>
-    </table>
-</section>
-
-{# ── Linked ExceptionLog rows ──────────────────────────────────── #}
-{% if linked_exceptions %}
-<section style="margin-bottom:1.5rem;">
-    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Linked exceptions ({{ linked_exceptions | length }})</h2>
+<section style="margin-bottom:1rem;">
+    <h2 class="a-section-title"><i class="fas fa-globe"></i> Page context</h2>
     <div class="a-table-wrap">
         <table class="a-table">
+            <tbody>
+                <tr><th style="width:160px;">Page URL</th><td class="a-cell-mono">{{ row.page_url or '—' }}</td></tr>
+                <tr><th>User-Agent</th><td><code class="a-cell-mono">{{ row.user_agent or '—' }}</code></td></tr>
+                <tr><th>GitHub sync error</th><td class="a-cell-dim">{{ row.github_sync_error or '—' }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+{% if linked_exceptions %}
+<section style="margin-bottom:1rem;">
+    <h2 class="a-section-title">
+        <i class="fas fa-link"></i> Linked exceptions
+        <span class="count">{{ linked_exceptions | length }}</span>
+    </h2>
+    <div class="a-table-wrap">
+        <table class="a-table a-table-pro">
             <thead>
                 <tr>
-                    <th>Type</th>
-                    <th>Message</th>
-                    <th style="width:90px;">Severity</th>
-                    <th style="width:170px;">When</th>
-                    <th style="width:80px;">Detail</th>
+                    <th class="sortable">Type</th>
+                    <th class="sortable">Message</th>
+                    <th class="sortable" style="width:100px;">Severity</th>
+                    <th class="sortable" style="width:170px;">When</th>
+                    <th style="width:80px;text-align:right;">Detail</th>
                 </tr>
             </thead>
             <tbody>
                 {% for exc in linked_exceptions %}
                 <tr>
-                    <td><code>{{ exc.exception_type }}</code></td>
-                    <td>{{ (exc.exception_message or '')[:140] }}</td>
+                    <td><code class="a-cell-mono">{{ exc.exception_type }}</code></td>
+                    <td class="a-cell-trunc">{{ (exc.exception_message or '')[:140] }}</td>
                     <td><span class="a-tag a-tag-{{ exc.severity }}">{{ exc.severity }}</span></td>
-                    <td>{{ exc.timestamp | localtime if exc.timestamp else '-' }}</td>
-                    <td><a href="{{ url_for('admin_exception_detail', exc_id=exc.id) }}">view →</a></td>
+                    <td class="a-cell-dim" data-sort="{{ exc.timestamp.isoformat() if exc.timestamp else '' }}">{{ exc.timestamp | localtime if exc.timestamp else '—' }}</td>
+                    <td class="a-cell-actions"><a href="{{ url_for('admin_exception_detail', exc_id=exc.id) }}">view →</a></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -119,33 +132,31 @@
 </section>
 {% endif %}
 
-{# ── Admin notes (local-only) ──────────────────────────────────── #}
-<section style="margin-bottom:1.5rem;">
-    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">
-        Admin notes
-        <span style="font-size:0.72rem; font-weight:400; color:var(--fg-secondary);">· local only, never synced to GitHub</span>
+<section style="margin-bottom:1rem;">
+    <h2 class="a-section-title">
+        <i class="fas fa-sticky-note"></i> Admin notes
+        <span style="font-size:.68rem; font-weight:400; color:var(--fg-secondary); margin-left:.25rem;">&middot; local only, never synced to GitHub</span>
     </h2>
     <form id="admin-notes-form" onsubmit="saveAdminNotes(event, {{ row.id }})">
         <textarea id="admin-notes-field" rows="4" maxlength="10000"
-                  style="width:100%; box-sizing:border-box; padding:0.6rem 0.8rem; border:1px solid var(--card-border); border-radius:6px; background:var(--bg); color:var(--fg); font-family:inherit; font-size:0.88rem; resize:vertical;"
+                  style="width:100%; box-sizing:border-box; padding:.55rem .8rem; border:1px solid var(--card-border); border-radius: var(--a-r-md); background:var(--bg); color:var(--fg); font-family:inherit; font-size:.84rem; resize:vertical;"
                   placeholder="Triage notes, investigation details, links to PRs…">{{ row.admin_notes or '' }}</textarea>
-        <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center;">
+        <div style="display:flex; gap:.5rem; margin-top:.5rem; align-items:center;">
             <button type="submit" class="a-btn a-btn-primary a-btn-sm">
                 <i class="fas fa-save"></i> Save notes
             </button>
-            <span id="admin-notes-status" style="font-size:0.82rem; color:var(--fg-secondary);"></span>
+            <span id="admin-notes-status" style="font-size:.78rem; color:var(--fg-secondary);"></span>
         </div>
     </form>
 </section>
 
-{# ── Session logs (collapsible) ────────────────────────────────── #}
-<section style="margin-bottom:1.5rem;">
+<section style="margin-bottom:1rem;">
     <details>
-        <summary style="cursor:pointer; font-size:1rem; font-weight:600; margin-bottom:0.5rem;">
+        <summary style="cursor:pointer; font-size: .92rem; font-weight: 700; margin-bottom: .5rem; color: var(--fg);">
             Session logs ({{ session_logs | length }} entries)
         </summary>
         {% if session_logs %}
-        <pre style="white-space:pre-wrap; padding:1rem; background:#0d1117; color:#c9d1d9; border-radius:6px; max-height:500px; overflow:auto; font-size:0.78rem;">{% for entry in session_logs %}[{{ entry.lvl or 'INFO' }}] {{ entry.logger or '' }} {{ entry.func or '' }}:{{ entry.line or 0 }}  {{ entry.msg or '' }}
+        <pre style="white-space:pre-wrap; padding:1rem; background:#0d1117; color:#c9d1d9; border-radius: var(--a-r-md); max-height: 500px; overflow: auto; font-size: .76rem;">{% for entry in session_logs %}[{{ entry.lvl or 'INFO' }}] {{ entry.logger or '' }} {{ entry.func or '' }}:{{ entry.line or 0 }}  {{ entry.msg or '' }}
 {% endfor %}</pre>
         {% else %}
         <p style="color:#6b7280;">No session logs captured.</p>
@@ -162,16 +173,16 @@ function retrySync(rowId) {
         .then(body => {
             const box = document.getElementById('alertContainer');
             if (body.status === 'queued' || body.status === 'already_synced') {
-                box.innerHTML = '<div class="a-alert a-alert-success">Retry queued. Reloading…</div>';
+                box.innerHTML = '<div class="a-alert a-alert-success" style="display:block">Retry queued. Reloading…</div>';
                 setTimeout(() => location.reload(), 1200);
             } else {
-                box.innerHTML = '<div class="a-alert a-alert-error">' + (body.error || 'Retry failed') + '</div>';
+                box.innerHTML = '<div class="a-alert a-alert-error" style="display:block">' + (body.error || 'Retry failed') + '</div>';
                 btn.disabled = false;
             }
         })
         .catch(err => {
             document.getElementById('alertContainer').innerHTML =
-                '<div class="a-alert a-alert-error">Network error: ' + err + '</div>';
+                '<div class="a-alert a-alert-error" style="display:block">Network error: ' + err + '</div>';
             btn.disabled = false;
         });
 }
@@ -205,5 +216,4 @@ function saveAdminNotes(event, rowId) {
         });
 }
 </script>
-
 {% endblock %}

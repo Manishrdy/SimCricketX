@@ -1,5 +1,11 @@
 {% extends "admin/layout.html" %}
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Bot Defense</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Bot Defense</h1>
@@ -9,7 +15,7 @@
 
 <div id="alertContainer"></div>
 
-<div class="a-card-flat" style="max-width: 860px;">
+<div class="a-card-flat" style="max-width: 900px;">
     <form id="botDefenseForm" onsubmit="saveBotDefense(event)">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -71,18 +77,16 @@
             <input type="text" name="trusted_ip_prefixes" class="a-form-input" style="max-width: 100%;"
                    value="{{ settings.trusted_ip_prefixes or '' }}"
                    placeholder="Examples: 127.0.0.1, 192.168., 10.0.0.0/8">
-            <p style="font-size: 0.78rem; color: var(--fg-secondary); margin-top: 0.35rem;">
-                Comma-separated entries. Supports exact IP, prefix ending with dot, or CIDR blocks.
-            </p>
+            <p class="a-form-hint">Comma-separated entries. Supports exact IP, prefix ending with dot, or CIDR blocks.</p>
         </div>
 
         <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-save"></i> Save Bot Defense Settings</button>
     </form>
 </div>
 
-<div class="a-card-flat" style="max-width: 860px; margin-top: 1rem;">
+<div class="a-card-flat" style="max-width: 900px; margin-top: 1rem;">
     <h3 class="a-section-title"><i class="fas fa-chart-line"></i> Live Solve-Time Estimator</h3>
-    <p style="font-size: 0.82rem; color: var(--fg-secondary); margin-bottom: 0.85rem;">
+    <p style="font-size: .8rem; color: var(--fg-secondary); margin-bottom: .75rem;">
         Estimate expected client-side proof-of-work solve times from the current difficulty values.
     </p>
 
@@ -93,7 +97,7 @@
         </div>
         <div class="a-form-group">
             <label class="a-form-label">Quick Presets</label>
-            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <div style="display:flex; gap:.4rem; flex-wrap:wrap;">
                 <button type="button" class="a-btn a-btn-secondary a-btn-sm" onclick="setHashRate(60000)">Low-End</button>
                 <button type="button" class="a-btn a-btn-secondary a-btn-sm" onclick="setHashRate(150000)">Mid</button>
                 <button type="button" class="a-btn a-btn-secondary a-btn-sm" onclick="setHashRate(350000)">High</button>
@@ -108,7 +112,7 @@
     </div>
 
     <div class="a-table-wrap">
-        <table class="a-table">
+        <table class="a-table a-table-pro">
             <thead>
                 <tr>
                     <th>Level</th>
@@ -120,25 +124,25 @@
             </thead>
             <tbody>
                 <tr>
-                    <td>Base</td>
-                    <td id="sim_base_diff">-</td>
-                    <td id="sim_base_attempts">-</td>
-                    <td id="sim_base_time">-</td>
-                    <td id="sim_base_fit">-</td>
+                    <td class="a-cell-strong">Base</td>
+                    <td id="sim_base_diff">—</td>
+                    <td id="sim_base_attempts" class="a-cell-mono">—</td>
+                    <td id="sim_base_time">—</td>
+                    <td id="sim_base_fit">—</td>
                 </tr>
                 <tr>
-                    <td>Elevated</td>
-                    <td id="sim_elev_diff">-</td>
-                    <td id="sim_elev_attempts">-</td>
-                    <td id="sim_elev_time">-</td>
-                    <td id="sim_elev_fit">-</td>
+                    <td class="a-cell-strong">Elevated</td>
+                    <td id="sim_elev_diff">—</td>
+                    <td id="sim_elev_attempts" class="a-cell-mono">—</td>
+                    <td id="sim_elev_time">—</td>
+                    <td id="sim_elev_fit">—</td>
                 </tr>
                 <tr>
-                    <td>High</td>
-                    <td id="sim_high_diff">-</td>
-                    <td id="sim_high_attempts">-</td>
-                    <td id="sim_high_time">-</td>
-                    <td id="sim_high_fit">-</td>
+                    <td class="a-cell-strong">High</td>
+                    <td id="sim_high_diff">—</td>
+                    <td id="sim_high_attempts" class="a-cell-mono">—</td>
+                    <td id="sim_high_time">—</td>
+                    <td id="sim_high_fit">—</td>
                 </tr>
             </tbody>
         </table>
@@ -174,7 +178,7 @@ function formatAttempts(n) {
 }
 
 function formatSeconds(seconds) {
-    if (!isFinite(seconds) || seconds < 0) return '-';
+    if (!isFinite(seconds) || seconds < 0) return '—';
     if (seconds < 1) return (seconds * 1000).toFixed(0) + ' ms';
     if (seconds < 60) return seconds.toFixed(1) + ' s';
     const m = Math.floor(seconds / 60);

@@ -1,12 +1,20 @@
 {% extends "admin/layout.html" %}
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Failed Logins</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Failed Login Attempts</h1>
         <p class="admin-page-subtitle">{{ total }} total recorded attempt{{ 's' if total != 1 }}</p>
     </div>
     <div class="admin-page-actions">
-        <button onclick="clearAll()" class="a-btn a-btn-danger"><i class="fas fa-trash"></i> Clear All</button>
+        <button onclick="clearAll()" class="a-btn a-btn-danger">
+            <i class="fas fa-trash"></i> Clear All
+        </button>
     </div>
 </div>
 
@@ -14,14 +22,21 @@
 
 {% if top_ips %}
 <div class="a-section">
-    <h3 class="a-section-title"><i class="fas fa-exclamation-triangle"></i> Top Offending IPs (24h)</h3>
+    <h3 class="a-section-title">
+        <i class="fas fa-exclamation-triangle"></i> Top Offending IPs
+        <span class="count">24h</span>
+    </h3>
     <div class="a-stats-grid">
         {% for ip, count in top_ips %}
-        <div class="a-stat-card">
-            <div class="a-stat-label">{{ ip or 'Unknown' }}</div>
+        <div class="a-stat-card" style="--a-stat-accent:#ef4444; --a-stat-accent-lt:rgba(239,68,68,.1)">
+            <div class="a-stat-icon"><i class="fas fa-ban"></i></div>
+            <div class="a-stat-header">
+                <div class="a-stat-icon-pill"><i class="fas fa-globe"></i></div>
+                <div class="a-stat-label">{{ ip or 'Unknown' }}</div>
+            </div>
             <div class="a-stat-value">{{ count }}</div>
             <div class="a-stat-sub">failed attempts</div>
-            <button onclick="blockIP('{{ ip }}')" class="a-btn a-btn-danger a-btn-sm" style="margin-top: 0.5rem;">
+            <button onclick="blockIP('{{ ip }}')" class="a-btn a-btn-danger a-btn-sm" style="margin-top: .55rem;">
                 <i class="fas fa-ban"></i> Block
             </button>
         </div>
@@ -31,27 +46,27 @@
 {% endif %}
 
 <div class="a-table-wrap">
-    <table class="a-table">
+    <table class="a-table a-table-pro">
         <thead>
             <tr>
-                <th>Email Attempted</th>
-                <th>IP Address</th>
-                <th>Time</th>
+                <th class="sortable">Email Attempted</th>
+                <th class="sortable" style="width:160px;">IP Address</th>
+                <th class="sortable" style="width:180px;">Time</th>
                 <th>User Agent</th>
             </tr>
         </thead>
         <tbody>
             {% for e in entries %}
             <tr>
-                <td style="font-weight: 600;">{{ e.email }}</td>
-                <td><code style="font-size: 0.8rem;">{{ e.ip_address or 'Unknown' }}</code></td>
-                <td>{{ e.timestamp | localtime(True) if e.timestamp else 'N/A' }}</td>
-                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem;">
-                    {{ e.user_agent or 'Unknown' }}
+                <td class="a-cell-strong">{{ e.email }}</td>
+                <td><code class="a-cell-mono">{{ e.ip_address or 'Unknown' }}</code></td>
+                <td class="a-cell-dim" data-sort="{{ e.timestamp.isoformat() if e.timestamp else '' }}">
+                    {{ e.timestamp | localtime(True) if e.timestamp else 'N/A' }}
                 </td>
+                <td class="a-cell-dim a-cell-trunc">{{ e.user_agent or 'Unknown' }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="a-empty"><p>No failed login attempts recorded</p></td></tr>
+            <tr><td colspan="4"><div class="a-empty"><i class="fas fa-check-circle"></i><p>No failed login attempts recorded</p></div></td></tr>
             {% endfor %}
         </tbody>
     </table>
