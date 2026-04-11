@@ -26,6 +26,15 @@ os.environ.setdefault(
     f"sqlite:///{(TEST_SESSION_ROOT / 'session_bootstrap.db').as_posix()}",
 )
 
+# Hard-disable outbound GitHub issue creation for the entire test session.
+# This is a safety net: even if a test raises an exception that flows through
+# `log_exception()`, the queue worker will see `is_enabled() == False` and
+# silently no-op instead of POSTing to the real GitHub API. Set with `=` (not
+# setdefault) so a stale `.env` value loaded by `load_dotenv()` inside app.py
+# cannot re-enable it.
+os.environ["GITHUB_ISSUE_ON_EXCEPTION_ENABLED"] = "false"
+os.environ["GITHUB_TOKEN"] = ""
+
 from app import create_app, db
 from database.models import (
     User,
