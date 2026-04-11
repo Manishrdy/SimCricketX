@@ -1,0 +1,88 @@
+{# ---------------------------------------------------------------------------
+   Issue Reporting Widget — PLAN-IR-001 Phase 1
+   Floating button bottom-right -> chatbot-style modal -> POST /api/issues/report.
+   Hidden on:
+     - admin routes (request.path starts with /admin)
+     - anonymous users
+     - auth pages (login / register / forgot password etc)
+   --------------------------------------------------------------------------- #}
+{% set _scx_path = (request.path or '') %}
+{% set _hide_widget = (
+    (not current_user.is_authenticated)
+    or _scx_path.startswith('/admin')
+    or _scx_path.startswith('/login')
+    or _scx_path.startswith('/logout')
+    or _scx_path.startswith('/register')
+    or _scx_path.startswith('/forgot-password')
+    or _scx_path.startswith('/reset-password')
+    or _scx_path.startswith('/verify-email')
+    or _scx_path.startswith('/force-')
+    or _scx_path.startswith('/static')
+) %}
+{% if not _hide_widget %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report_issue_widget.css') }}">
+
+<button type="button"
+        id="scx-report-issue-trigger"
+        class="scx-report-trigger"
+        aria-label="Report an issue"
+        title="Report an issue">
+    <i class="fa-regular fa-comment-dots"></i>
+</button>
+
+<div id="scx-report-issue-modal" class="scx-report-modal" aria-hidden="true" role="dialog" aria-labelledby="scx-report-issue-title">
+    <div class="scx-report-modal__backdrop" data-scx-close></div>
+    <div class="scx-report-modal__panel" role="document">
+        <header class="scx-report-modal__header">
+            <h3 id="scx-report-issue-title">Report an issue</h3>
+            <button type="button" class="scx-report-modal__close" data-scx-close aria-label="Close">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </header>
+
+        <div class="scx-report-modal__body">
+            <p class="scx-report-modal__intro">
+                Found a bug or have feedback? Tell us what happened — recent activity from your session is captured automatically.
+            </p>
+
+            <form id="scx-report-issue-form" novalidate>
+                <label class="scx-field">
+                    <span class="scx-field__label">Category</span>
+                    <select name="category" id="scx-report-category">
+                        <option value="bug">Bug</option>
+                        <option value="gameplay-balance">Gameplay balance</option>
+                        <option value="ui-ux">UI / UX</option>
+                        <option value="performance">Performance</option>
+                        <option value="feature-request">Feature request</option>
+                        <option value="data-accuracy">Data accuracy</option>
+                        <option value="other">Other</option>
+                    </select>
+                </label>
+
+                <label class="scx-field">
+                    <span class="scx-field__label">Title <span class="scx-required">*</span></span>
+                    <input type="text" name="title" id="scx-report-title" maxlength="200" required
+                           placeholder="Short summary (e.g. Scoreboard not updating)">
+                </label>
+
+                <label class="scx-field">
+                    <span class="scx-field__label">Description <span class="scx-required">*</span></span>
+                    <textarea name="description" id="scx-report-description" rows="5" maxlength="5000" required
+                              placeholder="What were you doing? What did you expect to happen?"></textarea>
+                </label>
+
+                <div class="scx-report-modal__footer">
+                    <button type="button" class="scx-btn scx-btn--ghost" data-scx-close>Cancel</button>
+                    <button type="submit" class="scx-btn scx-btn--primary" id="scx-report-submit">
+                        <span class="scx-btn__label">Submit</span>
+                    </button>
+                </div>
+
+                <div class="scx-report-modal__status" id="scx-report-status" aria-live="polite"></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/report_issue_widget.js') }}" defer></script>
+{% endif %}

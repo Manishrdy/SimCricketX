@@ -1,0 +1,146 @@
+/* PLAN-IR-001 Phase 4 — styling for the admin issue tracker.
+ * Colors for status / severity badges used across the Issues tab and
+ * detail views. Kept in a dedicated file so the existing admin.css stays
+ * focused on the shared admin shell.
+ */
+
+/* ── Base tag chip ──────────────────────────────────────────────────── */
+.a-tag {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background: var(--bg-secondary);
+    color: var(--fg-secondary);
+    border: 1px solid var(--card-border);
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* ── IssueReport status badges ──────────────────────────────────────── */
+.a-tag-new {
+    background: #dbeafe;
+    color: #1e40af;
+    border-color: #bfdbfe;
+}
+
+.a-tag-open {
+    background: #e0f2fe;
+    color: #075985;
+    border-color: #bae6fd;
+}
+
+.a-tag-in_progress {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fde68a;
+}
+
+.a-tag-resolved {
+    background: #dcfce7;
+    color: #166534;
+    border-color: #bbf7d0;
+}
+
+.a-tag-closed {
+    background: #f3f4f6;
+    color: #374151;
+    border-color: #e5e7eb;
+}
+
+.a-tag-deferred {
+    background: #ede9fe;
+    color: #5b21b6;
+    border-color: #ddd6fe;
+}
+
+.a-tag-wont_fix {
+    background: #fee2e2;
+    color: #7f1d1d;
+    border-color: #fecaca;
+}
+
+/* ── ExceptionLog severity badges ───────────────────────────────────── */
+.a-tag-critical {
+    background: #fee2e2;
+    color: #7f1d1d;
+    border-color: #fca5a5;
+}
+
+.a-tag-error {
+    background: #fef2f2;
+    color: #991b1b;
+    border-color: #fecaca;
+}
+
+.a-tag-warning {
+    background: #fffbeb;
+    color: #92400e;
+    border-color: #fde68a;
+}
+
+.a-tag-info {
+    background: #eff6ff;
+    color: #1e40af;
+    border-color: #bfdbfe;
+}
+
+/* ── Dark theme overrides ────────────────────────────────────────────── */
+[data-theme="dark"] .a-tag-new {
+    background: #1e3a8a;
+    color: #bfdbfe;
+    border-color: #3b82f6;
+}
+[data-theme="dark"] .a-tag-open {
+    background: #164e63;
+    color: #a5f3fc;
+    border-color: #0891b2;
+}
+[data-theme="dark"] .a-tag-in_progress {
+    background: #78350f;
+    color: #fde68a;
+    border-color: #d97706;
+}
+[data-theme="dark"] .a-tag-resolved {
+    background: #14532d;
+    color: #bbf7d0;
+    border-color: #16a34a;
+}
+[data-theme="dark"] .a-tag-closed {
+    background: #1f2937;
+    color: #d1d5db;
+    border-color: #4b5563;
+}
+[data-theme="dark"] .a-tag-deferred {
+    background: #4c1d95;
+    color: #ddd6fe;
+    border-color: #7c3aed;
+}
+[data-theme="dark"] .a-tag-wont_fix {
+    background: #7f1d1d;
+    color: #fecaca;
+    border-color: #dc2626;
+}
+[data-theme="dark"] .a-tag-critical {
+    background: #7f1d1d;
+    color: #fecaca;
+    border-color: #dc2626;
+}
+[data-theme="dark"] .a-tag-error {
+    background: #991b1b;
+    color: #fecaca;
+    border-color: #ef4444;
+}
+[data-theme="dark"] .a-tag-warning {
+    background: #78350f;
+    color: #fde68a;
+    border-color: #d97706;
+}
+[data-theme="dark"] .a-tag-info {
+    background: #1e3a8a;
+    color: #bfdbfe;
+    border-color: #3b82f6;
+}

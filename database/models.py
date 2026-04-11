@@ -671,6 +671,9 @@ class ExceptionLog(db.Model):
     last_seen_at      = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     github_issue_number = db.Column(db.Integer, nullable=True)
     github_issue_url  = db.Column(db.String(300), nullable=True)
+    github_sync_status = db.Column(db.String(20), nullable=True)
+    github_sync_error = db.Column(db.Text, nullable=True)
+    github_last_synced_at = db.Column(db.DateTime, nullable=True)
     timestamp         = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     __table_args__ = (
@@ -680,3 +683,75 @@ class ExceptionLog(db.Model):
         db.Index('ix_exception_resolved_ts', 'resolved', 'timestamp'),
         db.Index('ix_exception_fingerprint', 'fingerprint'),
     )
+
+
+class IssueReport(db.Model):
+    """User-submitted issue / bug report from the in-app widget.
+
+    Distinct from ExceptionLog (which captures stack traces): this table
+    holds free-form user descriptions plus auto-attached session log
+    snapshots and links to recent ExceptionLog rows for the same user.
+    GitHub issues are filed asynchronously via services.github_issue_queue.
+    """
+    __tablename__ = 'issue_report'
+
+    id                  = db.Column(db.Integer, primary_key=True)
+    public_id           = db.Column(db.String(16), nullable=False, unique=True, index=True)
+
+    # Authoring user — login-required so user_email is always populated.
+    user_email          = db.Column(db.String(120), nullable=False, index=True)
+
+    # User-supplied content
+    category            = db.Column(db.String(30), nullable=False, default='other')
+    title               = db.Column(db.String(200), nullable=False)
+    description         = db.Column(db.Text, nullable=False)
+
+    # Auto-captured request context
+    page_url            = db.Column(db.String(500), nullable=True)
+    user_agent          = db.Column(db.String(500), nullable=True)
+    app_version         = db.Column(db.String(50), nullable=True)
+
+    # Captured logs / correlations (JSON-encoded)
+    session_logs_json        = db.Column(db.Text, nullable=True)
+    linked_exception_log_ids = db.Column(db.Text, nullable=True)
+
+    # GitHub sync state (mirrors ExceptionLog)
+    github_issue_number   = db.Column(db.Integer, nullable=True, index=True)
+    github_issue_url      = db.Column(db.String(300), nullable=True)
+    github_sync_status    = db.Column(db.String(20), nullable=False, default='pending')
+    github_sync_error     = db.Column(db.Text, nullable=True)
+    github_last_synced_at = db.Column(db.DateTime, nullable=True)
+
+    # Workflow status (mirrored from GitHub labels via webhook in Phase 3)
+    status              = db.Column(db.String(20), nullable=False, default='new', index=True)
+    severity            = db.Column(db.String(20), nullable=True)
+    admin_notes         = db.Column(db.Text, nullable=True)
+
+    created_at          = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at          = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index('ix_issue_report_status_created', 'status', 'created_at'),
+        db.Index('ix_issue_report_user_created', 'user_email', 'created_at'),
+    )
+
+
+class IssueWebhookEvent(db.Model):
+    """Audit + idempotency record for inbound GitHub webhook deliveries.
+
+    GitHub re-delivers failed webhooks, so we MUST dedupe by `delivery_id`
+    (the X-GitHub-Delivery header). One row per delivery — successful or
+    not — gives us a full audit trail and a cheap idempotency check.
+    """
+    __tablename__ = 'issue_webhook_event'
+
+    id                  = db.Column(db.Integer, primary_key=True)
+    delivery_id         = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    event_type          = db.Column(db.String(50), nullable=True)
+    action              = db.Column(db.String(50), nullable=True)
+    github_issue_number = db.Column(db.Integer, nullable=True, index=True)
+    payload_json        = db.Column(db.Text, nullable=True)
+    signature_valid     = db.Column(db.Boolean, nullable=False, default=False)
+    processed           = db.Column(db.Boolean, nullable=False, default=False)
+    processing_error    = db.Column(db.Text, nullable=True)
+    received_at         = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)

@@ -1,0 +1,195 @@
+{% extends "layout.html" %}
+
+{% block title %}500 - Something Broke | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .error-page {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - var(--nav-height) - 8rem);
+        text-align: center;
+        padding: 2rem;
+    }
+
+    .error-code {
+        font-size: 8rem;
+        font-weight: 800;
+        line-height: 1;
+        background: var(--gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: -0.06em;
+        margin: 0;
+        position: relative;
+    }
+
+    .error-code::after {
+        content: '';
+        position: absolute;
+        bottom: 0.1em;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80px;
+        height: 4px;
+        background: var(--gradient);
+        border-radius: 2px;
+    }
+
+    .error-icon {
+        font-size: 3rem;
+        color: var(--fg-secondary);
+        opacity: 0.35;
+        margin-bottom: 1rem;
+    }
+
+    .error-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--fg);
+        margin: 1.5rem 0 0.5rem;
+        letter-spacing: -0.02em;
+    }
+
+    .error-message {
+        font-size: 0.95rem;
+        color: var(--fg-secondary);
+        max-width: 440px;
+        line-height: 1.6;
+        margin: 0 auto 1.5rem;
+    }
+
+    .error-reason {
+        background: var(--bg-secondary);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        padding: 0.75rem 1.25rem;
+        font-size: 0.82rem;
+        color: var(--fg-secondary);
+        font-family: 'IBM Plex Mono', monospace;
+        margin-bottom: 1.5rem;
+        max-width: 500px;
+    }
+
+    .error-reason span {
+        color: var(--fg);
+        font-weight: 600;
+    }
+
+    .error-actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .error-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1.5rem;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        border: none;
+        font-family: inherit;
+    }
+
+    .error-btn-primary {
+        background: var(--gradient);
+        color: white;
+    }
+
+    .error-btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px var(--shadow);
+        opacity: 0.9;
+    }
+
+    .error-btn-secondary {
+        background: var(--card-bg);
+        color: var(--fg);
+        border: 1px solid var(--card-border);
+    }
+
+    .error-btn-secondary:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .error-cricket {
+        margin-top: 2.5rem;
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+        opacity: 0.5;
+        font-style: italic;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-icon"><i class="fas fa-triangle-exclamation"></i></div>
+    <h1 class="error-code">500</h1>
+    <h2 class="error-title">Run Out!</h2>
+    <p class="error-message">
+        Something on our side went wrong and the request couldn't be completed.
+        The error has been logged automatically — you can help us fix it faster by telling us what you were doing.
+    </p>
+
+    {% if exception_log_id %}
+    <div class="error-reason">
+        <span>Reference:</span> EXC-{{ exception_log_id }}
+    </div>
+    {% endif %}
+
+    <div class="error-actions">
+        {% if current_user.is_authenticated %}
+        <button type="button" class="error-btn error-btn-primary" onclick="scxReportCrash()">
+            <i class="fas fa-comment-dots"></i> Report this issue
+        </button>
+        <a href="{{ url_for('home') }}" class="error-btn error-btn-secondary">
+            <i class="fas fa-home"></i> Back to Home
+        </a>
+        {% else %}
+        <a href="{{ url_for('home') }}" class="error-btn error-btn-primary">
+            <i class="fas fa-home"></i> Back to Home
+        </a>
+        {% endif %}
+        <button type="button" onclick="location.reload()" class="error-btn error-btn-secondary">
+            <i class="fas fa-rotate"></i> Retry
+        </button>
+    </div>
+
+    <p class="error-cricket">Even the best bowlers throw a no-ball sometimes.</p>
+</div>
+
+<script>
+/* Opens the floating issue widget with a prefill carrying the crash's
+ * exception_log.id so the user's report is automatically linked to the
+ * underlying stack trace.
+ */
+function scxReportCrash() {
+    var excId = {{ exception_log_id|tojson if exception_log_id is not none else 'null' }};
+    var pageUrl = window.location.href;
+    window.scxReportIssuePrefill = {
+        exception_log_id: excId,
+        title: 'Crash on ' + (document.title || pageUrl),
+        description: 'I was on ' + pageUrl + ' and saw a 500 error.\n\n[Describe what you were doing when it happened]',
+        category: 'bug'
+    };
+    var trigger = document.getElementById('scx-report-issue-trigger');
+    if (trigger) {
+        trigger.click();
+    } else {
+        alert('Thanks — the error has been logged with reference EXC-' + excId + '.');
+    }
+}
+</script>
+{% endblock %}

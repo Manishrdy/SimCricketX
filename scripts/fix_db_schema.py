@@ -229,6 +229,9 @@ def ensure_schema(engine, db_obj=None):
         "last_seen_at": "DATETIME",
         "github_issue_number": "INTEGER",
         "github_issue_url": "VARCHAR(300)",
+        "github_sync_status": "VARCHAR(20)",
+        "github_sync_error": "TEXT",
+        "github_last_synced_at": "DATETIME",
     })
 
     # Indexes for exception_log query performance
@@ -243,6 +246,26 @@ def ensure_schema(engine, db_obj=None):
         log_exception(source="sqlite", context={"scope": "fix_db_schema_exception_indexes"})
         pass
 
+    # ── issue_report indexes ──
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_issue_report_public_id ON issue_report(public_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issue_report_status_created ON issue_report(status, created_at)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issue_report_user_created ON issue_report(user_email, created_at)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issue_report_github_issue_number ON issue_report(github_issue_number)"))
+    except Exception:
+        log_exception(source="sqlite", context={"scope": "fix_db_schema_issue_report_indexes"})
+        pass
+
+    # ── issue_webhook_event indexes ──
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_issue_webhook_event_delivery_id ON issue_webhook_event(delivery_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issue_webhook_event_issue_number ON issue_webhook_event(github_issue_number)"))
+    except Exception:
+        log_exception(source="sqlite", context={"scope": "fix_db_schema_issue_webhook_event_indexes"})
+        pass
+
     # ── Ensure all tables exist (creates any missing ones) ──
     all_required_tables = (
         "tournament_player_stats_cache", "admin_audit_log",
@@ -250,6 +273,7 @@ def ensure_schema(engine, db_obj=None):
         "blocked_ips", "active_sessions", "site_counters",
         "login_history", "ip_whitelist", "announcement_banner",
         "user_banner_dismissals", "auth_event_log", "exception_log",
+        "issue_report", "issue_webhook_event",
     )
     missing = [t for t in all_required_tables if t not in tables]
     if missing and db_obj is not None:
@@ -258,7 +282,8 @@ def ensure_schema(engine, db_obj=None):
             TournamentPlayerStatsCache, AdminAuditLog, MatchPartnership,
             FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter,
             LoginHistory, IPWhitelistEntry, AnnouncementBanner,
-            UserBannerDismissal, AuthEventLog, ExceptionLog,
+            UserBannerDismissal, AuthEventLog, ExceptionLog, IssueReport,
+            IssueWebhookEvent,
         )
         db_obj.create_all()
 

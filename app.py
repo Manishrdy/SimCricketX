@@ -100,6 +100,9 @@ from routes.team_routes import register_team_routes
 from routes.core_routes import register_core_routes
 from routes.match_routes import register_match_routes
 from routes.admin_routes import register_admin_routes
+from routes.issue_routes import register_issue_routes
+from routes.admin_issue_routes import register_admin_issue_routes
+from routes.webhook_routes import register_webhook_routes
 from utils.exception_tracker import log_exception
 
 # SocketIO optional dependency — app works normally via HTTP if not installed
@@ -810,6 +813,30 @@ def create_app():
 
     app.jinja_env.filters['localtime'] = _admin_localtime
 
+    # Per-request context used by issue reporting (g.session_id, g.request_id)
+    # and the SessionLogHandler. Runs first so subsequent before_request hooks
+    # can rely on g being populated.
+    @app.before_request
+    def attach_request_context():
+        try:
+            g.request_id = uuid.uuid4().hex[:12]
+            g.request_path = request.path
+            sid = session.get('_scx_sid')
+            if not sid:
+                sid = uuid.uuid4().hex
+                try:
+                    session['_scx_sid'] = sid
+                except Exception:
+                    pass
+            g.session_id = sid
+        except Exception:
+            try:
+                g.request_id = None
+                g.session_id = None
+                g.request_path = None
+            except Exception:
+                pass
+
     @app.before_request
     def check_maintenance_mode():
         """Block non-admin users when maintenance mode is active."""
@@ -1283,17 +1310,8 @@ def create_app():
         return db.session.get(DBUser, email)
 
     # --- Admin Access Control Decorator ---
-    def admin_required(f):
-        """Decorator to require admin access for a route"""
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if not current_user.is_authenticated:
-                return redirect(url_for('login'))
-            if not getattr(current_user, 'is_admin', False):
-                app.logger.warning(f"[Admin] Unauthorized access attempt by {current_user.id}")
-                return jsonify({"error": "Forbidden: Admin access required"}), 403
-            return f(*args, **kwargs)
-        return decorated_function
+    # Moved to auth/decorators.py so blueprints can import it directly.
+    from auth.decorators import admin_required
 
     # --- Backup token brute-force protection ---
     _backup_token_attempts = {}  # {user_id: deque of timestamps}
@@ -1439,6 +1457,47 @@ def create_app():
             else:
                 app.logger.info("[Cleanup] Cleanup scheduler already initialized; skipping")
 
+        # Start the GitHub Issues background queue worker. Daemon thread, idempotent.
+        try:
+            from services import github_issue_queue
+            github_issue_queue.start_worker(app)
+            app.logger.info("[GitHubQueue] Background worker started")
+        except Exception:
+            log_exception(source="backend")
+
+        # Per-session log capture handler for issue reporting widget.
+        try:
+            from middleware import session_log_capture
+            root_logger = logging.getLogger()
+            if not any(isinstance(h, session_log_capture.SessionLogHandler) for h in root_logger.handlers):
+                handler = session_log_capture.SessionLogHandler()
+                handler.setLevel(logging.INFO)
+                root_logger.addHandler(handler)
+            session_log_capture.start_sweeper()
+            app.logger.info("[SessionLogCapture] Handler installed and sweeper started")
+        except Exception:
+            log_exception(source="backend")
+    else:
+        # In test mode the queue runs inline so assertions can observe results
+        # immediately without spawning background threads or sleeping.
+        try:
+            from services import github_issue_queue
+            github_issue_queue.set_synchronous_mode(True)
+            github_issue_queue.start_worker(app)  # also stores app ref for sync dispatch
+        except Exception:
+            log_exception(source="backend")
+        # Install session log handler in tests too (no sweeper) so widget /
+        # log-capture tests can observe behavior end-to-end.
+        try:
+            from middleware import session_log_capture
+            root_logger = logging.getLogger()
+            if not any(isinstance(h, session_log_capture.SessionLogHandler) for h in root_logger.handlers):
+                handler = session_log_capture.SessionLogHandler()
+                handler.setLevel(logging.DEBUG)
+                root_logger.addHandler(handler)
+        except Exception:
+            log_exception(source="backend")
+
     # --- Admin Routes ---
 
     # --- Admin Routes (Phase 5 extraction) ---
@@ -1496,6 +1555,16 @@ def create_app():
         get_cleanup_status=lambda: (_cleanup_scheduler_started, _last_cleanup_run),
     )
 
+    # Issue reporting routes for the in-app widget.
+    register_issue_routes(app, db=db)
+
+    # Admin-side issue tracker (PLAN-IR-001 Phase 2).
+    register_admin_issue_routes(app, db=db)
+
+    # GitHub webhook receiver (PLAN-IR-001 Phase 3). CSRF-exempted because
+    # it's authenticated via HMAC, not session cookies.
+    register_webhook_routes(app, db=db, csrf=csrf)
+
     # --- Request logging ---
     @app.before_request
     def log_request():
@@ -1538,12 +1607,16 @@ def create_app():
     @app.errorhandler(Exception)
     def handle_unhandled_exception(exc):
         from utils.exception_tracker import log_exception
-        log_exception(exc)
+        exc_log_id = log_exception(exc)
         if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
-            return jsonify({"error": "Internal Server Error"}), 500
-        return render_template('500.html') if os.path.exists(
-            os.path.join(app.template_folder or 'templates', '500.html')
-        ) else ("Internal Server Error", 500)
+            return jsonify({
+                "error": "Internal Server Error",
+                "exception_log_id": exc_log_id,
+            }), 500
+        template_path = os.path.join(app.template_folder or 'templates', '500.html')
+        if os.path.exists(template_path):
+            return render_template('500.html', exception_log_id=exc_log_id), 500
+        return ("Internal Server Error", 500)
 
     @app.errorhandler(404)
     def handle_not_found(err):
