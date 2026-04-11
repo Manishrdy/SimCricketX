@@ -1,0 +1,208 @@
+/* SimCricketX issue reporting widget — PLAN-IR-001 Phase 1 */
+
+.scx-report-trigger {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--card-border, #e2e4e8);
+    background: var(--accent, #24292f);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    transition: transform 0.15s ease, background 0.2s ease;
+    z-index: 1080;
+}
+
+.scx-report-trigger:hover {
+    background: var(--accent-hover, #000000);
+    transform: translateY(-1px);
+}
+
+.scx-report-trigger:focus {
+    outline: 2px solid var(--accent, #24292f);
+    outline-offset: 2px;
+}
+
+/* Modal -------------------------------------------------------------------- */
+
+.scx-report-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    display: none;
+}
+
+.scx-report-modal.is-open {
+    display: block;
+}
+
+.scx-report-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 17, 20, 0.55);
+}
+
+.scx-report-modal__panel {
+    position: absolute;
+    right: 20px;
+    bottom: 80px;
+    width: min(420px, calc(100vw - 40px));
+    max-height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+    background: var(--card-bg, #ffffff);
+    color: var(--fg, #1a1a1a);
+    border: 1px solid var(--card-border, #e2e4e8);
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+.scx-report-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--card-border, #e2e4e8);
+}
+
+.scx-report-modal__header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.scx-report-modal__close {
+    background: transparent;
+    border: 0;
+    color: var(--fg-secondary, #666666);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+}
+
+.scx-report-modal__close:hover {
+    color: var(--fg, #1a1a1a);
+}
+
+.scx-report-modal__body {
+    padding: 16px 18px 18px;
+    overflow-y: auto;
+}
+
+.scx-report-modal__intro {
+    margin: 0 0 14px;
+    font-size: 0.85rem;
+    color: var(--fg-secondary, #666666);
+    line-height: 1.45;
+}
+
+.scx-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.scx-field__label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--fg, #1a1a1a);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.scx-required {
+    color: #d73a49;
+}
+
+.scx-field input[type="text"],
+.scx-field textarea,
+.scx-field select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 11px;
+    border: 1px solid var(--card-border, #e2e4e8);
+    border-radius: 6px;
+    background: var(--bg, #ffffff);
+    color: var(--fg, #1a1a1a);
+    font-family: inherit;
+    font-size: 0.9rem;
+    transition: border-color 0.15s ease;
+}
+
+.scx-field input[type="text"]:focus,
+.scx-field textarea:focus,
+.scx-field select:focus {
+    outline: none;
+    border-color: var(--accent, #24292f);
+}
+
+.scx-field textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.scx-report-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.scx-btn {
+    appearance: none;
+    border: 1px solid transparent;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.scx-btn--primary {
+    background: var(--accent, #24292f);
+    color: #ffffff;
+}
+
+.scx-btn--primary:hover:not(:disabled) {
+    background: var(--accent-hover, #000000);
+}
+
+.scx-btn--primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.scx-btn--ghost {
+    background: transparent;
+    color: var(--fg-secondary, #666666);
+    border-color: var(--card-border, #e2e4e8);
+}
+
+.scx-btn--ghost:hover {
+    color: var(--fg, #1a1a1a);
+}
+
+.scx-report-modal__status {
+    margin-top: 12px;
+    font-size: 0.82rem;
+    min-height: 1em;
+}
+
+.scx-report-modal__status.is-success {
+    color: #1a7f37;
+}
+
+.scx-report-modal__status.is-error {
+    color: #d73a49;
+}

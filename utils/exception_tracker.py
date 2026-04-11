@@ -7,17 +7,20 @@ Usage inside any except block:
 
     except Exception as e:
         log_exception(e)            # records to exception_log table
-        # ... existing handling ...
+
+GitHub issue creation runs asynchronously via services.github_issue_queue,
+so the call site never blocks on a network round-trip.
 """
 
 import sys
 import json
-import os
 import hashlib
 import traceback as tb_module
 from datetime import datetime
-from urllib import request as urlrequest
-from urllib import error as urlerror
+# Re-exported for backwards compatibility with existing tests that monkeypatch
+# `exception_tracker.urlrequest.urlopen` / `exception_tracker.urlerror`.
+from urllib import request as urlrequest  # noqa: F401
+from urllib import error as urlerror  # noqa: F401
 
 from flask import has_request_context, request, g
 from flask_login import current_user
@@ -47,72 +50,6 @@ def _build_fingerprint(
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def _create_github_issue_for_exception(entry: ExceptionLog) -> tuple[int | None, str | None]:
-    """Best-effort GitHub issue creation for a logged exception."""
-    enabled = os.getenv("GITHUB_ISSUE_ON_EXCEPTION_ENABLED", "").strip().lower() in {"1", "true", "yes"}
-    if not enabled:
-        return None, None
-
-    token = os.getenv("GITHUB_TOKEN", "").strip()
-    repository = os.getenv("GITHUB_REPOSITORY", "").strip()  # owner/repo
-    if not token or not repository:
-        return None, None
-
-    issue_title_prefix = os.getenv("GITHUB_ISSUE_TITLE_PREFIX", "[Auto Exception]").strip() or "[Auto Exception]"
-    labels_raw = os.getenv("GITHUB_ISSUE_LABELS", "").strip()
-    assignees_raw = os.getenv("GITHUB_ISSUE_ASSIGNEES", "").strip()
-
-    labels = [item.strip() for item in labels_raw.split(",") if item.strip()]
-    assignees = [item.strip() for item in assignees_raw.split(",") if item.strip()]
-
-    title = f"{issue_title_prefix} {entry.exception_type}: {entry.exception_message[:120]}"
-    context_pretty = entry.context_json or "{}"
-    body = (
-        "Automated issue created from exception logger.\n\n"
-        f"- Type: `{entry.exception_type}`\n"
-        f"- Message: `{entry.exception_message[:500]}`\n"
-        f"- Severity: `{entry.severity}`\n"
-        f"- Source: `{entry.source}`\n"
-        f"- User: `{entry.user_email or 'anonymous'}`\n"
-        f"- Request ID: `{entry.request_id or 'n/a'}`\n"
-        f"- Timestamp (UTC): `{entry.timestamp}`\n\n"
-        "## Context\n"
-        f"```json\n{context_pretty}\n```\n\n"
-        "## Traceback\n"
-        f"```\n{(entry.traceback or '')[:5000]}\n```"
-    )
-
-    payload = {
-        "title": title[:256],
-        "body": body,
-    }
-    if labels:
-        payload["labels"] = labels
-    if assignees:
-        payload["assignees"] = assignees
-
-    api_url = f"https://api.github.com/repos/{repository}/issues"
-    req = urlrequest.Request(
-        api_url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-
-    try:
-        with urlrequest.urlopen(req, timeout=10) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            return body.get("number"), body.get("html_url")
-    except (urlerror.URLError, TimeoutError, ValueError):
-        # Never break caller flow when GitHub issue creation fails.
-        return None, None
-
-
 def log_exception(
     exc: Exception | None = None,
     *,
@@ -121,12 +58,17 @@ def log_exception(
     context: dict | None = None,
     request_id: str | None = None,
     handled: bool = True,
-) -> None:
+) -> int | None:
     """Record an exception to the exception_log table.
 
     Safe to call from anywhere — inside or outside a request context.
     Never raises; if the recording itself fails it is silently swallowed
     so the original error handling is not disrupted.
+
+    Returns the ExceptionLog row id on success (or the id of the
+    existing fingerprint-matched row on dedup), or None on failure.
+    The 500 error handler uses this to link the crash page to the
+    exact log entry so user reports carry the reference automatically.
     """
     try:
         if exc is None:
@@ -219,7 +161,7 @@ def log_exception(
             if user_email:
                 entry.user_email = user_email
             db.session.commit()
-            return
+            return entry.id
 
         entry = ExceptionLog(
             exception_type=exc_type_name,
@@ -240,14 +182,23 @@ def log_exception(
             first_seen_at=now,
             last_seen_at=now,
             timestamp=now,
+            github_sync_status="pending",
         )
         db.session.add(entry)
         db.session.commit()
 
-        issue_number, issue_url = _create_github_issue_for_exception(entry)
-        if issue_number and issue_url:
-            entry.github_issue_number = issue_number
-            entry.github_issue_url = issue_url
-            db.session.commit()
+        # Hand the GitHub issue creation off to the background queue so we
+        # never block the caller on a network round-trip. The worker will
+        # update github_issue_number / github_sync_status when it finishes.
+        created_id = entry.id
+        try:
+            from services import github_issue_queue
+            github_issue_queue.enqueue_exception(entry.id)
+        except Exception:
+            # Never let queue failures bubble up — caller's error handling
+            # must remain intact.
+            db.session.rollback()
+        return created_id
     except Exception:
         db.session.rollback()
+        return None

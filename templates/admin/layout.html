@@ -161,6 +161,10 @@
                             class="admin-nav-link {% if request.endpoint == 'admin_audit_log' %}active{% endif %}">
                             <i class="fas fa-scroll"></i> Audit Log
                         </a></li>
+                    <li><a href="/admin/issues"
+                            class="admin-nav-link {% if request.endpoint and request.endpoint.startswith('admin_issue') %}active{% endif %}">
+                            <i class="fas fa-bug"></i> Issues
+                        </a></li>
                     <li><a href="/admin/sql"
                             class="admin-nav-link {% if request.endpoint == 'admin_sql_runner' %}active{% endif %}">
                             <i class="fas fa-code"></i> SQL Runner

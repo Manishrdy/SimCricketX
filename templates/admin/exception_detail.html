@@ -1,0 +1,174 @@
+{% extends "admin/layout.html" %}
+
+{% block extra_css %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_issues.css') }}">
+{% endblock %}
+
+{% block admin_content %}
+
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">
+            <code>{{ row.exception_type }}</code>
+        </h1>
+        <p class="admin-page-subtitle">
+            <span class="a-tag a-tag-{{ row.severity }}">{{ row.severity }}</span>
+            <span class="a-tag">{{ row.source }}</span>
+            · {{ row.user_email or 'anonymous' }}
+            · seen {{ row.occurrence_count }} time{{ 's' if row.occurrence_count != 1 }}
+            · last: {{ row.last_seen_at | localtime if row.last_seen_at else '-' }}
+        </p>
+    </div>
+    <div class="admin-page-actions">
+        <a href="{{ url_for('admin_issues', kind='exceptions') }}" class="a-btn a-btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to list
+        </a>
+        {% if row.github_issue_url %}
+        <a href="{{ row.github_issue_url }}" target="_blank" rel="noopener" class="a-btn a-btn-primary">
+            <i class="fab fa-github"></i> Open issue #{{ row.github_issue_number }}
+        </a>
+        {% elif row.github_sync_status == 'failed' %}
+        <button type="button" class="a-btn a-btn-secondary" onclick="retryExcSync({{ row.id }})">
+            <i class="fas fa-redo"></i> Retry GitHub sync
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<div id="alertContainer"></div>
+
+{# ── Metadata grid ──────────────────────────────────────────────── #}
+<div class="a-stats-grid" style="margin-bottom:1.5rem;">
+    <div class="a-stat-card">
+        <div class="a-stat-label">Resolved</div>
+        <div class="a-stat-value" style="font-size:1rem;">
+            {% if row.resolved %}
+            <span style="color:#16a34a;">yes</span>
+            {% else %}
+            <span style="color:#ef4444;">no</span>
+            {% endif %}
+        </div>
+        <div class="a-stat-sub">
+            {% if row.resolved_at %}{{ row.resolved_at | localtime }} by {{ row.resolved_by or 'unknown' }}{% endif %}
+        </div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">First seen</div>
+        <div class="a-stat-value" style="font-size:1rem;">{{ row.first_seen_at | localtime if row.first_seen_at else '-' }}</div>
+        <div class="a-stat-sub">{{ row.fingerprint[:12] if row.fingerprint else '' }}</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">Linked reports</div>
+        <div class="a-stat-value">{{ related_reports | length }}</div>
+        <div class="a-stat-sub">last 7 days</div>
+    </div>
+    <div class="a-stat-card">
+        <div class="a-stat-label">GitHub sync</div>
+        <div class="a-stat-value" style="font-size:1rem;">
+            {% if row.github_sync_status == 'synced' %}
+            <span style="color:#16a34a;">synced</span>
+            {% elif row.github_sync_status == 'failed' %}
+            <span style="color:#ef4444;">failed</span>
+            {% else %}
+            <span style="color:#6b7280;">{{ row.github_sync_status or '-' }}</span>
+            {% endif %}
+        </div>
+        <div class="a-stat-sub">
+            {% if row.github_last_synced_at %}last: {{ row.github_last_synced_at | localtime }}{% endif %}
+        </div>
+    </div>
+</div>
+
+{# ── Message ───────────────────────────────────────────────────── #}
+<section style="margin-bottom:1.5rem;">
+    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Message</h2>
+    <pre style="white-space:pre-wrap; padding:1rem; background:var(--bg-secondary); border:1px solid var(--card-border); border-radius:6px;">{{ row.exception_message }}</pre>
+</section>
+
+{# ── Location ──────────────────────────────────────────────────── #}
+<section style="margin-bottom:1.5rem;">
+    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Location</h2>
+    <table class="a-table">
+        <tbody>
+            <tr><th style="width:160px;">Module</th><td><code>{{ row.module or '-' }}</code></td></tr>
+            <tr><th>Function</th><td><code>{{ row.function or '-' }}</code></td></tr>
+            <tr><th>File</th><td><code style="font-size:0.8em;">{{ row.filename or '-' }}:{{ row.line_number or 0 }}</code></td></tr>
+            <tr><th>Request ID</th><td><code>{{ row.request_id or '-' }}</code></td></tr>
+            <tr><th>Sync error</th><td>{{ row.github_sync_error or '-' }}</td></tr>
+        </tbody>
+    </table>
+</section>
+
+{# ── Context ──────────────────────────────────────────────────── #}
+{% if context %}
+<section style="margin-bottom:1.5rem;">
+    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Context</h2>
+    <pre style="white-space:pre-wrap; padding:1rem; background:#0d1117; color:#c9d1d9; border-radius:6px; font-size:0.78rem;">{{ context | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+
+{# ── Traceback ───────────────────────────────────────────────── #}
+{% if row.traceback %}
+<section style="margin-bottom:1.5rem;">
+    <details open>
+        <summary style="cursor:pointer; font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Traceback</summary>
+        <pre style="white-space:pre-wrap; padding:1rem; background:#0d1117; color:#c9d1d9; border-radius:6px; max-height:500px; overflow:auto; font-size:0.78rem;">{{ row.traceback }}</pre>
+    </details>
+</section>
+{% endif %}
+
+{# ── Linked user reports ──────────────────────────────────────── #}
+{% if related_reports %}
+<section style="margin-bottom:1.5rem;">
+    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">User reports referencing this exception</h2>
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <thead>
+                <tr>
+                    <th>Public ID</th>
+                    <th>Title</th>
+                    <th>User</th>
+                    <th style="width:170px;">Submitted</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in related_reports %}
+                <tr>
+                    <td><a href="{{ url_for('admin_issue_report_detail', public_id=r.public_id) }}"><code>{{ r.public_id }}</code></a></td>
+                    <td>{{ r.title }}</td>
+                    <td>{{ r.user_email }}</td>
+                    <td>{{ r.created_at | localtime if r.created_at else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<script>
+function retryExcSync(rowId) {
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    fetch('/admin/issues/exceptions/' + rowId + '/retry', { method: 'POST', credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(body => {
+            const box = document.getElementById('alertContainer');
+            if (body.status === 'queued' || body.status === 'already_synced') {
+                box.innerHTML = '<div class="a-alert a-alert-success">Retry queued. Reloading…</div>';
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                box.innerHTML = '<div class="a-alert a-alert-error">' + (body.error || 'Retry failed') + '</div>';
+                btn.disabled = false;
+            }
+        })
+        .catch(err => {
+            document.getElementById('alertContainer').innerHTML =
+                '<div class="a-alert a-alert-error">Network error: ' + err + '</div>';
+            btn.disabled = false;
+        });
+}
+</script>
+
+{% endblock %}
