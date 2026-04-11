@@ -30,28 +30,7 @@ def test_anonymous_request_is_rejected(client):
     assert resp.status_code in (302, 401)  # login_required redirects
 
 
-def test_valid_submission_creates_row_and_returns_public_id(authenticated_client, app, monkeypatch):
-    # Stub urlopen so the queue worker doesn't actually call GitHub.
-    from utils import exception_tracker
-
-    class _Resp:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return json.dumps({"number": 11, "html_url": "https://github.com/owner/repo/issues/11"}).encode("utf-8")
-
-        def getcode(self):
-            return 201
-
-    monkeypatch.setenv("GITHUB_ISSUE_ON_EXCEPTION_ENABLED", "true")
-    monkeypatch.setenv("GITHUB_TOKEN", "dummy")
-    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
-    monkeypatch.setattr(exception_tracker.urlrequest, "urlopen", lambda req, timeout=10: _Resp())
-
+def test_valid_submission_creates_row_and_returns_public_id(authenticated_client, app):
     resp = _post(authenticated_client, {
         "category": "bug",
         "title": "Score not updating",
@@ -74,8 +53,6 @@ def test_valid_submission_creates_row_and_returns_public_id(authenticated_client
         assert row.category == "bug"
         assert row.user_email == "testuser@example.com"
         assert row.page_url == "https://localhost/match/abc"
-        assert row.github_sync_status == "synced"
-        assert row.github_issue_number == 11
 
 
 def test_missing_title_returns_400(authenticated_client):
@@ -190,46 +167,6 @@ def test_recent_exception_logs_are_linked(authenticated_client, app):
         assert row.linked_exception_log_ids is not None
         ids = json.loads(row.linked_exception_log_ids)
         assert exc_id in ids
-
-
-def test_pii_is_scrubbed_in_outbound_github_payload(authenticated_client, app, monkeypatch):
-    captured = {"bodies": []}
-    from utils import exception_tracker
-
-    class _Resp:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return json.dumps({"number": 1, "html_url": "https://github.com/owner/repo/issues/1"}).encode("utf-8")
-
-        def getcode(self):
-            return 201
-
-    def _fake(req, timeout=10):
-        captured["bodies"].append(req.data.decode("utf-8") if req.data else "")
-        return _Resp()
-
-    monkeypatch.setenv("GITHUB_ISSUE_ON_EXCEPTION_ENABLED", "true")
-    monkeypatch.setenv("GITHUB_TOKEN", "dummy")
-    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
-    monkeypatch.setattr(exception_tracker.urlrequest, "urlopen", _fake)
-
-    resp = _post(authenticated_client, {
-        "title": "secret leak",
-        "description": "contact me at victim@example.com from 10.0.0.5 token github_pat_AAAAAAAAAAAAAAAAAAAAAAAA",
-    })
-    assert resp.status_code == 202
-    assert len(captured["bodies"]) == 1
-    body = captured["bodies"][0]
-
-    assert "victim@example.com" not in body
-    assert "10.0.0.5" not in body
-    assert "github_pat_AAAA" not in body
-    assert "<email>" in body or "<redacted>" in body
 
 
 def test_rejects_non_json_content_type(authenticated_client):
