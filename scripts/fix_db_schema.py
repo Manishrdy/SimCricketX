@@ -41,11 +41,11 @@ def ensure_schema(engine, db_obj=None):
         "mac_address":                 "VARCHAR(50)",
         "hostname":                    "VARCHAR(100)",
         "display_name":                "VARCHAR(100)",
-        "is_admin":                    "BOOLEAN NOT NULL DEFAULT 0",
-        "is_banned":                   "BOOLEAN NOT NULL DEFAULT 0",
+        "is_admin":                    "BOOLEAN NOT NULL DEFAULT FALSE",
+        "is_banned":                   "BOOLEAN NOT NULL DEFAULT FALSE",
         "banned_until":                "DATETIME",
         "ban_reason":                  "VARCHAR(500)",
-        "force_password_reset":        "BOOLEAN NOT NULL DEFAULT 0",
+        "force_password_reset":        "BOOLEAN NOT NULL DEFAULT FALSE",
         # Email verification (added for transactional email flow)
         "email_verified":              "INTEGER NOT NULL DEFAULT 0",
         "email_verify_token":          "TEXT",
@@ -57,7 +57,7 @@ def ensure_schema(engine, db_obj=None):
         "verify_resend_count":         "INTEGER NOT NULL DEFAULT 0",
         "verify_resend_window_start":  "DATETIME",
         # Force re-verify on next login for pre-existing users
-        "force_email_verify":          "BOOLEAN NOT NULL DEFAULT 0",
+        "force_email_verify":          "BOOLEAN NOT NULL DEFAULT FALSE",
     })
 
     # Backfill: pre-existing users (created before email verification was introduced)
@@ -78,7 +78,7 @@ def ensure_schema(engine, db_obj=None):
         try:
             with engine.begin() as conn:
                 conn.execute(text(
-                    "UPDATE users SET force_email_verify = 1 WHERE email_verified = 1"
+                    "UPDATE users SET force_email_verify = TRUE WHERE email_verified = 1"
                 ))
         except Exception:
             log_exception(source="sqlite", context={"scope": "fix_db_schema_backfill_force_verify"})
@@ -86,8 +86,8 @@ def ensure_schema(engine, db_obj=None):
 
     # ── teams ──
     _add_missing_cols("teams", {
-        "is_draft":       "BOOLEAN DEFAULT 0",
-        "is_placeholder": "BOOLEAN DEFAULT 0",
+        "is_draft":       "BOOLEAN DEFAULT FALSE",
+        "is_placeholder": "BOOLEAN DEFAULT FALSE",
     })
 
     # ── matches ──
@@ -98,7 +98,7 @@ def ensure_schema(engine, db_obj=None):
         "toss_decision":      "VARCHAR(10)",
         "match_format":       "VARCHAR(20) DEFAULT 'T20'",
         "overs_per_side":     "INTEGER DEFAULT 20",
-        "is_day_night":       "BOOLEAN DEFAULT 0",
+        "is_day_night":       "BOOLEAN DEFAULT FALSE",
         "match_json_path":    "VARCHAR(255)",
     })
 
@@ -145,7 +145,7 @@ def ensure_schema(engine, db_obj=None):
         "bracket_position":   "INTEGER",
         "winner_team_id":     "INTEGER",
         "series_match_number":"INTEGER",
-        "standings_applied":  "BOOLEAN DEFAULT 0",
+        "standings_applied":  "BOOLEAN DEFAULT FALSE",
     })
 
     # ── tournament_player_stats_cache ──
@@ -219,8 +219,8 @@ def ensure_schema(engine, db_obj=None):
         "source": "VARCHAR(30) NOT NULL DEFAULT 'backend'",
         "context_json": "TEXT",
         "request_id": "VARCHAR(64)",
-        "handled": "BOOLEAN NOT NULL DEFAULT 1",
-        "resolved": "BOOLEAN NOT NULL DEFAULT 0",
+        "handled": "BOOLEAN NOT NULL DEFAULT TRUE",
+        "resolved": "BOOLEAN NOT NULL DEFAULT FALSE",
         "resolved_at": "DATETIME",
         "resolved_by": "VARCHAR(120)",
         "fingerprint": "VARCHAR(64)",

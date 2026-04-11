@@ -421,6 +421,8 @@ def main():
 
     print_results(results, dry_run)
 
+    has_errors = any(r["status"] == "error" for r in results)
+
     # Reset Postgres SERIAL sequences after bulk insert so next INSERT
     # doesn't collide with migrated IDs.
     if not dry_run and not has_errors:
@@ -430,7 +432,6 @@ def main():
         except Exception as e:
             print(f"[WARN] Sequence reset failed — run scripts/db_reset_sequences.py manually: {e}")
 
-    has_errors = any(r["status"] == "error" for r in results)
     sys.exit(1 if has_errors else 0)
 
 
