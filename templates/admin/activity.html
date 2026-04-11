@@ -1,6 +1,12 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Activity</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">User Activity</h1>
@@ -12,84 +18,68 @@
     .chart-container {
         background: var(--card-bg);
         border: 1px solid var(--card-border);
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        position: relative;
+        border-radius: var(--a-r-lg);
+        padding: 1.15rem 1.25rem;
+        margin-bottom: 1.25rem;
     }
-
     .chart-title {
-        font-size: 0.95rem;
+        font-size: .92rem;
         font-weight: 700;
         color: var(--fg);
-        margin-bottom: 1rem;
+        margin-bottom: .75rem;
     }
-
-    .chart-canvas {
-        width: 100%;
-        height: 280px;
-    }
-
     .chart-bar-row {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        padding: 0.35rem 0;
+        gap: .4rem;
+        padding: .28rem 0;
     }
-
     .chart-bar-label {
-        width: 80px;
-        font-size: 0.72rem;
+        width: 68px;
+        font-size: .7rem;
         color: var(--fg-secondary);
         text-align: right;
         flex-shrink: 0;
     }
-
     .chart-bar-track {
         flex: 1;
-        height: 22px;
+        height: 20px;
         background: var(--bg-secondary);
         border-radius: 4px;
         overflow: hidden;
         position: relative;
     }
-
     .chart-bar-fill {
         height: 100%;
         border-radius: 4px;
-        transition: width 0.5s ease;
+        transition: width .5s ease;
         min-width: 2px;
     }
-
     .chart-bar-fill-signups { background: var(--accent); }
-    .chart-bar-fill-logins { background: #22c55e; }
+    .chart-bar-fill-logins  { background: #22c55e; }
     .chart-bar-fill-matches { background: #f59e0b; }
-
     .chart-bar-value {
         position: absolute;
         right: 6px;
         top: 50%;
         transform: translateY(-50%);
-        font-size: 0.68rem;
+        font-size: .66rem;
         font-weight: 700;
         color: var(--fg-secondary);
     }
-
     .chart-legend {
         display: flex;
-        gap: 1.5rem;
-        margin-bottom: 1rem;
+        gap: 1.25rem;
+        margin-bottom: .75rem;
         flex-wrap: wrap;
     }
-
     .chart-legend-item {
         display: flex;
         align-items: center;
-        gap: 0.4rem;
-        font-size: 0.8rem;
+        gap: .4rem;
+        font-size: .76rem;
         color: var(--fg-secondary);
     }
-
     .chart-legend-dot {
         width: 10px;
         height: 10px;
@@ -97,7 +87,6 @@
     }
 </style>
 
-<!-- Chart Legend -->
 <div class="chart-container">
     <div class="chart-title">Daily Activity (Last 30 Days)</div>
     <div class="chart-legend">
@@ -109,18 +98,17 @@
 </div>
 
 <div class="a-grid-2">
-    <!-- Top Users -->
     <div class="a-section">
         <h3 class="a-section-title"><i class="fas fa-medal"></i> Top Users by Matches</h3>
         <div class="a-table-wrap">
-            <table class="a-table">
-                <thead><tr><th>#</th><th>User</th><th>Matches</th></tr></thead>
+            <table class="a-table a-table-pro">
+                <thead><tr><th class="sortable" style="width:50px;">#</th><th class="sortable">User</th><th class="sortable" style="width:100px;text-align:right;">Matches</th></tr></thead>
                 <tbody>
                     {% for user in top_users %}
                     <tr>
-                        <td style="color: var(--fg-secondary);">{{ loop.index }}</td>
-                        <td><strong>{{ user.id }}</strong></td>
-                        <td><span class="a-badge a-badge-info">{{ user.match_count }}</span></td>
+                        <td class="a-cell-dim">{{ loop.index }}</td>
+                        <td class="a-cell-strong">{{ user.id }}</td>
+                        <td class="a-cell-num" data-sort="{{ user.match_count }}"><span class="a-badge a-badge-info">{{ user.match_count }}</span></td>
                     </tr>
                     {% else %}
                     <tr><td colspan="3"><div class="a-empty"><p>No data yet</p></div></td></tr>
@@ -130,19 +118,18 @@
         </div>
     </div>
 
-    <!-- Recent Audit -->
     <div class="a-section">
         <h3 class="a-section-title"><i class="fas fa-scroll"></i> Recent Admin Actions</h3>
         <div class="a-table-wrap">
-            <table class="a-table">
-                <thead><tr><th>Admin</th><th>Action</th><th>Target</th><th>Time</th></tr></thead>
+            <table class="a-table a-table-pro">
+                <thead><tr><th class="sortable">Admin</th><th class="sortable">Action</th><th class="sortable">Target</th><th class="sortable" style="width:120px;">Time</th></tr></thead>
                 <tbody>
                     {% for entry in audit_log[:15] %}
                     <tr>
-                        <td style="font-size: 0.82rem;"><strong>{{ entry.admin_email }}</strong></td>
+                        <td class="a-cell-strong">{{ entry.admin_email }}</td>
                         <td><span class="a-badge a-badge-info">{{ entry.action }}</span></td>
-                        <td style="color: var(--fg-secondary); font-size: 0.82rem;">{{ entry.target or '-' }}</td>
-                        <td style="color: var(--fg-secondary); font-size: 0.78rem;">
+                        <td class="a-cell-dim a-cell-trunc">{{ entry.target or '—' }}</td>
+                        <td class="a-cell-dim" data-sort="{{ entry.timestamp.isoformat() if entry.timestamp else '' }}">
                             {% if entry.timestamp %}{{ entry.timestamp.strftime('%m/%d %H:%M') }}{% endif %}
                         </td>
                     </tr>

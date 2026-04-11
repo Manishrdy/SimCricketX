@@ -1245,7 +1245,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 
-<body>
+<body{% if request.path and request.path.startswith('/admin') %} class="admin-page"{% endif %}>
 
     <!-- Navigation -->
     <nav class="navbar">

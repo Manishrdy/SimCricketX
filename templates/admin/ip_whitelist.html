@@ -1,15 +1,21 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">IP Whitelist</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">IP Whitelist</h1>
-        <p class="admin-page-subtitle">{{ entries|length }} allowed IP{{ 's' if entries|length != 1 }} &mdash; Whitelist mode is currently <strong>{% if whitelist_on %}ON{% else %}OFF{% endif %}</strong></p>
+        <p class="admin-page-subtitle">{{ entries|length }} allowed IP{{ 's' if entries|length != 1 }} &mdash; Mode is currently <strong>{% if whitelist_on %}ON{% else %}OFF{% endif %}</strong></p>
     </div>
     <div class="admin-page-actions">
         <button onclick="toggleWhitelist()" class="a-btn {% if whitelist_on %}a-btn-danger{% else %}a-btn-secondary{% endif %}" id="toggleBtn">
             <i class="fas fa-{% if whitelist_on %}lock{% else %}lock-open{% endif %}"></i>
-            {% if whitelist_on %}Disable Whitelist Mode{% else %}Enable Whitelist Mode{% endif %}
+            {% if whitelist_on %}Disable Whitelist{% else %}Enable Whitelist{% endif %}
         </button>
     </div>
 </div>
@@ -23,9 +29,9 @@
 
 <div id="alertContainer"></div>
 
-<div class="a-grid-2" style="margin-bottom:1.5rem;">
+<div class="a-grid-2" style="margin-bottom:1rem;">
     <div class="a-card-flat">
-        <h3 class="a-section-title"><i class="fas fa-plus-circle"></i> Add IP to Whitelist</h3>
+        <h3 class="a-section-title" style="margin-bottom:.75rem;"><i class="fas fa-plus-circle"></i> Add IP to Whitelist</h3>
         <form onsubmit="addIP(event)">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="a-form-group">
@@ -40,8 +46,8 @@
         </form>
     </div>
     <div class="a-card-flat">
-        <h3 class="a-section-title"><i class="fas fa-info-circle"></i> How It Works</h3>
-        <ul style="font-size:0.88rem;color:var(--fg);line-height:1.8;padding-left:1.2rem;">
+        <h3 class="a-section-title" style="margin-bottom:.75rem;"><i class="fas fa-info-circle"></i> How It Works</h3>
+        <ul style="font-size:.84rem;color:var(--fg);line-height:1.75;padding-left:1.2rem;margin:0;">
             <li>When whitelist mode is <strong>ON</strong>, only IPs in this list can access the site.</li>
             <li>Admin accounts always bypass the whitelist.</li>
             <li>Login/register pages are always accessible so users can authenticate.</li>
@@ -52,25 +58,33 @@
 </div>
 
 <div class="a-table-wrap">
-    <table class="a-table">
+    <table class="a-table a-table-pro">
         <thead>
-            <tr><th>IP Address</th><th>Label</th><th>Added By</th><th>Added At</th><th>Actions</th></tr>
+            <tr>
+                <th class="sortable" style="width:160px;">IP Address</th>
+                <th class="sortable">Label</th>
+                <th class="sortable" style="width:160px;">Added By</th>
+                <th class="sortable" style="width:160px;">Added At</th>
+                <th style="width:110px;text-align:right;">Actions</th>
+            </tr>
         </thead>
         <tbody>
             {% for e in entries %}
             <tr id="wl-{{ e.id }}">
-                <td><code style="font-size:0.85rem;">{{ e.ip_address }}</code></td>
-                <td style="color:var(--fg-secondary);">{{ e.label or '-' }}</td>
-                <td style="font-size:0.82rem;">{{ e.added_by }}</td>
-                <td>{% if e.added_at %}{{ e.added_at | localtime }}{% else %}-{% endif %}</td>
-                <td>
+                <td><code class="a-cell-mono a-cell-strong">{{ e.ip_address }}</code></td>
+                <td class="a-cell-dim">{{ e.label or '—' }}</td>
+                <td class="a-cell-dim">{{ e.added_by }}</td>
+                <td class="a-cell-dim" data-sort="{{ e.added_at.isoformat() if e.added_at else '' }}">
+                    {% if e.added_at %}{{ e.added_at | localtime }}{% else %}—{% endif %}
+                </td>
+                <td class="a-cell-actions">
                     <button onclick="removeIP({{ e.id }}, '{{ e.ip_address }}')" class="a-btn a-btn-danger a-btn-sm">
                         <i class="fas fa-times"></i> Remove
                     </button>
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="5"><div class="a-empty"><p>No IPs in whitelist yet.</p></div></td></tr>
+            <tr><td colspan="5"><div class="a-empty"><i class="fas fa-lock"></i><p>No IPs in whitelist yet</p></div></td></tr>
             {% endfor %}
         </tbody>
     </table>

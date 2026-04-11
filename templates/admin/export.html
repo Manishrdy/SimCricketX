@@ -1,5 +1,11 @@
 {% extends "admin/layout.html" %}
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Export</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Database Export</h1>
@@ -12,89 +18,112 @@
     </div>
 </div>
 
-<h3 class="a-section-title" style="margin-bottom: 1rem;"><i class="fas fa-table"></i> Core Tables</h3>
-<div class="a-grid-3" style="margin-bottom: 2rem;">
-    {% set core_tables = [
-        ('users', 'Users', 'fas fa-users', 'User accounts'),
-        ('teams', 'Teams', 'fas fa-shield-alt', 'All teams'),
-        ('players', 'Players', 'fas fa-running', 'Player records'),
-        ('matches', 'Matches', 'fas fa-cricket-bat-ball', 'Match records'),
-        ('tournaments', 'Tournaments', 'fas fa-trophy', 'Tournaments')
-    ] %}
-    {% for key, name, icon, desc in core_tables %}
-    <div class="a-card">
-        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-            <div style="width: 40px; height: 40px; background: var(--accent-light); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                <i class="{{ icon }}" style="color: var(--accent);"></i>
+<style>
+.ex-card-head {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    margin-bottom: .75rem;
+}
+.ex-icon-pill {
+    width: 34px;
+    height: 34px;
+    background: var(--accent-light);
+    border-radius: var(--a-r-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+.ex-name { font-weight: 700; color: var(--fg); font-size: .88rem; }
+.ex-desc { font-size: .74rem; color: var(--fg-secondary); }
+.ex-btns { display: flex; gap: .4rem; flex-wrap: wrap; }
+</style>
+
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-table"></i> Core Tables</h3>
+    <div class="a-grid-3">
+        {% set core_tables = [
+            ('users', 'Users', 'fas fa-users', 'User accounts'),
+            ('teams', 'Teams', 'fas fa-shield-alt', 'All teams'),
+            ('players', 'Players', 'fas fa-running', 'Player records'),
+            ('matches', 'Matches', 'fas fa-cricket-bat-ball', 'Match records'),
+            ('tournaments', 'Tournaments', 'fas fa-trophy', 'Tournaments')
+        ] %}
+        {% for key, name, icon, desc in core_tables %}
+        <div class="a-card">
+            <div class="ex-card-head">
+                <div class="ex-icon-pill"><i class="{{ icon }}"></i></div>
+                <div>
+                    <div class="ex-name">{{ name }}</div>
+                    <div class="ex-desc">{{ desc }}</div>
+                </div>
             </div>
-            <div>
-                <div style="font-weight: 700; color: var(--fg);">{{ name }}</div>
-                <div style="font-size: 0.78rem; color: var(--fg-secondary);">{{ desc }}</div>
+            <div class="ex-btns">
+                <a href="{{ url_for('admin_export_data', table=key, fmt='csv') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-csv"></i> CSV</a>
+                <a href="{{ url_for('admin_export_data', table=key, fmt='json') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-code"></i> JSON</a>
+                <a href="{{ url_for('admin_export_data', table=key, fmt='txt') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-alt"></i> TXT</a>
             </div>
         </div>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <a href="{{ url_for('admin_export_data', table=key, fmt='csv') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-csv"></i> CSV</a>
-            <a href="{{ url_for('admin_export_data', table=key, fmt='json') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-code"></i> JSON</a>
-            <a href="{{ url_for('admin_export_data', table=key, fmt='txt') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-alt"></i> TXT</a>
-        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
 </div>
 
-<h3 class="a-section-title" style="margin-bottom: 1rem;"><i class="fas fa-layer-group"></i> Detailed Data</h3>
-<div class="a-grid-3" style="margin-bottom: 2rem;">
-    {% set detail_tables = [
-        ('match_scorecards', 'Scorecards', 'fas fa-clipboard-list', 'Per-match player stats'),
-        ('match_partnerships', 'Partnerships', 'fas fa-handshake', 'Batting partnerships'),
-        ('tournament_teams', 'Tournament Teams', 'fas fa-sitemap', 'Team standings per tournament'),
-        ('tournament_fixtures', 'Fixtures', 'fas fa-calendar-alt', 'Tournament fixtures'),
-        ('tournament_player_stats', 'Tournament Stats', 'fas fa-chart-line', 'Player stats cache per tournament')
-    ] %}
-    {% for key, name, icon, desc in detail_tables %}
-    <div class="a-card">
-        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-            <div style="width: 40px; height: 40px; background: var(--accent-light); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                <i class="{{ icon }}" style="color: var(--accent);"></i>
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-layer-group"></i> Detailed Data</h3>
+    <div class="a-grid-3">
+        {% set detail_tables = [
+            ('match_scorecards', 'Scorecards', 'fas fa-clipboard-list', 'Per-match player stats'),
+            ('match_partnerships', 'Partnerships', 'fas fa-handshake', 'Batting partnerships'),
+            ('tournament_teams', 'Tournament Teams', 'fas fa-sitemap', 'Team standings per tournament'),
+            ('tournament_fixtures', 'Fixtures', 'fas fa-calendar-alt', 'Tournament fixtures'),
+            ('tournament_player_stats', 'Tournament Stats', 'fas fa-chart-line', 'Player stats cache per tournament')
+        ] %}
+        {% for key, name, icon, desc in detail_tables %}
+        <div class="a-card">
+            <div class="ex-card-head">
+                <div class="ex-icon-pill"><i class="{{ icon }}"></i></div>
+                <div>
+                    <div class="ex-name">{{ name }}</div>
+                    <div class="ex-desc">{{ desc }}</div>
+                </div>
             </div>
-            <div>
-                <div style="font-weight: 700; color: var(--fg);">{{ name }}</div>
-                <div style="font-size: 0.78rem; color: var(--fg-secondary);">{{ desc }}</div>
+            <div class="ex-btns">
+                <a href="{{ url_for('admin_export_data', table=key, fmt='csv') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-csv"></i> CSV</a>
+                <a href="{{ url_for('admin_export_data', table=key, fmt='json') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-code"></i> JSON</a>
+                <a href="{{ url_for('admin_export_data', table=key, fmt='txt') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-alt"></i> TXT</a>
             </div>
         </div>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <a href="{{ url_for('admin_export_data', table=key, fmt='csv') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-csv"></i> CSV</a>
-            <a href="{{ url_for('admin_export_data', table=key, fmt='json') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-code"></i> JSON</a>
-            <a href="{{ url_for('admin_export_data', table=key, fmt='txt') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-alt"></i> TXT</a>
-        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
 </div>
 
-<h3 class="a-section-title" style="margin-bottom: 1rem;"><i class="fas fa-shield-alt"></i> Admin & Security</h3>
-<div class="a-grid-3">
-    {% set admin_tables = [
-        ('audit_log', 'Audit Log', 'fas fa-scroll', 'Admin action trail'),
-        ('failed_logins', 'Failed Logins', 'fas fa-exclamation-triangle', 'Failed login attempts'),
-        ('blocked_ips', 'Blocked IPs', 'fas fa-ban', 'IP blocklist'),
-        ('active_sessions', 'Sessions', 'fas fa-desktop', 'Active user sessions')
-    ] %}
-    {% for key, name, icon, desc in admin_tables %}
-    <div class="a-card">
-        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-            <div style="width: 40px; height: 40px; background: var(--accent-light); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                <i class="{{ icon }}" style="color: var(--accent);"></i>
+<div class="a-section">
+    <h3 class="a-section-title"><i class="fas fa-shield-alt"></i> Admin &amp; Security</h3>
+    <div class="a-grid-3">
+        {% set admin_tables = [
+            ('audit_log', 'Audit Log', 'fas fa-scroll', 'Admin action trail'),
+            ('failed_logins', 'Failed Logins', 'fas fa-exclamation-triangle', 'Failed login attempts'),
+            ('blocked_ips', 'Blocked IPs', 'fas fa-ban', 'IP blocklist'),
+            ('active_sessions', 'Sessions', 'fas fa-desktop', 'Active user sessions')
+        ] %}
+        {% for key, name, icon, desc in admin_tables %}
+        <div class="a-card">
+            <div class="ex-card-head">
+                <div class="ex-icon-pill"><i class="{{ icon }}"></i></div>
+                <div>
+                    <div class="ex-name">{{ name }}</div>
+                    <div class="ex-desc">{{ desc }}</div>
+                </div>
             </div>
-            <div>
-                <div style="font-weight: 700; color: var(--fg);">{{ name }}</div>
-                <div style="font-size: 0.78rem; color: var(--fg-secondary);">{{ desc }}</div>
+            <div class="ex-btns">
+                <a href="{{ url_for('admin_export_data', table=key, fmt='csv') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-csv"></i> CSV</a>
+                <a href="{{ url_for('admin_export_data', table=key, fmt='json') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-code"></i> JSON</a>
+                <a href="{{ url_for('admin_export_data', table=key, fmt='txt') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-alt"></i> TXT</a>
             </div>
         </div>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <a href="{{ url_for('admin_export_data', table=key, fmt='csv') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-csv"></i> CSV</a>
-            <a href="{{ url_for('admin_export_data', table=key, fmt='json') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-code"></i> JSON</a>
-            <a href="{{ url_for('admin_export_data', table=key, fmt='txt') }}" class="a-btn a-btn-secondary a-btn-sm"><i class="fas fa-file-alt"></i> TXT</a>
-        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
 </div>
 {% endblock %}

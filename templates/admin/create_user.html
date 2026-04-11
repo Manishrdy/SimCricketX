@@ -1,19 +1,29 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <a href="/admin/users">Users</a>
+    <span class="sep">/</span>
+    <span class="current">Create</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Create User</h1>
         <p class="admin-page-subtitle">Create a new user account directly from admin</p>
     </div>
     <div class="admin-page-actions">
-        <a href="{{ url_for('admin_users') }}" class="a-btn a-btn-ghost"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="{{ url_for('admin_users') }}" class="a-btn a-btn-ghost">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
     </div>
 </div>
 
 <div id="alertContainer"></div>
 
-<div class="a-card-flat" style="max-width: 520px;">
+<div class="a-card-flat" style="max-width: 560px;">
     <form id="createUserForm" onsubmit="createUser(event)">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="a-form-group">
@@ -27,14 +37,14 @@
         <div class="a-form-group">
             <label class="a-form-label">Password <span style="color:#dc2626;">*</span></label>
             <input type="password" name="password" class="a-form-input" placeholder="Min 8 chars, upper/lower/digit" required minlength="8" style="max-width:100%;">
-            <div style="font-size:0.78rem; color:var(--fg-secondary); margin-top:0.3rem;">Min 8 characters, must include uppercase, lowercase, and a digit.</div>
+            <p class="a-form-hint">Min 8 characters, must include uppercase, lowercase, and a digit.</p>
         </div>
         <div class="a-form-group">
-            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.88rem; font-weight:600; color:var(--fg);">
+            <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.84rem; font-weight:600; color:var(--fg);">
                 <input type="checkbox" name="make_admin" value="1" style="width:16px;height:16px;">
                 Grant Administrator Role
             </label>
-            <div style="font-size:0.78rem; color:var(--fg-secondary); margin-top:0.3rem;">The user will have full admin access from creation.</div>
+            <p class="a-form-hint">The user will have full admin access from creation.</p>
         </div>
         <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-user-plus"></i> Create User</button>
     </form>

@@ -515,15 +515,32 @@
       display: inline-block;
     }
 
-    .template-card {
+    /* Invisible hit-area so pointer can cross the gap without losing :hover
+       (margin above the panel is not part of the card for hit-testing). */
+    .template-dropdown::before {
+      content: '';
       position: absolute;
       top: 100%;
-      /* Drop DOWN */
+      left: 50%;
+      transform: translateX(-50%);
+      width: 340px;
+      max-width: 90vw;
+      height: 12px;
+      z-index: 999;
+      pointer-events: none;
+    }
+
+    .template-dropdown:hover::before {
+      pointer-events: auto;
+    }
+
+    .template-card {
+      position: absolute;
+      top: calc(100% + 12px);
+      /* Drop DOWN — gap from button matches ::before bridge */
       bottom: auto;
       left: 50%;
       transform: translateX(-50%);
-      margin-top: 12px;
-      /* Small gap from button */
       width: 340px;
       max-width: 90vw;
       /* Prevent mobile overflow */

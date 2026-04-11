@@ -1,6 +1,12 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Global Search</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Global Search</h1>
@@ -8,29 +14,48 @@
     </div>
 </div>
 
-<div class="a-search-wrap" style="max-width: 720px;">
-    <i class="fas fa-search a-search-icon"></i>
-    <form method="GET" style="width: 100%;">
-        <input type="text" name="q" class="a-search-input" placeholder="Try email, team code, match id, result, or tournament name..." value="{{ q }}">
-    </form>
+<div class="a-toolbar">
+    <div class="a-toolbar-left">
+        <form method="GET" class="a-search-wrap" style="max-width:720px;margin:0;">
+            <i class="fas fa-search a-search-icon"></i>
+            <input type="text" name="q" class="a-search-input"
+                   placeholder="Try email, team code, match id, result, or tournament name…" value="{{ q }}">
+        </form>
+    </div>
 </div>
 
 {% if q %}
 <div class="a-stats-grid">
-    <div class="a-stat-card">
-        <div class="a-stat-label">Users</div>
+    <div class="a-stat-card" style="--a-stat-accent:#6366f1; --a-stat-accent-lt:rgba(99,102,241,.1)">
+        <div class="a-stat-icon"><i class="fas fa-users"></i></div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-users"></i></div>
+            <div class="a-stat-label">Users</div>
+        </div>
         <div class="a-stat-value">{{ totals.users }}</div>
     </div>
-    <div class="a-stat-card">
-        <div class="a-stat-label">Teams</div>
+    <div class="a-stat-card" style="--a-stat-accent:#8b5cf6; --a-stat-accent-lt:rgba(139,92,246,.1)">
+        <div class="a-stat-icon"><i class="fas fa-shield-alt"></i></div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-shield-alt"></i></div>
+            <div class="a-stat-label">Teams</div>
+        </div>
         <div class="a-stat-value">{{ totals.teams }}</div>
     </div>
-    <div class="a-stat-card">
-        <div class="a-stat-label">Matches</div>
+    <div class="a-stat-card" style="--a-stat-accent:#3b82f6; --a-stat-accent-lt:rgba(59,130,246,.1)">
+        <div class="a-stat-icon"><i class="fas fa-baseball-ball"></i></div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-baseball-ball"></i></div>
+            <div class="a-stat-label">Matches</div>
+        </div>
         <div class="a-stat-value">{{ totals.matches }}</div>
     </div>
-    <div class="a-stat-card">
-        <div class="a-stat-label">Tournaments</div>
+    <div class="a-stat-card" style="--a-stat-accent:#f59e0b; --a-stat-accent-lt:rgba(245,158,11,.1)">
+        <div class="a-stat-icon"><i class="fas fa-trophy"></i></div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-trophy"></i></div>
+            <div class="a-stat-label">Tournaments</div>
+        </div>
         <div class="a-stat-value">{{ totals.tournaments }}</div>
     </div>
 </div>
@@ -39,13 +64,13 @@
     <div class="a-section">
         <h3 class="a-section-title"><i class="fas fa-users"></i> Users</h3>
         <div class="a-table-wrap">
-            <table class="a-table">
-                <thead><tr><th>Email</th><th>Name</th><th>Role</th></tr></thead>
+            <table class="a-table a-table-pro">
+                <thead><tr><th class="sortable">Email</th><th class="sortable">Name</th><th class="sortable" style="width:90px;">Role</th></tr></thead>
                 <tbody>
                     {% for u in results.users %}
                     <tr>
                         <td><a href="{{ url_for('admin_user_360', user_email=u.id) }}" style="color: var(--accent); text-decoration: none;">{{ u.id }}</a></td>
-                        <td>{{ u.display_name or '-' }}</td>
+                        <td class="a-cell-dim">{{ u.display_name or '—' }}</td>
                         <td>{% if u.is_admin %}<span class="a-badge a-badge-admin">Admin</span>{% else %}<span class="a-badge a-badge-user">User</span>{% endif %}</td>
                     </tr>
                     {% else %}
@@ -59,12 +84,12 @@
     <div class="a-section">
         <h3 class="a-section-title"><i class="fas fa-shield-alt"></i> Teams</h3>
         <div class="a-table-wrap">
-            <table class="a-table">
-                <thead><tr><th>Team</th><th>Code</th><th>Owner</th></tr></thead>
+            <table class="a-table a-table-pro">
+                <thead><tr><th class="sortable">Team</th><th class="sortable" style="width:90px;">Code</th><th class="sortable">Owner</th></tr></thead>
                 <tbody>
                     {% for t in results.teams %}
                     <tr>
-                        <td>{{ t.name }}</td>
+                        <td class="a-cell-strong">{{ t.name }}</td>
                         <td><span class="a-badge a-badge-info">{{ t.short_code }}</span></td>
                         <td><a href="{{ url_for('admin_user_360', user_email=t.user_id) }}" style="color: var(--accent); text-decoration: none;">{{ t.user_id }}</a></td>
                     </tr>
@@ -81,14 +106,14 @@
     <div class="a-section">
         <h3 class="a-section-title"><i class="fas fa-cricket-bat-ball"></i> Matches</h3>
         <div class="a-table-wrap">
-            <table class="a-table">
-                <thead><tr><th>ID</th><th>Owner</th><th>Result</th></tr></thead>
+            <table class="a-table a-table-pro">
+                <thead><tr><th class="sortable" style="width:110px;">ID</th><th class="sortable">Owner</th><th class="sortable">Result</th></tr></thead>
                 <tbody>
                     {% for m in results.matches %}
                     <tr>
-                        <td style="font-family: monospace; font-size: 0.78rem;">{{ m.id[:10] }}...</td>
+                        <td class="a-cell-mono a-cell-dim">{{ m.id[:10] }}…</td>
                         <td><a href="{{ url_for('admin_user_360', user_email=m.user_id) }}" style="color: var(--accent); text-decoration: none;">{{ m.user_id }}</a></td>
-                        <td>{{ m.result_description or '-' }}</td>
+                        <td class="a-cell-trunc">{{ m.result_description or '—' }}</td>
                     </tr>
                     {% else %}
                     <tr><td colspan="3"><div class="a-empty"><p>No matches found</p></div></td></tr>
@@ -101,14 +126,14 @@
     <div class="a-section">
         <h3 class="a-section-title"><i class="fas fa-trophy"></i> Tournaments</h3>
         <div class="a-table-wrap">
-            <table class="a-table">
-                <thead><tr><th>Name</th><th>Owner</th><th>Status</th></tr></thead>
+            <table class="a-table a-table-pro">
+                <thead><tr><th class="sortable">Name</th><th class="sortable">Owner</th><th class="sortable" style="width:120px;">Status</th></tr></thead>
                 <tbody>
                     {% for t in results.tournaments %}
                     <tr>
-                        <td>{{ t.name }}</td>
+                        <td class="a-cell-strong">{{ t.name }}</td>
                         <td><a href="{{ url_for('admin_user_360', user_email=t.user_id) }}" style="color: var(--accent); text-decoration: none;">{{ t.user_id }}</a></td>
-                        <td><span class="a-badge a-badge-info">{{ t.status or '-' }}</span></td>
+                        <td><span class="a-badge a-badge-info">{{ t.status or '—' }}</span></td>
                     </tr>
                     {% else %}
                     <tr><td colspan="3"><div class="a-empty"><p>No tournaments found</p></div></td></tr>

@@ -1,11 +1,16 @@
 {% extends "admin/layout.html" %}
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Auth Events</span>
+</div>
+
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Auth Event Log</h1>
         <p class="admin-page-subtitle">
-            {{ total }} event{{ 's' if total != 1 }} &nbsp;·&nbsp;
-            {{ pending_counts.values() | sum }} pending
+            {{ total }} event{{ 's' if total != 1 }} &middot; {{ pending_counts.values() | sum }} pending
         </p>
     </div>
     <div class="admin-page-actions">
@@ -17,9 +22,8 @@
 
 <div id="alertContainer"></div>
 
-<!-- Summary badges -->
 {% if pending_counts %}
-<div class="a-stats-grid" style="margin-bottom:1.5rem;">
+<div class="a-stats-grid" style="margin-bottom: 1rem;">
     {% set type_labels = {
         'resend_rate_limit':  ('fa-tachometer-alt', 'Rate Limit Hit',    '#f59e0b'),
         'email_send_failure': ('fa-paper-plane',    'Email Send Failure', '#ef4444'),
@@ -28,9 +32,12 @@
     } %}
     {% for etype, cnt in pending_counts.items() %}
     {% set icon, label, color = type_labels.get(etype, ('fa-circle', etype, '#6b7280')) %}
-    <div class="a-stat-card" style="border-left: 3px solid {{ color }}; cursor:pointer;"
+    <div class="a-stat-card" style="--a-stat-accent:{{ color }}; border-left: 3px solid {{ color }}; cursor:pointer;"
          onclick="filterType('{{ etype }}')">
-        <div class="a-stat-label"><i class="fas {{ icon }}" style="color:{{ color }}"></i> {{ label }}</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill" style="background:{{ color }}20;color:{{ color }};"><i class="fas {{ icon }}"></i></div>
+            <div class="a-stat-label">{{ label }}</div>
+        </div>
         <div class="a-stat-value" style="color:{{ color }}">{{ cnt }}</div>
         <div class="a-stat-sub">pending</div>
     </div>
@@ -38,111 +45,93 @@
 </div>
 {% endif %}
 
-<!-- Filters -->
-<div style="display:flex; gap:0.75rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
-    <form method="GET" style="display:contents;">
-        <select name="status" class="a-input" style="width:auto;" onchange="this.form.submit()">
-            <option value="" {% if not status_filter %}selected{% endif %}>All statuses</option>
-            <option value="pending"   {% if status_filter=='pending'   %}selected{% endif %}>Pending</option>
-            <option value="contacted" {% if status_filter=='contacted' %}selected{% endif %}>Contacted</option>
-            <option value="resolved"  {% if status_filter=='resolved'  %}selected{% endif %}>Resolved</option>
-        </select>
-        <select name="type" class="a-input" style="width:auto;" onchange="this.form.submit()">
-            <option value="" {% if not type_filter %}selected{% endif %}>All types</option>
-            <option value="resend_rate_limit"   {% if type_filter=='resend_rate_limit'   %}selected{% endif %}>Rate Limit Hit</option>
-            <option value="email_send_failure"  {% if type_filter=='email_send_failure'  %}selected{% endif %}>Email Send Failure</option>
-            <option value="verify_token_expired"{% if type_filter=='verify_token_expired'%}selected{% endif %}>Verify Expired</option>
-            <option value="reset_token_expired" {% if type_filter=='reset_token_expired' %}selected{% endif %}>Reset Expired</option>
-        </select>
-        {% if status_filter or type_filter %}
-        <a href="/admin/auth-events" class="a-btn a-btn-secondary a-btn-sm">
-            <i class="fas fa-times"></i> Clear
-        </a>
-        {% endif %}
-    </form>
+<div class="a-toolbar">
+    <div class="a-toolbar-left">
+        <form method="GET" style="display:flex;gap:.5rem;flex-wrap:wrap;">
+            <select name="status" class="a-form-input" style="max-width:160px;width:auto;" onchange="this.form.submit()">
+                <option value="" {% if not status_filter %}selected{% endif %}>All statuses</option>
+                <option value="pending"   {% if status_filter=='pending'   %}selected{% endif %}>Pending</option>
+                <option value="contacted" {% if status_filter=='contacted' %}selected{% endif %}>Contacted</option>
+                <option value="resolved"  {% if status_filter=='resolved'  %}selected{% endif %}>Resolved</option>
+            </select>
+            <select name="type" class="a-form-input" style="max-width:200px;width:auto;" onchange="this.form.submit()">
+                <option value="" {% if not type_filter %}selected{% endif %}>All types</option>
+                <option value="resend_rate_limit"    {% if type_filter=='resend_rate_limit'    %}selected{% endif %}>Rate Limit Hit</option>
+                <option value="email_send_failure"   {% if type_filter=='email_send_failure'   %}selected{% endif %}>Email Send Failure</option>
+                <option value="verify_token_expired" {% if type_filter=='verify_token_expired' %}selected{% endif %}>Verify Expired</option>
+                <option value="reset_token_expired"  {% if type_filter=='reset_token_expired'  %}selected{% endif %}>Reset Expired</option>
+            </select>
+            {% if status_filter or type_filter %}
+            <a href="/admin/auth-events" class="a-btn a-btn-secondary a-btn-sm">
+                <i class="fas fa-times"></i> Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
 </div>
 
 <div class="a-table-wrap">
-    <table class="a-table">
+    <table class="a-table a-table-pro">
         <thead>
             <tr>
-                <th style="width:130px;">Type</th>
-                <th>Email / User</th>
-                <th>Details</th>
-                <th>IP</th>
-                <th>When</th>
-                <th style="width:100px;">Status</th>
-                <th style="width:140px;">Actions</th>
+                <th class="sortable" style="width:140px;">Type</th>
+                <th class="sortable">Email / User</th>
+                <th class="sortable">Details</th>
+                <th class="sortable" style="width:130px;">IP</th>
+                <th class="sortable" style="width:170px;">When</th>
+                <th class="sortable" style="width:110px;">Status</th>
+                <th style="width:150px;text-align:right;">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for ev in events %}
             <tr id="row-{{ ev.id }}" class="{% if ev.status == 'resolved' %}opacity-muted{% endif %}">
-                <!-- Type badge -->
                 <td>
                     {% if ev.event_type == 'resend_rate_limit' %}
-                        <span class="a-badge" style="background:#fef3c7;color:#92400e;">
-                            <i class="fas fa-tachometer-alt"></i> Rate Limit
-                        </span>
+                        <span class="a-badge a-badge-warning"><i class="fas fa-tachometer-alt"></i> Rate Limit</span>
                     {% elif ev.event_type == 'email_send_failure' %}
-                        <span class="a-badge" style="background:#fee2e2;color:#991b1b;">
-                            <i class="fas fa-paper-plane"></i> Send Fail
-                        </span>
+                        <span class="a-badge a-badge-danger"><i class="fas fa-paper-plane"></i> Send Fail</span>
                     {% elif ev.event_type == 'verify_token_expired' %}
-                        <span class="a-badge" style="background:#ede9fe;color:#5b21b6;">
-                            <i class="fas fa-clock"></i> Verify Exp
-                        </span>
+                        <span class="a-badge" style="background:#ede9fe;color:#5b21b6;border-color:#ddd6fe;"><i class="fas fa-clock"></i> Verify Exp</span>
                     {% elif ev.event_type == 'reset_token_expired' %}
-                        <span class="a-badge" style="background:#dbeafe;color:#1e40af;">
-                            <i class="fas fa-key"></i> Reset Exp
-                        </span>
+                        <span class="a-badge a-badge-info"><i class="fas fa-key"></i> Reset Exp</span>
                     {% else %}
                         <span class="a-badge">{{ ev.event_type }}</span>
                     {% endif %}
                 </td>
 
-                <!-- Email + user info -->
                 <td>
-                    <div style="font-weight:600; font-size:0.85rem;">{{ ev.email }}</div>
+                    <div style="font-weight:600; font-size:.82rem;">{{ ev.email }}</div>
                     {% if ev.user %}
-                    <div style="font-size:0.75rem; color:var(--fg-secondary);">
+                    <div style="font-size:.72rem; color:var(--fg-secondary);">
                         {{ ev.user.display_name or '—' }}
-                        &nbsp;·&nbsp;
-                        <a href="/admin/users/{{ ev.email }}" style="font-size:0.75rem;">view profile</a>
-                        &nbsp;·&nbsp;
-                        <a href="mailto:{{ ev.email }}" style="font-size:0.75rem;">
-                            <i class="fas fa-envelope"></i> email
-                        </a>
+                        &middot;
+                        <a href="/admin/users/{{ ev.email }}" style="font-size:.72rem;">view profile</a>
+                        &middot;
+                        <a href="mailto:{{ ev.email }}" style="font-size:.72rem;"><i class="fas fa-envelope"></i> email</a>
                     </div>
                     {% endif %}
                     {% if ev.admin_notes %}
-                    <div style="font-size:0.75rem; color:var(--fg-secondary); margin-top:0.25rem;
-                                font-style:italic; max-width:220px; white-space:pre-wrap;">
+                    <div style="font-size:.72rem; color:var(--fg-secondary); margin-top:.25rem; font-style:italic; max-width:220px; white-space:pre-wrap;">
                         <i class="fas fa-sticky-note"></i> {{ ev.admin_notes }}
                     </div>
                     {% endif %}
                 </td>
 
-                <!-- Details -->
-                <td style="font-size:0.78rem; max-width:200px; word-break:break-word;">
-                    {{ ev.details or '—' }}
-                </td>
+                <td class="a-cell-dim a-cell-trunc" style="max-width:200px;">{{ ev.details or '—' }}</td>
 
-                <!-- IP -->
-                <td><code style="font-size:0.78rem;">{{ ev.ip_address or '—' }}</code></td>
+                <td><code class="a-cell-mono">{{ ev.ip_address or '—' }}</code></td>
 
-                <!-- When -->
-                <td style="white-space:nowrap; font-size:0.82rem;">
+                <td class="a-cell-dim" data-sort="{{ ev.created_at.isoformat() if ev.created_at else '' }}">
                     {{ ev.created_at | localtime(True) if ev.created_at else '—' }}
                     {% if ev.resolved_at %}
-                    <div style="font-size:0.72rem; color:var(--fg-secondary);">
+                    <div style="font-size:.68rem; color:var(--fg-secondary);">
                         Resolved {{ ev.resolved_at | localtime(True) }}
                         {% if ev.resolved_by %} by {{ ev.resolved_by }}{% endif %}
                     </div>
                     {% endif %}
                 </td>
 
-                <!-- Status badge -->
                 <td>
                     <span id="badge-{{ ev.id }}" class="a-badge
                         {% if ev.status == 'pending'   %}a-badge-warning
@@ -153,23 +142,19 @@
                     </span>
                 </td>
 
-                <!-- Actions -->
-                <td>
-                    <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                <td class="a-cell-actions">
+                    <div style="display:flex; gap:.3rem; flex-wrap:wrap; justify-content:flex-end;">
                         {% if ev.status != 'contacted' %}
-                        <button onclick="updateEvent({{ ev.id }}, 'contacted')"
-                                class="a-btn a-btn-secondary a-btn-sm" title="Mark as Contacted">
+                        <button onclick="updateEvent({{ ev.id }}, 'contacted')" class="a-btn a-btn-secondary a-btn-sm" title="Mark as Contacted">
                             <i class="fas fa-phone"></i>
                         </button>
                         {% endif %}
                         {% if ev.status != 'resolved' %}
-                        <button onclick="updateEvent({{ ev.id }}, 'resolved')"
-                                class="a-btn a-btn-success a-btn-sm" title="Mark as Resolved">
+                        <button onclick="updateEvent({{ ev.id }}, 'resolved')" class="a-btn a-btn-secondary a-btn-sm" title="Mark as Resolved" style="color:#16a34a;border-color:#16a34a;">
                             <i class="fas fa-check"></i>
                         </button>
                         {% endif %}
-                        <button onclick="openNotes({{ ev.id }}, `{{ (ev.admin_notes or '') | replace('`','\\`') }}`)"
-                                class="a-btn a-btn-secondary a-btn-sm" title="Add Notes">
+                        <button onclick="openNotes({{ ev.id }}, `{{ (ev.admin_notes or '') | replace('`','\\`') }}`)" class="a-btn a-btn-secondary a-btn-sm" title="Add Notes">
                             <i class="fas fa-sticky-note"></i>
                         </button>
                     </div>
@@ -177,9 +162,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="7" class="a-empty">
-                    <p>No auth events recorded{% if status_filter or type_filter %} for this filter{% endif %}</p>
-                </td>
+                <td colspan="7"><div class="a-empty"><i class="fas fa-envelope-open-text"></i><p>No auth events recorded{% if status_filter or type_filter %} for this filter{% endif %}</p></div></td>
             </tr>
             {% endfor %}
         </tbody>
@@ -198,16 +181,13 @@
 </div>
 {% endif %}
 
-<!-- Notes modal -->
-<div id="notesModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45);
-     z-index:9999; align-items:center; justify-content:center;">
-    <div style="background:var(--card-bg); border:1px solid var(--card-border); border-radius:12px;
-                padding:1.5rem; width:min(480px, 92vw); box-shadow: 0 8px 32px rgba(0,0,0,0.25);">
-        <h3 style="margin:0 0 1rem; font-size:1rem;">Admin Notes</h3>
+<div id="notesModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:var(--card-bg); border:1px solid var(--card-border); border-radius: var(--a-r-lg); padding:1.25rem; width:min(480px, 92vw); box-shadow: var(--a-shadow-floating);">
+        <h3 style="margin:0 0 .85rem; font-size:1rem;">Admin Notes</h3>
         <input type="hidden" id="notesEventId">
-        <textarea id="notesText" rows="4" class="a-input" style="width:100%; resize:vertical;"
+        <textarea id="notesText" rows="4" class="a-form-input" style="width:100%; max-width:100%; resize:vertical;"
                   placeholder="Notes about this user / resolution steps…"></textarea>
-        <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:1rem;">
+        <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:.9rem;">
             <button onclick="closeNotes()" class="a-btn a-btn-secondary">Cancel</button>
             <button onclick="saveNotes()" class="a-btn a-btn-primary">Save Notes</button>
         </div>
@@ -216,19 +196,7 @@
 
 <style>
 .opacity-muted { opacity: 0.55; }
-.a-badge {
-    display: inline-flex; align-items: center; gap: 0.3rem;
-    padding: 0.2rem 0.5rem; border-radius: 999px;
-    font-size: 0.72rem; font-weight: 600; white-space: nowrap;
-    background: var(--bg-secondary); color: var(--fg-secondary);
-}
-.a-badge-warning { background:#fef3c7; color:#92400e; }
-.a-badge-info    { background:#dbeafe; color:#1e40af; }
-.a-badge-success { background:#d1fae5; color:#065f46; }
-[data-theme="dark"] .a-badge-warning { background:#451a03; color:#fcd34d; }
-[data-theme="dark"] .a-badge-info    { background:#1e3a5f; color:#93c5fd; }
-[data-theme="dark"] .a-badge-success { background:#064e3b; color:#6ee7b7; }
-[data-theme="dark"] .opacity-muted   { opacity: 0.4; }
+[data-theme="dark"] .opacity-muted { opacity: 0.4; }
 </style>
 
 <script>
@@ -273,13 +241,11 @@ function closeNotes() {
 async function saveNotes() {
     const id = document.getElementById('notesEventId').value;
     const notes = document.getElementById('notesText').value.trim();
-    // Keep current status — just update notes
     const row = document.getElementById(`row-${id}`);
     const badge = document.getElementById(`badge-${id}`);
     const currentStatus = badge ? badge.textContent.trim().toLowerCase() : 'pending';
     closeNotes();
     await updateEvent(parseInt(id), currentStatus, notes);
-    // Refresh notes display in the row
     setTimeout(() => location.reload(), 800);
 }
 
@@ -298,5 +264,4 @@ async function clearResolved() {
     else showAlert(data.error, 'error');
 }
 </script>
-
 {% endblock %}

@@ -6,6 +6,13 @@
 {% endblock %}
 
 {% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <a href="{{ url_for('admin_issues', kind='exceptions') }}">Issues</a>
+    <span class="sep">/</span>
+    <span class="current">{{ row.exception_type }}</span>
+</div>
 
 <div class="admin-page-header">
     <div>
@@ -15,18 +22,18 @@
         <p class="admin-page-subtitle">
             <span class="a-tag a-tag-{{ row.severity }}">{{ row.severity }}</span>
             <span class="a-tag">{{ row.source }}</span>
-            · {{ row.user_email or 'anonymous' }}
-            · seen {{ row.occurrence_count }} time{{ 's' if row.occurrence_count != 1 }}
-            · last: {{ row.last_seen_at | localtime if row.last_seen_at else '-' }}
+            &middot; {{ row.user_email or 'anonymous' }}
+            &middot; seen {{ row.occurrence_count }} time{{ 's' if row.occurrence_count != 1 }}
+            &middot; last: {{ row.last_seen_at | localtime if row.last_seen_at else '—' }}
         </p>
     </div>
     <div class="admin-page-actions">
         <a href="{{ url_for('admin_issues', kind='exceptions') }}" class="a-btn a-btn-secondary">
-            <i class="fas fa-arrow-left"></i> Back to list
+            <i class="fas fa-arrow-left"></i> Back
         </a>
         {% if row.github_issue_url %}
         <a href="{{ row.github_issue_url }}" target="_blank" rel="noopener" class="a-btn a-btn-primary">
-            <i class="fab fa-github"></i> Open issue #{{ row.github_issue_number }}
+            <i class="fab fa-github"></i> Issue #{{ row.github_issue_number }}
         </a>
         {% elif row.github_sync_status == 'failed' %}
         <button type="button" class="a-btn a-btn-secondary" onclick="retryExcSync({{ row.id }})">
@@ -38,11 +45,13 @@
 
 <div id="alertContainer"></div>
 
-{# ── Metadata grid ──────────────────────────────────────────────── #}
-<div class="a-stats-grid" style="margin-bottom:1.5rem;">
+<div class="a-stats-grid" style="margin-bottom:1rem;">
     <div class="a-stat-card">
-        <div class="a-stat-label">Resolved</div>
-        <div class="a-stat-value" style="font-size:1rem;">
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-check"></i></div>
+            <div class="a-stat-label">Resolved</div>
+        </div>
+        <div class="a-stat-value" style="font-size: 1rem;">
             {% if row.resolved %}
             <span style="color:#16a34a;">yes</span>
             {% else %}
@@ -54,24 +63,33 @@
         </div>
     </div>
     <div class="a-stat-card">
-        <div class="a-stat-label">First seen</div>
-        <div class="a-stat-value" style="font-size:1rem;">{{ row.first_seen_at | localtime if row.first_seen_at else '-' }}</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-clock"></i></div>
+            <div class="a-stat-label">First seen</div>
+        </div>
+        <div class="a-stat-value" style="font-size: 1rem;">{{ row.first_seen_at | localtime if row.first_seen_at else '—' }}</div>
         <div class="a-stat-sub">{{ row.fingerprint[:12] if row.fingerprint else '' }}</div>
     </div>
     <div class="a-stat-card">
-        <div class="a-stat-label">Linked reports</div>
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fas fa-link"></i></div>
+            <div class="a-stat-label">Linked reports</div>
+        </div>
         <div class="a-stat-value">{{ related_reports | length }}</div>
         <div class="a-stat-sub">last 7 days</div>
     </div>
     <div class="a-stat-card">
-        <div class="a-stat-label">GitHub sync</div>
-        <div class="a-stat-value" style="font-size:1rem;">
+        <div class="a-stat-header">
+            <div class="a-stat-icon-pill"><i class="fab fa-github"></i></div>
+            <div class="a-stat-label">GitHub sync</div>
+        </div>
+        <div class="a-stat-value" style="font-size: 1rem;">
             {% if row.github_sync_status == 'synced' %}
             <span style="color:#16a34a;">synced</span>
             {% elif row.github_sync_status == 'failed' %}
             <span style="color:#ef4444;">failed</span>
             {% else %}
-            <span style="color:#6b7280;">{{ row.github_sync_status or '-' }}</span>
+            <span style="color:#6b7280;">{{ row.github_sync_status or '—' }}</span>
             {% endif %}
         </div>
         <div class="a-stat-sub">
@@ -80,65 +98,62 @@
     </div>
 </div>
 
-{# ── Message ───────────────────────────────────────────────────── #}
-<section style="margin-bottom:1.5rem;">
-    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Message</h2>
-    <pre style="white-space:pre-wrap; padding:1rem; background:var(--bg-secondary); border:1px solid var(--card-border); border-radius:6px;">{{ row.exception_message }}</pre>
+<section style="margin-bottom:1rem;">
+    <h2 class="a-section-title"><i class="fas fa-comment-alt"></i> Message</h2>
+    <pre style="white-space:pre-wrap; padding:.85rem 1rem; background:var(--bg-secondary); border:1px solid var(--card-border); border-radius: var(--a-r-md); font-size: .82rem;">{{ row.exception_message }}</pre>
 </section>
 
-{# ── Location ──────────────────────────────────────────────────── #}
-<section style="margin-bottom:1.5rem;">
-    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Location</h2>
-    <table class="a-table">
-        <tbody>
-            <tr><th style="width:160px;">Module</th><td><code>{{ row.module or '-' }}</code></td></tr>
-            <tr><th>Function</th><td><code>{{ row.function or '-' }}</code></td></tr>
-            <tr><th>File</th><td><code style="font-size:0.8em;">{{ row.filename or '-' }}:{{ row.line_number or 0 }}</code></td></tr>
-            <tr><th>Request ID</th><td><code>{{ row.request_id or '-' }}</code></td></tr>
-            <tr><th>Sync error</th><td>{{ row.github_sync_error or '-' }}</td></tr>
-        </tbody>
-    </table>
+<section style="margin-bottom:1rem;">
+    <h2 class="a-section-title"><i class="fas fa-map-marker-alt"></i> Location</h2>
+    <div class="a-table-wrap">
+        <table class="a-table">
+            <tbody>
+                <tr><th style="width:160px;">Module</th><td><code class="a-cell-mono">{{ row.module or '—' }}</code></td></tr>
+                <tr><th>Function</th><td><code class="a-cell-mono">{{ row.function or '—' }}</code></td></tr>
+                <tr><th>File</th><td><code class="a-cell-mono">{{ row.filename or '—' }}:{{ row.line_number or 0 }}</code></td></tr>
+                <tr><th>Request ID</th><td><code class="a-cell-mono">{{ row.request_id or '—' }}</code></td></tr>
+                <tr><th>Sync error</th><td class="a-cell-dim">{{ row.github_sync_error or '—' }}</td></tr>
+            </tbody>
+        </table>
+    </div>
 </section>
 
-{# ── Context ──────────────────────────────────────────────────── #}
 {% if context %}
-<section style="margin-bottom:1.5rem;">
-    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Context</h2>
-    <pre style="white-space:pre-wrap; padding:1rem; background:#0d1117; color:#c9d1d9; border-radius:6px; font-size:0.78rem;">{{ context | tojson(indent=2) }}</pre>
+<section style="margin-bottom:1rem;">
+    <h2 class="a-section-title"><i class="fas fa-info-circle"></i> Context</h2>
+    <pre style="white-space:pre-wrap; padding:1rem; background:#0d1117; color:#c9d1d9; border-radius: var(--a-r-md); font-size: .76rem;">{{ context | tojson(indent=2) }}</pre>
 </section>
 {% endif %}
 
-{# ── Traceback ───────────────────────────────────────────────── #}
 {% if row.traceback %}
-<section style="margin-bottom:1.5rem;">
+<section style="margin-bottom:1rem;">
     <details open>
-        <summary style="cursor:pointer; font-size:1rem; font-weight:600; margin-bottom:0.5rem;">Traceback</summary>
-        <pre style="white-space:pre-wrap; padding:1rem; background:#0d1117; color:#c9d1d9; border-radius:6px; max-height:500px; overflow:auto; font-size:0.78rem;">{{ row.traceback }}</pre>
+        <summary style="cursor:pointer; font-size: .92rem; font-weight: 700; margin-bottom: .5rem; color: var(--fg);">Traceback</summary>
+        <pre style="white-space:pre-wrap; padding:1rem; background:#0d1117; color:#c9d1d9; border-radius: var(--a-r-md); max-height: 500px; overflow: auto; font-size: .76rem;">{{ row.traceback }}</pre>
     </details>
 </section>
 {% endif %}
 
-{# ── Linked user reports ──────────────────────────────────────── #}
 {% if related_reports %}
-<section style="margin-bottom:1.5rem;">
-    <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.5rem;">User reports referencing this exception</h2>
+<section style="margin-bottom:1rem;">
+    <h2 class="a-section-title"><i class="fas fa-link"></i> User reports referencing this exception</h2>
     <div class="a-table-wrap">
-        <table class="a-table">
+        <table class="a-table a-table-pro">
             <thead>
                 <tr>
-                    <th>Public ID</th>
-                    <th>Title</th>
-                    <th>User</th>
-                    <th style="width:170px;">Submitted</th>
+                    <th class="sortable" style="width:140px;">Public ID</th>
+                    <th class="sortable">Title</th>
+                    <th class="sortable">User</th>
+                    <th class="sortable" style="width:180px;">Submitted</th>
                 </tr>
             </thead>
             <tbody>
                 {% for r in related_reports %}
                 <tr>
-                    <td><a href="{{ url_for('admin_issue_report_detail', public_id=r.public_id) }}"><code>{{ r.public_id }}</code></a></td>
-                    <td>{{ r.title }}</td>
-                    <td>{{ r.user_email }}</td>
-                    <td>{{ r.created_at | localtime if r.created_at else '-' }}</td>
+                    <td><a href="{{ url_for('admin_issue_report_detail', public_id=r.public_id) }}"><code class="a-cell-mono">{{ r.public_id }}</code></a></td>
+                    <td class="a-cell-strong">{{ r.title }}</td>
+                    <td class="a-cell-dim">{{ r.user_email }}</td>
+                    <td class="a-cell-dim" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ r.created_at | localtime if r.created_at else '—' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -156,19 +171,18 @@ function retryExcSync(rowId) {
         .then(body => {
             const box = document.getElementById('alertContainer');
             if (body.status === 'queued' || body.status === 'already_synced') {
-                box.innerHTML = '<div class="a-alert a-alert-success">Retry queued. Reloading…</div>';
+                box.innerHTML = '<div class="a-alert a-alert-success" style="display:block">Retry queued. Reloading…</div>';
                 setTimeout(() => location.reload(), 1200);
             } else {
-                box.innerHTML = '<div class="a-alert a-alert-error">' + (body.error || 'Retry failed') + '</div>';
+                box.innerHTML = '<div class="a-alert a-alert-error" style="display:block">' + (body.error || 'Retry failed') + '</div>';
                 btn.disabled = false;
             }
         })
         .catch(err => {
             document.getElementById('alertContainer').innerHTML =
-                '<div class="a-alert a-alert-error">Network error: ' + err + '</div>';
+                '<div class="a-alert a-alert-error" style="display:block">Network error: ' + err + '</div>';
             btn.disabled = false;
         });
 }
 </script>
-
 {% endblock %}
