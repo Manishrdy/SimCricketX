@@ -119,7 +119,7 @@ def test_statistics_route_exception_is_logged_to_db(app, authenticated_client, r
 
 
 def test_log_exception_creates_github_issue_when_enabled(app, monkeypatch):
-    captured = {"requests": 0}
+    captured = {"requests": 0, "bodies": []}
 
     class _Resp:
         def __enter__(self):
@@ -131,8 +131,15 @@ def test_log_exception_creates_github_issue_when_enabled(app, monkeypatch):
         def read(self):
             return json.dumps({"number": 123, "html_url": "https://github.com/owner/repo/issues/123"}).encode("utf-8")
 
+        def getcode(self):
+            return 201
+
     def _fake_urlopen(req, timeout=10):
         captured["requests"] += 1
+        try:
+            captured["bodies"].append(req.data.decode("utf-8") if req.data else "")
+        except Exception:
+            captured["bodies"].append("")
         return _Resp()
 
     monkeypatch.setenv("GITHUB_ISSUE_ON_EXCEPTION_ENABLED", "true")
@@ -164,6 +171,9 @@ def test_log_exception_creates_github_issue_when_enabled(app, monkeypatch):
         assert row.occurrence_count == 2
         assert row.github_issue_number == 123
         assert row.github_issue_url == "https://github.com/owner/repo/issues/123"
+        assert row.github_sync_status == "synced"
+        assert row.github_sync_error is None
+        assert row.github_last_synced_at is not None
 
 
 def test_log_exception_ignores_github_issue_failures(app, monkeypatch):
@@ -184,7 +194,75 @@ def test_log_exception_ignores_github_issue_failures(app, monkeypatch):
             log_exception(exc, source="backend")
         after = ExceptionLog.query.count()
 
-    assert after == before + 1
+        assert after == before + 1
+
+        row = ExceptionLog.query.filter_by(exception_type="RuntimeError", exception_message="issue-fail-safe").first()
+        assert row is not None
+        # Queue ran inline but the network call failed -> sync status should be 'failed'.
+        assert row.github_sync_status == "failed"
+        assert row.github_sync_error is not None
+        assert row.github_issue_number is None
+
+
+def test_log_exception_scrubs_pii_before_sending_to_github(app, monkeypatch):
+    """The outbound issue body must not contain raw emails / IPs / tokens."""
+    captured = {"bodies": []}
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps({"number": 9, "html_url": "https://github.com/owner/repo/issues/9"}).encode("utf-8")
+
+        def getcode(self):
+            return 201
+
+    def _fake_urlopen(req, timeout=10):
+        captured["bodies"].append(req.data.decode("utf-8") if req.data else "")
+        return _Resp()
+
+    monkeypatch.setenv("GITHUB_ISSUE_ON_EXCEPTION_ENABLED", "true")
+    monkeypatch.setenv("GITHUB_TOKEN", "dummy-token")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
+    monkeypatch.setattr(exception_tracker.urlrequest, "urlopen", _fake_urlopen)
+
+    with app.app_context():
+        try:
+            raise RuntimeError(
+                "leak victim@example.com from 10.0.0.5 with token github_pat_AAAAAAAAAAAAAAAAAAAAAAAA"
+            )
+        except Exception as exc:
+            log_exception(
+                exc,
+                source="backend",
+                context={
+                    "user_email": "user@example.com",
+                    "client_ip": "192.168.1.42",
+                    "password": "hunter2",
+                    "token": "github_pat_BBBBBBBBBBBBBBBBBBBBBBBB",
+                },
+            )
+
+    assert len(captured["bodies"]) == 1
+    body = captured["bodies"][0]
+
+    # Sensitive substrings must NOT appear anywhere in the outbound JSON.
+    assert "victim@example.com" not in body
+    assert "user@example.com" not in body
+    assert "10.0.0.5" not in body
+    assert "192.168.1.42" not in body
+    assert "github_pat_AAAA" not in body
+    assert "github_pat_BBBB" not in body
+    assert "hunter2" not in body
+
+    # Redaction markers should be present.
+    assert "<email>" in body or "<redacted>" in body
+    assert "<ip>" in body or "<redacted>" in body
+    assert "<redacted-token>" in body or "<redacted>" in body
 
 
 def test_log_exception_deduplicates_same_fingerprint(app):
