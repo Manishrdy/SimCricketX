@@ -12,6 +12,8 @@ GitHub issue creation runs asynchronously via services.github_issue_queue,
 so the call site never blocks on a network round-trip.
 """
 
+from __future__ import annotations
+
 import sys
 import json
 import hashlib
