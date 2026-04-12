@@ -132,11 +132,14 @@ def register_auth_routes(
                 return render_template("register.html", error=policy_error)
 
             if register_user(email, password, display_name=display_name):
-                # Send verification email immediately after registration
-                user = db.session.get(DBUser, email)
-                if user and user.email_verify_token:
+                # Send verification email immediately after registration.
+                # generate_email_verify_token returns the raw token; the DB stores
+                # its SHA-256 hash. Passing user.email_verify_token (the hash) directly
+                # into the URL would cause a double-hash mismatch in verify_email.
+                token = generate_email_verify_token(email)
+                if token:
                     verify_link = url_for(
-                        "verify_email", token=user.email_verify_token, _external=True
+                        "verify_email", token=token, _external=True
                     )
                     sent = send_verification_email(
                         email,
