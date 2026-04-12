@@ -4,450 +4,1463 @@
 
 {% block extra_css %}
 <style>
-    .sb-container { max-width: 1300px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
-    .sb-back { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none; font-size: .85rem; margin-bottom: 1rem; }
-    .sb-back:hover { color: var(--text-primary); }
-    .sb-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; flex-wrap: wrap; gap: 12px; }
-    .sb-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 0; }
-    .sb-subtitle { color: var(--text-secondary); font-size: .9rem; margin-bottom: 1rem; }
-    .sb-tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; background: var(--bg-surface, #f9fafb); padding: 4px; border-radius: 10px; width: fit-content; }
-    .sb-tab { padding: 8px 20px; border-radius: 8px; font-size: .85rem; font-weight: 600; text-decoration: none; color: var(--text-secondary); }
-    .sb-tab:hover { color: var(--text-primary); }
-    .sb-tab.active { background: var(--bg-raised, #fff); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .sb-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: .85rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; transition: opacity .2s; }
-    .sb-btn:hover { opacity: .85; }
-    .sb-btn-primary { background: var(--brand-primary, #0f766e); color: #fff; }
-    .sb-btn-success { background: #16a34a; color: #fff; }
-    .sb-btn-danger { background: #dc2626; color: #fff; }
-    .sb-btn-secondary { background: var(--bg-raised, #fff); color: var(--text-primary); border: 1px solid var(--border-light, #e5e7eb); }
-    .sb-btn-sm { padding: 5px 10px; font-size: .78rem; }
-    .sb-btn:disabled { opacity: .4; cursor: not-allowed; }
+/* Classic theme-aligned squad builder */
+:root {
+    --sq-accent: var(--accent);
+    --sq-accent-soft: var(--accent-light);
+    --sq-panel: var(--card-bg);
+    --sq-panel-border: var(--card-border);
+    --sq-panel-shadow: 0 8px 18px var(--shadow);
+    --sq-input-bg: var(--bg-secondary);
+    --sq-success-bg: rgba(16, 185, 129, 0.12);
+    --sq-success-fg: #047857;
+    --sq-warn-bg: rgba(245, 158, 11, 0.12);
+    --sq-warn-fg: #b45309;
+    --role-bat: #2563eb;
+    --role-bat-bg: rgba(37, 99, 235, 0.12);
+    --role-bat-text: #1d4ed8;
+    --role-bowl: #dc2626;
+    --role-bowl-bg: rgba(220, 38, 38, 0.12);
+    --role-bowl-text: #b91c1c;
+    --role-all: #7c3aed;
+    --role-all-bg: rgba(124, 58, 237, 0.12);
+    --role-all-text: #6d28d9;
+    --role-wk: #d97706;
+    --role-wk-bg: rgba(217, 119, 6, 0.12);
+    --role-wk-text: #b45309;
+}
+[data-theme="dark"] {
+    --sq-success-fg: #6ee7b7;
+    --sq-warn-fg: #fcd34d;
+    --role-bat-text: #93c5fd;
+    --role-bowl-text: #fca5a5;
+    --role-all-text: #ddd6fe;
+    --role-wk-text: #fde68a;
+}
 
-    .sb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-    @media (max-width: 900px) { .sb-grid { grid-template-columns: 1fr; } }
+.sb-page {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 1rem 1.25rem 3.5rem;
+}
 
-    .sb-panel { background: var(--bg-raised, #fff); border: 1px solid var(--border-light, #e5e7eb); border-radius: 12px; padding: 20px; }
-    .sb-panel-title { font-size: 1rem; font-weight: 600; margin: 0 0 12px; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; }
-    .sb-panel-count { font-size: .85rem; font-weight: 400; color: var(--text-secondary); }
+.sb-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-secondary);
+    margin-bottom: 1.2rem;
+    transition: color .2s ease;
+}
+.sb-back:hover { color: var(--sq-accent); }
 
-    /* Filters */
-    .sb-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-    .sb-search { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .85rem; background: var(--bg-raised, #fff); color: var(--text-primary); }
-    .sb-search:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
-    .sb-filter-select { padding: 8px 10px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .8rem; background: var(--bg-raised, #fff); color: var(--text-primary); }
-    .sb-filter-row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.sb-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 16px;
+    padding: 1rem 1.15rem;
+    background: linear-gradient(135deg, var(--sq-panel) 0%, var(--sq-input-bg) 100%);
+    margin-bottom: 1rem;
+}
+.sb-hero-left {
+    display: flex;
+    align-items: center;
+    gap: 0.95rem;
+}
+.sb-team-badge {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    border: 1px solid var(--sq-panel-border);
+    background: var(--sq-accent-soft);
+    color: var(--sq-accent);
+    font-weight: 800;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sb-team-name {
+    font-size: 1.42rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--fg);
+}
+.sb-team-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.25rem;
+    font-size: 0.78rem;
+    color: var(--fg-secondary);
+}
+.sb-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+}
+.sb-status-dot.draft { background: var(--role-wk); }
 
-    /* Player cards */
-    .sb-list { max-height: 520px; overflow-y: auto; min-height: 200px; }
-    .sb-player { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; margin-bottom: 4px; border-radius: 8px; border: 1px solid var(--border-light, #e5e7eb); background: var(--bg-raised, #fff); cursor: grab; transition: all .15s; font-size: .83rem; }
-    .sb-player:hover { border-color: var(--brand-primary, #0f766e); box-shadow: 0 2px 6px rgba(0,0,0,.06); }
-    .sb-player.dragging { opacity: .5; transform: scale(.97); }
-    .sb-player-info { display: flex; align-items: center; gap: 8px; flex: 1; }
-    .sb-player-name { font-weight: 600; color: var(--text-primary); }
-    .sb-player-role { font-size: .75rem; color: var(--text-secondary); }
-    .sb-player-ratings { font-size: .72rem; color: var(--text-secondary); }
-    .sb-player-detail { font-size: .7rem; color: var(--text-secondary); }
-    .sb-role-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .sb-role-bat { background: #3b82f6; }
-    .sb-role-bowl { background: #ef4444; }
-    .sb-role-all { background: #8b5cf6; }
-    .sb-role-wk { background: #f59e0b; }
-    .sb-add-btn, .sb-remove-btn { background: none; border: none; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
-    .sb-add-btn { color: var(--brand-primary, #0f766e); }
-    .sb-add-btn:hover { background: rgba(15,118,110,.1); }
-    .sb-remove-btn { color: #dc2626; }
-    .sb-remove-btn:hover { background: rgba(220,38,38,.1); }
+.sb-hero-actions {
+    display: flex;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+}
+.sb-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 10px;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    background: var(--sq-panel);
+    color: var(--fg);
+    transition: all .2s ease;
+}
+.sb-btn:disabled { opacity: .55; cursor: not-allowed; }
+.sb-btn-ghost:hover:not(:disabled) { border-color: var(--sq-accent); color: var(--sq-accent); }
+.sb-btn-primary {
+    border-color: var(--sq-accent);
+    background: var(--sq-accent);
+    color: #fff;
+}
+.sb-btn-primary:hover:not(:disabled) { filter: brightness(0.94); }
+[data-theme="dark"] .sb-btn-primary { color: #111827; }
 
-    /* Squad panel extras */
-    .sb-squad-panel { border: 2px solid var(--brand-primary, #0f766e); }
-    .sb-squad-panel.drag-over { background: rgba(15,118,110,.04); border-style: dashed; }
-    .sb-drop-zone { min-height: 80px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: .85rem; border: 2px dashed var(--border-light, #e5e7eb); border-radius: 8px; margin-bottom: 8px; padding: 12px; display: none; }
-    .sb-squad-panel.drag-over .sb-drop-zone { display: flex; }
+.sb-subtitle {
+    color: var(--fg-secondary);
+    font-size: 0.83rem;
+    line-height: 1.55;
+    margin-bottom: 1rem;
+}
 
-    /* Validation status */
-    .sb-validation { margin-top: 12px; padding: 12px; border-radius: 8px; font-size: .8rem; }
-    .sb-val-ok { background: #dcfce7; color: #166534; }
-    .sb-val-warn { background: #fef3c7; color: #92400e; }
-    [data-theme="dark"] .sb-val-ok { background: #14532d; color: #86efac; }
-    [data-theme="dark"] .sb-val-warn { background: #78350f; color: #fde68a; }
+.sb-tabs-wrap { margin-bottom: 1rem; }
+.sb-tabs {
+    display: inline-flex;
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 999px;
+    padding: 0.2rem;
+    background: var(--sq-panel);
+}
+.sb-tab {
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fg-secondary);
+}
+.sb-tab.active {
+    background: var(--sq-accent);
+    color: #fff;
+}
+[data-theme="dark"] .sb-tab.active { color: #111827; }
 
-    /* Designations */
-    .sb-designations { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
-    .sb-designation { flex: 1; min-width: 140px; }
-    .sb-designation label { display: block; font-size: .75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px; }
-    .sb-designation select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: .8rem; background: var(--bg-raised); color: var(--text-primary); }
+.sb-restore-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    border: 1px solid var(--role-bat);
+    background: var(--role-bat-bg);
+    color: var(--role-bat-text);
+    border-radius: 12px;
+    padding: 0.65rem 0.8rem;
+    margin-bottom: 1rem;
+    font-size: 0.78rem;
+}
+.sb-restore-btn,
+.sb-discard-btn {
+    padding: 0.38rem 0.7rem;
+    border-radius: 8px;
+    border: 1px solid currentColor;
+    background: transparent;
+    font-size: 0.74rem;
+    font-weight: 700;
+}
+.sb-restore-btn {
+    background: var(--sq-accent);
+    border-color: var(--sq-accent);
+    color: #fff;
+}
+[data-theme="dark"] .sb-restore-btn { color: #111827; }
 
-    .sb-captain-badge, .sb-wk-badge { font-size: .65rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-left: 4px; }
-    .sb-captain-badge { background: #dbeafe; color: #1e40af; }
-    .sb-wk-badge { background: #fef3c7; color: #92400e; }
-    [data-theme="dark"] .sb-captain-badge { background: #1e3a5f; color: #93c5fd; }
-    [data-theme="dark"] .sb-wk-badge { background: #78350f; color: #fde68a; }
+.sb-composition {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 12px;
+    background: var(--sq-panel);
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--sq-panel-shadow);
+}
+.sb-comp-label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--fg-secondary);
+}
+.sb-comp-track-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 170px;
+    flex: 1;
+}
+.sb-comp-track {
+    flex: 1;
+    height: 7px;
+    border-radius: 999px;
+    border: 1px solid var(--sq-panel-border);
+    background: var(--sq-input-bg);
+    overflow: hidden;
+}
+.sb-comp-track-fill {
+    height: 100%;
+    background: var(--sq-accent);
+    transition: width .25s ease;
+}
+.sb-comp-val {
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+.sb-comp-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--sq-panel-border);
+}
+.sb-comp-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    border-radius: 999px;
+    padding: 0.3rem 0.58rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+.sb-comp-pill-wk { background: var(--role-wk-bg); color: var(--role-wk-text); }
+.sb-comp-pill-bat { background: var(--role-bat-bg); color: var(--role-bat-text); }
+.sb-comp-pill-all { background: var(--role-all-bg); color: var(--role-all-text); }
+.sb-comp-pill-bowl { background: var(--role-bowl-bg); color: var(--role-bowl-text); }
 
-    .sb-feedback { margin-top: 8px; font-size: .85rem; font-weight: 600; min-height: 1.2em; }
-    .sb-feedback.error { color: #dc2626; }
-    .sb-feedback.ok { color: #16a34a; }
-    .sb-empty { text-align: center; padding: 2rem; color: var(--text-secondary); font-size: .85rem; }
+.sb-grid {
+    display: grid;
+    grid-template-columns: 1fr 0.92fr;
+    gap: 1rem;
+}
+@media (max-width: 1000px) {
+    .sb-grid { grid-template-columns: 1fr; }
+}
+
+.sb-panel {
+    background: var(--sq-panel);
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 14px;
+    box-shadow: var(--sq-panel-shadow);
+}
+.sb-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    border-bottom: 1px solid var(--sq-panel-border);
+    padding: 0.85rem 0.95rem 0.7rem;
+}
+.sb-panel-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.86rem;
+    font-weight: 800;
+}
+.sb-panel-title i { color: var(--sq-accent); }
+.sb-panel-count {
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 999px;
+    background: var(--sq-input-bg);
+    color: var(--fg-secondary);
+    padding: 0.2rem 0.52rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+.sb-panel-body {
+    padding: 0.85rem 0.95rem 0.95rem;
+}
+
+.sb-search-wrap {
+    position: relative;
+    margin-bottom: 0.65rem;
+}
+.sb-search-icon {
+    position: absolute;
+    left: 0.72rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--fg-secondary);
+    font-size: 0.8rem;
+}
+.sb-search {
+    width: 100%;
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 10px;
+    background: var(--sq-input-bg);
+    color: var(--fg);
+    padding: 0.58rem 0.75rem 0.58rem 2rem;
+    font-size: 0.82rem;
+}
+.sb-search:focus {
+    outline: none;
+    border-color: var(--sq-accent);
+}
+
+.sb-chips {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.65rem;
+}
+.sb-chip {
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 999px;
+    background: var(--sq-input-bg);
+    color: var(--fg-secondary);
+    padding: 0.24rem 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+.sb-chip.active {
+    background: var(--sq-accent);
+    color: #fff;
+    border-color: var(--sq-accent);
+}
+[data-theme="dark"] .sb-chip.active { color: #111827; }
+
+.sb-pool-help {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    color: var(--fg-secondary);
+    margin-bottom: 0.55rem;
+}
+
+.sb-slider-wrap {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) 36px;
+    gap: 0.45rem;
+    align-items: stretch;
+}
+.sb-slider-btn {
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 10px;
+    background: var(--sq-input-bg);
+    color: var(--fg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sb-slider-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.sb-list {
+    min-height: 348px;
+    display: flex;
+    align-items: stretch;
+    gap: 0.6rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    padding-bottom: 0.35rem;
+}
+.sb-list::-webkit-scrollbar { height: 8px; }
+.sb-list::-webkit-scrollbar-track { background: transparent; }
+.sb-list::-webkit-scrollbar-thumb { background: var(--sq-panel-border); border-radius: 999px; }
+
+.sb-squad-panel {
+    border: 1px solid var(--sq-accent);
+}
+.sb-squad-panel.drag-over {
+    box-shadow: 0 0 0 3px var(--sq-accent-soft);
+}
+.sb-drop-hint {
+    border: 1px dashed var(--sq-accent);
+    border-radius: 10px;
+    background: var(--sq-accent-soft);
+    color: var(--sq-accent);
+    text-align: center;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 0.65rem;
+    margin-bottom: 0.6rem;
+}
+
+.sb-squad-list {
+    max-height: 360px;
+    overflow-y: auto;
+    padding-right: 0.2rem;
+}
+.sb-squad-list::-webkit-scrollbar { width: 7px; }
+.sb-squad-list::-webkit-scrollbar-thumb { background: var(--sq-panel-border); border-radius: 999px; }
+
+.sb-player {
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 12px;
+    background: var(--sq-panel);
+    transition: border-color .2s ease, transform .2s ease, opacity .2s ease;
+}
+.sb-list .sb-player {
+    min-width: 252px;
+    max-width: 252px;
+    scroll-snap-align: start;
+    padding: 0.72rem;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 0.55rem;
+    align-content: start;
+    cursor: grab;
+}
+.sb-list .sb-player .sb-player-avatar { grid-column: 1; grid-row: 1; }
+.sb-list .sb-player .sb-player-body { grid-column: 2; grid-row: 1 / span 2; }
+.sb-list .sb-player .sb-add-btn,
+.sb-list .sb-player > .sb-added-tag {
+    grid-column: 1 / span 2;
+    justify-self: end;
+}
+.sb-squad-list .sb-player {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.62rem;
+    margin-bottom: 0.45rem;
+}
+.sb-squad-list .sb-player:last-child { margin-bottom: 0; }
+.sb-player:hover {
+    border-color: var(--sq-accent);
+    transform: translateY(-1px);
+}
+.sb-player.dragging { opacity: 0.35; }
+.sb-player.in-squad {
+    opacity: 0.56;
+    background: var(--sq-input-bg);
+    cursor: default;
+}
+.sb-player.in-squad:hover {
+    border-color: var(--sq-panel-border);
+    transform: none;
+}
+
+.sb-player-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.71rem;
+    font-weight: 800;
+}
+.sb-avatar-bat { background: var(--role-bat-bg); color: var(--role-bat-text); }
+.sb-avatar-bowl { background: var(--role-bowl-bg); color: var(--role-bowl-text); }
+.sb-avatar-all { background: var(--role-all-bg); color: var(--role-all-text); }
+.sb-avatar-wk { background: var(--role-wk-bg); color: var(--role-wk-text); }
+
+.sb-player-body {
+    min-width: 0;
+    flex: 1;
+}
+.sb-player-head {
+    display: flex;
+    align-items: center;
+    gap: 0.38rem;
+    margin-bottom: 0.46rem;
+    flex-wrap: wrap;
+}
+.sb-player-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--fg);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sb-role-pill {
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    padding: 0.16rem 0.38rem;
+    border-radius: 6px;
+    text-transform: uppercase;
+}
+.sb-role-pill-bat { background: var(--role-bat-bg); color: var(--role-bat-text); }
+.sb-role-pill-bowl { background: var(--role-bowl-bg); color: var(--role-bowl-text); }
+.sb-role-pill-all { background: var(--role-all-bg); color: var(--role-all-text); }
+.sb-role-pill-wk { background: var(--role-wk-bg); color: var(--role-wk-text); }
+
+.sb-player-ratings {
+    display: flex;
+    flex-direction: column;
+    gap: 0.22rem;
+}
+.sb-mini-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+.sb-mini-label {
+    width: 22px;
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: var(--fg-secondary);
+}
+.sb-mini-track {
+    flex: 1;
+    height: 4px;
+    border-radius: 999px;
+    border: 1px solid var(--sq-panel-border);
+    background: var(--sq-input-bg);
+    overflow: hidden;
+}
+.sb-mini-fill {
+    height: 100%;
+    background: var(--sq-accent);
+}
+.sb-mini-fill.bar-bat { background: var(--role-bat); }
+.sb-mini-fill.bar-bowl { background: var(--role-bowl); }
+.sb-mini-val {
+    width: 18px;
+    text-align: right;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--fg-secondary);
+}
+
+.sb-added-tag {
+    font-size: 0.62rem;
+    font-weight: 800;
+    border-radius: 6px;
+    padding: 0.16rem 0.38rem;
+    background: var(--sq-success-bg);
+    color: var(--sq-success-fg);
+}
+
+.sb-add-btn,
+.sb-remove-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--sq-panel-border);
+    background: var(--sq-input-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sb-add-btn { color: var(--sq-accent); }
+.sb-add-btn:hover {
+    border-color: var(--sq-accent);
+    background: var(--sq-accent);
+    color: #fff;
+}
+[data-theme="dark"] .sb-add-btn:hover { color: #111827; }
+.sb-remove-btn { color: #dc2626; }
+.sb-remove-btn:hover {
+    border-color: #dc2626;
+    background: #dc2626;
+    color: #fff;
+}
+
+.sb-captain-badge,
+.sb-wk-badge {
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    padding: 0.14rem 0.34rem;
+    border-radius: 5px;
+    margin-left: 0.2rem;
+}
+.sb-captain-badge { background: var(--role-bat-bg); color: var(--role-bat-text); }
+.sb-wk-badge { background: var(--role-wk-bg); color: var(--role-wk-text); }
+
+.sb-empty {
+    width: 100%;
+    text-align: center;
+    border: 1px dashed var(--sq-panel-border);
+    border-radius: 12px;
+    background: var(--sq-input-bg);
+    color: var(--fg-secondary);
+    padding: 1.5rem 1rem;
+    font-size: 0.8rem;
+    line-height: 1.55;
+}
+.sb-empty-icon {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 0.6rem;
+    border-radius: 10px;
+    border: 1px solid var(--sq-panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.sb-designations {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem;
+    margin-top: 0.75rem;
+}
+@media (max-width: 640px) {
+    .sb-designations { grid-template-columns: 1fr; }
+}
+.sb-designation label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: 0.32rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fg-secondary);
+}
+.sb-designation label i { color: var(--sq-accent); }
+.sb-designation select {
+    width: 100%;
+    border: 1px solid var(--sq-panel-border);
+    border-radius: 9px;
+    background: var(--sq-input-bg);
+    color: var(--fg);
+    padding: 0.48rem 0.58rem;
+    font-size: 0.8rem;
+}
+.sb-designation select:focus {
+    outline: none;
+    border-color: var(--sq-accent);
+}
+
+.sb-validation {
+    margin-top: 0.75rem;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    padding: 0.6rem 0.7rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+.sb-val-ok {
+    background: var(--sq-success-bg);
+    color: var(--sq-success-fg);
+    border-color: var(--sq-success-fg);
+}
+.sb-val-warn {
+    background: var(--sq-warn-bg);
+    color: var(--sq-warn-fg);
+    border-color: var(--sq-warn-fg);
+}
+.sb-validation div {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+}
+
+.sb-feedback {
+    margin-top: 0.6rem;
+    min-height: 1.2em;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+.sb-feedback.error { color: #dc2626; }
+.sb-feedback.ok { color: #059669; }
+
+.sb-draft-ts {
+    margin-top: 0.3rem;
+    font-size: 0.7rem;
+    color: var(--fg-secondary);
+}
+
+.sb-pool-loading {
+    min-width: 100%;
+    padding: 1.3rem 0.7rem;
+    text-align: center;
+    color: var(--fg-secondary);
+    font-size: 0.8rem;
+}
+.sb-pool-sentinel { width: 1px; height: 1px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="sb-container">
-    <a href="{{ url_for('manage_teams') }}" class="sb-back"><i class="fas fa-arrow-left"></i> Back to Teams</a>
+<div class="sb-page">
+    <a href="{{ url_for('manage_teams') }}" class="sb-back">
+        <i class="fas fa-arrow-left"></i> All Teams
+    </a>
 
-    <div class="sb-header">
-        <div>
-            <h1 class="sb-title">{{ team.name }} — Squad Builder</h1>
+    <div class="sb-hero">
+        <div class="sb-hero-left">
+            <div class="sb-team-badge">{{ team.name[:2].upper() }}</div>
+            <div>
+                <div class="sb-team-name">{{ team.name }}</div>
+                <div class="sb-team-meta">
+                    <span class="sb-status-dot {{ 'draft' if team.is_draft else '' }}"></span>
+                    {{ 'Draft' if team.is_draft else 'Published' }} &middot; Squad Builder
+                </div>
+            </div>
         </div>
-        <div style="display:flex;gap:8px;">
-            <button class="sb-btn sb-btn-success" id="publishBtn" onclick="publishSquad()"><i class="fas fa-check-circle"></i> Publish Team</button>
+        <div class="sb-hero-actions">
+            <button class="sb-btn sb-btn-ghost" id="saveDraftBtn" onclick="saveDraftExplicit()">
+                <i class="fas fa-floppy-disk"></i> Save Draft
+            </button>
+            <button class="sb-btn sb-btn-primary" id="publishBtn" onclick="publishSquad()">
+                <i class="fas fa-rocket"></i> Publish Team
+            </button>
         </div>
     </div>
-    <p class="sb-subtitle">Drag players from the pool to your squad, or click the + button. Need 12-25 players, 1+ WK, 6+ Bowlers/All-rounders.</p>
 
-    <div class="sb-tabs">
-        {% for f in formats %}
-        <a href="{{ url_for('team_squad', team_id=team.id, fmt=f) }}" class="sb-tab {{ 'active' if f == fmt }}">{{ f }}</a>
-        {% endfor %}
+    <p class="sb-subtitle">
+        Build your {{ fmt }} unit from the player pool. Keep 11-25 players with 1+ wicketkeeper, 5+ bowling options, and set captain plus wicketkeeper before publishing.
+    </p>
+
+    <div class="sb-tabs-wrap">
+        <div class="sb-tabs">
+            {% for f in formats %}
+            <a href="{{ url_for('team_squad', team_id=team.id, fmt=f) }}"
+               class="sb-tab {{ 'active' if f == fmt }}">{{ f }}</a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="sb-restore-banner" id="restoreBanner" style="display:none;">
+        <i class="fas fa-clock-rotate-left"></i>
+        <span id="restoreMsg">You have a saved draft.</span>
+        <button class="sb-restore-btn" onclick="applyDraftRestore()">Restore Draft</button>
+        <button class="sb-discard-btn" onclick="discardDraft()">Discard</button>
+    </div>
+
+    <div class="sb-composition">
+        <span class="sb-comp-label">Squad</span>
+        <div class="sb-comp-track-wrap">
+            <div class="sb-comp-track"><div class="sb-comp-track-fill" id="compTrack" style="width:0%"></div></div>
+            <span class="sb-comp-val" id="squadCount">0 / 25</span>
+        </div>
+        <div class="sb-comp-sep"></div>
+        <div class="sb-comp-pill sb-comp-pill-wk"><i class="fas fa-hand-paper" style="font-size:.65rem"></i> WK: <span id="compWK">0</span></div>
+        <div class="sb-comp-pill sb-comp-pill-bat"><i class="fas fa-cricket-bat-ball" style="font-size:.65rem"></i> BAT: <span id="compBat">0</span></div>
+        <div class="sb-comp-pill sb-comp-pill-all">AR: <span id="compAR">0</span></div>
+        <div class="sb-comp-pill sb-comp-pill-bowl"><i class="fas fa-baseball" style="font-size:.65rem"></i> BOWL: <span id="compBowl">0</span></div>
     </div>
 
     <div class="sb-grid">
-        <!-- Pool Panel -->
         <div class="sb-panel" id="poolPanel">
-            <div class="sb-panel-title">
-                Player Pool
-                <span class="sb-panel-count" id="poolCount">({{ pool|length }})</span>
+            <div class="sb-panel-header">
+                <div class="sb-panel-title">
+                    <i class="fas fa-users"></i> Player Pool
+                </div>
+                <span class="sb-panel-count" id="poolCount"></span>
             </div>
-            <div class="sb-filters">
-                <input type="text" class="sb-search" id="searchInput" placeholder="Search players…" autocomplete="off">
-                <select class="sb-filter-select" id="filterRole">
-                    <option value="">All Roles</option>
-                    <option value="Batsman">Batsman</option>
-                    <option value="Bowler">Bowler</option>
-                    <option value="All-rounder">All-rounder</option>
-                    <option value="Wicketkeeper">Wicketkeeper</option>
-                </select>
-            </div>
-            <div class="sb-filter-row2" id="subFilters" style="display:none;">
-                <select class="sb-filter-select" id="filterBatHand">
-                    <option value="">Any Hand</option>
-                    <option value="Left">Left Hand</option>
-                    <option value="Right">Right Hand</option>
-                </select>
-                <select class="sb-filter-select" id="filterBowlType" style="display:none;">
-                    <option value="">Any Bowling</option>
-                    <option value="Fast">Fast</option>
-                    <option value="Fast-medium">Fast-medium</option>
-                    <option value="Medium-fast">Medium-fast</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Off spin">Off spin</option>
-                    <option value="Leg spin">Leg spin</option>
-                    <option value="Finger spin">Finger spin</option>
-                    <option value="Wrist spin">Wrist spin</option>
-                </select>
-                <select class="sb-filter-select" id="filterBowlHand" style="display:none;">
-                    <option value="">Any Bowl Hand</option>
-                    <option value="Left">Left</option>
-                    <option value="Right">Right</option>
-                </select>
-            </div>
-            <div class="sb-list" id="poolList">
-                {% for p in pool %}
-                <div class="sb-player" draggable="true" data-player-id="{{ p.id }}" data-name="{{ p.name|lower }}" data-role="{{ p.role }}" data-bat-hand="{{ p.batting_hand }}" data-bowl-type="{{ p.bowling_type }}" data-bowl-hand="{{ p.bowling_hand }}">
-                    <div class="sb-player-info">
-                        <span class="sb-role-dot sb-role-{{ 'bat' if p.role == 'Batsman' else 'bowl' if p.role == 'Bowler' else 'all' if p.role == 'All-rounder' else 'wk' }}"></span>
-                        <div>
-                            <span class="sb-player-name">{{ p.name }}</span>
-                            <span class="sb-player-role">{{ p.role }}</span>
-                            <div class="sb-player-ratings">Bat {{ p.batting_rating }} | Bowl {{ p.bowling_rating }} | Field {{ p.fielding_rating }}</div>
-                            {% if p.batting_hand or p.bowling_type %}<div class="sb-player-detail">{{ p.batting_hand }}{% if p.bowling_type %} | {{ p.bowling_type }}{% endif %}</div>{% endif %}
+            <div class="sb-panel-body">
+                <div class="sb-search-wrap">
+                    <i class="fas fa-magnifying-glass sb-search-icon"></i>
+                    <input type="text" class="sb-search" id="searchInput"
+                           placeholder="Search players…" autocomplete="off">
+                </div>
+                <div class="sb-chips" id="roleChips">
+                    <button class="sb-chip active" data-role="">All</button>
+                    <button class="sb-chip" data-role="Wicketkeeper">WK</button>
+                    <button class="sb-chip" data-role="Batsman">Bat</button>
+                    <button class="sb-chip" data-role="All-rounder">AR</button>
+                    <button class="sb-chip" data-role="Bowler">Bowl</button>
+                </div>
+                <div class="sb-pool-help">
+                    <i class="fas fa-arrows-left-right"></i> Slide to browse players
+                </div>
+                <div class="sb-slider-wrap">
+                    <button class="sb-slider-btn" id="poolPrevBtn" type="button" aria-label="Previous players">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <div class="sb-list" id="poolList">
+                        <div class="sb-pool-loading" id="poolSpinner">
+                            <i class="fas fa-circle-notch fa-spin"></i> Loading players...
                         </div>
                     </div>
-                    <button class="sb-add-btn" onclick="addPlayer('{{ p.id }}')" title="Add to squad"><i class="fas fa-plus-circle"></i></button>
+                    <button class="sb-slider-btn" id="poolNextBtn" type="button" aria-label="Next players">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
                 </div>
-                {% endfor %}
-                {% if not pool %}
-                <div class="sb-empty">No players available. <a href="{{ url_for('player_pool') }}">Add players to your pool</a> first.</div>
-                {% endif %}
+                <div class="sb-pool-sentinel" id="poolSentinel"></div>
             </div>
         </div>
 
-        <!-- Squad Panel -->
         <div class="sb-panel sb-squad-panel" id="squadPanel">
-            <div class="sb-panel-title">
-                Your Squad ({{ fmt }})
-                <span class="sb-panel-count" id="squadCount">{{ squad|length }}/25</span>
+            <div class="sb-panel-header">
+                <div class="sb-panel-title">
+                    <i class="fas fa-shield-halved"></i> Your Squad &mdash; {{ fmt }}
+                </div>
             </div>
-            <div class="sb-drop-zone" id="dropZone">Drop player here to add</div>
-            <div class="sb-list" id="squadList">
-                {% for p in squad %}
-                <div class="sb-player" data-squad-id="{{ p.id }}" data-role="{{ p.role }}">
-                    <div class="sb-player-info">
-                        <span class="sb-role-dot sb-role-{{ 'bat' if p.role == 'Batsman' else 'bowl' if p.role == 'Bowler' else 'all' if p.role == 'All-rounder' else 'wk' }}"></span>
-                        <div>
-                            <span class="sb-player-name">{{ p.name }}{% if p.is_captain %}<span class="sb-captain-badge">C</span>{% endif %}{% if p.is_wicketkeeper %}<span class="sb-wk-badge">WK</span>{% endif %}</span>
-                            <span class="sb-player-role">{{ p.role }}</span>
-                            <div class="sb-player-ratings">Bat {{ p.batting_rating }} | Bowl {{ p.bowling_rating }} | Field {{ p.fielding_rating }}</div>
-                        </div>
+            <div class="sb-panel-body">
+                <div class="sb-drop-hint" id="dropHint" style="display:none;">
+                    <i class="fas fa-arrow-left"></i> Drop player here or double-click from pool
+                </div>
+
+                <div class="sb-squad-list" id="squadList">
+                    <div class="sb-empty" id="squadEmpty">
+                        <div class="sb-empty-icon"><i class="fas fa-user-plus"></i></div>
+                        Drag or double-click players from the pool to build your squad.
                     </div>
-                    <button class="sb-remove-btn" onclick="removePlayer({{ p.id }}, '{{ p.name }}')" title="Remove"><i class="fas fa-times-circle"></i></button>
                 </div>
-                {% endfor %}
-                {% if not squad %}
-                <div class="sb-empty" id="squadEmpty">Drag or add players from the pool.</div>
-                {% endif %}
-            </div>
 
-            <!-- Designations -->
-            <div class="sb-designations">
-                <div class="sb-designation">
-                    <label>Captain</label>
-                    <select id="captainSelect" onchange="setCaptain()">
-                        <option value="">Select captain…</option>
-                        {% for p in squad %}
-                        <option value="{{ p.id }}" {{ 'selected' if p.is_captain }}>{{ p.name }}</option>
-                        {% endfor %}
-                    </select>
+                <div class="sb-designations">
+                    <div class="sb-designation">
+                        <label><i class="fas fa-star"></i> Captain</label>
+                        <select id="captainSelect" onchange="onCaptainChange()">
+                            <option value="">Select captain…</option>
+                        </select>
+                    </div>
+                    <div class="sb-designation">
+                        <label><i class="fas fa-hands-holding"></i> Wicketkeeper</label>
+                        <select id="wkSelect" onchange="onWKChange()">
+                            <option value="">Select WK…</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="sb-designation">
-                    <label>Wicketkeeper</label>
-                    <select id="wkSelect" onchange="setWicketkeeper()">
-                        <option value="">Select WK…</option>
-                        {% for p in squad if p.role == 'Wicketkeeper' %}
-                        <option value="{{ p.id }}" {{ 'selected' if p.is_wicketkeeper }}>{{ p.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
 
-            <!-- Validation -->
-            <div class="sb-validation" id="validationBox"></div>
-            <div class="sb-feedback" id="feedback"></div>
+                <div class="sb-validation sb-val-warn" id="validationBox"></div>
+                <div class="sb-feedback" id="feedback"></div>
+                <div class="sb-draft-ts" id="draftTs"></div>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
-(function(){
-    var TEAM_ID = {{ team.id }};
-    var FMT = '{{ fmt }}';
-    var CSRF = '{{ csrf_token() }}';
+(function () {
+    'use strict';
 
-    // Drag and drop
-    document.querySelectorAll('#poolList .sb-player').forEach(function(el){
-        el.addEventListener('dragstart', function(e){
-            e.dataTransfer.setData('text/plain', el.dataset.playerId);
-            el.classList.add('dragging');
-        });
-        el.addEventListener('dragend', function(){ el.classList.remove('dragging'); });
-    });
+    // ── Constants ──────────────────────────────────────────────────────────
+    var TEAM_ID  = {{ team.id }};
+    var FMT      = '{{ fmt }}';
+    var CSRF     = '{{ csrf_token() }}';
+    var DRAFT_KEY = 'simcx_squad_' + TEAM_ID + '_' + FMT;
+    var MIN_PLAYERS = 11, MAX_PLAYERS = 25, MIN_BOWL = 5;
 
-    var squadPanel = document.getElementById('squadPanel');
-    squadPanel.addEventListener('dragover', function(e){ e.preventDefault(); squadPanel.classList.add('drag-over'); });
-    squadPanel.addEventListener('dragleave', function(){ squadPanel.classList.remove('drag-over'); });
-    squadPanel.addEventListener('drop', function(e){
-        e.preventDefault();
-        squadPanel.classList.remove('drag-over');
-        var playerId = e.dataTransfer.getData('text/plain');
-        if (playerId) addPlayer(playerId);
-    });
+    // Squad state — source of truth before publish
+    var draft = { players: [], captain_name: '', wk_name: '' };
 
-    // Search + Filters
-    var searchInput = document.getElementById('searchInput');
-    var filterRole = document.getElementById('filterRole');
-    var filterBatHand = document.getElementById('filterBatHand');
-    var filterBowlType = document.getElementById('filterBowlType');
-    var filterBowlHand = document.getElementById('filterBowlHand');
-    var subFilters = document.getElementById('subFilters');
-    var debounceTimer;
+    // Pool lazy-load state
+    var pool = { offset: 0, limit: 30, loading: false, hasMore: true, search: '', role: '' };
 
-    searchInput.addEventListener('input', function(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(applyFilters, 200); });
-    filterRole.addEventListener('change', function(){
-        var r = filterRole.value;
-        subFilters.style.display = r ? '' : 'none';
-        filterBowlType.style.display = (r === 'Bowler' || r === 'All-rounder') ? '' : 'none';
-        filterBowlHand.style.display = (r === 'Bowler' || r === 'All-rounder') ? '' : 'none';
-        applyFilters();
-    });
-    filterBatHand.addEventListener('change', applyFilters);
-    filterBowlType.addEventListener('change', applyFilters);
-    filterBowlHand.addEventListener('change', applyFilters);
+    // ── Initial squad from server ──────────────────────────────────────────
+    var INITIAL_SQUAD = {{ squad_json|safe }};
 
-    function applyFilters() {
-        var q = searchInput.value.toLowerCase();
-        var role = filterRole.value;
-        var batHand = filterBatHand.value;
-        var bowlType = filterBowlType.value;
-        var bowlHand = filterBowlHand.value;
-        var count = 0;
-        document.querySelectorAll('#poolList .sb-player').forEach(function(el){
-            var show = true;
-            if (q && el.dataset.name.indexOf(q) === -1) show = false;
-            if (role && el.dataset.role !== role) show = false;
-            if (batHand && el.dataset.batHand !== batHand) show = false;
-            if (bowlType && el.dataset.bowlType !== bowlType) show = false;
-            if (bowlHand && el.dataset.bowlHand !== bowlHand) show = false;
-            el.style.display = show ? '' : 'none';
-            if (show) count++;
-        });
-        document.getElementById('poolCount').textContent = '(' + count + ')';
-    }
-
-    // Add player
-    window.addPlayer = function(playerId) {
-        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({ player_id: playerId }),
-        })
-        .then(function(r){ return r.json(); })
-        .then(function(d){
-            if (d.error) { showFeedback(d.error, 'error'); return; }
-            // Remove from pool
-            var poolEl = document.querySelector('#poolList [data-player-id="' + playerId + '"]');
-            if (poolEl) poolEl.remove();
-            // Add to squad
-            var emptyEl = document.getElementById('squadEmpty');
-            if (emptyEl) emptyEl.remove();
-            var p = d.player;
-            var roleClass = p.role === 'Batsman' ? 'bat' : p.role === 'Bowler' ? 'bowl' : p.role === 'All-rounder' ? 'all' : 'wk';
-            var div = document.createElement('div');
-            div.className = 'sb-player';
-            div.dataset.squadId = p.id;
-            div.dataset.role = p.role;
-            div.innerHTML = '<div class="sb-player-info"><span class="sb-role-dot sb-role-' + roleClass + '"></span><div><span class="sb-player-name">' + esc(p.name) + '</span> <span class="sb-player-role">' + esc(p.role) + '</span><div class="sb-player-ratings">Bat ' + p.batting_rating + ' | Bowl ' + p.bowling_rating + ' | Field ' + p.fielding_rating + '</div></div></div><button class="sb-remove-btn" onclick="removePlayer(' + p.id + ',\'' + esc(p.name).replace(/'/g, "\\'") + '\')" title="Remove"><i class="fas fa-times-circle"></i></button>';
-            document.getElementById('squadList').appendChild(div);
-            updateDesignations();
-            updateValidation();
-            updateCounts();
-            showFeedback(p.name + ' added', 'ok');
-        });
-    };
-
-    // Remove player
-    window.removePlayer = function(playerId, name) {
-        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/remove', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({ player_id: playerId }),
-        })
-        .then(function(r){ return r.json(); })
-        .then(function(d){
-            if (d.error) { showFeedback(d.error, 'error'); return; }
-            var el = document.querySelector('[data-squad-id="' + playerId + '"]');
-            if (el) el.remove();
-            updateDesignations();
-            updateValidation();
-            updateCounts();
-            showFeedback(d.name + ' removed', 'ok');
-            // Reload pool to show the player back — simple approach
-            location.reload();
-        });
-    };
-
-    // Captain
-    window.setCaptain = function() {
-        var pid = parseInt(document.getElementById('captainSelect').value);
-        if (!pid) return;
-        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/captain', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({ player_id: pid }),
-        }).then(function(r){ return r.json(); }).then(function(d){
-            if (d.error) showFeedback(d.error, 'error');
-            else { showFeedback('Captain set', 'ok'); updateValidation(); }
-        });
-    };
-
-    // Wicketkeeper
-    window.setWicketkeeper = function() {
-        var pid = parseInt(document.getElementById('wkSelect').value);
-        if (!pid) return;
-        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/wicketkeeper', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({ player_id: pid }),
-        }).then(function(r){ return r.json(); }).then(function(d){
-            if (d.error) showFeedback(d.error, 'error');
-            else { showFeedback('Wicketkeeper set', 'ok'); updateValidation(); }
-        });
-    };
-
-    // Publish
-    window.publishSquad = function() {
-        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/publish', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        }).then(function(r){ return r.json(); }).then(function(d){
-            if (d.error) { showFeedback(d.error, 'error'); return; }
-            showFeedback('Team published!', 'ok');
-            setTimeout(function(){ location.href = '{{ url_for("manage_teams") }}'; }, 800);
-        });
-    };
-
-    // Helpers
-    function updateCounts() {
-        var n = document.querySelectorAll('#squadList .sb-player').length;
-        document.getElementById('squadCount').textContent = n + '/25';
-        var poolN = document.querySelectorAll('#poolList .sb-player').length;
-        document.getElementById('poolCount').textContent = '(' + poolN + ')';
-    }
-
-    function updateDesignations() {
-        var capSel = document.getElementById('captainSelect');
-        var wkSel = document.getElementById('wkSelect');
-        var capVal = capSel.value;
-        var wkVal = wkSel.value;
-        capSel.innerHTML = '<option value="">Select captain…</option>';
-        wkSel.innerHTML = '<option value="">Select WK…</option>';
-        document.querySelectorAll('#squadList .sb-player').forEach(function(el){
-            var id = el.dataset.squadId;
-            var name = el.querySelector('.sb-player-name').textContent.replace(/[CWK]/g, '').trim();
-            var role = el.dataset.role;
-            capSel.innerHTML += '<option value="' + id + '"' + (id == capVal ? ' selected' : '') + '>' + esc(name) + '</option>';
-            if (role === 'Wicketkeeper') {
-                wkSel.innerHTML += '<option value="' + id + '"' + (id == wkVal ? ' selected' : '') + '>' + esc(name) + '</option>';
-            }
-        });
-    }
-
-    function updateValidation() {
-        var players = document.querySelectorAll('#squadList .sb-player');
-        var n = players.length;
-        var issues = [];
-        if (n < 12) issues.push('Need ' + (12 - n) + ' more player' + (12 - n > 1 ? 's' : ''));
-        if (n > 25) issues.push('Too many players (max 25)');
-        var wkCount = 0, bowlCount = 0;
-        players.forEach(function(el){
-            var r = el.dataset.role;
-            if (r === 'Wicketkeeper') wkCount++;
-            if (r === 'Bowler' || r === 'All-rounder') bowlCount++;
-        });
-        if (wkCount < 1) issues.push('Need at least 1 Wicketkeeper');
-        if (bowlCount < 6) issues.push('Need ' + (6 - bowlCount) + ' more Bowler/All-rounder' + (6 - bowlCount > 1 ? 's' : ''));
-        if (!document.getElementById('captainSelect').value) issues.push('Select a captain');
-        if (!document.getElementById('wkSelect').value) issues.push('Designate a wicketkeeper');
-        var box = document.getElementById('validationBox');
-        if (issues.length === 0) {
-            box.className = 'sb-validation sb-val-ok';
-            box.innerHTML = '<i class="fas fa-check-circle"></i> Ready to publish!';
+    // ── Boot ──────────────────────────────────────────────────────────────
+    (function boot() {
+        if (INITIAL_SQUAD.length > 0) {
+            INITIAL_SQUAD.forEach(function (p) { draft.players.push(p); });
+            draft.captain_name = (INITIAL_SQUAD.find(function(p){ return p.is_captain; }) || {}).name || '';
+            draft.wk_name      = (INITIAL_SQUAD.find(function(p){ return p.is_wicketkeeper; }) || {}).name || '';
+            renderSquad();
+            saveDraftToStorage();
         } else {
-            box.className = 'sb-validation sb-val-warn';
-            box.innerHTML = issues.map(function(i){ return '<div><i class="fas fa-exclamation-triangle"></i> ' + i + '</div>'; }).join('');
+            var saved = loadDraftFromStorage();
+            if (saved && saved.players && saved.players.length > 0) {
+                showRestoreBanner(saved);
+            }
         }
+        fetchPool(true);
+        setupDragDrop();
+        setupSearchAndChips();
+        setupPoolSlider();
+        setupInfiniteScroll();
+        updateValidation();
+    })();
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function roleToClass(role) {
+        if (role === 'Batsman') return 'bat';
+        if (role === 'Bowler') return 'bowl';
+        if (role === 'All-rounder') return 'all';
+        return 'wk';
     }
+
+    function nameToInitials(name) {
+        var parts = (name || '').trim().split(/\s+/);
+        if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        return (name || '??').slice(0, 2).toUpperCase();
+    }
+
+    function miniRatingBar(label, val, barClass) {
+        var pct = Math.min(100, Math.max(0, val || 0));
+        return '<div class="sb-mini-rating">' +
+            '<span class="sb-mini-label">' + label + '</span>' +
+            '<div class="sb-mini-track"><div class="sb-mini-fill' + (barClass ? ' ' + barClass : '') + '" style="width:' + pct + '%"></div></div>' +
+            '<span class="sb-mini-val">' + (val || 0) + '</span>' +
+            '</div>';
+    }
+
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function squadList() { return document.getElementById('squadList'); }
 
     function showFeedback(msg, type) {
         var el = document.getElementById('feedback');
         el.textContent = msg;
         el.className = 'sb-feedback ' + type;
-        setTimeout(function(){ el.textContent = ''; el.className = 'sb-feedback'; }, 3000);
+        clearTimeout(el._timer);
+        el._timer = setTimeout(function () { el.textContent = ''; el.className = 'sb-feedback'; }, 3000);
     }
 
-    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    // ── Pool fetch ─────────────────────────────────────────────────────────
+    function fetchPool(reset) {
+        if (pool.loading) return;
+        if (!reset && !pool.hasMore) return;
+        var listEl = document.getElementById('poolList');
+        if (reset) {
+            pool.offset = 0;
+            pool.hasMore = true;
+            listEl.innerHTML =
+                '<div class="sb-pool-loading" id="poolSpinner"><i class="fas fa-circle-notch fa-spin"></i> Loading...</div>';
+            listEl.scrollLeft = 0;
+        }
+        pool.loading = true;
 
-    // Init
-    updateValidation();
-    updateCounts();
+        var params = new URLSearchParams({
+            q: pool.search,
+            role: pool.role,
+            offset: pool.offset,
+            limit: pool.limit
+        });
+
+        fetch('/api/player-pool/search?' + params)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                pool.loading = false;
+                pool.hasMore = data.has_more;
+                pool.offset += data.players.length;
+
+                var spinner = document.getElementById('poolSpinner');
+                if (spinner) spinner.remove();
+
+                var list = document.getElementById('poolList');
+                if (data.players.length === 0 && pool.offset === data.players.length) {
+                    list.innerHTML = '<div class="sb-empty"><div class="sb-empty-icon"><i class="fas fa-inbox"></i></div>No players found. <a href="{{ url_for("player_pool") }}" style="color:var(--sq-accent);font-weight:700;">Add to your pool</a>.</div>';
+                } else {
+                    data.players.forEach(function (p) {
+                        list.appendChild(makePoolCard(p));
+                    });
+                }
+
+                var total = data.total;
+                document.getElementById('poolCount').textContent = total ? total + ' players' : '';
+                updatePoolSliderControls();
+            })
+            .catch(function () {
+                pool.loading = false;
+                var spinner = document.getElementById('poolSpinner');
+                if (spinner) spinner.textContent = 'Failed to load. Refresh to retry.';
+                updatePoolSliderControls();
+            });
+    }
+
+    function makePoolCard(p) {
+        var inSquad = draft.players.some(function (s) { return s.name.toLowerCase() === p.name.toLowerCase(); });
+        var roleClass = roleToClass(p.role);
+        var initials = nameToInitials(p.name);
+        var div = document.createElement('div');
+        div.className = 'sb-player' + (inSquad ? ' in-squad' : '');
+        div.setAttribute('draggable', inSquad ? 'false' : 'true');
+        div.dataset.poolId = p.id;
+        div.dataset.poolSource = p.source || '';
+        div.dataset.name = p.name.toLowerCase();
+        div.dataset.role = p.role;
+        div.dataset.playerJson = JSON.stringify(p);
+
+        // role-specific bar highlight
+        var batBarCls  = (roleClass === 'bat')  ? 'bar-bat'  : '';
+        var bowlBarCls = (roleClass === 'bowl') ? 'bar-bowl' : '';
+
+        div.innerHTML =
+            '<div class="sb-player-avatar sb-avatar-' + roleClass + '">' + esc(initials) + '</div>' +
+            '<div class="sb-player-body">' +
+            '<div class="sb-player-head">' +
+            '<span class="sb-player-name" title="' + esc(p.name) + '">' + esc(p.name) + '</span>' +
+            (inSquad
+                ? '<span class="sb-added-tag">✓ Added</span>'
+                : '<span class="sb-role-pill sb-role-pill-' + roleClass + '">' + esc(p.role) + '</span>') +
+            '</div>' +
+            '<div class="sb-player-ratings">' +
+            miniRatingBar('BAT', p.batting_rating, batBarCls) +
+            miniRatingBar('BWL', p.bowling_rating, bowlBarCls) +
+            miniRatingBar('FLD', p.fielding_rating, '') +
+            '</div>' +
+            '</div>' +
+            (inSquad ? '' : '<button class="sb-add-btn" title="Add to squad"><i class="fas fa-plus"></i></button>');
+
+        if (!inSquad) {
+            div.querySelector('.sb-add-btn').addEventListener('click', function () { addPlayer(p); });
+            div.addEventListener('dblclick', function () { addPlayer(p); });
+            div.addEventListener('dragstart', function (e) {
+                e.dataTransfer.setData('text/plain', JSON.stringify(p));
+                div.classList.add('dragging');
+            });
+            div.addEventListener('dragend', function () { div.classList.remove('dragging'); });
+        }
+        return div;
+    }
+
+    // ── Squad operations ───────────────────────────────────────────────────
+    function addPlayer(p) {
+        if (draft.players.some(function (s) { return s.name.toLowerCase() === p.name.toLowerCase(); })) {
+            showFeedback(p.name + ' is already in the squad.', 'error');
+            return;
+        }
+        if (draft.players.length >= MAX_PLAYERS) {
+            showFeedback('Squad is full (max ' + MAX_PLAYERS + ').', 'error');
+            return;
+        }
+        var entry = {
+            pool_id:         p.id || null,
+            source:          p.source || null,
+            name:            p.name,
+            role:            p.role,
+            batting_rating:  p.batting_rating,
+            bowling_rating:  p.bowling_rating,
+            fielding_rating: p.fielding_rating,
+            batting_hand:    p.batting_hand || '',
+            bowling_type:    p.bowling_type || '',
+            bowling_hand:    p.bowling_hand || '',
+            is_captain:      false,
+            is_wicketkeeper: false,
+        };
+        draft.players.push(entry);
+        markPoolCardInSquad(p.name, true);
+        appendSquadCard(entry);
+        updateDesignations();
+        updateValidation();
+        updateSquadCount();
+        saveDraftToStorage();
+        showFeedback(p.name + ' added.', 'ok');
+    }
+
+    function removePlayer(name) {
+        var idx = draft.players.findIndex(function (p) { return p.name.toLowerCase() === name.toLowerCase(); });
+        if (idx === -1) return;
+        var removed = draft.players.splice(idx, 1)[0];
+        if (draft.captain_name === removed.name) draft.captain_name = '';
+        if (draft.wk_name === removed.name) draft.wk_name = '';
+
+        var el = squadList().querySelector('[data-squad-name="' + CSS.escape(removed.name.toLowerCase()) + '"]');
+        if (el) el.remove();
+        if (draft.players.length === 0) {
+            document.getElementById('squadEmpty').style.display = '';
+        }
+
+        markPoolCardInSquad(name, false);
+        updateDesignations();
+        updateValidation();
+        updateSquadCount();
+        saveDraftToStorage();
+        showFeedback(removed.name + ' removed.', 'ok');
+    }
+
+    function appendSquadCard(p) {
+        document.getElementById('squadEmpty').style.display = 'none';
+        var list = squadList();
+        var roleClass = roleToClass(p.role);
+        var initials = nameToInitials(p.name);
+        var div = document.createElement('div');
+        div.className = 'sb-player';
+        div.dataset.squadName = p.name.toLowerCase();
+        div.dataset.role = p.role;
+
+        var batBarCls  = (roleClass === 'bat')  ? 'bar-bat'  : '';
+        var bowlBarCls = (roleClass === 'bowl') ? 'bar-bowl' : '';
+        var safeId = esc(p.name).replace(/[^a-z0-9]/gi, '_');
+
+        div.innerHTML =
+            '<div class="sb-player-avatar sb-avatar-' + roleClass + '">' + esc(initials) + '</div>' +
+            '<div class="sb-player-body">' +
+            '<div class="sb-player-head">' +
+            '<span class="sb-player-name" id="sname-' + safeId + '">' + esc(p.name) +
+            (p.is_captain ? '<span class="sb-captain-badge">C</span>' : '') +
+            (p.is_wicketkeeper ? '<span class="sb-wk-badge">WK</span>' : '') +
+            '</span>' +
+            '<span class="sb-role-pill sb-role-pill-' + roleClass + '">' + esc(p.role) + '</span>' +
+            '</div>' +
+            '<div class="sb-player-ratings">' +
+            miniRatingBar('BAT', p.batting_rating, batBarCls) +
+            miniRatingBar('BWL', p.bowling_rating, bowlBarCls) +
+            miniRatingBar('FLD', p.fielding_rating, '') +
+            '</div>' +
+            '</div>' +
+            '<button class="sb-remove-btn" title="Remove player"><i class="fas fa-xmark"></i></button>';
+
+        div.querySelector('.sb-remove-btn').addEventListener('click', function () { removePlayer(p.name); });
+        div.addEventListener('dblclick', function () { removePlayer(p.name); });
+        list.appendChild(div);
+    }
+
+    function renderSquad() {
+        var list = squadList();
+        list.innerHTML = '';
+        document.getElementById('squadEmpty').style.display = draft.players.length ? 'none' : '';
+        draft.players.forEach(function (p) { appendSquadCard(p); });
+        updateDesignations();
+        updateSquadCount();
+    }
+
+    // ── Mark pool card as in-squad / available ─────────────────────────────
+    function markPoolCardInSquad(name, inSquad) {
+        var lower = name.toLowerCase();
+        var poolListEl = document.getElementById('poolList');
+        var cards = poolListEl.querySelectorAll('.sb-player');
+        for (var i = 0; i < cards.length; i++) {
+            if (cards[i].dataset.name === lower) {
+                var card = cards[i];
+                if (inSquad) {
+                    card.classList.add('in-squad');
+                    card.setAttribute('draggable', 'false');
+                    var btn = card.querySelector('.sb-add-btn');
+                    if (btn) btn.replaceWith((function() {
+                        var tag = document.createElement('span');
+                        tag.className = 'sb-added-tag';
+                        tag.textContent = '✓ Added';
+                        return tag;
+                    })());
+                    var pilEl = card.querySelector('.sb-role-pill');
+                    if (pilEl) {
+                        var addTag = document.createElement('span');
+                        addTag.className = 'sb-added-tag';
+                        addTag.textContent = '✓ Added';
+                        pilEl.replaceWith(addTag);
+                    }
+                    card.ondblclick = null;
+                    card.ondragstart = null;
+                    var fresh = card.cloneNode(true);
+                    fresh.classList.add('in-squad');
+                    card.parentNode.replaceChild(fresh, card);
+                } else {
+                    var pData = JSON.parse(card.dataset.playerJson || '{}');
+                    if (pData.name) {
+                        var newCard = makePoolCard(pData);
+                        poolListEl.replaceChild(newCard, card);
+                    }
+                }
+                break;
+            }
+        }
+        updatePoolSliderControls();
+    }
+
+    // ── Drag-and-drop ──────────────────────────────────────────────────────
+    function setupDragDrop() {
+        var panel = document.getElementById('squadPanel');
+        panel.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            panel.classList.add('drag-over');
+            document.getElementById('dropHint').style.display = '';
+        });
+        panel.addEventListener('dragleave', function (e) {
+            if (!panel.contains(e.relatedTarget)) {
+                panel.classList.remove('drag-over');
+                document.getElementById('dropHint').style.display = 'none';
+            }
+        });
+        panel.addEventListener('drop', function (e) {
+            e.preventDefault();
+            panel.classList.remove('drag-over');
+            document.getElementById('dropHint').style.display = 'none';
+            try {
+                var p = JSON.parse(e.dataTransfer.getData('text/plain'));
+                if (p && p.name) addPlayer(p);
+            } catch (err) { /* ignore */ }
+        });
+    }
+
+    // ── Search + role chips ────────────────────────────────────────────────
+    function setupSearchAndChips() {
+        var debounce;
+        document.getElementById('searchInput').addEventListener('input', function () {
+            clearTimeout(debounce);
+            debounce = setTimeout(function () {
+                pool.search = document.getElementById('searchInput').value.trim();
+                fetchPool(true);
+            }, 280);
+        });
+
+        document.getElementById('roleChips').addEventListener('click', function (e) {
+            var chip = e.target.closest('.sb-chip');
+            if (!chip) return;
+            document.querySelectorAll('#roleChips .sb-chip').forEach(function (c) { c.classList.remove('active'); });
+            chip.classList.add('active');
+            pool.role = chip.dataset.role;
+            fetchPool(true);
+        });
+    }
+
+    // ── Pool slider + infinite load ───────────────────────────────────────
+    function setupPoolSlider() {
+        var list = document.getElementById('poolList');
+        var prev = document.getElementById('poolPrevBtn');
+        var next = document.getElementById('poolNextBtn');
+        if (!list || !prev || !next) return;
+
+        function slide(dir) {
+            var stride = Math.max(220, Math.floor(list.clientWidth * 0.72));
+            list.scrollBy({ left: dir * stride, behavior: 'smooth' });
+        }
+
+        prev.addEventListener('click', function () { slide(-1); });
+        next.addEventListener('click', function () { slide(1); });
+
+        list.addEventListener('scroll', function () {
+            updatePoolSliderControls();
+        }, { passive: true });
+
+        list.addEventListener('wheel', function (e) {
+            if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+            e.preventDefault();
+            list.scrollLeft += e.deltaY;
+        }, { passive: false });
+
+        window.addEventListener('resize', updatePoolSliderControls);
+        updatePoolSliderControls();
+    }
+
+    function updatePoolSliderControls() {
+        var list = document.getElementById('poolList');
+        var prev = document.getElementById('poolPrevBtn');
+        var next = document.getElementById('poolNextBtn');
+        if (!list || !prev || !next) return;
+        var maxLeft = Math.max(0, list.scrollWidth - list.clientWidth);
+        prev.disabled = list.scrollLeft <= 2;
+        next.disabled = list.scrollLeft >= (maxLeft - 2);
+    }
+
+    function setupInfiniteScroll() {
+        var list = document.getElementById('poolList');
+        if (!list) return;
+        list.addEventListener('scroll', function () {
+            var nearEnd = (list.scrollLeft + list.clientWidth) >= (list.scrollWidth - 280);
+            if (nearEnd && !pool.loading && pool.hasMore) {
+                fetchPool(false);
+            }
+        }, { passive: true });
+    }
+
+    // ── Designation selects ────────────────────────────────────────────────
+    function updateDesignations() {
+        var capSel = document.getElementById('captainSelect');
+        var wkSel  = document.getElementById('wkSelect');
+        capSel.innerHTML = '<option value="">Select captain…</option>';
+        wkSel.innerHTML  = '<option value="">Select WK…</option>';
+        draft.players.forEach(function (p) {
+            var opt = '<option value="' + esc(p.name) + '"' + (p.name === draft.captain_name ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+            capSel.innerHTML += opt;
+            if (p.role === 'Wicketkeeper') {
+                wkSel.innerHTML += '<option value="' + esc(p.name) + '"' + (p.name === draft.wk_name ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+            }
+        });
+    }
+
+    window.onCaptainChange = function () {
+        draft.captain_name = document.getElementById('captainSelect').value;
+        refreshBadges();
+        updateValidation();
+        saveDraftToStorage();
+    };
+
+    window.onWKChange = function () {
+        draft.wk_name = document.getElementById('wkSelect').value;
+        refreshBadges();
+        updateValidation();
+        saveDraftToStorage();
+    };
+
+    function refreshBadges() {
+        squadList().querySelectorAll('.sb-player').forEach(function (el) {
+            var name = el.dataset.squadName;
+            var nameEl = el.querySelector('.sb-player-name');
+            if (!nameEl) return;
+            nameEl.querySelectorAll('.sb-captain-badge, .sb-wk-badge').forEach(function (b) { b.remove(); });
+            if (name === draft.captain_name.toLowerCase()) {
+                var cb = document.createElement('span');
+                cb.className = 'sb-captain-badge';
+                cb.textContent = 'C';
+                nameEl.appendChild(cb);
+            }
+            if (name === draft.wk_name.toLowerCase()) {
+                var wb = document.createElement('span');
+                wb.className = 'sb-wk-badge';
+                wb.textContent = 'WK';
+                nameEl.appendChild(wb);
+            }
+        });
+    }
+
+    // ── Validation ─────────────────────────────────────────────────────────
+    function updateValidation() {
+        var n         = draft.players.length;
+        var wkCount   = draft.players.filter(function (p) { return p.role === 'Wicketkeeper'; }).length;
+        var bowlCount = draft.players.filter(function (p) { return p.role === 'Bowler' || p.role === 'All-rounder'; }).length;
+        var issues    = [];
+
+        if (n < MIN_PLAYERS) issues.push('Need ' + (MIN_PLAYERS - n) + ' more player' + ((MIN_PLAYERS - n) > 1 ? 's' : '') + ' (min ' + MIN_PLAYERS + ')');
+        if (n > MAX_PLAYERS) issues.push('Too many players (max ' + MAX_PLAYERS + ')');
+        if (wkCount < 1) issues.push('Need at least 1 Wicketkeeper');
+        if (bowlCount < MIN_BOWL) issues.push('Need ' + (MIN_BOWL - bowlCount) + ' more Bowler/All-rounder' + ((MIN_BOWL - bowlCount) > 1 ? 's' : '') + ' (min ' + MIN_BOWL + ')');
+        if (!draft.captain_name) issues.push('Select a captain');
+        if (!draft.wk_name) issues.push('Designate a wicketkeeper');
+
+        var box = document.getElementById('validationBox');
+        if (issues.length === 0) {
+            box.className = 'sb-validation sb-val-ok';
+            box.innerHTML = '<div><i class="fas fa-circle-check"></i> Ready to publish! (' + n + ' players)</div>';
+        } else {
+            box.className = 'sb-validation sb-val-warn';
+            box.innerHTML = issues.map(function (i) {
+                return '<div><i class="fas fa-triangle-exclamation"></i> ' + i + '</div>';
+            }).join('');
+        }
+
+        document.getElementById('publishBtn').disabled = issues.length > 0;
+    }
+
+    // ── Squad count + composition strip ────────────────────────────────────
+    function updateSquadCount() {
+        var n = draft.players.length;
+        document.getElementById('squadCount').textContent = n + ' / ' + MAX_PLAYERS;
+        var pct = Math.round((n / MAX_PLAYERS) * 100);
+        document.getElementById('compTrack').style.width = pct + '%';
+
+        var wk   = draft.players.filter(function(p){ return p.role === 'Wicketkeeper'; }).length;
+        var bat  = draft.players.filter(function(p){ return p.role === 'Batsman'; }).length;
+        var ar   = draft.players.filter(function(p){ return p.role === 'All-rounder'; }).length;
+        var bowl = draft.players.filter(function(p){ return p.role === 'Bowler'; }).length;
+        document.getElementById('compWK').textContent   = wk;
+        document.getElementById('compBat').textContent  = bat;
+        document.getElementById('compAR').textContent   = ar;
+        document.getElementById('compBowl').textContent = bowl;
+    }
+
+    // ── Publish ────────────────────────────────────────────────────────────
+    window.publishSquad = function () {
+        updateValidation();
+        if (document.getElementById('publishBtn').disabled) return;
+
+        var btn = document.getElementById('publishBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Publishing…';
+
+        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/bulk-publish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({
+                players:      draft.players,
+                captain_name: draft.captain_name,
+                wk_name:      draft.wk_name,
+                is_draft:     false,
+            }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (d.error) {
+                showFeedback(d.error, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-rocket"></i> Publish Team';
+                return;
+            }
+            localStorage.removeItem(DRAFT_KEY);
+            showFeedback('Team published!', 'ok');
+            setTimeout(function () { location.href = '{{ url_for("manage_teams") }}'; }, 800);
+        })
+        .catch(function () {
+            showFeedback('Network error — please try again.', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-rocket"></i> Publish Team';
+        });
+    };
+
+    // ── LocalStorage draft ─────────────────────────────────────────────────
+    function saveDraftToStorage() {
+        try {
+            localStorage.setItem(DRAFT_KEY, JSON.stringify({
+                players:      draft.players,
+                captain_name: draft.captain_name,
+                wk_name:      draft.wk_name,
+                saved_at:     new Date().toISOString(),
+            }));
+        } catch (e) { /* quota exceeded */ }
+    }
+
+    function loadDraftFromStorage() {
+        try {
+            var raw = localStorage.getItem(DRAFT_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) { return null; }
+    }
+
+    window.saveDraftExplicit = function () {
+        saveDraftToStorage();
+        var now = new Date();
+        document.getElementById('draftTs').textContent =
+            'Draft saved at ' + now.toLocaleTimeString();
+        showFeedback('Draft saved to browser.', 'ok');
+    };
+
+    // ── Restore banner ─────────────────────────────────────────────────────
+    var pendingRestore = null;
+
+    function showRestoreBanner(saved) {
+        pendingRestore = saved;
+        var d = new Date(saved.saved_at);
+        document.getElementById('restoreMsg').textContent =
+            'You have a saved draft from ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString() +
+            ' (' + saved.players.length + ' players).';
+        document.getElementById('restoreBanner').style.display = 'flex';
+    }
+
+    window.applyDraftRestore = function () {
+        if (!pendingRestore) return;
+        draft.players      = pendingRestore.players || [];
+        draft.captain_name = pendingRestore.captain_name || '';
+        draft.wk_name      = pendingRestore.wk_name || '';
+        pendingRestore = null;
+        document.getElementById('restoreBanner').style.display = 'none';
+        renderSquad();
+        fetchPool(true);
+        updateValidation();
+        showFeedback('Draft restored.', 'ok');
+    };
+
+    window.discardDraft = function () {
+        localStorage.removeItem(DRAFT_KEY);
+        pendingRestore = null;
+        document.getElementById('restoreBanner').style.display = 'none';
+    };
+
 })();
 </script>
 {% endblock %}

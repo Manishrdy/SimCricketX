@@ -14,7 +14,8 @@
       "Bash(find /Users/manish/Documents/SimCricketX -type f -name \"*.py\" -path \"*/engine/*\" -exec basename {} ;)",
       "Bash(ls:*)",
       "Bash(gh run list --limit 5)",
-      "Bash(xargs -I{} sqlite3 cricket_sim.db \"PRAGMA foreign_key_list\\({}\\);\")"
+      "Bash(xargs -I{} sqlite3 cricket_sim.db \"PRAGMA foreign_key_list\\({}\\);\")",
+      "Bash(venv/Scripts/python -c ':*)"
     ]
   }
 }
