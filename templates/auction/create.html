@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+
+{% block title %}Create Auction | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .ac-container { max-width: 560px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
+    .ac-back { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none; font-size: .85rem; margin-bottom: 1rem; }
+    .ac-back:hover { color: var(--text-primary); }
+    .ac-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 0 0 .25rem; }
+    .ac-subtitle { color: var(--text-secondary); font-size: .9rem; margin-bottom: 1.5rem; }
+    .ac-card { background: var(--bg-raised, #fff); border: 1px solid var(--border-light, #e5e7eb); border-radius: 12px; padding: 24px; }
+    .ac-group { margin-bottom: 16px; }
+    .ac-label { display: block; font-size: .8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 6px; }
+    .ac-input, .ac-select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .9rem; background: var(--bg-raised, #fff); color: var(--text-primary); box-sizing: border-box; }
+    .ac-input:focus, .ac-select:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
+    .ac-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .ac-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 8px; font-size: .9rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; }
+    .ac-btn-primary { background: var(--brand-primary, #0f766e); color: #fff; }
+    .ac-btn-secondary { background: var(--bg-raised, #fff); color: var(--text-primary); border: 1px solid var(--border-light, #e5e7eb); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ac-container">
+    <a href="{{ url_for('auction_list') }}" class="ac-back"><i class="fas fa-arrow-left"></i> Back to Auctions</a>
+    <h1 class="ac-title">Create Auction Event</h1>
+    <p class="ac-subtitle">Set up a new player auction. You'll configure rules, teams, and players in the next steps.</p>
+
+    <div class="ac-card">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="ac-group">
+                <label class="ac-label">Event Name <span style="color:var(--danger,#dc2626)">*</span></label>
+                <input type="text" name="name" class="ac-input" required maxlength="200" placeholder="e.g. IPL 2026">
+            </div>
+            <div class="ac-row">
+                <div class="ac-group">
+                    <label class="ac-label">Format</label>
+                    <select name="format" class="ac-select">
+                        <option value="T20">T20</option>
+                        <option value="ListA">List A</option>
+                    </select>
+                </div>
+                <div class="ac-group">
+                    <label class="ac-label">Number of Teams</label>
+                    <input type="number" name="num_teams" class="ac-input" value="8" min="2" max="20">
+                </div>
+            </div>
+            <div style="margin-top:20px;display:flex;gap:12px;">
+                <button type="submit" class="ac-btn ac-btn-primary"><i class="fas fa-plus"></i> Create</button>
+                <a href="{{ url_for('auction_list') }}" class="ac-btn ac-btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

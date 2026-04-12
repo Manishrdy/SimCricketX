@@ -1,0 +1,365 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ event.name }} — Dashboard | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .ad-container { max-width: 1200px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
+    .ad-back { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none; font-size: .85rem; margin-bottom: 1rem; }
+    .ad-back:hover { color: var(--text-primary); }
+    .ad-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 12px; }
+    .ad-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 0; }
+    .ad-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: .8rem; font-weight: 600; margin-left: 8px; }
+    .ad-badge-setup { background: #dbeafe; color: #1e40af; }
+    .ad-badge-live { background: #dcfce7; color: #166534; animation: pulse-live 2s infinite; }
+    .ad-badge-paused { background: #fef3c7; color: #92400e; }
+    .ad-badge-completed { background: #e5e7eb; color: #374151; }
+    [data-theme="dark"] .ad-badge-setup { background: #1e3a5f; color: #93c5fd; }
+    [data-theme="dark"] .ad-badge-live { background: #14532d; color: #86efac; }
+    [data-theme="dark"] .ad-badge-paused { background: #78350f; color: #fde68a; }
+    [data-theme="dark"] .ad-badge-completed { background: #374151; color: #d1d5db; }
+    @keyframes pulse-live { 0%,100% { opacity:1; } 50% { opacity:.7; } }
+    .ad-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: .85rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; transition: opacity .2s; }
+    .ad-btn:hover { opacity: .85; }
+    .ad-btn-primary { background: var(--brand-primary, #0f766e); color: #fff; }
+    .ad-btn-success { background: #16a34a; color: #fff; }
+    .ad-btn-warning { background: #d97706; color: #fff; }
+    .ad-btn-danger { background: #dc2626; color: #fff; }
+    .ad-btn-secondary { background: var(--bg-raised, #fff); color: var(--text-primary); border: 1px solid var(--border-light, #e5e7eb); }
+    .ad-btn-sm { padding: 6px 12px; font-size: .8rem; }
+    .ad-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .ad-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+    .ad-stat { background: var(--bg-raised, #fff); border: 1px solid var(--border-light, #e5e7eb); border-radius: 12px; padding: 16px 20px; text-align: center; }
+    .ad-stat-num { font-size: 1.4rem; font-weight: 700; color: var(--text-primary); transition: color .3s; }
+    .ad-stat-label { font-size: .75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; }
+    .ad-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+    @media (max-width: 768px) { .ad-grid { grid-template-columns: 1fr; } }
+    .ad-card { background: var(--bg-raised, #fff); border: 1px solid var(--border-light, #e5e7eb); border-radius: 12px; padding: 24px; margin-bottom: 1.5rem; }
+    .ad-card-title { font-size: 1rem; font-weight: 600; margin: 0 0 16px; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; }
+    .ad-lot-card { border: 2px solid var(--brand-primary, #0f766e); }
+    .ad-lot-player { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); margin: 0 0 4px; }
+    .ad-lot-meta { font-size: .85rem; color: var(--text-secondary); margin-bottom: 12px; }
+    .ad-lot-price { font-size: 1.8rem; font-weight: 700; color: var(--brand-primary, #0f766e); margin: 8px 0; }
+    .ad-lot-bidder { font-size: .9rem; color: var(--text-secondary); }
+    .ad-lot-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+    .ad-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+    .ad-table th { text-align: left; padding: 8px 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--border-light); font-size: .75rem; text-transform: uppercase; }
+    .ad-table td { padding: 8px 12px; border-bottom: 1px solid var(--border-light); }
+    .ad-table tbody tr:last-child td { border-bottom: none; }
+    .ad-notice { background: var(--bg-surface, #f9fafb); border: 1px solid var(--border-light, #e5e7eb); border-radius: 10px; padding: 2rem; text-align: center; color: var(--text-secondary); }
+    .ad-notice h3 { color: var(--text-primary); margin: 0 0 8px; }
+    .ad-feed { max-height: 260px; overflow-y: auto; }
+    .ad-feed-item { padding: 8px 0; border-bottom: 1px solid var(--border-light, #e5e7eb); font-size: .83rem; }
+    .ad-feed-item:last-child { border-bottom: none; }
+    .ad-feed-amount { font-weight: 700; color: var(--brand-primary, #0f766e); }
+    .ad-conn { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; color: var(--text-secondary); }
+    .ad-conn-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .ad-conn-dot.live { background: #16a34a; }
+    .ad-conn-dot.off { background: #dc2626; }
+    .ad-upcoming-btn { background: none; border: 1px solid var(--border-light, #e5e7eb); border-radius: 6px; padding: 4px 10px; font-size: .78rem; cursor: pointer; color: var(--brand-primary); }
+    .ad-upcoming-btn:hover { background: var(--bg-surface); }
+    .ad-cat-badge { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: .7rem; font-weight: 600; background: #ede9fe; color: #5b21b6; margin-right: 3px; }
+    [data-theme="dark"] .ad-cat-badge { background: #3b0764; color: #c4b5fd; }
+    .flash-anim { animation: flash-val .6s ease; }
+    @keyframes flash-val { 0% { color: var(--brand-primary); transform: scale(1.1); } 100% { color: var(--text-primary); transform: scale(1); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ad-container">
+    <a href="{{ url_for('auction_list') }}" class="ad-back"><i class="fas fa-arrow-left"></i> Back to Auctions</a>
+
+    <div class="ad-header">
+        <div>
+            <h1 class="ad-title">
+                {{ event.name }}
+                <span class="ad-badge ad-badge-{{ event.status }}" id="statusBadge">{{ event.status|capitalize }}</span>
+            </h1>
+            <span class="ad-conn"><span class="ad-conn-dot" id="connDot"></span> <span id="connLabel">Connecting…</span></span>
+        </div>
+        <div id="controlBtns" style="display:flex;gap:8px;flex-wrap:wrap;">
+            {% if event.status == 'setup' %}
+            <a href="{{ url_for('auction_setup', event_id=event.id) }}" class="ad-btn ad-btn-secondary"><i class="fas fa-cog"></i> Edit Setup</a>
+            <button class="ad-btn ad-btn-success" onclick="auctionAction('start')"><i class="fas fa-play"></i> Start Auction</button>
+            {% elif event.status == 'live' %}
+            <button class="ad-btn ad-btn-warning" onclick="auctionAction('pause')"><i class="fas fa-pause"></i> Pause</button>
+            {% if event.reauction_enabled %}
+            <button class="ad-btn ad-btn-primary" onclick="triggerReauction()" id="reauctionBtn"><i class="fas fa-redo"></i> Re-Auction Round</button>
+            {% endif %}
+            <button class="ad-btn ad-btn-danger" onclick="if(confirm('End the auction?')) auctionAction('complete')"><i class="fas fa-stop"></i> End Auction</button>
+            {% elif event.status == 'paused' %}
+            <button class="ad-btn ad-btn-success" onclick="auctionAction('resume')"><i class="fas fa-play"></i> Resume</button>
+            {% if event.reauction_enabled %}
+            <button class="ad-btn ad-btn-primary" onclick="triggerReauction()" id="reauctionBtn"><i class="fas fa-redo"></i> Re-Auction Round</button>
+            {% endif %}
+            <button class="ad-btn ad-btn-danger" onclick="if(confirm('End the auction?')) auctionAction('complete')"><i class="fas fa-stop"></i> End Auction</button>
+            {% elif event.status == 'completed' %}
+            <a href="{{ url_for('auction_summary', event_id=event.id) }}" class="ad-btn ad-btn-primary"><i class="fas fa-chart-bar"></i> Summary</a>
+            <a href="{{ url_for('auction_export_json', event_id=event.id) }}" class="ad-btn ad-btn-secondary"><i class="fas fa-download"></i> Export JSON</a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% set sold_count = event.players|selectattr('status', 'equalto', 'sold')|list|length %}
+    {% set unsold_count = event.players|selectattr('status', 'equalto', 'unsold')|list|length %}
+    {% set upcoming_count = event.players|selectattr('status', 'equalto', 'upcoming')|list|length %}
+
+    <div class="ad-summary">
+        <div class="ad-stat"><div class="ad-stat-num" id="statTeams">{{ event.teams|length }}</div><div class="ad-stat-label">Teams</div></div>
+        <div class="ad-stat"><div class="ad-stat-num" id="statTotal">{{ event.players|length }}</div><div class="ad-stat-label">Total Players</div></div>
+        <div class="ad-stat"><div class="ad-stat-num" id="statSold">{{ sold_count }}</div><div class="ad-stat-label">Sold</div></div>
+        <div class="ad-stat"><div class="ad-stat-num" id="statUnsold">{{ unsold_count }}</div><div class="ad-stat-label">Unsold</div></div>
+        <div class="ad-stat"><div class="ad-stat-num" id="statUpcoming">{{ upcoming_count }}</div><div class="ad-stat-label">Upcoming</div></div>
+    </div>
+
+    {% if event.status == 'setup' %}
+    <div class="ad-notice">
+        <h3>Auction Not Started</h3>
+        <p>Complete setup, then click "Start Auction" to go live.</p>
+        <a href="{{ url_for('auction_setup', event_id=event.id) }}" class="ad-btn ad-btn-primary" style="margin-top:12px;"><i class="fas fa-cog"></i> Go to Setup</a>
+    </div>
+    {% endif %}
+
+    <div class="ad-grid">
+        <div>
+            <!-- Current Lot -->
+            <div class="ad-card ad-lot-card" id="lotCard" style="{{ 'display:none' if not current_lot }}">
+                <div class="ad-card-title">Current Lot <span style="font-size:.8rem;font-weight:400;color:var(--text-secondary);">Round {{ event.current_round }}</span></div>
+                <h2 class="ad-lot-player" id="lotName">{{ lot_payload.name if lot_payload else '' }}</h2>
+                <div class="ad-lot-meta" id="lotMeta">
+                    {% if lot_payload %}{{ lot_payload.role }} | Bat {{ lot_payload.batting_rating }} | Bowl {{ lot_payload.bowling_rating }} | Field {{ lot_payload.fielding_rating }}{% endif %}
+                </div>
+                <div id="lotCategories">
+                    {% if lot_payload %}{% for c in lot_payload.categories %}<span class="ad-cat-badge">{{ c }}</span>{% endfor %}{% endif %}
+                </div>
+                <div class="ad-lot-price">
+                    <span id="lotCurrentBid">{{ "{:,}".format(lot_payload.current_bid) if lot_payload and lot_payload.current_bid else 'No bids' }}</span>
+                </div>
+                <div class="ad-lot-bidder" id="lotBidder">
+                    {% if lot_payload and lot_payload.current_bidder %}Highest: {{ lot_payload.current_bidder }}{% else %}Base price: {{ "{:,}".format(lot_payload.base_price) if lot_payload else 0 }}{% endif %}
+                </div>
+                <div class="ad-lot-actions">
+                    <button class="ad-btn ad-btn-success" id="btnSell" onclick="lotAction('sell')"><i class="fas fa-gavel"></i> Sold!</button>
+                    <button class="ad-btn ad-btn-warning" id="btnUnsold" onclick="lotAction('unsold')"><i class="fas fa-times"></i> Unsold</button>
+                </div>
+            </div>
+            <div id="noLot" style="{{ 'display:none' if current_lot }}" class="ad-card">
+                <div class="ad-notice" style="border:none;background:transparent;padding:1rem 0;">
+                    <p>No player is currently up. Select from upcoming players to open a lot.</p>
+                </div>
+            </div>
+
+            <!-- Bid Feed -->
+            <div class="ad-card">
+                <div class="ad-card-title">Live Bid Feed</div>
+                <div class="ad-feed" id="bidFeed">
+                    <div class="ad-feed-item" style="color:var(--text-secondary);text-align:center;">Waiting for bids…</div>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <!-- Team Purses -->
+            <div class="ad-card">
+                <div class="ad-card-title">Teams</div>
+                <table class="ad-table">
+                    <thead><tr><th>Team</th><th>Purse</th><th>Bought</th></tr></thead>
+                    <tbody id="teamsTable">
+                        {% for team in event.teams %}
+                        <tr data-team-id="{{ team.id }}">
+                            <td><strong>{{ team.name }}</strong></td>
+                            <td class="team-purse">{{ "{:,}".format(team.purse_remaining) }}</td>
+                            <td class="team-bought">{{ team.players_bought }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Upcoming Players -->
+            <div class="ad-card">
+                <div class="ad-card-title">Upcoming <span style="font-size:.8rem;font-weight:400;" id="upcomingCount">({{ upcoming_players|length }})</span></div>
+                <div style="max-height:300px;overflow-y:auto;" id="upcomingList">
+                    {% for p in upcoming_players %}
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-light, #e5e7eb);" data-upcoming-id="{{ p.id }}">
+                        <div>
+                            <strong style="font-size:.85rem;">{{ p.name }}</strong>
+                            <span style="font-size:.75rem;color:var(--text-secondary);margin-left:4px;">{{ p.role or '' }}</span>
+                        </div>
+                        <button class="ad-upcoming-btn" onclick="openLot({{ p.id }})"><i class="fas fa-arrow-up"></i> Open</button>
+                    </div>
+                    {% endfor %}
+                    {% if not upcoming_players %}
+                    <div style="text-align:center;padding:1rem;color:var(--text-secondary);font-size:.85rem;">No upcoming players.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    var EVENT_ID = {{ event.id }};
+    var CSRF = '{{ csrf_token() }}';
+    var currentLotId = {{ lot_payload.player_id if lot_payload else 'null' }};
+    var feedStarted = false;
+
+    // SSE
+    var es, reconnectDelay = 2000;
+    function connect() {
+        if (!window.EventSource) return;
+        es = new EventSource('/auction/' + EVENT_ID + '/stream');
+        es.onopen = function() {
+            reconnectDelay = 2000;
+            document.getElementById('connDot').className = 'ad-conn-dot live';
+            document.getElementById('connLabel').textContent = 'Connected';
+        };
+        es.addEventListener('lot', onLot);
+        es.addEventListener('bid', onBid);
+        es.addEventListener('sold', onSold);
+        es.addEventListener('unsold', onUnsold);
+        es.addEventListener('status', onStatus);
+        es.addEventListener('purse', onPurse);
+        es.onerror = function() {
+            es.close();
+            document.getElementById('connDot').className = 'ad-conn-dot off';
+            document.getElementById('connLabel').textContent = 'Reconnecting…';
+            setTimeout(connect, reconnectDelay);
+            reconnectDelay = Math.min(reconnectDelay * 2, 60000);
+        };
+    }
+    connect();
+
+    function onLot(e) {
+        var d = JSON.parse(e.data);
+        currentLotId = d.player_id;
+        document.getElementById('lotCard').style.display = '';
+        document.getElementById('noLot').style.display = 'none';
+        document.getElementById('lotName').textContent = d.name;
+        document.getElementById('lotMeta').textContent = d.role + ' | Bat ' + d.batting_rating + ' | Bowl ' + d.bowling_rating + ' | Field ' + d.fielding_rating;
+        var catHtml = '';
+        (d.categories || []).forEach(function(c){ catHtml += '<span class="ad-cat-badge">' + esc(c) + '</span>'; });
+        document.getElementById('lotCategories').innerHTML = catHtml;
+        document.getElementById('lotCurrentBid').textContent = d.current_bid ? fmt(d.current_bid) : 'No bids';
+        document.getElementById('lotBidder').textContent = d.current_bidder ? 'Highest: ' + d.current_bidder : 'Base price: ' + fmt(d.base_price);
+        // Remove from upcoming list
+        var upEl = document.querySelector('[data-upcoming-id="' + d.player_id + '"]');
+        if (upEl) upEl.remove();
+        updateUpcomingCount();
+        addFeedItem('Lot opened: ' + d.name + ' (base ' + fmt(d.base_price) + ')');
+    }
+
+    function onBid(e) {
+        var d = JSON.parse(e.data);
+        document.getElementById('lotCurrentBid').textContent = fmt(d.amount);
+        document.getElementById('lotBidder').textContent = 'Highest: ' + d.team_name;
+        flashEl(document.getElementById('lotCurrentBid'));
+        addFeedItem(d.team_name + ' bids ' + fmt(d.amount));
+    }
+
+    function onSold(e) {
+        var d = JSON.parse(e.data);
+        currentLotId = null;
+        document.getElementById('lotCard').style.display = 'none';
+        document.getElementById('noLot').style.display = '';
+        addFeedItem('SOLD: ' + d.player_name + ' to ' + d.team_name + ' for ' + fmt(d.price), true);
+        incStat('statSold');
+        decStat('statUpcoming');
+    }
+
+    function onUnsold(e) {
+        var d = JSON.parse(e.data);
+        currentLotId = null;
+        document.getElementById('lotCard').style.display = 'none';
+        document.getElementById('noLot').style.display = '';
+        addFeedItem('UNSOLD: ' + d.player_name, false);
+        incStat('statUnsold');
+        decStat('statUpcoming');
+    }
+
+    function onStatus(e) {
+        var d = JSON.parse(e.data);
+        var badge = document.getElementById('statusBadge');
+        badge.textContent = d.status.charAt(0).toUpperCase() + d.status.slice(1);
+        badge.className = 'ad-badge ad-badge-' + d.status;
+        if (d.reauction) {
+            addFeedItem('Re-auction round ' + d.round + ' started (' + d.players_reactivated + ' players re-entering)', true);
+        }
+        location.reload();
+    }
+
+    function onPurse(e) {
+        var teams = JSON.parse(e.data);
+        teams.forEach(function(t) {
+            var row = document.querySelector('[data-team-id="' + t.id + '"]');
+            if (row) {
+                row.querySelector('.team-purse').textContent = fmt(t.purse_remaining);
+                row.querySelector('.team-bought').textContent = t.players_bought;
+            }
+        });
+    }
+
+    // Actions
+    window.auctionAction = function(action) {
+        fetch('/auction/' + EVENT_ID + '/' + action, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.error) alert(d.error);
+        });
+    };
+
+    window.openLot = function(playerId) {
+        fetch('/auction/' + EVENT_ID + '/lot/' + playerId + '/open', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.error) alert(d.error);
+        });
+    };
+
+    window.lotAction = function(action) {
+        if (!currentLotId) return;
+        fetch('/auction/' + EVENT_ID + '/lot/' + currentLotId + '/' + action, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.error) alert(d.error);
+        });
+    };
+
+    window.triggerReauction = function() {
+        if (!confirm('Start a re-auction round? All unsold players will re-enter the pool with reduced base prices.')) return;
+        fetch('/auction/' + EVENT_ID + '/reauction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.error) { alert(d.error); return; }
+            addFeedItem('Re-auction round ' + d.round + ' started (' + d.reactivated + ' players)', true);
+        });
+    };
+
+    // Utilities
+    function fmt(n) { return Number(n).toLocaleString('en-IN'); }
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function flashEl(el) { el.classList.remove('flash-anim'); void el.offsetWidth; el.classList.add('flash-anim'); }
+    function incStat(id) { var el = document.getElementById(id); el.textContent = parseInt(el.textContent) + 1; flashEl(el); }
+    function decStat(id) { var el = document.getElementById(id); el.textContent = Math.max(0, parseInt(el.textContent) - 1); flashEl(el); }
+    function updateUpcomingCount() {
+        var n = document.querySelectorAll('[data-upcoming-id]').length;
+        document.getElementById('upcomingCount').textContent = '(' + n + ')';
+    }
+    function addFeedItem(text, highlight) {
+        var feed = document.getElementById('bidFeed');
+        if (!feedStarted) { feed.innerHTML = ''; feedStarted = true; }
+        var item = document.createElement('div');
+        item.className = 'ad-feed-item';
+        if (highlight) item.style.fontWeight = '700';
+        var time = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        item.innerHTML = '<span style="color:var(--text-secondary);font-size:.75rem;">' + time + '</span> ' + esc(text);
+        feed.insertBefore(item, feed.firstChild);
+    }
+})();
+</script>
+{% endblock %}

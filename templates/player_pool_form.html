@@ -1,0 +1,334 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ "Edit Player" if edit else "Add Player" }} | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .ppf-container {
+        max-width: 640px;
+        margin: 2rem auto 3rem;
+        padding: 0 1.5rem;
+    }
+    .ppf-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: .85rem;
+        margin-bottom: 1rem;
+    }
+    .ppf-back:hover { color: var(--text-primary); }
+    .ppf-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0 0 .25rem;
+    }
+    .ppf-subtitle {
+        color: var(--text-secondary);
+        font-size: .9rem;
+        margin-bottom: 1.5rem;
+    }
+    .ppf-card {
+        background: var(--bg-raised, #fff);
+        border: 1px solid var(--border-light, #e5e7eb);
+        border-radius: 12px;
+        padding: 24px;
+    }
+    .ppf-group {
+        margin-bottom: 16px;
+    }
+    .ppf-label {
+        display: block;
+        font-size: .8rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        margin-bottom: 6px;
+    }
+    .ppf-input, .ppf-select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-light, #e5e7eb);
+        border-radius: 8px;
+        font-size: .9rem;
+        background: var(--bg-raised, #fff);
+        color: var(--text-primary);
+        box-sizing: border-box;
+    }
+    .ppf-input:focus, .ppf-select:focus {
+        outline: none;
+        border-color: var(--brand-primary, #0f766e);
+        box-shadow: 0 0 0 3px rgba(15,118,110,.1);
+    }
+    .ppf-row {
+        display: grid;
+        gap: 16px;
+    }
+    .ppf-row-2 { grid-template-columns: 1fr 1fr; }
+    .ppf-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .ppf-checkbox-row {
+        display: flex;
+        gap: 24px;
+        margin: 16px 0;
+    }
+    .ppf-checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: .9rem;
+        color: var(--text-primary);
+        cursor: pointer;
+    }
+    .ppf-footer {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+    }
+    .ppf-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-size: .9rem;
+        font-weight: 600;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        transition: all .2s;
+    }
+    .ppf-btn-primary {
+        background: var(--brand-primary, #0f766e);
+        color: #fff;
+    }
+    .ppf-btn-primary:hover { opacity: .85; }
+    .ppf-btn-secondary {
+        background: var(--bg-raised, #fff);
+        color: var(--text-primary);
+        border: 1px solid var(--border-light, #e5e7eb);
+    }
+    .ppf-override-note {
+        background: #fef3c7;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: .85rem;
+        color: #92400e;
+        margin-bottom: 1.5rem;
+    }
+    [data-theme="dark"] .ppf-override-note {
+        background: #78350f;
+        border-color: #92400e;
+        color: #fde68a;
+    }
+    .ppf-name-warn {
+        font-size: .82rem;
+        font-weight: 600;
+        margin-top: 6px;
+        min-height: 1.2em;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .ppf-name-warn.error { color: #dc2626; }
+    .ppf-name-warn.ok { color: #16a34a; }
+    .ppf-name-warn.checking { color: var(--text-secondary); }
+    @media (max-width: 600px) {
+        .ppf-row-2, .ppf-row-3 { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ppf-container">
+    <a href="{{ url_for('player_pool') }}" class="ppf-back">
+        <i class="fas fa-arrow-left"></i> Back to Player Pool
+    </a>
+
+    <h1 class="ppf-title">
+        {% if override %}
+            {{ "Edit Override" if edit else "Override Player" }}
+        {% else %}
+            {{ "Edit Player" if edit else "Add Custom Player" }}
+        {% endif %}
+    </h1>
+    <p class="ppf-subtitle">
+        {% if override %}
+            Customise this player's attributes for your account only.
+        {% else %}
+            {{ "Update your custom player." if edit else "Add a new player to your personal pool." }}
+        {% endif %}
+    </p>
+
+    {% if override and master is defined and master %}
+    <div class="ppf-override-note">
+        <i class="fas fa-info-circle"></i>
+        Overriding <strong>{{ master.name }}</strong> from the global pool.
+        Your changes only affect your account.
+    </div>
+    {% endif %}
+
+    <div class="ppf-card">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="ppf-group">
+                <label class="ppf-label">Name <span style="color:var(--danger,#dc2626)">*</span></label>
+                <input type="text" name="name" id="nameInput" class="ppf-input" required maxlength="100"
+                       value="{{ player.name if player else '' }}" autocomplete="off">
+                <div class="ppf-name-warn" id="nameWarn"></div>
+            </div>
+
+            <div class="ppf-row ppf-row-2">
+                <div class="ppf-group">
+                    <label class="ppf-label">Role <span style="color:var(--danger,#dc2626)">*</span></label>
+                    <select name="role" class="ppf-select" required id="roleSelect">
+                        <option value="">Select role</option>
+                        {% for r in roles %}
+                        <option value="{{ r }}" {{ 'selected' if player and player.role == r }}>{{ r }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="ppf-group">
+                    <label class="ppf-label">Batting Hand</label>
+                    <select name="batting_hand" class="ppf-select">
+                        <option value="">—</option>
+                        {% for h in batting_hands %}
+                        <option value="{{ h }}" {{ 'selected' if player and player.batting_hand == h }}>{{ h }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="ppf-row ppf-row-2" id="bowlingFields">
+                <div class="ppf-group">
+                    <label class="ppf-label">Bowling Type</label>
+                    <select name="bowling_type" class="ppf-select" id="bowlingType">
+                        <option value="">—</option>
+                        {% for bt in bowling_types %}
+                        <option value="{{ bt }}" {{ 'selected' if player and player.bowling_type == bt }}>{{ bt }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="ppf-group">
+                    <label class="ppf-label">Bowling Hand</label>
+                    <select name="bowling_hand" class="ppf-select" id="bowlingHand">
+                        <option value="">—</option>
+                        {% for bh in bowling_hands %}
+                        <option value="{{ bh }}" {{ 'selected' if player and player.bowling_hand == bh }}>{{ bh }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="ppf-row ppf-row-3">
+                <div class="ppf-group">
+                    <label class="ppf-label">Batting Rating</label>
+                    <input type="number" name="batting_rating" class="ppf-input" min="0" max="100"
+                           value="{{ player.batting_rating if player else 50 }}">
+                </div>
+                <div class="ppf-group">
+                    <label class="ppf-label">Bowling Rating</label>
+                    <input type="number" name="bowling_rating" class="ppf-input" min="0" max="100"
+                           value="{{ player.bowling_rating if player else 50 }}">
+                </div>
+                <div class="ppf-group">
+                    <label class="ppf-label">Fielding Rating</label>
+                    <input type="number" name="fielding_rating" class="ppf-input" min="0" max="100"
+                           value="{{ player.fielding_rating if player else 50 }}">
+                </div>
+            </div>
+
+            <div class="ppf-checkbox-row">
+                <label class="ppf-checkbox-label">
+                    <input type="checkbox" name="is_captain" value="true"
+                           {{ 'checked' if player and player.is_captain }}>
+                    Captain
+                </label>
+                <label class="ppf-checkbox-label">
+                    <input type="checkbox" name="is_wicketkeeper" value="true"
+                           {{ 'checked' if player and player.is_wicketkeeper }}>
+                    Wicketkeeper
+                </label>
+            </div>
+
+            <div class="ppf-footer">
+                <button type="submit" class="ppf-btn ppf-btn-primary" id="submitBtn">
+                    <i class="fas fa-save"></i> {{ "Update" if edit else "Add Player" }}
+                </button>
+                <a href="{{ url_for('player_pool') }}" class="ppf-btn ppf-btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function(){
+    var role = document.getElementById('roleSelect');
+    var bowlFields = document.getElementById('bowlingFields');
+    function toggle() {
+        var hide = role.value === 'Wicketkeeper';
+        bowlFields.style.display = hide ? 'none' : '';
+        if (hide) {
+            document.getElementById('bowlingType').value = '';
+            document.getElementById('bowlingHand').value = '';
+        }
+    }
+    role.addEventListener('change', toggle);
+    toggle();
+
+    // Real-time duplicate name check
+    var isEdit = {{ 'true' if edit else 'false' }};
+    var isOverride = {{ 'true' if override else 'false' }};
+    var originalName = '{{ (player.name if player else '')|e }}'.toLowerCase();
+    var nameInput = document.getElementById('nameInput');
+    var nameWarn = document.getElementById('nameWarn');
+    var submitBtn = document.getElementById('submitBtn');
+    var debounce;
+    var dupFound = false;
+
+    if (!isEdit && !isOverride) {
+        nameInput.addEventListener('input', function(){
+            clearTimeout(debounce);
+            var val = nameInput.value.trim();
+            if (!val || val.length < 2) {
+                nameWarn.textContent = '';
+                nameWarn.className = 'ppf-name-warn';
+                submitBtn.disabled = false;
+                dupFound = false;
+                return;
+            }
+            nameWarn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
+            nameWarn.className = 'ppf-name-warn checking';
+            debounce = setTimeout(function(){
+                fetch('/api/player-pool/check-name?name=' + encodeURIComponent(val))
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (d.exists) {
+                        dupFound = true;
+                        var src = d.source === 'global' ? 'global pool' : 'your custom pool';
+                        nameWarn.innerHTML = '<i class="fas fa-exclamation-circle"></i> "' + d.name + '" already exists in the ' + src + '.';
+                        nameWarn.className = 'ppf-name-warn error';
+                        submitBtn.disabled = true;
+                    } else {
+                        dupFound = false;
+                        nameWarn.innerHTML = '<i class="fas fa-check-circle"></i> Name available';
+                        nameWarn.className = 'ppf-name-warn ok';
+                        submitBtn.disabled = false;
+                    }
+                })
+                .catch(function(){
+                    nameWarn.textContent = '';
+                    nameWarn.className = 'ppf-name-warn';
+                    submitBtn.disabled = false;
+                    dupFound = false;
+                });
+            }, 300);
+        });
+    }
+})();
+</script>
+{% endblock %}
