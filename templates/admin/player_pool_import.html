@@ -1,6 +1,28 @@
 {% extends "admin/layout.html" %}
 
 {% block admin_content %}
+<style>
+    .api-grid { --api-panel-height: 640px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; align-items: stretch; }
+    .api-grid > div { display: flex; flex-direction: column; min-width: 0; }
+    .api-grid > div > .a-card { flex: 1; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; height: var(--api-panel-height) !important; min-height: var(--api-panel-height) !important; max-height: var(--api-panel-height) !important; min-width: 0; }
+    #adminImportForm { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+    .api-ai-body { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+    @media (max-width: 900px) { .api-grid { grid-template-columns: 1fr; --api-panel-height: 560px; } }
+    .api-card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 1rem; font-weight: 600; color: var(--text-primary, #111); margin: 0 0 16px; }
+    .api-card-title i { color: var(--brand-primary, #0f766e); }
+    .api-label { display: block; font-size: .78rem; font-weight: 600; color: var(--text-muted, #667085); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+    .api-select, .api-input { width: 100%; padding: 9px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .88rem; background: var(--bg-surface, #fff); color: var(--text-primary, #111); box-sizing: border-box; margin-bottom: 14px; }
+    .api-select:focus, .api-input:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
+    .api-textarea { width: 100%; min-height: 170px; flex: 1; padding: 10px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .82rem; background: var(--bg-surface, #fff); color: var(--text-primary, #111); box-sizing: border-box; margin-bottom: 14px; font-family: 'IBM Plex Mono', monospace; resize: none; }
+    .api-textarea:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
+    .api-or { text-align: center; color: var(--text-muted, #667085); font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin: 4px 0 12px; }
+    .api-note { color: var(--text-muted, #667085); font-size: .8rem; margin: 0 0 10px; }
+    .api-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .api-actions.is-header { margin: 0; }
+    .api-code { background: var(--surface-alt, #f9fafb); padding: 12px; border-radius: 8px; font-size: .72rem; font-family: 'IBM Plex Mono', monospace; border: 1px solid var(--border-light, #e5e7eb); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; margin: 0; overflow-y: auto; flex: 1; min-height: 0; min-width: 0; }
+    .is-hidden { display: none; }
+</style>
+
 <div class="a-breadcrumb">
     <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
     <span class="sep">/</span>
@@ -12,72 +34,189 @@
 <div class="admin-page-header">
     <div>
         <h1 class="admin-page-title">Import Players to Global Pool</h1>
-        <p class="admin-page-subtitle">Upload a JSON or CSV file. Duplicate names are silently skipped.</p>
+        <p class="admin-page-subtitle">Upload a file or paste data. Duplicate names are skipped.</p>
     </div>
 </div>
 
-<div class="a-card" style="max-width:640px;">
-    <form method="POST" enctype="multipart/form-data" class="a-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="api-grid">
+    <!-- LEFT: Import form -->
+    <div>
+        <div class="a-card">
+            <div class="api-card-title">
+                <span><i class="fas fa-file-import"></i> Import Data</span>
+                <div class="api-actions is-header">
+                    <a href="{{ url_for('admin_player_pool_export_json') }}" class="a-btn a-btn-sm a-btn-secondary" id="sampleJsonBtn">
+                        <i class="fas fa-download"></i> Sample JSON
+                    </a>
+                    <a href="#" class="a-btn a-btn-sm a-btn-secondary is-hidden" id="sampleCsvBtn">
+                        <i class="fas fa-download"></i> Sample CSV
+                    </a>
+                </div>
+            </div>
 
-        <div class="a-form-group">
-            <label class="a-label">File Format</label>
-            <select name="format" class="a-select" id="importFormat">
-                <option value="json">JSON</option>
-                <option value="csv">CSV</option>
-            </select>
+            <form method="POST" enctype="multipart/form-data" id="adminImportForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <label class="api-label">File Format</label>
+                <select name="format" class="api-select" id="importFormat">
+                    <option value="json">JSON</option>
+                    <option value="csv">CSV</option>
+                </select>
+
+                <label class="api-label">Upload File</label>
+                <input type="file" name="file" class="api-input" id="importFile" accept=".json,.csv">
+
+                <div class="api-or">or</div>
+
+                <label class="api-label">Paste JSON/CSV Data</label>
+                <textarea name="pasted_data" id="pastedData" class="api-textarea" placeholder="Paste your JSON array or CSV rows here."></textarea>
+
+                <p class="api-note">Format must strictly match the expected schema.</p>
+
+                <div class="api-actions">
+                    <button type="submit" class="a-btn a-btn-primary">
+                        <i class="fas fa-file-import"></i> Import
+                    </button>
+                    <a href="{{ url_for('admin_player_pool') }}" class="a-btn a-btn-secondary">Cancel</a>
+                </div>
+            </form>
         </div>
-
-        <div class="a-form-group">
-            <label class="a-label">File</label>
-            <input type="file" name="file" class="a-input" accept=".json,.csv" required>
-        </div>
-
-        <div style="margin-top:24px;display:flex;gap:12px;">
-            <button type="submit" class="a-btn a-btn-primary">
-                <i class="fas fa-file-import"></i> Import
-            </button>
-            <a href="{{ url_for('admin_player_pool') }}" class="a-btn a-btn-secondary">Cancel</a>
-        </div>
-    </form>
-</div>
-
-<div class="a-card" style="max-width:640px;margin-top:24px;">
-    <h3 style="margin:0 0 12px;">Expected Format</h3>
-
-    <div id="jsonExample">
-        <p class="admin-page-subtitle" style="margin-bottom:8px;">JSON — array of player objects:</p>
-        <pre style="background:var(--surface-alt);padding:12px;border-radius:8px;font-size:13px;overflow-x:auto;">[
-  {
-    "name": "Virat Kohli",
-    "role": "Batsman",
-    "batting_rating": 95,
-    "bowling_rating": 20,
-    "fielding_rating": 85,
-    "batting_hand": "Right",
-    "bowling_type": "Medium",
-    "bowling_hand": "Right",
-    "is_captain": false,
-    "is_wicketkeeper": false
-  }
-]</pre>
     </div>
 
-    <div id="csvExample" style="display:none;">
-        <p class="admin-page-subtitle" style="margin-bottom:8px;">CSV — header row with column names:</p>
-        <pre style="background:var(--surface-alt);padding:12px;border-radius:8px;font-size:13px;overflow-x:auto;">name,role,batting_rating,bowling_rating,fielding_rating,batting_hand,bowling_type,bowling_hand,is_captain,is_wicketkeeper
-Virat Kohli,Batsman,95,20,85,Right,Medium,Right,false,false</pre>
+    <!-- RIGHT: AI Prompt -->
+    <div>
+        <div class="a-card">
+            <div class="api-card-title">
+                <span><i class="fas fa-robot"></i> AI Prompt Generator</span>
+            </div>
+            <p class="api-note">Copy this prompt into your AI tool to generate import-ready player data. Paste the output on the left.</p>
+
+            <div class="api-actions" style="margin-bottom:12px;">
+                <button type="button" class="a-btn a-btn-sm a-btn-primary" id="copyAiPromptBtn">
+                    <i class="fas fa-copy"></i> Copy Prompt
+                </button>
+            </div>
+
+            <div class="api-ai-body">
+                <pre class="api-code" id="aiPrompt"></pre>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
 (function(){
     var fmt = document.getElementById('importFormat');
-    var jsonEx = document.getElementById('jsonExample');
-    var csvEx = document.getElementById('csvExample');
-    fmt.addEventListener('change', function(){
-        jsonEx.style.display = fmt.value === 'json' ? '' : 'none';
-        csvEx.style.display = fmt.value === 'csv' ? '' : 'none';
+    var form = document.getElementById('adminImportForm');
+    var fileInput = document.getElementById('importFile');
+    var pastedData = document.getElementById('pastedData');
+    var aiPrompt = document.getElementById('aiPrompt');
+    var copyBtn = document.getElementById('copyAiPromptBtn');
+    var sampleJsonBtn = document.getElementById('sampleJsonBtn');
+    var sampleCsvBtn = document.getElementById('sampleCsvBtn');
+
+    var playerFields = {{ player_fields | tojson }};
+    var validRoles = {{ roles | tojson }};
+    var validBattingHands = {{ batting_hands | tojson }};
+    var validBowlingTypes = {{ bowling_types | tojson }};
+    var validBowlingHands = {{ bowling_hands | tojson }};
+
+    function strictHeaderText() { return playerFields.join(','); }
+    function displayAllowed(values) {
+        return values.map(function(v){ return v === '' ? '"" (empty)' : v; }).join(' | ');
+    }
+
+    function buildJsonPrompt() {
+        return [
+            'Generate only JSON data for cricket player import.',
+            'STRICT RULES:',
+            '1) Output must be ONLY one fenced code block with language tag `json`.',
+            '2) Output must be a JSON array of objects.',
+            '3) Each object must contain EXACTLY these keys (same spelling):',
+            '   ' + playerFields.join(', '),
+            '4) Allowed `role`: ' + displayAllowed(validRoles),
+            '5) Allowed `batting_hand`: ' + displayAllowed(validBattingHands),
+            '6) Allowed `bowling_type`: ' + displayAllowed(validBowlingTypes),
+            '7) Allowed `bowling_hand`: ' + displayAllowed(validBowlingHands),
+            '8) `batting_rating`, `bowling_rating`, `fielding_rating` must be integers in range 0-100.',
+            '9) `is_captain` and `is_wicketkeeper` must be JSON booleans true/false (not strings).',
+            '10) No extra keys. No missing keys. No null values.',
+            '11) If role is Wicketkeeper, set bowling_type and bowling_hand to empty string.',
+            '12) Do not output any explanation or text outside the code block.',
+            '',
+            'JSON schema:',
+            '{',
+            '  "type": "array",',
+            '  "minItems": 1,',
+            '  "items": {',
+            '    "type": "object",',
+            '    "additionalProperties": false,',
+            '    "required": [' + playerFields.map(function(k){ return '"' + k + '"'; }).join(', ') + '],',
+            '    "properties": {',
+            '      "name": { "type": "string", "minLength": 1 },',
+            '      "role": { "type": "string", "enum": ' + JSON.stringify(validRoles) + ' },',
+            '      "batting_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "bowling_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "fielding_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "batting_hand": { "type": "string", "enum": ' + JSON.stringify(validBattingHands) + ' },',
+            '      "bowling_type": { "type": "string", "enum": ' + JSON.stringify(validBowlingTypes) + ' },',
+            '      "bowling_hand": { "type": "string", "enum": ' + JSON.stringify(validBowlingHands) + ' },',
+            '      "is_captain": { "type": "boolean" },',
+            '      "is_wicketkeeper": { "type": "boolean" }',
+            '    }',
+            '  }',
+            '}'
+        ].join('\n');
+    }
+
+    function buildCsvPrompt() {
+        return [
+            'Generate only CSV data for cricket player import.',
+            'STRICT RULES:',
+            '1) Output must be ONLY one fenced code block with language tag `csv`.',
+            '2) First line must match this exact header (same order):',
+            strictHeaderText(),
+            '3) Allowed `role`: ' + displayAllowed(validRoles),
+            '4) Allowed `batting_hand`: ' + displayAllowed(validBattingHands),
+            '5) Allowed `bowling_type`: ' + displayAllowed(validBowlingTypes),
+            '6) Allowed `bowling_hand`: ' + displayAllowed(validBowlingHands),
+            '7) `batting_rating`, `bowling_rating`, `fielding_rating` must be integers in 0-100.',
+            '8) `is_captain` and `is_wicketkeeper` must be exactly `true` or `false` (lowercase).',
+            '9) Include all columns for every row, no extra or missing columns.',
+            '10) Do not output comments, explanations, or anything outside the code block.',
+            '11) If role is Wicketkeeper, set bowling_type and bowling_hand to empty values.'
+        ].join('\n');
+    }
+
+    var prompts = { json: buildJsonPrompt(), csv: buildCsvPrompt() };
+
+    function syncFormat() {
+        var isJson = fmt.value === 'json';
+        aiPrompt.textContent = prompts[fmt.value];
+        sampleJsonBtn.classList.toggle('is-hidden', !isJson);
+        sampleCsvBtn.classList.toggle('is-hidden', isJson);
+    }
+
+    syncFormat();
+    fmt.addEventListener('change', syncFormat);
+
+    copyBtn.addEventListener('click', function(){
+        var text = aiPrompt.textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function(){
+                copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(function(){ copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy Prompt'; }, 1500);
+            });
+        }
+    });
+
+    form.addEventListener('submit', function(e){
+        var hasFile = fileInput.files && fileInput.files.length > 0;
+        var hasPaste = pastedData.value.trim() !== '';
+        if (!hasFile && !hasPaste) {
+            e.preventDefault();
+            alert('Provide either a file upload or pasted data.');
+        }
     });
 })();
 </script>
