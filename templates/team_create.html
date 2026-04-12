@@ -1,1540 +1,1454 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-
-  <meta charset="UTF-8">
-  <title>{{ "Edit Team" if edit else "Create Team" }} – SimCricketX</title>
-  <link rel="canonical" href="{{ request.base_url }}">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <!-- Modern CSS Reset -->
-  <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
-
-  <!-- Font Awesome for Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-
-  <!-- Google Fonts -->
-  <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
-    rel="stylesheet">
-
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/shared.css') }}">
-
-  <style>
-    :root {
-      /* Premium Font Stack */
-      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-
-      /* Light Theme - Clean, Airy, Premium */
-      --bg-body: #f8fafc;
-      --bg-surface: #ffffff;
-      --bg-glass: rgba(255, 255, 255, 0.8);
-
-      --text-main: #0f172a;
-      --text-muted: #64748b;
-      --text-on-accent: #ffffff;
-
-      --border-light: #e2e8f0;
-      --border-focused: #6366f1;
-
-      /* Brand Colors - Indigo/Violet Gradient */
-      --brand-primary: #4f46e5;
-      --brand-secondary: #818cf8;
-      --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
-
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-
-      /* Shadows & Elevation */
-      --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-      --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-      --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
-      --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-      --shadow-glow: 0 0 20px rgba(79, 70, 229, 0.3);
-
-      --radius-lg: 16px;
-      --radius-md: 10px;
-      --radius-sm: 6px;
-      --radius-full: 9999px;
-
-      --ease-elastic: cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    [data-theme="dark"] {
-      /* Dark Theme - VS Code One Dark Pro */
-      --bg-body: #282c34;
-      --bg-surface: #21252b;
-      --bg-glass: rgba(33, 37, 43, 0.85);
-
-      --text-main: #abb2bf;
-      --text-muted: #5c6370;
-
-      --border-light: #3e4451;
-      --border-focused: #61afef;
-
-      --brand-primary: #61afef;
-      --brand-secondary: #c678dd;
-      --brand-gradient: linear-gradient(135deg, #61afef 0%, #c678dd 100%);
-
-      --success: #98c379;
-      --warning: #e5c07b;
-      --danger: #e06c75;
-
-      --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-      --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
-      --shadow-glow: 0 0 20px rgba(97, 175, 239, 0.2);
-
-      /* One Dark Pro Extended Palette */
-      --one-dark-red: #e06c75;
-      --one-dark-green: #98c379;
-      --one-dark-yellow: #e5c07b;
-      --one-dark-blue: #61afef;
-      --one-dark-purple: #c678dd;
-      --one-dark-cyan: #56b6c2;
-      --one-dark-orange: #d19a66;
-    }
-
-    /* Global Reset */
-    * {
-      outline: none;
-    }
-
-    body {
-      background-color: var(--bg-body);
-      color: var(--text-main);
-      font-family: var(--font-sans);
-      padding: 0;
-      line-height: 1.6;
-      transition: background-color 0.3s ease;
-      overflow-x: hidden;
-    }
-
-    /* Layout Container */
-    .main-content {
-      max-width: 1100px;
-    }
-
-    /* ─── Navbar overrides ─── */
-    .nav-header {
-      background: var(--bg-glass);
-      border-bottom: 1px solid var(--border-light);
-    }
-
-    .nav-brand {
-      color: var(--text-main);
-      font-size: 1.25rem;
-    }
-
-    .home-btn {
-      border: 1px solid var(--border-light);
-      color: var(--text-muted);
-    }
-
-    .home-btn:hover {
-      background: var(--bg-surface);
-      color: var(--brand-primary);
-      border-color: var(--brand-primary);
-      transform: scale(1.05);
-      box-shadow: var(--shadow-sm);
-    }
-
-    .theme-toggle:hover {
-      color: var(--text-main);
-    }
-
-    /* ─── Page Header & Typography ─── */
-    .page-header {
-      text-align: center;
-      margin-bottom: 4rem;
-      animation: fadeUp 0.6s ease-out;
-    }
-
-    .dynamic-title {
-      font-size: 3.5rem;
-      background: var(--brand-gradient);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      color: transparent;
-      margin-bottom: 1rem;
-    }
-
-    .page-subtitle {
-      color: var(--text-muted);
-      font-size: 1.1rem;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-
-    /* ─── Cards & Sections ─── */
-    .glass-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-light);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-md);
-      margin-bottom: 2rem;
-      /* Overflow visible to allow dropdowns to pop out */
-      overflow: visible;
-      transition: box-shadow 0.3s ease, transform 0.3s ease;
-    }
-
-    .glass-card:hover {
-      box-shadow: var(--shadow-lg);
-    }
-
-    .section-header {
-      padding: 2rem;
-      border-bottom: 1px solid var(--border-light);
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      background: linear-gradient(to bottom, var(--bg-surface), rgba(255, 255, 255, 0.02));
-    }
-
-    .section-icon {
-      width: 48px;
-      height: 48px;
-      background: var(--brand-gradient);
-      border-radius: var(--radius-md);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 1.25rem;
-      box-shadow: var(--shadow-glow);
-    }
-
-    .section-title {
-      font-size: 1.5rem;
-      color: var(--text-main);
-    }
-
-    .section-body {
-      padding: 2rem;
-    }
-
-    /* ─── Form Elements ─── */
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 2rem;
-    }
-
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 0.6rem;
-      position: relative;
-    }
-
-    .form-label {
-      font-size: 0.85rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-    }
-
-    .form-input,
-    .form-select {
-      background: var(--bg-body);
-      border: 2px solid transparent;
-      border-radius: var(--radius-md);
-      padding: 1rem;
-      font-size: 1rem;
-      color: var(--text-main);
-      font-family: var(--font-sans);
-      transition: all 0.2s ease;
-      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
-    }
-
-    /* Premium Input Interaction */
-    .form-input:hover,
-    .form-select:hover {
-      background: var(--bg-surface);
-      border-color: var(--border-light);
-    }
-
-    .form-input:focus,
-    .form-select:focus {
-      background: var(--bg-surface);
-      border-color: var(--brand-primary);
-      box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
-    }
-
-    /* Custom Color Picker */
-    .color-picker-wrapper {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 0.5rem;
-      background: var(--bg-body);
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .color-picker-wrapper:hover {
-      background: var(--bg-surface);
-      box-shadow: 0 0 0 2px var(--border-light);
-    }
-
-    .color-swatch {
-      width: 40px;
-      height: 40px;
-      border-radius: var(--radius-sm);
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      box-shadow: var(--shadow-sm);
-    }
-
-    /* ─── Squad Management / Player Table ─── */
-    .squad-toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 2rem;
-      background: var(--bg-body);
-      padding: 1rem;
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border-light);
-    }
-
-    .squad-stats {
-      display: flex;
-      gap: 1.5rem;
-      align-items: center;
-    }
-
-    .stat-badge {
-      font-family: var(--font-mono);
-      font-size: 0.9rem;
-      font-weight: 500;
-      color: var(--text-muted);
-      background: var(--bg-surface);
-      padding: 0.5rem 1rem;
-      border-radius: var(--radius-full);
-      box-shadow: var(--shadow-xs);
-      border: 1px solid var(--border-light);
-    }
-
-    .player-counter {
-      color: var(--brand-primary);
-      font-weight: 700;
-    }
-
-    /* Action Buttons */
-    .btn-group {
-      display: flex;
-      gap: 1rem;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.75rem;
-      padding: 0.75rem 1.5rem;
-      font-weight: 600;
-      font-size: 0.95rem;
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      transition: all 0.2s var(--ease-elastic);
-      border: none;
-      text-decoration: none;
-      position: relative;
-      overflow: hidden;
-    }
-
-    /* Primary Gradient Button */
-    .btn-primary {
-      background: var(--brand-gradient);
-      color: white;
-      box-shadow: var(--shadow-glow);
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.4);
-    }
-
-    .btn-primary:active {
-      transform: translateY(0);
-    }
-
-    /* Secondary Glass Button */
-    .btn-secondary {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-light);
-      color: var(--text-main);
-    }
-
-    .btn-secondary:hover {
-      border-color: var(--brand-primary);
-      color: var(--brand-primary);
-      transform: translateY(-1px);
-      background: var(--bg-body);
-    }
-
-    /* ─── Player List Rows ─── */
-    .players-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .player-row {
-      display: grid;
-      /* Mobile layout by default, overridden by media query */
-      grid-template-columns: 1fr;
-      gap: 1rem;
-
-      background: var(--bg-surface);
-      border: 1px solid var(--border-light);
-      padding: 1.25rem;
-      border-radius: var(--radius-md);
-      position: relative;
-      transition: all 0.2s ease;
-      animation: slideIn 0.3s ease forwards;
-    }
-
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .player-row:hover {
-      border-color: var(--brand-secondary);
-      box-shadow: var(--shadow-sm);
-      transform: translateX(4px);
-    }
-
-    /* Responsive Desktop Grid for Players */
-    @media (min-width: 1024px) {
-      .player-row {
-        /* Adjusted grid pattern to be tighter and fit within 900-1000px container */
-        grid-template-columns: minmax(140px, 1.8fr) minmax(100px, 1.2fr) repeat(3, minmax(60px, 0.7fr)) repeat(3, minmax(80px, 0.9fr)) 40px;
-        padding: 0.75rem 1rem;
-        align-items: center;
-        gap: 0.5rem;
-        /* Reduced gap from 0.75rem to 0.5rem */
-      }
-    }
-
-    /* Horizontal Scroll Wrapper for smaller desktops/tablets */
-    .players-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      /* Ensure it doesn't break layout if still too wide */
-      overflow-x: auto;
-      padding-bottom: 0.5rem;
-      /* Space for scrollbar if needed */
-      -webkit-overflow-scrolling: touch;
-    }
-
-    /* Sleek Inputs inside rows */
-    .player-row .form-input,
-    .player-row .form-select {
-      background: transparent;
-      border: 1px solid transparent;
-      padding: 0.5rem;
-      font-size: 0.9rem;
-      border-radius: var(--radius-sm);
-      box-shadow: none;
-    }
-
-    .player-row .form-input:hover,
-    .player-row .form-select:hover {
-      background: var(--bg-body);
-    }
-
-    .player-row .form-input:focus,
-    .player-row .form-select:focus {
-      background: var(--bg-body);
-      border-color: var(--brand-primary);
-      box-shadow: none;
-    }
-
-    /* Remove Button */
-    .btn-remove {
-      width: 32px;
-      height: 32px;
-      border-radius: var(--radius-full);
-      border: none;
-      background: rgba(239, 68, 68, 0.1);
-      color: var(--danger);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .btn-remove:hover {
-      background: var(--danger);
-      color: white;
-      transform: rotate(90deg);
-    }
-
-    /* ─── Sticky Footer ─── */
-    .sticky-footer {
-      position: fixed;
-      bottom: 2rem;
-      padding: 1rem 2rem;
-      background: rgba(15, 23, 42, 0.9);
-      /* Dark background even on light mode for contrast */
-      backdrop-filter: blur(12px);
-      color: white;
-      border-radius: var(--radius-full);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-      z-index: 900;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      width: 90%;
-      max-width: 600px;
-      justify-content: space-between;
-    }
-
-    /* Template Helper Dropdown */
-    .template-dropdown {
-      position: relative;
-      display: inline-block;
-    }
-
-    /* Invisible hit-area so pointer can cross the gap without losing :hover
-       (margin above the panel is not part of the card for hit-testing). */
-    .template-dropdown::before {
-      content: '';
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 340px;
-      max-width: 90vw;
-      height: 12px;
-      z-index: 999;
-      pointer-events: none;
-    }
-
-    .template-dropdown:hover::before {
-      pointer-events: auto;
-    }
-
-    .template-card {
-      position: absolute;
-      top: calc(100% + 12px);
-      /* Drop DOWN — gap from button matches ::before bridge */
-      bottom: auto;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 340px;
-      max-width: 90vw;
-      /* Prevent mobile overflow */
-      background: var(--bg-surface);
-      border: 1px solid var(--border-light);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-xl);
-      padding: 1.25rem;
-      display: none;
-      z-index: 1000;
-      pointer-events: none;
-      opacity: 0;
-      transition: all 0.2s ease;
-    }
-
-    /* Arrow pointing UP */
-    .template-card::after {
-      content: '';
-      position: absolute;
-      bottom: 100%;
-      left: 50%;
-      margin-left: -6px;
-      border-width: 6px;
-      border-style: solid;
-      border-color: transparent transparent var(--bg-surface) transparent;
-    }
-
-    .template-dropdown:hover .template-card {
-      display: block;
-      pointer-events: auto;
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-
-    .code-block {
-      background: #1e293b;
-      color: #a78bfa;
-      font-family: var(--font-mono);
-      padding: 1rem;
-      border-radius: var(--radius-sm);
-      font-size: 0.75rem;
-      overflow-x: auto;
-      margin: 0.5rem 0;
-      white-space: pre;
-    }
-
-    /* Media Queries */
-    @media (max-width: 768px) {
-      .dynamic-title {
-        font-size: 2.5rem;
-      }
-
-      .main-content {
-        padding: 100px 1rem 120px;
-      }
-
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .sticky-footer {
-        width: 95%;
-        bottom: 1rem;
-        flex-direction: column;
-        border-radius: var(--radius-lg);
-      }
-
-      .btn {
-        width: 100%;
-      }
-
-      .player-row {
-        grid-template-columns: 1fr;
-        gap: 0.5rem;
-        padding: 1.5rem;
-        border-left: 4px solid var(--brand-primary);
-      }
-    }
-
-    /* ─── Format Profile Tabs ─── */
-    .profile-tab {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.65rem 1.25rem;
-      font-size: 0.9rem;
-      font-weight: 600;
-      border: none;
-      border-bottom: 3px solid transparent;
-      background: transparent;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      position: relative;
-      top: 2px;
-    }
-
-    .profile-tab:hover {
-      color: var(--brand-primary);
-    }
-
-    .profile-tab.active {
-      color: var(--brand-primary);
-      border-bottom-color: var(--brand-primary);
-    }
-
-    .profile-count-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 20px;
-      height: 20px;
-      padding: 0 5px;
-      border-radius: var(--radius-full);
-      font-size: 0.7rem;
-      font-weight: 700;
-      background: var(--border-light);
-      color: var(--text-muted);
-      transition: all 0.2s ease;
-    }
-
-    .profile-tab.active .profile-count-badge,
-    .profile-tab.has-players .profile-count-badge {
-      background: var(--brand-primary);
-      color: white;
-    }
-
-    .profile-tab.complete .profile-count-badge {
-      background: var(--success);
-      color: white;
-    }
-  </style>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_manage.css') }}">
-</head>
-
-<body>
-  <!-- Navigation Header -->
-  <header class="nav-header">
-    <div class="nav-brand">
-      <a href="{{ url_for('home') }}" class="home-btn" title="Home">
-        <i class="fa-solid fa-house"></i>
-      </a>
-      <span>SimCricket<span style="color:var(--brand-primary)">X</span></span>
-    </div>
-
-    <button class="theme-toggle" id="theme-toggle">
-      <i class="fa-solid fa-moon"></i>
-    </button>
-  </header>
-
-  <!-- Main Content -->
-  <main class="main-content">
-    <!-- Page Header -->
-    <div class="page-header">
-      <h1 class="dynamic-title" id="dynamic-title">{{ team.team_name if edit else 'Create Team' }}</h1>
-      <p class="page-subtitle">Design your championship winning squad with precision and style.</p>
-    </div>
-
-    <!-- Error Messages -->
-    {% if error %}
-    <div class="glass-card" style="border-left: 4px solid var(--danger); padding: 1rem;">
-      <div style="color: var(--danger); display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-        <i class="fa-solid fa-circle-exclamation"></i>
-        {{ error }}
+{% extends "layout.html" %}
+
+{% block title %}Create Team | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Classic theme-aligned single-page team builder */
+:root {
+    --tc-accent: var(--accent);
+    --tc-accent-soft: var(--accent-light);
+    --tc-panel: var(--card-bg);
+    --tc-panel-border: var(--card-border);
+    --tc-panel-shadow: 0 4px 14px var(--shadow);
+    --tc-input-bg: var(--bg-secondary);
+    --tc-success-bg: rgba(16, 185, 129, 0.12);
+    --tc-success-fg: #047857;
+    --tc-warn-bg: rgba(245, 158, 11, 0.12);
+    --tc-warn-fg: #b45309;
+    --tc-danger-bg: rgba(239, 68, 68, 0.12);
+    --tc-danger-fg: #b91c1c;
+    --role-bat: #2563eb;
+    --role-bat-bg: rgba(37, 99, 235, 0.12);
+    --role-bat-text: #1d4ed8;
+    --role-bowl: #dc2626;
+    --role-bowl-bg: rgba(220, 38, 38, 0.12);
+    --role-bowl-text: #b91c1c;
+    --role-all: #7c3aed;
+    --role-all-bg: rgba(124, 58, 237, 0.12);
+    --role-all-text: #6d28d9;
+    --role-wk: #d97706;
+    --role-wk-bg: rgba(217, 119, 6, 0.12);
+    --role-wk-text: #b45309;
+}
+[data-theme="dark"] {
+    --tc-success-fg: #6ee7b7;
+    --tc-warn-fg: #fcd34d;
+    --tc-danger-fg: #fca5a5;
+    --role-bat-text: #93c5fd;
+    --role-bowl-text: #fca5a5;
+    --role-all-text: #ddd6fe;
+    --role-wk-text: #fde68a;
+}
+
+.tc-page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1rem 1.25rem 3rem;
+}
+
+.tc-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.tc-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-secondary);
+    transition: color .2s ease;
+}
+.tc-back:hover { color: var(--tc-accent); }
+
+.tc-save-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--fg-secondary);
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--tc-panel-border);
+    border-radius: 999px;
+    background: var(--tc-panel);
+    transition: color .2s ease, background .2s ease;
+}
+.tc-save-status .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--fg-secondary);
+}
+.tc-save-status.saving { color: var(--tc-warn-fg); }
+.tc-save-status.saving .dot { background: var(--tc-warn-fg); }
+.tc-save-status.saved { color: var(--tc-success-fg); }
+.tc-save-status.saved .dot { background: var(--tc-success-fg); }
+
+.tc-hero {
+    border: 1px solid var(--tc-panel-border);
+    background: var(--tc-panel);
+    border-radius: 14px;
+    padding: 1.1rem 1.2rem;
+    box-shadow: var(--tc-panel-shadow);
+}
+.tc-hero h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--fg);
+    margin-bottom: 0.2rem;
+}
+.tc-hero p { color: var(--fg-secondary); font-size: 0.85rem; }
+
+.tc-alert {
+    margin-top: 0.9rem;
+    padding: 0.7rem 0.95rem;
+    border-radius: 10px;
+    background: var(--tc-danger-bg);
+    color: var(--tc-danger-fg);
+    font-size: 0.85rem;
+    font-weight: 500;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.tc-alert.info {
+    background: var(--tc-accent-soft);
+    color: var(--fg);
+    border-color: var(--tc-panel-border);
+}
+
+/* ── Identity Section ── */
+.tc-identity {
+    margin-top: 1rem;
+    border: 1px solid var(--tc-panel-border);
+    background: var(--tc-panel);
+    border-radius: 14px;
+    box-shadow: var(--tc-panel-shadow);
+    padding: 1.1rem 1.2rem;
+}
+.tc-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+.tc-section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg-secondary);
+}
+.tc-identity-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.9rem;
+}
+.tc-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.tc-field label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-secondary);
+}
+.tc-input, .tc-select {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.92rem;
+    font-family: inherit;
+    color: var(--fg);
+    background: var(--tc-input-bg);
+    border: 1px solid var(--tc-panel-border);
+    border-radius: 8px;
+    transition: border-color .15s ease, background .15s ease;
+}
+.tc-input:focus, .tc-select:focus {
+    outline: none;
+    border-color: var(--tc-accent);
+    background: var(--bg);
+}
+.tc-input[readonly] { background: var(--tc-input-bg); cursor: not-allowed; }
+
+.tc-color-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.4rem 0.5rem;
+    background: var(--tc-input-bg);
+    border: 1px solid var(--tc-panel-border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+.tc-color-swatch {
+    width: 28px; height: 28px; border-radius: 6px;
+    border: 1px solid var(--tc-panel-border);
+    background: #4f46e5;
+    flex-shrink: 0;
+}
+.tc-color-wrap input[type="color"] {
+    width: 0; height: 0; opacity: 0; position: absolute;
+}
+.tc-color-wrap span { font-size: 0.85rem; color: var(--fg-secondary); }
+
+/* ── Builder Split ── */
+.tc-builder {
+    margin-top: 1rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+@media (max-width: 900px) {
+    .tc-builder { grid-template-columns: 1fr; }
+}
+.tc-panel {
+    border: 1px solid var(--tc-panel-border);
+    background: var(--tc-panel);
+    border-radius: 14px;
+    box-shadow: var(--tc-panel-shadow);
+    display: flex;
+    flex-direction: column;
+    min-height: 520px;
+    max-height: 720px;
+    overflow: hidden;
+}
+.tc-panel-head {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--tc-panel-border);
+    background: var(--tc-input-bg);
+}
+.tc-panel-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--fg);
+    margin-bottom: 0.15rem;
+}
+.tc-panel-sub { font-size: 0.75rem; color: var(--fg-secondary); }
+
+.tc-filter-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.7rem;
+}
+.tc-filter-row .tc-input,
+.tc-filter-row .tc-select {
+    padding: 0.45rem 0.6rem;
+    font-size: 0.85rem;
+    background: var(--bg);
+}
+.tc-filter-row .tc-input { flex: 1; }
+.tc-filter-row .tc-select { max-width: 160px; }
+
+.tc-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+.tc-list::-webkit-scrollbar { width: 8px; }
+.tc-list::-webkit-scrollbar-track { background: transparent; }
+.tc-list::-webkit-scrollbar-thumb {
+    background: var(--tc-panel-border);
+    border-radius: 4px;
+}
+
+/* Player bar */
+.tc-player {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.8rem;
+    margin-bottom: 0.35rem;
+    border: 1px solid var(--tc-panel-border);
+    border-radius: 8px;
+    background: var(--bg);
+    font-size: 0.87rem;
+    user-select: none;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease, transform .08s ease;
+}
+.tc-player:hover {
+    border-color: var(--tc-accent);
+    background: var(--tc-accent-soft);
+}
+.tc-player:active { transform: scale(0.995); }
+.tc-player.in-roster {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: var(--tc-input-bg);
+}
+.tc-player.in-roster:hover {
+    border-color: var(--tc-panel-border);
+    background: var(--tc-input-bg);
+}
+/* Drag-to-reorder states */
+.tc-player[draggable="true"] { cursor: grab; }
+.tc-player[draggable="true"]:active { cursor: grabbing; }
+.tc-player.dragging { opacity: 0.35; }
+.tc-player.drop-above { box-shadow: inset 0 2px 0 0 var(--tc-accent); }
+.tc-player.drop-below { box-shadow: inset 0 -2px 0 0 var(--tc-accent); }
+.tc-grip {
+    color: var(--fg-secondary);
+    font-size: 0.8rem;
+    margin-right: 0.1rem;
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+.tc-player:hover .tc-grip { opacity: 1; }
+.tc-player-order {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--fg-secondary);
+    min-width: 1.3rem;
+    text-align: right;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+.tc-player-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1;
+}
+.tc-player-name {
+    font-weight: 600;
+    color: var(--fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tc-player-meta {
+    font-size: 0.72rem;
+    color: var(--fg-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tc-role-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+.tc-role-pill.bat { background: var(--role-bat-bg); color: var(--role-bat-text); }
+.tc-role-pill.bowl { background: var(--role-bowl-bg); color: var(--role-bowl-text); }
+.tc-role-pill.all { background: var(--role-all-bg); color: var(--role-all-text); }
+.tc-role-pill.wk { background: var(--role-wk-bg); color: var(--role-wk-text); }
+.tc-role-pill.none { background: var(--tc-input-bg); color: var(--fg-secondary); }
+
+.tc-empty {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--fg-secondary);
+    font-size: 0.85rem;
+}
+.tc-empty a { color: var(--tc-accent); font-weight: 600; text-decoration: underline; }
+
+.tc-loader {
+    text-align: center;
+    padding: 0.8rem;
+    color: var(--fg-secondary);
+    font-size: 0.78rem;
+}
+
+/* ── Roster tabs ── */
+.tc-tabs {
+    display: flex;
+    gap: 0.3rem;
+    margin-top: 0.7rem;
+}
+.tc-tab {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--fg-secondary);
+    background: var(--bg);
+    border: 1px solid var(--tc-panel-border);
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: all .15s ease;
+}
+.tc-tab:hover { color: var(--fg); border-color: var(--tc-accent); }
+.tc-tab.active {
+    color: var(--bg);
+    background: var(--tc-accent);
+    border-color: var(--tc-accent);
+}
+.tc-tab-count {
+    padding: 0.08rem 0.45rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 999px;
+    background: var(--tc-input-bg);
+    color: var(--fg-secondary);
+}
+.tc-tab.active .tc-tab-count {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--bg);
+}
+
+.tc-counter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.75rem;
+    padding: 0.55rem 1rem;
+    background: var(--tc-input-bg);
+    border-bottom: 1px solid var(--tc-panel-border);
+    font-size: 0.75rem;
+    color: var(--fg-secondary);
+}
+.tc-counter strong { color: var(--fg); font-weight: 700; }
+.tc-counter .ok { color: var(--tc-success-fg); }
+.tc-counter .warn { color: var(--tc-warn-fg); }
+
+.tc-leaders {
+    padding: 0.85rem 1rem;
+    border-top: 1px solid var(--tc-panel-border);
+    background: var(--tc-input-bg);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+.tc-leaders .tc-field { gap: 0.25rem; }
+
+/* ── Actions ── */
+.tc-actions {
+    margin-top: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 1rem 1.2rem;
+    border: 1px solid var(--tc-panel-border);
+    background: var(--tc-panel);
+    border-radius: 14px;
+    box-shadow: var(--tc-panel-shadow);
+}
+.tc-status-msg {
+    font-size: 0.82rem;
+    color: var(--fg-secondary);
+}
+.tc-status-msg.ready { color: var(--tc-success-fg); font-weight: 600; }
+.tc-status-msg.draft { color: var(--tc-warn-fg); font-weight: 600; }
+
+/* Live rule chips */
+.tc-rules {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem 0.7rem;
+    font-size: 0.78rem;
+    color: var(--fg-secondary);
+}
+.tc-rules .tc-rules-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-secondary);
+    margin-right: 0.1rem;
+}
+.tc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--tc-panel-border);
+    border-radius: 999px;
+    background: var(--bg);
+    font-weight: 500;
+    color: var(--fg-secondary);
+    transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.tc-chip .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #cbd5e1;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.02);
+}
+.tc-chip.ok {
+    color: var(--tc-success-fg);
+    border-color: rgba(16, 185, 129, 0.35);
+    background: var(--tc-success-bg);
+}
+.tc-chip.ok .dot { background: #10b981; }
+.tc-chip.bad {
+    color: var(--tc-danger-fg);
+    border-color: rgba(239, 68, 68, 0.35);
+    background: var(--tc-danger-bg);
+}
+.tc-chip.bad .dot { background: #ef4444; }
+.tc-rules-empty {
+    font-size: 0.82rem;
+    color: var(--fg-secondary);
+}
+
+/* Tab status dot */
+.tc-tab-status {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: transparent;
+    margin-left: 0.15rem;
+    flex-shrink: 0;
+}
+.tc-tab-status.ok { background: #10b981; }
+.tc-tab-status.bad { background: #ef4444; }
+
+.tc-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    font-family: inherit;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.tc-btn-primary {
+    background: var(--tc-accent);
+    color: var(--bg);
+    border-color: var(--tc-accent);
+}
+.tc-btn-primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+}
+.tc-btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.tc-btn-ghost {
+    background: transparent;
+    color: var(--fg-secondary);
+    border-color: var(--tc-panel-border);
+}
+.tc-btn-ghost:hover {
+    color: var(--fg);
+    border-color: var(--tc-accent);
+}
+
+.tc-restored-banner {
+    margin-top: 0.8rem;
+    padding: 0.65rem 0.95rem;
+    border-radius: 10px;
+    background: var(--tc-accent-soft);
+    color: var(--fg);
+    border: 1px solid var(--tc-panel-border);
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+.tc-restored-banner button {
+    background: transparent;
+    border: none;
+    color: var(--fg-secondary);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.1rem 0.35rem;
+}
+.tc-restored-banner button:hover { color: var(--fg); }
+
+/* Hint */
+.tc-hint {
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+    color: var(--fg-secondary);
+}
+.tc-hint code {
+    padding: 0.08rem 0.3rem;
+    border-radius: 4px;
+    background: var(--tc-input-bg);
+    font-family: var(--font-mono, monospace);
+    font-size: 0.7rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tc-page">
+
+  <div class="tc-topbar">
+    <a href="{{ url_for('manage_teams') }}" class="tc-back">
+      <i class="fa-solid fa-arrow-left"></i> Back to Teams
+    </a>
+    <span id="tc-save-status" class="tc-save-status">
+      <span class="dot"></span>
+      <span class="label">Not started</span>
+    </span>
+  </div>
+
+  <div class="tc-hero">
+    <h1>Create Team</h1>
+    <p>Fill in team identity, then build squads for T20 and List A from your player pool. Drafts are auto-saved locally.</p>
+  </div>
+
+  {% if error %}
+    <div class="tc-alert">{{ error }}</div>
+  {% endif %}
+
+  <div id="tc-restored-banner" class="tc-restored-banner" hidden>
+    <span><i class="fa-solid fa-clock-rotate-left"></i> Restored unsaved draft from your last session.</span>
+    <button type="button" id="tc-restored-dismiss" aria-label="Dismiss">&times;</button>
+  </div>
+
+  <form id="tc-form" method="POST" action="{{ url_for('create_team') }}" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="profiles_payload" id="tc-profiles-payload">
+
+    <!-- Identity -->
+    <section class="tc-identity">
+      <div class="tc-section-header">
+        <span class="tc-section-title">Team Identity</span>
       </div>
-    </div>
-    {% endif %}
-
-    <!-- Main Team Form -->
-    <form id="team-form" method="POST"
-      action="{{ url_for('edit_team', short_code=team.short_code) if edit else url_for('create_team') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="profiles_payload" id="profiles_payload" value="{}">
-
-      <!-- Team Details Section -->
-      <div class="glass-card">
-        <div class="section-header">
-          <div class="section-icon">
-            <i class="fa-solid fa-shield-halved"></i>
-          </div>
-          <div class="section-title">Team Identity</div>
+      <div class="tc-identity-grid">
+        <div class="tc-field">
+          <label for="tc-name">Team Name</label>
+          <input id="tc-name" name="team_name" class="tc-input" required maxlength="60" placeholder="e.g. Mumbai Marauders">
         </div>
-
-        <div class="section-body">
-          <div class="form-grid">
-            <div class="form-group">
-              <label class="form-label" for="team_name">Team Name</label>
-              <input id="team_name" name="team_name" class="form-input" placeholder="e.g. Mumbai Indians" required>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="short_code">Short Code</label>
-              <input name="short_code" class="form-input" placeholder="e.g. MI" minlength="2" maxlength="3" required>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="home_ground">Home Ground</label>
-              <input name="home_ground" class="form-input" placeholder="e.g. Wankhede Stadium" required>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="pitch_preference">Pitch Preference</label>
-              <select name="pitch_preference" class="form-select" required>
-                <option value="">Select Surface</option>
-                <option>Green</option>
-                <option>Flat</option>
-                <option>Dry</option>
-                <option>Hard</option>
-                <option>Dead</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Team Color</label>
-              <div class="color-picker-wrapper" id="color-picker-trigger">
-                <div id="color-swatch" class="color-swatch"></div>
-                <span style="font-size: 0.9rem; font-weight: 500;">Select Brand Color</span>
-                <input type="color" id="team_color" name="team_color" value="#4f46e5" class="color-input" required>
-              </div>
-            </div>
-          </div>
+        <div class="tc-field">
+          <label for="tc-short">Short Code</label>
+          <input id="tc-short" name="short_code" class="tc-input" required maxlength="5" placeholder="MUM" style="text-transform:uppercase;">
+          <span class="tc-hint">2–5 letters or digits</span>
+        </div>
+        <div class="tc-field">
+          <label for="tc-ground">Home Ground</label>
+          <input id="tc-ground" name="home_ground" class="tc-input" required maxlength="80" placeholder="e.g. Wankhede Stadium">
+        </div>
+        <div class="tc-field">
+          <label for="tc-pitch">Pitch Preference</label>
+          <select id="tc-pitch" name="pitch_preference" class="tc-select" required>
+            <option value="">Select surface</option>
+            <option>Green</option>
+            <option>Flat</option>
+            <option>Dry</option>
+            <option>Hard</option>
+            <option>Dead</option>
+          </select>
+        </div>
+        <div class="tc-field">
+          <label>Team Color</label>
+          <label class="tc-color-wrap" for="tc-color">
+            <span id="tc-color-swatch" class="tc-color-swatch"></span>
+            <span>Pick brand color</span>
+            <input id="tc-color" type="color" name="team_color" value="#4f46e5" required>
+          </label>
         </div>
       </div>
+    </section>
 
-      <!-- Format Profiles Section -->
-      <div class="glass-card">
-        <div class="section-header">
-          <div class="section-icon">
-            <i class="fa-solid fa-layer-group"></i>
-          </div>
-          <div>
-            <div class="section-title">Format Profiles</div>
-            <p style="color:var(--text-muted);font-size:0.85rem;margin-top:0.25rem;">
-              Each format has its own independent squad. At least one profile is required.
-            </p>
+    <!-- Builder Split -->
+    <div class="tc-builder">
+      <!-- Left: Player Pool -->
+      <section class="tc-panel">
+        <div class="tc-panel-head">
+          <div class="tc-panel-title">Player Pool</div>
+          <div class="tc-panel-sub">Double-click a player to add to the active roster.</div>
+          <div class="tc-filter-row">
+            <input id="tc-pool-search" class="tc-input" type="search" placeholder="Search by name…">
+            <select id="tc-pool-role" class="tc-select">
+              <option value="">All roles</option>
+              <option value="Batsman">Batsman</option>
+              <option value="Bowler">Bowler</option>
+              <option value="All-rounder">All-rounder</option>
+              <option value="Wicketkeeper">Wicketkeeper</option>
+            </select>
           </div>
         </div>
+        <div id="tc-pool-list" class="tc-list" role="listbox" aria-label="Player pool"></div>
+      </section>
 
-        <div class="section-body">
-          <!-- Profile Tabs -->
-          <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;border-bottom:2px solid var(--border-light);padding-bottom:0;">
-            <button type="button" class="profile-tab active" data-fmt="T20" id="tab-T20">
-              <i class="fa-solid fa-bolt"></i> T20
-              <span class="profile-count-badge" id="badge-T20">0</span>
+      <!-- Right: Roster Builder -->
+      <section class="tc-panel">
+        <div class="tc-panel-head">
+          <div class="tc-panel-title">Team Roster</div>
+          <div class="tc-panel-sub">Double-click a player to remove. Each profile: 11–25 players, ≥1 WK, ≥5 Bowl/AR.</div>
+          <div class="tc-tabs" role="tablist">
+            <button type="button" class="tc-tab active" data-fmt="T20" role="tab">
+              <span class="tc-tab-status" id="tc-tab-status-T20" aria-hidden="true"></span>
+              T20 <span class="tc-tab-count" id="tc-count-T20">0</span>
             </button>
-            <button type="button" class="profile-tab" data-fmt="ListA" id="tab-ListA">
-              <i class="fa-solid fa-cricket-bat-ball"></i> List A / ODI
-              <span class="profile-count-badge" id="badge-ListA">0</span>
+            <button type="button" class="tc-tab" data-fmt="ListA" role="tab">
+              <span class="tc-tab-status" id="tc-tab-status-ListA" aria-hidden="true"></span>
+              List A <span class="tc-tab-count" id="tc-count-ListA">0</span>
             </button>
-
-          </div>
-
-          <!-- Profile Panels -->
-          <div id="profile-panels">
-            <!-- T20 Panel -->
-            <div class="profile-panel" id="panel-T20" data-fmt="T20">
-              <div class="squad-toolbar">
-                <div class="squad-stats">
-                  <div class="stat-badge">Squad: <span class="player-counter" id="count-T20">0/25</span></div>
-                </div>
-                <div class="btn-group">
-                  <button type="button" class="btn btn-secondary import-btn" data-fmt="T20">
-                    <i class="fa-solid fa-file-import"></i> Import
-                  </button>
-                  <div class="template-dropdown">
-                    <button type="button" class="btn btn-secondary">
-                      <i class="fa-solid fa-wand-magic-sparkles"></i> AI Prompt
-                    </button>
-                    <div class="template-card">
-                      <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;color:var(--text-muted);font-size:0.8rem;text-transform:uppercase;font-weight:700;">
-                        <span>JSON Format</span>
-                      </div>
-                      <div class="code-block" id="json-template-preview">[
-  {
-    "name": "Player Name",
-    "role": "Batsman",
-    "bat": 85, "bowl": 20, "field": 80,
-    "bhand": "Right", "btype": "", "bhand2": ""
-  }
-]</div>
-                      <button type="button" class="btn btn-primary copy-prompt-btn" data-fmt="T20" style="width:100%;font-size:0.8rem;padding:0.5rem;">
-                        <i class="fa-regular fa-copy"></i> Copy AI Prompt
-                      </button>
-                    </div>
-                  </div>
-                  <button type="button" class="btn btn-primary add-player-btn" data-fmt="T20">
-                    <i class="fa-solid fa-plus"></i> Add Player
-                  </button>
-                </div>
-              </div>
-              <div class="players-list profile-players" id="players-T20"></div>
-              <!-- Leadership -->
-              <div style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
-                <div class="form-group">
-                  <label class="form-label">Captain (T20)</label>
-                  <select class="form-select profile-captain" data-fmt="T20" id="captain-T20">
-                    <option value="">Select Captain</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Wicketkeeper (T20)</label>
-                  <select class="form-select profile-wk" data-fmt="T20" id="wk-T20">
-                    <option value="">Select Wicketkeeper</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <!-- List A Panel -->
-            <div class="profile-panel" id="panel-ListA" data-fmt="ListA" style="display:none;">
-              <div class="squad-toolbar">
-                <div class="squad-stats">
-                  <div class="stat-badge">Squad: <span class="player-counter" id="count-ListA">0/25</span></div>
-                </div>
-                <div class="btn-group">
-                  <button type="button" class="btn btn-secondary copy-from-t20-btn" data-fmt="ListA">
-                    <i class="fa-solid fa-copy"></i> Copy from T20
-                  </button>
-                  <button type="button" class="btn btn-secondary import-btn" data-fmt="ListA">
-                    <i class="fa-solid fa-file-import"></i> Import
-                  </button>
-                  <div class="template-dropdown">
-                    <button type="button" class="btn btn-secondary">
-                      <i class="fa-solid fa-wand-magic-sparkles"></i> AI Prompt
-                    </button>
-                    <div class="template-card">
-                      <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;color:var(--text-muted);font-size:0.8rem;text-transform:uppercase;font-weight:700;">
-                        <span>JSON Format</span>
-                      </div>
-                      <div class="code-block">[
-  {
-    "name": "Player Name",
-    "role": "Batsman",
-    "bat": 85, "bowl": 20, "field": 80,
-    "bhand": "Right", "btype": "", "bhand2": ""
-  }
-]</div>
-                      <button type="button" class="btn btn-primary copy-prompt-btn" data-fmt="ListA" style="width:100%;font-size:0.8rem;padding:0.5rem;">
-                        <i class="fa-regular fa-copy"></i> Copy AI Prompt
-                      </button>
-                    </div>
-                  </div>
-                  <button type="button" class="btn btn-primary add-player-btn" data-fmt="ListA">
-                    <i class="fa-solid fa-plus"></i> Add Player
-                  </button>
-                </div>
-              </div>
-              <div class="players-list profile-players" id="players-ListA"></div>
-              <div style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
-                <div class="form-group">
-                  <label class="form-label">Captain (List A)</label>
-                  <select class="form-select profile-captain" data-fmt="ListA" id="captain-ListA">
-                    <option value="">Select Captain</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Wicketkeeper (List A)</label>
-                  <select class="form-select profile-wk" data-fmt="ListA" id="wk-ListA">
-                    <option value="">Select Wicketkeeper</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-
           </div>
         </div>
-      </div>
-
-      <!-- Sticky Footer Actions -->
-      <div class="sticky-footer">
-        <div style="font-size: 0.9rem; opacity: 0.8; display: flex; flex-direction: column;">
-          <span>{% if edit %}Editing <strong>{{ team.short_code }}</strong>{% else %}Creating New Team{% endif %}</span>
-          <span id="auto-save-status"
-            style="font-size: 0.75rem; color: var(--success); opacity: 0; transition: opacity 0.5s ease;">
-            <i class="fa-solid fa-check"></i> Saved to browser
-          </span>
-        </div>
-        <div class="btn-group">
-          <!-- Validation Feedback -->
-          <div id="validation-feedback"
-            style="display: flex; flex-direction: column; justify-content: center; align-items: flex-end; margin-right: 1rem; font-size: 0.8rem; color: var(--warning);">
-            <!-- Dynamic errors will appear here -->
+        <div id="tc-roster-counter" class="tc-counter"></div>
+        <div id="tc-roster-list" class="tc-list" role="listbox" aria-label="Team roster"></div>
+        <div class="tc-leaders">
+          <div class="tc-field">
+            <label for="tc-captain">Captain</label>
+            <select id="tc-captain" class="tc-select">
+              <option value="">— none —</option>
+            </select>
           </div>
-          {% if edit %}
-          <a href="{{ url_for('manage_teams') }}" class="btn btn-secondary"
-            style="background: rgba(255,255,255,0.1); color: white; border: none;">
-            Cancel
-          </a>
-          <!-- Save as Draft removed -->
-          {% else %}
-          <button type="button" class="btn btn-secondary" id="clear-draft"
-            style="background: rgba(255,255,255,0.1); color: white; border: none;">
-            Clear Draft
-          </button>
-
-          <!-- Save as Draft removed -->
-          {% endif %}
-
-          <button type="submit" name="action" value="publish" class="btn btn-primary" id="btn-publish">
-            <i class="fa-solid fa-floppy-disk"></i>
-            {{ 'Save Changes' if edit else 'Create Team' }}
-          </button>
+          <div class="tc-field">
+            <label for="tc-wk">Wicketkeeper</label>
+            <select id="tc-wk" class="tc-select">
+              <option value="">— none —</option>
+            </select>
+          </div>
         </div>
-      </div>
-
-    </form>
-  </main>
-
-  <!-- Player Row Template -->
-  <template id="player-template">
-    <div class="player-row">
-      <input name="player_name" class="form-input" placeholder="Player Name" required>
-      <select name="player_role" class="form-select" required>
-        <option value="">Role</option>
-        <option>Batsman</option>
-        <option>Bowler</option>
-        <option>All-rounder</option>
-        <option>Wicketkeeper</option>
-      </select>
-      <input type="number" name="batting_rating" class="form-input" placeholder="Bat" min="0" max="100" title="Batting Rating" required>
-      <input type="number" name="bowling_rating" class="form-input" placeholder="Bowl" min="0" max="100" title="Bowling Rating" required>
-      <input type="number" name="fielding_rating" class="form-input" placeholder="Fld" min="0" max="100" title="Fielding Rating" required>
-      <select name="batting_hand" class="form-select" required>
-        <option value="">Bat Hand</option>
-        <option>Left</option>
-        <option>Right</option>
-      </select>
-      <select name="bowling_type" class="form-select">
-        <option value="">Bowl Type</option>
-        <option>Fast</option>
-        <option>Fast-medium</option>
-        <option>Medium-fast</option>
-        <option>Medium</option>
-        <option>Off spin</option>
-        <option>Leg spin</option>
-        <option>Finger spin</option>
-        <option>Wrist spin</option>
-      </select>
-      <select name="bowling_hand" class="form-select">
-        <option value="">Bowl Hand</option>
-        <option>Left</option>
-        <option>Right</option>
-      </select>
-      <button type="button" class="btn-remove player-remove" title="Remove Player">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
+      </section>
     </div>
-  </template>
 
-  <!-- Data Injection -->
-  <script id="edit-mode-data" type="application/json">{{ 'true' if edit else 'false' }}</script>
-  <script id="team-data-json" type="application/json">{{ team | tojson | safe if edit else 'null' }}</script>
+    <!-- Actions -->
+    <div class="tc-actions">
+      <div id="tc-validation" class="tc-rules" aria-live="polite">
+        <span class="tc-rules-empty">Fill team identity and add players to save.</span>
+      </div>
+      <div style="display:flex;gap:0.5rem;">
+        <button type="button" id="tc-clear" class="tc-btn tc-btn-ghost">
+          <i class="fa-solid fa-rotate-left"></i> Clear Draft
+        </button>
+        <button type="submit" id="tc-save" class="tc-btn tc-btn-primary" disabled>
+          <i class="fa-solid fa-floppy-disk"></i> Save Team
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
 
-  <script>
-    // ─── Constants & State ────────────────────────────────────────
-    const EDIT_MODE = JSON.parse(document.getElementById('edit-mode-data').textContent);
-    let TEAM_DATA = null;
-    try { TEAM_DATA = JSON.parse(document.getElementById('team-data-json').textContent); }
-    catch (e) { console.error("Failed to parse team data", e); }
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
 
-    const FORMATS = ['T20', 'ListA'];
-    const MAX = 25, MIN = 12;
-    const DRAFT_KEY = 'team_create_draft_v2';
+  const LS_KEY = 'team_create_draft_v1';
+  const POOL_PAGE = 50;
+  const VALID_FORMATS = ['T20', 'ListA'];
+  const ROLE_CLASS = {
+    'Batsman': 'bat',
+    'Bowler': 'bowl',
+    'All-rounder': 'all',
+    'Wicketkeeper': 'wk',
+  };
 
-    // ─── Tab switching ────────────────────────────────────────────
-    document.querySelectorAll('.profile-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        const fmt = tab.dataset.fmt;
-        document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.profile-panel').forEach(p => p.style.display = 'none');
-        tab.classList.add('active');
-        document.getElementById('panel-' + fmt).style.display = 'block';
-      });
-    });
+  // ── State ────────────────────────────────────────────────────────────
+  const state = {
+    identity: {
+      team_name: '',
+      short_code: '',
+      home_ground: '',
+      pitch_preference: '',
+      team_color: '#4f46e5',
+    },
+    activeFmt: 'T20',
+    rosters: { T20: [], ListA: [] },
+    leaders: {
+      T20: { captain: '', wicketkeeper: '' },
+      ListA: { captain: '', wicketkeeper: '' },
+    },
+    pool: {
+      items: [],
+      offset: 0,
+      hasMore: true,
+      total: 0,
+      search: '',
+      role: '',
+      loading: false,
+    },
+    submitting: false,
+  };
 
-    // ─── Per-profile player management ────────────────────────────
+  // ── DOM refs ─────────────────────────────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  const form = $('tc-form');
+  const nameInput = $('tc-name');
+  const shortInput = $('tc-short');
+  const groundInput = $('tc-ground');
+  const pitchSelect = $('tc-pitch');
+  const colorInput = $('tc-color');
+  const colorSwatch = $('tc-color-swatch');
+  const poolList = $('tc-pool-list');
+  const poolSearch = $('tc-pool-search');
+  const poolRole = $('tc-pool-role');
+  const rosterList = $('tc-roster-list');
+  const rosterCounter = $('tc-roster-counter');
+  const tabButtons = document.querySelectorAll('.tc-tab');
+  const captainSelect = $('tc-captain');
+  const wkSelect = $('tc-wk');
+  const saveStatus = $('tc-save-status');
+  const saveStatusLabel = saveStatus.querySelector('.label');
+  const validationMsg = $('tc-validation');
+  const saveBtn = $('tc-save');
+  const clearBtn = $('tc-clear');
+  const payloadInput = $('tc-profiles-payload');
+  const restoredBanner = $('tc-restored-banner');
 
-    function getContainer(fmt) { return document.getElementById('players-' + fmt); }
-    function getCountEl(fmt)  { return document.getElementById('count-' + fmt); }
-    function getBadge(fmt)    { return document.getElementById('badge-' + fmt); }
-    function getCaptainSel(fmt) { return document.getElementById('captain-' + fmt); }
-    function getWkSel(fmt)      { return document.getElementById('wk-' + fmt); }
-
-    function createPlayerCard(data) {
-      const tpl = document.getElementById('player-template').content.cloneNode(true);
-      const card = tpl.querySelector('.player-row');
-      if (data) {
-        card.querySelector('[name=player_name]').value = data.name || '';
-        const validRoles = ['Batsman','Bowler','All-rounder','Wicketkeeper'];
-        card.querySelector('[name=player_role]').value = validRoles.includes(data.role) ? data.role : 'Batsman';
-        card.querySelector('[name=batting_rating]').value  = data.bat  ?? data.batting_rating  ?? '';
-        card.querySelector('[name=bowling_rating]').value  = data.bowl ?? data.bowling_rating  ?? '';
-        card.querySelector('[name=fielding_rating]').value = data.field?? data.fielding_rating ?? '';
-        card.querySelector('[name=batting_hand]').value    = data.bhand || data.batting_hand  || '';
-        card.querySelector('[name=bowling_type]').value    = data.btype || data.bowling_type  || '';
-        card.querySelector('[name=bowling_hand]').value    = data.bhand2|| data.bowling_hand  || '';
-      }
-      return card;
-    }
-
-    function wireCard(card, fmt) {
-      const roleSelect  = card.querySelector('[name=player_role]');
-      const btypeSelect = card.querySelector('[name=bowling_type]');
-      const bhand2Select= card.querySelector('[name=bowling_hand]');
-
-      function applyRoleConstraints() {
-        if (roleSelect.value === 'Wicketkeeper') {
-          btypeSelect.value = ''; bhand2Select.value = '';
-          btypeSelect.disabled = bhand2Select.disabled = true;
-          btypeSelect.style.opacity = bhand2Select.style.opacity = '0.5';
-        } else {
-          btypeSelect.disabled = bhand2Select.disabled = false;
-          btypeSelect.style.opacity = bhand2Select.style.opacity = '1';
-        }
-        refreshProfileSelectors(fmt);
-        updateSubmitButtons();
-      }
-      roleSelect.addEventListener('change', applyRoleConstraints);
-      applyRoleConstraints();
-
-      card.querySelector('[name=player_name]').addEventListener('input', () => {
-        refreshProfileSelectors(fmt); highlightDuplicateNames(fmt); updateSubmitButtons();
-      });
-      card.querySelectorAll('input, select').forEach(el => {
-        el.addEventListener('input',  () => { updateSubmitButtons(); if (!EDIT_MODE) saveDraft(); });
-        el.addEventListener('change', () => { updateSubmitButtons(); if (!EDIT_MODE) saveDraft(); });
-      });
-
-      card.querySelector('.player-remove').onclick = () => {
-        card.style.transform = 'translateX(20px)';
-        card.style.opacity = '0';
-        setTimeout(() => { card.remove(); updateProfileCount(fmt); updateSubmitButtons(); }, 300);
-      };
-    }
-
-    function addPlayerToProfile(fmt, data, autoUpdate = true) {
-      const cont = getContainer(fmt);
-      if (cont.children.length >= MAX) return;
-      const card = createPlayerCard(data);
-      wireCard(card, fmt);
-      cont.appendChild(card);
-      if (autoUpdate) { updateProfileCount(fmt); refreshProfileSelectors(fmt); updateSubmitButtons(); }
-    }
-
-    function updateProfileCount(fmt) {
-      const cont  = getContainer(fmt);
-      const count = cont.children.length;
-      const countEl = getCountEl(fmt);
-      const badge   = getBadge(fmt);
-
-      countEl.textContent = `${count} / ${MAX}`;
-      badge.textContent = count;
-
-      const tab = document.getElementById('tab-' + fmt);
-      tab.classList.toggle('has-players', count > 0);
-      tab.classList.toggle('complete', count >= MIN);
-
-      if (count < MIN && count > 0) {
-        countEl.style.color = '#dc3545';
-      } else if (count >= MIN) {
-        countEl.style.color = '#10b981';
-      } else {
-        countEl.style.color = '';
-      }
-
-      refreshProfileSelectors(fmt);
-      if (!EDIT_MODE) saveDraft();
-    }
-
-    function refreshProfileSelectors(fmt) {
-      const cont    = getContainer(fmt);
-      const capSel  = getCaptainSel(fmt);
-      const wkSel   = getWkSel(fmt);
-      const curCap  = capSel.value;
-      const curWk   = wkSel.value;
-      const cards   = [...cont.querySelectorAll('.player-row')];
-
-      capSel.innerHTML = '<option value="">Select Captain</option>';
-      cards.forEach(c => {
-        const n = c.querySelector('[name=player_name]').value.trim();
-        if (n) {
-          const o = document.createElement('option');
-          o.value = o.textContent = n;
-          if (n === curCap) o.selected = true;
-          capSel.appendChild(o);
-        }
-      });
-
-      wkSel.innerHTML = '<option value="">Select Wicketkeeper</option>';
-      cards.filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper')
-        .forEach(c => {
-          const n = c.querySelector('[name=player_name]').value.trim();
-          if (n) {
-            const o = document.createElement('option');
-            o.value = o.textContent = n;
-            if (n === curWk) o.selected = true;
-            wkSel.appendChild(o);
-          }
-        });
-    }
-
-    function highlightDuplicateNames(fmt) {
-      const cont = getContainer(fmt);
-      const cards = [...cont.querySelectorAll('.player-row')];
-      const nameMap = {};
-      cards.forEach(c => {
-        const inp = c.querySelector('[name=player_name]');
-        const n = inp.value.trim().toLowerCase();
-        if (n) { if (!nameMap[n]) nameMap[n] = []; nameMap[n].push(inp); }
-      });
-      cards.forEach(c => {
-        const inp = c.querySelector('[name=player_name]');
-        const n = inp.value.trim().toLowerCase();
-        const isDupe = n && nameMap[n] && nameMap[n].length > 1;
-        inp.style.borderColor = isDupe ? 'var(--danger)' : '';
-        inp.title = isDupe ? 'Duplicate player name' : '';
-      });
-    }
-
-    // ─── "Add Player" buttons ─────────────────────────────────────
-    document.querySelectorAll('.add-player-btn').forEach(btn => {
-      btn.addEventListener('click', () => addPlayerToProfile(btn.dataset.fmt));
-    });
-
-    // ─── Import JSON ──────────────────────────────────────────────
-    document.querySelectorAll('.import-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const fmt = btn.dataset.fmt;
-        const jsonStr = prompt(`Paste JSON array for ${fmt} squad:`);
-        if (!jsonStr) return;
-        try {
-          const data = JSON.parse(jsonStr);
-          if (!Array.isArray(data)) throw new Error("Must be a JSON array");
-          const cont = getContainer(fmt);
-          if (cont.children.length > 0 && !confirm("Replace current squad?")) return;
-          cont.innerHTML = '';
-          data.forEach(p => addPlayerToProfile(fmt, p, false));
-          updateProfileCount(fmt);
-          refreshProfileSelectors(fmt);
-          setTimeout(updateSubmitButtons, 100);
-        } catch (e) { alert("Invalid JSON: " + e.message); }
-      });
-    });
-
-    // ─── Copy from T20 ────────────────────────────────────────────
-    document.querySelectorAll('.copy-from-t20-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const targetFmt = btn.dataset.fmt;
-        const t20Cont = getContainer('T20');
-        const cards = [...t20Cont.querySelectorAll('.player-row')];
-        if (cards.length === 0) { alert('T20 profile is empty. Add players to T20 first.'); return; }
-        const targetCont = getContainer(targetFmt);
-        if (targetCont.children.length > 0 && !confirm(`Replace ${targetFmt} squad with T20 squad?`)) return;
-        targetCont.innerHTML = '';
-        cards.forEach(card => {
-          const p = {
-            name:   card.querySelector('[name=player_name]').value,
-            role:   card.querySelector('[name=player_role]').value,
-            bat:    card.querySelector('[name=batting_rating]').value,
-            bowl:   card.querySelector('[name=bowling_rating]').value,
-            field:  card.querySelector('[name=fielding_rating]').value,
-            bhand:  card.querySelector('[name=batting_hand]').value,
-            btype:  card.querySelector('[name=bowling_type]').value,
-            bhand2: card.querySelector('[name=bowling_hand]').value,
-          };
-          addPlayerToProfile(targetFmt, p, false);
-        });
-        updateProfileCount(targetFmt);
-        refreshProfileSelectors(targetFmt);
-        // Copy captain/wk selections too
-        const t20Cap = getCaptainSel('T20').value;
-        const t20Wk  = getWkSel('T20').value;
-        setTimeout(() => {
-          if (t20Cap) getCaptainSel(targetFmt).value = t20Cap;
-          if (t20Wk)  getWkSel(targetFmt).value = t20Wk;
-          updateSubmitButtons();
-        }, 50);
-      });
-    });
-
-    // ─── AI Prompt copy ───────────────────────────────────────────
-    const JSON_TEMPLATE = `[
-  {
-    "name": "Player Name",
-    "role": "Batsman",
-    "bat": 85, "bowl": 20, "field": 80,
-    "bhand": "Right", "btype": "", "bhand2": ""
+  // ── Helpers ──────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
-]`;
-    document.querySelectorAll('.copy-prompt-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const fmt = btn.dataset.fmt;
-        const fmtLabel = fmt === 'ListA' ? 'List A / ODI (50-over)' : 'T20';
-        const teamName   = document.getElementById('team_name').value || '[Team Name]';
-        const shortCode  = document.querySelector('[name=short_code]').value || '[Code]';
-        const homeGround = document.querySelector('[name=home_ground]').value || '[Ground]';
-        const pitchPref  = document.querySelector('[name=pitch_preference]').value || 'Flat';
-        const promptText = `Generate a JSON squad for ${fmtLabel} cricket for team "${teamName}" (${shortCode}).
-Home ground: ${homeGround}, pitch: ${pitchPref}.
-Requirements:
-- JSON array, 12–25 players
-- At least 5 Batsmen, 1 Wicketkeeper, 6 Bowlers/All-rounders
-- Ratings 0–100 (stars 85–95, regulars 70–84)
-- Bowling types: Fast, Fast-medium, Medium-fast, Medium, Off spin, Leg spin, Finger spin, Wrist spin
-Format:\n${JSON_TEMPLATE}\nReturn ONLY the JSON array.`;
-        navigator.clipboard.writeText(promptText).then(() => {
-          const orig = btn.innerHTML;
-          btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
-          setTimeout(() => { btn.innerHTML = orig; }, 2000);
-        }).catch(() => alert('Clipboard access denied'));
+
+  function normName(s) { return (s || '').trim().toLowerCase(); }
+
+  function roleClass(role) { return ROLE_CLASS[role] || 'none'; }
+
+  function shortRole(role) {
+    if (role === 'Batsman') return 'BAT';
+    if (role === 'Bowler') return 'BOWL';
+    if (role === 'All-rounder') return 'AR';
+    if (role === 'Wicketkeeper') return 'WK';
+    return role || '—';
+  }
+
+  function playerMeta(p) {
+    const parts = [];
+    if (p.batting_hand) parts.push(p.batting_hand + ' hand bat');
+    if ((p.role === 'Bowler' || p.role === 'All-rounder') && p.bowling_type) {
+      parts.push(p.bowling_type);
+    }
+    return parts.join(' · ');
+  }
+
+  function debounce(fn, wait) {
+    let t;
+    return function () {
+      const args = arguments;
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(null, args), wait);
+    };
+  }
+
+  // ── Pool: fetch + render ─────────────────────────────────────────────
+  async function fetchPool(reset) {
+    if (state.pool.loading) return;
+    if (reset) {
+      state.pool.offset = 0;
+      state.pool.items = [];
+      state.pool.hasMore = true;
+    }
+    if (!state.pool.hasMore) return;
+    state.pool.loading = true;
+    renderPool();
+
+    const params = new URLSearchParams({
+      offset: String(state.pool.offset),
+      limit: String(POOL_PAGE),
+    });
+    if (state.pool.search) params.set('q', state.pool.search);
+    if (state.pool.role) params.set('role', state.pool.role);
+
+    try {
+      const res = await fetch('/api/player-pool/search?' + params.toString(), {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin',
       });
+      if (!res.ok) throw new Error('pool fetch failed');
+      const data = await res.json();
+      state.pool.items = state.pool.items.concat(data.players || []);
+      state.pool.offset = (data.offset || 0) + (data.players || []).length;
+      state.pool.total = data.total || 0;
+      state.pool.hasMore = !!data.has_more;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      state.pool.loading = false;
+      renderPool();
+    }
+  }
+
+  function renderPool() {
+    const rosterNames = new Set(
+      [...state.rosters[state.activeFmt]].map(p => normName(p.name))
+    );
+
+    if (!state.pool.items.length && !state.pool.loading) {
+      poolList.innerHTML = `
+        <div class="tc-empty">
+          ${state.pool.search || state.pool.role
+            ? 'No players match your filters.'
+            : `No players in your pool yet. <br><a href="/player-pool">Add players to your pool &rarr;</a>`}
+        </div>`;
+      return;
+    }
+
+    const rows = state.pool.items.map(p => {
+      const inRoster = rosterNames.has(normName(p.name));
+      const meta = playerMeta(p);
+      return `
+        <div class="tc-player ${inRoster ? 'in-roster' : ''}"
+             data-pool-id="${escHtml(p.id)}"
+             title="${inRoster ? 'Already in roster' : 'Double-click to add'}">
+          <div class="tc-player-main">
+            <div class="tc-player-name">${escHtml(p.name)}</div>
+            ${meta ? `<div class="tc-player-meta">${escHtml(meta)}</div>` : ''}
+          </div>
+          <span class="tc-role-pill ${roleClass(p.role)}">${escHtml(shortRole(p.role))}</span>
+        </div>`;
+    }).join('');
+
+    const loader = state.pool.loading
+      ? '<div class="tc-loader">Loading…</div>'
+      : (state.pool.hasMore
+          ? '<div class="tc-loader" data-sentinel="1">Scroll for more</div>'
+          : (state.pool.items.length ? '<div class="tc-loader">— end of pool —</div>' : ''));
+
+    poolList.innerHTML = rows + loader;
+  }
+
+  // Infinite scroll sentinel
+  poolList.addEventListener('scroll', () => {
+    if (state.pool.loading || !state.pool.hasMore) return;
+    const threshold = 80;
+    if (poolList.scrollTop + poolList.clientHeight >= poolList.scrollHeight - threshold) {
+      fetchPool(false);
+    }
+  });
+
+  // Double-click to add
+  poolList.addEventListener('dblclick', (e) => {
+    const row = e.target.closest('[data-pool-id]');
+    if (!row) return;
+    if (row.classList.contains('in-roster')) return;
+    const id = row.getAttribute('data-pool-id');
+    const p = state.pool.items.find(x => String(x.id) === String(id));
+    if (p) addToRoster(p);
+  });
+
+  // Filters (debounced)
+  const debouncedSearch = debounce(() => {
+    state.pool.search = poolSearch.value.trim();
+    fetchPool(true);
+  }, 250);
+  poolSearch.addEventListener('input', debouncedSearch);
+  poolRole.addEventListener('change', () => {
+    state.pool.role = poolRole.value;
+    fetchPool(true);
+  });
+
+  // ── Roster: add/remove/render ────────────────────────────────────────
+  function addToRoster(pool) {
+    const list = state.rosters[state.activeFmt];
+    if (list.length >= 25) {
+      flashValidation('Maximum 25 players per profile.', 'warn');
+      return;
+    }
+    const key = normName(pool.name);
+    if (list.some(p => normName(p.name) === key)) {
+      return; // strict idempotency
+    }
+    // WK rule: bowling fields cleared server-side, but mirror on client for consistency
+    const isWk = pool.role === 'Wicketkeeper';
+    list.push({
+      name: pool.name,
+      role: pool.role,
+      batting_rating: pool.batting_rating || 0,
+      bowling_rating: isWk ? 0 : (pool.bowling_rating || 0),
+      fielding_rating: pool.fielding_rating || 0,
+      batting_hand: pool.batting_hand || '',
+      bowling_type: isWk ? '' : (pool.bowling_type || ''),
+      bowling_hand: isWk ? '' : (pool.bowling_hand || ''),
     });
+    afterRosterChange();
+  }
 
-    // ─── Validation ───────────────────────────────────────────────
-    function checkValidity() {
-      const errors = [];
-      if (!document.getElementById('team_name').value.trim()) errors.push('Team Name required');
-      const scVal = document.querySelector('[name=short_code]').value.trim().toUpperCase();
-      if (!scVal) errors.push('Short Code required');
-      else if (!/^[A-Z0-9]{2,5}$/.test(scVal)) errors.push('Short Code must be 2-5 alphanumeric characters');
-      if (!document.querySelector('[name=home_ground]').value.trim()) errors.push('Home Ground required');
-      if (!document.querySelector('[name=pitch_preference]').value) errors.push('Pitch Preference required');
+  function removeFromRoster(name) {
+    const list = state.rosters[state.activeFmt];
+    const idx = list.findIndex(p => normName(p.name) === normName(name));
+    if (idx === -1) return;
+    list.splice(idx, 1);
+    const leaders = state.leaders[state.activeFmt];
+    if (normName(leaders.captain) === normName(name)) leaders.captain = '';
+    if (normName(leaders.wicketkeeper) === normName(name)) leaders.wicketkeeper = '';
+    afterRosterChange();
+  }
 
-      let anyComplete = false;
-      for (const fmt of FORMATS) {
-        const cont  = getContainer(fmt);
-        const cards = [...cont.querySelectorAll('.player-row')];
-        if (cards.length === 0) continue; // empty profile — skip
+  function afterRosterChange() {
+    renderPool();
+    renderRoster();
+    renderLeaders();
+    updateTabCounts();
+    updateValidation();
+    scheduleAutoSave();
+  }
 
-        // Duplicate player name check
-        const nameCount = {};
-        cards.forEach(c => {
-          const n = c.querySelector('[name=player_name]').value.trim().toLowerCase();
-          if (n) nameCount[n] = (nameCount[n] || 0) + 1;
-        });
-        const dupes = Object.entries(nameCount).filter(([, v]) => v > 1).map(([k]) => k);
-        if (dupes.length) {
-          errors.push(`${fmt}: duplicate player name(s): ${dupes.join(', ')}`);
-        }
-
-        // Field completeness
-        let missingFields = false;
-        for (const c of cards) {
-          const n  = c.querySelector('[name=player_name]').value.trim();
-          const r  = c.querySelector('[name=player_role]').value;
-          const bh = c.querySelector('[name=batting_hand]').value;
-          const bt = c.querySelector('[name=bowling_type]').value;
-          const bh2= c.querySelector('[name=bowling_hand]').value;
-          if (!n || !r || !bh) { missingFields = true; break; }
-          if (bt && !bh2) errors.push(`${fmt}: set Bowling Hand for ${n}`);
-        }
-        if (missingFields) { errors.push(`${fmt}: complete all player fields`); continue; }
-
-        if (cards.length < MIN) { errors.push(`${fmt}: need at least ${MIN} players (have ${cards.length})`); continue; }
-        if (cards.length > MAX) { errors.push(`${fmt}: max ${MAX} players`); continue; }
-
-        const wkCount   = cards.filter(c => c.querySelector('[name=player_role]').value === 'Wicketkeeper').length;
-        const bowlCount = cards.filter(c => ['Bowler','All-rounder'].includes(c.querySelector('[name=player_role]').value)).length;
-        if (wkCount < 1)   errors.push(`${fmt}: need 1+ Wicketkeeper`);
-        if (bowlCount < 6) errors.push(`${fmt}: need 6+ Bowlers/All-rounders`);
-
-        if (!getCaptainSel(fmt).value) errors.push(`${fmt}: select a Captain`);
-        if (!getWkSel(fmt).value)      errors.push(`${fmt}: select a Wicketkeeper`);
-
-        if (wkCount >= 1 && bowlCount >= 6 && cards.length >= MIN && getCaptainSel(fmt).value && getWkSel(fmt).value) {
-          anyComplete = true;
-        }
-      }
-      if (!anyComplete && errors.filter(e => e.includes('required')).length === 0) {
-        errors.push('At least one complete profile (T20, List A, or First Class) is required');
-      }
-      return { valid: errors.length === 0, errors };
+  function renderRoster() {
+    const list = state.rosters[state.activeFmt];
+    if (!list.length) {
+      rosterList.innerHTML = `
+        <div class="tc-empty">No players selected for ${state.activeFmt}. Double-click from the pool to add.</div>`;
+      renderCounter(list);
+      return;
     }
+    const rows = list.map((p, idx) => {
+      const meta = playerMeta(p);
+      return `
+        <div class="tc-player" draggable="true"
+             data-roster-idx="${idx}"
+             data-roster-name="${escHtml(p.name)}"
+             title="Drag to reorder · double-click to remove">
+          <span class="tc-grip" aria-hidden="true"><i class="fa-solid fa-grip-vertical"></i></span>
+          <span class="tc-player-order">${idx + 1}</span>
+          <div class="tc-player-main">
+            <div class="tc-player-name">${escHtml(p.name)}</div>
+            ${meta ? `<div class="tc-player-meta">${escHtml(meta)}</div>` : ''}
+          </div>
+          <span class="tc-role-pill ${roleClass(p.role)}">${escHtml(shortRole(p.role))}</span>
+        </div>`;
+    }).join('');
+    rosterList.innerHTML = rows;
+    renderCounter(list);
+  }
 
-    function updateSubmitButtons() {
-      const { valid, errors } = checkValidity();
-      const btn = document.getElementById('btn-publish');
-      const feed= document.getElementById('validation-feedback');
-      if (feed) {
-        if (!valid) {
-          const show = errors.slice(0, 2);
-          const more = errors.length > 2 ? ` (+${errors.length-2} more)` : '';
-          feed.innerHTML = show.map(e => `<span><i class="fa-solid fa-circle-exclamation"></i> ${e}</span>`).join('') + (more ? `<span>${more}</span>` : '');
-          feed.style.color = 'var(--warning)';
-        } else {
-          feed.innerHTML = '<span style="color:var(--success)"><i class="fa-solid fa-check"></i> Ready to Publish</span>';
-        }
-      }
-      if (btn) {
-        btn.disabled = !valid;
-        btn.style.opacity = valid ? '1' : '0.5';
-        btn.style.cursor  = valid ? 'pointer' : 'not-allowed';
-      }
-    }
+  rosterList.addEventListener('dblclick', (e) => {
+    const row = e.target.closest('[data-roster-name]');
+    if (!row) return;
+    removeFromRoster(row.getAttribute('data-roster-name'));
+  });
 
-    // ─── Serialize profiles on submit ─────────────────────────────
-    const profilesPayloadInput = document.getElementById('profiles_payload');
+  // ── Drag-to-reorder ──────────────────────────────────────────────────
+  let dragSrcIdx = null;
 
-    function syncProfilesPayload() {
-      const payload = {};
-      for (const fmt of FORMATS) {
-        const cont  = getContainer(fmt);
-        const cards = [...cont.querySelectorAll('.player-row')];
-        if (cards.length === 0) continue;
-        payload[fmt] = {
-          captain:     getCaptainSel(fmt).value,
-          wicketkeeper:getWkSel(fmt).value,
-          players: cards.map(c => ({
-            name:            c.querySelector('[name=player_name]').value.trim(),
-            role:            c.querySelector('[name=player_role]').value,
-            batting_rating:  parseInt(c.querySelector('[name=batting_rating]').value) || 0,
-            bowling_rating:  parseInt(c.querySelector('[name=bowling_rating]').value) || 0,
-            fielding_rating: parseInt(c.querySelector('[name=fielding_rating]').value) || 0,
-            batting_hand:    c.querySelector('[name=batting_hand]').value,
-            bowling_type:    c.querySelector('[name=bowling_type]').value,
-            bowling_hand:    c.querySelector('[name=bowling_hand]').value,
-          }))
-        };
-      }
-      profilesPayloadInput.value = JSON.stringify(payload);
-    }
-
-    document.getElementById('team-form').addEventListener('submit', syncProfilesPayload);
-
-    // ─── Edit-mode prefill ────────────────────────────────────────
-    if (EDIT_MODE && TEAM_DATA) {
-      document.getElementById('team_name').value = TEAM_DATA.team_name || '';
-      document.querySelector('[name=short_code]').value    = TEAM_DATA.short_code || '';
-      document.querySelector('[name=home_ground]').value   = TEAM_DATA.home_ground || '';
-      document.querySelector('[name=pitch_preference]').value = TEAM_DATA.pitch_preference || '';
-      document.getElementById('team_color').value = TEAM_DATA.team_color || '#4f46e5';
-      document.getElementById('color-swatch').style.background = TEAM_DATA.team_color || '#4f46e5';
-
-      const profiles = TEAM_DATA.profiles || {};
-      for (const fmt of FORMATS) {
-        const pdata = profiles[fmt];
-        if (!pdata) continue;
-        const container = getContainer(fmt);
-        container.innerHTML = '';
-        (pdata.players || []).forEach(p => addPlayerToProfile(fmt, p, false));
-        updateProfileCount(fmt);
-        refreshProfileSelectors(fmt);
-        setTimeout(() => {
-          if (pdata.captain)     getCaptainSel(fmt).value = pdata.captain;
-          if (pdata.wicketkeeper)getWkSel(fmt).value      = pdata.wicketkeeper;
-          updateSubmitButtons();
-        }, 50);
-      }
-      updateSubmitButtons();
-    }
-
-    // ─── Color swatch ─────────────────────────────────────────────
-    const colorInput = document.getElementById('team_color');
-    const swatch     = document.getElementById('color-swatch');
-    swatch.style.background = colorInput.value;
-    swatch.onclick = () => colorInput.click();
-    colorInput.addEventListener('input',  e => { swatch.style.background = e.target.value; if (!EDIT_MODE) saveDraft(); });
-    colorInput.addEventListener('change', e => { swatch.style.background = e.target.value; if (!EDIT_MODE) saveDraft(); });
-
-    // ─── Team-info field listeners ────────────────────────────────
-    ['team_name','short_code','home_ground','pitch_preference'].forEach(n => {
-      const el = document.querySelector(`[name="${n}"], #${n}`);
-      if (el) {
-        el.addEventListener('input',  () => { updateSubmitButtons(); if (!EDIT_MODE) saveDraft(); });
-        el.addEventListener('change', () => { updateSubmitButtons(); if (!EDIT_MODE) saveDraft(); });
-      }
+  function clearDropMarkers() {
+    rosterList.querySelectorAll('.drop-above, .drop-below').forEach(el => {
+      el.classList.remove('drop-above', 'drop-below');
     });
+  }
 
-    // Dynamic title
-    const teamInput = document.getElementById('team_name');
-    const titleEl   = document.getElementById('dynamic-title');
-    teamInput.addEventListener('input', () => { titleEl.textContent = teamInput.value || 'Team Creation'; });
+  rosterList.addEventListener('dragstart', (e) => {
+    const row = e.target.closest('[data-roster-idx]');
+    if (!row) return;
+    dragSrcIdx = parseInt(row.getAttribute('data-roster-idx'), 10);
+    row.classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', String(dragSrcIdx)); } catch (_) {}
+    }
+  });
 
-    updateSubmitButtons();
-  </script>
+  rosterList.addEventListener('dragend', (e) => {
+    const row = e.target.closest('[data-roster-idx]');
+    if (row) row.classList.remove('dragging');
+    clearDropMarkers();
+    dragSrcIdx = null;
+  });
 
-  <script>
-    // ─── Theme toggle ─────────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', () => {
-      const root = document.documentElement;
-      const btn  = document.getElementById('theme-toggle');
-      const icon = btn.querySelector('i');
-      const saved = localStorage.getItem('theme') || 'light';
-      root.setAttribute('data-theme', saved);
-      function updateIcon(t) {
-        icon.classList.toggle('fa-sun',  t === 'dark');
-        icon.classList.toggle('fa-moon', t !== 'dark');
-      }
-      updateIcon(saved);
-      btn.addEventListener('click', () => {
-        const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-        root.setAttribute('data-theme', next);
-        localStorage.setItem('theme', next);
-        updateIcon(next);
-      });
+  rosterList.addEventListener('dragover', (e) => {
+    if (dragSrcIdx === null) return;
+    const row = e.target.closest('[data-roster-idx]');
+    if (!row) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    const rect = row.getBoundingClientRect();
+    const above = (e.clientY - rect.top) < rect.height / 2;
+    clearDropMarkers();
+    row.classList.add(above ? 'drop-above' : 'drop-below');
+  });
+
+  rosterList.addEventListener('dragleave', (e) => {
+    // Only clear when leaving the list container entirely
+    if (!rosterList.contains(e.relatedTarget)) clearDropMarkers();
+  });
+
+  rosterList.addEventListener('drop', (e) => {
+    if (dragSrcIdx === null) return;
+    const row = e.target.closest('[data-roster-idx]');
+    if (!row) { clearDropMarkers(); return; }
+    e.preventDefault();
+    const targetIdx = parseInt(row.getAttribute('data-roster-idx'), 10);
+    const rect = row.getBoundingClientRect();
+    const above = (e.clientY - rect.top) < rect.height / 2;
+    let insertAt = above ? targetIdx : targetIdx + 1;
+    clearDropMarkers();
+
+    const list = state.rosters[state.activeFmt];
+    if (dragSrcIdx < 0 || dragSrcIdx >= list.length) { dragSrcIdx = null; return; }
+    if (insertAt === dragSrcIdx || insertAt === dragSrcIdx + 1) { dragSrcIdx = null; return; }
+
+    const [moved] = list.splice(dragSrcIdx, 1);
+    if (insertAt > dragSrcIdx) insertAt -= 1;
+    list.splice(insertAt, 0, moved);
+    dragSrcIdx = null;
+
+    renderRoster();
+    scheduleAutoSave();
+  });
+
+  function renderCounter(list) {
+    const wk = list.filter(p => p.role === 'Wicketkeeper').length;
+    const bowl = list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length;
+    const count = list.length;
+    const countOk = count >= 11 && count <= 25;
+    const wkOk = wk >= 1;
+    const bowlOk = bowl >= 5;
+    rosterCounter.innerHTML = `
+      <span class="${countOk ? 'ok' : (count ? 'warn' : '')}">
+        <strong>${count}</strong>/25 players
+      </span>
+      <span class="${wkOk ? 'ok' : 'warn'}">
+        <strong>${wk}</strong> WK
+      </span>
+      <span class="${bowlOk ? 'ok' : 'warn'}">
+        <strong>${bowl}</strong> Bowl/AR
+      </span>
+    `;
+  }
+
+  function updateTabCounts() {
+    VALID_FORMATS.forEach(fmt => {
+      const el = document.getElementById('tc-count-' + fmt);
+      if (el) el.textContent = String(state.rosters[fmt].length);
     });
+  }
 
-    // ─── Draft (localStorage) ─────────────────────────────────────
-    const clearDraftBtn = document.getElementById('clear-draft');
+  // ── Leaders (captain / WK) ───────────────────────────────────────────
+  function renderLeaders() {
+    const list = state.rosters[state.activeFmt];
+    const leaders = state.leaders[state.activeFmt];
 
-    function saveDraft() {
-      if (EDIT_MODE) return;
-      const draft = {
-        team_name:        document.getElementById('team_name').value,
-        short_code:       document.querySelector('[name=short_code]').value,
-        home_ground:      document.querySelector('[name=home_ground]').value,
-        pitch_preference: document.querySelector('[name=pitch_preference]').value,
-        team_color:       document.getElementById('team_color').value,
-        profiles: {},
-        timestamp: Date.now(),
-      };
-      for (const fmt of FORMATS) {
-        const cont  = getContainer(fmt);
-        const cards = [...cont.querySelectorAll('.player-row')];
-        if (cards.length === 0) continue;
-        draft.profiles[fmt] = {
-          captain:      getCaptainSel(fmt).value,
-          wicketkeeper: getWkSel(fmt).value,
-          players: cards.map(c => ({
-            name:   c.querySelector('[name=player_name]').value,
-            role:   c.querySelector('[name=player_role]').value,
-            bat:    c.querySelector('[name=batting_rating]').value,
-            bowl:   c.querySelector('[name=bowling_rating]').value,
-            field:  c.querySelector('[name=fielding_rating]').value,
-            bhand:  c.querySelector('[name=batting_hand]').value,
-            btype:  c.querySelector('[name=bowling_type]').value,
-            bhand2: c.querySelector('[name=bowling_hand]').value,
-          }))
-        };
-      }
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-      const status = document.getElementById('auto-save-status');
-      if (status) {
-        status.style.opacity = '1';
-        clearTimeout(window._saveTimeout);
-        window._saveTimeout = setTimeout(() => { status.style.opacity = '0'; }, 2000);
-      }
+    // Captain: any roster player
+    captainSelect.innerHTML = '<option value="">— none —</option>' +
+      list.map(p => `<option value="${escHtml(p.name)}"${leaders.captain === p.name ? ' selected' : ''}>${escHtml(p.name)}</option>`).join('');
+
+    // WK: only WK-role players
+    const wks = list.filter(p => p.role === 'Wicketkeeper');
+    if (!wks.length) {
+      wkSelect.innerHTML = '<option value="">— add a wicketkeeper first —</option>';
+      leaders.wicketkeeper = '';
+    } else {
+      wkSelect.innerHTML = '<option value="">— none —</option>' +
+        wks.map(p => `<option value="${escHtml(p.name)}"${leaders.wicketkeeper === p.name ? ' selected' : ''}>${escHtml(p.name)}</option>`).join('');
     }
 
-    function loadDraft() {
-      if (EDIT_MODE) return;
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
+    // Re-sync values if leader was removed from roster
+    if (leaders.captain && !list.some(p => p.name === leaders.captain)) leaders.captain = '';
+    if (leaders.wicketkeeper && !wks.some(p => p.name === leaders.wicketkeeper)) leaders.wicketkeeper = '';
+    captainSelect.value = leaders.captain || '';
+    wkSelect.value = leaders.wicketkeeper || '';
+  }
+
+  captainSelect.addEventListener('change', () => {
+    state.leaders[state.activeFmt].captain = captainSelect.value;
+    updateValidation();
+    scheduleAutoSave();
+  });
+  wkSelect.addEventListener('change', () => {
+    state.leaders[state.activeFmt].wicketkeeper = wkSelect.value;
+    updateValidation();
+    scheduleAutoSave();
+  });
+
+  // ── Tab switching ────────────────────────────────────────────────────
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fmt = btn.getAttribute('data-fmt');
+      if (!VALID_FORMATS.includes(fmt) || fmt === state.activeFmt) return;
+      state.activeFmt = fmt;
+      tabButtons.forEach(b => b.classList.toggle('active', b === btn));
+      renderPool();
+      renderRoster();
+      renderLeaders();
+    });
+  });
+
+  // ── Identity inputs ──────────────────────────────────────────────────
+  function bindIdentity() {
+    nameInput.addEventListener('input', () => {
+      state.identity.team_name = nameInput.value;
+      scheduleAutoSave();
+    });
+    shortInput.addEventListener('input', () => {
+      shortInput.value = shortInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+      state.identity.short_code = shortInput.value;
+      scheduleAutoSave();
+    });
+    groundInput.addEventListener('input', () => {
+      state.identity.home_ground = groundInput.value;
+      scheduleAutoSave();
+    });
+    pitchSelect.addEventListener('change', () => {
+      state.identity.pitch_preference = pitchSelect.value;
+      scheduleAutoSave();
+    });
+    colorInput.addEventListener('input', () => {
+      state.identity.team_color = colorInput.value;
+      colorSwatch.style.background = colorInput.value;
+      scheduleAutoSave();
+    });
+  }
+
+  // ── Validation + save button enabling ────────────────────────────────
+  function profileStrictState(fmt) {
+    const list = state.rosters[fmt];
+    const leaders = state.leaders[fmt];
+    if (!list.length) return { empty: true, ok: false, reason: '' };
+    if (list.length < 11) return { empty: false, ok: false, reason: `${fmt}: need 11+` };
+    if (list.length > 25) return { empty: false, ok: false, reason: `${fmt}: over 25` };
+    if (list.filter(p => p.role === 'Wicketkeeper').length < 1) return { empty: false, ok: false, reason: `${fmt}: need a WK` };
+    if (list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length < 5) return { empty: false, ok: false, reason: `${fmt}: need 5 bowlers/AR` };
+    if (!leaders.captain) return { empty: false, ok: false, reason: `${fmt}: pick a captain` };
+    if (!leaders.wicketkeeper) return { empty: false, ok: false, reason: `${fmt}: pick a WK` };
+    return { empty: false, ok: true, reason: '' };
+  }
+
+  function computeRuleChecks(fmt) {
+    const list = state.rosters[fmt];
+    const leaders = state.leaders[fmt];
+    const players = list.length;
+    const wk = list.filter(p => p.role === 'Wicketkeeper').length;
+    const bowl = list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length;
+    return [
+      { label: `${players}/11 Players`, ok: players >= 11 && players <= 25 },
+      { label: `${wk}/1 Wicketkeeper`, ok: wk >= 1 },
+      { label: `${bowl}/5 Bowl/AR`, ok: bowl >= 5 },
+      { label: 'Captain', ok: !!leaders.captain },
+      { label: 'WK selected', ok: !!leaders.wicketkeeper },
+    ];
+  }
+
+  function renderRuleChips() {
+    const checks = computeRuleChecks(state.activeFmt);
+    const chips = checks.map(c =>
+      `<span class="tc-chip ${c.ok ? 'ok' : 'bad'}">
+         <span class="dot" aria-hidden="true"></span>${escHtml(c.label)}
+       </span>`
+    ).join('');
+    validationMsg.innerHTML =
+      `<span class="tc-rules-label">${escHtml(state.activeFmt)}</span>${chips}`;
+  }
+
+  function updateTabStatus() {
+    VALID_FORMATS.forEach(fmt => {
+      const el = document.getElementById('tc-tab-status-' + fmt);
+      if (!el) return;
+      const list = state.rosters[fmt];
+      if (!list.length) {
+        el.className = 'tc-tab-status';
+        return;
+      }
+      const checks = computeRuleChecks(fmt);
+      const allOk = checks.every(c => c.ok);
+      el.className = 'tc-tab-status ' + (allOk ? 'ok' : 'bad');
+    });
+  }
+
+  function updateValidation() {
+    const identityOk = state.identity.team_name.trim() &&
+                       state.identity.short_code.trim() &&
+                       state.identity.home_ground.trim() &&
+                       state.identity.pitch_preference;
+    const anyPlayers = VALID_FORMATS.some(f => state.rosters[f].length > 0);
+
+    updateTabStatus();
+
+    if (!anyPlayers) {
+      validationMsg.innerHTML =
+        `<span class="tc-rules-empty">Fill team identity and add players to save.</span>`;
+    } else {
+      renderRuleChips();
+    }
+
+    if (!identityOk || !anyPlayers) {
+      saveBtn.disabled = true;
+      return;
+    }
+
+    // All non-empty profiles must satisfy every rule.
+    const allGood = VALID_FORMATS.every(fmt => {
+      if (!state.rosters[fmt].length) return true;
+      return computeRuleChecks(fmt).every(c => c.ok);
+    });
+    saveBtn.disabled = !allGood;
+  }
+
+  let flashTimer = null;
+  function flashValidation(msg) {
+    if (flashTimer) clearTimeout(flashTimer);
+    validationMsg.innerHTML =
+      `<span class="tc-chip bad"><span class="dot" aria-hidden="true"></span>${escHtml(msg)}</span>`;
+    flashTimer = setTimeout(() => { flashTimer = null; updateValidation(); }, 2000);
+  }
+
+  // ── LocalStorage auto-save ───────────────────────────────────────────
+  let saveTimer = null;
+  let lastSavedJson = '';
+
+  function setSaveStatus(mode) {
+    if (mode === 'saving') {
+      saveStatus.className = 'tc-save-status saving';
+      saveStatusLabel.textContent = 'Saving…';
+    } else if (mode === 'saved') {
+      saveStatus.className = 'tc-save-status saved';
+      saveStatusLabel.textContent = 'Draft saved';
+    } else if (mode === 'idle') {
+      saveStatus.className = 'tc-save-status';
+      saveStatusLabel.textContent = 'Not started';
+    }
+  }
+
+  function snapshot() {
+    return JSON.stringify({
+      v: 1,
+      ts: Date.now(),
+      identity: state.identity,
+      activeFmt: state.activeFmt,
+      rosters: state.rosters,
+      leaders: state.leaders,
+    });
+  }
+
+  function scheduleAutoSave() {
+    setSaveStatus('saving');
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
       try {
-        const draft = JSON.parse(raw);
-        document.getElementById('team_name').value = draft.team_name || '';
-        document.querySelector('[name=short_code]').value      = draft.short_code || '';
-        document.querySelector('[name=home_ground]').value     = draft.home_ground || '';
-        document.querySelector('[name=pitch_preference]').value= draft.pitch_preference || '';
-        if (draft.team_color) {
-          document.getElementById('team_color').value = draft.team_color;
-          document.getElementById('color-swatch').style.background = draft.team_color;
+        const json = snapshot();
+        if (json !== lastSavedJson) {
+          localStorage.setItem(LS_KEY, json);
+          lastSavedJson = json;
         }
-        const profiles = draft.profiles || {};
-        for (const fmt of FORMATS) {
-          if (!profiles[fmt]) continue;
-          const cont = getContainer(fmt);
-          cont.innerHTML = '';
-          (profiles[fmt].players || []).forEach(p => addPlayerToProfile(fmt, p, false));
-          updateProfileCount(fmt);
-          refreshProfileSelectors(fmt);
-          setTimeout(() => {
-            if (profiles[fmt].captain)      getCaptainSel(fmt).value = profiles[fmt].captain;
-            if (profiles[fmt].wicketkeeper) getWkSel(fmt).value      = profiles[fmt].wicketkeeper;
-            updateSubmitButtons();
-          }, 100);
-        }
-        updateSubmitButtons();
-      } catch (e) { console.error('Error loading draft', e); }
-    }
+        setSaveStatus('saved');
+      } catch (e) {
+        console.warn('autosave failed', e);
+      }
+    }, 400);
+  }
 
-    if (clearDraftBtn) {
-      clearDraftBtn.onclick = () => {
-        if (confirm('Clear the form? This cannot be undone.')) {
-          localStorage.removeItem(DRAFT_KEY);
-          location.reload();
-        }
+  function loadDraft() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      if (!parsed || parsed.v !== 1) return false;
+      const id = parsed.identity || {};
+      state.identity = {
+        team_name: id.team_name || '',
+        short_code: id.short_code || '',
+        home_ground: id.home_ground || '',
+        pitch_preference: id.pitch_preference || '',
+        team_color: id.team_color || '#4f46e5',
       };
+      state.rosters = {
+        T20: Array.isArray(parsed.rosters && parsed.rosters.T20) ? parsed.rosters.T20 : [],
+        ListA: Array.isArray(parsed.rosters && parsed.rosters.ListA) ? parsed.rosters.ListA : [],
+      };
+      state.leaders = {
+        T20: (parsed.leaders && parsed.leaders.T20) || { captain: '', wicketkeeper: '' },
+        ListA: (parsed.leaders && parsed.leaders.ListA) || { captain: '', wicketkeeper: '' },
+      };
+      if (VALID_FORMATS.includes(parsed.activeFmt)) state.activeFmt = parsed.activeFmt;
+
+      nameInput.value = state.identity.team_name;
+      shortInput.value = state.identity.short_code;
+      groundInput.value = state.identity.home_ground;
+      pitchSelect.value = state.identity.pitch_preference;
+      colorInput.value = state.identity.team_color;
+      colorSwatch.style.background = state.identity.team_color;
+
+      tabButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-fmt') === state.activeFmt));
+      lastSavedJson = raw;
+      return true;
+    } catch (e) {
+      console.warn('draft load failed', e);
+      return false;
     }
+  }
 
-    if (!EDIT_MODE) loadDraft();
+  function clearDraft() {
+    try { localStorage.removeItem(LS_KEY); } catch (e) {}
+    lastSavedJson = '';
+  }
 
-    // ─── Unsaved changes warning ──────────────────────────────────
-    let formDirty = false;
-    let formSubmitting = false;
-    document.getElementById('team-form').addEventListener('input', () => { formDirty = true; });
-    document.getElementById('team-form').addEventListener('change', () => { formDirty = true; });
-    document.getElementById('team-form').addEventListener('submit', () => { formSubmitting = true; });
-    window.addEventListener('beforeunload', (e) => {
-      if (formDirty && !formSubmitting) { e.preventDefault(); }
+  clearBtn.addEventListener('click', () => {
+    if (!confirm('Clear your unsaved draft? This cannot be undone.')) return;
+    clearDraft();
+    state.identity = { team_name: '', short_code: '', home_ground: '', pitch_preference: '', team_color: '#4f46e5' };
+    state.rosters = { T20: [], ListA: [] };
+    state.leaders = { T20: { captain: '', wicketkeeper: '' }, ListA: { captain: '', wicketkeeper: '' } };
+    state.activeFmt = 'T20';
+    nameInput.value = ''; shortInput.value = ''; groundInput.value = '';
+    pitchSelect.value = ''; colorInput.value = '#4f46e5';
+    colorSwatch.style.background = '#4f46e5';
+    tabButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-fmt') === 'T20'));
+    renderRoster();
+    renderLeaders();
+    updateTabCounts();
+    updateValidation();
+    renderPool();
+    setSaveStatus('idle');
+  });
+
+  $('tc-restored-dismiss').addEventListener('click', () => {
+    restoredBanner.hidden = true;
+  });
+
+  // ── Submit: build payload ────────────────────────────────────────────
+  form.addEventListener('submit', (e) => {
+    if (state.submitting) { e.preventDefault(); return; }
+    const payload = {};
+    VALID_FORMATS.forEach(fmt => {
+      const list = state.rosters[fmt];
+      if (!list.length) return;
+      payload[fmt] = {
+        captain: state.leaders[fmt].captain || '',
+        wicketkeeper: state.leaders[fmt].wicketkeeper || '',
+        players: list,
+      };
     });
-  </script>
+    if (!Object.keys(payload).length) {
+      e.preventDefault();
+      flashValidation('Add players to at least one profile before saving.', 'draft');
+      return;
+    }
+    payloadInput.value = JSON.stringify(payload);
+    state.submitting = true;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+    // Clear localStorage optimistically; if server rejects, user is re-rendered with error
+    // and can refill (identity fields are preserved via form POST echo, rosters must be rebuilt).
+    // To protect against loss on server error, keep the draft until server confirms success —
+    // which we detect via the redirect (this page unloads).
+    window.addEventListener('beforeunload', () => {
+      clearDraft();
+    }, { once: true });
+  });
 
-</body>
-
-</html>
+  // ── Init ─────────────────────────────────────────────────────────────
+  bindIdentity();
+  colorSwatch.style.background = colorInput.value;
+  const restored = loadDraft();
+  if (restored) restoredBanner.hidden = false;
+  renderRoster();
+  renderLeaders();
+  updateTabCounts();
+  updateValidation();
+  fetchPool(true);
+  setSaveStatus(restored ? 'saved' : 'idle');
+})();
+</script>
+{% endblock %}

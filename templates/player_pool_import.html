@@ -12,8 +12,9 @@
 
     .ppi-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; align-items: stretch; }
     .ppi-grid > div { display: flex; flex-direction: column; }
-    .ppi-grid > div > .ppi-card { flex: 1; display: flex; flex-direction: column; }
-    .ppi-grid > div > .ppi-card .ppi-code { flex: 1; }
+    .ppi-grid > div > .ppi-card { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .ppi-ai-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .ppi-ai-body .ppi-code { flex: 1; min-height: 0; margin: 0; }
     @media (max-width: 860px) { .ppi-grid { grid-template-columns: 1fr; } }
 
     .ppi-card { background: var(--bg-raised, #fff); border: 1px solid var(--border-light, #e5e7eb); border-radius: 12px; padding: 24px; margin-bottom: 1.5rem; }
@@ -110,8 +111,9 @@
                     </button>
                 </div>
 
-                <pre class="ppi-code" id="jsonAiPrompt"></pre>
-                <pre class="ppi-code" id="csvAiPrompt" style="display:none;"></pre>
+                <div class="ppi-ai-body">
+                    <pre class="ppi-code" id="aiPrompt"></pre>
+                </div>
             </div>
         </div>
     </div>
@@ -123,8 +125,7 @@
     var form = document.getElementById('playerPoolImportForm');
     var fileInput = document.getElementById('importFile');
     var pastedData = document.getElementById('pastedData');
-    var csvAiPrompt = document.getElementById('csvAiPrompt');
-    var jsonAiPrompt = document.getElementById('jsonAiPrompt');
+    var aiPrompt = document.getElementById('aiPrompt');
     var copyAiPromptBtn = document.getElementById('copyAiPromptBtn');
     var sampleJsonBtn = document.getElementById('sampleJsonBtn');
     var sampleCsvBtn = document.getElementById('sampleCsvBtn');
@@ -200,10 +201,10 @@
         ].join('\n');
     }
 
+    var prompts = {};
     function syncFormatBlocks(){
         var isJson = fmt.value === 'json';
-        jsonAiPrompt.style.display = isJson ? '' : 'none';
-        csvAiPrompt.style.display = isJson ? 'none' : '';
+        aiPrompt.textContent = prompts[fmt.value] || '';
         sampleJsonBtn.classList.toggle('is-hidden', !isJson);
         sampleCsvBtn.classList.toggle('is-hidden', isJson);
     }
@@ -226,14 +227,14 @@
         return parseCsvStrict(raw);
     }
 
-    csvAiPrompt.textContent = buildCsvPrompt();
-    jsonAiPrompt.textContent = buildJsonPrompt();
+    prompts.json = buildJsonPrompt();
+    prompts.csv = buildCsvPrompt();
     syncFormatBlocks();
 
     fmt.addEventListener('change', syncFormatBlocks);
 
     copyAiPromptBtn.addEventListener('click', function(){
-        var text = fmt.value === 'json' ? jsonAiPrompt.textContent : csvAiPrompt.textContent;
+        var text = aiPrompt.textContent;
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(function(){
                 copyAiPromptBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';

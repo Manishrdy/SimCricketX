@@ -419,14 +419,19 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
     def admin_player_pool_import():
         if request.method == "POST":
             fmt = request.form.get("format", "json")
+            pasted_data = request.form.get("pasted_data", "").strip()
             f = request.files.get("file")
-            if not f or not f.filename:
-                flash("No file selected.", "danger")
+            has_file = bool(f and f.filename)
+
+            if not pasted_data and not has_file:
+                flash("Provide either a file upload or pasted data.", "danger")
                 return redirect(url_for("admin_player_pool_import"))
+
             if fmt == "csv":
-                rows, err = _parse_csv_upload(f)
+                rows, err = _parse_csv_text(pasted_data) if pasted_data else _parse_csv_upload(f)
             else:
-                rows, err = _parse_json_upload(f)
+                rows, err = _parse_json_text(pasted_data) if pasted_data else _parse_json_upload(f)
+
             if err:
                 flash(err, "danger")
                 return redirect(url_for("admin_player_pool_import"))
@@ -442,7 +447,14 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
                 msg += f" {len(errors)} error(s): " + "; ".join(errors[:5])
             flash(msg, "success" if not errors else "warning")
             return redirect(url_for("admin_player_pool"))
-        return render_template("admin/player_pool_import.html")
+        return render_template(
+            "admin/player_pool_import.html",
+            player_fields=PLAYER_FIELDS,
+            roles=sorted(VALID_ROLES),
+            batting_hands=sorted(VALID_BATTING_HANDS - {""}),
+            bowling_types=sorted(VALID_BOWLING_TYPES - {""}),
+            bowling_hands=sorted(VALID_BOWLING_HANDS - {""}),
+        )
 
     @app.route("/admin/player-pool/export/json")
     @admin_required
