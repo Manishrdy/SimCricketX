@@ -1,0 +1,84 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <a href="{{ url_for('admin_player_pool') }}">Player Pool</a>
+    <span class="sep">/</span>
+    <span class="current">Import</span>
+</div>
+
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Import Players to Global Pool</h1>
+        <p class="admin-page-subtitle">Upload a JSON or CSV file. Duplicate names are silently skipped.</p>
+    </div>
+</div>
+
+<div class="a-card" style="max-width:640px;">
+    <form method="POST" enctype="multipart/form-data" class="a-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="a-form-group">
+            <label class="a-label">File Format</label>
+            <select name="format" class="a-select" id="importFormat">
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+            </select>
+        </div>
+
+        <div class="a-form-group">
+            <label class="a-label">File</label>
+            <input type="file" name="file" class="a-input" accept=".json,.csv" required>
+        </div>
+
+        <div style="margin-top:24px;display:flex;gap:12px;">
+            <button type="submit" class="a-btn a-btn-primary">
+                <i class="fas fa-file-import"></i> Import
+            </button>
+            <a href="{{ url_for('admin_player_pool') }}" class="a-btn a-btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="a-card" style="max-width:640px;margin-top:24px;">
+    <h3 style="margin:0 0 12px;">Expected Format</h3>
+
+    <div id="jsonExample">
+        <p class="admin-page-subtitle" style="margin-bottom:8px;">JSON — array of player objects:</p>
+        <pre style="background:var(--surface-alt);padding:12px;border-radius:8px;font-size:13px;overflow-x:auto;">[
+  {
+    "name": "Virat Kohli",
+    "role": "Batsman",
+    "batting_rating": 95,
+    "bowling_rating": 20,
+    "fielding_rating": 85,
+    "batting_hand": "Right",
+    "bowling_type": "Medium",
+    "bowling_hand": "Right",
+    "is_captain": false,
+    "is_wicketkeeper": false
+  }
+]</pre>
+    </div>
+
+    <div id="csvExample" style="display:none;">
+        <p class="admin-page-subtitle" style="margin-bottom:8px;">CSV — header row with column names:</p>
+        <pre style="background:var(--surface-alt);padding:12px;border-radius:8px;font-size:13px;overflow-x:auto;">name,role,batting_rating,bowling_rating,fielding_rating,batting_hand,bowling_type,bowling_hand,is_captain,is_wicketkeeper
+Virat Kohli,Batsman,95,20,85,Right,Medium,Right,false,false</pre>
+    </div>
+</div>
+
+<script>
+(function(){
+    var fmt = document.getElementById('importFormat');
+    var jsonEx = document.getElementById('jsonExample');
+    var csvEx = document.getElementById('csvExample');
+    fmt.addEventListener('change', function(){
+        jsonEx.style.display = fmt.value === 'json' ? '' : 'none';
+        csvEx.style.display = fmt.value === 'csv' ? '' : 'none';
+    });
+})();
+</script>
+{% endblock %}

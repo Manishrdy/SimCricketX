@@ -103,6 +103,8 @@ from routes.admin_routes import register_admin_routes
 from routes.issue_routes import register_issue_routes
 from routes.admin_issue_routes import register_admin_issue_routes
 from routes.webhook_routes import register_webhook_routes
+from routes.player_pool_routes import register_player_pool_routes
+from routes.auction_routes import register_auction_routes
 from utils.exception_tracker import log_exception
 
 # SocketIO optional dependency — app works normally via HTTP if not installed
@@ -124,6 +126,8 @@ except ImportError:
 
 from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, TournamentTeam, TournamentFixture
+from database.models import MasterPlayer as DBMasterPlayer, UserPlayer as DBUserPlayer
+from database.models import AuctionEvent, AuctionCategory, AuctionTeam, AuctionPlayer, AuctionBid
 from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership, AdminAuditLog  # Distinct from engine.match.Match
 from database.models import (
     FailedLoginAttempt,
@@ -1182,6 +1186,20 @@ def create_app():
             log_exception(e, source="sqlite")
             print(f"[WARN] Exception log dedup migration skipped: {e}")
 
+        try:
+            from migrations.add_player_pool import run_migration as _run_player_pool_migration
+            _run_player_pool_migration(db, app)
+        except Exception as e:
+            log_exception(e, source="sqlite")
+            print(f"[WARN] Player pool migration skipped: {e}")
+
+        try:
+            from migrations.add_auction import run_migration as _run_auction_migration
+            _run_auction_migration(db, app)
+        except Exception as e:
+            log_exception(e, source="sqlite")
+            print(f"[WARN] Auction migration skipped: {e}")
+
     # --- Logging setup (logs to file + terminal) ---
     base_dir = os.path.abspath(os.path.dirname(__file__))
     log_dir = os.path.join(base_dir, "logs")
@@ -1564,6 +1582,27 @@ def create_app():
     # GitHub webhook receiver (PLAN-IR-001 Phase 3). CSRF-exempted because
     # it's authenticated via HMAC, not session cookies.
     register_webhook_routes(app, db=db, csrf=csrf)
+
+    # --- Player Pool Routes ---
+    register_player_pool_routes(
+        app,
+        db=db,
+        DBMasterPlayer=DBMasterPlayer,
+        DBUserPlayer=DBUserPlayer,
+    )
+
+    # --- Auction Routes ---
+    register_auction_routes(
+        app,
+        db=db,
+        AuctionEvent=AuctionEvent,
+        AuctionCategory=AuctionCategory,
+        AuctionTeam=AuctionTeam,
+        AuctionPlayer=AuctionPlayer,
+        AuctionBid=AuctionBid,
+        DBMasterPlayer=DBMasterPlayer,
+        DBUserPlayer=DBUserPlayer,
+    )
 
     # --- Request logging ---
     @app.before_request
@@ -2234,6 +2273,8 @@ def create_app():
         DBTeam=DBTeam,
         DBPlayer=DBPlayer,
         DBTeamProfile=DBTeamProfile,
+        DBMasterPlayer=DBMasterPlayer,
+        DBUserPlayer=DBUserPlayer,
     )
 
     # --- Match & Archive Routes (Phase 4 extraction) ---
