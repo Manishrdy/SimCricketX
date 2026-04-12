@@ -67,15 +67,15 @@
         display: flex;
         gap: 10px;
         align-items: center;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
     }
-    .pp-toolbar form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .pp-search {
         padding: 8px 12px;
         border: 1px solid var(--border-light, #e5e7eb);
         border-radius: 8px;
         font-size: .85rem;
-        min-width: 220px;
+        flex: 1;
+        min-width: 0;
         background: var(--bg-raised, #fff);
         color: var(--text-primary);
     }
@@ -86,11 +86,14 @@
         font-size: .85rem;
         background: var(--bg-raised, #fff);
         color: var(--text-primary);
+        flex-shrink: 0;
     }
     .pp-count {
         margin-left: auto;
         color: var(--text-secondary);
         font-size: .85rem;
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 
     .pp-container {
@@ -212,19 +215,17 @@
 </div>
 
 <div class="pp-toolbar">
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input type="text" class="pp-search" id="liveSearch" placeholder="Search by name…" value="{{ search }}" autocomplete="off">
-        <select class="pp-select" id="liveRole">
-            <option value="">All Roles</option>
-            {% for r in roles %}
-            <option value="{{ r }}" {{ 'selected' if role_filter == r }}>{{ r }}</option>
-            {% endfor %}
-        </select>
-        <button type="button" class="pp-btn pp-btn-secondary pp-btn-sm" id="clearFilters" style="{{ '' if search or role_filter else 'display:none' }}" onclick="clearLiveFilters()">Clear</button>
-        <button type="button" class="pp-btn pp-btn-secondary pp-btn-sm pp-select-toggle" id="selectToggle" onclick="toggleSelectMode()">
-            <i class="fas fa-check-double"></i> Select
-        </button>
-    </div>
+    <input type="text" class="pp-search" id="liveSearch" placeholder="Search by name…" value="{{ search }}" autocomplete="off">
+    <select class="pp-select" id="liveRole">
+        <option value="">All Roles</option>
+        {% for r in roles %}
+        <option value="{{ r }}" {{ 'selected' if role_filter == r }}>{{ r }}</option>
+        {% endfor %}
+    </select>
+    <button type="button" class="pp-btn pp-btn-secondary pp-btn-sm" id="clearFilters" style="{{ '' if search or role_filter else 'display:none' }}" onclick="clearLiveFilters()">Clear</button>
+    <button type="button" class="pp-btn pp-btn-secondary pp-btn-sm pp-select-toggle" id="selectToggle" onclick="toggleSelectMode()">
+        <i class="fas fa-check-double"></i> Select
+    </button>
     <span class="pp-count" id="shownCount">{{ pool|length }} of {{ total }}</span>
 </div>
 
