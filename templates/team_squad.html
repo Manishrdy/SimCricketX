@@ -1,0 +1,453 @@
+{% extends "layout.html" %}
+
+{% block title %}Squad Builder — {{ team.name }} | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sb-container { max-width: 1300px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
+    .sb-back { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none; font-size: .85rem; margin-bottom: 1rem; }
+    .sb-back:hover { color: var(--text-primary); }
+    .sb-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; flex-wrap: wrap; gap: 12px; }
+    .sb-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 0; }
+    .sb-subtitle { color: var(--text-secondary); font-size: .9rem; margin-bottom: 1rem; }
+    .sb-tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; background: var(--bg-surface, #f9fafb); padding: 4px; border-radius: 10px; width: fit-content; }
+    .sb-tab { padding: 8px 20px; border-radius: 8px; font-size: .85rem; font-weight: 600; text-decoration: none; color: var(--text-secondary); }
+    .sb-tab:hover { color: var(--text-primary); }
+    .sb-tab.active { background: var(--bg-raised, #fff); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .sb-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: .85rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; transition: opacity .2s; }
+    .sb-btn:hover { opacity: .85; }
+    .sb-btn-primary { background: var(--brand-primary, #0f766e); color: #fff; }
+    .sb-btn-success { background: #16a34a; color: #fff; }
+    .sb-btn-danger { background: #dc2626; color: #fff; }
+    .sb-btn-secondary { background: var(--bg-raised, #fff); color: var(--text-primary); border: 1px solid var(--border-light, #e5e7eb); }
+    .sb-btn-sm { padding: 5px 10px; font-size: .78rem; }
+    .sb-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .sb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 900px) { .sb-grid { grid-template-columns: 1fr; } }
+
+    .sb-panel { background: var(--bg-raised, #fff); border: 1px solid var(--border-light, #e5e7eb); border-radius: 12px; padding: 20px; }
+    .sb-panel-title { font-size: 1rem; font-weight: 600; margin: 0 0 12px; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; }
+    .sb-panel-count { font-size: .85rem; font-weight: 400; color: var(--text-secondary); }
+
+    /* Filters */
+    .sb-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .sb-search { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .85rem; background: var(--bg-raised, #fff); color: var(--text-primary); }
+    .sb-search:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
+    .sb-filter-select { padding: 8px 10px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .8rem; background: var(--bg-raised, #fff); color: var(--text-primary); }
+    .sb-filter-row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+
+    /* Player cards */
+    .sb-list { max-height: 520px; overflow-y: auto; min-height: 200px; }
+    .sb-player { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; margin-bottom: 4px; border-radius: 8px; border: 1px solid var(--border-light, #e5e7eb); background: var(--bg-raised, #fff); cursor: grab; transition: all .15s; font-size: .83rem; }
+    .sb-player:hover { border-color: var(--brand-primary, #0f766e); box-shadow: 0 2px 6px rgba(0,0,0,.06); }
+    .sb-player.dragging { opacity: .5; transform: scale(.97); }
+    .sb-player-info { display: flex; align-items: center; gap: 8px; flex: 1; }
+    .sb-player-name { font-weight: 600; color: var(--text-primary); }
+    .sb-player-role { font-size: .75rem; color: var(--text-secondary); }
+    .sb-player-ratings { font-size: .72rem; color: var(--text-secondary); }
+    .sb-player-detail { font-size: .7rem; color: var(--text-secondary); }
+    .sb-role-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .sb-role-bat { background: #3b82f6; }
+    .sb-role-bowl { background: #ef4444; }
+    .sb-role-all { background: #8b5cf6; }
+    .sb-role-wk { background: #f59e0b; }
+    .sb-add-btn, .sb-remove-btn { background: none; border: none; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
+    .sb-add-btn { color: var(--brand-primary, #0f766e); }
+    .sb-add-btn:hover { background: rgba(15,118,110,.1); }
+    .sb-remove-btn { color: #dc2626; }
+    .sb-remove-btn:hover { background: rgba(220,38,38,.1); }
+
+    /* Squad panel extras */
+    .sb-squad-panel { border: 2px solid var(--brand-primary, #0f766e); }
+    .sb-squad-panel.drag-over { background: rgba(15,118,110,.04); border-style: dashed; }
+    .sb-drop-zone { min-height: 80px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: .85rem; border: 2px dashed var(--border-light, #e5e7eb); border-radius: 8px; margin-bottom: 8px; padding: 12px; display: none; }
+    .sb-squad-panel.drag-over .sb-drop-zone { display: flex; }
+
+    /* Validation status */
+    .sb-validation { margin-top: 12px; padding: 12px; border-radius: 8px; font-size: .8rem; }
+    .sb-val-ok { background: #dcfce7; color: #166534; }
+    .sb-val-warn { background: #fef3c7; color: #92400e; }
+    [data-theme="dark"] .sb-val-ok { background: #14532d; color: #86efac; }
+    [data-theme="dark"] .sb-val-warn { background: #78350f; color: #fde68a; }
+
+    /* Designations */
+    .sb-designations { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+    .sb-designation { flex: 1; min-width: 140px; }
+    .sb-designation label { display: block; font-size: .75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px; }
+    .sb-designation select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: .8rem; background: var(--bg-raised); color: var(--text-primary); }
+
+    .sb-captain-badge, .sb-wk-badge { font-size: .65rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-left: 4px; }
+    .sb-captain-badge { background: #dbeafe; color: #1e40af; }
+    .sb-wk-badge { background: #fef3c7; color: #92400e; }
+    [data-theme="dark"] .sb-captain-badge { background: #1e3a5f; color: #93c5fd; }
+    [data-theme="dark"] .sb-wk-badge { background: #78350f; color: #fde68a; }
+
+    .sb-feedback { margin-top: 8px; font-size: .85rem; font-weight: 600; min-height: 1.2em; }
+    .sb-feedback.error { color: #dc2626; }
+    .sb-feedback.ok { color: #16a34a; }
+    .sb-empty { text-align: center; padding: 2rem; color: var(--text-secondary); font-size: .85rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sb-container">
+    <a href="{{ url_for('manage_teams') }}" class="sb-back"><i class="fas fa-arrow-left"></i> Back to Teams</a>
+
+    <div class="sb-header">
+        <div>
+            <h1 class="sb-title">{{ team.name }} — Squad Builder</h1>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <button class="sb-btn sb-btn-success" id="publishBtn" onclick="publishSquad()"><i class="fas fa-check-circle"></i> Publish Team</button>
+        </div>
+    </div>
+    <p class="sb-subtitle">Drag players from the pool to your squad, or click the + button. Need 12-25 players, 1+ WK, 6+ Bowlers/All-rounders.</p>
+
+    <div class="sb-tabs">
+        {% for f in formats %}
+        <a href="{{ url_for('team_squad', team_id=team.id, fmt=f) }}" class="sb-tab {{ 'active' if f == fmt }}">{{ f }}</a>
+        {% endfor %}
+    </div>
+
+    <div class="sb-grid">
+        <!-- Pool Panel -->
+        <div class="sb-panel" id="poolPanel">
+            <div class="sb-panel-title">
+                Player Pool
+                <span class="sb-panel-count" id="poolCount">({{ pool|length }})</span>
+            </div>
+            <div class="sb-filters">
+                <input type="text" class="sb-search" id="searchInput" placeholder="Search players…" autocomplete="off">
+                <select class="sb-filter-select" id="filterRole">
+                    <option value="">All Roles</option>
+                    <option value="Batsman">Batsman</option>
+                    <option value="Bowler">Bowler</option>
+                    <option value="All-rounder">All-rounder</option>
+                    <option value="Wicketkeeper">Wicketkeeper</option>
+                </select>
+            </div>
+            <div class="sb-filter-row2" id="subFilters" style="display:none;">
+                <select class="sb-filter-select" id="filterBatHand">
+                    <option value="">Any Hand</option>
+                    <option value="Left">Left Hand</option>
+                    <option value="Right">Right Hand</option>
+                </select>
+                <select class="sb-filter-select" id="filterBowlType" style="display:none;">
+                    <option value="">Any Bowling</option>
+                    <option value="Fast">Fast</option>
+                    <option value="Fast-medium">Fast-medium</option>
+                    <option value="Medium-fast">Medium-fast</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Off spin">Off spin</option>
+                    <option value="Leg spin">Leg spin</option>
+                    <option value="Finger spin">Finger spin</option>
+                    <option value="Wrist spin">Wrist spin</option>
+                </select>
+                <select class="sb-filter-select" id="filterBowlHand" style="display:none;">
+                    <option value="">Any Bowl Hand</option>
+                    <option value="Left">Left</option>
+                    <option value="Right">Right</option>
+                </select>
+            </div>
+            <div class="sb-list" id="poolList">
+                {% for p in pool %}
+                <div class="sb-player" draggable="true" data-player-id="{{ p.id }}" data-name="{{ p.name|lower }}" data-role="{{ p.role }}" data-bat-hand="{{ p.batting_hand }}" data-bowl-type="{{ p.bowling_type }}" data-bowl-hand="{{ p.bowling_hand }}">
+                    <div class="sb-player-info">
+                        <span class="sb-role-dot sb-role-{{ 'bat' if p.role == 'Batsman' else 'bowl' if p.role == 'Bowler' else 'all' if p.role == 'All-rounder' else 'wk' }}"></span>
+                        <div>
+                            <span class="sb-player-name">{{ p.name }}</span>
+                            <span class="sb-player-role">{{ p.role }}</span>
+                            <div class="sb-player-ratings">Bat {{ p.batting_rating }} | Bowl {{ p.bowling_rating }} | Field {{ p.fielding_rating }}</div>
+                            {% if p.batting_hand or p.bowling_type %}<div class="sb-player-detail">{{ p.batting_hand }}{% if p.bowling_type %} | {{ p.bowling_type }}{% endif %}</div>{% endif %}
+                        </div>
+                    </div>
+                    <button class="sb-add-btn" onclick="addPlayer('{{ p.id }}')" title="Add to squad"><i class="fas fa-plus-circle"></i></button>
+                </div>
+                {% endfor %}
+                {% if not pool %}
+                <div class="sb-empty">No players available. <a href="{{ url_for('player_pool') }}">Add players to your pool</a> first.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Squad Panel -->
+        <div class="sb-panel sb-squad-panel" id="squadPanel">
+            <div class="sb-panel-title">
+                Your Squad ({{ fmt }})
+                <span class="sb-panel-count" id="squadCount">{{ squad|length }}/25</span>
+            </div>
+            <div class="sb-drop-zone" id="dropZone">Drop player here to add</div>
+            <div class="sb-list" id="squadList">
+                {% for p in squad %}
+                <div class="sb-player" data-squad-id="{{ p.id }}" data-role="{{ p.role }}">
+                    <div class="sb-player-info">
+                        <span class="sb-role-dot sb-role-{{ 'bat' if p.role == 'Batsman' else 'bowl' if p.role == 'Bowler' else 'all' if p.role == 'All-rounder' else 'wk' }}"></span>
+                        <div>
+                            <span class="sb-player-name">{{ p.name }}{% if p.is_captain %}<span class="sb-captain-badge">C</span>{% endif %}{% if p.is_wicketkeeper %}<span class="sb-wk-badge">WK</span>{% endif %}</span>
+                            <span class="sb-player-role">{{ p.role }}</span>
+                            <div class="sb-player-ratings">Bat {{ p.batting_rating }} | Bowl {{ p.bowling_rating }} | Field {{ p.fielding_rating }}</div>
+                        </div>
+                    </div>
+                    <button class="sb-remove-btn" onclick="removePlayer({{ p.id }}, '{{ p.name }}')" title="Remove"><i class="fas fa-times-circle"></i></button>
+                </div>
+                {% endfor %}
+                {% if not squad %}
+                <div class="sb-empty" id="squadEmpty">Drag or add players from the pool.</div>
+                {% endif %}
+            </div>
+
+            <!-- Designations -->
+            <div class="sb-designations">
+                <div class="sb-designation">
+                    <label>Captain</label>
+                    <select id="captainSelect" onchange="setCaptain()">
+                        <option value="">Select captain…</option>
+                        {% for p in squad %}
+                        <option value="{{ p.id }}" {{ 'selected' if p.is_captain }}>{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="sb-designation">
+                    <label>Wicketkeeper</label>
+                    <select id="wkSelect" onchange="setWicketkeeper()">
+                        <option value="">Select WK…</option>
+                        {% for p in squad if p.role == 'Wicketkeeper' %}
+                        <option value="{{ p.id }}" {{ 'selected' if p.is_wicketkeeper }}>{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Validation -->
+            <div class="sb-validation" id="validationBox"></div>
+            <div class="sb-feedback" id="feedback"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    var TEAM_ID = {{ team.id }};
+    var FMT = '{{ fmt }}';
+    var CSRF = '{{ csrf_token() }}';
+
+    // Drag and drop
+    document.querySelectorAll('#poolList .sb-player').forEach(function(el){
+        el.addEventListener('dragstart', function(e){
+            e.dataTransfer.setData('text/plain', el.dataset.playerId);
+            el.classList.add('dragging');
+        });
+        el.addEventListener('dragend', function(){ el.classList.remove('dragging'); });
+    });
+
+    var squadPanel = document.getElementById('squadPanel');
+    squadPanel.addEventListener('dragover', function(e){ e.preventDefault(); squadPanel.classList.add('drag-over'); });
+    squadPanel.addEventListener('dragleave', function(){ squadPanel.classList.remove('drag-over'); });
+    squadPanel.addEventListener('drop', function(e){
+        e.preventDefault();
+        squadPanel.classList.remove('drag-over');
+        var playerId = e.dataTransfer.getData('text/plain');
+        if (playerId) addPlayer(playerId);
+    });
+
+    // Search + Filters
+    var searchInput = document.getElementById('searchInput');
+    var filterRole = document.getElementById('filterRole');
+    var filterBatHand = document.getElementById('filterBatHand');
+    var filterBowlType = document.getElementById('filterBowlType');
+    var filterBowlHand = document.getElementById('filterBowlHand');
+    var subFilters = document.getElementById('subFilters');
+    var debounceTimer;
+
+    searchInput.addEventListener('input', function(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(applyFilters, 200); });
+    filterRole.addEventListener('change', function(){
+        var r = filterRole.value;
+        subFilters.style.display = r ? '' : 'none';
+        filterBowlType.style.display = (r === 'Bowler' || r === 'All-rounder') ? '' : 'none';
+        filterBowlHand.style.display = (r === 'Bowler' || r === 'All-rounder') ? '' : 'none';
+        applyFilters();
+    });
+    filterBatHand.addEventListener('change', applyFilters);
+    filterBowlType.addEventListener('change', applyFilters);
+    filterBowlHand.addEventListener('change', applyFilters);
+
+    function applyFilters() {
+        var q = searchInput.value.toLowerCase();
+        var role = filterRole.value;
+        var batHand = filterBatHand.value;
+        var bowlType = filterBowlType.value;
+        var bowlHand = filterBowlHand.value;
+        var count = 0;
+        document.querySelectorAll('#poolList .sb-player').forEach(function(el){
+            var show = true;
+            if (q && el.dataset.name.indexOf(q) === -1) show = false;
+            if (role && el.dataset.role !== role) show = false;
+            if (batHand && el.dataset.batHand !== batHand) show = false;
+            if (bowlType && el.dataset.bowlType !== bowlType) show = false;
+            if (bowlHand && el.dataset.bowlHand !== bowlHand) show = false;
+            el.style.display = show ? '' : 'none';
+            if (show) count++;
+        });
+        document.getElementById('poolCount').textContent = '(' + count + ')';
+    }
+
+    // Add player
+    window.addPlayer = function(playerId) {
+        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ player_id: playerId }),
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if (d.error) { showFeedback(d.error, 'error'); return; }
+            // Remove from pool
+            var poolEl = document.querySelector('#poolList [data-player-id="' + playerId + '"]');
+            if (poolEl) poolEl.remove();
+            // Add to squad
+            var emptyEl = document.getElementById('squadEmpty');
+            if (emptyEl) emptyEl.remove();
+            var p = d.player;
+            var roleClass = p.role === 'Batsman' ? 'bat' : p.role === 'Bowler' ? 'bowl' : p.role === 'All-rounder' ? 'all' : 'wk';
+            var div = document.createElement('div');
+            div.className = 'sb-player';
+            div.dataset.squadId = p.id;
+            div.dataset.role = p.role;
+            div.innerHTML = '<div class="sb-player-info"><span class="sb-role-dot sb-role-' + roleClass + '"></span><div><span class="sb-player-name">' + esc(p.name) + '</span> <span class="sb-player-role">' + esc(p.role) + '</span><div class="sb-player-ratings">Bat ' + p.batting_rating + ' | Bowl ' + p.bowling_rating + ' | Field ' + p.fielding_rating + '</div></div></div><button class="sb-remove-btn" onclick="removePlayer(' + p.id + ',\'' + esc(p.name).replace(/'/g, "\\'") + '\')" title="Remove"><i class="fas fa-times-circle"></i></button>';
+            document.getElementById('squadList').appendChild(div);
+            updateDesignations();
+            updateValidation();
+            updateCounts();
+            showFeedback(p.name + ' added', 'ok');
+        });
+    };
+
+    // Remove player
+    window.removePlayer = function(playerId, name) {
+        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ player_id: playerId }),
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if (d.error) { showFeedback(d.error, 'error'); return; }
+            var el = document.querySelector('[data-squad-id="' + playerId + '"]');
+            if (el) el.remove();
+            updateDesignations();
+            updateValidation();
+            updateCounts();
+            showFeedback(d.name + ' removed', 'ok');
+            // Reload pool to show the player back — simple approach
+            location.reload();
+        });
+    };
+
+    // Captain
+    window.setCaptain = function() {
+        var pid = parseInt(document.getElementById('captainSelect').value);
+        if (!pid) return;
+        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/captain', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ player_id: pid }),
+        }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.error) showFeedback(d.error, 'error');
+            else { showFeedback('Captain set', 'ok'); updateValidation(); }
+        });
+    };
+
+    // Wicketkeeper
+    window.setWicketkeeper = function() {
+        var pid = parseInt(document.getElementById('wkSelect').value);
+        if (!pid) return;
+        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/wicketkeeper', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ player_id: pid }),
+        }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.error) showFeedback(d.error, 'error');
+            else { showFeedback('Wicketkeeper set', 'ok'); updateValidation(); }
+        });
+    };
+
+    // Publish
+    window.publishSquad = function() {
+        fetch('/api/team/' + TEAM_ID + '/squad/' + FMT + '/publish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.error) { showFeedback(d.error, 'error'); return; }
+            showFeedback('Team published!', 'ok');
+            setTimeout(function(){ location.href = '{{ url_for("manage_teams") }}'; }, 800);
+        });
+    };
+
+    // Helpers
+    function updateCounts() {
+        var n = document.querySelectorAll('#squadList .sb-player').length;
+        document.getElementById('squadCount').textContent = n + '/25';
+        var poolN = document.querySelectorAll('#poolList .sb-player').length;
+        document.getElementById('poolCount').textContent = '(' + poolN + ')';
+    }
+
+    function updateDesignations() {
+        var capSel = document.getElementById('captainSelect');
+        var wkSel = document.getElementById('wkSelect');
+        var capVal = capSel.value;
+        var wkVal = wkSel.value;
+        capSel.innerHTML = '<option value="">Select captain…</option>';
+        wkSel.innerHTML = '<option value="">Select WK…</option>';
+        document.querySelectorAll('#squadList .sb-player').forEach(function(el){
+            var id = el.dataset.squadId;
+            var name = el.querySelector('.sb-player-name').textContent.replace(/[CWK]/g, '').trim();
+            var role = el.dataset.role;
+            capSel.innerHTML += '<option value="' + id + '"' + (id == capVal ? ' selected' : '') + '>' + esc(name) + '</option>';
+            if (role === 'Wicketkeeper') {
+                wkSel.innerHTML += '<option value="' + id + '"' + (id == wkVal ? ' selected' : '') + '>' + esc(name) + '</option>';
+            }
+        });
+    }
+
+    function updateValidation() {
+        var players = document.querySelectorAll('#squadList .sb-player');
+        var n = players.length;
+        var issues = [];
+        if (n < 12) issues.push('Need ' + (12 - n) + ' more player' + (12 - n > 1 ? 's' : ''));
+        if (n > 25) issues.push('Too many players (max 25)');
+        var wkCount = 0, bowlCount = 0;
+        players.forEach(function(el){
+            var r = el.dataset.role;
+            if (r === 'Wicketkeeper') wkCount++;
+            if (r === 'Bowler' || r === 'All-rounder') bowlCount++;
+        });
+        if (wkCount < 1) issues.push('Need at least 1 Wicketkeeper');
+        if (bowlCount < 6) issues.push('Need ' + (6 - bowlCount) + ' more Bowler/All-rounder' + (6 - bowlCount > 1 ? 's' : ''));
+        if (!document.getElementById('captainSelect').value) issues.push('Select a captain');
+        if (!document.getElementById('wkSelect').value) issues.push('Designate a wicketkeeper');
+        var box = document.getElementById('validationBox');
+        if (issues.length === 0) {
+            box.className = 'sb-validation sb-val-ok';
+            box.innerHTML = '<i class="fas fa-check-circle"></i> Ready to publish!';
+        } else {
+            box.className = 'sb-validation sb-val-warn';
+            box.innerHTML = issues.map(function(i){ return '<div><i class="fas fa-exclamation-triangle"></i> ' + i + '</div>'; }).join('');
+        }
+    }
+
+    function showFeedback(msg, type) {
+        var el = document.getElementById('feedback');
+        el.textContent = msg;
+        el.className = 'sb-feedback ' + type;
+        setTimeout(function(){ el.textContent = ''; el.className = 'sb-feedback'; }, 3000);
+    }
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    // Init
+    updateValidation();
+    updateCounts();
+})();
+</script>
+{% endblock %}

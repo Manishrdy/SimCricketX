@@ -178,6 +178,180 @@ class Player(db.Model):
     profile = relationship('TeamProfile', back_populates='players')
     scorecard_entries = relationship('MatchScorecard', backref='player_ref', passive_deletes=True)
 
+
+class MasterPlayer(db.Model):
+    """Admin-curated global player pool entry."""
+    __tablename__ = 'master_players'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    role = db.Column(db.String(50))
+    batting_rating = db.Column(db.Integer, default=50)
+    bowling_rating = db.Column(db.Integer, default=50)
+    fielding_rating = db.Column(db.Integer, default=50)
+    batting_hand = db.Column(db.String(20))
+    bowling_type = db.Column(db.String(50))
+    bowling_hand = db.Column(db.String(20))
+    is_captain = db.Column(db.Boolean, default=False)
+    is_wicketkeeper = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user_overrides = relationship('UserPlayer', back_populates='master_player', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.UniqueConstraint('name', name='uq_master_player_name'),
+    )
+
+
+class UserPlayer(db.Model):
+    """Per-user custom player or override of a MasterPlayer."""
+    __tablename__ = 'user_players'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    master_player_id = db.Column(db.Integer, db.ForeignKey('master_players.id', ondelete='CASCADE'), nullable=True, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    role = db.Column(db.String(50))
+    batting_rating = db.Column(db.Integer, default=50)
+    bowling_rating = db.Column(db.Integer, default=50)
+    fielding_rating = db.Column(db.Integer, default=50)
+    batting_hand = db.Column(db.String(20))
+    bowling_type = db.Column(db.String(50))
+    bowling_hand = db.Column(db.String(20))
+    is_captain = db.Column(db.Boolean, default=False)
+    is_wicketkeeper = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship('User', backref=db.backref('pool_players', cascade='all, delete-orphan', passive_deletes=True))
+    master_player = relationship('MasterPlayer', back_populates='user_overrides')
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'master_player_id', name='uq_user_master_override'),
+        db.Index('ix_user_player_user_name', 'user_id', 'name'),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Auction Module
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class AuctionEvent(db.Model):
+    __tablename__ = 'auction_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False)
+    format = db.Column(db.String(20), default='T20')
+    status = db.Column(db.String(20), default='setup')  # setup / live / paused / completed
+    num_teams = db.Column(db.Integer, default=8)
+    budget_mode = db.Column(db.String(20), default='uniform')  # uniform / custom
+    uniform_budget = db.Column(db.BigInteger, default=0)
+    bid_increment_tiers = db.Column(db.Text, default='[]')  # JSON: [{up_to, increment}, ...]
+    min_players_per_team = db.Column(db.Integer, default=12)
+    max_players_per_team = db.Column(db.Integer, default=25)
+    reauction_enabled = db.Column(db.Boolean, default=False)
+    max_reauction_rounds = db.Column(db.Integer, nullable=True)
+    reauction_base_price_reduction_pct = db.Column(db.Integer, default=0)
+    current_round = db.Column(db.Integer, default=1)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    organizer = relationship('User', backref=db.backref('auction_events', cascade='all, delete-orphan', passive_deletes=True))
+    teams = relationship('AuctionTeam', back_populates='event', cascade='all, delete-orphan')
+    categories = relationship('AuctionCategory', back_populates='event', cascade='all, delete-orphan')
+    players = relationship('AuctionPlayer', back_populates='event', cascade='all, delete-orphan')
+
+
+class AuctionCategory(db.Model):
+    __tablename__ = 'auction_categories'
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('auction_events.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    default_base_price = db.Column(db.BigInteger, default=0)
+    max_per_team = db.Column(db.Integer, nullable=True)
+
+    event = relationship('AuctionEvent', back_populates='categories')
+
+    __table_args__ = (
+        db.UniqueConstraint('event_id', 'name', name='uq_auction_category_name'),
+    )
+
+
+class AuctionTeam(db.Model):
+    __tablename__ = 'auction_teams'
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('auction_events.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False)
+    access_token = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    custom_budget = db.Column(db.BigInteger, nullable=True)
+    purse_remaining = db.Column(db.BigInteger, default=0)
+    players_bought = db.Column(db.Integer, default=0)
+
+    event = relationship('AuctionEvent', back_populates='teams')
+    won_players = relationship('AuctionPlayer', back_populates='sold_to_team', foreign_keys='AuctionPlayer.sold_to')
+    bids = relationship('AuctionBid', back_populates='team', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.UniqueConstraint('event_id', 'name', name='uq_auction_team_name'),
+    )
+
+
+class AuctionPlayer(db.Model):
+    __tablename__ = 'auction_players'
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('auction_events.id', ondelete='CASCADE'), nullable=False, index=True)
+    master_player_id = db.Column(db.Integer, db.ForeignKey('master_players.id', ondelete='SET NULL'), nullable=True)
+    user_player_id = db.Column(db.Integer, db.ForeignKey('user_players.id', ondelete='SET NULL'), nullable=True)
+
+    # Snapshotted fields (copied at curation time — immutable during auction)
+    name = db.Column(db.String(100), nullable=False)
+    role = db.Column(db.String(50))
+    batting_rating = db.Column(db.Integer, default=50)
+    bowling_rating = db.Column(db.Integer, default=50)
+    fielding_rating = db.Column(db.Integer, default=50)
+    batting_hand = db.Column(db.String(20))
+    bowling_type = db.Column(db.String(50))
+    bowling_hand = db.Column(db.String(20))
+
+    base_price = db.Column(db.BigInteger, nullable=True)
+    status = db.Column(db.String(20), default='upcoming')  # upcoming / live / sold / unsold
+    sold_to = db.Column(db.Integer, db.ForeignKey('auction_teams.id', ondelete='SET NULL'), nullable=True)
+    sold_price = db.Column(db.BigInteger, nullable=True)
+    sold_in_round = db.Column(db.Integer, nullable=True)
+    lot_order = db.Column(db.Integer, nullable=True)
+
+    event = relationship('AuctionEvent', back_populates='players')
+    sold_to_team = relationship('AuctionTeam', back_populates='won_players', foreign_keys=[sold_to])
+    categories = relationship('AuctionCategory', secondary='auction_player_categories', backref='players')
+    bids = relationship('AuctionBid', back_populates='player', cascade='all, delete-orphan')
+
+
+auction_player_categories = db.Table(
+    'auction_player_categories',
+    db.Column('auction_player_id', db.Integer, db.ForeignKey('auction_players.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('category_id', db.Integer, db.ForeignKey('auction_categories.id', ondelete='CASCADE'), primary_key=True),
+)
+
+
+class AuctionBid(db.Model):
+    __tablename__ = 'auction_bids'
+
+    id = db.Column(db.Integer, primary_key=True)
+    auction_player_id = db.Column(db.Integer, db.ForeignKey('auction_players.id', ondelete='CASCADE'), nullable=False, index=True)
+    team_id = db.Column(db.Integer, db.ForeignKey('auction_teams.id', ondelete='CASCADE'), nullable=False, index=True)
+    amount = db.Column(db.BigInteger, nullable=False)
+    round = db.Column(db.Integer, default=1)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    player = relationship('AuctionPlayer', back_populates='bids')
+    team = relationship('AuctionTeam', back_populates='bids')
+
+
 class Match(db.Model):
     """Match Archive Record"""
     __tablename__ = 'matches'

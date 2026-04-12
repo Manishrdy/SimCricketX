@@ -20,6 +20,8 @@ def register_team_routes(
     DBTeam,
     DBPlayer,
     DBTeamProfile,
+    DBMasterPlayer=None,
+    DBUserPlayer=None,
 ):
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -255,8 +257,6 @@ def register_team_routes(
                 short_code = request.form["short_code"].strip().upper()
                 home_ground = request.form["home_ground"].strip()
                 pitch = request.form["pitch_preference"]
-                action = request.form.get("action", "publish")
-                is_draft = action == "save_draft"
 
                 if not (name and short_code and home_ground and pitch):
                     return render_template(
@@ -293,73 +293,37 @@ def register_team_routes(
                         ),
                     )
 
-                profiles, parse_err = _parse_profiles_payload(request.form)
-                if parse_err:
-                    return render_template("team_create.html", error=parse_err)
-
-                # At least one profile must have players
-                non_empty = {
-                    fmt: pd for fmt, pd in profiles.items() if pd["players"]
-                }
-                if not non_empty:
-                    return render_template(
-                        "team_create.html",
-                        error="At least one format profile with players is required.",
-                    )
-
-                # Validate each non-empty profile
-                for fmt, pdata in non_empty.items():
-                    err = _validate_profile(fmt, pdata, is_draft)
-                    if err:
-                        return render_template("team_create.html", error=err)
-
                 color = request.form.get("team_color", "#4f46e5")
 
-                try:
-                    new_team = DBTeam(
-                        user_id=current_user.id,
-                        name=name,
-                        short_code=short_code,
-                        home_ground=home_ground,
-                        pitch_preference=pitch,
-                        team_color=color,
-                        is_draft=is_draft,
-                    )
-                    db.session.add(new_team)
-                    db.session.flush()
+                new_team = DBTeam(
+                    user_id=current_user.id,
+                    name=name,
+                    short_code=short_code,
+                    home_ground=home_ground,
+                    pitch_preference=pitch,
+                    team_color=color,
+                    is_draft=True,
+                )
+                db.session.add(new_team)
+                db.session.flush()
 
-                    save_err = _save_profiles(new_team.id, non_empty, is_draft)
-                    if save_err:
-                        db.session.rollback()
-                        return render_template("team_create.html", error=save_err)
+                # Create a default T20 profile
+                profile = DBTeamProfile(team_id=new_team.id, format_type="T20")
+                db.session.add(profile)
+                db.session.commit()
 
-                    db.session.commit()
-                    status_msg = "Draft" if is_draft else "Active"
-                    app.logger.info(
-                        f"Team '{new_team.name}' (ID: {new_team.id}) created as "
-                        f"{status_msg} by {current_user.id}"
-                    )
-                    if is_draft:
-                        flash("Team saved as draft.", "success")
-                        return redirect(
-                            url_for("manage_teams", clear_team_draft=1)
-                        )
-                    return redirect(url_for("home", clear_team_draft=1))
-
-                except Exception as db_err:
-                    log_exception(db_err)
-                    db.session.rollback()
-                    app.logger.error(
-                        f"Database error saving team: {db_err}", exc_info=True
-                    )
-                    return render_template(
-                        "team_create.html", error="Database error saving team."
-                    )
+                app.logger.info(
+                    f"Team '{new_team.name}' (ID: {new_team.id}) created as "
+                    f"Draft by {current_user.id}"
+                )
+                flash("Team created as draft. Now build your squad.", "success")
+                return redirect(url_for("team_squad", team_id=new_team.id, fmt="T20"))
 
             except Exception as e:
                 log_exception(e)
+                db.session.rollback()
                 app.logger.error(
-                    f"Unexpected error saving team: {e}", exc_info=True
+                    f"Error creating team: {e}", exc_info=True
                 )
                 return render_template(
                     "team_create.html",
@@ -367,6 +331,245 @@ def register_team_routes(
                 )
 
         return render_template("team_create.html")
+
+    # ── Squad Builder ────────────────────────────────────────────────────────
+
+    def _get_effective_pool(user_id):
+        if not DBMasterPlayer or not DBUserPlayer:
+            return []
+        masters = DBMasterPlayer.query.order_by(DBMasterPlayer.name).all()
+        overrides = {}
+        customs = []
+        for up in DBUserPlayer.query.filter_by(user_id=user_id).all():
+            if up.master_player_id is not None:
+                overrides[up.master_player_id] = up
+            else:
+                customs.append(up)
+        pool = []
+        for mp in masters:
+            if mp.id in overrides:
+                up = overrides[mp.id]
+                pool.append(_pool_dict(up, "override", mp.id, up.id))
+            else:
+                pool.append(_pool_dict(mp, "master", mp.id, None))
+        for cp in customs:
+            pool.append(_pool_dict(cp, "custom", None, cp.id))
+        return pool
+
+    def _pool_dict(obj, source, master_id, user_player_id):
+        return {
+            "id": f"{source}_{obj.id}",
+            "source": source,
+            "master_player_id": master_id,
+            "user_player_id": user_player_id,
+            "name": obj.name,
+            "role": obj.role or "",
+            "batting_rating": obj.batting_rating or 0,
+            "bowling_rating": obj.bowling_rating or 0,
+            "fielding_rating": obj.fielding_rating or 0,
+            "batting_hand": obj.batting_hand or "",
+            "bowling_type": obj.bowling_type or "",
+            "bowling_hand": obj.bowling_hand or "",
+        }
+
+    @app.route("/team/<int:team_id>/squad")
+    @app.route("/team/<int:team_id>/squad/<fmt>")
+    @login_required
+    def team_squad(team_id, fmt="T20"):
+        team = DBTeam.query.get_or_404(team_id)
+        if team.user_id != current_user.id:
+            flash("Access denied.", "danger")
+            return redirect(url_for("manage_teams"))
+        if fmt not in VALID_FORMATS:
+            fmt = "T20"
+        profile = DBTeamProfile.query.filter_by(team_id=team_id, format_type=fmt).first()
+        if not profile:
+            profile = DBTeamProfile(team_id=team_id, format_type=fmt)
+            db.session.add(profile)
+            db.session.commit()
+        squad = DBPlayer.query.filter_by(profile_id=profile.id).order_by(DBPlayer.name).all()
+        squad_names = {p.name.lower() for p in squad}
+        pool = _get_effective_pool(current_user.id)
+        available = [p for p in pool if p["name"].lower() not in squad_names]
+        return render_template(
+            "team_squad.html",
+            team=team,
+            fmt=fmt,
+            profile=profile,
+            squad=squad,
+            pool=available,
+            formats=VALID_FORMATS,
+        )
+
+    @app.route("/api/team/<int:team_id>/squad/<fmt>/add", methods=["POST"])
+    @login_required
+    def team_squad_add(team_id, fmt):
+        team = DBTeam.query.get_or_404(team_id)
+        if team.user_id != current_user.id:
+            return json.dumps({"error": "Forbidden"}), 403, {"Content-Type": "application/json"}
+        profile = DBTeamProfile.query.filter_by(team_id=team_id, format_type=fmt).first()
+        if not profile:
+            return json.dumps({"error": "Profile not found."}), 404, {"Content-Type": "application/json"}
+        data = request.get_json(silent=True) or {}
+        player_id = data.get("player_id", "")
+        pool = _get_effective_pool(current_user.id)
+        entry = None
+        for p in pool:
+            if p["id"] == player_id:
+                entry = p
+                break
+        if not entry:
+            return json.dumps({"error": "Player not found in pool."}), 404, {"Content-Type": "application/json"}
+        existing = DBPlayer.query.filter_by(profile_id=profile.id, name=entry["name"]).first()
+        if existing:
+            return json.dumps({"error": f"'{entry['name']}' is already in the squad."}), 400, {"Content-Type": "application/json"}
+        count = DBPlayer.query.filter_by(profile_id=profile.id).count()
+        if count >= 25:
+            return json.dumps({"error": "Squad is full (max 25 players)."}), 400, {"Content-Type": "application/json"}
+        player = DBPlayer(
+            team_id=team_id,
+            profile_id=profile.id,
+            name=entry["name"],
+            role=entry["role"],
+            batting_rating=entry["batting_rating"],
+            bowling_rating=entry["bowling_rating"],
+            fielding_rating=entry["fielding_rating"],
+            batting_hand=entry["batting_hand"],
+            bowling_type=entry["bowling_type"],
+            bowling_hand=entry["bowling_hand"],
+        )
+        db.session.add(player)
+        db.session.commit()
+        return json.dumps({
+            "ok": True,
+            "player": {
+                "id": player.id, "name": player.name, "role": player.role,
+                "batting_rating": player.batting_rating,
+                "bowling_rating": player.bowling_rating,
+                "fielding_rating": player.fielding_rating,
+                "batting_hand": player.batting_hand or "",
+                "bowling_type": player.bowling_type or "",
+                "bowling_hand": player.bowling_hand or "",
+            },
+        }), 200, {"Content-Type": "application/json"}
+
+    @app.route("/api/team/<int:team_id>/squad/<fmt>/remove", methods=["POST"])
+    @login_required
+    def team_squad_remove(team_id, fmt):
+        team = DBTeam.query.get_or_404(team_id)
+        if team.user_id != current_user.id:
+            return json.dumps({"error": "Forbidden"}), 403, {"Content-Type": "application/json"}
+        data = request.get_json(silent=True) or {}
+        player_id = data.get("player_id")
+        player = DBPlayer.query.get(player_id)
+        if not player or player.team_id != team_id:
+            return json.dumps({"error": "Player not found."}), 404, {"Content-Type": "application/json"}
+        name = player.name
+        db.session.delete(player)
+        db.session.commit()
+        return json.dumps({"ok": True, "name": name}), 200, {"Content-Type": "application/json"}
+
+    @app.route("/api/team/<int:team_id>/squad/<fmt>/captain", methods=["POST"])
+    @login_required
+    def team_squad_captain(team_id, fmt):
+        team = DBTeam.query.get_or_404(team_id)
+        if team.user_id != current_user.id:
+            return json.dumps({"error": "Forbidden"}), 403, {"Content-Type": "application/json"}
+        profile = DBTeamProfile.query.filter_by(team_id=team_id, format_type=fmt).first()
+        if not profile:
+            return json.dumps({"error": "Profile not found."}), 404, {"Content-Type": "application/json"}
+        data = request.get_json(silent=True) or {}
+        player_id = data.get("player_id")
+        for p in DBPlayer.query.filter_by(profile_id=profile.id).all():
+            p.is_captain = (p.id == player_id)
+        db.session.commit()
+        return json.dumps({"ok": True}), 200, {"Content-Type": "application/json"}
+
+    @app.route("/api/team/<int:team_id>/squad/<fmt>/wicketkeeper", methods=["POST"])
+    @login_required
+    def team_squad_wicketkeeper(team_id, fmt):
+        team = DBTeam.query.get_or_404(team_id)
+        if team.user_id != current_user.id:
+            return json.dumps({"error": "Forbidden"}), 403, {"Content-Type": "application/json"}
+        profile = DBTeamProfile.query.filter_by(team_id=team_id, format_type=fmt).first()
+        if not profile:
+            return json.dumps({"error": "Profile not found."}), 404, {"Content-Type": "application/json"}
+        data = request.get_json(silent=True) or {}
+        player_id = data.get("player_id")
+        player = DBPlayer.query.get(player_id)
+        if not player or player.profile_id != profile.id:
+            return json.dumps({"error": "Player not in squad."}), 400, {"Content-Type": "application/json"}
+        if player.role != "Wicketkeeper":
+            return json.dumps({"error": "Only Wicketkeeper-role players can be designated."}), 400, {"Content-Type": "application/json"}
+        for p in DBPlayer.query.filter_by(profile_id=profile.id).all():
+            p.is_wicketkeeper = (p.id == player_id)
+        db.session.commit()
+        return json.dumps({"ok": True}), 200, {"Content-Type": "application/json"}
+
+    @app.route("/api/team/<int:team_id>/squad/<fmt>/publish", methods=["POST"])
+    @login_required
+    def team_squad_publish(team_id, fmt):
+        team = DBTeam.query.get_or_404(team_id)
+        if team.user_id != current_user.id:
+            return json.dumps({"error": "Forbidden"}), 403, {"Content-Type": "application/json"}
+        profile = DBTeamProfile.query.filter_by(team_id=team_id, format_type=fmt).first()
+        if not profile:
+            return json.dumps({"error": "Profile not found."}), 404, {"Content-Type": "application/json"}
+        players = DBPlayer.query.filter_by(profile_id=profile.id).all()
+        count = len(players)
+        if not (12 <= count <= 25):
+            return json.dumps({"error": f"Need 12-25 players, have {count}."}), 400, {"Content-Type": "application/json"}
+        wk_count = sum(1 for p in players if p.role == "Wicketkeeper")
+        if wk_count < 1:
+            return json.dumps({"error": "Need at least 1 Wicketkeeper."}), 400, {"Content-Type": "application/json"}
+        bowl_count = sum(1 for p in players if p.role in ("Bowler", "All-rounder"))
+        if bowl_count < 6:
+            return json.dumps({"error": "Need at least 6 Bowlers/All-rounders."}), 400, {"Content-Type": "application/json"}
+        captain = [p for p in players if p.is_captain]
+        if not captain:
+            return json.dumps({"error": "Select a captain."}), 400, {"Content-Type": "application/json"}
+        wk_designated = [p for p in players if p.is_wicketkeeper]
+        if not wk_designated:
+            return json.dumps({"error": "Designate a wicketkeeper."}), 400, {"Content-Type": "application/json"}
+        team.is_draft = False
+        db.session.commit()
+        return json.dumps({"ok": True}), 200, {"Content-Type": "application/json"}
+
+    @app.route("/api/team/<int:team_id>/pool/search")
+    @login_required
+    def team_pool_search(team_id):
+        team = DBTeam.query.get_or_404(team_id)
+        if team.user_id != current_user.id:
+            return json.dumps({"error": "Forbidden"}), 403, {"Content-Type": "application/json"}
+        fmt = request.args.get("fmt", "T20")
+        q = request.args.get("q", "").strip().lower()
+        role = request.args.get("role", "").strip()
+        batting_hand = request.args.get("batting_hand", "").strip()
+        bowling_type = request.args.get("bowling_type", "").strip()
+        bowling_hand = request.args.get("bowling_hand", "").strip()
+
+        profile = DBTeamProfile.query.filter_by(team_id=team_id, format_type=fmt).first()
+        squad_names = set()
+        if profile:
+            squad_names = {p.name.lower() for p in DBPlayer.query.filter_by(profile_id=profile.id).all()}
+
+        pool = _get_effective_pool(current_user.id)
+        results = []
+        for p in pool:
+            if p["name"].lower() in squad_names:
+                continue
+            if q and q not in p["name"].lower():
+                continue
+            if role and p["role"] != role:
+                continue
+            if batting_hand and p["batting_hand"] != batting_hand:
+                continue
+            if bowling_type and p["bowling_type"] != bowling_type:
+                continue
+            if bowling_hand and p["bowling_hand"] != bowling_hand:
+                continue
+            results.append(p)
+        return json.dumps(results), 200, {"Content-Type": "application/json"}
 
     @app.route("/teams/manage")
     @login_required

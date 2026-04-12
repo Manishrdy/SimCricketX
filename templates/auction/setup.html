@@ -1,0 +1,150 @@
+{% extends "layout.html" %}
+
+{% block title %}Setup — {{ event.name }} | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .as-container { max-width: 900px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
+    .as-back { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none; font-size: .85rem; margin-bottom: 1rem; }
+    .as-back:hover { color: var(--text-primary); }
+    .as-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 0 0 .25rem; }
+    .as-subtitle { color: var(--text-secondary); font-size: .9rem; margin-bottom: 1.5rem; }
+    .as-tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; background: var(--bg-surface, #f9fafb); padding: 4px; border-radius: 10px; }
+    .as-tab { padding: 8px 16px; border-radius: 8px; font-size: .85rem; font-weight: 600; text-decoration: none; color: var(--text-secondary); transition: all .2s; }
+    .as-tab:hover { color: var(--text-primary); }
+    .as-tab.active { background: var(--bg-raised, #fff); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .as-card { background: var(--bg-raised, #fff); border: 1px solid var(--border-light, #e5e7eb); border-radius: 12px; padding: 24px; margin-bottom: 1.5rem; }
+    .as-card-title { font-size: 1rem; font-weight: 600; color: var(--text-primary); margin: 0 0 16px; }
+    .as-group { margin-bottom: 16px; }
+    .as-label { display: block; font-size: .8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 6px; }
+    .as-hint { font-size: .8rem; color: var(--text-secondary); margin-top: 4px; }
+    .as-input, .as-select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .9rem; background: var(--bg-raised, #fff); color: var(--text-primary); box-sizing: border-box; }
+    .as-input:focus, .as-select:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
+    .as-row { display: grid; gap: 16px; }
+    .as-row-2 { grid-template-columns: 1fr 1fr; }
+    .as-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .as-checkbox-label { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--text-primary); cursor: pointer; }
+    .as-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 8px; font-size: .9rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; }
+    .as-btn-primary { background: var(--brand-primary, #0f766e); color: #fff; }
+    .as-btn-primary:hover { opacity: .85; }
+    .as-btn-secondary { background: var(--bg-raised, #fff); color: var(--text-primary); border: 1px solid var(--border-light, #e5e7eb); }
+    .as-textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .85rem; font-family: 'IBM Plex Mono', monospace; background: var(--bg-raised, #fff); color: var(--text-primary); box-sizing: border-box; min-height: 80px; resize: vertical; }
+    .as-summary { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .as-summary-item { background: var(--bg-surface, #f9fafb); border-radius: 10px; padding: 12px 20px; text-align: center; }
+    .as-summary-num { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); }
+    .as-summary-label { font-size: .75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; }
+    @media (max-width: 600px) { .as-row-2, .as-row-3 { grid-template-columns: 1fr; } .as-tabs { flex-wrap: wrap; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="as-container">
+    <a href="{{ url_for('auction_list') }}" class="as-back"><i class="fas fa-arrow-left"></i> Back to Auctions</a>
+    <h1 class="as-title">{{ event.name }}</h1>
+    <p class="as-subtitle">Configure your auction before going live.</p>
+
+    <div class="as-tabs">
+        <a href="{{ url_for('auction_setup', event_id=event.id) }}" class="as-tab active">Configuration</a>
+        <a href="{{ url_for('auction_setup_teams', event_id=event.id) }}" class="as-tab">Teams ({{ event.teams|length }}/{{ event.num_teams }})</a>
+        <a href="{{ url_for('auction_setup_categories', event_id=event.id) }}" class="as-tab">Categories ({{ event.categories|length }})</a>
+        <a href="{{ url_for('auction_setup_players', event_id=event.id) }}" class="as-tab">Players ({{ event.players|length }})</a>
+    </div>
+
+    <div class="as-summary">
+        <div class="as-summary-item">
+            <div class="as-summary-num">{{ event.teams|length }}/{{ event.num_teams }}</div>
+            <div class="as-summary-label">Teams</div>
+        </div>
+        <div class="as-summary-item">
+            <div class="as-summary-num">{{ event.categories|length }}</div>
+            <div class="as-summary-label">Categories</div>
+        </div>
+        <div class="as-summary-item">
+            <div class="as-summary-num">{{ event.players|length }}</div>
+            <div class="as-summary-label">Players</div>
+        </div>
+    </div>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="as-card">
+            <h3 class="as-card-title">Budget</h3>
+            <div class="as-row as-row-2">
+                <div class="as-group">
+                    <label class="as-label">Budget Mode</label>
+                    <select name="budget_mode" class="as-select" id="budgetMode">
+                        <option value="uniform" {{ 'selected' if event.budget_mode == 'uniform' }}>Uniform (same for all teams)</option>
+                        <option value="custom" {{ 'selected' if event.budget_mode == 'custom' }}>Custom (per team)</option>
+                    </select>
+                </div>
+                <div class="as-group" id="uniformBudgetGroup">
+                    <label class="as-label">Budget per Team</label>
+                    <input type="number" name="uniform_budget" class="as-input" min="0" value="{{ event.uniform_budget }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="as-card">
+            <h3 class="as-card-title">Squad Constraints</h3>
+            <div class="as-row as-row-2">
+                <div class="as-group">
+                    <label class="as-label">Min Players per Team</label>
+                    <input type="number" name="min_players_per_team" class="as-input" min="1" max="50" value="{{ event.min_players_per_team }}">
+                </div>
+                <div class="as-group">
+                    <label class="as-label">Max Players per Team</label>
+                    <input type="number" name="max_players_per_team" class="as-input" min="1" max="50" value="{{ event.max_players_per_team }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="as-card">
+            <h3 class="as-card-title">Bid Increments</h3>
+            <div class="as-group">
+                <label class="as-label">Increment Tiers (JSON)</label>
+                <textarea name="bid_increment_tiers" class="as-textarea" placeholder='[{"up_to": 10000000, "increment": 500000}]'>{{ event.bid_increment_tiers }}</textarea>
+                <p class="as-hint">JSON array of tiers. Each tier: {"up_to": max_price, "increment": bid_step}. The last tier applies to all higher amounts.</p>
+            </div>
+        </div>
+
+        <div class="as-card">
+            <h3 class="as-card-title">Re-Auction</h3>
+            <div class="as-group">
+                <label class="as-checkbox-label">
+                    <input type="checkbox" name="reauction_enabled" id="reauctionEnabled" {{ 'checked' if event.reauction_enabled }}>
+                    Enable re-auction rounds for unsold players
+                </label>
+            </div>
+            <div class="as-row as-row-2" id="reauctionFields" style="{{ '' if event.reauction_enabled else 'display:none' }}">
+                <div class="as-group">
+                    <label class="as-label">Max Rounds</label>
+                    <input type="number" name="max_reauction_rounds" class="as-input" min="1" max="10" value="{{ event.max_reauction_rounds or '' }}">
+                </div>
+                <div class="as-group">
+                    <label class="as-label">Base Price Reduction (%)</label>
+                    <input type="number" name="reauction_base_price_reduction_pct" class="as-input" min="0" max="100" value="{{ event.reauction_base_price_reduction_pct }}">
+                    <p class="as-hint">Reduce base prices by this % each round.</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:12px;">
+            <button type="submit" class="as-btn as-btn-primary"><i class="fas fa-save"></i> Save Configuration</button>
+        </div>
+    </form>
+</div>
+
+<script>
+(function(){
+    var mode = document.getElementById('budgetMode');
+    var ug = document.getElementById('uniformBudgetGroup');
+    mode.addEventListener('change', function(){ ug.style.display = mode.value === 'uniform' ? '' : 'none'; });
+    if (mode.value !== 'uniform') ug.style.display = 'none';
+
+    var re = document.getElementById('reauctionEnabled');
+    var rf = document.getElementById('reauctionFields');
+    re.addEventListener('change', function(){ rf.style.display = re.checked ? '' : 'none'; });
+})();
+</script>
+{% endblock %}

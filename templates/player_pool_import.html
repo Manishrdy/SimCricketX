@@ -1,0 +1,267 @@
+{% extends "layout.html" %}
+
+{% block title %}Import Players | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .ppi-container { max-width: 1200px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
+    .ppi-back { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none; font-size: .85rem; margin-bottom: 1rem; }
+    .ppi-back:hover { color: var(--text-primary); }
+    .ppi-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 0 0 .25rem; }
+    .ppi-subtitle { color: var(--text-secondary); font-size: .9rem; margin-bottom: 1.5rem; }
+
+    .ppi-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; align-items: stretch; }
+    .ppi-grid > div { display: flex; flex-direction: column; }
+    .ppi-grid > div > .ppi-card { flex: 1; display: flex; flex-direction: column; }
+    .ppi-grid > div > .ppi-card .ppi-code { flex: 1; }
+    @media (max-width: 860px) { .ppi-grid { grid-template-columns: 1fr; } }
+
+    .ppi-card { background: var(--bg-raised, #fff); border: 1px solid var(--border-light, #e5e7eb); border-radius: 12px; padding: 24px; margin-bottom: 1.5rem; }
+    .ppi-card-title { font-size: 1rem; font-weight: 600; color: var(--text-primary); margin: 0 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .ppi-card-title i { color: var(--brand-primary, #0f766e); }
+
+    .ppi-label { display: block; font-size: .8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 6px; }
+    .ppi-select, .ppi-input { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .9rem; background: var(--bg-raised, #fff); color: var(--text-primary); box-sizing: border-box; margin-bottom: 16px; }
+    .ppi-select:focus, .ppi-input:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
+    .ppi-textarea { width: 100%; min-height: 150px; padding: 10px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .85rem; background: var(--bg-raised, #fff); color: var(--text-primary); box-sizing: border-box; margin-bottom: 16px; font-family: 'IBM Plex Mono', monospace; resize: vertical; }
+    .ppi-textarea:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
+
+    .ppi-or { text-align: center; color: var(--text-secondary); font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin: 4px 0 12px; }
+    .ppi-note { color: var(--text-secondary); font-size: .8rem; margin: 0 0 10px; }
+
+    .ppi-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 8px; font-size: .9rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; transition: opacity .2s; }
+    .ppi-btn:hover { opacity: .85; }
+    .ppi-btn-primary { background: var(--brand-primary, #0f766e); color: #fff; }
+    .ppi-btn-secondary { background: var(--bg-raised, #fff); color: var(--text-primary); border: 1px solid var(--border-light, #e5e7eb); }
+    .ppi-btn-sm { padding: 7px 10px; font-size: .78rem; border-radius: 6px; }
+    .ppi-inline-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .ppi-inline-actions .is-hidden { display: none; }
+
+    .ppi-code { background: var(--bg-surface, #f9fafb); padding: 12px; border-radius: 8px; font-size: .75rem; overflow-x: auto; font-family: 'IBM Plex Mono', monospace; border: 1px solid var(--border-light, #e5e7eb); white-space: pre-wrap; margin: 0 0 12px; max-height: 260px; overflow-y: auto; }
+
+    .ppi-section-label { font-size: .85rem; font-weight: 600; color: var(--text-primary); margin: 0 0 8px; }
+    .ppi-divider { border: none; border-top: 1px solid var(--border-light, #e5e7eb); margin: 16px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ppi-container">
+    <a href="{{ url_for('player_pool') }}" class="ppi-back">
+        <i class="fas fa-arrow-left"></i> Back to Player Pool
+    </a>
+
+    <h1 class="ppi-title">Import Players</h1>
+    <p class="ppi-subtitle">Upload a file or paste data directly. Use the AI prompt on the right to generate player data.</p>
+
+    <div class="ppi-grid">
+        <!-- LEFT: Import form -->
+        <div>
+            <div class="ppi-card">
+                <div class="ppi-card-title">
+                    <span><i class="fas fa-file-import"></i> Import Data</span>
+                    <span class="ppi-inline-actions" style="margin:0;">
+                        <a href="{{ url_for('player_pool_import_template_json') }}" class="ppi-btn ppi-btn-secondary ppi-btn-sm" id="sampleJsonBtn">
+                            <i class="fas fa-download"></i> Sample JSON
+                        </a>
+                        <a href="{{ url_for('player_pool_import_template_csv') }}" class="ppi-btn ppi-btn-secondary ppi-btn-sm" id="sampleCsvBtn">
+                            <i class="fas fa-download"></i> Sample CSV
+                        </a>
+                    </span>
+                </div>
+
+                <form method="POST" enctype="multipart/form-data" id="playerPoolImportForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <label class="ppi-label">File Format</label>
+                    <select name="format" class="ppi-select" id="importFormat">
+                        <option value="json">JSON</option>
+                        <option value="csv">CSV</option>
+                    </select>
+
+                    <label class="ppi-label">Upload File</label>
+                    <input type="file" name="file" class="ppi-input" id="importFile" accept=".json,.csv">
+
+                    <div class="ppi-or">or</div>
+
+                    <label class="ppi-label">Paste JSON/CSV Data</label>
+                    <textarea name="pasted_data" id="pastedData" class="ppi-textarea" placeholder="Paste your JSON array or CSV rows here."></textarea>
+
+                    <p class="ppi-note">Format must strictly match the expected schema and allowed values.</p>
+
+                    <div style="display:flex;gap:12px;margin-top:8px;">
+                        <button type="submit" class="ppi-btn ppi-btn-primary">
+                            <i class="fas fa-file-import"></i> Import
+                        </button>
+                        <a href="{{ url_for('player_pool') }}" class="ppi-btn ppi-btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- RIGHT: AI Prompt -->
+        <div>
+            <div class="ppi-card">
+                <div class="ppi-card-title"><i class="fas fa-robot"></i> AI Prompt Generator</div>
+                <p class="ppi-note">Copy this prompt into your AI tool (ChatGPT, Claude, etc.) to generate import-ready player data. Then paste the output on the left.</p>
+
+                <div class="ppi-inline-actions">
+                    <button type="button" class="ppi-btn ppi-btn-primary ppi-btn-sm" id="copyAiPromptBtn">
+                        <i class="fas fa-copy"></i> Copy Prompt
+                    </button>
+                </div>
+
+                <pre class="ppi-code" id="jsonAiPrompt"></pre>
+                <pre class="ppi-code" id="csvAiPrompt" style="display:none;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    var fmt = document.getElementById('importFormat');
+    var form = document.getElementById('playerPoolImportForm');
+    var fileInput = document.getElementById('importFile');
+    var pastedData = document.getElementById('pastedData');
+    var csvAiPrompt = document.getElementById('csvAiPrompt');
+    var jsonAiPrompt = document.getElementById('jsonAiPrompt');
+    var copyAiPromptBtn = document.getElementById('copyAiPromptBtn');
+    var sampleJsonBtn = document.getElementById('sampleJsonBtn');
+    var sampleCsvBtn = document.getElementById('sampleCsvBtn');
+
+    var playerFields = {{ player_fields | tojson }};
+    var validRoles = {{ roles | tojson }};
+    var validBattingHands = {{ batting_hands | tojson }};
+    var validBowlingTypes = {{ bowling_types | tojson }};
+    var validBowlingHands = {{ bowling_hands | tojson }};
+
+    function strictHeaderText() { return playerFields.join(','); }
+    function displayAllowed(values) { return values.map(function(v){ return v === '' ? '\"\" (empty)' : v; }).join(' | '); }
+
+    function buildCsvPrompt() {
+        return [
+            'Generate only CSV data for cricket player import.',
+            'STRICT RULES:',
+            '1) Output must be ONLY one fenced code block with language tag `csv`.',
+            '2) First line must match this exact header (same order):',
+            strictHeaderText(),
+            '3) Allowed `role`: ' + displayAllowed(validRoles),
+            '4) Allowed `batting_hand`: ' + displayAllowed(validBattingHands),
+            '5) Allowed `bowling_type`: ' + displayAllowed(validBowlingTypes),
+            '6) Allowed `bowling_hand`: ' + displayAllowed(validBowlingHands),
+            '7) `batting_rating`, `bowling_rating`, `fielding_rating` must be integers in 0-100.',
+            '8) `is_captain` and `is_wicketkeeper` must be exactly `true` or `false` (lowercase).',
+            '9) Include all columns for every row, no extra columns, no missing columns.',
+            '10) Do not output comments, explanations, markdown text, or anything outside the code block.',
+            '11) If role is Wicketkeeper, set bowling_type and bowling_hand to empty values.'
+        ].join('\n');
+    }
+
+    function buildJsonPrompt() {
+        return [
+            'Generate only JSON data for cricket player import.',
+            'STRICT RULES:',
+            '1) Output must be ONLY one fenced code block with language tag `json`.',
+            '2) Output must be a JSON array of objects.',
+            '3) Each object must contain EXACTLY these keys (same spelling):',
+            '   ' + playerFields.join(', '),
+            '4) Allowed `role`: ' + displayAllowed(validRoles),
+            '5) Allowed `batting_hand`: ' + displayAllowed(validBattingHands),
+            '6) Allowed `bowling_type`: ' + displayAllowed(validBowlingTypes),
+            '7) Allowed `bowling_hand`: ' + displayAllowed(validBowlingHands),
+            '8) `batting_rating`, `bowling_rating`, `fielding_rating` must be integers in range 0-100.',
+            '9) `is_captain` and `is_wicketkeeper` must be JSON booleans true/false (not strings).',
+            '10) No extra keys. No missing keys. No null values.',
+            '11) If role is Wicketkeeper, set bowling_type and bowling_hand to empty string.',
+            '12) Do not output any explanation or text outside the code block.',
+            '',
+            'JSON schema:',
+            '{',
+            '  "type": "array",',
+            '  "minItems": 1,',
+            '  "items": {',
+            '    "type": "object",',
+            '    "additionalProperties": false,',
+            '    "required": [' + playerFields.map(function(key){ return '"' + key + '"'; }).join(', ') + '],',
+            '    "properties": {',
+            '      "name": { "type": "string", "minLength": 1 },',
+            '      "role": { "type": "string", "enum": ' + JSON.stringify(validRoles) + ' },',
+            '      "batting_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "bowling_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "fielding_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "batting_hand": { "type": "string", "enum": ' + JSON.stringify(validBattingHands) + ' },',
+            '      "bowling_type": { "type": "string", "enum": ' + JSON.stringify(validBowlingTypes) + ' },',
+            '      "bowling_hand": { "type": "string", "enum": ' + JSON.stringify(validBowlingHands) + ' },',
+            '      "is_captain": { "type": "boolean" },',
+            '      "is_wicketkeeper": { "type": "boolean" }',
+            '    }',
+            '  }',
+            '}'
+        ].join('\n');
+    }
+
+    function syncFormatBlocks(){
+        var isJson = fmt.value === 'json';
+        jsonAiPrompt.style.display = isJson ? '' : 'none';
+        csvAiPrompt.style.display = isJson ? 'none' : '';
+        sampleJsonBtn.classList.toggle('is-hidden', !isJson);
+        sampleCsvBtn.classList.toggle('is-hidden', isJson);
+    }
+
+    function parseCsvStrict(raw) {
+        var lines = raw.split(/\r?\n/).filter(function(line){ return line.trim() !== ''; });
+        if (lines.length < 2) return 'CSV must include header + at least one data row.';
+        if (lines[0].trim() !== strictHeaderText()) return 'CSV header must match exactly: ' + strictHeaderText();
+        return null;
+    }
+
+    function validatePastedData() {
+        var raw = pastedData.value.trim();
+        if (!raw) return null;
+        if (fmt.value === 'json') {
+            try { var parsed = JSON.parse(raw); } catch (e) { return 'Pasted JSON is invalid: ' + e.message; }
+            if (!Array.isArray(parsed) || parsed.length === 0) return 'Pasted JSON must be a non-empty array.';
+            return null;
+        }
+        return parseCsvStrict(raw);
+    }
+
+    csvAiPrompt.textContent = buildCsvPrompt();
+    jsonAiPrompt.textContent = buildJsonPrompt();
+    syncFormatBlocks();
+
+    fmt.addEventListener('change', syncFormatBlocks);
+
+    copyAiPromptBtn.addEventListener('click', function(){
+        var text = fmt.value === 'json' ? jsonAiPrompt.textContent : csvAiPrompt.textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function(){
+                copyAiPromptBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(function(){ copyAiPromptBtn.innerHTML = '<i class="fas fa-copy"></i> Copy Prompt'; }, 1500);
+            });
+            return;
+        }
+        var temp = document.createElement('textarea');
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+    });
+
+    form.addEventListener('submit', function(e){
+        var hasFile = fileInput.files && fileInput.files.length > 0;
+        var hasPaste = pastedData.value.trim() !== '';
+        if (!hasFile && !hasPaste) {
+            e.preventDefault();
+            alert('Provide either a file upload or pasted data.');
+            return;
+        }
+        if (hasPaste) {
+            var err = validatePastedData();
+            if (err) { e.preventDefault(); alert(err); }
+        }
+    });
+})();
+</script>
+{% endblock %}

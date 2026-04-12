@@ -1,0 +1,566 @@
+{% extends "layout.html" %}
+
+{% block title %}Player Pool | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .pp-hero {
+        position: relative;
+        padding: 3rem 0 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .pp-hero-inner {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 1.5rem;
+    }
+    .pp-title {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0 0 .25rem;
+    }
+    .pp-subtitle {
+        color: var(--text-secondary);
+        font-size: .95rem;
+    }
+    .pp-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 1rem;
+    }
+    .pp-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: .85rem;
+        font-weight: 600;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        transition: all .2s;
+    }
+    .pp-btn-primary {
+        background: var(--brand-primary, #0f766e);
+        color: #fff;
+    }
+    .pp-btn-primary:hover { opacity: .85; }
+    .pp-btn-secondary {
+        background: var(--bg-raised, #fff);
+        color: var(--text-primary);
+        border: 1px solid var(--border-light, #e5e7eb);
+    }
+    .pp-btn-secondary:hover { background: var(--bg-surface, #f9fafb); }
+    .pp-btn-danger {
+        background: var(--danger, #dc2626);
+        color: #fff;
+        padding: 6px 10px;
+    }
+    .pp-btn-sm { padding: 6px 12px; font-size: .8rem; }
+
+    .pp-toolbar {
+        max-width: 1200px;
+        margin: 0 auto 1rem;
+        padding: 0 1.5rem;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .pp-toolbar form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pp-search {
+        padding: 8px 12px;
+        border: 1px solid var(--border-light, #e5e7eb);
+        border-radius: 8px;
+        font-size: .85rem;
+        min-width: 220px;
+        background: var(--bg-raised, #fff);
+        color: var(--text-primary);
+    }
+    .pp-select {
+        padding: 8px 12px;
+        border: 1px solid var(--border-light, #e5e7eb);
+        border-radius: 8px;
+        font-size: .85rem;
+        background: var(--bg-raised, #fff);
+        color: var(--text-primary);
+    }
+    .pp-count {
+        margin-left: auto;
+        color: var(--text-secondary);
+        font-size: .85rem;
+    }
+
+    .pp-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 1.5rem 3rem;
+    }
+    .pp-table-wrap {
+        background: var(--bg-raised, #fff);
+        border-radius: 12px;
+        border: 1px solid var(--border-light, #e5e7eb);
+        overflow-x: auto;
+    }
+    .pp-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: .85rem;
+    }
+    .pp-table th {
+        text-align: left;
+        padding: 12px 16px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border-light, #e5e7eb);
+        font-size: .8rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    .pp-table td {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border-light, #e5e7eb);
+        vertical-align: middle;
+    }
+    .pp-table tbody tr:last-child td { border-bottom: none; }
+    .pp-table tbody tr:hover { background: var(--bg-surface, #f9fafb); }
+    .pp-name { font-weight: 600; }
+    .pp-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: .75rem;
+        font-weight: 600;
+    }
+    .pp-badge-master { background: #dcfce7; color: #166534; }
+    .pp-badge-override { background: #fef3c7; color: #92400e; }
+    .pp-badge-custom { background: #dbeafe; color: #1e40af; }
+    [data-theme="dark"] .pp-badge-master { background: #14532d; color: #86efac; }
+    [data-theme="dark"] .pp-badge-override { background: #78350f; color: #fde68a; }
+    [data-theme="dark"] .pp-badge-custom { background: #1e3a5f; color: #93c5fd; }
+    .pp-actions-cell {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+    }
+    .pp-empty {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--text-secondary);
+    }
+    .pp-bulk-bar {
+        display: none;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        background: var(--bg-raised, #fff);
+        border: 1px solid var(--border-light, #e5e7eb);
+        border-radius: 10px;
+        margin-bottom: 12px;
+        font-size: .85rem;
+    }
+    .pp-bulk-bar.visible { display: flex; }
+    .pp-bulk-count { font-weight: 600; color: var(--text-primary); }
+    .pp-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--brand-primary, #0f766e); }
+    .pp-col-check { display: none; }
+    .pp-select-mode .pp-col-check { display: table-cell; }
+    .pp-select-toggle.active { background: var(--brand-primary, #0f766e); color: #fff; border-color: var(--brand-primary, #0f766e); }
+    /* Confirm modal */
+    .pp-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.4);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+    }
+    .pp-modal-overlay.open { display: flex; }
+    .pp-modal {
+        background: var(--bg-raised, #fff);
+        border-radius: 14px;
+        padding: 28px;
+        max-width: 420px;
+        width: 90%;
+        box-shadow: 0 20px 40px rgba(0,0,0,.15);
+    }
+    .pp-modal-title { font-size: 1.1rem; font-weight: 700; margin: 0 0 8px; color: var(--text-primary); }
+    .pp-modal-msg { font-size: .9rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5; }
+    .pp-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .pp-sentinel { text-align: center; padding: 1.5rem; color: var(--text-secondary); font-size: .85rem; }
+    .pp-spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border-light, #e5e7eb); border-top-color: var(--brand-primary, #0f766e); border-radius: 50%; animation: pp-spin .6s linear infinite; margin-right: 8px; vertical-align: middle; }
+    @keyframes pp-spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pp-hero">
+    <div class="pp-hero-inner">
+        <h1 class="pp-title">Player Pool</h1>
+        <p class="pp-subtitle">{{ total }} player{{ 's' if total != 1 }} available in your pool</p>
+        <div class="pp-actions">
+            <a href="{{ url_for('player_pool_add') }}" class="pp-btn pp-btn-primary">
+                <i class="fas fa-plus"></i> Add Player
+            </a>
+            <a href="{{ url_for('player_pool_import') }}" class="pp-btn pp-btn-secondary">
+                <i class="fas fa-file-import"></i> Import
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="pp-toolbar">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="text" class="pp-search" id="liveSearch" placeholder="Search by name…" value="{{ search }}" autocomplete="off">
+        <select class="pp-select" id="liveRole">
+            <option value="">All Roles</option>
+            {% for r in roles %}
+            <option value="{{ r }}" {{ 'selected' if role_filter == r }}>{{ r }}</option>
+            {% endfor %}
+        </select>
+        <button type="button" class="pp-btn pp-btn-secondary pp-btn-sm" id="clearFilters" style="{{ '' if search or role_filter else 'display:none' }}" onclick="clearLiveFilters()">Clear</button>
+        <button type="button" class="pp-btn pp-btn-secondary pp-btn-sm pp-select-toggle" id="selectToggle" onclick="toggleSelectMode()">
+            <i class="fas fa-check-double"></i> Select
+        </button>
+    </div>
+    <span class="pp-count" id="shownCount">{{ pool|length }} of {{ total }}</span>
+</div>
+
+<div class="pp-container">
+    <!-- Bulk action bar -->
+    <div class="pp-bulk-bar" id="bulkBar">
+        <span class="pp-bulk-count"><span id="bulkCount">0</span> selected</span>
+        <button class="pp-btn pp-btn-danger pp-btn-sm" onclick="confirmBulkDelete()">
+            <i class="fas fa-trash"></i> Delete Selected
+        </button>
+        <button class="pp-btn pp-btn-secondary pp-btn-sm" onclick="clearSelection()">Cancel</button>
+    </div>
+
+    <div class="pp-table-wrap">
+        <table class="pp-table">
+            <thead>
+                <tr>
+                    <th class="pp-col-check" style="width:36px;"><input type="checkbox" class="pp-checkbox" id="selectAll"></th>
+                    <th>Name</th>
+                    <th>Source</th>
+                    <th>Role</th>
+                    <th>Bat</th>
+                    <th>Bowl</th>
+                    <th>Field</th>
+                    <th>Batting Hand</th>
+                    <th>Bowling Type</th>
+                    <th style="text-align:right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="poolBody">
+                {% for p in pool %}
+                <tr data-source="{{ p.source }}" data-user-player-id="{{ p.user_player_id or '' }}">
+                    <td class="pp-col-check">
+                        {% if p.source in ('override', 'custom') %}
+                        <input type="checkbox" class="pp-checkbox pp-row-check" value="{{ p.user_player_id }}">
+                        {% endif %}
+                    </td>
+                    <td class="pp-name">{{ p.name }}</td>
+                    <td>
+                        {% if p.source == 'master' %}
+                        <span class="pp-badge pp-badge-master">Global</span>
+                        {% elif p.source == 'override' %}
+                        <span class="pp-badge pp-badge-override">Override</span>
+                        {% else %}
+                        <span class="pp-badge pp-badge-custom">Custom</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ p.role or '—' }}</td>
+                    <td>{{ p.batting_rating }}</td>
+                    <td>{{ p.bowling_rating }}</td>
+                    <td>{{ p.fielding_rating }}</td>
+                    <td>{{ p.batting_hand or '—' }}</td>
+                    <td>{{ p.bowling_type or '—' }}</td>
+                    <td>
+                        <div class="pp-actions-cell">
+                            {% if p.source == 'master' %}
+                            <a href="{{ url_for('player_pool_override', master_id=p.master_player_id) }}"
+                               class="pp-btn pp-btn-secondary pp-btn-sm" title="Create your override">
+                                <i class="fas fa-pen"></i>
+                            </a>
+                            {% elif p.source == 'override' %}
+                            <a href="{{ url_for('player_pool_edit', player_id=p.user_player_id) }}"
+                               class="pp-btn pp-btn-secondary pp-btn-sm" title="Edit override">
+                                <i class="fas fa-pen"></i>
+                            </a>
+                            <button class="pp-btn pp-btn-danger pp-btn-sm" title="Remove override"
+                                    onclick="confirmSingleDelete({{ p.user_player_id }}, '{{ p.name }}', true)">
+                                <i class="fas fa-rotate-left"></i>
+                            </button>
+                            {% else %}
+                            <a href="{{ url_for('player_pool_edit', player_id=p.user_player_id) }}"
+                               class="pp-btn pp-btn-secondary pp-btn-sm" title="Edit">
+                                <i class="fas fa-pen"></i>
+                            </a>
+                            <button class="pp-btn pp-btn-danger pp-btn-sm" title="Delete"
+                                    onclick="confirmSingleDelete({{ p.user_player_id }}, '{{ p.name }}', false)">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not pool %}
+                <tr>
+                    <td colspan="9" class="pp-empty">
+                        No players found. <a href="{{ url_for('player_pool_add') }}">Add one</a> or
+                        <a href="{{ url_for('player_pool_import') }}">import from file</a>.
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+    {% if total > pool|length %}
+    <div class="pp-sentinel" id="loadSentinel">
+        <span class="pp-spinner"></span> Loading more players…
+    </div>
+    {% endif %}
+</div>
+
+<!-- Confirm modal -->
+<div class="pp-modal-overlay" id="confirmModal">
+    <div class="pp-modal">
+        <h3 class="pp-modal-title" id="modalTitle">Confirm Delete</h3>
+        <p class="pp-modal-msg" id="modalMsg"></p>
+        <div class="pp-modal-actions">
+            <button class="pp-btn pp-btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="pp-btn pp-btn-danger" id="modalConfirmBtn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    var CSRF = '{{ csrf_token() }}';
+    var selectAll = document.getElementById('selectAll');
+    var bulkBar = document.getElementById('bulkBar');
+    var bulkCount = document.getElementById('bulkCount');
+    var modal = document.getElementById('confirmModal');
+    var modalTitle = document.getElementById('modalTitle');
+    var modalMsg = document.getElementById('modalMsg');
+    var modalBtn = document.getElementById('modalConfirmBtn');
+    var pendingAction = null;
+    var tableWrap = document.querySelector('.pp-table-wrap');
+    var selectToggle = document.getElementById('selectToggle');
+    var selectMode = false;
+
+    // Toggle select mode
+    window.toggleSelectMode = function() {
+        selectMode = !selectMode;
+        tableWrap.classList.toggle('pp-select-mode', selectMode);
+        selectToggle.classList.toggle('active', selectMode);
+        if (!selectMode) {
+            clearSelection();
+        }
+    };
+
+    // Select all (only selectable rows — override + custom)
+    selectAll.addEventListener('change', function(){
+        document.querySelectorAll('.pp-row-check').forEach(function(cb){ cb.checked = selectAll.checked; });
+        updateBulkBar();
+    });
+    document.querySelectorAll('.pp-row-check').forEach(function(cb){
+        cb.addEventListener('change', updateBulkBar);
+    });
+
+    function updateBulkBar() {
+        var checked = document.querySelectorAll('.pp-row-check:checked');
+        var n = checked.length;
+        bulkCount.textContent = n;
+        bulkBar.classList.toggle('visible', n > 0);
+    }
+
+    window.clearSelection = function() {
+        selectAll.checked = false;
+        document.querySelectorAll('.pp-row-check').forEach(function(cb){ cb.checked = false; });
+        updateBulkBar();
+    };
+
+    // Single delete with inline confirm
+    window.confirmSingleDelete = function(playerId, name, isOverride) {
+        modalTitle.textContent = isOverride ? 'Remove Override' : 'Delete Player';
+        modalMsg.textContent = isOverride
+            ? 'Remove your override for "' + name + '"? This will revert to the global pool values.'
+            : 'Delete "' + name + '" from your pool? This action cannot be undone.';
+        pendingAction = function(){
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/player-pool/' + playerId + '/delete';
+            var csrf = document.createElement('input');
+            csrf.type = 'hidden'; csrf.name = 'csrf_token'; csrf.value = CSRF;
+            form.appendChild(csrf);
+            document.body.appendChild(form);
+            form.submit();
+        };
+        modal.classList.add('open');
+    };
+
+    // Bulk delete with inline confirm
+    window.confirmBulkDelete = function() {
+        var checked = document.querySelectorAll('.pp-row-check:checked');
+        var ids = [];
+        checked.forEach(function(cb){ ids.push(parseInt(cb.value)); });
+        if (!ids.length) return;
+        modalTitle.textContent = 'Delete ' + ids.length + ' Player' + (ids.length > 1 ? 's' : '');
+        modalMsg.textContent = 'Delete ' + ids.length + ' selected player' + (ids.length > 1 ? 's' : '') + ' from your pool? This action cannot be undone. Overrides will revert to global values.';
+        pendingAction = function(){
+            fetch('/player-pool/bulk-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+                body: JSON.stringify({ ids: ids }),
+            })
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d.error) { alert(d.error); return; }
+                location.reload();
+            });
+        };
+        modal.classList.add('open');
+    };
+
+    // Modal controls
+    modalBtn.addEventListener('click', function(){
+        if (pendingAction) pendingAction();
+        closeModal();
+    });
+
+    window.closeModal = function() {
+        modal.classList.remove('open');
+        pendingAction = null;
+    };
+
+    modal.addEventListener('click', function(e){
+        if (e.target === modal) closeModal();
+    });
+
+    document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
+    });
+
+    // Live search + lazy loading
+    var sentinel = document.getElementById('loadSentinel');
+    var pageSize = {{ page_size }};
+    var loadedOffset = {{ pool|length }};
+    var totalPlayers = {{ total }};
+    var loading = false;
+    var searchInput = document.getElementById('liveSearch');
+    var roleSelect = document.getElementById('liveRole');
+    var clearBtn = document.getElementById('clearFilters');
+    var searchDebounce;
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function buildRow(p) {
+        var source = p.source || 'master';
+        var badgeClass = source === 'master' ? 'pp-badge-master' : source === 'override' ? 'pp-badge-override' : 'pp-badge-custom';
+        var badgeLabel = source === 'master' ? 'Global' : source === 'override' ? 'Override' : 'Custom';
+        var checkbox = '';
+        if (source === 'override' || source === 'custom') {
+            checkbox = '<input type="checkbox" class="pp-checkbox pp-row-check" value="' + p.user_player_id + '">';
+        }
+        var actions = '';
+        if (source === 'master') {
+            actions = '<a href="/player-pool/override/' + p.master_player_id + '" class="pp-btn pp-btn-secondary pp-btn-sm" title="Override"><i class="fas fa-pen"></i></a>';
+        } else if (source === 'override') {
+            actions = '<a href="/player-pool/' + p.user_player_id + '/edit" class="pp-btn pp-btn-secondary pp-btn-sm" title="Edit"><i class="fas fa-pen"></i></a>'
+                + '<button class="pp-btn pp-btn-danger pp-btn-sm" title="Remove override" onclick="confirmSingleDelete(' + p.user_player_id + ',\'' + esc(p.name).replace(/'/g, "\\'") + '\',true)"><i class="fas fa-rotate-left"></i></button>';
+        } else {
+            actions = '<a href="/player-pool/' + p.user_player_id + '/edit" class="pp-btn pp-btn-secondary pp-btn-sm" title="Edit"><i class="fas fa-pen"></i></a>'
+                + '<button class="pp-btn pp-btn-danger pp-btn-sm" title="Delete" onclick="confirmSingleDelete(' + p.user_player_id + ',\'' + esc(p.name).replace(/'/g, "\\'") + '\',false)"><i class="fas fa-trash"></i></button>';
+        }
+        var tr = document.createElement('tr');
+        tr.dataset.source = source;
+        tr.dataset.userPlayerId = p.user_player_id || '';
+        tr.innerHTML = '<td class="pp-col-check">' + checkbox + '</td>'
+            + '<td class="pp-name">' + esc(p.name) + '</td>'
+            + '<td><span class="pp-badge ' + badgeClass + '">' + badgeLabel + '</span></td>'
+            + '<td>' + esc(p.role || '—') + '</td>'
+            + '<td>' + p.batting_rating + '</td>'
+            + '<td>' + p.bowling_rating + '</td>'
+            + '<td>' + p.fielding_rating + '</td>'
+            + '<td>' + esc(p.batting_hand || '—') + '</td>'
+            + '<td>' + esc(p.bowling_type || '—') + '</td>'
+            + '<td><div class="pp-actions-cell">' + actions + '</div></td>';
+        var cb = tr.querySelector('.pp-row-check');
+        if (cb) cb.addEventListener('change', updateBulkBar);
+        return tr;
+    }
+
+    function buildApiUrl(offset) {
+        var q = searchInput.value.trim();
+        var role = roleSelect.value;
+        var url = '/api/player-pool/search?offset=' + offset + '&limit=' + pageSize;
+        if (q) url += '&q=' + encodeURIComponent(q);
+        if (role) url += '&role=' + encodeURIComponent(role);
+        return url;
+    }
+
+    function fetchAndReplace() {
+        loading = true;
+        loadedOffset = 0;
+        fetch(buildApiUrl(0))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            var tbody = document.getElementById('poolBody');
+            tbody.innerHTML = '';
+            if (d.players.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="pp-empty">No players match your filters.</td></tr>';
+            } else {
+                d.players.forEach(function(p){ tbody.appendChild(buildRow(p)); });
+            }
+            loadedOffset = d.players.length;
+            totalPlayers = d.total;
+            document.getElementById('shownCount').textContent = loadedOffset + ' of ' + totalPlayers;
+            clearBtn.style.display = (searchInput.value.trim() || roleSelect.value) ? '' : 'none';
+            if (sentinel) sentinel.style.display = d.has_more ? '' : 'none';
+            loading = false;
+        })
+        .catch(function(){ loading = false; });
+    }
+
+    function loadMore() {
+        if (loading || loadedOffset >= totalPlayers) return;
+        loading = true;
+        fetch(buildApiUrl(loadedOffset))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            var tbody = document.getElementById('poolBody');
+            d.players.forEach(function(p){ tbody.appendChild(buildRow(p)); });
+            loadedOffset += d.players.length;
+            document.getElementById('shownCount').textContent = loadedOffset + ' of ' + totalPlayers;
+            if (!d.has_more && sentinel) sentinel.style.display = 'none';
+            loading = false;
+        })
+        .catch(function(){ loading = false; });
+    }
+
+    searchInput.addEventListener('input', function(){
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(fetchAndReplace, 250);
+    });
+    roleSelect.addEventListener('change', fetchAndReplace);
+
+    window.clearLiveFilters = function() {
+        searchInput.value = '';
+        roleSelect.value = '';
+        fetchAndReplace();
+    };
+
+    if (sentinel && 'IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function(entries){
+            if (entries[0].isIntersecting) loadMore();
+        }, { rootMargin: '200px' });
+        observer.observe(sentinel);
+    }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,338 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<style>
+    .ap-bulk-bar { display:none; align-items:center; gap:12px; padding:10px 16px; background:var(--surface-alt,#f9fafb); border:1px solid var(--border-light,#e5e7eb); border-radius:10px; margin-bottom:12px; font-size:.85rem; }
+    .ap-bulk-bar.visible { display:flex; }
+    .ap-bulk-count { font-weight:600; }
+    .ap-checkbox { width:16px; height:16px; cursor:pointer; accent-color:var(--brand-primary,#0f766e); }
+    .ap-col-check { display:none; }
+    .ap-select-mode .ap-col-check { display:table-cell; }
+    .ap-select-toggle.active { background:var(--brand-primary,#0f766e)!important; color:#fff!important; border-color:var(--brand-primary,#0f766e)!important; }
+    .ap-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:9999; align-items:center; justify-content:center; }
+    .ap-modal-overlay.open { display:flex; }
+    .ap-modal { background:var(--bg-raised,#fff); border-radius:14px; padding:28px; max-width:420px; width:90%; box-shadow:0 20px 40px rgba(0,0,0,.15); }
+    .ap-modal-title { font-size:1.1rem; font-weight:700; margin:0 0 8px; }
+    .ap-modal-msg { font-size:.9rem; color:var(--text-secondary); margin-bottom:20px; line-height:1.5; }
+    .ap-modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+</style>
+
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <span class="current">Player Pool</span>
+</div>
+
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">Global Player Pool</h1>
+        <p class="admin-page-subtitle">{{ total }} player{{ 's' if total != 1 }} in the master pool</p>
+    </div>
+    <div class="admin-page-actions">
+        <a href="{{ url_for('admin_player_pool_import') }}" class="a-btn a-btn-secondary">
+            <i class="fas fa-file-import"></i> Import
+        </a>
+        <a href="{{ url_for('admin_player_pool_export_json') }}" class="a-btn a-btn-secondary">
+            <i class="fas fa-download"></i> Export JSON
+        </a>
+        <a href="{{ url_for('admin_player_pool_add') }}" class="a-btn a-btn-primary">
+            <i class="fas fa-plus"></i> Add Player
+        </a>
+    </div>
+</div>
+
+<div class="a-toolbar">
+    <div class="a-toolbar-left" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div class="a-search-wrap">
+            <i class="fas fa-search a-search-icon"></i>
+            <input type="text" class="a-search-input" id="liveSearch" placeholder="Search by name…" value="{{ search }}" autocomplete="off">
+        </div>
+        <select class="a-select" id="liveRole">
+            <option value="">All Roles</option>
+            {% for r in roles %}
+            <option value="{{ r }}" {{ 'selected' if role_filter == r }}>{{ r }}</option>
+            {% endfor %}
+        </select>
+        <button type="button" class="a-btn a-btn-sm a-btn-ghost" id="clearFilters" style="{{ '' if search or role_filter else 'display:none' }}" onclick="clearLiveFilters()">Clear</button>
+        <button type="button" class="a-btn a-btn-sm a-btn-secondary ap-select-toggle" id="selectToggle" onclick="toggleSelectMode()">
+            <i class="fas fa-check-double"></i> Select
+        </button>
+    </div>
+    <div class="a-toolbar-right">
+        <span class="a-toolbar-count" id="shownCount">{{ players|length }} of {{ total_filtered }}</span>
+    </div>
+</div>
+
+<!-- Bulk action bar -->
+<div class="ap-bulk-bar" id="bulkBar">
+    <span class="ap-bulk-count"><span id="bulkCount">0</span> selected</span>
+    <button class="a-btn a-btn-sm a-btn-danger" onclick="confirmBulkDelete()">
+        <i class="fas fa-trash"></i> Delete Selected
+    </button>
+    <button class="a-btn a-btn-sm a-btn-secondary" onclick="clearSelection()">Cancel</button>
+</div>
+
+<div class="a-table-wrap" id="tableWrap">
+    <table class="a-table a-table-pro">
+        <thead>
+            <tr>
+                <th class="ap-col-check" style="width:36px;"><input type="checkbox" class="ap-checkbox" id="selectAll"></th>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Bat</th>
+                <th>Bowl</th>
+                <th>Field</th>
+                <th>Batting Hand</th>
+                <th>Bowling Type</th>
+                <th style="text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in players %}
+            <tr>
+                <td class="ap-col-check"><input type="checkbox" class="ap-checkbox ap-row-check" value="{{ p.id }}"></td>
+                <td><strong>{{ p.name }}</strong></td>
+                <td><span class="a-badge a-badge-user">{{ p.role or '—' }}</span></td>
+                <td>{{ p.batting_rating }}</td>
+                <td>{{ p.bowling_rating }}</td>
+                <td>{{ p.fielding_rating }}</td>
+                <td>{{ p.batting_hand or '—' }}</td>
+                <td>{{ p.bowling_type or '—' }}</td>
+                <td style="text-align:right;">
+                    <a href="{{ url_for('admin_player_pool_edit', player_id=p.id) }}" class="a-btn a-btn-sm a-btn-secondary" title="Edit">
+                        <i class="fas fa-pen"></i>
+                    </a>
+                    <button class="a-btn a-btn-sm a-btn-danger" title="Delete" onclick="confirmSingleDelete({{ p.id }}, '{{ p.name }}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not players %}
+            <tr>
+                <td colspan="9" style="text-align:center;padding:2rem;color:var(--text-secondary);">
+                    No players found. <a href="{{ url_for('admin_player_pool_add') }}">Add one</a> or <a href="{{ url_for('admin_player_pool_import') }}">import from file</a>.
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% if total_filtered > players|length %}
+<div style="text-align:center;padding:1.5rem;color:var(--text-secondary);font-size:.85rem;" id="loadSentinel">
+    <span style="display:inline-block;width:20px;height:20px;border:2px solid var(--border-light,#e5e7eb);border-top-color:var(--brand-primary,#0f766e);border-radius:50%;animation:ap-spin .6s linear infinite;margin-right:8px;vertical-align:middle;"></span> Loading more…
+</div>
+<style>@keyframes ap-spin { to { transform: rotate(360deg); } }</style>
+{% endif %}
+
+<!-- Confirm modal -->
+<div class="ap-modal-overlay" id="confirmModal">
+    <div class="ap-modal">
+        <h3 class="ap-modal-title" id="modalTitle">Confirm Delete</h3>
+        <p class="ap-modal-msg" id="modalMsg"></p>
+        <div class="ap-modal-actions">
+            <button class="a-btn a-btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="a-btn a-btn-danger" id="modalConfirmBtn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    var CSRF = '{{ csrf_token() }}';
+    var selectAll = document.getElementById('selectAll');
+    var bulkBar = document.getElementById('bulkBar');
+    var bulkCount = document.getElementById('bulkCount');
+    var modal = document.getElementById('confirmModal');
+    var modalTitle = document.getElementById('modalTitle');
+    var modalMsg = document.getElementById('modalMsg');
+    var modalBtn = document.getElementById('modalConfirmBtn');
+    var pendingAction = null;
+    var tableWrap = document.getElementById('tableWrap');
+    var selectToggle = document.getElementById('selectToggle');
+    var selectMode = false;
+
+    window.toggleSelectMode = function() {
+        selectMode = !selectMode;
+        tableWrap.classList.toggle('ap-select-mode', selectMode);
+        selectToggle.classList.toggle('active', selectMode);
+        if (!selectMode) clearSelection();
+    };
+
+    selectAll.addEventListener('change', function(){
+        document.querySelectorAll('.ap-row-check').forEach(function(cb){ cb.checked = selectAll.checked; });
+        updateBulkBar();
+    });
+    document.querySelectorAll('.ap-row-check').forEach(function(cb){
+        cb.addEventListener('change', updateBulkBar);
+    });
+
+    function updateBulkBar() {
+        var n = document.querySelectorAll('.ap-row-check:checked').length;
+        bulkCount.textContent = n;
+        bulkBar.classList.toggle('visible', n > 0);
+    }
+
+    window.clearSelection = function() {
+        selectAll.checked = false;
+        document.querySelectorAll('.ap-row-check').forEach(function(cb){ cb.checked = false; });
+        updateBulkBar();
+    };
+
+    window.confirmSingleDelete = function(playerId, name) {
+        modalTitle.textContent = 'Delete Player';
+        modalMsg.textContent = 'Delete "' + name + '" from the global pool? This will also remove all user overrides for this player. This action cannot be undone.';
+        pendingAction = function(){
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/admin/player-pool/' + playerId + '/delete';
+            var csrf = document.createElement('input');
+            csrf.type = 'hidden'; csrf.name = 'csrf_token'; csrf.value = CSRF;
+            form.appendChild(csrf);
+            document.body.appendChild(form);
+            form.submit();
+        };
+        modal.classList.add('open');
+    };
+
+    window.confirmBulkDelete = function() {
+        var checked = document.querySelectorAll('.ap-row-check:checked');
+        var ids = [];
+        checked.forEach(function(cb){ ids.push(parseInt(cb.value)); });
+        if (!ids.length) return;
+        modalTitle.textContent = 'Delete ' + ids.length + ' Player' + (ids.length > 1 ? 's' : '');
+        modalMsg.textContent = 'Delete ' + ids.length + ' selected player' + (ids.length > 1 ? 's' : '') + ' from the global pool? All user overrides for these players will also be removed. This action cannot be undone.';
+        pendingAction = function(){
+            fetch('/admin/player-pool/bulk-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+                body: JSON.stringify({ ids: ids }),
+            })
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d.error) { alert(d.error); return; }
+                location.reload();
+            });
+        };
+        modal.classList.add('open');
+    };
+
+    modalBtn.addEventListener('click', function(){
+        if (pendingAction) pendingAction();
+        closeModal();
+    });
+
+    window.closeModal = function() {
+        modal.classList.remove('open');
+        pendingAction = null;
+    };
+
+    modal.addEventListener('click', function(e){
+        if (e.target === modal) closeModal();
+    });
+
+    document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
+    });
+
+    // Lazy loading
+    var sentinel = document.getElementById('loadSentinel');
+    var loadedOffset = {{ players|length }};
+    var totalFiltered = {{ total_filtered }};
+    var pageSize = {{ page_size }};
+    var loading = false;
+    var searchInput = document.getElementById('liveSearch');
+    var roleSelect = document.getElementById('liveRole');
+    var clearBtn = document.getElementById('clearFilters');
+    var searchDebounce;
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function buildAdminRow(p) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td class="ap-col-check"><input type="checkbox" class="ap-checkbox ap-row-check" value="' + p.id + '"></td>'
+            + '<td><strong>' + esc(p.name) + '</strong></td>'
+            + '<td><span class="a-badge a-badge-user">' + esc(p.role || '—') + '</span></td>'
+            + '<td>' + p.batting_rating + '</td>'
+            + '<td>' + p.bowling_rating + '</td>'
+            + '<td>' + p.fielding_rating + '</td>'
+            + '<td>' + esc(p.batting_hand || '—') + '</td>'
+            + '<td>' + esc(p.bowling_type || '—') + '</td>'
+            + '<td style="text-align:right;">'
+            + '<a href="/admin/player-pool/' + p.id + '/edit" class="a-btn a-btn-sm a-btn-secondary" title="Edit"><i class="fas fa-pen"></i></a> '
+            + '<button class="a-btn a-btn-sm a-btn-danger" title="Delete" onclick="confirmSingleDelete(' + p.id + ',\'' + esc(p.name).replace(/'/g, "\\'") + '\')"><i class="fas fa-trash"></i></button>'
+            + '</td>';
+        var cb = tr.querySelector('.ap-row-check');
+        if (cb) cb.addEventListener('change', updateBulkBar);
+        return tr;
+    }
+
+    function buildApiUrl(offset) {
+        var q = searchInput.value.trim();
+        var role = roleSelect.value;
+        var url = '/api/admin/player-pool/search?offset=' + offset + '&limit=' + pageSize;
+        if (q) url += '&q=' + encodeURIComponent(q);
+        if (role) url += '&role=' + encodeURIComponent(role);
+        return url;
+    }
+
+    function fetchAndReplace() {
+        loading = true;
+        loadedOffset = 0;
+        fetch(buildApiUrl(0))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            var tbody = document.querySelector('.a-table tbody');
+            tbody.innerHTML = '';
+            if (d.players.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-secondary);">No players match your filters.</td></tr>';
+            } else {
+                d.players.forEach(function(p){ tbody.appendChild(buildAdminRow(p)); });
+            }
+            loadedOffset = d.players.length;
+            totalFiltered = d.total;
+            document.getElementById('shownCount').textContent = loadedOffset + ' of ' + totalFiltered;
+            clearBtn.style.display = (searchInput.value.trim() || roleSelect.value) ? '' : 'none';
+            if (sentinel) sentinel.style.display = d.has_more ? '' : 'none';
+            loading = false;
+        })
+        .catch(function(){ loading = false; });
+    }
+
+    function loadMore() {
+        if (loading || loadedOffset >= totalFiltered) return;
+        loading = true;
+        fetch(buildApiUrl(loadedOffset))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            var tbody = document.querySelector('.a-table tbody');
+            d.players.forEach(function(p){ tbody.appendChild(buildAdminRow(p)); });
+            loadedOffset += d.players.length;
+            document.getElementById('shownCount').textContent = loadedOffset + ' of ' + totalFiltered;
+            if (!d.has_more && sentinel) sentinel.style.display = 'none';
+            loading = false;
+        })
+        .catch(function(){ loading = false; });
+    }
+
+    searchInput.addEventListener('input', function(){
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(fetchAndReplace, 250);
+    });
+    roleSelect.addEventListener('change', fetchAndReplace);
+
+    window.clearLiveFilters = function() {
+        searchInput.value = '';
+        roleSelect.value = '';
+        fetchAndReplace();
+    };
+
+    if (sentinel && 'IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function(entries){
+            if (entries[0].isIntersecting) loadMore();
+        }, { rootMargin: '200px' });
+        observer.observe(sentinel);
+    }
+})();
+</script>
+{% endblock %}

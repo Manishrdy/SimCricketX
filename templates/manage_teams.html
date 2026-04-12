@@ -739,6 +739,9 @@
                         <span>Created {{ t.created_at.strftime('%b %d, %Y') if t.created_at else 'N/A' }}</span>
                     </div>
                     <div class="card-actions">
+                        <a class="action-btn edit" href="/team/{{ t.id }}/squad/T20" title="Build Squad" style="text-decoration:none;">
+                            <i class="fa-solid fa-people-group"></i>
+                        </a>
                         <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>

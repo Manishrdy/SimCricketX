@@ -1,0 +1,168 @@
+{% extends "admin/layout.html" %}
+
+{% block admin_content %}
+<div class="a-breadcrumb">
+    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+    <span class="sep">/</span>
+    <a href="{{ url_for('admin_player_pool') }}">Player Pool</a>
+    <span class="sep">/</span>
+    <span class="current">{{ "Edit Player" if edit else "Add Player" }}</span>
+</div>
+
+<div class="admin-page-header">
+    <div>
+        <h1 class="admin-page-title">{{ "Edit Player" if edit else "Add Player to Global Pool" }}</h1>
+    </div>
+</div>
+
+<div class="a-card" style="max-width:640px;">
+    <form method="POST" class="a-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="a-form-group">
+            <label class="a-label">Name <span style="color:var(--danger)">*</span></label>
+            <input type="text" name="name" id="nameInput" class="a-input" required maxlength="100"
+                   value="{{ player.name if player else '' }}" autocomplete="off">
+            <div id="nameWarn" style="font-size:.82rem;font-weight:600;margin-top:6px;min-height:1.2em;"></div>
+        </div>
+
+        <div class="a-form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="a-form-group">
+                <label class="a-label">Role <span style="color:var(--danger)">*</span></label>
+                <select name="role" class="a-select" required id="roleSelect">
+                    <option value="">Select role</option>
+                    {% for r in roles %}
+                    <option value="{{ r }}" {{ 'selected' if player and player.role == r }}>{{ r }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="a-form-group">
+                <label class="a-label">Batting Hand</label>
+                <select name="batting_hand" class="a-select">
+                    <option value="">—</option>
+                    {% for h in batting_hands %}
+                    <option value="{{ h }}" {{ 'selected' if player and player.batting_hand == h }}>{{ h }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="a-form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" id="bowlingFields">
+            <div class="a-form-group">
+                <label class="a-label">Bowling Type</label>
+                <select name="bowling_type" class="a-select" id="bowlingType">
+                    <option value="">—</option>
+                    {% for bt in bowling_types %}
+                    <option value="{{ bt }}" {{ 'selected' if player and player.bowling_type == bt }}>{{ bt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="a-form-group">
+                <label class="a-label">Bowling Hand</label>
+                <select name="bowling_hand" class="a-select" id="bowlingHand">
+                    <option value="">—</option>
+                    {% for bh in bowling_hands %}
+                    <option value="{{ bh }}" {{ 'selected' if player and player.bowling_hand == bh }}>{{ bh }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="a-form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+            <div class="a-form-group">
+                <label class="a-label">Batting Rating (0–100)</label>
+                <input type="number" name="batting_rating" class="a-input" min="0" max="100"
+                       value="{{ player.batting_rating if player else 50 }}">
+            </div>
+            <div class="a-form-group">
+                <label class="a-label">Bowling Rating (0–100)</label>
+                <input type="number" name="bowling_rating" class="a-input" min="0" max="100"
+                       value="{{ player.bowling_rating if player else 50 }}">
+            </div>
+            <div class="a-form-group">
+                <label class="a-label">Fielding Rating (0–100)</label>
+                <input type="number" name="fielding_rating" class="a-input" min="0" max="100"
+                       value="{{ player.fielding_rating if player else 50 }}">
+            </div>
+        </div>
+
+        <div class="a-form-row" style="display:flex;gap:24px;">
+            <label class="a-checkbox-label">
+                <input type="checkbox" name="is_captain" value="true"
+                       {{ 'checked' if player and player.is_captain }}>
+                Captain
+            </label>
+            <label class="a-checkbox-label">
+                <input type="checkbox" name="is_wicketkeeper" value="true"
+                       {{ 'checked' if player and player.is_wicketkeeper }}>
+                Wicketkeeper
+            </label>
+        </div>
+
+        <div style="margin-top:24px;display:flex;gap:12px;">
+            <button type="submit" class="a-btn a-btn-primary" id="submitBtn">
+                <i class="fas fa-save"></i> {{ "Update" if edit else "Add Player" }}
+            </button>
+            <a href="{{ url_for('admin_player_pool') }}" class="a-btn a-btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+(function(){
+    var role = document.getElementById('roleSelect');
+    var bowlFields = document.getElementById('bowlingFields');
+    function toggle() {
+        var hide = role.value === 'Wicketkeeper';
+        bowlFields.style.display = hide ? 'none' : '';
+        if (hide) {
+            document.getElementById('bowlingType').value = '';
+            document.getElementById('bowlingHand').value = '';
+        }
+    }
+    role.addEventListener('change', toggle);
+    toggle();
+
+    // Real-time duplicate name check (admin — checks MasterPlayer only)
+    var isEdit = {{ 'true' if edit else 'false' }};
+    var nameInput = document.getElementById('nameInput');
+    var nameWarn = document.getElementById('nameWarn');
+    var submitBtn = document.getElementById('submitBtn');
+    var debounce;
+
+    if (!isEdit) {
+        nameInput.addEventListener('input', function(){
+            clearTimeout(debounce);
+            var val = nameInput.value.trim();
+            if (!val || val.length < 2) {
+                nameWarn.textContent = '';
+                nameWarn.style.color = '';
+                submitBtn.disabled = false;
+                return;
+            }
+            nameWarn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
+            nameWarn.style.color = 'var(--text-secondary)';
+            debounce = setTimeout(function(){
+                fetch('/api/player-pool/check-name?name=' + encodeURIComponent(val))
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (d.exists) {
+                        nameWarn.innerHTML = '<i class="fas fa-exclamation-circle"></i> "' + d.name + '" already exists.';
+                        nameWarn.style.color = '#dc2626';
+                        submitBtn.disabled = true;
+                    } else {
+                        nameWarn.innerHTML = '<i class="fas fa-check-circle"></i> Available';
+                        nameWarn.style.color = '#16a34a';
+                        submitBtn.disabled = false;
+                    }
+                })
+                .catch(function(){
+                    nameWarn.textContent = '';
+                    submitBtn.disabled = false;
+                });
+            }, 300);
+        });
+    }
+})();
+</script>
+{% endblock %}

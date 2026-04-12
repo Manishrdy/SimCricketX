@@ -83,6 +83,10 @@
                             class="admin-nav-link {% if request.endpoint == 'admin_global_matches' %}active{% endif %}">
                             <i class="fas fa-list"></i> <span>All Matches</span>
                         </a></li>
+                    <li><a href="/admin/player-pool" data-label="Player Pool"
+                            class="admin-nav-link {% if request.endpoint in ['admin_player_pool','admin_player_pool_add','admin_player_pool_edit','admin_player_pool_import'] %}active{% endif %}">
+                            <i class="fas fa-database"></i> <span>Player Pool</span>
+                        </a></li>
                 </ul>
             </div>
 
