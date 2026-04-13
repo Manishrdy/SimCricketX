@@ -314,6 +314,19 @@ class Match:
                 "wicket_type": "", "bowler_out": "", "fielder_out": ""
             }
 
+    def _ensure_current_bowler_stats_entry(self):
+        if not self.current_bowler:
+            return
+        bowler_name = self.current_bowler.get("name")
+        if not bowler_name:
+            return
+        if bowler_name not in self.bowler_stats:
+            self.bowler_stats[bowler_name] = {
+                "runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0,
+                "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0
+            }
+            logger.warning("Created missing bowler_stats entry for '%s'", bowler_name)
+
     def _build_decision_required_response(self, decision, commentary="", ball_data=None):
         response = {
             "match_over": False,
@@ -443,11 +456,7 @@ class Match:
         if decision["type"] == "next_bowler":
             self.current_bowler = self.bowling_team[selected_index]
             self.bowler_selected_for_over = self.current_over
-            if self.current_bowler["name"] not in self.bowler_stats:
-                self.bowler_stats[self.current_bowler["name"]] = {
-                    "runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0,
-                    "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0
-                }
+            self._ensure_current_bowler_stats_entry()
             result = {
                 "success": True,
                 "applied": {
@@ -3409,6 +3418,8 @@ class Match:
             if status_code != 200:
                 return {"error": apply_result.get("error", "Failed to auto-resolve pending decision")}
 
+        self._ensure_current_bowler_stats_entry()
+
 
         if self.current_over >= self.overs or self.wickets >= 10:
             # 🤝 SAVE UNFINISHED PARTNERSHIP (if overs completed and not all out)
@@ -3642,6 +3653,7 @@ class Match:
                         "Using fallback bowler '%s' after selection failure",
                         self.current_bowler.get("name", "Unknown")
                     )
+                self._ensure_current_bowler_stats_entry()
                 self.bowler_selected_for_over = self.current_over
             if self.current_over == 0:
                 batting_team_name = self._get_team_name(self.batting_team)
