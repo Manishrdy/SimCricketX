@@ -1,0 +1,205 @@
+user_id,user_email,team_id,team_name,profile_format,player_id,player_name,player_ratings,match_type,master_id,master_name,master_ratings,action
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,79,Travis Head,90/18/82|Left|Off spin|Right,master_rating_divergence,114,Travis Head,85/55/82|Left|Off spin|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,80,Abhishek Sharma,88/30/80|Left|Off spin|Right,master_rating_divergence,37,Abhishek Sharma,87/15/84|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,81,Ishan Kishan,82/10/78|Left|Off spin|Right,master_rating_divergence,27,Ishan Kishan,88/5/87|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,82,Abhinav Manohar,78/12/76|Right|Off spin|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,83,Aniket Verma,66/10/64|Right|Off spin|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,84,Smaran Ravichandran,67/12/66|Left|Fast|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,85,Heinrich Klaasen,92/5/88|Right|Fast|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,86,Pat Cummins,45/92/84|Right|Medium|Right,master_rating_divergence,122,Pat Cummins,45/92/70|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,87,Mohammad Shami,28/91/78|Right|Medium|Left,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,88,Harshal Patel,55/86/76|Right|Leg spin|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,89,Jaydev Unadkat,34/79/74|Left|Fast|Right,master_rating_divergence,92,Jaydev Unadkat,40/86/83|Right|Medium-fast|Left,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,90,Rahul Chahar,25/80/75|Right|Medium-fast|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,91,Simarjeet Singh,22/76/72|Right|Leg spin|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,92,Nitish Kumar Reddy,79/74/80|Right||,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,9,Sunrisers Hyderabad,T20,93,Liam Livingstone,84/72/82|Right||,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,276,Rohit Sharma,91/20/85|Right|Off spin|Right,master_rating_divergence,4,Rohit Sharma,96/15/88|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,277,Suryakumar Yadav,94/15/88|Right|Off spin|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,278,Tilak Varma,83/18/80|Left|Off spin|Left,master_rating_divergence,36,Tilak Varma,89/5/85|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,279,Nehal Wadhera,78/16/76|Left|Off spin|Left,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,280,Dewald Brevis,69/22/72|Right|Off spin|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,281,Ishan Kishan,84/10/82|Left||,master_rating_divergence,27,Ishan Kishan,88/5/87|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,282,Hardik Pandya,88/86/87|Right|Fast-medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,283,Romario Shepherd,76/80/78|Right|Fast|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,284,Gerald Coetzee,40/88/80|Right|Fast|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,285,Jasprit Bumrah,35/95/90|Right|Leg spin|Right,master_rating_divergence,65,Jasprit Bumrah,40/98/85|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,286,Piyush Chawla,32/82/74|Right|Finger spin|Left,master_rating_divergence,95,Piyush Chawla,55/88/84|Left|Leg spin|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,287,Shams Mulani,68/76/75|Left|Medium-fast|Left,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,288,Arjun Tendulkar,65/74/72|Left|Fast-medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,289,Akash Madhwal,30/79/73|Right|Wrist spin|Left,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,T20,290,Kumar Kartikeya,28/77/70|Left||,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,291,Rohit Sharma,91/20/85|Right|Off spin|Right,master_rating_divergence,4,Rohit Sharma,96/15/88|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,292,Suryakumar Yadav,94/15/88|Right|Off spin|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,293,Tilak Varma,83/18/80|Left|Off spin|Left,master_rating_divergence,36,Tilak Varma,89/5/85|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,294,Nehal Wadhera,78/16/76|Left|Off spin|Left,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,295,Dewald Brevis,69/22/72|Right|Off spin|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,296,Ishan Kishan,84/10/82|Left||,master_rating_divergence,27,Ishan Kishan,88/5/87|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,297,Hardik Pandya,88/86/87|Right|Fast-medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,298,Romario Shepherd,76/80/78|Right|Fast|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,299,Gerald Coetzee,40/88/80|Right|Fast|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,300,Jasprit Bumrah,35/95/90|Right|Leg spin|Right,master_rating_divergence,65,Jasprit Bumrah,40/98/85|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,301,Piyush Chawla,32/82/74|Right|Finger spin|Left,master_rating_divergence,95,Piyush Chawla,55/88/84|Left|Leg spin|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,302,Shams Mulani,68/76/75|Left|Medium-fast|Left,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,303,Arjun Tendulkar,65/74/72|Left|Fast-medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,304,Akash Madhwal,30/79/73|Right|Wrist spin|Left,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,ListA,305,Kumar Kartikeya,28/77/70|Left||,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,306,Rohit Sharma,91/20/85|Right|Off spin|Right,master_rating_divergence,4,Rohit Sharma,96/15/88|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,307,Suryakumar Yadav,94/15/88|Right|Off spin|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,308,Tilak Varma,83/18/80|Left|Off spin|Left,master_rating_divergence,36,Tilak Varma,89/5/85|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,309,Nehal Wadhera,78/16/76|Left|Off spin|Left,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,310,Dewald Brevis,69/22/72|Right|Off spin|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,311,Ishan Kishan,84/10/82|Left||,master_rating_divergence,27,Ishan Kishan,88/5/87|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,312,Hardik Pandya,88/86/87|Right|Fast-medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,313,Romario Shepherd,76/80/78|Right|Fast|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,314,Gerald Coetzee,40/88/80|Right|Fast|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,315,Jasprit Bumrah,35/95/90|Right|Leg spin|Right,master_rating_divergence,65,Jasprit Bumrah,40/98/85|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,316,Piyush Chawla,32/82/74|Right|Finger spin|Left,master_rating_divergence,95,Piyush Chawla,55/88/84|Left|Leg spin|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,317,Shams Mulani,68/76/75|Left|Medium-fast|Left,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,318,Arjun Tendulkar,65/74/72|Left|Fast-medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,319,Akash Madhwal,30/79/73|Right|Wrist spin|Left,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,10,Mumbai Indians,FirstClass,320,Kumar Kartikeya,28/77/70|Left||,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,200,Suryakumar Yadav,92/35/88|Right|Medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,201,Abhishek Sharma,82/72/78|Left|Finger spin|Left,master_rating_divergence,37,Abhishek Sharma,87/15/84|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,202,Rinku Singh,84/20/82|Left||,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,203,Tilak Varma,81/58/80|Left|Off spin|Right,master_rating_divergence,36,Tilak Varma,89/5/85|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,204,Axar Patel,78/84/84|Left|Finger spin|Left,master_rating_divergence,83,Axar Patel,75/89/90|Left|Finger spin|Left,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,205,Hardik Pandya,86/83/86|Right|Fast-medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,206,Shivam Dube,80/72/76|Left|Medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,207,Washington Sundar,74/82/79|Left|Off spin|Right,master_rating_divergence,84,Washington Sundar,78/88/88|Left|Off spin|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,208,Sanju Samson,80/10/84|Right||,master_rating_divergence,30,Sanju Samson,89/5/88|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,209,Ishan Kishan,79/18/82|Left||,master_rating_divergence,27,Ishan Kishan,88/5/87|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,210,Jasprit Bumrah,20/92/82|Right|Fast|Right,master_rating_divergence,65,Jasprit Bumrah,40/98/85|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,211,Mohammed Siraj,22/84/78|Right|Fast|Right,master_rating_divergence,67,Mohammed Siraj,38/92/84|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,212,Arshdeep Singh,24/83/77|Left|Fast-medium|Left,master_rating_divergence,89,Arshdeep Singh,35/90/85|Left|Medium-fast|Left,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,213,Kuldeep Yadav,18/88/76|Left|Wrist spin|Left,master_rating_divergence,80,Kuldeep Yadav,40/91/83|Left|Wrist spin|Left,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,T20,214,Varun Chakravarthy,22/82/75|Right|Wrist spin|Right,master_rating_divergence,93,Varun Chakravarthy,30/91/82|Right|Wrist spin|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,215,Rohit Sharma,91/20/85|Right|Off spin|Right,master_rating_divergence,4,Rohit Sharma,96/15/88|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,216,Shubman Gill,90/25/84|Right|Off spin|Right,master_rating_divergence,26,Shubman Gill,92/5/88|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,217,Virat Kohli,93/30/88|Right|Medium|Right,master_rating_divergence,3,Virat Kohli,98/10/90|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,218,Shreyas Iyer,86/20/82|Right||,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,219,KL Rahul,87/15/86|Right||,master_rating_divergence,12,KL Rahul,91/5/88|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,220,Hardik Pandya,88/84/87|Right|Fast-medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,221,Ravindra Jadeja,82/88/92|Left|Finger spin|Left,master_rating_divergence,82,Ravindra Jadeja,85/92/95|Left|Finger spin|Left,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,222,Axar Patel,78/83/84|Left|Finger spin|Left,master_rating_divergence,83,Axar Patel,75/89/90|Left|Finger spin|Left,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,223,Kuldeep Yadav,20/89/78|Left|Wrist spin|Left,master_rating_divergence,80,Kuldeep Yadav,40/91/83|Left|Wrist spin|Left,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,224,Jasprit Bumrah,22/94/83|Right|Fast|Right,master_rating_divergence,65,Jasprit Bumrah,40/98/85|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,225,Mohammed Siraj,24/86/80|Right|Fast|Right,master_rating_divergence,67,Mohammed Siraj,38/92/84|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,226,Mohammed Shami,23/88/79|Right|Fast|Right,master_rating_divergence,66,Mohammed Shami,35/95/82|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,227,Shardul Thakur,74/80/78|Right|Medium-fast|Right,master_rating_divergence,85,Shardul Thakur,70/87/85|Right|Medium-fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,228,Suryakumar Yadav,84/35/86|Right|Medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,ListA,229,Ishan Kishan,82/20/84|Left||,master_rating_divergence,27,Ishan Kishan,88/5/87|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,230,Shubman Gill,89/20/85|Right||,master_rating_divergence,26,Shubman Gill,92/5/88|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,231,Yashasvi Jaiswal,88/15/83|Left||,master_rating_divergence,35,Yashasvi Jaiswal,93/5/86|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,232,Sai Sudharsan,80/18/82|Left||,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,233,Abhimanyu Easwaran,75/10/78|Right||,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,234,Karun Nair,72/12/76|Right||,master_rating_divergence,33,Karun Nair,86/5/82|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,235,KL Rahul,85/10/85|Right||,master_rating_divergence,12,KL Rahul,91/5/88|Right||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,236,Rishabh Pant,88/5/84|Left||,master_rating_divergence,42,Rishabh Pant,92/5/88|Left||,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,237,Dhruv Jurel,78/5/80|Right||,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,238,Ravindra Jadeja,83/90/92|Left|Finger spin|Left,master_rating_divergence,82,Ravindra Jadeja,85/92/95|Left|Finger spin|Left,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,239,Washington Sundar,75/80/78|Left|Off spin|Right,master_rating_divergence,84,Washington Sundar,78/88/88|Left|Off spin|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,240,Jasprit Bumrah,22/93/83|Right|Fast|Right,master_rating_divergence,65,Jasprit Bumrah,40/98/85|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,241,Mohammed Siraj,20/88/80|Right|Fast|Right,master_rating_divergence,67,Mohammed Siraj,38/92/84|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,242,Prasidh Krishna,18/82/77|Right|Fast|Right,master_rating_divergence,87,Prasidh Krishna,30/89/82|Right|Fast|Right,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,243,Akash Deep,15/80/75|Right|Fast-medium|Right,no_master_match,,,,create_custom
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,244,Arshdeep Singh,18/81/76|Left|Fast-medium|Left,master_rating_divergence,89,Arshdeep Singh,35/90/85|Left|Medium-fast|Left,create_override
+d6mr07@gmail.com,d6mr07@gmail.com,11,India,FirstClass,245,Kuldeep Yadav,18/86/79|Left|Wrist spin|Left,master_rating_divergence,80,Kuldeep Yadav,40/91/83|Left|Wrist spin|Left,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,321,Virat Kohli,92/25/86|Right||,master_rating_divergence,3,Virat Kohli,98/10/90|Right||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,322,Rajat Patidar,86/20/82|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,323,Devdutt Padikkal,82/18/78|Left||,master_rating_divergence,32,Devdutt Padikkal,88/5/84|Left||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,324,Tim David,80/35/80|Right|Medium|Right,master_rating_divergence,119,Tim David,80/0/72|Right||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,325,Jordan Cox,68/10/70|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,326,Phil Salt,83/10/82|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,327,Jitesh Sharma,79/10/80|Right||,master_rating_divergence,63,Jitesh Sharma,84/0/85|Right||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,328,Krunal Pandya,78/82/80|Left|Fast-medium|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,329,Venkatesh Iyer,80/74/78|Left|Finger spin|Left,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,330,Romario Shepherd,70/80/77|Right|Finger spin|Left,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,331,Swapnil Singh,62/68/66|Left|Fast-medium|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,332,Jacob Bethell,70/70/72|Left|Medium-fast|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,333,Josh Hazlewood,20/90/78|Right|Medium-fast|Left,master_rating_divergence,124,Josh Hazlewood,30/90/65|Right|Fast|Right,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,334,Bhuvneshwar Kumar,30/88/80|Right|Leg spin|Right,master_rating_divergence,68,Bhuvneshwar Kumar,50/90/86|Right|Medium-fast|Right,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,335,Yash Dayal,22/82/76|Left|Fast-medium|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,336,Suyash Sharma,18/78/72|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,4,Royal Challengers Bengaluru,T20,337,Nuwan Thushara,15/82/74|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,18,Pat Cummins,30/92/85|Right|Fast|Right,master_rating_divergence,122,Pat Cummins,45/92/70|Right|Fast|Right,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,19,Travis Head,89/20/83|Left|Off spin|Right,master_rating_divergence,114,Travis Head,85/55/82|Left|Off spin|Right,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,20,Ishan Kishan,84/5/82|Left|Off spin|Right,master_rating_divergence,27,Ishan Kishan,88/5/87|Left||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,21,Heinrich Klaasen,80/10/80|Right|Medium-fast|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,22,Abhishek Sharma,82/45/78|Left|Medium-fast|Right,master_rating_divergence,37,Abhishek Sharma,87/15/84|Left||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,23,Nitish Kumar Reddy,70/68/75|Right|Off spin|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,24,Harshal Patel,68/75/77|Right|Fast-medium|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,25,Kamindu Mendis,74/72/78|Right|Medium-fast|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,26,Brydon Carse,65/78/77|Right|Medium-fast|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,27,Liam Livingstone,80/65/79|Right|Fast-medium|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,28,Jaydev Unadkat,30/77/75|Right|Leg spin|Right,master_rating_divergence,92,Jaydev Unadkat,40/86/83|Right|Medium-fast|Left,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,29,Eshan Malinga,28/75/74|Right|Fast|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,30,Zeeshan Ansari,20/70/72|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,31,Shivam Mavi,25/72/74|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,5,Sunrisers Hyderabad,T20,32,Salil Arora,68/5/70|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,33,Tristan Stubbs,85/15/83|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,34,Jonny Bairstow,88/5/80|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,35,Quinton de Kock,85/5/81|Left||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,36,Matthew Breetzke,82/10/78|Right|Finger spin|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,37,Jordan Hermann,78/8/77|Right|Off spin|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,38,Mitchell van Buuren,75/10/76|Right|Fast-medium|Left,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,39,James Coles,78/66/78|Right|Medium-fast|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,40,Lewis Gregory,74/70/78|Right|Medium-fast|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,41,Marco Jansen,70/82/80|Left|Off spin|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,42,CJ King,68/68/75|Right|Fast-medium|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,43,JP King,66/70/76|Right|Fast|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,44,Senuran Muthusamy,68/72/78|Right|Fast|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,45,AM Ghazanfar,25/70/72|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,46,Adam Milne,20/75/74|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,6,Sunrisers Eastern Cape,T20,47,Anrich Nortje,28/80/76|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,63,David Warner,92/35/88|Left|Wrist spin|Right,master_rating_divergence,113,David Warner,88/0/78|Left||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,64,Shikhar Dhawan,88/20/82|Left||,master_rating_divergence,11,Shikhar Dhawan,89/5/85|Left||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,65,Kane Williamson,86/25/82|Right|Off spin|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,66,Eoin Morgan,80/18/78|Left||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,67,Ricky Bhui,66/25/70|Right|Leg spin|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,68,Naman Ojha,78/10/82|Right|Finger spin|Left,master_rating_divergence,44,Naman Ojha,82/5/79|Right||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,69,Yuvraj Singh,82/62/78|Left|Medium|Right,master_rating_divergence,15,Yuvraj Singh,91/30/89|Left||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,70,Moises Henriques,79/78/82|Right|Off spin|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,71,Deepak Hooda,77/72/76|Right|Fast-medium|Right,master_rating_divergence,40,Deepak Hooda,87/15/84|Right||,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,72,Ben Cutting,79/77/78|Right|Medium-fast|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,73,Bhuvneshwar Kumar,28/89/82|Right|Fast-medium|Left,master_rating_divergence,68,Bhuvneshwar Kumar,50/90/86|Right|Medium-fast|Right,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,74,Mustafizur Rahman,18/88/76|Left|Fast|Left,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,75,Ashish Nehra,20/86/70|Right|Fast|Left,master_rating_divergence,72,Ashish Nehra,25/88/78|Right|Fast-medium|Left,create_override
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,76,Trent Boult,22/86/78|Right|Fast-medium|Left,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,77,Barinder Sran,16/76/70|Left|Leg spin|Right,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,8,Sunrisers 2016,T20,78,Karn Sharma,26/78/74|Right||,no_master_match,,,,create_custom
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,338,David Warner,88/0/78|Left||,master_exact,113,David Warner,88/0/78|Left||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,339,Rohit Sharma,96/15/88|Right||,master_exact,4,Rohit Sharma,96/15/88|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,340,Virat Kohli,98/10/90|Right||,master_exact,3,Virat Kohli,98/10/90|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,341,Steve Smith,90/40/85|Right|Leg spin|Right,master_exact,115,Steve Smith,90/40/85|Right|Leg spin|Right,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,342,Mitchell Starc,40/91/68|Left|Fast|Left,master_exact,123,Mitchell Starc,40/91/68|Left|Fast|Left,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,343,MS Dhoni,95/0/98|Right||,master_exact,51,MS Dhoni,95/0/98|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,344,Yuvraj Singh,91/30/89|Left||,master_exact,15,Yuvraj Singh,91/30/89|Left||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,345,Suresh Raina,88/25/92|Left||,master_exact,16,Suresh Raina,88/25/92|Left||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,346,Sachin Tendulkar,100/20/85|Right||,master_exact,2,Sachin Tendulkar,100/20/85|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,347,Ravichandran Ashwin,75/96/87|Right|Off spin|Right,master_exact,77,Ravichandran Ashwin,75/96/87|Right|Off spin|Right,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,348,Ravindra Jadeja,85/92/95|Left|Finger spin|Left,master_exact,82,Ravindra Jadeja,85/92/95|Left|Finger spin|Left,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,13,Indo Aussies,T20,349,Mohammed Siraj,38/92/84|Right|Fast|Right,master_exact,67,Mohammed Siraj,38/92/84|Right|Fast|Right,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,350,Abhishek Sharma,87/15/84|Left||,master_exact,37,Abhishek Sharma,87/15/84|Left||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,351,Aaron Hardie,72/68/73|Right|Medium-fast|Right,master_exact,131,Aaron Hardie,72/68/73|Right|Medium-fast|Right,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,352,Adam Zampa,25/85/60|Right|Leg spin|Right,master_exact,125,Adam Zampa,25/85/60|Right|Leg spin|Right,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,353,Ambati Rayudu,86/10/84|Right||,master_exact,29,Ambati Rayudu,86/10/84|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,354,Amol Muzumdar,83/5/77|Right||,master_exact,46,Amol Muzumdar,83/5/77|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,355,Amit Mishra,60/90/83|Right|Leg spin|Right,master_exact,96,Amit Mishra,60/90/83|Right|Leg spin|Right,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,356,Arshdeep Singh,35/90/85|Left|Medium-fast|Left,master_exact,89,Arshdeep Singh,35/90/85|Left|Medium-fast|Left,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,357,Ben McDermott,77/0/73|Right||,master_exact,132,Ben McDermott,77/0/73|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,358,Budhi Kunderan,81/0/84|Right||,master_exact,58,Budhi Kunderan,81/0/84|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,359,Cheteshwar Pujara,88/5/82|Right||,master_exact,13,Cheteshwar Pujara,88/5/82|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,360,David Warner,88/0/78|Left||,master_exact,113,David Warner,88/0/78|Left||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,14,E Sala Cup namdhe,T20,361,Murali Vijay,86/5/80|Right||,master_exact,22,Murali Vijay,86/5/80|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,362,Rohit Sharma,96/15/88|Right||,master_exact,4,Rohit Sharma,96/15/88|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,363,David Warner,88/0/78|Left||,master_exact,113,David Warner,88/0/78|Left||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,364,Virat Kohli,98/10/90|Right||,master_exact,3,Virat Kohli,98/10/90|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,365,Chris Green,45/72/68|Right|Off spin|Right,master_exact,138,Chris Green,45/72/68|Right|Off spin|Right,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,366,Yuvraj Singh,91/30/89|Left||,master_exact,15,Yuvraj Singh,91/30/89|Left||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,367,MS Dhoni,95/0/98|Right||,master_exact,51,MS Dhoni,95/0/98|Right||,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,368,Ravindra Jadeja,85/92/95|Left|Finger spin|Left,master_exact,82,Ravindra Jadeja,85/92/95|Left|Finger spin|Left,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,369,Shardul Thakur,70/87/85|Right|Medium-fast|Right,master_exact,85,Shardul Thakur,70/87/85|Right|Medium-fast|Right,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,370,Dale Steyn,10/95/70|Right|Fast|Right,master_exact,1,Dale Steyn,10/95/70|Right|Fast|Right,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,371,Jasprit Bumrah,40/98/85|Right|Fast|Right,master_exact,65,Jasprit Bumrah,40/98/85|Right|Fast|Right,link_to_master
+manish.botta@outlook.com,manish.botta@outlook.com,15,Planet Cricket Staff,T20,372,Mitchell Starc,40/91/68|Left|Fast|Left,master_exact,123,Mitchell Starc,40/91/68|Left|Fast|Left,link_to_master
