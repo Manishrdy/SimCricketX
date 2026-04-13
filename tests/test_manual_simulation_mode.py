@@ -212,3 +212,33 @@ def test_submit_decision_rejects_invalid_index_and_type(app_client):
     )
     assert bad_index_resp.status_code == 400
     assert "valid option" in bad_index_resp.get_json()["error"]
+
+
+def test_next_ball_recovers_missing_current_bowler_stats_entry(app_client, monkeypatch):
+    _app, _client, user_id = app_client
+    data = _build_match_data(user_id, simulation_mode="auto")
+    match = match_module.Match(data)
+
+    match.current_over = 0
+    match.current_ball = 1
+    match.current_bowler = match.bowling_team[0]
+    match.bowler_selected_for_over = 0
+
+    missing_bowler = match.current_bowler["name"]
+    match.bowler_stats.pop(missing_bowler, None)
+
+    def fake_single_outcome(**_kwargs):
+        return {
+            "runs": 1,
+            "batter_out": False,
+            "is_extra": False,
+            "description": "Worked to long-on for a single.",
+        }
+
+    monkeypatch.setattr(match_module, "calculate_outcome", fake_single_outcome)
+
+    response = match.next_ball()
+
+    assert response.get("error") is None
+    assert missing_bowler in match.bowler_stats
+    assert match.bowler_stats[missing_bowler]["runs"] == 1
