@@ -224,6 +224,7 @@ def test_next_ball_handles_missing_bowler_stats(app_client, monkeypatch):
     match.current_bowler = match.bowling_team[0]
     match.bowler_selected_for_over = 0
 
+    assert match.current_bowler and "name" in match.current_bowler
     missing_bowler = match.current_bowler["name"]
     match.bowler_stats.pop(missing_bowler, None)
 
