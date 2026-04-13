@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from flask_login import UserMixin
-from sqlalchemy.orm import relationship, synonym
+from sqlalchemy.orm import relationship, synonym, validates
 from database import db
 import uuid
 
@@ -192,6 +192,20 @@ class Player(db.Model):
     # Relationships
     profile = relationship('TeamProfile', back_populates='players')
     scorecard_entries = relationship('MatchScorecard', backref='player_ref', passive_deletes=True)
+
+    @validates('master_player_id', 'user_player_id')
+    def _validate_pool_fk_exclusive(self, key, value):
+        # A Player row may link to the master pool XOR the user pool, never both.
+        # Neither-set is allowed as a transitional state.
+        if value is None:
+            return value
+        other = 'user_player_id' if key == 'master_player_id' else 'master_player_id'
+        if getattr(self, other) is not None:
+            raise ValueError(
+                f"Player {self.id or '(new)'}: cannot set both master_player_id "
+                f"and user_player_id — pool links are mutually exclusive."
+            )
+        return value
 
 
 class MasterPlayer(db.Model):
@@ -421,7 +435,7 @@ class MatchScorecard(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=False, index=True)
-    player_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False, index=True)
+    player_id = db.Column(db.Integer, db.ForeignKey('players.id', ondelete='CASCADE'), nullable=False, index=True)
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False, index=True)
     innings_number = db.Column(db.Integer, default=1, nullable=False)
     record_type = db.Column(db.String(20), default="batting", nullable=False)

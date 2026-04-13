@@ -7,7 +7,7 @@ Handles all statistics calculations and queries for the SimCricketX application.
 from sqlalchemy import func
 from sqlalchemy.orm import aliased
 from datetime import datetime
-from database.models import Match, MatchScorecard, Tournament, Player, Team, TournamentPlayerStatsCache
+from database.models import Match, MatchScorecard, Tournament, Player, Team, TeamProfile, TournamentPlayerStatsCache
 from database import db
 from collections import defaultdict
 import csv
@@ -86,7 +86,7 @@ class StatsService:
 
         # Try the pre-computed cache when no format filter is active
         if not match_format:
-            cached = self._try_cache_tournament_stats(tournament_id)
+            cached = self._try_cache_tournament_stats(tournament_id, user_id)
             if cached:
                 return cached
 
@@ -111,7 +111,7 @@ class StatsService:
 
         return self._calculate_stats_from_records(records)
 
-    def _try_cache_tournament_stats(self, tournament_id):
+    def _try_cache_tournament_stats(self, tournament_id, user_id):
         """Attempt to serve tournament stats from TournamentPlayerStatsCache.
 
         Returns the same dict shape as _calculate_stats_from_records() on
@@ -123,6 +123,7 @@ class StatsService:
             .join(Player, TournamentPlayerStatsCache.player_id == Player.id)
             .join(Team, TournamentPlayerStatsCache.team_id == Team.id)
             .filter(TournamentPlayerStatsCache.tournament_id == tournament_id)
+            .filter(Team.user_id == user_id)
             .all()
         )
         if not cached:
@@ -951,6 +952,16 @@ class StatsService:
             if not team or team.user_id != user_id:
                 return None
             
+            # A Player row is bound to a single TeamProfile (one format). Scope
+            # scorecard queries to that format so any stray cross-format records
+            # cannot bleed into a single-profile player view.
+            profile_format = None
+            if player.profile_id:
+                profile = TeamProfile.query.get(player.profile_id)
+                if profile:
+                    profile_format = profile.format_type
+            effective_format = match_format or profile_format
+
             # Query scorecard records
             query = (
                 db.session.query(MatchScorecard, Match)
@@ -958,11 +969,11 @@ class StatsService:
                 .filter(MatchScorecard.player_id == player_id)
                 .filter(Match.user_id == user_id)  # Ensure we only get current user's matches
             )
-            
+
             if tournament_id:
                 query = query.filter(Match.tournament_id == tournament_id)
-            if match_format:
-                query = query.filter(Match.match_format == match_format)
+            if effective_format:
+                query = query.filter(Match.match_format == effective_format)
 
             records = query.all()
 
@@ -1455,13 +1466,24 @@ class StatsService:
             if not team or team.user_id != user_id:
                 return {"error": "Unauthorized"}
 
+            # A Player row is bound to a TeamProfile (one format). Constrain the
+            # scorecard query to that profile's format so legacy or mis-archived
+            # cross-format records cannot bleed into a single-profile player view.
+            profile_format = None
+            if player.profile_id:
+                profile = TeamProfile.query.get(player.profile_id)
+                if profile:
+                    profile_format = profile.format_type
+
+            effective_format = match_format or profile_format
+
             query = (
                 db.session.query(MatchScorecard, Match)
                 .join(Match, MatchScorecard.match_id == Match.id)
                 .filter(MatchScorecard.player_id == player_id, Match.user_id == user_id)
             )
-            if match_format:
-                query = query.filter(Match.match_format == match_format)
+            if effective_format:
+                query = query.filter(Match.match_format == effective_format)
 
             records = query.order_by(Match.date.desc()).all()
 

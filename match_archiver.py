@@ -695,7 +695,13 @@ class MatchArchiver:
             _match_format = self.match_data.get('match_format', 'T20')
 
             def _lookup_player(p_name, team_id):
-                """Resolve player via format profile first; fall back to team-wide lookup."""
+                """Resolve player via format profile; only fall back to team-wide
+                lookup for genuinely legacy (profile_id IS NULL) rows.
+
+                Post-migration, every player belongs to a profile. Falling back
+                to any team-wide match would risk attaching this match's stats
+                to a player row in a *different* format profile.
+                """
                 profile = DBTeamProfile.query.filter_by(
                     team_id=team_id, format_type=_match_format
                 ).first()
@@ -705,8 +711,10 @@ class MatchArchiver:
                     ).first()
                     if player:
                         return player
-                # Fallback for legacy / pre-migration data
-                return DBPlayer.query.filter_by(name=p_name, team_id=team_id).first()
+                # Legacy fallback: only accept an unassigned (pre-migration) row.
+                return DBPlayer.query.filter_by(
+                    name=p_name, team_id=team_id, profile_id=None
+                ).first()
 
             def save_stats(stats_dict, team_id, innings_number, record_type, batting_stats=None):
                 if not stats_dict:
@@ -715,6 +723,13 @@ class MatchArchiver:
                     # Find player ID (profile-aware)
                     player = _lookup_player(p_name, team_id)
                     if not player:
+                        self.logger.warning(
+                            "Scorecard skipped: player '%s' not found for team_id=%s "
+                            "(match_id=%s, format=%s, innings=%s, record_type=%s). "
+                            "Stats for this player will not be archived.",
+                            p_name, team_id, self.match_id, _match_format,
+                            innings_number, record_type,
+                        )
                         continue
                     
                     card = MatchScorecard.query.filter_by(
@@ -891,7 +906,11 @@ class MatchArchiver:
                 ).first()
                 if p:
                     return p
-            return DBPlayer.query.filter_by(name=name, team_id=batting_team_id).first()
+            # Legacy fallback: only accept unassigned (pre-migration) rows so
+            # partnerships are never attached to a different-format Player row.
+            return DBPlayer.query.filter_by(
+                name=name, team_id=batting_team_id, profile_id=None
+            ).first()
 
         for p_data in partnerships:
              # Resolve player IDs (profile-aware)

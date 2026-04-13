@@ -1195,11 +1195,39 @@ def create_app():
             print(f"[WARN] Player pool migration skipped: {e}")
 
         try:
+            from migrations.add_scorecard_cascade import run_migration as _run_scorecard_cascade_migration
+            _run_scorecard_cascade_migration(db, app)
+        except Exception as e:
+            log_exception(e, source="sqlite")
+            print(f"[WARN] Scorecard cascade migration skipped: {e}")
+
+        try:
             from migrations.add_auction import run_migration as _run_auction_migration
             _run_auction_migration(db, app)
         except Exception as e:
             log_exception(e, source="sqlite")
             print(f"[WARN] Auction migration skipped: {e}")
+
+        # Player pool FK invariant audit — a Player may link to master XOR user
+        # pool, never both. The @validates hook guards new writes; this audit
+        # surfaces any pre-existing violations so ops can fix them manually.
+        try:
+            with app.app_context():
+                from sqlalchemy import text as _sql_text
+                rows = db.session.execute(_sql_text(
+                    "SELECT id, team_id, name, master_player_id, user_player_id "
+                    "FROM players "
+                    "WHERE master_player_id IS NOT NULL AND user_player_id IS NOT NULL"
+                )).fetchall()
+                if rows:
+                    print(f"[WARN] Pool FK audit: {len(rows)} Player row(s) have both master_player_id and user_player_id set:")
+                    for r in rows[:20]:
+                        print(f"  - player_id={r[0]} team_id={r[1]} name={r[2]!r} master={r[3]} user={r[4]}")
+                    if len(rows) > 20:
+                        print(f"  ... and {len(rows) - 20} more")
+        except Exception as e:
+            log_exception(e, source="sqlite")
+            print(f"[WARN] Pool FK audit skipped: {e}")
 
     # --- Logging setup (logs to file + terminal) ---
     base_dir = os.path.abspath(os.path.dirname(__file__))
