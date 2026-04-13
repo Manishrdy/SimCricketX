@@ -435,12 +435,6 @@
             background: var(--bg-body);
         }
 
-        .action-btn.clone:hover {
-            color: var(--warning);
-            border-color: var(--warning);
-            background: rgba(217, 119, 6, 0.12);
-        }
-
         .action-btn.delete:hover {
             color: var(--danger);
             border-color: var(--danger);
@@ -739,14 +733,8 @@
                         <span>Created {{ t.created_at.strftime('%b %d, %Y') if t.created_at else 'N/A' }}</span>
                     </div>
                     <div class="card-actions">
-                        <a class="action-btn edit" href="/team/{{ t.id }}/squad/T20" title="Build Squad" style="text-decoration:none;">
-                            <i class="fa-solid fa-people-group"></i>
-                        </a>
                         <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team">
                             <i class="fa-solid fa-pen-to-square"></i>
-                        </button>
-                        <button class="action-btn clone" onclick="cloneTeam('{{ t.short_code }}')" title="Clone Team">
-                            <i class="fa-solid fa-clone"></i>
                         </button>
                         <button class="action-btn delete" onclick="confirmDelete('{{ t.short_code }}')"
                             title="Delete Team">
@@ -767,11 +755,6 @@
             {% endif %}
         </div>
     </main>
-
-    <!-- Hidden clone form -->
-    <form id="clone-form" method="POST" style="display:none;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    </form>
 
     <div class="modal" id="confirmModal">
         <div class="modal-content">
@@ -838,13 +821,6 @@
             card.style.opacity = '0.7';
             card.style.pointerEvents = 'none';
             window.location.href = `/team/${code}/edit`;
-        }
-
-        function cloneTeam(code) {
-            if (!confirm('Clone this team as a new draft?')) return;
-            const form = document.getElementById('clone-form');
-            form.action = `/team/${code}/clone`;
-            form.submit();
         }
 
         // ─── Team search / filter ──────────────────────────────────
