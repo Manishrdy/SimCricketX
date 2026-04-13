@@ -296,6 +296,11 @@
 .tc-player.dragging { opacity: 0.35; }
 .tc-player.drop-above { box-shadow: inset 0 2px 0 0 var(--tc-accent); }
 .tc-player.drop-below { box-shadow: inset 0 -2px 0 0 var(--tc-accent); }
+.tc-list.drop-target {
+  outline: 2px dashed var(--tc-accent);
+  outline-offset: -4px;
+  background: color-mix(in srgb, var(--tc-accent) 6%, transparent);
+}
 .tc-grip {
     color: var(--fg-secondary);
     font-size: 0.8rem;
@@ -605,8 +610,8 @@
   </div>
 
   <div class="tc-hero">
-    <h1>Create Team</h1>
-    <p>Fill in team identity, then build squads for T20 and List A from your player pool. Drafts are auto-saved locally.</p>
+    <h1>{% if edit %}Edit Team{% else %}Create Team{% endif %}</h1>
+    <p>{% if edit %}Update team identity and squad composition. Changes replace the existing profiles on save.{% else %}Fill in team identity, then build squads for T20 and List A from your player pool. Drafts are auto-saved locally.{% endif %}</p>
   </div>
 
   {% if error %}
@@ -618,7 +623,23 @@
     <button type="button" id="tc-restored-dismiss" aria-label="Dismiss">&times;</button>
   </div>
 
-  <form id="tc-form" method="POST" action="{{ url_for('create_team') }}" autocomplete="off">
+  {% if edit %}
+  <script id="tc-edit-data" type="application/json">
+    {{ {
+      "identity": {
+        "team_name": team.team_name,
+        "short_code": team.short_code,
+        "home_ground": team.home_ground,
+        "pitch_preference": team.pitch_preference,
+        "team_color": team.team_color,
+      },
+      "profiles": team.profiles,
+    } | tojson }}
+  </script>
+  {% endif %}
+
+  <form id="tc-form" method="POST" action="{% if edit %}{{ url_for('edit_team', short_code=team.short_code) }}{% else %}{{ url_for('create_team') }}{% endif %}" autocomplete="off">
+    {% if edit %}<input type="hidden" name="action" value="publish">{% endif %}
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="profiles_payload" id="tc-profiles-payload">
 
@@ -725,11 +746,13 @@
         <span class="tc-rules-empty">Fill team identity and add players to save.</span>
       </div>
       <div style="display:flex;gap:0.5rem;">
+        {% if not edit %}
         <button type="button" id="tc-clear" class="tc-btn tc-btn-ghost">
           <i class="fa-solid fa-rotate-left"></i> Clear Draft
         </button>
+        {% endif %}
         <button type="submit" id="tc-save" class="tc-btn tc-btn-primary" disabled>
-          <i class="fa-solid fa-floppy-disk"></i> Save Team
+          <i class="fa-solid fa-floppy-disk"></i> {% if edit %}Update Team{% else %}Save Team{% endif %}
         </button>
       </div>
     </div>
@@ -745,6 +768,16 @@
   const LS_KEY = 'team_create_draft_v1';
   const POOL_PAGE = 50;
   const VALID_FORMATS = ['T20', 'ListA'];
+
+  // Edit mode — hydrated from server-rendered JSON. When present, we skip
+  // localStorage draft persistence so editing one team doesn't clobber an
+  // unrelated create-team draft.
+  const EDIT_DATA = (function () {
+    const el = document.getElementById('tc-edit-data');
+    if (!el) return null;
+    try { return JSON.parse(el.textContent); } catch (_) { return null; }
+  })();
+  const IS_EDIT = !!EDIT_DATA;
   const ROLE_CLASS = {
     'Batsman': 'bat',
     'Bowler': 'bowl',
@@ -902,8 +935,9 @@
       const meta = playerMeta(p);
       return `
         <div class="tc-player ${inRoster ? 'in-roster' : ''}"
+             draggable="${inRoster ? 'false' : 'true'}"
              data-pool-id="${escHtml(p.id)}"
-             title="${inRoster ? 'Already in roster' : 'Double-click to add'}">
+             title="${inRoster ? 'Already in roster' : 'Double-click or drag to add'}">
           <div class="tc-player-main">
             <div class="tc-player-name">${escHtml(p.name)}</div>
             ${meta ? `<div class="tc-player-meta">${escHtml(meta)}</div>` : ''}
@@ -952,7 +986,8 @@
   });
 
   // ── Roster: add/remove/render ────────────────────────────────────────
-  function addToRoster(pool) {
+  // insertAt: optional index; defaults to end-of-list.
+  function addToRoster(pool, insertAt) {
     const list = state.rosters[state.activeFmt];
     if (list.length >= 25) {
       flashValidation('Maximum 25 players per profile.', 'warn');
@@ -964,7 +999,7 @@
     }
     // WK rule: bowling fields cleared server-side, but mirror on client for consistency
     const isWk = pool.role === 'Wicketkeeper';
-    list.push({
+    const entry = {
       name: pool.name,
       role: pool.role,
       batting_rating: pool.batting_rating || 0,
@@ -973,7 +1008,12 @@
       batting_hand: pool.batting_hand || '',
       bowling_type: isWk ? '' : (pool.bowling_type || ''),
       bowling_hand: isWk ? '' : (pool.bowling_hand || ''),
-    });
+    };
+    if (typeof insertAt === 'number' && insertAt >= 0 && insertAt <= list.length) {
+      list.splice(insertAt, 0, entry);
+    } else {
+      list.push(entry);
+    }
     afterRosterChange();
   }
 
@@ -1031,55 +1071,106 @@
     removeFromRoster(row.getAttribute('data-roster-name'));
   });
 
-  // ── Drag-to-reorder ──────────────────────────────────────────────────
-  let dragSrcIdx = null;
+  // ── Drag-to-reorder + cross-list drag-and-drop ───────────────────────
+  // dragSource tracks the origin of the current drag across both lists.
+  //   { kind: 'roster', idx }   — reorder within roster or remove via pool drop
+  //   { kind: 'pool',   id  }   — add to roster via roster drop
+  let dragSource = null;
+  let dragSrcIdx = null; // kept for roster reorder positioning
 
   function clearDropMarkers() {
     rosterList.querySelectorAll('.drop-above, .drop-below').forEach(el => {
       el.classList.remove('drop-above', 'drop-below');
     });
+    rosterList.classList.remove('drop-target');
+    poolList.classList.remove('drop-target');
   }
 
+  // ── Pool: dragstart (to roster) ──
+  poolList.addEventListener('dragstart', (e) => {
+    const row = e.target.closest('[data-pool-id]');
+    if (!row || row.classList.contains('in-roster')) return;
+    dragSource = { kind: 'pool', id: row.getAttribute('data-pool-id') };
+    dragSrcIdx = null;
+    row.classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'copy';
+      try { e.dataTransfer.setData('text/plain', 'pool:' + dragSource.id); } catch (_) {}
+    }
+  });
+
+  // ── Roster: dragstart (reorder or remove via pool drop) ──
   rosterList.addEventListener('dragstart', (e) => {
     const row = e.target.closest('[data-roster-idx]');
     if (!row) return;
     dragSrcIdx = parseInt(row.getAttribute('data-roster-idx'), 10);
+    dragSource = { kind: 'roster', idx: dragSrcIdx };
     row.classList.add('dragging');
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
-      try { e.dataTransfer.setData('text/plain', String(dragSrcIdx)); } catch (_) {}
+      try { e.dataTransfer.setData('text/plain', 'roster:' + dragSrcIdx); } catch (_) {}
     }
   });
 
-  rosterList.addEventListener('dragend', (e) => {
-    const row = e.target.closest('[data-roster-idx]');
-    if (row) row.classList.remove('dragging');
+  // Shared dragend cleanup for both lists.
+  function onDragEnd() {
+    document.querySelectorAll('.tc-player.dragging').forEach(el => el.classList.remove('dragging'));
     clearDropMarkers();
+    dragSource = null;
     dragSrcIdx = null;
-  });
+  }
+  poolList.addEventListener('dragend', onDragEnd);
+  rosterList.addEventListener('dragend', onDragEnd);
 
+  // ── Roster: accept drops from pool (add) or roster (reorder) ──
   rosterList.addEventListener('dragover', (e) => {
-    if (dragSrcIdx === null) return;
-    const row = e.target.closest('[data-roster-idx]');
-    if (!row) return;
+    if (!dragSource) return;
     e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    const rect = row.getBoundingClientRect();
-    const above = (e.clientY - rect.top) < rect.height / 2;
-    clearDropMarkers();
-    row.classList.add(above ? 'drop-above' : 'drop-below');
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = dragSource.kind === 'pool' ? 'copy' : 'move';
+    }
+    const row = e.target.closest('[data-roster-idx]');
+    if (row) {
+      const rect = row.getBoundingClientRect();
+      const above = (e.clientY - rect.top) < rect.height / 2;
+      clearDropMarkers();
+      row.classList.add(above ? 'drop-above' : 'drop-below');
+    } else {
+      // Empty area / empty roster: append-at-end affordance.
+      clearDropMarkers();
+      rosterList.classList.add('drop-target');
+    }
   });
 
   rosterList.addEventListener('dragleave', (e) => {
-    // Only clear when leaving the list container entirely
     if (!rosterList.contains(e.relatedTarget)) clearDropMarkers();
   });
 
   rosterList.addEventListener('drop', (e) => {
-    if (dragSrcIdx === null) return;
+    if (!dragSource) return;
+    e.preventDefault();
+
+    if (dragSource.kind === 'pool') {
+      const p = state.pool.items.find(x => String(x.id) === String(dragSource.id));
+      // Positional insertion: drop on a row = above/below that row;
+      // drop on empty area = append at end.
+      let insertAt;
+      const row = e.target.closest('[data-roster-idx]');
+      if (row) {
+        const targetIdx = parseInt(row.getAttribute('data-roster-idx'), 10);
+        const rect = row.getBoundingClientRect();
+        const above = (e.clientY - rect.top) < rect.height / 2;
+        insertAt = above ? targetIdx : targetIdx + 1;
+      }
+      if (p) addToRoster(p, insertAt);
+      clearDropMarkers();
+      dragSource = null;
+      return;
+    }
+
+    // roster reorder
     const row = e.target.closest('[data-roster-idx]');
     if (!row) { clearDropMarkers(); return; }
-    e.preventDefault();
     const targetIdx = parseInt(row.getAttribute('data-roster-idx'), 10);
     const rect = row.getBoundingClientRect();
     const above = (e.clientY - rect.top) < rect.height / 2;
@@ -1087,16 +1178,44 @@
     clearDropMarkers();
 
     const list = state.rosters[state.activeFmt];
-    if (dragSrcIdx < 0 || dragSrcIdx >= list.length) { dragSrcIdx = null; return; }
-    if (insertAt === dragSrcIdx || insertAt === dragSrcIdx + 1) { dragSrcIdx = null; return; }
+    if (dragSrcIdx === null || dragSrcIdx < 0 || dragSrcIdx >= list.length) {
+      dragSrcIdx = null; dragSource = null; return;
+    }
+    if (insertAt === dragSrcIdx || insertAt === dragSrcIdx + 1) {
+      dragSrcIdx = null; dragSource = null; return;
+    }
 
     const [moved] = list.splice(dragSrcIdx, 1);
     if (insertAt > dragSrcIdx) insertAt -= 1;
     list.splice(insertAt, 0, moved);
     dragSrcIdx = null;
+    dragSource = null;
 
     renderRoster();
     scheduleAutoSave();
+  });
+
+  // ── Pool: accept drops from roster (remove) ──
+  poolList.addEventListener('dragover', (e) => {
+    if (!dragSource || dragSource.kind !== 'roster') return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    poolList.classList.add('drop-target');
+  });
+
+  poolList.addEventListener('dragleave', (e) => {
+    if (!poolList.contains(e.relatedTarget)) poolList.classList.remove('drop-target');
+  });
+
+  poolList.addEventListener('drop', (e) => {
+    if (!dragSource || dragSource.kind !== 'roster') return;
+    e.preventDefault();
+    poolList.classList.remove('drop-target');
+    const list = state.rosters[state.activeFmt];
+    const victim = list[dragSource.idx];
+    dragSource = null;
+    dragSrcIdx = null;
+    if (victim) removeFromRoster(victim.name);
   });
 
   function renderCounter(list) {
@@ -1323,6 +1442,7 @@
   }
 
   function scheduleAutoSave() {
+    if (IS_EDIT) return; // no local draft persistence while editing
     setSaveStatus('saving');
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
@@ -1337,6 +1457,42 @@
         console.warn('autosave failed', e);
       }
     }, 400);
+  }
+
+  function loadEdit() {
+    const id = EDIT_DATA.identity || {};
+    state.identity = {
+      team_name: id.team_name || '',
+      short_code: id.short_code || '',
+      home_ground: id.home_ground || '',
+      pitch_preference: id.pitch_preference || '',
+      team_color: id.team_color || '#4f46e5',
+    };
+    const profiles = EDIT_DATA.profiles || {};
+    state.rosters = {
+      T20: Array.isArray(profiles.T20 && profiles.T20.players) ? profiles.T20.players.slice() : [],
+      ListA: Array.isArray(profiles.ListA && profiles.ListA.players) ? profiles.ListA.players.slice() : [],
+    };
+    state.leaders = {
+      T20: {
+        captain: (profiles.T20 && profiles.T20.captain) || '',
+        wicketkeeper: (profiles.T20 && profiles.T20.wicketkeeper) || '',
+      },
+      ListA: {
+        captain: (profiles.ListA && profiles.ListA.captain) || '',
+        wicketkeeper: (profiles.ListA && profiles.ListA.wicketkeeper) || '',
+      },
+    };
+    // Prefer the profile that actually has players.
+    if (!state.rosters.T20.length && state.rosters.ListA.length) state.activeFmt = 'ListA';
+
+    nameInput.value = state.identity.team_name;
+    shortInput.value = state.identity.short_code;
+    groundInput.value = state.identity.home_ground;
+    pitchSelect.value = state.identity.pitch_preference;
+    colorInput.value = state.identity.team_color;
+    colorSwatch.style.background = state.identity.team_color;
+    tabButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-fmt') === state.activeFmt));
   }
 
   function loadDraft() {
@@ -1384,24 +1540,26 @@
     lastSavedJson = '';
   }
 
-  clearBtn.addEventListener('click', () => {
-    if (!confirm('Clear your unsaved draft? This cannot be undone.')) return;
-    clearDraft();
-    state.identity = { team_name: '', short_code: '', home_ground: '', pitch_preference: '', team_color: '#4f46e5' };
-    state.rosters = { T20: [], ListA: [] };
-    state.leaders = { T20: { captain: '', wicketkeeper: '' }, ListA: { captain: '', wicketkeeper: '' } };
-    state.activeFmt = 'T20';
-    nameInput.value = ''; shortInput.value = ''; groundInput.value = '';
-    pitchSelect.value = ''; colorInput.value = '#4f46e5';
-    colorSwatch.style.background = '#4f46e5';
-    tabButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-fmt') === 'T20'));
-    renderRoster();
-    renderLeaders();
-    updateTabCounts();
-    updateValidation();
-    renderPool();
-    setSaveStatus('idle');
-  });
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      if (!confirm('Clear your unsaved draft? This cannot be undone.')) return;
+      clearDraft();
+      state.identity = { team_name: '', short_code: '', home_ground: '', pitch_preference: '', team_color: '#4f46e5' };
+      state.rosters = { T20: [], ListA: [] };
+      state.leaders = { T20: { captain: '', wicketkeeper: '' }, ListA: { captain: '', wicketkeeper: '' } };
+      state.activeFmt = 'T20';
+      nameInput.value = ''; shortInput.value = ''; groundInput.value = '';
+      pitchSelect.value = ''; colorInput.value = '#4f46e5';
+      colorSwatch.style.background = '#4f46e5';
+      tabButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-fmt') === 'T20'));
+      renderRoster();
+      renderLeaders();
+      updateTabCounts();
+      updateValidation();
+      renderPool();
+      setSaveStatus('idle');
+    });
+  }
 
   $('tc-restored-dismiss').addEventListener('click', () => {
     restoredBanner.hidden = true;
@@ -1434,21 +1592,26 @@
     // To protect against loss on server error, keep the draft until server confirms success —
     // which we detect via the redirect (this page unloads).
     window.addEventListener('beforeunload', () => {
-      clearDraft();
+      if (!IS_EDIT) clearDraft();
     }, { once: true });
   });
 
   // ── Init ─────────────────────────────────────────────────────────────
   bindIdentity();
   colorSwatch.style.background = colorInput.value;
-  const restored = loadDraft();
-  if (restored) restoredBanner.hidden = false;
+  let restored = false;
+  if (IS_EDIT) {
+    loadEdit();
+  } else {
+    restored = loadDraft();
+    if (restored) restoredBanner.hidden = false;
+  }
   renderRoster();
   renderLeaders();
   updateTabCounts();
   updateValidation();
   fetchPool(true);
-  setSaveStatus(restored ? 'saved' : 'idle');
+  setSaveStatus(IS_EDIT ? 'idle' : (restored ? 'saved' : 'idle'));
 })();
 </script>
 {% endblock %}

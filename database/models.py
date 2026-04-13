@@ -168,6 +168,21 @@ class Player(db.Model):
     best_bowling_wickets = db.Column(db.Integer, default=0)
     best_bowling_runs = db.Column(db.Integer, default=0)
 
+    # Identity metadata only — never aggregate stats across users via these FKs.
+    # Stats must stay strictly per-user (filter via Team.user_id).
+    master_player_id = db.Column(
+        db.Integer,
+        db.ForeignKey('master_players.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    user_player_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user_players.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+
     # Unique constraint: one player name per profile (format squad)
     # NOTE: uq_player_team_name is replaced by uq_player_profile_name via migration
     __table_args__ = (
