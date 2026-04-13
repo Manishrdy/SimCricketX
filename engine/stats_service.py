@@ -873,9 +873,9 @@ class StatsService:
         """
         try:
             if match.home_team_id == team_id:
-                return match.away_team.name if hasattr(match, 'away_team') else 'N/A'
+                return match.away_team.name if getattr(match, 'away_team', None) is not None else 'N/A'
             else:
-                return match.home_team.name if hasattr(match, 'home_team') else 'N/A'
+                return match.home_team.name if getattr(match, 'home_team', None) is not None else 'N/A'
         except:
             log_exception(source="backend")
             return 'N/A'
