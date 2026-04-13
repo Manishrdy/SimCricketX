@@ -325,7 +325,7 @@ class Match:
                 "runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0,
                 "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0
             }
-            logger.warning("Created missing bowler_stats entry for '%s' during live match", bowler_name)
+            logger.warning("Created missing bowler_stats entry for '%s'", bowler_name)
 
     def _build_decision_required_response(self, decision, commentary="", ball_data=None):
         response = {

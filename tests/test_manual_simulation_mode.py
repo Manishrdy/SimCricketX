@@ -216,7 +216,7 @@ def test_submit_decision_rejects_invalid_index_and_type(app_client):
 
 def test_next_ball_recovers_missing_current_bowler_stats_entry(app_client, monkeypatch):
     _app, _client, user_id = app_client
-    data = _build_match_data(user_id, simulation_mode="auto")
+    data = _build_match_data(user_id, simulation_mode="manual")
     match = match_module.Match(data)
 
     match.current_over = 0
