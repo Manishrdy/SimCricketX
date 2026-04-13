@@ -35,24 +35,28 @@ def _player_fk_cascades(conn):
 def run_migration(db, app):
     with app.app_context():
         conn = db.engine.connect()
-        # Ensure FK behavior is enabled for the connection
+        # SQLAlchemy 2.x autobegins a transaction on connect(), so we can't
+        # call conn.begin() again. Commit the autobegun txn first so the
+        # PRAGMA runs outside a transaction (SQLite requires this), then
+        # let the next statement autobegin a fresh one for our DDL.
         try:
+            conn.rollback()
             conn.execute(text("PRAGMA foreign_keys = OFF"))
+            conn.commit()
         except Exception:
             pass
 
-        trans = conn.begin()
         try:
             exists = conn.execute(text(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='match_scorecards'"
             )).fetchone()
             if not exists:
-                trans.commit()
+                conn.commit()
                 print("[Migration] add_scorecard_cascade: match_scorecards table absent — nothing to do.")
                 return
 
             if _player_fk_cascades(conn):
-                trans.commit()
+                conn.commit()
                 print("[Migration] add_scorecard_cascade: already applied.")
                 return
 
@@ -95,16 +99,24 @@ def run_migration(db, app):
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_match_scorecards_player_id ON match_scorecards(player_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_match_scorecards_team_id ON match_scorecards(team_id)"))
 
-            trans.commit()
+            conn.commit()
             print("[Migration] add_scorecard_cascade: completed successfully.")
         except Exception as exc:
             log_exception(exc, source="sqlite", context={"migration": "add_scorecard_cascade"})
-            trans.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             print(f"[Migration] add_scorecard_cascade: FAILED — {exc}")
             raise
         finally:
             try:
                 conn.execute(text("PRAGMA foreign_keys = ON"))
+                conn.commit()
+            except Exception:
+                pass
+            try:
+                conn.close()
             except Exception:
                 pass
 
