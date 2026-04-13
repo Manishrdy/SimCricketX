@@ -214,7 +214,7 @@ def test_submit_decision_rejects_invalid_index_and_type(app_client):
     assert "valid option" in bad_index_resp.get_json()["error"]
 
 
-def test_next_ball_recovers_missing_current_bowler_stats_entry(app_client, monkeypatch):
+def test_next_ball_handles_missing_bowler_stats(app_client, monkeypatch):
     _app, _client, user_id = app_client
     data = _build_match_data(user_id, simulation_mode="manual")
     match = match_module.Match(data)
