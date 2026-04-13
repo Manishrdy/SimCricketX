@@ -24,7 +24,7 @@ from datetime import datetime
 from urllib import request as urlrequest  # noqa: F401
 from urllib import error as urlerror  # noqa: F401
 
-from flask import has_request_context, request, g
+from flask import has_app_context, has_request_context, request, g
 from flask_login import current_user
 
 from database import db
@@ -147,6 +147,19 @@ def log_exception(
             source=normalized_source,
         )
 
+        # DB writes require an app context. When called from startup code
+        # between migrations (each migration opens/closes its own context),
+        # there may be none — fall back to stderr so the caller still sees
+        # the failure without crashing the logger itself.
+        if not has_app_context():
+            sys.stderr.write(
+                f"[exception_tracker] no app context; cannot persist "
+                f"{exc_type_name}: {exc_message}\n"
+            )
+            if tb_text:
+                sys.stderr.write(tb_text)
+            return None
+
         # Idempotency: one canonical DB row per fingerprint.
         # Repeated occurrences increment counters and update last_seen fields.
         entry = ExceptionLog.query.filter_by(fingerprint=fingerprint).first()
@@ -202,5 +215,9 @@ def log_exception(
             db.session.rollback()
         return created_id
     except Exception:
-        db.session.rollback()
+        if has_app_context():
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
         return None
