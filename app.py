@@ -1018,11 +1018,12 @@ def create_app():
             if last.tzinfo is None:
                 last = last.replace(tzinfo=timezone.utc)
             if datetime.now(timezone.utc) - last > inactivity_limit:
+                user_id = current_user.id
                 db.session.delete(active)
                 db.session.commit()
                 logout_user()
                 _clear_app_session()
-                app.logger.info(f"[Auth] Session expired due to inactivity for {current_user.id}")
+                app.logger.info(f"[Auth] Session expired due to inactivity for {user_id}")
                 if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
                     return jsonify({"error": "Session expired due to inactivity. Please log in again."}), 401
                 flash("Your session expired due to inactivity. Please sign in again.", "info")
