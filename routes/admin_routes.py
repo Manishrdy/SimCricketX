@@ -12,6 +12,7 @@ import yaml
 from flask import Response, after_this_request, flash, jsonify, redirect, render_template, request, send_file, session, stream_with_context, url_for
 from flask_login import current_user, login_user
 from sqlalchemy import func
+from match_archiver import reverse_player_aggregates
 from utils.exception_tracker import log_exception
 from werkzeug.utils import secure_filename
 
@@ -1999,6 +2000,22 @@ def register_admin_routes(
         if not match:
             return jsonify({"error": "Match not found"}), 404
         owner = match.user_id
+
+        # Reverse player career aggregates BEFORE deleting the match so cascade
+        # deletion of scorecards doesn't leave inflated career totals behind.
+        scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
+        if scorecards:
+            try:
+                reverse_player_aggregates(scorecards, logger=app.logger)
+            except Exception as rev_err:
+                log_exception(rev_err)
+                app.logger.error(
+                    f"[Admin] Failed to reverse aggregates for match {match_id}: {rev_err}",
+                    exc_info=True,
+                )
+                db.session.rollback()
+                return jsonify({"error": "Failed to reverse player aggregates"}), 500
+
         db.session.delete(match)
         db.session.commit()
         log_admin_action(current_user.id, 'delete_match', match_id, f'Owned by {owner}', get_client_ip())

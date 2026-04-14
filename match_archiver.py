@@ -454,24 +454,26 @@ class MatchArchiver:
         # Track fielding contributions by player name
         fielding_contributions = {}
         
+        def _ensure(name):
+            if name not in fielding_contributions:
+                fielding_contributions[name] = {'catches': 0, 'run_outs': 0, 'stumpings': 0}
+            return fielding_contributions[name]
+
         for player_stats in batting_stats.values():
             wicket_type = player_stats.get('wicket_type', '').lower()
             fielder_name = player_stats.get('fielder_out', '').strip()
-            
-            if not wicket_type:
+
+            if not wicket_type or not fielder_name:
                 continue
-            
-            # Track catches
-            if ('caught' in wicket_type or 'c ' in wicket_type) and fielder_name:
-                if fielder_name not in fielding_contributions:
-                    fielding_contributions[fielder_name] = {'catches': 0, 'run_outs': 0}
-                fielding_contributions[fielder_name]['catches'] += 1
-            
-            # Track run outs
-            elif 'run out' in wicket_type and fielder_name:
-                if fielder_name not in fielding_contributions:
-                    fielding_contributions[fielder_name] = {'catches': 0, 'run_outs': 0}
-                fielding_contributions[fielder_name]['run_outs'] += 1
+
+            # Stumpings must be checked before catches: "stumped" never contains
+            # "caught"/"c ", but keep the order explicit for safety.
+            if 'stumped' in wicket_type or wicket_type.startswith('st '):
+                _ensure(fielder_name)['stumpings'] += 1
+            elif 'caught' in wicket_type or 'c ' in wicket_type:
+                _ensure(fielder_name)['catches'] += 1
+            elif 'run out' in wicket_type:
+                _ensure(fielder_name)['run_outs'] += 1
         
         # Save to database - update existing batting/bowling records or create new fielding records
         _fmt = self.match_data.get('match_format', 'T20')
@@ -486,11 +488,14 @@ class MatchArchiver:
                     name=fielder_name, profile_id=_fld_profile.id
                 ).first()
             if not fielder:
+                # Legacy fallback: only accept unassigned (pre-migration) rows.
+                # Falling back to any team-wide match would bind this match's
+                # fielding stats to a Player row in a *different* format profile.
                 fielder = DBPlayer.query.filter_by(
-                    name=fielder_name, team_id=fielding_team_id
+                    name=fielder_name, team_id=fielding_team_id, profile_id=None
                 ).first()
             if not fielder:
-                self.logger.warning(f"Fielder {fielder_name} not found in team {fielding_team_id}")
+                self.logger.warning(f"Fielder {fielder_name} not found in team {fielding_team_id} for format {_fmt}")
                 continue
             
             # Try to find existing scorecard entry (batting or bowling) for this player
@@ -504,6 +509,7 @@ class MatchArchiver:
                 # Update existing record with fielding stats
                 existing_card.catches = (existing_card.catches or 0) + contributions['catches']
                 existing_card.run_outs = (existing_card.run_outs or 0) + contributions['run_outs']
+                existing_card.stumpings = (existing_card.stumpings or 0) + contributions['stumpings']
                 self.logger.debug(f"Updated fielding stats for {fielder_name}: {contributions}")
             else:
                 # Create new fielding-only record
@@ -514,7 +520,8 @@ class MatchArchiver:
                     innings_number=innings_number,
                     record_type="fielding",
                     catches=contributions['catches'],
-                    run_outs=contributions['run_outs']
+                    run_outs=contributions['run_outs'],
+                    stumpings=contributions['stumpings'],
                 )
                 db.session.add(fielding_card)
                 self.logger.debug(f"Created fielding record for {fielder_name}: {contributions}")
@@ -811,17 +818,21 @@ class MatchArchiver:
                 # NEW: Save fielding stats for the bowling/fielding team
                 self._save_fielding_stats(batting_stats, bowling_team_id, innings_number)
             
-            # Update Player Aggregates
+            # Update Player Aggregates. Track per-player deltas so milestone
+            # detection knows the exact "before" total (multi-wicket / multi-
+            # catch matches that straddle a milestone need the precise jump).
             updated_players = set()
+            player_deltas = {}
             for card in [c for c in db.session.new if isinstance(c, MatchScorecard)]:
                 # relationship loading fallback
                 p = DBPlayer.query.get(card.player_id)
                 if not p: continue
-                
+
                 if card.player_id not in updated_players:
                     p.matches_played += 1
                     updated_players.add(card.player_id)
-                
+                d = player_deltas.setdefault(card.player_id, {"runs": 0, "wickets": 0, "catches": 0})
+
                 if card.record_type == "batting":
                     p.total_runs += card.runs
                     p.total_balls_faced += card.balls
@@ -835,7 +846,8 @@ class MatchArchiver:
                         p.highest_score = card.runs
                     if not card.is_out and card.balls > 0:
                         p.not_outs += 1
-                    
+                    d["runs"] += card.runs or 0
+
                 if card.record_type == "bowling":
                     p.total_wickets += card.wickets
                     p.total_balls_bowled += card.balls_bowled
@@ -843,13 +855,18 @@ class MatchArchiver:
                     p.total_maidens += card.maidens
                     if card.wickets >= 5:
                         p.five_wicket_hauls += 1
-                    
+
                     if card.wickets > p.best_bowling_wickets:
                         p.best_bowling_wickets = card.wickets
                         p.best_bowling_runs = card.runs_conceded
                     elif card.wickets == p.best_bowling_wickets:
                         if card.runs_conceded < p.best_bowling_runs:
                             p.best_bowling_runs = card.runs_conceded
+                    d["wickets"] += card.wickets or 0
+
+                # Fielding contributions live on any record_type — they can
+                # appear on batting/bowling/fielding-only cards.
+                d["catches"] += card.catches or 0
 
             # Save Partnerships
             # Determine which team batted first/second
@@ -864,7 +881,7 @@ class MatchArchiver:
             try:
                 from engine.stats_service import StatsService
                 for pid in updated_players:
-                    ms = StatsService.detect_milestones(pid)
+                    ms = StatsService.detect_milestones(pid, deltas=player_deltas.get(pid))
                     all_milestones.extend(ms)
                 if all_milestones:
                     self.logger.info(f"Milestones reached: {all_milestones}")

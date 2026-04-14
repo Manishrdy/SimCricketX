@@ -70,8 +70,7 @@
             <div class="fg">
                 <label>Format</label>
                 <select id="h2h-format">
-                    <option value="">All formats</option>
-                    <option value="T20">T20</option>
+                    <option value="T20" selected>T20</option>
                     <option value="ListA">List A</option>
                 </select>
             </div>
@@ -120,12 +119,11 @@
 function loadH2H() {
     const t1 = document.getElementById('h2h-team1').value;
     const t2 = document.getElementById('h2h-team2').value;
-    const fmt = document.getElementById('h2h-format').value;
+    const fmt = document.getElementById('h2h-format').value || 'T20';
     if (!t1 || !t2) { alert('Select both teams'); return; }
     if (t1 === t2) { alert('Select two different teams'); return; }
 
-    let url = `/api/head-to-head?team1_id=${t1}&team2_id=${t2}`;
-    if (fmt) url += `&match_format=${encodeURIComponent(fmt)}`;
+    const url = `/api/head-to-head?team1_id=${t1}&team2_id=${t2}&match_format=${encodeURIComponent(fmt)}`;
 
     fetch(url).then(r => r.json()).then(res => {
         if (!res.success) { alert(res.error || 'Error'); return; }
