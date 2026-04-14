@@ -422,6 +422,36 @@
     font-size: 0.75rem;
     color: var(--fg-secondary);
 }
+
+.tc-copy-bar {
+    padding: 0.5rem 1rem 0;
+    display: flex;
+    justify-content: flex-end;
+}
+.tc-copy-bar[hidden] { display: none; }
+.tc-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--tc-accent);
+    background: transparent;
+    border: 1px dashed var(--tc-accent);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.tc-copy-btn:hover {
+    background: var(--tc-accent);
+    color: var(--bg);
+    border-style: solid;
+}
+.tc-copy-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
 .tc-counter strong { color: var(--fg); font-weight: 700; }
 .tc-counter .ok { color: var(--tc-success-fg); }
 .tc-counter .warn { color: var(--tc-warn-fg); }
@@ -721,6 +751,12 @@
             </button>
           </div>
         </div>
+        <div id="tc-copy-bar" class="tc-copy-bar" hidden>
+          <button type="button" id="tc-copy-btn" class="tc-copy-btn">
+            <i class="fa-solid fa-copy"></i>
+            <span id="tc-copy-label">Copy squad from T20</span>
+          </button>
+        </div>
         <div id="tc-roster-counter" class="tc-counter"></div>
         <div id="tc-roster-list" class="tc-list" role="listbox" aria-label="Team roster"></div>
         <div class="tc-leaders">
@@ -826,6 +862,9 @@
   const poolRole = $('tc-pool-role');
   const rosterList = $('tc-roster-list');
   const rosterCounter = $('tc-roster-counter');
+  const copyBar = $('tc-copy-bar');
+  const copyBtn = $('tc-copy-btn');
+  const copyLabel = $('tc-copy-label');
   const tabButtons = document.querySelectorAll('.tc-tab');
   const captainSelect = $('tc-captain');
   const wkSelect = $('tc-wk');
@@ -1236,6 +1275,7 @@
         <strong>${bowl}</strong> Bowl/AR
       </span>
     `;
+    renderCopyBar();
   }
 
   function updateTabCounts() {
@@ -1244,6 +1284,50 @@
       if (el) el.textContent = String(state.rosters[fmt].length);
     });
   }
+
+  const FMT_LABEL = { T20: 'T20', ListA: 'List A' };
+  function otherFmt(fmt) { return fmt === 'T20' ? 'ListA' : 'T20'; }
+
+  function renderCopyBar() {
+    const src = otherFmt(state.activeFmt);
+    const srcCount = state.rosters[src].length;
+    if (!srcCount) {
+      copyBar.hidden = true;
+      return;
+    }
+    copyBar.hidden = false;
+    const tgtCount = state.rosters[state.activeFmt].length;
+    const verb = tgtCount ? 'Replace with' : 'Copy squad from';
+    copyLabel.textContent = `${verb} ${FMT_LABEL[src]} (${srcCount})`;
+  }
+
+  copyBtn.addEventListener('click', () => {
+    const src = otherFmt(state.activeFmt);
+    const tgt = state.activeFmt;
+    const srcRoster = state.rosters[src];
+    if (!srcRoster.length) return;
+
+    if (state.rosters[tgt].length) {
+      const ok = window.confirm(
+        `Replace ${state.rosters[tgt].length} player(s) in ${FMT_LABEL[tgt]} ` +
+        `with the ${srcRoster.length} from ${FMT_LABEL[src]}? ` +
+        `Captain and wicketkeeper will also be copied.`
+      );
+      if (!ok) return;
+    }
+
+    // Deep-copy so future edits to either format stay independent.
+    state.rosters[tgt] = srcRoster.map(p => ({ ...p }));
+    state.leaders[tgt] = { ...state.leaders[src] };
+
+    renderPool();
+    renderRoster();
+    renderLeaders();
+    updateTabCounts();
+    renderCopyBar();
+    updateValidation();
+    scheduleAutoSave();
+  });
 
   // ── Leaders (captain / WK) ───────────────────────────────────────────
   function renderLeaders() {
@@ -1292,6 +1376,7 @@
       renderPool();
       renderRoster();
       renderLeaders();
+      renderCopyBar();
     });
   });
 

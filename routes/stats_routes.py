@@ -31,7 +31,9 @@ def register_stats_routes(
 
             view_type = request.args.get("view", "overall")
             tournament_id = request.args.get("tournament_id", type=int)
-            match_format = request.args.get("match_format") or None
+            # Cricket stats are always format-specific. Default to T20 when
+            # the caller doesn't supply a format (e.g. bookmarked URL).
+            match_format = request.args.get("match_format") or "T20"
             tournaments = Tournament.query.filter_by(user_id=current_user.id).all()
 
             stats_data = None
@@ -145,7 +147,9 @@ def register_stats_routes(
 
             view_type = request.args.get("view", "overall")
             tournament_id = request.args.get("tournament_id", type=int)
-            match_format = request.args.get("match_format") or None
+            # Cricket stats are always format-specific. Default to T20 when
+            # the caller doesn't supply a format (e.g. bookmarked URL).
+            match_format = request.args.get("match_format") or "T20"
 
             if view_type == "overall":
                 stats_data = stats_service.get_overall_stats(current_user.id, match_format)
@@ -215,7 +219,9 @@ def register_stats_routes(
         try:
             tournament_id = request.args.get("tournament_id", type=int)
             limit = request.args.get("limit", 10, type=int)
-            match_format = request.args.get("match_format") or None
+            # Cricket stats are always format-specific. Default to T20 when
+            # the caller doesn't supply a format (e.g. bookmarked URL).
+            match_format = request.args.get("match_format") or "T20"
 
             if limit < 1 or limit > 100:
                 return jsonify({"error": "Limit must be between 1 and 100"}), 400
@@ -249,7 +255,9 @@ def register_stats_routes(
             player_ids_str = request.args.get("player_ids", "")
             player_ids = [int(x.strip()) for x in player_ids_str.split(",") if x.strip().isdigit()]
             tournament_id = request.args.get("tournament_id", type=int)
-            match_format = request.args.get("match_format") or None
+            # Cricket stats are always format-specific. Default to T20 when
+            # the caller doesn't supply a format (e.g. bookmarked URL).
+            match_format = request.args.get("match_format") or "T20"
 
             if not player_ids:
                 stats_service = StatsService(app.logger)
@@ -344,7 +352,15 @@ def register_stats_routes(
         """API endpoint for player partnership statistics."""
         try:
             tournament_id = request.args.get("tournament_id", type=int)
-            match_format = request.args.get("match_format") or None
+            # Default to the player's own profile format when omitted, so a
+            # ListA player's partnerships aren't queried under T20.
+            match_format = request.args.get("match_format")
+            if not match_format:
+                _player = db.session.get(DBPlayer, player_id)
+                if _player and _player.profile:
+                    match_format = _player.profile.format_type
+                else:
+                    match_format = "T20"
             stats_service = StatsService(app.logger)
             partnership_stats = stats_service.get_player_partnership_stats(
                 player_id,
@@ -371,7 +387,9 @@ def register_stats_routes(
         """API endpoint for tournament partnership leaderboard."""
         try:
             limit = request.args.get("limit", 10, type=int)
-            match_format = request.args.get("match_format") or None
+            # Cricket stats are always format-specific. Default to T20 when
+            # the caller doesn't supply a format (e.g. bookmarked URL).
+            match_format = request.args.get("match_format") or "T20"
 
             if limit < 1 or limit > 50:
                 return jsonify({"error": "Limit must be between 1 and 50"}), 400
@@ -403,7 +421,9 @@ def register_stats_routes(
         """API endpoint for overall partnership leaderboard."""
         try:
             limit = request.args.get("limit", 10, type=int)
-            match_format = request.args.get("match_format") or None
+            # Cricket stats are always format-specific. Default to T20 when
+            # the caller doesn't supply a format (e.g. bookmarked URL).
+            match_format = request.args.get("match_format") or "T20"
             if limit < 1 or limit > 50:
                 return jsonify({"error": "Limit must be between 1 and 50"}), 400
 
@@ -473,7 +493,9 @@ def register_stats_routes(
         try:
             team1_id = request.args.get("team1_id", type=int)
             team2_id = request.args.get("team2_id", type=int)
-            match_format = request.args.get("match_format") or None
+            # Cricket stats are always format-specific. Default to T20 when
+            # the caller doesn't supply a format (e.g. bookmarked URL).
+            match_format = request.args.get("match_format") or "T20"
             if not team1_id or not team2_id:
                 return jsonify({"error": "Select two teams"}), 400
             if team1_id == team2_id:
@@ -494,7 +516,16 @@ def register_stats_routes(
     @login_required
     def player_profile_page(player_id):
         try:
-            match_format = request.args.get("match_format") or None
+            # A Player row is bound to one TeamProfile (one format). When the
+            # URL omits match_format, default to that player's own profile
+            # format so a ListA-only player isn't shown an empty T20 view.
+            match_format = request.args.get("match_format")
+            if not match_format:
+                _player = db.session.get(DBPlayer, player_id)
+                if _player and _player.profile:
+                    match_format = _player.profile.format_type
+                else:
+                    match_format = "T20"
             stats_service = StatsService(app.logger)
             profile = stats_service.get_player_profile(player_id, current_user.id, match_format)
             if "error" in profile:
@@ -513,7 +544,9 @@ def register_stats_routes(
     @login_required
     def team_stats_page(team_id):
         try:
-            match_format = request.args.get("match_format") or None
+            # Cricket stats are always format-specific. Default to T20 when
+            # the caller doesn't supply a format (e.g. bookmarked URL).
+            match_format = request.args.get("match_format") or "T20"
             stats_service = StatsService(app.logger)
             data = stats_service.get_team_stats(current_user.id, team_id, match_format)
             if "error" in data:
@@ -536,7 +569,9 @@ def register_stats_routes(
             stats_service = StatsService(app.logger)
             view_type = request.args.get("view", "overall")
             tournament_id = request.args.get("tournament_id", type=int)
-            match_format = request.args.get("match_format") or None
+            # Cricket stats are always format-specific. Default to T20 when
+            # the caller doesn't supply a format (e.g. bookmarked URL).
+            match_format = request.args.get("match_format") or "T20"
 
             if view_type == "overall":
                 stats_data = stats_service.get_overall_stats(current_user.id, match_format)
