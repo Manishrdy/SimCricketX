@@ -62,7 +62,6 @@
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
             <div class="pp-format-filter">
                 <select id="pp-fmt">
-                    <option value="">All formats</option>
                     <option value="T20" {% if match_format == 'T20' %}selected{% endif %}>T20</option>
                     <option value="ListA" {% if match_format == 'ListA' %}selected{% endif %}>List A</option>
                 </select>
@@ -106,8 +105,8 @@
             <div class="pp-card-title"><i class="fas fa-baseball-ball"></i> Batting</div>
             <div class="pp-stat-row"><span>Innings</span><span class="pp-stat-val">{{ profile.batting.innings }}</span></div>
             <div class="pp-stat-row"><span>Runs</span><span class="pp-stat-val">{{ profile.batting.runs }}</span></div>
-            <div class="pp-stat-row"><span>Average</span><span class="pp-stat-val">{{ profile.batting.average }}</span></div>
-            <div class="pp-stat-row"><span>Strike Rate</span><span class="pp-stat-val">{{ profile.batting.strike_rate }}</span></div>
+            <div class="pp-stat-row"><span>Average</span><span class="pp-stat-val">{{ profile.batting.average if profile.batting.average is not none else '-' }}</span></div>
+            <div class="pp-stat-row"><span>Strike Rate</span><span class="pp-stat-val">{{ profile.batting.strike_rate if profile.batting.strike_rate is not none else '-' }}</span></div>
             <div class="pp-stat-row"><span>High Score</span><span class="pp-stat-val">{{ profile.batting.high_score }}</span></div>
             <div class="pp-stat-row"><span>Not Outs</span><span class="pp-stat-val">{{ profile.batting.not_outs }}</span></div>
             <div class="pp-stat-row"><span>4s / 6s</span><span class="pp-stat-val">{{ profile.batting.fours }} / {{ profile.batting.sixes }}</span></div>
@@ -122,9 +121,9 @@
             <div class="pp-card-title"><i class="fas fa-bowling-ball"></i> Bowling</div>
             <div class="pp-stat-row"><span>Innings</span><span class="pp-stat-val">{{ profile.bowling.innings }}</span></div>
             <div class="pp-stat-row"><span>Wickets</span><span class="pp-stat-val">{{ profile.bowling.wickets }}</span></div>
-            <div class="pp-stat-row"><span>Average</span><span class="pp-stat-val">{{ profile.bowling.average }}</span></div>
+            <div class="pp-stat-row"><span>Average</span><span class="pp-stat-val">{{ profile.bowling.average if profile.bowling.average is not none else '-' }}</span></div>
             <div class="pp-stat-row"><span>Economy</span><span class="pp-stat-val">{{ profile.bowling.economy }}</span></div>
-            <div class="pp-stat-row"><span>Strike Rate</span><span class="pp-stat-val">{{ profile.bowling.strike_rate }}</span></div>
+            <div class="pp-stat-row"><span>Strike Rate</span><span class="pp-stat-val">{{ profile.bowling.strike_rate if profile.bowling.strike_rate is not none else '-' }}</span></div>
             <div class="pp-stat-row"><span>Best Figures</span><span class="pp-stat-val">{{ profile.bowling.best_figures }}</span></div>
         </div>
         {% else %}
@@ -138,6 +137,7 @@
         <div style="display:flex;gap:2rem">
             <div class="pp-stat-row" style="flex:1"><span>Catches</span><span class="pp-stat-val">{{ profile.fielding.catches }}</span></div>
             <div class="pp-stat-row" style="flex:1"><span>Run Outs</span><span class="pp-stat-val">{{ profile.fielding.run_outs }}</span></div>
+            <div class="pp-stat-row" style="flex:1"><span>Stumpings</span><span class="pp-stat-val">{{ profile.fielding.stumpings|default(0) }}</span></div>
         </div>
     </div>
 
@@ -185,8 +185,7 @@
 {% block extra_js %}
 <script>
 document.getElementById('pp-fmt')?.addEventListener('change', function() {
-    let url = '/player/{{ profile.player_id }}';
-    if (this.value) url += '?match_format=' + encodeURIComponent(this.value);
+    const url = '/player/{{ profile.player_id }}?match_format=' + encodeURIComponent(this.value || 'T20');
     window.location.href = url;
 });
 </script>

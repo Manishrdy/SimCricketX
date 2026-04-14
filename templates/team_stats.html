@@ -62,7 +62,6 @@
                 {% endfor %}
             </select>
             <select id="ts-format" onchange="switchFormat(this.value)">
-                <option value="">All formats</option>
                 <option value="T20" {% if match_format == 'T20' %}selected{% endif %}>T20</option>
                 <option value="ListA" {% if match_format == 'ListA' %}selected{% endif %}>List A</option>
             </select>
@@ -160,15 +159,13 @@
 {% block extra_js %}
 <script>
 function switchTeam(teamId) {
-    const fmt = document.getElementById('ts-format').value;
-    let url = '/team-stats/' + teamId;
-    if (fmt) url += '?match_format=' + encodeURIComponent(fmt);
+    const fmt = document.getElementById('ts-format').value || 'T20';
+    const url = '/team-stats/' + teamId + '?match_format=' + encodeURIComponent(fmt);
     window.location.href = url;
 }
 function switchFormat(fmt) {
     const teamId = document.getElementById('ts-team-select').value;
-    let url = '/team-stats/' + teamId;
-    if (fmt) url += '?match_format=' + encodeURIComponent(fmt);
+    const url = '/team-stats/' + teamId + '?match_format=' + encodeURIComponent(fmt || 'T20');
     window.location.href = url;
 }
 </script>

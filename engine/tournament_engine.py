@@ -4,7 +4,7 @@ from database.models import (
     MatchScorecard, MatchPartnership, TournamentPlayerStatsCache,
     Player,
 )
-from sqlalchemy import func as sa_func
+from sqlalchemy import func as sa_func, or_ as sa_or
 from datetime import datetime
 import itertools
 import logging
@@ -1411,7 +1411,17 @@ class TournamentEngine:
                 )
                 db.session.add(cache)
 
-            # Batting aggregation
+            # Batting aggregation. The "valid innings" filter (balls > 0 OR
+            # runs > 0 OR is_out) matches what `get_player_profile` uses, so
+            # cache and per-player views agree on innings_batted. Without it,
+            # a non-striker scorecard (balls=0, runs>0, not out) inflates the
+            # innings count but is excluded from `not_outs` below, so
+            # `dismissals = innings_batted - not_outs` over-counts.
+            valid_innings = sa_or(
+                MatchScorecard.balls > 0,
+                MatchScorecard.runs > 0,
+                MatchScorecard.is_out == True,
+            )
             bat = db.session.query(
                 sa_func.count(MatchScorecard.id),
                 sa_func.coalesce(sa_func.sum(MatchScorecard.runs), 0),
@@ -1423,6 +1433,7 @@ class TournamentEngine:
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "batting",
                 MatchScorecard.match_id.in_(tournament_match_ids),
+                valid_innings,
             ).first()
 
             if bat:
@@ -1434,15 +1445,17 @@ class TournamentEngine:
                 cache.highest_score = bat[5]
                 cache.batting_strike_rate = round(
                     (bat[1] / bat[2]) * 100, 2
-                ) if bat[2] > 0 else 0.0
+                ) if bat[2] > 0 else None
 
-            # Count not-outs, fifties, centuries
+            # Count not-outs over the SAME valid-innings universe as above
+            # so `dismissals = innings_batted - not_outs` is internally
+            # consistent and matches the per-player profile path.
             not_outs = db.session.query(sa_func.count()).filter(
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "batting",
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.is_out == False,
-                MatchScorecard.balls > 0,
+                sa_or(MatchScorecard.balls > 0, MatchScorecard.runs > 0),
             ).scalar() or 0
             cache.not_outs = not_outs
 
@@ -1466,7 +1479,7 @@ class TournamentEngine:
             dismissals = (cache.innings_batted or 0) - not_outs
             cache.batting_average = round(
                 cache.runs_scored / dismissals, 2
-            ) if dismissals > 0 else 0.0
+            ) if dismissals > 0 else None
 
             # Bowling aggregation
             bowl = db.session.query(
@@ -1491,13 +1504,13 @@ class TournamentEngine:
                 cache.maidens = bowl[4]
                 cache.bowling_average = round(
                     bowl[2] / bowl[3], 2
-                ) if bowl[3] > 0 else 0.0
+                ) if bowl[3] > 0 else None
                 cache.bowling_economy = round(
                     (bowl[2] / (total_balls / 6.0)), 2
                 ) if total_balls > 0 else 0.0
                 cache.bowling_strike_rate = round(
                     total_balls / bowl[3], 2
-                ) if bowl[3] > 0 else 0.0
+                ) if bowl[3] > 0 else None
 
             # Best bowling
             best_bowl = db.session.query(
@@ -1526,6 +1539,7 @@ class TournamentEngine:
             fielding = db.session.query(
                 sa_func.coalesce(sa_func.sum(MatchScorecard.catches), 0),
                 sa_func.coalesce(sa_func.sum(MatchScorecard.run_outs), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.stumpings), 0),
             ).filter(
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.match_id.in_(tournament_match_ids),
@@ -1533,6 +1547,7 @@ class TournamentEngine:
             if fielding:
                 cache.catches = fielding[0]
                 cache.run_outs = fielding[1]
+                cache.stumpings = fielding[2]
 
             # Matches played = distinct match IDs
             matches_played = db.session.query(

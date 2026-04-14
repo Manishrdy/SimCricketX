@@ -1202,6 +1202,13 @@ def create_app():
             print(f"[WARN] Scorecard cascade migration skipped: {e}")
 
         try:
+            from migrations.add_scorecard_stumpings import run_migration as _run_scorecard_stumpings_migration
+            _run_scorecard_stumpings_migration(db, app)
+        except Exception as e:
+            log_exception(e, source="sqlite")
+            print(f"[WARN] Scorecard stumpings migration skipped: {e}")
+
+        try:
             from migrations.add_auction import run_migration as _run_auction_migration
             _run_auction_migration(db, app)
         except Exception as e:
@@ -2051,6 +2058,7 @@ def create_app():
                     "bowl_innings": 0,
                     "catches": 0,
                     "run_outs": 0,
+                    "stumpings": 0,
                 }
                 match_sets[pid] = set()
 
@@ -2082,6 +2090,7 @@ def create_app():
 
             agg[pid]["catches"] += card.catches or 0
             agg[pid]["run_outs"] += card.run_outs or 0
+            agg[pid]["stumpings"] += card.stumpings or 0
 
         batting_stats = []
         bowling_stats = []
@@ -2093,8 +2102,10 @@ def create_app():
             # Batting
             if matches_played > 0:
                 outs = max(d["bat_innings"] - d["bat_not_outs"], 0)
-                bat_avg = d["bat_runs"] / outs if outs > 0 else d["bat_runs"]
-                sr = (d["bat_runs"] * 100 / d["bat_balls"]) if d["bat_balls"] > 0 else 0
+                # Average undefined when player has no dismissals (cricket convention).
+                bat_avg = round(d["bat_runs"] / outs, 2) if outs > 0 else None
+                # Strike rate undefined when no balls faced.
+                sr = round(d["bat_runs"] * 100 / d["bat_balls"], 2) if d["bat_balls"] > 0 else None
                 batting_stats.append({
                     "Player": d["player"],
                     "Team": d["team"],
@@ -2102,8 +2113,8 @@ def create_app():
                     "Innings": d["bat_innings"],
                     "Runs": d["bat_runs"],
                     "Balls": d["bat_balls"],
-                    "Average": round(bat_avg, 2),
-                    "Strike Rate": round(sr, 2),
+                    "Average": bat_avg,
+                    "Strike Rate": sr,
                     "6s": d["bat_sixes"],
                     "4s": d["bat_fours"],
                     "Not Outs": d["bat_not_outs"],
@@ -2113,7 +2124,8 @@ def create_app():
             if matches_played > 0 and (d["bowl_balls"] > 0 or d["bowl_wkts"] > 0):
                 overs_float = (d["bowl_balls"] // 6) + (d["bowl_balls"] % 6) / 10.0
                 econ = d["bowl_runs"] / (d["bowl_balls"] / 6) if d["bowl_balls"] > 0 else 0
-                bowl_avg = d["bowl_runs"] / d["bowl_wkts"] if d["bowl_wkts"] > 0 else 0
+                # Average undefined when bowler has zero wickets (cricket convention).
+                bowl_avg = round(d["bowl_runs"] / d["bowl_wkts"], 2) if d["bowl_wkts"] > 0 else None
                 best_w, best_r = d["bowl_best"]
                 bowling_stats.append({
                     "Player": d["player"],
@@ -2123,7 +2135,7 @@ def create_app():
                     "Wickets": d["bowl_wkts"],
                     "Overs": overs_float,
                     "Economy": round(econ, 2),
-                    "Average": round(bowl_avg, 2) if bowl_avg else 0,
+                    "Average": bowl_avg,
                     "Best": f"{best_w}/{best_r}" if best_w or best_r < 9999 else "-",
                 })
 
@@ -2136,7 +2148,7 @@ def create_app():
                     "Innings": matches_played,  # fielded if in match
                     "Catches": d["catches"],
                     "Run Outs": d["run_outs"],
-                    "Stumpings": 0,  # not tracked yet
+                    "Stumpings": d["stumpings"],
                 })
 
         # Leaderboards
@@ -2152,7 +2164,7 @@ def create_app():
             "top_run_scorers": sorted(batting_stats, key=lambda x: x["Runs"], reverse=True)[:5],
             "top_wicket_takers": sorted(bowling_stats, key=lambda x: x["Wickets"], reverse=True)[:5],
             "most_catches": sorted(fielding_stats, key=lambda x: x["Catches"], reverse=True)[:5],
-            "best_strikers": sorted([p for p in batting_stats if p["Balls"] > 20], key=lambda x: x["Strike Rate"], reverse=True)[:5],
+            "best_strikers": sorted([p for p in batting_stats if p["Balls"] > 20 and p["Strike Rate"] is not None], key=lambda x: x["Strike Rate"], reverse=True)[:5],
             "best_economy": sorted([p for p in bowling_stats if p["Overs"] > 5], key=lambda x: x["Economy"])[:5],
             "best_bowling_figures": bowling_figures[:5],  # NEW: Best bowling figures
         }

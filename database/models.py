@@ -461,6 +461,7 @@ class MatchScorecard(db.Model):
     # Fielding
     catches = db.Column(db.Integer, default=0)
     run_outs = db.Column(db.Integer, default=0)
+    stumpings = db.Column(db.Integer, default=0)
 
     # New fields for detailed scorecard
     wicket_taker_name = db.Column(db.String(100), nullable=True)

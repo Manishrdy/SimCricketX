@@ -708,7 +708,6 @@
         <div class="stats-bar-spacer"></div>
 
         <div class="pill-group">
-            <button class="pill-btn {% if not match_format %}active{% endif %}" onclick="selectFormat('')">All</button>
             <button class="pill-btn {% if match_format == 'T20' %}active{% endif %}" onclick="selectFormat('T20')">T20</button>
             <button class="pill-btn {% if match_format == 'ListA' %}active{% endif %}" onclick="selectFormat('ListA')">List A</button>
         </div>
@@ -878,7 +877,7 @@
                             <div class="lb-name">{{ p.player }}</div>
                             <div class="lb-team">{{ p.team }}</div>
                         </div>
-                        <span class="lb-val">{{ p.average }}</span>
+                        <span class="lb-val">{{ p.average if p.average is not none else '-' }}</span>
                     </div>
                     {% endfor %}
                 </div>
@@ -1142,8 +1141,8 @@
                                 <td class="kc">{{ row.runs }}</td>
                                 <td>{{ row.balls }}</td>
                                 <td>{{ row.not_outs }}</td>
-                                <td class="kc">{{ row.strike_rate }}</td>
-                                <td class="kc">{{ row.average }}</td>
+                                <td class="kc">{{ row.strike_rate if row.strike_rate is not none else '-' }}</td>
+                                <td class="kc">{{ row.average if row.average is not none else '-' }}</td>
                                 <td>{{ row.zeros }}</td>
                                 <td>{{ row.fours }}</td>
                                 <td>{{ row.sixes }}</td>
@@ -1210,7 +1209,7 @@
                                 <td>{{ row.runs }}</td>
                                 <td class="kc">{{ row.wickets }}</td>
                                 <td class="kc">{{ row.best }}</td>
-                                <td class="kc">{{ row.average }}</td>
+                                <td class="kc">{{ row.average if row.average is not none else '-' }}</td>
                                 <td class="kc">{{ row.economy }}</td>
                                 <td>{{ row.dots }}</td>
                                 <td>{{ row.wides }}</td>
@@ -1255,6 +1254,7 @@
                                 <th onclick="handleSort('fielding-table',2)">Matches <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('fielding-table',3)">Catches <span class="sa">⇕</span></th>
                                 <th onclick="handleSort('fielding-table',4)">Run Outs <span class="sa">⇕</span></th>
+                                <th onclick="handleSort('fielding-table',5)">Stumpings <span class="sa">⇕</span></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1265,6 +1265,7 @@
                                 <td>{{ row.matches }}</td>
                                 <td class="kc">{{ row.catches }}</td>
                                 <td class="kc">{{ row.run_outs }}</td>
+                                <td class="kc">{{ row.stumpings|default(0) }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -1341,7 +1342,7 @@ function selectTournament(id) {
 
 function selectFormat(fmt) {
     const p = new URLSearchParams(window.location.search);
-    fmt ? p.set('match_format', fmt) : p.delete('match_format');
+    p.set('match_format', fmt || 'T20');
     window.location.href = '/statistics?' + p.toString();
 }
 

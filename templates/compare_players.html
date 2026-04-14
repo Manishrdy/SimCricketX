@@ -194,8 +194,8 @@
                         <td class="player-name">${esc(p.player)}</td>
                         <td>${p.innings}</td>
                         <td class="highlight">${p.runs}</td>
-                        <td>${p.average}</td>
-                        <td>${p.strike_rate}</td>
+                        <td>${p.average == null ? '-' : p.average}</td>
+                        <td>${p.strike_rate == null ? '-' : p.strike_rate}</td>
                         <td>${p.high_score}</td>
                         <td>${p.fifties}</td>
                         <td>${p.hundreds}</td>
@@ -226,9 +226,9 @@
                         <td class="player-name">${esc(p.player)}</td>
                         <td>${p.innings}</td>
                         <td class="highlight">${p.wickets}</td>
-                        <td>${p.average}</td>
+                        <td>${p.average == null ? '-' : p.average}</td>
                         <td>${p.economy}</td>
-                        <td>${p.strike_rate}</td>
+                        <td>${p.strike_rate == null ? '-' : p.strike_rate}</td>
                         <td>${esc(p.best_figures)}</td>
                     </tr>
                 `).join('')}

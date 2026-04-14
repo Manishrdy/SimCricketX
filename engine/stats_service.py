@@ -84,11 +84,21 @@ class StatsService:
         """
         self._log(f"Fetching tournament stats for user {user_id}, tournament {tournament_id}, format={match_format}")
 
-        # Try the pre-computed cache when no format filter is active
-        if not match_format:
-            cached = self._try_cache_tournament_stats(tournament_id, user_id)
-            if cached:
-                return cached
+        # Tournaments are single-format (enforced at creation + match save).
+        # When the requested format doesn't match the tournament's format,
+        # there are zero matches to aggregate — short-circuit to empty.
+        # When it does match, the cache is correct by construction.
+        tournament = db.session.get(Tournament, tournament_id)
+        if tournament and match_format and tournament.format_type != match_format:
+            self._log(
+                f"Tournament {tournament_id} format={tournament.format_type} "
+                f"does not match requested format={match_format}; returning empty"
+            )
+            return self._empty_stats()
+
+        cached = self._try_cache_tournament_stats(tournament_id, user_id)
+        if cached:
+            return cached
 
         # Full computation fallback
         query = (
@@ -149,8 +159,8 @@ class StatsService:
                     'runs': cache.runs_scored or 0,
                     'balls': cache.balls_faced or 0,
                     'not_outs': cache.not_outs or 0,
-                    'strike_rate': cache.batting_strike_rate or 0.0,
-                    'average': cache.batting_average or 0.0,
+                    'strike_rate': cache.batting_strike_rate,
+                    'average': cache.batting_average,
                     'zeros': 0, 'ones': 0, 'twos': 0, 'threes': 0,
                     'fours': cache.fours or 0,
                     'sixes': cache.sixes or 0,
@@ -171,7 +181,7 @@ class StatsService:
                     'runs': cache.runs_conceded or 0,
                     'wickets': cache.wickets_taken or 0,
                     'best': f"{best_w}/{best_r}" if best_w > 0 else '-',
-                    'average': cache.bowling_average or 0.0,
+                    'average': cache.bowling_average,
                     'economy': cache.bowling_economy or 0.0,
                     'dots': 0, 'bowled': 0, 'lbw': 0,
                     'byes': 0, 'leg_byes': 0,
@@ -431,6 +441,7 @@ class StatsService:
             'bowl_best': (0, 9999),  # (wickets, runs)
             'catches': 0,
             'run_outs': 0,
+            'stumpings': 0,
             'matches': set()  # Track unique match IDs
         })
         
@@ -491,6 +502,7 @@ class StatsService:
             # Fielding stats (recorded in all record types)
             player_data[pid]['catches'] += card.catches or 0
             player_data[pid]['run_outs'] += card.run_outs or 0
+            player_data[pid]['stumpings'] += card.stumpings or 0
         
         # Calculate final statistics
         batting_stats = self._calculate_batting_stats(player_data)
@@ -521,12 +533,13 @@ class StatsService:
             balls = data['bat_balls']
             not_outs = data['bat_not_outs']
             
-            # Calculate average
+            # Calculate average — undefined when player has zero dismissals.
+            # Standard cricket convention: shown as '-', not as total runs.
             outs = innings - not_outs
-            average = runs / outs if outs > 0 else runs
-            
-            # Calculate strike rate
-            strike_rate = (runs * 100 / balls) if balls > 0 else 0
+            average = round(runs / outs, 2) if outs > 0 else None
+
+            # Calculate strike rate — undefined when player faced no balls.
+            strike_rate = round(runs * 100 / balls, 2) if balls > 0 else None
             
             # Calculate milestones
             zeros = sum(1 for inn in innings_data if inn['runs'] == 0 and inn['is_out'])
@@ -544,8 +557,8 @@ class StatsService:
                 'runs': runs,
                 'balls': balls,
                 'not_outs': not_outs,
-                'strike_rate': round(strike_rate, 2),
-                'average': round(average, 2),
+                'strike_rate': strike_rate,
+                'average': average,
                 'zeros': zeros,
                 'ones': data['bat_ones'],
                 'twos': data['bat_twos'],
@@ -581,9 +594,10 @@ class StatsService:
             # Calculate economy rate
             economy = runs / (balls / 6) if balls > 0 else 0
             
-            # Calculate average
-            average = runs / wickets if wickets > 0 else 0
-            
+            # Calculate average — undefined when bowler has zero wickets.
+            # Standard cricket convention: shown as '-', not as 0.
+            average = round(runs / wickets, 2) if wickets > 0 else None
+
             bowling_stats.append({
                 'team': data['team'],
                 'player': data['name'],
@@ -595,7 +609,7 @@ class StatsService:
                 'runs': runs,
                 'wickets': wickets,
                 'best': f"{data['bowl_best'][0]}/{data['bowl_best'][1]}" if data['bowl_best'][0] > 0 else '-',
-                'average': round(average, 2),
+                'average': average,
                 'economy': round(economy, 2),
                 'dots': data['bowl_dots'],
                 'bowled': data['bowl_wickets_bowled'],
@@ -620,9 +634,10 @@ class StatsService:
             matches = len(data['matches'])
             catches = data['catches']
             run_outs = data['run_outs']
-            
-            self._log(f"Player {data['name']}: matches={matches}, catches={catches}, run_outs={run_outs}")
-            
+            stumpings = data['stumpings']
+
+            self._log(f"Player {data['name']}: matches={matches}, catches={catches}, run_outs={run_outs}, stumpings={stumpings}")
+
             # Include all players who have played matches
             # This gives a complete view of fielding performance
             if matches > 0:
@@ -633,7 +648,8 @@ class StatsService:
                     'player_id': data['player_id'],
                     'matches': matches,
                     'catches': catches,
-                    'run_outs': run_outs
+                    'run_outs': run_outs,
+                    'stumpings': stumpings,
                 })
         
         self._log(f"Generated {len(fielding_stats)} fielding stat entries")
@@ -678,7 +694,12 @@ class StatsService:
         else:
             min_balls = 50
 
-        sr_qualified = [b for b in batting_stats if b['balls'] >= min_balls]
+        # 0-ball players already excluded via min_balls; the `is not None`
+        # guard is belt-and-braces and prevents TypeError on undefined SR.
+        sr_qualified = [
+            b for b in batting_stats
+            if b['balls'] >= min_balls and b['strike_rate'] is not None
+        ]
         sr_sorted = sorted(sr_qualified, key=lambda x: x['strike_rate'], reverse=True)
         leaderboards['highest_sr'] = [
             {'player': b['player'], 'team': b['team'], 'sr': b['strike_rate']}
@@ -690,7 +711,13 @@ class StatsService:
         min_innings = max(1, num_batsmen // 4)
         min_innings = min(min_innings, 3)
 
-        avg_qualified = [b for b in batting_stats if b['innings'] >= min_innings]
+        # Best Average: a player with zero dismissals has an undefined average,
+        # not "infinity". Filter them out so the leaderboard isn't dominated by
+        # tail-enders who happened to remain not-out across small sample sizes.
+        avg_qualified = [
+            b for b in batting_stats
+            if b['innings'] >= min_innings and b['average'] is not None
+        ]
         avg_sorted = sorted(avg_qualified, key=lambda x: x['average'], reverse=True)
         leaderboards['best_average'] = [
             {'player': b['player'], 'team': b['team'], 'average': b['average']}
@@ -982,6 +1009,7 @@ class StatsService:
             bowling_data = []
             catches = 0
             run_outs = 0
+            stumpings = 0
             matches = set()
             
             for card, match in records:
@@ -1005,11 +1033,12 @@ class StatsService:
                 
                 catches += card.catches or 0
                 run_outs += card.run_outs or 0
-            
+                stumpings += card.stumpings or 0
+
             # Calculate batting stats
             batting_stats = self._calculate_batting_metrics(batting_data)
             bowling_stats = self._calculate_bowling_metrics(bowling_data)
-            
+
             return {
                 'player_id': player_id,
                 'player_name': player.name,
@@ -1020,7 +1049,8 @@ class StatsService:
                 'fielding': {
                     'catches': catches,
                     'run_outs': run_outs,
-                    'total_dismissals': catches + run_outs
+                    'stumpings': stumpings,
+                    'total_dismissals': catches + run_outs + stumpings,
                 }
             }
             
@@ -1040,16 +1070,17 @@ class StatsService:
         not_outs = sum(1 for i in innings_list if not i['is_out'])
         outs = innings - not_outs
         
-        avg = total_runs / outs if outs > 0 else total_runs
-        sr = (total_runs * 100.0 / total_balls) if total_balls > 0 else 0.0
+        # Average and SR undefined when respective denominator is 0.
+        avg = round(total_runs / outs, 2) if outs > 0 else None
+        sr = round(total_runs * 100.0 / total_balls, 2) if total_balls > 0 else None
         high_score = max(i['runs'] for i in innings_list) if innings_list else 0
-        
+
         return {
             'innings': innings,
             'runs': total_runs,
             'balls': total_balls,
-            'average': round(avg, 2),
-            'strike_rate': round(sr, 2),
+            'average': avg,
+            'strike_rate': sr,
             'high_score': high_score,
             'not_outs': not_outs,
             'fours': sum(i['fours'] for i in innings_list),
@@ -1068,20 +1099,22 @@ class StatsService:
         total_balls = sum(b['balls'] for b in bowling_list)
         innings = len(bowling_list)
         
-        avg = total_runs / total_wickets if total_wickets > 0 else 0.0
+        # Bowling average and strike rate are undefined when bowler has zero
+        # wickets (cricket convention — cannot be 0, that would imply best ever).
+        avg = round(total_runs / total_wickets, 2) if total_wickets > 0 else None
         economy = (total_runs * 6.0 / total_balls) if total_balls > 0 else 0.0
-        sr = total_balls / total_wickets if total_wickets > 0 else 0.0
-        
+        sr = round(total_balls / total_wickets, 1) if total_wickets > 0 else None
+
         best = max(bowling_list, key=lambda x: (x['wickets'], -x['runs'])) if bowling_list else None
-        
+
         return {
             'innings': innings,
             'wickets': total_wickets,
             'runs': total_runs,
             'balls': total_balls,
-            'average': round(avg, 2),
+            'average': avg,
             'economy': round(economy, 2),
-            'strike_rate': round(sr, 1),
+            'strike_rate': sr,
             'best_figures': f"{best['wickets']}/{best['runs']}" if best else 'N/A'
         }
     
@@ -1489,7 +1522,7 @@ class StatsService:
 
             batting_innings = []
             bowling_innings = []
-            catches = run_outs = 0
+            catches = run_outs = stumpings = 0
             match_set = set()
             match_log = {}
 
@@ -1503,12 +1536,14 @@ class StatsService:
                     "result": match.result_description or "",
                     "bat_runs": None, "bat_balls": None, "bat_out": None,
                     "bowl_wkts": None, "bowl_runs": None, "bowl_overs": None,
-                    "catches": 0, "run_outs": 0,
+                    "catches": 0, "run_outs": 0, "stumpings": 0,
                 })
                 ml["catches"] += card.catches or 0
                 ml["run_outs"] += card.run_outs or 0
+                ml["stumpings"] += card.stumpings or 0
                 catches += card.catches or 0
                 run_outs += card.run_outs or 0
+                stumpings += card.stumpings or 0
 
                 if card.record_type == "batting" and ((card.balls or 0) > 0 or (card.runs or 0) > 0 or card.is_out):
                     batting_innings.append({
@@ -1556,7 +1591,7 @@ class StatsService:
                 "matches": len(match_set),
                 "batting": batting,
                 "bowling": bowling,
-                "fielding": {"catches": catches, "run_outs": run_outs, "total": catches + run_outs},
+                "fielding": {"catches": catches, "run_outs": run_outs, "stumpings": stumpings, "total": catches + run_outs + stumpings},
                 "milestones": milestones,
                 "match_log": sorted(match_log.values(), key=lambda x: x["date"], reverse=True),
             }
@@ -1673,8 +1708,18 @@ class StatsService:
     # ========================================================================
 
     @staticmethod
-    def detect_milestones(player_id):
+    def detect_milestones(player_id, deltas=None):
         """Check if a player has reached any career milestones.
+
+        Args:
+            player_id: Player whose aggregates were just updated.
+            deltas: Optional dict with this match's contribution
+                ``{"runs": int, "wickets": int, "catches": int}``.
+                When supplied, the "previous total" is computed exactly as
+                ``current - delta``, so multi-wicket / multi-run jumps that
+                straddle a milestone (e.g. 24 → 26 wickets crosses 25) fire
+                correctly. When omitted, falls back to a coarse delta=1
+                heuristic that may miss multi-event matches.
 
         Returns a list of milestone strings (empty if none reached).
         Called after aggregates are updated during match archival.
@@ -1683,19 +1728,21 @@ class StatsService:
         if not player:
             return []
 
+        d = deltas or {}
+        runs_delta = max(int(d.get("runs", 1) or 0), 1)
+        wickets_delta = max(int(d.get("wickets", 1) or 0), 1)
+        catches_delta = max(int(d.get("catches", 1) or 0), 1)
+
         milestones = []
         run_marks = [500, 1000, 2000, 3000, 5000]
         for mark in run_marks:
-            if player.total_runs >= mark and (player.total_runs - (player.matches_played and 1 or 0)) < mark:
+            if player.total_runs >= mark and (player.total_runs - runs_delta) < mark:
                 milestones.append(f"{player.name} reached {mark} career runs!")
 
         wkt_marks = [25, 50, 100, 150, 200]
         for mark in wkt_marks:
-            if player.total_wickets >= mark:
-                # check if they just crossed
-                prev_approx = player.total_wickets - 1  # rough — exact would need the scorecard delta
-                if prev_approx < mark:
-                    milestones.append(f"{player.name} reached {mark} career wickets!")
+            if player.total_wickets >= mark and (player.total_wickets - wickets_delta) < mark:
+                milestones.append(f"{player.name} reached {mark} career wickets!")
 
         catch_total = (
             db.session.query(func.coalesce(func.sum(MatchScorecard.catches), 0))
@@ -1703,9 +1750,7 @@ class StatsService:
             .scalar()
         ) or 0
         for mark in [10, 25, 50]:
-            if catch_total >= mark:
-                prev = catch_total - 1
-                if prev < mark:
-                    milestones.append(f"{player.name} reached {mark} career catches!")
+            if catch_total >= mark and (catch_total - catches_delta) < mark:
+                milestones.append(f"{player.name} reached {mark} career catches!")
 
         return milestones
