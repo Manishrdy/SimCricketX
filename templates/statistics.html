@@ -17,6 +17,81 @@
     font-family: 'Space Grotesk', sans-serif;
 }
 
+/* ===== HERO ===== */
+.stats-hero {
+    position: relative;
+    padding: 2.5rem 1.25rem 1.75rem;
+    margin-top: .5rem;
+    margin-bottom: 1rem;
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+.stats-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 12% 0%, rgba(99, 102, 241, .10), transparent 55%),
+        radial-gradient(circle at 90% 100%, rgba(236, 72, 153, .07), transparent 55%);
+    pointer-events: none;
+}
+
+[data-theme="dark"] .stats-hero::before {
+    background:
+        radial-gradient(circle at 12% 0%, rgba(129, 140, 248, .14), transparent 55%),
+        radial-gradient(circle at 90% 100%, rgba(244, 114, 182, .10), transparent 55%);
+}
+
+.stats-hero-inner { position: relative; }
+
+.stats-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--c1);
+    margin-bottom: .5rem;
+}
+
+.stats-eyebrow::before {
+    content: "";
+    width: 6px; height: 6px;
+    background: var(--c1);
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, .22);
+}
+
+.stats-hero h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 0 .35rem;
+    background: linear-gradient(135deg, var(--c1), var(--c2) 55%, var(--c3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.stats-hero p {
+    color: var(--fg-secondary);
+    font-size: 0.95rem;
+    max-width: 620px;
+    line-height: 1.55;
+    margin: 0;
+}
+
+.stats-hero p b { color: var(--fg); font-weight: 700; }
+
+@media (max-width: 640px) {
+    .stats-hero { padding: 1.75rem 1rem 1.25rem; }
+    .stats-hero h1 { font-size: 1.55rem; }
+}
+
 /* ===== STICKY CONTROLS BAR ===== */
 .stats-bar {
     position: sticky;
@@ -683,9 +758,18 @@
 {% block content %}
 <div class="stats-page">
 
+    <!-- HERO -->
+    <section class="stats-hero">
+        <div class="stats-hero-inner">
+            <span class="stats-eyebrow">Performance Analytics</span>
+            <h1>Statistics Hub</h1>
+            <p>Dive into batting, bowling, and fielding breakdowns across <b>overall</b> play or any <b>tournament</b>. Switch formats, compare players, and export the numbers behind every performance.</p>
+        </div>
+    </section>
+
     <!-- STICKY CONTROLS BAR -->
     <div class="stats-bar">
-        <div class="stats-bar-title">Statistics <em>Hub</em></div>
+        <div class="stats-bar-title"><i class="fas fa-sliders-h" style="color:var(--c1);margin-right:6px"></i>Filters</div>
 
         <div class="pill-group">
             <button class="pill-btn {% if view_type == 'overall' or not view_type %}active{% endif %}"

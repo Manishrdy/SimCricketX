@@ -194,11 +194,15 @@ class StatsService:
                 'matches': matches,
                 'catches': cache.catches or 0,
                 'run_outs': cache.run_outs or 0,
+                'stumpings': cache.stumpings or 0,
             })
 
         batting_stats.sort(key=lambda x: x['runs'], reverse=True)
         bowling_stats.sort(key=lambda x: (-x['wickets'], x['economy']))
-        fielding_stats.sort(key=lambda x: (x['catches'] + x['run_outs'], x['matches']), reverse=True)
+        fielding_stats.sort(
+            key=lambda x: (x['catches'] + x['run_outs'] + x.get('stumpings', 0), x['matches']),
+            reverse=True
+        )
 
         leaderboards = self._calculate_leaderboards(batting_stats, bowling_stats)
         return {
@@ -655,7 +659,10 @@ class StatsService:
         self._log(f"Generated {len(fielding_stats)} fielding stat entries")
         
         # Sort by total dismissals (descending), then by matches
-        fielding_stats.sort(key=lambda x: (x['catches'] + x['run_outs'], x['matches']), reverse=True)
+        fielding_stats.sort(
+            key=lambda x: (x['catches'] + x['run_outs'] + x.get('stumpings', 0), x['matches']),
+            reverse=True
+        )
         return fielding_stats
     
     def _calculate_leaderboards(self, batting_stats, bowling_stats):
@@ -753,7 +760,9 @@ class StatsService:
         else:  # fielding
             fieldnames = ['player', 'team', 'matches', 'catches', 'run_outs']
         
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        # Stats rows include extra internal keys (e.g. role/player_id). Ignore
+        # unknown keys so exports remain stable across response-shape evolution.
+        writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
         writer.writeheader()
         writer.writerows(data)
         
@@ -1661,12 +1670,14 @@ class StatsService:
 
                 opp_team = Team.query.get(m.away_team_id if is_home else m.home_team_id)
                 if len(recent) < 10:
+                    team_wickets = (m.home_team_wickets if is_home else m.away_team_wickets) or 0
+                    opp_wickets = (m.away_team_wickets if is_home else m.home_team_wickets) or 0
                     recent.append({
                         "date": m.date.strftime("%Y-%m-%d") if m.date else "",
                         "opponent": opp_team.name if opp_team else "Unknown",
                         "result": "W" if m.winner_team_id == team_id else ("L" if m.winner_team_id else "T"),
-                        "score": f"{team_score or 0}/{m.home_team_wickets if is_home else m.away_team_wickets or 0}",
-                        "opp_score": f"{opp_score or 0}/{m.away_team_wickets if is_home else m.home_team_wickets or 0}",
+                        "score": f"{team_score or 0}/{team_wickets}",
+                        "opp_score": f"{opp_score or 0}/{opp_wickets}",
                         "venue": m.venue or "",
                         "format": m.match_format or "T20",
                     })

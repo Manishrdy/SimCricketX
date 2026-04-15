@@ -12,8 +12,27 @@
 .h2h-sel-row .fg { flex: 1; min-width: 160px; }
 .h2h-sel-row label { display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.3rem; color: var(--fg-secondary); }
 .h2h-sel-row select { width: 100%; padding: 0.45rem 0.7rem; border: 1px solid var(--card-border); border-radius: 8px; background: var(--bg-secondary); color: var(--fg); font-size: 0.8rem; font-family: inherit; }
-.h2h-btn { padding: 0.5rem 1.2rem; background: var(--c1); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.8rem; }
-.h2h-btn:hover { opacity: 0.9; }
+.h2h-btn {
+    padding: 0.6rem 1.4rem;
+    background: linear-gradient(135deg, var(--c1, #6366f1), var(--c2, #8b5cf6));
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    white-space: nowrap;
+    height: fit-content;
+    align-self: end;
+}
+.h2h-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35); }
+.h2h-btn:active { transform: translateY(0); }
+.h2h-btn:disabled { cursor: wait; opacity: 0.7; }
 
 .h2h-summary { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; margin-bottom: 1.5rem; align-items: center; }
 .h2h-team-box { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; text-align: center; }
@@ -74,7 +93,7 @@
                     <option value="ListA">List A</option>
                 </select>
             </div>
-            <button class="h2h-btn" onclick="loadH2H()"><i class="fas fa-search"></i> Compare</button>
+            <button type="button" id="h2h-compare-btn" class="h2h-btn"><i class="fas fa-search"></i> Compare</button>
         </div>
     </div>
 
@@ -116,7 +135,7 @@
 
 {% block extra_js %}
 <script>
-function loadH2H() {
+async function loadH2H() {
     const t1 = document.getElementById('h2h-team1').value;
     const t2 = document.getElementById('h2h-team2').value;
     const fmt = document.getElementById('h2h-format').value || 'T20';
@@ -124,43 +143,58 @@ function loadH2H() {
     if (t1 === t2) { alert('Select two different teams'); return; }
 
     const url = `/api/head-to-head?team1_id=${t1}&team2_id=${t2}&match_format=${encodeURIComponent(fmt)}`;
+    const btn = document.getElementById('h2h-compare-btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
 
-    fetch(url).then(r => r.json()).then(res => {
+    try {
+        const r = await fetch(url, { credentials: 'same-origin' });
+        const res = await r.json();
+        console.log('[H2H] response', res);
         if (!res.success) { alert(res.error || 'Error'); return; }
-        const d = res.data;
-        const s = d.summary;
+        renderH2H(res.data);
+    } catch (e) {
+        console.error('[H2H] error', e);
+        alert('Error loading head-to-head data: ' + (e && e.message ? e.message : e));
+    } finally {
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    }
+}
 
-        document.getElementById('h2h-empty').style.display = 'none';
-        document.getElementById('h2h-results').style.display = '';
+function renderH2H(d) {
+    const s = d.summary || {};
+    const empty = document.getElementById('h2h-empty');
+    const results = document.getElementById('h2h-results');
+    if (empty) empty.style.display = 'none';
+    if (results) results.style.display = 'block';
 
-        document.getElementById('h2h-t1-name').textContent = d.team1;
-        document.getElementById('h2h-t2-name').textContent = d.team2;
-        document.getElementById('h2h-t1-wins').textContent = s.team1_wins;
-        document.getElementById('h2h-t2-wins').textContent = s.team2_wins;
-        document.getElementById('h2h-played').textContent = s.played;
-        document.getElementById('h2h-ties').textContent = s.ties ? s.ties + ' tie(s)' : '';
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setText('h2h-t1-name', d.team1 || '');
+    setText('h2h-t2-name', d.team2 || '');
+    setText('h2h-t1-wins', s.team1_wins || 0);
+    setText('h2h-t2-wins', s.team2_wins || 0);
+    setText('h2h-played', s.played || 0);
+    setText('h2h-ties', s.ties ? s.ties + ' tie(s)' : '');
 
-        // Performers
-        const perfHtml = (team, perfs) => {
-            let h = `<div class="perf-card"><div class="perf-card-title">${esc(team)} — Top Performers</div>`;
-            if (!perfs.length) { h += '<div style="font-size:0.75rem;color:var(--fg-secondary)">No data</div>'; }
-            perfs.forEach(p => {
-                h += `<div class="perf-row"><span>${esc(p.name)}</span><span class="perf-val">${p.runs}r / ${p.wickets}w (${p.matches}m)</span></div>`;
-            });
-            return h + '</div>';
-        };
-        document.getElementById('h2h-performers').innerHTML =
-            perfHtml(d.team1, d.top_performers.team1) + perfHtml(d.team2, d.top_performers.team2);
-
-        // Match list
-        let rows = '';
-        d.matches.forEach(m => {
-            rows += `<tr><td>${esc(m.date)}</td><td>${esc(m.home)}</td><td><b>${m.home_score}</b></td>`
-                  + `<td>${esc(m.away)}</td><td><b>${m.away_score}</b></td>`
-                  + `<td>${esc(m.result)}</td></tr>`;
+    const perfHtml = (team, perfs) => {
+        let h = `<div class="perf-card"><div class="perf-card-title">${esc(team)} — Top Performers</div>`;
+        if (!perfs || !perfs.length) { h += '<div style="font-size:0.75rem;color:var(--fg-secondary)">No data</div>'; }
+        (perfs || []).forEach(p => {
+            h += `<div class="perf-row"><span>${esc(p.name)}</span><span class="perf-val">${p.runs}r / ${p.wickets}w (${p.matches}m)</span></div>`;
         });
-        document.getElementById('h2h-match-tbody').innerHTML = rows || '<tr><td colspan="6" class="h2h-empty">No matches found</td></tr>';
-    }).catch(e => { console.error(e); alert('Error loading head-to-head data'); });
+        return h + '</div>';
+    };
+    const tp = d.top_performers || { team1: [], team2: [] };
+    const perfEl = document.getElementById('h2h-performers');
+    if (perfEl) perfEl.innerHTML = perfHtml(d.team1, tp.team1) + perfHtml(d.team2, tp.team2);
+
+    let rows = '';
+    (d.matches || []).forEach(m => {
+        rows += `<tr><td>${esc(m.date)}</td><td>${esc(m.home)}</td><td><b>${esc(m.home_score)}</b></td>`
+              + `<td>${esc(m.away)}</td><td><b>${esc(m.away_score)}</b></td>`
+              + `<td>${esc(m.result)}</td></tr>`;
+    });
+    const tbody = document.getElementById('h2h-match-tbody');
+    if (tbody) tbody.innerHTML = rows || '<tr><td colspan="6" class="h2h-empty">No matches found</td></tr>';
 }
 
 function esc(s) {
@@ -168,5 +202,10 @@ function esc(s) {
     d.textContent = s || '';
     return d.innerHTML;
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    const btn = document.getElementById('h2h-compare-btn');
+    if (btn) btn.addEventListener('click', loadH2H);
+});
 </script>
 {% endblock %}

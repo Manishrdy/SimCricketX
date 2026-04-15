@@ -8,6 +8,7 @@ from utils.exception_tracker import log_exception
 class StatsAggregator:
     REQUIRED_BATTING_COLS = {'Player Name', 'Team Name', 'Runs', 'Balls', 'Status',
                              '1s', '2s', '3s', 'Fours', 'Sixes', 'Dots'}
+    OPTIONAL_BATTING_COLS = {'Fielder Out', 'Bowler Out'}
     REQUIRED_BOWLING_COLS = {'Bowler Name', 'Team Name', 'Overs', 'Maidens', 'Runs',
                              'Wickets', 'Wides', 'No Balls', 'Byes', 'Leg Byes'}
 
@@ -36,6 +37,12 @@ class StatsAggregator:
                     if missing:
                         logging.error(f"Skipping {file_path}: missing required columns: {missing}")
                         continue
+                # Ensure optional attribution columns exist so downstream groupby
+                # logic never crashes when providers omit them.
+                if required_columns == self.REQUIRED_BATTING_COLS:
+                    for col in self.OPTIONAL_BATTING_COLS:
+                        if col not in df.columns:
+                            df[col] = None
                 df['match_id'] = os.path.basename(file_path).split('_')[0]
                 df_list.append(df)
             except Exception as e:

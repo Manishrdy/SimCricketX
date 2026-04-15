@@ -3,9 +3,19 @@ Test suite for Team routes
 Tests routes defined in routes/team_routes.py
 """
 
+import json
+import uuid
+from datetime import datetime
+
 import pytest
 from app import db
-from database.models import Team as DBTeam, TeamProfile as DBTeamProfile, Player as DBPlayer
+from database.models import (
+    Team as DBTeam,
+    TeamProfile as DBTeamProfile,
+    Player as DBPlayer,
+    Match as DBMatch,
+    MatchScorecard,
+)
 
 
 # ==================== Helpers ====================
@@ -330,3 +340,263 @@ class TestTeamValidation:
             b"captain" in response.data.lower()
             or b"wicketkeeper" in response.data.lower()
         )
+
+
+class TestSquadHistoryPreservation:
+    """Ensure squad churn does not delete historical scorecards."""
+
+    def test_team_squad_remove_detaches_player_not_delete(self, authenticated_client, regular_user):
+        team = DBTeam(
+            user_id=regular_user.id,
+            name="Detach XI",
+            short_code="DTX",
+            home_ground="Ground",
+            pitch_preference="flat",
+            team_color="#123456",
+            is_draft=False,
+            is_placeholder=False,
+        )
+        db.session.add(team)
+        db.session.flush()
+
+        profile = DBTeamProfile(team_id=team.id, format_type="T20")
+        db.session.add(profile)
+        db.session.flush()
+
+        player = DBPlayer(team_id=team.id, profile_id=profile.id, name="Legacy A", role="Batsman")
+        db.session.add(player)
+        db.session.flush()
+
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=regular_user.id,
+            home_team_id=team.id,
+            away_team_id=team.id,
+            match_format="T20",
+            date=datetime.utcnow(),
+        )
+        db.session.add(match)
+        db.session.flush()
+        db.session.add(MatchScorecard(
+            match_id=match.id,
+            player_id=player.id,
+            team_id=team.id,
+            innings_number=1,
+            record_type="batting",
+            runs=25,
+            balls=18,
+            is_out=True,
+        ))
+        db.session.commit()
+
+        resp = authenticated_client.post(
+            f"/api/team/{team.id}/squad/T20/remove",
+            json={"player_id": player.id},
+        )
+        assert resp.status_code == 200
+
+        kept = db.session.get(DBPlayer, player.id)
+        assert kept is not None
+        assert kept.profile_id is None
+        assert MatchScorecard.query.filter_by(match_id=match.id, player_id=player.id).count() == 1
+
+    def test_bulk_publish_preserves_player_rows_with_history(self, authenticated_client, regular_user):
+        team = DBTeam(
+            user_id=regular_user.id,
+            name="Bulk XI",
+            short_code="BLK",
+            home_ground="Ground",
+            pitch_preference="flat",
+            team_color="#654321",
+            is_draft=False,
+            is_placeholder=False,
+        )
+        db.session.add(team)
+        db.session.flush()
+
+        profile = DBTeamProfile(team_id=team.id, format_type="T20")
+        db.session.add(profile)
+        db.session.flush()
+
+        legacy = DBPlayer(team_id=team.id, profile_id=profile.id, name="Legacy A", role="Batsman")
+        survivor = DBPlayer(team_id=team.id, profile_id=profile.id, name="Survivor B", role="Bowler")
+        db.session.add_all([legacy, survivor])
+        db.session.flush()
+        survivor_id = survivor.id
+
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=regular_user.id,
+            home_team_id=team.id,
+            away_team_id=team.id,
+            match_format="T20",
+            date=datetime.utcnow(),
+        )
+        db.session.add(match)
+        db.session.flush()
+        db.session.add(MatchScorecard(
+            match_id=match.id,
+            player_id=legacy.id,
+            team_id=team.id,
+            innings_number=1,
+            record_type="batting",
+            runs=10,
+            balls=9,
+            is_out=True,
+        ))
+        db.session.commit()
+
+        payload = {
+            "players": [
+                {
+                    "name": "Survivor B", "role": "Bowler",
+                    "batting_rating": 50, "bowling_rating": 70, "fielding_rating": 55,
+                    "batting_hand": "Right", "bowling_type": "Medium", "bowling_hand": "Right",
+                },
+                {
+                    "name": "Fresh C", "role": "Batsman",
+                    "batting_rating": 68, "bowling_rating": 20, "fielding_rating": 60,
+                    "batting_hand": "Right", "bowling_type": "", "bowling_hand": "",
+                },
+            ],
+            "captain_name": "",
+            "wk_name": "",
+            "is_draft": True,
+        }
+        resp = authenticated_client.post(
+            f"/api/team/{team.id}/squad/T20/bulk-publish",
+            json=payload,
+        )
+        assert resp.status_code == 200
+
+        # Existing selected player keeps identity.
+        assert db.session.get(DBPlayer, survivor_id).profile_id == profile.id
+
+        # Removed player is detached, not deleted; history remains.
+        legacy_now = DBPlayer.query.filter_by(team_id=team.id, name="Legacy A").first()
+        assert legacy_now is not None
+        assert legacy_now.profile_id is None
+        assert MatchScorecard.query.filter_by(match_id=match.id, player_id=legacy_now.id).count() == 1
+
+    def test_edit_team_does_not_delete_historical_players(self, authenticated_client, regular_user):
+        team = DBTeam(
+            user_id=regular_user.id,
+            name="Edit XI",
+            short_code="EDX",
+            home_ground="Ground",
+            pitch_preference="flat",
+            team_color="#101010",
+            is_draft=False,
+            is_placeholder=False,
+        )
+        db.session.add(team)
+        db.session.flush()
+
+        profile = DBTeamProfile(team_id=team.id, format_type="T20")
+        db.session.add(profile)
+        db.session.flush()
+
+        player = DBPlayer(team_id=team.id, profile_id=profile.id, name="Legacy Edit", role="Batsman")
+        db.session.add(player)
+        db.session.flush()
+
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=regular_user.id,
+            home_team_id=team.id,
+            away_team_id=team.id,
+            match_format="T20",
+            date=datetime.utcnow(),
+        )
+        db.session.add(match)
+        db.session.flush()
+        db.session.add(MatchScorecard(
+            match_id=match.id,
+            player_id=player.id,
+            team_id=team.id,
+            innings_number=1,
+            record_type="batting",
+            runs=7,
+            balls=5,
+            is_out=True,
+        ))
+        db.session.commit()
+
+        payload = {
+            "T20": {
+                "captain": "",
+                "wicketkeeper": "",
+                "players": [
+                    {
+                        "name": "New Edit", "role": "Batsman",
+                        "batting_rating": 65, "bowling_rating": 15, "fielding_rating": 50,
+                        "batting_hand": "Right", "bowling_type": "", "bowling_hand": "",
+                    }
+                ],
+            }
+        }
+        resp = authenticated_client.post(
+            f"/team/{team.short_code}/edit",
+            data={
+                "team_name": team.name,
+                "short_code": team.short_code,
+                "home_ground": team.home_ground,
+                "pitch_preference": team.pitch_preference,
+                "team_color": team.team_color,
+                "action": "save_draft",
+                "profiles_payload": json.dumps(payload),
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+
+        legacy_now = DBPlayer.query.filter_by(team_id=team.id, name="Legacy Edit").first()
+        assert legacy_now is not None
+        assert legacy_now.profile_id is None
+        assert MatchScorecard.query.filter_by(match_id=match.id, player_id=legacy_now.id).count() == 1
+
+    def test_team_squad_add_reattaches_detached_player_identity(self, authenticated_client, regular_user, app):
+        team = DBTeam(
+            user_id=regular_user.id,
+            name="Reattach XI",
+            short_code="RTX",
+            home_ground="Ground",
+            pitch_preference="flat",
+            team_color="#202020",
+            is_draft=False,
+            is_placeholder=False,
+        )
+        db.session.add(team)
+        db.session.flush()
+        profile = DBTeamProfile(team_id=team.id, format_type="T20")
+        db.session.add(profile)
+        db.session.flush()
+
+        player = DBPlayer(team_id=team.id, profile_id=None, name="ReUse Me", role="Batsman")
+        db.session.add(player)
+        db.session.commit()
+        legacy_id = player.id
+
+        # Add matching player to the global pool so the API can resolve player_id.
+        from database.models import MasterPlayer
+
+        with app.app_context():
+            mp = MasterPlayer(
+                name="ReUse Me", role="Batsman",
+                batting_rating=60, bowling_rating=20, fielding_rating=55,
+                batting_hand="Right", bowling_type="", bowling_hand="",
+            )
+            db.session.add(mp)
+            db.session.commit()
+            pool_token = f"master_{mp.id}"
+
+        resp = authenticated_client.post(
+            f"/api/team/{team.id}/squad/T20/add",
+            json={"player_id": pool_token},
+        )
+        assert resp.status_code == 200
+
+        reused = DBPlayer.query.filter_by(team_id=team.id, name="ReUse Me").order_by(DBPlayer.id.asc()).all()
+        assert len(reused) == 1
+        assert reused[0].id == legacy_id
+        assert reused[0].profile_id == profile.id

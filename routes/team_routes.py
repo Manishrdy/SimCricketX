@@ -230,6 +230,70 @@ def register_team_routes(
                 db.session.add(db_player)
         return None
 
+    def _detach_player_from_squad(player):
+        """Remove a player from active squad selection without deleting history."""
+        player.profile_id = None
+        player.is_captain = False
+        player.is_wicketkeeper = False
+
+    def _sync_profile_squad(team_id, profile, pdata):
+        """
+        Idempotently sync one profile's active squad while preserving Player IDs.
+
+        Strategy:
+        - Reuse in-squad rows by name (profile_id + name).
+        - Reattach legacy rows (same team_id + name + profile_id NULL) when present.
+        - Create new rows only when no reusable identity exists.
+        - Detach rows removed from squad instead of deleting.
+        """
+        captain = (pdata.get("captain") or "").strip()
+        wk_name = (pdata.get("wicketkeeper") or "").strip()
+        incoming = pdata.get("players", []) or []
+
+        # Existing active rows in this profile.
+        existing_active = {
+            (p.name or "").strip().lower(): p
+            for p in DBPlayer.query.filter_by(profile_id=profile.id).all()
+        }
+
+        incoming_names = set()
+        for p in incoming:
+            name = (p.get("name") or "").strip()
+            key = name.lower()
+            if not key:
+                continue
+            incoming_names.add(key)
+
+            # Prefer current in-profile row; otherwise try legacy detached row.
+            player = existing_active.get(key)
+            if player is None:
+                player = (
+                    DBPlayer.query.filter_by(team_id=team_id, profile_id=None, name=name)
+                    .order_by(DBPlayer.id.asc())
+                    .first()
+                )
+                if player is not None:
+                    player.profile_id = profile.id
+
+            if player is None:
+                player = DBPlayer(team_id=team_id, profile_id=profile.id, name=name)
+                db.session.add(player)
+
+            player.role = p.get("role")
+            player.batting_rating = p.get("batting_rating")
+            player.bowling_rating = p.get("bowling_rating")
+            player.fielding_rating = p.get("fielding_rating")
+            player.batting_hand = p.get("batting_hand")
+            player.bowling_type = p.get("bowling_type")
+            player.bowling_hand = p.get("bowling_hand")
+            player.is_captain = (name == captain) if captain else False
+            player.is_wicketkeeper = (name == wk_name) if wk_name else False
+
+        # Players removed from squad are detached (never deleted).
+        for key, player in existing_active.items():
+            if key not in incoming_names:
+                _detach_player_from_squad(player)
+
     def _find_name_conflict(user_id, team_name, *, exclude_team_id=None):
         """
         Return an existing team for the user whose name matches case-insensitively.
@@ -484,19 +548,22 @@ def register_team_routes(
         count = DBPlayer.query.filter_by(profile_id=profile.id).count()
         if count >= 25:
             return json.dumps({"error": "Squad is full (max 25 players)."}), 400, {"Content-Type": "application/json"}
-        player = DBPlayer(
-            team_id=team_id,
-            profile_id=profile.id,
-            name=entry["name"],
-            role=entry["role"],
-            batting_rating=entry["batting_rating"],
-            bowling_rating=entry["bowling_rating"],
-            fielding_rating=entry["fielding_rating"],
-            batting_hand=entry["batting_hand"],
-            bowling_type=entry["bowling_type"],
-            bowling_hand=entry["bowling_hand"],
+        player = (
+            DBPlayer.query.filter_by(team_id=team_id, profile_id=None, name=entry["name"])
+            .order_by(DBPlayer.id.asc())
+            .first()
         )
-        db.session.add(player)
+        if player is None:
+            player = DBPlayer(team_id=team_id, name=entry["name"])
+            db.session.add(player)
+        player.profile_id = profile.id
+        player.role = entry["role"]
+        player.batting_rating = entry["batting_rating"]
+        player.bowling_rating = entry["bowling_rating"]
+        player.fielding_rating = entry["fielding_rating"]
+        player.batting_hand = entry["batting_hand"]
+        player.bowling_type = entry["bowling_type"]
+        player.bowling_hand = entry["bowling_hand"]
         db.session.commit()
         return json.dumps({
             "ok": True,
@@ -523,7 +590,7 @@ def register_team_routes(
         if not player or player.team_id != team_id:
             return json.dumps({"error": "Player not found."}), 404, {"Content-Type": "application/json"}
         name = player.name
-        db.session.delete(player)
+        _detach_player_from_squad(player)
         db.session.commit()
         return json.dumps({"ok": True, "name": name}), 200, {"Content-Type": "application/json"}
 
@@ -681,24 +748,16 @@ def register_team_routes(
             db.session.add(profile)
             db.session.flush()
 
-        # Replace squad atomically
-        DBPlayer.query.filter_by(profile_id=profile.id).delete()
-        for p in resolved:
-            db_player = DBPlayer(
-                team_id=team_id,
-                profile_id=profile.id,
-                name=p["name"],
-                role=p["role"],
-                batting_rating=p["batting_rating"],
-                bowling_rating=p["bowling_rating"],
-                fielding_rating=p["fielding_rating"],
-                batting_hand=p["batting_hand"],
-                bowling_type=p["bowling_type"],
-                bowling_hand=p["bowling_hand"],
-                is_captain=(p["name"] == captain_name) if captain_name else False,
-                is_wicketkeeper=(p["name"] == wk_name) if wk_name else False,
-            )
-            db.session.add(db_player)
+        # Replace active squad identity-safely (preserve Player rows with history).
+        _sync_profile_squad(
+            team_id,
+            profile,
+            {
+                "captain": captain_name,
+                "wicketkeeper": wk_name,
+                "players": resolved,
+            },
+        )
 
         if not is_draft:
             team.is_draft = False
@@ -910,17 +969,32 @@ def register_team_routes(
                         if err:
                             return _edit_error(err)
 
-                    # Replace all profiles: delete existing, recreate
-                    for prof in list(team.profiles):
-                        db.session.delete(prof)
-                    db.session.flush()
-
                     team.is_draft = is_draft
                     team.short_code = new_short_code
 
-                    save_err = _save_profiles(team.id, non_empty, is_draft)
-                    if save_err:
-                        return _edit_error(save_err)
+                    # Upsert profiles and sync active squads without deleting
+                    # historical Player identities used by archived scorecards.
+                    existing_profiles = {
+                        prof.format_type: prof for prof in list(team.profiles)
+                    }
+                    for fmt, pdata in non_empty.items():
+                        prof = existing_profiles.get(fmt)
+                        if not prof:
+                            prof = DBTeamProfile(team_id=team.id, format_type=fmt)
+                            db.session.add(prof)
+                            db.session.flush()
+                        _sync_profile_squad(team.id, prof, pdata)
+
+                    # Formats removed in edit: detach active players first, then
+                    # remove now-empty profile rows.
+                    for fmt, prof in existing_profiles.items():
+                        if fmt in non_empty:
+                            continue
+                        for p in DBPlayer.query.filter_by(profile_id=prof.id).all():
+                            _detach_player_from_squad(p)
+                        db.session.flush()
+                        if DBPlayer.query.filter_by(profile_id=prof.id).count() == 0:
+                            db.session.delete(prof)
 
                     db.session.commit()
                     status_msg = "Draft" if is_draft else "Active"
