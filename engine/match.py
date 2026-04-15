@@ -745,21 +745,63 @@ class Match:
                 self.current_partnership_balls += 1
             self.current_partnership_runs += outcome.get('runs', 0)
 
+    def _credit_partnership_contribution(self, runs=0, balls=0):
+        """Credit the current striker's contribution toward the running partnership.
+
+        Lazily seeds batsman1/batsman2 slot names from the current striker and
+        non-striker when both are empty (innings start, or first ball after a
+        wicket), then matches by name so strike rotation is handled correctly.
+        """
+        if not runs and not balls:
+            return
+        contrib = self.current_partnership_contributions
+        if contrib['batsman1']['name'] == '' and contrib['batsman2']['name'] == '':
+            contrib['batsman1']['name'] = self.current_striker['name']
+            contrib['batsman2']['name'] = self.current_non_striker['name']
+
+        striker_name = self.current_striker['name']
+        if contrib['batsman1']['name'] == striker_name:
+            slot = contrib['batsman1']
+        elif contrib['batsman2']['name'] == striker_name:
+            slot = contrib['batsman2']
+        else:
+            return
+
+        slot['runs'] += runs
+        slot['balls'] += balls
+
     def _save_partnership(self, wicket_type=None):
         """Save the current partnership and reset for next wicket"""
+        contrib = self.current_partnership_contributions
+        striker_name = self.current_striker["name"]
+        non_striker_name = self.current_non_striker["name"]
+
+        # Match contributions to the saved names (slots may be pegged to whoever
+        # entered the pair first; strike rotation means current_striker != slot1).
+        if contrib['batsman1']['name'] == striker_name:
+            b1 = contrib['batsman1']
+            b2 = contrib['batsman2']
+        elif contrib['batsman2']['name'] == striker_name:
+            b1 = contrib['batsman2']
+            b2 = contrib['batsman1']
+        else:
+            # Fallback (shouldn't happen): assume slot order matches save order
+            b1 = contrib['batsman1']
+            b2 = contrib['batsman2']
+
         partnership_data = {
             "innings_number": self.innings,
             "wicket_number": self.wickets + 1,
             "batsman1_id": None,  # Will be resolved to player ID later
-            "batsman1_name": self.current_striker["name"],
+            "batsman1_name": striker_name,
             "batsman2_id": None,
-            "batsman2_name": self.current_non_striker["name"],
+            "batsman2_name": non_striker_name,
             "runs": self.current_partnership_runs,
             "balls": self.current_partnership_balls,
-            "batsman1_contribution": self.current_partnership_contributions['batsman1']['runs'],
-            "batsman1_balls": self.current_partnership_contributions['batsman1']['balls'],
-            "batsman2_contribution": self.current_partnership_contributions['batsman2']['runs'],
-            "batsman2_balls": self.current_partnership_contributions['batsman2']['balls'],
+            "batsman1_contribution": b1['runs'],
+            "batsman1_balls": b1['balls'],
+            "batsman2_contribution": b2['runs'],
+            "batsman2_balls": b2['balls'],
             "start_over": self.current_partnership_start_over,
             "end_over": self.current_over + (self.current_ball / 6),
         }
@@ -4037,11 +4079,13 @@ class Match:
                         self.bowler_stats[self.current_bowler["name"]]["runs"] += 1
                         self.batsman_stats[self.current_striker["name"]]["runs"] += 1
                         self.batsman_stats[self.current_striker["name"]]["ones"] += 1
+                        self._credit_partnership_contribution(runs=1)
                     # Byes/Leg Byes: runs are extras, not charged to bowler or credited to batsman
                 else:
                     self.bowler_stats[self.current_bowler["name"]]["runs"] += 1
                     self.batsman_stats[self.current_striker["name"]]["runs"] += 1
                     self.batsman_stats[self.current_striker["name"]]["ones"] += 1
+                    self._credit_partnership_contribution(runs=1)
 
                 # 2. Count the ball (Byes/Leg Byes are legal deliveries)
                 is_legal_delivery = not extra
@@ -4055,6 +4099,7 @@ class Match:
                     self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
                     self.batsman_stats[self.current_striker["name"]]["balls"] += 1
                     self.current_partnership_balls += 1
+                    self._credit_partnership_contribution(balls=1)
 
                 # 3. Add 1 run to partnership, then save before dismissal
                 self.current_partnership_runs += 1
@@ -4090,6 +4135,7 @@ class Match:
                     self.current_ball += 1
                     self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
                     self.batsman_stats[self.current_striker["name"]]["balls"] += 1
+                    self._credit_partnership_contribution(balls=1)
 
                 self._save_partnership(wicket_type)
 
@@ -4390,6 +4436,7 @@ class Match:
             if not extra:
                 self.batsman_stats[self.current_striker["name"]]["runs"] += runs
                 self.batsman_stats[self.current_striker["name"]]["balls"] += 1
+                self._credit_partnership_contribution(runs=runs, balls=1)
 
                 # Track run breakdown for legal deliveries
                 if runs == 0:
@@ -4413,6 +4460,7 @@ class Match:
                 # Byes, Leg Byes, and No Balls: batsman faced the delivery
                 if extra_type in ("Byes", "Leg Bye", "No Ball"):
                     self.batsman_stats[self.current_striker["name"]]["balls"] += 1
+                    self._credit_partnership_contribution(balls=1)
 
                 # Byes/Leg Byes: batsman scored 0 off the bat → dot ball
                 # (runs go to extras, not credited to batsman)
@@ -4425,6 +4473,7 @@ class Match:
                 bat_runs = outcome.get("bat_runs", 0)
                 if bat_runs > 0:
                     self.batsman_stats[self.current_striker["name"]]["runs"] += bat_runs
+                    self._credit_partnership_contribution(runs=bat_runs)
                     if bat_runs == 1:
                         self.batsman_stats[self.current_striker["name"]]["ones"] += 1
                     elif bat_runs == 2:

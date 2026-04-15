@@ -1114,106 +1114,15 @@ def create_app():
     
     db.init_app(app)
 
-    # Lightweight, idempotent schema guard (covers sqlite drift in dev)
-    if not test_mode:
+    # Unified schema migration precheck — runs every idempotent migration in
+    # order. See migrations/precheck.py for the registry and docs.
+    if not test_mode and os.getenv("SIMCRICKETX_PRECHECK_RUNNING", "0") != "1":
         try:
-            from scripts.fix_db_schema import ensure_schema
-            with app.app_context():
-                ensure_schema(db.engine, db)
+            from migrations.precheck import run_all as _run_precheck
+            _run_precheck(db, app)
         except Exception as e:
             log_exception(e, source="sqlite")
-            print(f"[WARN] Schema check skipped: {e}")
-
-    # Team format-profiles migration (idempotent — safe to run on every startup)
-    if not test_mode:
-        try:
-            from migrations.add_team_profiles import run_migration as _run_profiles_migration
-            _run_profiles_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Team profiles migration skipped: {e}")
-
-    # Tournament format migration (idempotent — adds format_type to tournaments)
-    if not test_mode:
-        try:
-            from migrations.add_tournament_format import run_migration as _run_tournament_fmt_migration
-            _run_tournament_fmt_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Tournament format migration skipped: {e}")
-
-    # Account lockout migration (idempotent — adds lockout_* columns to users)
-    if not test_mode:
-        try:
-            from migrations.add_account_lockout import run_migration as _run_lockout_migration
-            _run_lockout_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Account lockout migration skipped: {e}")
-
-    # Pending email migration (idempotent — adds pending_email_* columns to users)
-    if not test_mode:
-        try:
-            from migrations.add_pending_email import run_migration as _run_pending_email_migration
-            _run_pending_email_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Pending email migration skipped: {e}")
-
-    # Exception log migration (idempotent — creates exception_log table)
-    if not test_mode:
-        try:
-            from migrations.add_exception_log import run_migration as _run_exception_log_migration
-            _run_exception_log_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Exception log migration skipped: {e}")
-
-    # Exception log metadata migration (idempotent — adds structured logging fields)
-    if not test_mode:
-        try:
-            from migrations.add_exception_log_metadata import run_migration as _run_exception_log_meta_migration
-            _run_exception_log_meta_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Exception log metadata migration skipped: {e}")
-
-    # Exception log dedup migration (idempotent — adds fingerprint/occurrence fields)
-    if not test_mode:
-        try:
-            from migrations.add_exception_log_dedup import run_migration as _run_exception_log_dedup_migration
-            _run_exception_log_dedup_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Exception log dedup migration skipped: {e}")
-
-        try:
-            from migrations.add_player_pool import run_migration as _run_player_pool_migration
-            _run_player_pool_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Player pool migration skipped: {e}")
-
-        try:
-            from migrations.add_scorecard_cascade import run_migration as _run_scorecard_cascade_migration
-            _run_scorecard_cascade_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Scorecard cascade migration skipped: {e}")
-
-        try:
-            from migrations.add_scorecard_stumpings import run_migration as _run_scorecard_stumpings_migration
-            _run_scorecard_stumpings_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Scorecard stumpings migration skipped: {e}")
-
-        try:
-            from migrations.add_auction import run_migration as _run_auction_migration
-            _run_auction_migration(db, app)
-        except Exception as e:
-            log_exception(e, source="sqlite")
-            print(f"[WARN] Auction migration skipped: {e}")
+            print(f"[WARN] Precheck failed: {e}")
 
         # Player pool FK invariant audit — a Player may link to master XOR user
         # pool, never both. The @validates hook guards new writes; this audit

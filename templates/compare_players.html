@@ -1,551 +1,785 @@
 {% extends "layout.html" %}
 
+{% block title %}Compare Players — SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+.cmp-page {
+    --c1: #6366f1;
+    --c2: #8b5cf6;
+    --c3: #ec4899;
+    --cgold: #f59e0b;
+    --cgreen: #10b981;
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 0 1.25rem 4rem;
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+/* ===== HERO ===== */
+.cmp-hero {
+    position: relative;
+    padding: 2.5rem 1.25rem 1.75rem;
+    margin-top: .5rem;
+    margin-bottom: 1rem;
+    border-radius: 18px;
+    overflow: hidden;
+}
+.cmp-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 12% 0%, rgba(99,102,241,.10), transparent 55%),
+        radial-gradient(circle at 90% 100%, rgba(236,72,153,.07), transparent 55%);
+    pointer-events: none;
+}
+[data-theme="dark"] .cmp-hero::before {
+    background:
+        radial-gradient(circle at 12% 0%, rgba(129,140,248,.14), transparent 55%),
+        radial-gradient(circle at 90% 100%, rgba(244,114,182,.10), transparent 55%);
+}
+.cmp-hero-inner { position: relative; display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; }
+.cmp-hero-text { flex: 1; min-width: 260px; }
+.cmp-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--c1);
+    margin-bottom: .5rem;
+}
+.cmp-eyebrow::before {
+    content: "";
+    width: 6px; height: 6px;
+    background: var(--c1);
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(99,102,241,.22);
+}
+.cmp-hero h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 0 .35rem;
+    background: linear-gradient(135deg, var(--c1), var(--c2) 55%, var(--c3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.cmp-hero p { color: var(--fg-secondary); font-size: .95rem; max-width: 620px; line-height: 1.55; margin: 0; }
+.cmp-hero p b { color: var(--fg); font-weight: 700; }
+
+.cmp-back {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .5rem .9rem;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    color: var(--fg);
+    text-decoration: none;
+    font-size: .8rem;
+    background: var(--card-bg);
+    transition: all .15s ease;
+}
+.cmp-back:hover { background: var(--bg-secondary); transform: translateX(-2px); }
+
+/* ===== SELECTION CARD ===== */
+.cmp-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+    overflow: hidden;
+}
+.cmp-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+.cmp-card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    color: var(--fg);
+}
+.cmp-card-title i { color: var(--c1); }
+.cmp-card-sub { font-size: .78rem; color: var(--fg-secondary); }
+
+/* ===== CHIP SELECT ===== */
+.cmp-chip-box {
+    min-height: 46px;
+    padding: .5rem;
+    background: var(--bg-secondary);
+    border: 1px dashed var(--card-border);
+    border-radius: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    align-items: center;
+    margin-bottom: .6rem;
+}
+.cmp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .3rem .65rem;
+    background: linear-gradient(135deg, var(--c1), var(--c2));
+    color: #fff;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(99,102,241,.25);
+    animation: chipIn .18s ease;
+}
+@keyframes chipIn {
+    from { opacity: 0; transform: scale(.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+.cmp-chip button {
+    background: rgba(255,255,255,.2);
+    border: none;
+    color: #fff;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    font-size: .6rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+}
+.cmp-chip button:hover { background: rgba(255,255,255,.35); }
+.cmp-chip-empty { font-size: .78rem; color: var(--fg-secondary); padding: .25rem .5rem; }
+
+/* ===== SEARCH + LIST ===== */
+.cmp-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+@media (max-width: 760px) { .cmp-grid { grid-template-columns: 1fr; } }
+
+.cmp-search {
+    position: relative;
+    margin-bottom: .5rem;
+}
+.cmp-search i {
+    position: absolute;
+    left: .8rem; top: 50%;
+    transform: translateY(-50%);
+    color: var(--fg-secondary);
+    font-size: .85rem;
+    pointer-events: none;
+}
+.cmp-search input {
+    width: 100%;
+    padding: .55rem .8rem .55rem 2.2rem;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    color: var(--fg);
+    font-size: .85rem;
+    font-family: inherit;
+    transition: border-color .15s;
+}
+.cmp-search input:focus {
+    outline: none;
+    border-color: var(--c1);
+    box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+}
+
+.cmp-list {
+    max-height: 340px;
+    overflow-y: auto;
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    background: var(--bg-secondary);
+}
+.cmp-list::-webkit-scrollbar { width: 8px; }
+.cmp-list::-webkit-scrollbar-track { background: transparent; }
+.cmp-list::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 4px; }
+
+.cmp-team-group { border-bottom: 1px solid var(--card-border); }
+.cmp-team-group:last-child { border-bottom: none; }
+.cmp-team-head {
+    padding: .5rem .8rem;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--fg-secondary);
+    background: var(--card-bg);
+    position: sticky; top: 0;
+    z-index: 1;
+}
+.cmp-player-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .5rem .8rem;
+    cursor: pointer;
+    font-size: .85rem;
+    color: var(--fg);
+    border-top: 1px solid var(--card-border);
+    transition: background .12s;
+}
+.cmp-player-row:first-child { border-top: none; }
+.cmp-player-row:hover { background: var(--card-bg); }
+.cmp-player-row.selected {
+    background: linear-gradient(90deg, rgba(99,102,241,.12), transparent);
+    color: var(--c1);
+    font-weight: 600;
+}
+.cmp-player-row .cmp-check {
+    width: 18px; height: 18px;
+    border: 1.5px solid var(--card-border);
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--card-bg);
+    transition: all .12s;
+}
+.cmp-player-row.selected .cmp-check {
+    background: var(--c1);
+    border-color: var(--c1);
+    color: #fff;
+}
+.cmp-player-row.selected .cmp-check::after { content: "✓"; font-size: .75rem; font-weight: 700; }
+
+/* ===== SIDE PANEL (filters + action) ===== */
+.cmp-side { display: flex; flex-direction: column; gap: .75rem; }
+.cmp-field label {
+    display: block;
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--fg-secondary);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: .3rem;
+}
+.cmp-field select {
+    width: 100%;
+    padding: .55rem .75rem;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    color: var(--fg);
+    font-size: .85rem;
+    font-family: inherit;
+}
+.cmp-field select:focus {
+    outline: none;
+    border-color: var(--c1);
+    box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+}
+
+.cmp-btn {
+    padding: .7rem 1.2rem;
+    background: linear-gradient(135deg, var(--c1), var(--c2));
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: .88rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    box-shadow: 0 2px 10px rgba(99,102,241,.3);
+    transition: all .15s ease;
+    width: 100%;
+}
+.cmp-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(99,102,241,.4); }
+.cmp-btn:active { transform: translateY(0); }
+.cmp-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.cmp-btn-ghost {
+    padding: .55rem 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--fg);
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: .8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    transition: all .15s;
+}
+.cmp-btn-ghost:hover { background: var(--bg-secondary); }
+
+.cmp-counter {
+    font-size: .78rem;
+    color: var(--fg-secondary);
+    text-align: center;
+}
+.cmp-counter b { color: var(--c1); }
+
+/* ===== RESULTS ===== */
+.cmp-results { display: none; animation: fadeIn .3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.cmp-section {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+.cmp-section-title {
+    font-size: .95rem;
+    font-weight: 700;
+    margin-bottom: .9rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+.cmp-section-title i {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .8rem;
+    background: linear-gradient(135deg, var(--c1), var(--c2));
+    color: #fff;
+}
+
+.cmp-tbl-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--card-border); }
+.cmp-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .82rem;
+    min-width: 600px;
+}
+.cmp-tbl th {
+    background: var(--bg-secondary);
+    padding: .6rem .75rem;
+    text-align: left;
+    font-weight: 700;
+    font-size: .68rem;
+    color: var(--fg-secondary);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    white-space: nowrap;
+}
+.cmp-tbl td {
+    padding: .65rem .75rem;
+    border-top: 1px solid var(--card-border);
+    color: var(--fg);
+    white-space: nowrap;
+}
+.cmp-tbl tr:hover td { background: var(--bg-secondary); }
+.cmp-tbl .cmp-player-cell {
+    font-weight: 700;
+    color: var(--fg);
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+}
+.cmp-player-cell::before {
+    content: "";
+    width: 4px;
+    height: 18px;
+    background: linear-gradient(180deg, var(--c1), var(--c2));
+    border-radius: 2px;
+}
+.cmp-tbl .leader { color: var(--cgreen); font-weight: 800; }
+.cmp-tbl .muted { color: var(--fg-secondary); }
+
+/* ===== LOADING / ERROR / EMPTY ===== */
+.cmp-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    text-align: center;
+}
+.cmp-state i { font-size: 2.2rem; color: var(--fg-secondary); opacity: .4; margin-bottom: .75rem; }
+.cmp-state p { margin: 0; color: var(--fg-secondary); font-size: .9rem; }
+.cmp-state.err i { color: #ef4444; opacity: .7; }
+
+.cmp-spinner {
+    width: 42px; height: 42px;
+    border: 3px solid var(--card-border);
+    border-top: 3px solid var(--c1);
+    border-radius: 50%;
+    animation: cmpSpin 0.8s linear infinite;
+    margin-bottom: .75rem;
+}
+@keyframes cmpSpin { to { transform: rotate(360deg); } }
+
+.cmp-empty-illustration {
+    font-size: 2.5rem;
+    margin-bottom: .75rem;
+    background: linear-gradient(135deg, var(--c1), var(--c3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    opacity: .7;
+}
+
+@media (max-width: 640px) {
+    .cmp-hero { padding: 1.75rem 1rem 1.25rem; }
+    .cmp-hero h1 { font-size: 1.5rem; }
+    .cmp-card { padding: 1rem; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="compare-players-page">
-    <div class="page-header">
-        <div class="header-content">
-            <h1 class="page-title">
-                <i class="fas fa-balance-scale"></i> Player Comparison
-            </h1>
-            <p class="page-subtitle">Compare players side-by-side across all statistics</p>
+<div class="cmp-page">
+    <!-- HERO -->
+    <section class="cmp-hero">
+        <div class="cmp-hero-inner">
+            <div class="cmp-hero-text">
+                <span class="cmp-eyebrow">Side-by-side analytics</span>
+                <h1>Compare Players</h1>
+                <p>Pit up to <b>six players</b> against each other across <b>batting</b>, <b>bowling</b>, and <b>fielding</b> — filtered by format or tournament. Pick your shortlist, hit compare, and see who leads each column.</p>
+            </div>
+            <a href="{{ url_for('statistics') }}" class="cmp-back"><i class="fas fa-arrow-left"></i> Statistics</a>
         </div>
-        <a href="{{ url_for('home') }}" class="back-btn">
-            <i class="fas fa-arrow-left"></i> Back
-        </a>
-    </div>
+    </section>
 
-    <!-- Player Selection Section -->
-    <div class="selection-card">
-        <div class="selection-header">
-            <h3><i class="fas fa-users"></i> Select Players to Compare</h3>
-            <p>Choose 2-6 players from your teams</p>
+    <!-- SELECTION -->
+    <div class="cmp-card">
+        <div class="cmp-card-head">
+            <div>
+                <div class="cmp-card-title"><i class="fas fa-users"></i> Select Players</div>
+                <div class="cmp-card-sub">Pick 2–6 players to compare</div>
+            </div>
+            <button type="button" id="cmp-clear" class="cmp-btn-ghost"><i class="fas fa-times-circle"></i> Clear</button>
         </div>
 
-        <div class="selection-form">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="player-select">Select Players</label>
-                    <select id="player-select" multiple class="player-multiselect">
-                        {% for team in teams %}
-                        <optgroup label="{{ team.name }}">
-                            {% for player in team.players %}
-                            <option value="{{ player.id }}">{{ player.name }}</option>
-                            {% endfor %}
-                        </optgroup>
+        <div id="cmp-chips" class="cmp-chip-box">
+            <span class="cmp-chip-empty">No players selected yet.</span>
+        </div>
+
+        <div class="cmp-grid">
+            <div>
+                <div class="cmp-search">
+                    <i class="fas fa-search"></i>
+                    <input id="cmp-search-input" type="text" placeholder="Search players…" autocomplete="off">
+                </div>
+                <div id="cmp-list" class="cmp-list">
+                    {% for team in teams %}
+                    <div class="cmp-team-group" data-team="{{ team.name|lower }}">
+                        <div class="cmp-team-head">{{ team.name }}</div>
+                        {% for player in team.players %}
+                        <div class="cmp-player-row" data-id="{{ player.id }}" data-name="{{ player.name|lower }}" data-display="{{ player.name }}">
+                            <span class="cmp-check"></span>
+                            <span>{{ player.name }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="cmp-side">
+                <div class="cmp-field">
+                    <label>Format</label>
+                    <select id="cmp-format">
+                        <option value="T20" selected>T20</option>
+                        <option value="ListA">List A</option>
+                    </select>
+                </div>
+                <div class="cmp-field">
+                    <label>Tournament (optional)</label>
+                    <select id="cmp-tournament">
+                        <option value="">All tournaments</option>
+                        {% for t in tournaments %}
+                        <option value="{{ t.id }}">{{ t.name }}</option>
                         {% endfor %}
                     </select>
-                    <small class="form-hint">Hold Ctrl/Cmd to select multiple players</small>
                 </div>
-
-                <div class="form-group">
-                    <label for="tournament-filter">Tournament (Optional)</label>
-                    <select id="tournament-filter" class="form-select">
-                        <option value="">All Tournaments</option>
-                        {% for tournament in tournaments %}
-                        <option value="{{ tournament.id }}">{{ tournament.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <button id="compare-btn" class="primary-btn" onclick="compareSelected()">
-                <i class="fas fa-chart-bar"></i> Compare Players
-            </button>
-        </div>
-    </div>
-
-    <!-- Comparison Results -->
-    <div id="comparison-results" class="comparison-results" style="display: none;">
-        <div class="results-header">
-            <h2>Comparison Results</h2>
-            <button class="secondary-btn" onclick="resetComparison()">
-                <i class="fas fa-redo"></i> New Comparison
-            </button>
-        </div>
-
-        <!-- Batting Comparison -->
-        <div class="comparison-section">
-            <div class="section-title">
-                <i class="fas fa-cricket-bat"></i> Batting Statistics
-            </div>
-            <div class="table-responsive">
-                <table id="batting-table" class="comparison-table">
-                    <!-- Populated dynamically -->
-                </table>
-            </div>
-        </div>
-
-        <!-- Bowling Comparison -->
-        <div class="comparison-section">
-            <div class="section-title">
-                <i class="fas fa-bowling-ball"></i> Bowling Statistics
-            </div>
-            <div class="table-responsive">
-                <table id="bowling-table" class="comparison-table">
-                    <!-- Populated dynamically -->
-                </table>
-            </div>
-        </div>
-
-        <!-- Fielding Comparison -->
-        <div class="comparison-section">
-            <div class="section-title">
-                <i class="fas fa-hand-paper"></i> Fielding Statistics
-            </div>
-            <div class="table-responsive">
-                <table id="fielding-table" class="comparison-table">
-                    <!-- Populated dynamically -->
-                </table>
+                <div class="cmp-counter"><b id="cmp-count">0</b> of 6 selected</div>
+                <button type="button" id="cmp-btn" class="cmp-btn" disabled>
+                    <i class="fas fa-chart-bar"></i> Compare Players
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Loading State -->
-    <div id="loading-state" class="loading-state" style="display: none;">
-        <div class="spinner"></div>
-        <p>Loading comparison data...</p>
+    <!-- LOADING -->
+    <div id="cmp-loading" class="cmp-state" style="display:none">
+        <div class="cmp-spinner"></div>
+        <p>Crunching numbers…</p>
     </div>
 
-    <!-- Error State -->
-    <div id="error-state" class="error-state" style="display: none;">
+    <!-- ERROR -->
+    <div id="cmp-error" class="cmp-state err" style="display:none">
         <i class="fas fa-exclamation-triangle"></i>
-        <p id="error-message"></p>
+        <p id="cmp-error-msg"></p>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="cmp-results" class="cmp-results">
+        <div class="cmp-section">
+            <div class="cmp-section-title"><i class="fas fa-baseball-ball"></i> Batting</div>
+            <div class="cmp-tbl-wrap"><table id="cmp-batting" class="cmp-tbl"></table></div>
+        </div>
+        <div class="cmp-section">
+            <div class="cmp-section-title"><i class="fas fa-bullseye"></i> Bowling</div>
+            <div class="cmp-tbl-wrap"><table id="cmp-bowling" class="cmp-tbl"></table></div>
+        </div>
+        <div class="cmp-section">
+            <div class="cmp-section-title"><i class="fas fa-hands-helping"></i> Fielding</div>
+            <div class="cmp-tbl-wrap"><table id="cmp-fielding" class="cmp-tbl"></table></div>
+        </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-    function compareSelected() {
-        const select = document.getElementById('player-select');
-        const tournamentFilter = document.getElementById('tournament-filter');
-        const selectedPlayers = Array.from(select.selectedOptions).map(opt => opt.value);
+(function () {
+    const selected = new Map(); // id -> name
+    const MAX = 6, MIN = 2;
 
-        // Validation
-        if (selectedPlayers.length < 2) {
-            alert('Please select at least 2 players to compare');
-            return;
-        }
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
 
-        if (selectedPlayers.length > 6) {
-            alert('You can compare a maximum of 6 players');
-            return;
-        }
-
-        // Build query string
-        const params = new URLSearchParams();
-        selectedPlayers.forEach(id => params.append('player_ids', id));
-        if (tournamentFilter.value) {
-            params.append('tournament_id', tournamentFilter.value);
-        }
-
-        // Show loading
-        document.getElementById('loading-state').style.display = 'flex';
-        document.getElementById('comparison-results').style.display = 'none';
-        document.getElementById('error-state').style.display = 'none';
-
-        // Fetch comparison data
-        fetch(`/api/compare-players?${params}`)
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('loading-state').style.display = 'none';
-
-                if (data.error) {
-                    showError(data.error);
-                    return;
-                }
-
-                if (data.success) {
-                    displayComparison(data.data);
-                }
-            })
-            .catch(err => {
-                document.getElementById('loading-state').style.display = 'none';
-                showError('Error loading comparison: ' + err.message);
-            });
-    }
-
-    function esc(s) {
-        return String(s ?? '')
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    function displayComparison(data) {
-        document.getElementById('comparison-results').style.display = 'block';
-
-        // Batting comparison
-        if (data.batting_comparison && data.batting_comparison.length > 0) {
-            const battingTable = document.getElementById('batting-table');
-            battingTable.innerHTML = `
-            <thead>
-                <tr>
-                    <th>Player</th>
-                    <th>Innings</th>
-                    <th>Runs</th>
-                    <th>Average</th>
-                    <th>Strike Rate</th>
-                    <th>High Score</th>
-                    <th>50s</th>
-                    <th>100s</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${data.batting_comparison.map(p => `
-                    <tr>
-                        <td class="player-name">${esc(p.player)}</td>
-                        <td>${p.innings}</td>
-                        <td class="highlight">${p.runs}</td>
-                        <td>${p.average == null ? '-' : p.average}</td>
-                        <td>${p.strike_rate == null ? '-' : p.strike_rate}</td>
-                        <td>${p.high_score}</td>
-                        <td>${p.fifties}</td>
-                        <td>${p.hundreds}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        `;
-        }
-
-        // Bowling comparison
-        if (data.bowling_comparison && data.bowling_comparison.length > 0) {
-            const bowlingTable = document.getElementById('bowling-table');
-            bowlingTable.innerHTML = `
-            <thead>
-                <tr>
-                    <th>Player</th>
-                    <th>Innings</th>
-                    <th>Wickets</th>
-                    <th>Average</th>
-                    <th>Economy</th>
-                    <th>Strike Rate</th>
-                    <th>Best Figures</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${data.bowling_comparison.map(p => `
-                    <tr>
-                        <td class="player-name">${esc(p.player)}</td>
-                        <td>${p.innings}</td>
-                        <td class="highlight">${p.wickets}</td>
-                        <td>${p.average == null ? '-' : p.average}</td>
-                        <td>${p.economy}</td>
-                        <td>${p.strike_rate == null ? '-' : p.strike_rate}</td>
-                        <td>${esc(p.best_figures)}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        `;
+    function renderChips() {
+        const box = $('cmp-chips');
+        if (!selected.size) {
+            box.innerHTML = '<span class="cmp-chip-empty">No players selected yet.</span>';
         } else {
-            document.getElementById('bowling-table').innerHTML = '<p class="no-data">No bowling data available</p>';
+            let html = '';
+            selected.forEach((name, id) => {
+                html += `<span class="cmp-chip">${esc(name)}<button type="button" data-remove="${esc(id)}" aria-label="Remove">✕</button></span>`;
+            });
+            box.innerHTML = html;
         }
+        $('cmp-count').textContent = selected.size;
+        $('cmp-btn').disabled = selected.size < MIN;
+    }
 
-        // Fielding comparison
-        if (data.fielding_comparison && data.fielding_comparison.length > 0) {
-            const fieldingTable = document.getElementById('fielding-table');
-            fieldingTable.innerHTML = `
-            <thead>
-                <tr>
-                    <th>Player</th>
-                    <th>Catches</th>
-                    <th>Run Outs</th>
-                    <th>Total Dismissals</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${data.fielding_comparison.map(p => `
-                    <tr>
-                        <td class="player-name">${esc(p.player)}</td>
-                        <td>${p.catches}</td>
-                        <td>${p.run_outs}</td>
-                        <td class="highlight">${p.total_dismissals}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        `;
+    function toggle(id, name, rowEl) {
+        if (selected.has(id)) {
+            selected.delete(id);
+            rowEl && rowEl.classList.remove('selected');
+        } else {
+            if (selected.size >= MAX) { alert(`You can compare up to ${MAX} players at a time.`); return; }
+            selected.set(id, name);
+            rowEl && rowEl.classList.add('selected');
+        }
+        renderChips();
+    }
+
+    // Row click
+    document.querySelectorAll('.cmp-player-row').forEach(row => {
+        row.addEventListener('click', () => {
+            toggle(row.dataset.id, row.dataset.display, row);
+        });
+    });
+
+    // Chip remove (event delegation)
+    $('cmp-chips').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-remove]');
+        if (!btn) return;
+        const id = btn.getAttribute('data-remove');
+        selected.delete(id);
+        const row = document.querySelector(`.cmp-player-row[data-id="${CSS.escape(id)}"]`);
+        row && row.classList.remove('selected');
+        renderChips();
+    });
+
+    // Clear all
+    $('cmp-clear').addEventListener('click', () => {
+        selected.clear();
+        document.querySelectorAll('.cmp-player-row.selected').forEach(r => r.classList.remove('selected'));
+        renderChips();
+    });
+
+    // Search filter
+    $('cmp-search-input').addEventListener('input', (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        document.querySelectorAll('.cmp-team-group').forEach(group => {
+            let visible = 0;
+            group.querySelectorAll('.cmp-player-row').forEach(row => {
+                const name = row.dataset.name || '';
+                const match = !q || name.includes(q);
+                row.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+            group.style.display = visible ? '' : 'none';
+        });
+    });
+
+    // Highlight winners per column helper
+    function markLeaders(tbody, colIndexes, higherIsBetter = true) {
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        colIndexes.forEach(ci => {
+            let best = null;
+            rows.forEach(r => {
+                const v = parseFloat(r.cells[ci].dataset.val);
+                if (isNaN(v)) return;
+                if (best === null) best = v;
+                else best = higherIsBetter ? Math.max(best, v) : Math.min(best, v);
+            });
+            if (best === null) return;
+            rows.forEach(r => {
+                const v = parseFloat(r.cells[ci].dataset.val);
+                if (!isNaN(v) && v === best) r.cells[ci].classList.add('leader');
+            });
+        });
+    }
+
+    function num(v, suf = '') { return (v == null || v === '') ? '<span class="muted">—</span>' : esc(v) + suf; }
+
+    function playerLabel(p) {
+        const team = p.team ? ` <span style="color:var(--fg-secondary);font-weight:500;font-size:.72rem">· ${esc(p.team)}</span>` : '';
+        return `<span class="cmp-player-cell">${esc(p.name)}</span>${team}`;
+    }
+
+    function renderBatting(players) {
+        const tbl = $('cmp-batting');
+        const rows = players.filter(p => p.batting && (p.batting.innings || p.batting.runs));
+        if (!rows.length) { tbl.innerHTML = '<tbody><tr><td class="muted" style="padding:1rem">No batting data.</td></tr></tbody>'; return; }
+        let h = `<thead><tr>
+            <th>Player</th><th>Inn</th><th>Runs</th><th>Avg</th><th>SR</th><th>HS</th><th>4s</th><th>6s</th><th>50s</th><th>100s</th>
+        </tr></thead><tbody>`;
+        rows.forEach(p => {
+            const b = p.batting || {};
+            h += `<tr>
+                <td>${playerLabel(p)}</td>
+                <td data-val="${b.innings||0}">${num(b.innings)}</td>
+                <td data-val="${b.runs||0}">${num(b.runs)}</td>
+                <td data-val="${b.average==null?'':b.average}">${num(b.average)}</td>
+                <td data-val="${b.strike_rate==null?'':b.strike_rate}">${num(b.strike_rate)}</td>
+                <td data-val="${b.high_score||0}">${num(b.high_score)}</td>
+                <td data-val="${b.fours||0}">${num(b.fours)}</td>
+                <td data-val="${b.sixes||0}">${num(b.sixes)}</td>
+                <td data-val="${b.fifties||0}">${num(b.fifties)}</td>
+                <td data-val="${b.hundreds||0}">${num(b.hundreds)}</td>
+            </tr>`;
+        });
+        h += '</tbody>';
+        tbl.innerHTML = h;
+        markLeaders(tbl.tBodies[0], [2,3,4,5,6,7,8,9], true);
+    }
+
+    function renderBowling(players) {
+        const tbl = $('cmp-bowling');
+        const rows = players.filter(p => {
+            const b = p.bowling || {};
+            return (b.innings || b.wickets || b.overs || b.runs_conceded);
+        });
+        if (!rows.length) { tbl.innerHTML = '<tbody><tr><td class="muted" style="padding:1rem">No bowling data for the selected players.</td></tr></tbody>'; return; }
+        let h = `<thead><tr>
+            <th>Player</th><th>Inn</th><th>Overs</th><th>Wkts</th><th>Avg</th><th>Econ</th><th>SR</th><th>Best</th>
+        </tr></thead><tbody>`;
+        rows.forEach(p => {
+            const b = p.bowling || {};
+            h += `<tr>
+                <td>${playerLabel(p)}</td>
+                <td data-val="${b.innings||0}">${num(b.innings)}</td>
+                <td data-val="${b.overs||0}">${num(b.overs)}</td>
+                <td data-val="${b.wickets||0}">${num(b.wickets)}</td>
+                <td data-val="${b.average==null?'':b.average}">${num(b.average)}</td>
+                <td data-val="${b.economy==null?'':b.economy}">${num(b.economy)}</td>
+                <td data-val="${b.strike_rate==null?'':b.strike_rate}">${num(b.strike_rate)}</td>
+                <td>${num(b.best_figures)}</td>
+            </tr>`;
+        });
+        h += '</tbody>';
+        tbl.innerHTML = h;
+        markLeaders(tbl.tBodies[0], [3], true);
+        markLeaders(tbl.tBodies[0], [4,5,6], false);
+    }
+
+    function renderFielding(players) {
+        const tbl = $('cmp-fielding');
+        const rows = players.map(p => ({ p, f: p.fielding || {} }));
+        if (!rows.length) { tbl.innerHTML = '<tbody><tr><td class="muted" style="padding:1rem">No fielding data.</td></tr></tbody>'; return; }
+        let h = `<thead><tr>
+            <th>Player</th><th>Catches</th><th>Run Outs</th><th>Stumpings</th><th>Total</th>
+        </tr></thead><tbody>`;
+        rows.forEach(({p, f}) => {
+            const total = (f.total_dismissals != null) ? f.total_dismissals : ((f.catches||0)+(f.run_outs||0)+(f.stumpings||0));
+            h += `<tr>
+                <td>${playerLabel(p)}</td>
+                <td data-val="${f.catches||0}">${num(f.catches)}</td>
+                <td data-val="${f.run_outs||0}">${num(f.run_outs)}</td>
+                <td data-val="${f.stumpings||0}">${num(f.stumpings)}</td>
+                <td data-val="${total}">${num(total)}</td>
+            </tr>`;
+        });
+        h += '</tbody>';
+        tbl.innerHTML = h;
+        markLeaders(tbl.tBodies[0], [1,2,3,4], true);
+    }
+
+    function displayComparison(players) {
+        const list = Array.isArray(players) ? players : [];
+        $('cmp-results').style.display = 'block';
+        renderBatting(list);
+        renderBowling(list);
+        renderFielding(list);
+        $('cmp-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function showError(msg) {
+        $('cmp-error').style.display = 'flex';
+        $('cmp-error-msg').textContent = msg;
+    }
+
+    async function compareSelected() {
+        if (selected.size < MIN) { alert(`Select at least ${MIN} players.`); return; }
+        if (selected.size > MAX) { alert(`Max ${MAX} players.`); return; }
+
+        const ids = Array.from(selected.keys()).join(',');
+        const params = new URLSearchParams();
+        params.set('player_ids', ids);
+        const tourn = $('cmp-tournament').value;
+        if (tourn) params.set('tournament_id', tourn);
+        const fmt = $('cmp-format').value || 'T20';
+        params.set('match_format', fmt);
+
+        $('cmp-loading').style.display = 'flex';
+        $('cmp-results').style.display = 'none';
+        $('cmp-error').style.display = 'none';
+        $('cmp-btn').disabled = true;
+
+        try {
+            const r = await fetch(`/api/compare-players?${params}`, { credentials: 'same-origin' });
+            const res = await r.json();
+            if (res.error) { showError(res.error); return; }
+            if (res.success) displayComparison(res.data);
+        } catch (e) {
+            console.error('[Compare] error', e);
+            showError('Error loading comparison: ' + (e && e.message ? e.message : e));
+        } finally {
+            $('cmp-loading').style.display = 'none';
+            $('cmp-btn').disabled = selected.size < MIN;
         }
     }
 
-    function showError(message) {
-        document.getElementById('error-state').style.display = 'flex';
-        document.getElementById('error-message').textContent = message;
-    }
+    $('cmp-btn').addEventListener('click', compareSelected);
 
-    function resetComparison() {
-        document.getElementById('comparison-results').style.display = 'none';
-        document.getElementById('player-select').selectedIndex = -1;
-        document.getElementById('tournament-filter').selectedIndex = 0;
-    }
+    renderChips();
+})();
 </script>
-
-<style>
-    .compare-players-page {
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 2rem;
-        color: #abb2bf;
-    }
-
-    .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-        padding-bottom: 1.5rem;
-        border-bottom: 2px solid #3e4451;
-    }
-
-    .page-title {
-        font-size: 2rem;
-        margin: 0 0 0.5rem 0;
-        color: #61afef;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    }
-
-    .page-subtitle {
-        margin: 0;
-        color: #5c6370;
-        font-size: 1rem;
-    }
-
-    .back-btn {
-        padding: 0.75rem 1.5rem;
-        background: #3e4451;
-        border: none;
-        border-radius: 8px;
-        color: #abb2bf;
-        text-decoration: none;
-        transition: all 0.3s ease;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .back-btn:hover {
-        background: #4e5461;
-    }
-
-    .selection-card {
-        background: #2c323c;
-        border-radius: 12px;
-        padding: 2rem;
-        border: 1px solid #3e4451;
-        margin-bottom: 2rem;
-    }
-
-    .selection-header h3 {
-        margin: 0 0 0.5rem 0;
-        color: #61afef;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .selection-header p {
-        margin: 0;
-        color: #5c6370;
-    }
-
-    .selection-form {
-        margin-top: 1.5rem;
-    }
-
-    .form-row {
-        display: grid;
-        grid-template-columns: 2fr 1fr;
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .form-group {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .form-group label {
-        margin-bottom: 0.5rem;
-        font-weight: 600;
-        color: #abb2bf;
-    }
-
-    .player-multiselect,
-    .form-select {
-        padding: 0.75rem;
-        background: #1e2127;
-        border: 1px solid #3e4451;
-        border-radius: 8px;
-        color: #abb2bf;
-        font-size: 0.95rem;
-    }
-
-    .player-multiselect {
-        min-height: 200px;
-    }
-
-    .form-hint {
-        margin-top: 0.5rem;
-        color: #5c6370;
-        font-size: 0.85rem;
-    }
-
-    .primary-btn {
-        padding: 1rem 2rem;
-        background: linear-gradient(135deg, #61afef, #56b6c2);
-        border: none;
-        border-radius: 8px;
-        color: #282c34;
-        font-weight: 600;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .primary-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 16px rgba(97, 175, 239, 0.3);
-    }
-
-    .secondary-btn {
-        padding: 0.75rem 1.5rem;
-        background: #3e4451;
-        border: 1px solid #5c6370;
-        border-radius: 8px;
-        color: #abb2bf;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .secondary-btn:hover {
-        background: #4e5461;
-    }
-
-    .comparison-results {
-        margin-top: 2rem;
-    }
-
-    .results-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-    }
-
-    .results-header h2 {
-        margin: 0;
-        color: #98c379;
-    }
-
-    .comparison-section {
-        background: #2c323c;
-        border-radius: 12px;
-        padding: 1.5rem;
-        border: 1px solid #3e4451;
-        margin-bottom: 1.5rem;
-    }
-
-    .section-title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: #61afef;
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .table-responsive {
-        overflow-x: auto;
-    }
-
-    .comparison-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .comparison-table thead {
-        background: #1e2127;
-    }
-
-    .comparison-table th {
-        padding: 1rem;
-        text-align: left;
-        color: #5c6370;
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.85rem;
-        letter-spacing: 0.5px;
-        border-bottom: 2px solid #3e4451;
-    }
-
-    .comparison-table td {
-        padding: 1rem;
-        border-bottom: 1px solid #3e4451;
-    }
-
-    .comparison-table tr:last-child td {
-        border-bottom: none;
-    }
-
-    .player-name {
-        font-weight: 600;
-        color: #abb2bf;
-    }
-
-    .highlight {
-        color: #98c379;
-        font-weight: 700;
-        font-size: 1.1rem;
-    }
-
-    .loading-state,
-    .error-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 4rem 2rem;
-        background: #2c323c;
-        border-radius: 12px;
-        border: 1px solid #3e4451;
-        margin-top: 2rem;
-    }
-
-    .spinner {
-        width: 50px;
-        height: 50px;
-        border: 4px solid #3e4451;
-        border-top: 4px solid #61afef;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-
-        100% {
-            transform: rotate(360deg);
-        }
-    }
-
-    .error-state i {
-        font-size: 3rem;
-        color: #e06c75;
-        margin-bottom: 1rem;
-    }
-
-    .no-data {
-        text-align: center;
-        padding: 2rem;
-        color: #5c6370;
-        font-style: italic;
-    }
-</style>
 {% endblock %}

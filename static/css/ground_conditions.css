@@ -4,41 +4,68 @@
 
 /* ── Page Header ── */
 .gc-header {
-    text-align: center;
-    padding: 3rem 0 2rem;
     position: relative;
+    padding: 2.75rem 1.25rem 1.75rem;
+    margin-bottom: 1.5rem;
+    border-radius: 18px;
+    overflow: hidden;
 }
 
 .gc-header::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80%;
-    height: 100%;
-    background: radial-gradient(ellipse at center, rgba(34, 139, 34, 0.04) 0%, transparent 70%);
+    inset: 0;
+    background:
+        radial-gradient(circle at 12% 0%, rgba(15, 118, 110, .08), transparent 55%),
+        radial-gradient(circle at 90% 100%, rgba(59, 130, 246, .06), transparent 55%);
     pointer-events: none;
 }
 
+[data-theme="dark"] .gc-header::before {
+    background:
+        radial-gradient(circle at 12% 0%, rgba(45, 212, 191, .10), transparent 55%),
+        radial-gradient(circle at 90% 100%, rgba(96, 165, 250, .07), transparent 55%);
+}
+
+.gc-header > * { position: relative; }
+
+.gc-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--accent, #0f766e);
+    margin-bottom: .5rem;
+}
+
+.gc-eyebrow::before {
+    content: "";
+    width: 6px; height: 6px;
+    background: var(--accent, #0f766e);
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, .18);
+}
+
 .gc-title {
-    font-size: 2.8rem;
+    font-size: 2rem;
     font-weight: 800;
     background: var(--gradient);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    letter-spacing: -0.03em;
-    margin-bottom: 0.5rem;
-    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.35rem;
+    line-height: 1.1;
 }
 
 .gc-subtitle {
     color: var(--fg-secondary);
-    font-size: 1.05rem;
-    max-width: 500px;
-    margin: 0 auto;
-    line-height: 1.6;
+    font-size: 0.95rem;
+    max-width: 560px;
+    line-height: 1.55;
 }
 
 /* ── Game Mode Selector ── */
@@ -1362,8 +1389,11 @@
 }
 
 @media (max-width: 768px) {
+    .gc-header {
+        padding: 1.75rem 1rem 1.25rem;
+    }
     .gc-title {
-        font-size: 2rem;
+        font-size: 1.55rem;
     }
 
     .gc-modes-row {

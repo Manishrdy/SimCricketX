@@ -6,59 +6,101 @@
 <style>
     .pp-hero {
         position: relative;
-        padding: 3rem 0 2rem;
-        margin-bottom: 1.5rem;
+        padding: 2.75rem 0 1.75rem;
+        margin-bottom: 1.25rem;
+        overflow: hidden;
+    }
+    .pp-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at 12% 0%, rgba(15, 118, 110, .08), transparent 55%),
+            radial-gradient(circle at 90% 100%, rgba(59, 130, 246, .06), transparent 55%);
+        pointer-events: none;
+    }
+    [data-theme="dark"] .pp-hero::before {
+        background:
+            radial-gradient(circle at 12% 0%, rgba(45, 212, 191, .10), transparent 55%),
+            radial-gradient(circle at 90% 100%, rgba(96, 165, 250, .07), transparent 55%);
     }
     .pp-hero-inner {
+        position: relative;
         max-width: 1200px;
         margin: 0 auto;
         padding: 0 1.5rem;
     }
-    .pp-title {
-        font-size: 1.8rem;
+    .pp-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: .7rem;
         font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: var(--brand-primary, #0f766e);
+        margin-bottom: .5rem;
+    }
+    .pp-eyebrow::before {
+        content: "";
+        width: 6px; height: 6px;
+        background: var(--brand-primary, #0f766e);
+        border-radius: 50%;
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, .18);
+    }
+    .pp-title {
+        font-size: 2rem;
+        font-weight: 800;
+        letter-spacing: -.02em;
         color: var(--text-primary);
-        margin: 0 0 .25rem;
+        margin: 0 0 .35rem;
     }
     .pp-subtitle {
         color: var(--text-secondary);
         font-size: .95rem;
     }
+    .pp-subtitle b { color: var(--text-primary); font-weight: 700; }
     .pp-actions {
         display: flex;
         gap: 10px;
-        margin-top: 1rem;
+        margin-top: 1.15rem;
     }
     .pp-btn {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 6px;
         padding: 8px 16px;
-        border-radius: 8px;
+        border-radius: 9px;
         font-size: .85rem;
         font-weight: 600;
         text-decoration: none;
-        border: none;
+        border: 1px solid transparent;
         cursor: pointer;
-        transition: all .2s;
+        transition: transform .15s, box-shadow .2s, background .2s, border-color .2s, color .2s;
+        white-space: nowrap;
     }
+    .pp-btn:active { transform: translateY(1px); }
     .pp-btn-primary {
         background: var(--brand-primary, #0f766e);
         color: #fff;
+        box-shadow: 0 1px 2px rgba(15,118,110,.25), 0 4px 12px -4px rgba(15,118,110,.45);
     }
-    .pp-btn-primary:hover { opacity: .85; }
+    .pp-btn-primary:hover { filter: brightness(1.08); box-shadow: 0 2px 4px rgba(15,118,110,.3), 0 8px 18px -6px rgba(15,118,110,.55); }
     .pp-btn-secondary {
         background: var(--bg-raised, #fff);
         color: var(--text-primary);
-        border: 1px solid var(--border-light, #e5e7eb);
+        border-color: var(--border-light, #e5e7eb);
     }
-    .pp-btn-secondary:hover { background: var(--bg-surface, #f9fafb); }
+    .pp-btn-secondary:hover { background: var(--bg-surface, #f9fafb); border-color: var(--border-medium, #d1d5db); }
     .pp-btn-danger {
-        background: var(--danger, #dc2626);
-        color: #fff;
-        padding: 6px 10px;
+        background: transparent;
+        color: var(--danger, #dc2626);
+        border-color: var(--border-light, #e5e7eb);
     }
+    .pp-btn-danger:hover { background: rgba(220,38,38,.08); border-color: rgba(220,38,38,.35); }
     .pp-btn-sm { padding: 6px 12px; font-size: .8rem; }
+    .pp-btn-icon { width: 32px; height: 32px; padding: 0; }
 
     .pp-toolbar {
         max-width: 1200px;
@@ -70,28 +112,57 @@
         flex-wrap: wrap;
     }
     .pp-toolbar form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .pp-search {
-        padding: 8px 12px;
-        border: 1px solid var(--border-light, #e5e7eb);
-        border-radius: 8px;
+    .pp-search-wrap { position: relative; display: inline-flex; align-items: center; }
+    .pp-search-wrap > i {
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        text-align: center;
+        color: var(--text-secondary);
         font-size: .85rem;
-        min-width: 220px;
+        pointer-events: none;
+        line-height: 1;
+    }
+    .pp-search {
+        padding: 9px 36px 9px 12px;
+        border: 1px solid var(--border-light, #e5e7eb);
+        border-radius: 9px;
+        font-size: .85rem;
+        min-width: 240px;
         background: var(--bg-raised, #fff);
         color: var(--text-primary);
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .pp-search:focus {
+        outline: none;
+        border-color: var(--brand-primary, #0f766e);
+        box-shadow: 0 0 0 3px rgba(15,118,110,.15);
     }
     .pp-select {
-        padding: 8px 12px;
+        padding: 9px 32px 9px 12px;
         border: 1px solid var(--border-light, #e5e7eb);
-        border-radius: 8px;
+        border-radius: 9px;
         font-size: .85rem;
-        background: var(--bg-raised, #fff);
+        background: var(--bg-raised, #fff) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='none' stroke='%236b7280' stroke-width='1.5' d='M1 1l4 4 4-4'/></svg>") no-repeat right 12px center;
         color: var(--text-primary);
+        appearance: none;
+        cursor: pointer;
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .pp-select:focus {
+        outline: none;
+        border-color: var(--brand-primary, #0f766e);
+        box-shadow: 0 0 0 3px rgba(15,118,110,.15);
     }
     .pp-count {
         margin-left: auto;
         color: var(--text-secondary);
         font-size: .85rem;
+        font-variant-numeric: tabular-nums;
     }
+    .pp-count b { color: var(--text-primary); font-weight: 700; }
 
     .pp-container {
         max-width: 1200px;
@@ -100,14 +171,16 @@
     }
     .pp-table-wrap {
         background: var(--bg-raised, #fff);
-        border-radius: 12px;
+        border-radius: 14px;
         border: 1px solid var(--border-light, #e5e7eb);
         overflow-x: auto;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 4px 16px -8px rgba(15, 23, 42, .08);
     }
+    [data-theme="dark"] .pp-table-wrap { box-shadow: 0 1px 2px rgba(0,0,0,.25), 0 8px 24px -12px rgba(0,0,0,.5); }
     .pp-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: .85rem;
+        font-size: .88rem;
     }
     .pp-table th {
         text-align: left;
@@ -115,31 +188,92 @@
         font-weight: 600;
         color: var(--text-secondary);
         border-bottom: 1px solid var(--border-light, #e5e7eb);
-        font-size: .8rem;
+        font-size: .72rem;
         text-transform: uppercase;
-        letter-spacing: .03em;
+        letter-spacing: .06em;
+        background: var(--bg-raised, #fff);
+        position: sticky;
+        top: 0;
+        z-index: 2;
     }
     .pp-table td {
-        padding: 10px 16px;
+        padding: 12px 16px;
         border-bottom: 1px solid var(--border-light, #e5e7eb);
         vertical-align: middle;
     }
+    .pp-table tbody tr { transition: background .15s; }
     .pp-table tbody tr:last-child td { border-bottom: none; }
     .pp-table tbody tr:hover { background: var(--bg-surface, #f9fafb); }
-    .pp-name { font-weight: 600; }
+    .pp-name { font-weight: 600; color: var(--text-primary); }
+
     .pp-badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: .75rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: .72rem;
         font-weight: 600;
+        letter-spacing: .01em;
+        border: 1px solid transparent;
     }
-    .pp-badge-master { background: #dcfce7; color: #166534; }
-    .pp-badge-override { background: #fef3c7; color: #92400e; }
-    .pp-badge-custom { background: #dbeafe; color: #1e40af; }
-    [data-theme="dark"] .pp-badge-master { background: #14532d; color: #86efac; }
-    [data-theme="dark"] .pp-badge-override { background: #78350f; color: #fde68a; }
-    [data-theme="dark"] .pp-badge-custom { background: #1e3a5f; color: #93c5fd; }
+    .pp-badge i { font-size: .65rem; }
+    .pp-badge-master { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+    .pp-badge-override { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+    .pp-badge-custom { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+    [data-theme="dark"] .pp-badge-master { background: rgba(16,185,129,.12); color: #6ee7b7; border-color: rgba(16,185,129,.3); }
+    [data-theme="dark"] .pp-badge-override { background: rgba(245,158,11,.12); color: #fcd34d; border-color: rgba(245,158,11,.3); }
+    [data-theme="dark"] .pp-badge-custom { background: rgba(59,130,246,.12); color: #93c5fd; border-color: rgba(59,130,246,.3); }
+
+    /* Role chip */
+    .pp-role-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: .82rem;
+        color: var(--text-primary);
+    }
+    .pp-role-chip::before {
+        content: "";
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        background: var(--text-secondary);
+        flex-shrink: 0;
+    }
+    .pp-role-chip[data-role*="Batter" i]::before,
+    .pp-role-chip[data-role*="Batsman" i]::before { background: #3b82f6; }
+    .pp-role-chip[data-role*="Bowler" i]::before { background: #ef4444; }
+    .pp-role-chip[data-role*="All" i]::before { background: #a855f7; }
+    .pp-role-chip[data-role*="Wicket" i]::before,
+    .pp-role-chip[data-role*="Keeper" i]::before { background: #14b8a6; }
+    .pp-role-chip[data-role=""] { color: var(--text-secondary); }
+    .pp-role-chip[data-role=""]::before { background: var(--border-medium, #cbd5e1); }
+
+    /* Rating cell */
+    .pp-rating {
+        display: inline-block;
+        min-width: 34px;
+        padding: 2px 8px;
+        text-align: center;
+        border-radius: 6px;
+        font-size: .82rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        background: var(--bg-surface, #f3f4f6);
+        color: var(--text-primary);
+    }
+    .pp-rating.pp-r-elite { background: rgba(16,185,129,.14); color: #047857; }
+    .pp-rating.pp-r-strong { background: rgba(14,165,233,.12); color: #0369a1; }
+    .pp-rating.pp-r-mid { background: rgba(245,158,11,.12); color: #b45309; }
+    .pp-rating.pp-r-low { background: rgba(148,163,184,.14); color: #475569; }
+    [data-theme="dark"] .pp-rating { background: rgba(148,163,184,.12); }
+    [data-theme="dark"] .pp-rating.pp-r-elite { background: rgba(16,185,129,.18); color: #6ee7b7; }
+    [data-theme="dark"] .pp-rating.pp-r-strong { background: rgba(14,165,233,.18); color: #7dd3fc; }
+    [data-theme="dark"] .pp-rating.pp-r-mid { background: rgba(245,158,11,.18); color: #fcd34d; }
+    [data-theme="dark"] .pp-rating.pp-r-low { background: rgba(148,163,184,.18); color: #cbd5e1; }
+
+    .pp-muted { color: var(--text-secondary); font-size: .82rem; }
+
     .pp-actions-cell {
         display: flex;
         gap: 6px;
@@ -147,9 +281,18 @@
     }
     .pp-empty {
         text-align: center;
-        padding: 3rem 1rem;
+        padding: 3.5rem 1rem;
         color: var(--text-secondary);
     }
+    .pp-empty i.pp-empty-icon {
+        display: block;
+        font-size: 2rem;
+        color: var(--border-medium, #cbd5e1);
+        margin-bottom: .75rem;
+    }
+    .pp-empty a { color: var(--brand-primary, #0f766e); font-weight: 600; text-decoration: none; }
+    .pp-empty a:hover { text-decoration: underline; }
+
     .pp-bulk-bar {
         display: none;
         align-items: center;
@@ -160,6 +303,7 @@
         border-radius: 10px;
         margin-bottom: 12px;
         font-size: .85rem;
+        box-shadow: 0 2px 8px -4px rgba(15,23,42,.08);
     }
     .pp-bulk-bar.visible { display: flex; }
     .pp-bulk-count { font-weight: 600; color: var(--text-primary); }
@@ -167,39 +311,56 @@
     .pp-col-check { display: none; }
     .pp-select-mode .pp-col-check { display: table-cell; }
     .pp-select-toggle.active { background: var(--brand-primary, #0f766e); color: #fff; border-color: var(--brand-primary, #0f766e); }
+
     /* Confirm modal */
     .pp-modal-overlay {
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,.4);
+        background: rgba(15, 23, 42, .45);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
         z-index: 9999;
         align-items: center;
         justify-content: center;
+        animation: pp-fade .15s ease-out;
     }
     .pp-modal-overlay.open { display: flex; }
     .pp-modal {
         background: var(--bg-raised, #fff);
-        border-radius: 14px;
-        padding: 28px;
-        max-width: 420px;
+        border-radius: 16px;
+        padding: 26px 28px 22px;
+        max-width: 440px;
         width: 90%;
-        box-shadow: 0 20px 40px rgba(0,0,0,.15);
+        box-shadow: 0 30px 60px -20px rgba(0,0,0,.35), 0 12px 24px -12px rgba(0,0,0,.2);
+        border: 1px solid var(--border-light, #e5e7eb);
+        animation: pp-pop .18s cubic-bezier(.2,.9,.3,1.2);
     }
-    .pp-modal-title { font-size: 1.1rem; font-weight: 700; margin: 0 0 8px; color: var(--text-primary); }
-    .pp-modal-msg { font-size: .9rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5; }
-    .pp-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .pp-modal-title { font-size: 1.08rem; font-weight: 700; margin: 0 0 8px; color: var(--text-primary); letter-spacing: -.01em; }
+    .pp-modal-msg { font-size: .9rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.55; }
+    .pp-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    @keyframes pp-fade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes pp-pop { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
     .pp-sentinel { text-align: center; padding: 1.5rem; color: var(--text-secondary); font-size: .85rem; }
-    .pp-spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border-light, #e5e7eb); border-top-color: var(--brand-primary, #0f766e); border-radius: 50%; animation: pp-spin .6s linear infinite; margin-right: 8px; vertical-align: middle; }
+    .pp-spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border-light, #e5e7eb); border-top-color: var(--brand-primary, #0f766e); border-radius: 50%; animation: pp-spin .6s linear infinite; margin-right: 8px; vertical-align: middle; }
     @keyframes pp-spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 640px) {
+        .pp-title { font-size: 1.55rem; }
+        .pp-search { min-width: 0; width: 100%; }
+        .pp-search-wrap { flex: 1; }
+        .pp-count { width: 100%; margin-left: 0; }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="pp-hero">
     <div class="pp-hero-inner">
+        <span class="pp-eyebrow">Squad Management</span>
         <h1 class="pp-title">Player Pool</h1>
-        <p class="pp-subtitle">{{ total }} player{{ 's' if total != 1 }} available in your pool</p>
+        <p class="pp-subtitle"><b>{{ total }}</b> player{{ 's' if total != 1 }} available — blend global stars, personal overrides, and custom signings.</p>
         <div class="pp-actions">
             <a href="{{ url_for('player_pool_add') }}" class="pp-btn pp-btn-primary">
                 <i class="fas fa-plus"></i> Add Player
@@ -212,8 +373,11 @@
 </div>
 
 <div class="pp-toolbar">
-    <div style="display:flex;gap:8px;align-items:center;">
-        <input type="text" class="pp-search" id="liveSearch" placeholder="Search by name…" value="{{ search }}" autocomplete="off">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span class="pp-search-wrap">
+            <i class="fas fa-search"></i>
+            <input type="text" class="pp-search" id="liveSearch" placeholder="Search by name…" value="{{ search }}" autocomplete="off">
+        </span>
         <select class="pp-select" id="liveRole">
             <option value="">All Roles</option>
             {% for r in roles %}
@@ -225,7 +389,7 @@
             <i class="fas fa-check-double"></i> Select
         </button>
     </div>
-    <span class="pp-count" id="shownCount">{{ pool|length }} of {{ total }}</span>
+    <span class="pp-count" id="shownCount"><b>{{ pool|length }}</b> of {{ total }}</span>
 </div>
 
 <div class="pp-container">
@@ -256,6 +420,9 @@
             </thead>
             <tbody id="poolBody">
                 {% for p in pool %}
+                {% set br = p.batting_rating %}
+                {% set bo = p.bowling_rating %}
+                {% set fi = p.fielding_rating %}
                 <tr data-source="{{ p.source }}" data-user-player-id="{{ p.user_player_id or '' }}">
                     <td class="pp-col-check">
                         {% if p.source in ('override', 'custom') %}
@@ -265,41 +432,41 @@
                     <td class="pp-name">{{ p.name }}</td>
                     <td>
                         {% if p.source == 'master' %}
-                        <span class="pp-badge pp-badge-master">Global</span>
+                        <span class="pp-badge pp-badge-master"><i class="fas fa-globe"></i>Global</span>
                         {% elif p.source == 'override' %}
-                        <span class="pp-badge pp-badge-override">Override</span>
+                        <span class="pp-badge pp-badge-override"><i class="fas fa-pen-to-square"></i>Override</span>
                         {% else %}
-                        <span class="pp-badge pp-badge-custom">Custom</span>
+                        <span class="pp-badge pp-badge-custom"><i class="fas fa-user-plus"></i>Custom</span>
                         {% endif %}
                     </td>
-                    <td>{{ p.role or '—' }}</td>
-                    <td>{{ p.batting_rating }}</td>
-                    <td>{{ p.bowling_rating }}</td>
-                    <td>{{ p.fielding_rating }}</td>
-                    <td>{{ p.batting_hand or '—' }}</td>
-                    <td>{{ p.bowling_type or '—' }}</td>
+                    <td><span class="pp-role-chip" data-role="{{ p.role or '' }}">{{ p.role or '—' }}</span></td>
+                    <td><span class="pp-rating {% if br >= 85 %}pp-r-elite{% elif br >= 70 %}pp-r-strong{% elif br >= 55 %}pp-r-mid{% else %}pp-r-low{% endif %}">{{ br }}</span></td>
+                    <td><span class="pp-rating {% if bo >= 85 %}pp-r-elite{% elif bo >= 70 %}pp-r-strong{% elif bo >= 55 %}pp-r-mid{% else %}pp-r-low{% endif %}">{{ bo }}</span></td>
+                    <td><span class="pp-rating {% if fi >= 85 %}pp-r-elite{% elif fi >= 70 %}pp-r-strong{% elif fi >= 55 %}pp-r-mid{% else %}pp-r-low{% endif %}">{{ fi }}</span></td>
+                    <td>{% if p.batting_hand %}{{ p.batting_hand }}{% else %}<span class="pp-muted">—</span>{% endif %}</td>
+                    <td>{% if p.bowling_type %}{{ p.bowling_type }}{% else %}<span class="pp-muted">—</span>{% endif %}</td>
                     <td>
                         <div class="pp-actions-cell">
                             {% if p.source == 'master' %}
                             <a href="{{ url_for('player_pool_override', master_id=p.master_player_id) }}"
-                               class="pp-btn pp-btn-secondary pp-btn-sm" title="Create your override">
+                               class="pp-btn pp-btn-secondary pp-btn-icon" title="Create your override">
                                 <i class="fas fa-pen"></i>
                             </a>
                             {% elif p.source == 'override' %}
                             <a href="{{ url_for('player_pool_edit', player_id=p.user_player_id) }}"
-                               class="pp-btn pp-btn-secondary pp-btn-sm" title="Edit override">
+                               class="pp-btn pp-btn-secondary pp-btn-icon" title="Edit override">
                                 <i class="fas fa-pen"></i>
                             </a>
-                            <button class="pp-btn pp-btn-danger pp-btn-sm" title="Remove override"
+                            <button class="pp-btn pp-btn-danger pp-btn-icon" title="Revert to global"
                                     onclick="confirmSingleDelete({{ p.user_player_id }}, '{{ p.name }}', true)">
                                 <i class="fas fa-rotate-left"></i>
                             </button>
                             {% else %}
                             <a href="{{ url_for('player_pool_edit', player_id=p.user_player_id) }}"
-                               class="pp-btn pp-btn-secondary pp-btn-sm" title="Edit">
+                               class="pp-btn pp-btn-secondary pp-btn-icon" title="Edit">
                                 <i class="fas fa-pen"></i>
                             </a>
-                            <button class="pp-btn pp-btn-danger pp-btn-sm" title="Delete"
+                            <button class="pp-btn pp-btn-danger pp-btn-icon" title="Delete"
                                     onclick="confirmSingleDelete({{ p.user_player_id }}, '{{ p.name }}', false)">
                                 <i class="fas fa-trash"></i>
                             </button>
@@ -310,8 +477,10 @@
                 {% endfor %}
                 {% if not pool %}
                 <tr>
-                    <td colspan="9" class="pp-empty">
-                        No players found. <a href="{{ url_for('player_pool_add') }}">Add one</a> or
+                    <td colspan="10" class="pp-empty">
+                        <i class="fas fa-users pp-empty-icon"></i>
+                        No players found.
+                        <a href="{{ url_for('player_pool_add') }}">Add one</a> or
                         <a href="{{ url_for('player_pool_import') }}">import from file</a>.
                     </td>
                 </tr>
@@ -459,36 +628,53 @@
 
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
+    function ratingClass(v) {
+        if (v >= 85) return 'pp-r-elite';
+        if (v >= 70) return 'pp-r-strong';
+        if (v >= 55) return 'pp-r-mid';
+        return 'pp-r-low';
+    }
+    function ratingCell(v) {
+        return '<td><span class="pp-rating ' + ratingClass(v) + '">' + v + '</span></td>';
+    }
+    function mutedOr(v) {
+        return v ? esc(v) : '<span class="pp-muted">—</span>';
+    }
+
     function buildRow(p) {
         var source = p.source || 'master';
-        var badgeClass = source === 'master' ? 'pp-badge-master' : source === 'override' ? 'pp-badge-override' : 'pp-badge-custom';
-        var badgeLabel = source === 'master' ? 'Global' : source === 'override' ? 'Override' : 'Custom';
+        var badgeClass, badgeIcon, badgeLabel;
+        if (source === 'master') { badgeClass = 'pp-badge-master'; badgeIcon = 'fa-globe'; badgeLabel = 'Global'; }
+        else if (source === 'override') { badgeClass = 'pp-badge-override'; badgeIcon = 'fa-pen-to-square'; badgeLabel = 'Override'; }
+        else { badgeClass = 'pp-badge-custom'; badgeIcon = 'fa-user-plus'; badgeLabel = 'Custom'; }
         var checkbox = '';
         if (source === 'override' || source === 'custom') {
             checkbox = '<input type="checkbox" class="pp-checkbox pp-row-check" value="' + p.user_player_id + '">';
         }
+        var safeName = esc(p.name).replace(/'/g, "\\'");
         var actions = '';
         if (source === 'master') {
-            actions = '<a href="/player-pool/override/' + p.master_player_id + '" class="pp-btn pp-btn-secondary pp-btn-sm" title="Override"><i class="fas fa-pen"></i></a>';
+            actions = '<a href="/player-pool/override/' + p.master_player_id + '" class="pp-btn pp-btn-secondary pp-btn-icon" title="Create your override"><i class="fas fa-pen"></i></a>';
         } else if (source === 'override') {
-            actions = '<a href="/player-pool/' + p.user_player_id + '/edit" class="pp-btn pp-btn-secondary pp-btn-sm" title="Edit"><i class="fas fa-pen"></i></a>'
-                + '<button class="pp-btn pp-btn-danger pp-btn-sm" title="Remove override" onclick="confirmSingleDelete(' + p.user_player_id + ',\'' + esc(p.name).replace(/'/g, "\\'") + '\',true)"><i class="fas fa-rotate-left"></i></button>';
+            actions = '<a href="/player-pool/' + p.user_player_id + '/edit" class="pp-btn pp-btn-secondary pp-btn-icon" title="Edit override"><i class="fas fa-pen"></i></a>'
+                + '<button class="pp-btn pp-btn-danger pp-btn-icon" title="Revert to global" onclick="confirmSingleDelete(' + p.user_player_id + ',\'' + safeName + '\',true)"><i class="fas fa-rotate-left"></i></button>';
         } else {
-            actions = '<a href="/player-pool/' + p.user_player_id + '/edit" class="pp-btn pp-btn-secondary pp-btn-sm" title="Edit"><i class="fas fa-pen"></i></a>'
-                + '<button class="pp-btn pp-btn-danger pp-btn-sm" title="Delete" onclick="confirmSingleDelete(' + p.user_player_id + ',\'' + esc(p.name).replace(/'/g, "\\'") + '\',false)"><i class="fas fa-trash"></i></button>';
+            actions = '<a href="/player-pool/' + p.user_player_id + '/edit" class="pp-btn pp-btn-secondary pp-btn-icon" title="Edit"><i class="fas fa-pen"></i></a>'
+                + '<button class="pp-btn pp-btn-danger pp-btn-icon" title="Delete" onclick="confirmSingleDelete(' + p.user_player_id + ',\'' + safeName + '\',false)"><i class="fas fa-trash"></i></button>';
         }
         var tr = document.createElement('tr');
         tr.dataset.source = source;
         tr.dataset.userPlayerId = p.user_player_id || '';
+        var roleAttr = esc(p.role || '');
         tr.innerHTML = '<td class="pp-col-check">' + checkbox + '</td>'
             + '<td class="pp-name">' + esc(p.name) + '</td>'
-            + '<td><span class="pp-badge ' + badgeClass + '">' + badgeLabel + '</span></td>'
-            + '<td>' + esc(p.role || '—') + '</td>'
-            + '<td>' + p.batting_rating + '</td>'
-            + '<td>' + p.bowling_rating + '</td>'
-            + '<td>' + p.fielding_rating + '</td>'
-            + '<td>' + esc(p.batting_hand || '—') + '</td>'
-            + '<td>' + esc(p.bowling_type || '—') + '</td>'
+            + '<td><span class="pp-badge ' + badgeClass + '"><i class="fas ' + badgeIcon + '"></i>' + badgeLabel + '</span></td>'
+            + '<td><span class="pp-role-chip" data-role="' + roleAttr + '">' + (p.role ? esc(p.role) : '—') + '</span></td>'
+            + ratingCell(p.batting_rating)
+            + ratingCell(p.bowling_rating)
+            + ratingCell(p.fielding_rating)
+            + '<td>' + mutedOr(p.batting_hand) + '</td>'
+            + '<td>' + mutedOr(p.bowling_type) + '</td>'
             + '<td><div class="pp-actions-cell">' + actions + '</div></td>';
         var cb = tr.querySelector('.pp-row-check');
         if (cb) cb.addEventListener('change', updateBulkBar);
@@ -513,7 +699,7 @@
             var tbody = document.getElementById('poolBody');
             tbody.innerHTML = '';
             if (d.players.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="pp-empty">No players match your filters.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="pp-empty"><i class="fas fa-magnifying-glass pp-empty-icon"></i>No players match your filters.</td></tr>';
             } else {
                 d.players.forEach(function(p){ tbody.appendChild(buildRow(p)); });
             }

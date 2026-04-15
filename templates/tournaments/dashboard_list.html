@@ -9,6 +9,7 @@
                 <i class="fas fa-trophy"></i>
             </div>
             <div class="header-text">
+                <span class="page-eyebrow">Competition Hub</span>
                 <h1>My Tournaments</h1>
                 <p class="subtitle">Manage your leagues and cups</p>
             </div>
@@ -115,10 +116,31 @@
 
     /* --- Page Header --- */
     .page-header {
-        margin-bottom: 2.5rem;
+        position: relative;
+        padding: 2.25rem 1.25rem 1.75rem;
+        margin: 0 0 2.25rem;
+        border-radius: 18px;
+        overflow: hidden;
+    }
+
+    .page-header::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at 12% 0%, rgba(15, 118, 110, .08), transparent 55%),
+            radial-gradient(circle at 90% 100%, rgba(59, 130, 246, .06), transparent 55%);
+        pointer-events: none;
+    }
+
+    [data-theme="dark"] .page-header::before {
+        background:
+            radial-gradient(circle at 12% 0%, rgba(45, 212, 191, .10), transparent 55%),
+            radial-gradient(circle at 90% 100%, rgba(96, 165, 250, .07), transparent 55%);
     }
 
     .header-content {
+        position: relative;
         display: flex;
         align-items: center;
         gap: 1.25rem;
@@ -135,19 +157,48 @@
         font-size: 1.5rem;
         color: #fff;
         box-shadow: 0 4px 12px rgba(97, 175, 239, 0.3);
+        flex-shrink: 0;
+    }
+
+    .page-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: .7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: var(--accent);
+        margin-bottom: .4rem;
+    }
+
+    .page-eyebrow::before {
+        content: "";
+        width: 6px; height: 6px;
+        background: var(--accent);
+        border-radius: 50%;
+        box-shadow: 0 0 0 3px rgba(97, 175, 239, .18);
     }
 
     .header-text h1 {
         font-size: 2rem;
-        font-weight: 700;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
         margin: 0;
         color: var(--fg);
     }
 
     .subtitle {
         color: var(--fg-secondary);
-        font-size: 1rem;
-        margin-top: 0.25rem;
+        font-size: 0.95rem;
+        margin-top: 0.3rem;
+    }
+
+    @media (max-width: 640px) {
+        .page-header { padding: 1.75rem 1rem 1.25rem; }
+        .header-text h1 { font-size: 1.55rem; }
+        .header-icon { width: 48px; height: 48px; font-size: 1.25rem; }
     }
 
     /* --- Grid Layout --- */

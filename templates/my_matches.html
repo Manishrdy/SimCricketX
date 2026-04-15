@@ -7,9 +7,10 @@
     /* ========== HERO ========== */
     .matches-hero {
         position: relative;
-        padding: 3.5rem 0 2.5rem;
-        margin-bottom: 2rem;
+        padding: 2.75rem 0 1.75rem;
+        margin-bottom: 1.5rem;
         overflow: hidden;
+        border-radius: 18px;
     }
 
     .matches-hero::before {
@@ -17,61 +18,15 @@
         position: absolute;
         inset: 0;
         background:
-            radial-gradient(ellipse at 20% 50%, rgba(34, 139, 34, 0.05) 0%, transparent 60%),
-            radial-gradient(ellipse at 85% 30%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+            radial-gradient(circle at 12% 0%, rgba(15, 118, 110, .08), transparent 55%),
+            radial-gradient(circle at 90% 100%, rgba(59, 130, 246, .06), transparent 55%);
         pointer-events: none;
     }
 
-    /* Decorative cricket field lines */
-    .matches-hero::after {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 600px;
-        height: 600px;
-        border-radius: 50%;
-        border: 2px solid var(--card-border);
-        opacity: 0.08;
-        pointer-events: none;
-    }
-
-    .hero-deco-ball {
-        position: absolute;
-        top: 15%;
-        right: 4%;
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        background: radial-gradient(circle at 35% 35%, #DC143C, #8B0000);
-        opacity: 0.08;
-        animation: heroBallFloat 7s ease-in-out infinite;
-        pointer-events: none;
-    }
-
-    .hero-deco-ball::before {
-        content: '';
-        position: absolute;
-        top: 12px;
-        left: 5px;
-        right: 5px;
-        height: 1.5px;
-        background: rgba(255, 255, 255, 0.4);
-        border-radius: 50%;
-        transform: rotate(15deg);
-    }
-
-    @keyframes heroBallFloat {
-
-        0%,
-        100% {
-            transform: translateY(0) rotate(0deg);
-        }
-
-        50% {
-            transform: translateY(-14px) rotate(180deg);
-        }
+    [data-theme="dark"] .matches-hero::before {
+        background:
+            radial-gradient(circle at 12% 0%, rgba(45, 212, 191, .10), transparent 55%),
+            radial-gradient(circle at 90% 100%, rgba(96, 165, 250, .07), transparent 55%);
     }
 
     .hero-row {
@@ -81,25 +36,46 @@
         gap: 2rem;
         position: relative;
         z-index: 1;
+        padding: 0 1.25rem;
+    }
+
+    .hero-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: .7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: var(--brand-primary, #0f766e);
+        margin-bottom: .5rem;
+    }
+
+    .hero-eyebrow::before {
+        content: "";
+        width: 6px; height: 6px;
+        background: var(--brand-primary, #0f766e);
+        border-radius: 50%;
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, .18);
     }
 
     .hero-text h1 {
-        font-size: 2.8rem;
-        font-weight: 900;
+        font-size: 2rem;
+        font-weight: 800;
         background: var(--gradient);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
         line-height: 1.1;
-        letter-spacing: -0.03em;
-        margin-bottom: 0.5rem;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.35rem;
     }
 
     .hero-text p {
         color: var(--fg-secondary);
-        font-size: 1.05rem;
+        font-size: 0.95rem;
         max-width: 480px;
-        line-height: 1.6;
+        line-height: 1.55;
     }
 
     /* ========== STAT PILLS ========== */
@@ -1314,7 +1290,7 @@
         }
 
         .hero-text h1 {
-            font-size: 2rem;
+            font-size: 1.55rem;
         }
 
         .stat-pills {
@@ -1373,9 +1349,9 @@
 {% block content %}
 <!-- Hero -->
 <section class="matches-hero">
-    <div class="hero-deco-ball"></div>
     <div class="hero-row">
         <div class="hero-text">
+            <span class="hero-eyebrow">Match Archive</span>
             <h1>My Matches</h1>
             <p>Your completed matches and downloadable archives, all in one place.</p>
         </div>
