@@ -8,13 +8,6 @@
 - Added scorecard cascade + stumpings migrations (`add_scorecard_cascade.py`, `add_scorecard_stumpings.py`) and orphaned-stats cleanup/recovery migrations (`cleanup_orphaned_stats.py`, `recover_archived_stats_from_backup.py`)
 - Added migrations pre-check tooling (`migrations/precheck.py`, `scripts/precheck_dry_run.py`) for safer schema upgrades
 - Improved stats engine: refined `stats_service.py` aggregation, tournament engine stats handling, and match archiver profile-aware lookups; fixed duplicate/orphaned stat rows and archived-stats recovery
-- Fixed `KeyError` on live match progression when current bowler was missing from `bowler_stats` (PR #143) — now guarded with a clear warning instead of crashing
-- Fixed `AttributeError` on anonymous user logout by capturing `user_id` before `logout_user()` (PR #142)
-- Fixed `AttributeError` in `_get_opponent_name` when `home_team`/`away_team` relationships were `None` (PR #141)
-- Fixed email verification flow edge case in `auth_routes.py`
-- Fixed exception tracker crash on production startup; hardened `exception_tracker.py`
-- Removed `migration_reports/` from version control (environment-specific dry-run outputs)
-- Improved compare-players, head-to-head, statistics, and home page templates with layout/UX polish
 
 [2.3.2] 2026-04-10
 - Added production-grade exception idempotency: each unique exception fingerprint is stored once in `exception_log`; repeat events increment `occurrence_count` and update `last_seen_at` instead of creating duplicate rows
