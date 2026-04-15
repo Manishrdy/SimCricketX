@@ -18,6 +18,7 @@ from database.models import (
     TeamProfile as DBTeamProfile,
 )
 from engine.stats_service import StatsService
+from engine.stats_aggregator import StatsAggregator
 from engine.tournament_engine import TournamentEngine
 from match_archiver import MatchArchiver
 from database.models import (
@@ -664,3 +665,134 @@ class TestStumpingsFieldingStats:
         assert fielding["stumpings"] == 3
         # Dismissals total must include stumpings.
         assert fielding["total"] == 6
+
+
+class TestStatisticsRegressionFixes:
+    """Regression tests for statistics module bug fixes."""
+
+    def test_export_to_csv_ignores_extra_row_keys(self):
+        """CSV export should tolerate internal-only keys in stats rows."""
+        svc = StatsService(logging.getLogger(__name__))
+        rows = [{
+            "player": "A", "team": "X", "matches": 1, "innings": 1,
+            "runs": 12, "balls": 8, "not_outs": 0, "strike_rate": 150.0, "average": 12.0,
+            "zeros": 0, "ones": 2, "twos": 1, "threes": 0, "fours": 2, "sixes": 0,
+            "thirties": 0, "fifties": 0, "hundreds": 0,
+            # Extra keys present in real service output
+            "role": "Batsman", "player_id": 123,
+        }]
+
+        content = svc.export_to_csv(rows, "batting")
+        assert "player,team,matches,innings,runs,balls" in content
+        assert "A,X,1,1,12,8,0,150.0,12.0,0,2,1,0,2,0,0,0,0" in content
+
+    def test_tournament_cache_includes_stumpings_and_sorts_by_total_dismissals(self, regular_user):
+        """Cache-backed fielding rows should include stumpings and rank by total dismissals."""
+        team = DBTeam(user_id=regular_user.id, name="Cache Field XI", short_code="CFX")
+        db.session.add(team)
+        db.session.flush()
+
+        profile = DBTeamProfile(team_id=team.id, format_type="T20")
+        db.session.add(profile)
+        db.session.flush()
+
+        p1 = DBPlayer(team_id=team.id, profile_id=profile.id, name="Keeper A", role="Wicketkeeper")
+        p2 = DBPlayer(team_id=team.id, profile_id=profile.id, name="Keeper B", role="Wicketkeeper")
+        db.session.add_all([p1, p2])
+        db.session.flush()
+
+        t = Tournament(user_id=regular_user.id, name="Cache Field Cup", mode="round_robin", format_type="T20")
+        db.session.add(t)
+        db.session.flush()
+
+        # Same catches+run_outs, different stumpings -> p2 should rank first.
+        db.session.add_all([
+            TournamentPlayerStatsCache(
+                tournament_id=t.id, player_id=p1.id, team_id=team.id,
+                matches_played=3, catches=1, run_outs=1, stumpings=0
+            ),
+            TournamentPlayerStatsCache(
+                tournament_id=t.id, player_id=p2.id, team_id=team.id,
+                matches_played=3, catches=1, run_outs=1, stumpings=2
+            ),
+        ])
+        db.session.commit()
+
+        svc = StatsService(logging.getLogger(__name__))
+        out = svc.get_tournament_stats(regular_user.id, t.id, "T20")
+        fielding = out["fielding"]
+
+        assert len(fielding) == 2
+        assert fielding[0]["player"] == "Keeper B"
+        assert fielding[0]["stumpings"] == 2
+        assert fielding[1]["stumpings"] == 0
+
+    def test_team_stats_recent_scores_do_not_show_none_wickets(self, regular_user):
+        """Team dashboard recent scorecards should coerce missing wickets to 0."""
+        team1 = DBTeam(user_id=regular_user.id, name="Alpha XI", short_code="ALP")
+        team2 = DBTeam(user_id=regular_user.id, name="Beta XI", short_code="BET")
+        db.session.add_all([team1, team2])
+        db.session.flush()
+
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=regular_user.id,
+            home_team_id=team1.id,
+            away_team_id=team2.id,
+            match_format="T20",
+            date=datetime.utcnow(),
+            home_team_score=150,
+            home_team_wickets=None,
+            away_team_score=149,
+            away_team_wickets=None,
+            winner_team_id=team1.id,
+        )
+        db.session.add(match)
+        db.session.commit()
+
+        svc = StatsService(logging.getLogger(__name__))
+        data = svc.get_team_stats(regular_user.id, team1.id, "T20")
+        assert data["recent"]
+        assert data["recent"][0]["score"] == "150/0"
+        assert data["recent"][0]["opp_score"] == "149/0"
+
+    def test_fielding_sort_includes_stumpings_in_full_compute_path(self):
+        """Non-cache fielding ranking should include stumpings in total dismissals."""
+        svc = StatsService(logging.getLogger(__name__))
+        player_data = {
+            1: {
+                "name": "Keeper A", "team": "T", "role": "Wicketkeeper", "player_id": 1,
+                "matches": {"m1", "m2"}, "catches": 1, "run_outs": 1, "stumpings": 0,
+            },
+            2: {
+                "name": "Keeper B", "team": "T", "role": "Wicketkeeper", "player_id": 2,
+                "matches": {"m1", "m2"}, "catches": 1, "run_outs": 1, "stumpings": 2,
+            },
+        }
+
+        rows = svc._calculate_fielding_stats(player_data)
+        assert rows[0]["player"] == "Keeper B"
+        assert rows[0]["stumpings"] == 2
+
+    def test_stats_aggregator_handles_missing_optional_attribution_columns(self, tmp_path):
+        """Aggregator should not crash when batting CSV omits Bowler Out/Fielder Out."""
+        batting_path = tmp_path / "match1_batting.csv"
+        bowling_path = tmp_path / "match1_bowling.csv"
+
+        batting_path.write_text(
+            "Player Name,Team Name,Runs,Balls,Status,1s,2s,3s,Fours,Sixes,Dots\n"
+            "Batter A,Team A,34,22,Caught,4,2,0,3,1,10\n",
+            encoding="utf-8",
+        )
+        bowling_path.write_text(
+            "Bowler Name,Team Name,Overs,Maidens,Runs,Wickets,Wides,No Balls,Byes,Leg Byes\n"
+            "Bowler A,Team B,4.0,0,28,1,2,0,1,0\n",
+            encoding="utf-8",
+        )
+
+        agg = StatsAggregator([str(batting_path), str(bowling_path)], user_id="u1")
+        bat = agg._calculate_batting_stats()
+        bowl = agg._calculate_bowling_stats()
+
+        assert not bat.empty
+        assert not bowl.empty

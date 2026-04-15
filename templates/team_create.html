@@ -91,20 +91,59 @@
 .tc-save-status.saved .dot { background: var(--tc-success-fg); }
 
 .tc-hero {
-    border: 1px solid var(--tc-panel-border);
-    background: var(--tc-panel);
-    border-radius: 14px;
-    padding: 1.1rem 1.2rem;
-    box-shadow: var(--tc-panel-shadow);
+    position: relative;
+    padding: 2.25rem 1.2rem 1.5rem;
+    margin: .5rem 0 1rem;
+    overflow: hidden;
+    border-radius: 16px;
+}
+.tc-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 12% 0%, rgba(15, 118, 110, .08), transparent 55%),
+        radial-gradient(circle at 90% 100%, rgba(59, 130, 246, .06), transparent 55%);
+    pointer-events: none;
+}
+[data-theme="dark"] .tc-hero::before {
+    background:
+        radial-gradient(circle at 12% 0%, rgba(45, 212, 191, .10), transparent 55%),
+        radial-gradient(circle at 90% 100%, rgba(96, 165, 250, .07), transparent 55%);
+}
+.tc-hero-inner { position: relative; }
+.tc-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--tc-accent);
+    margin-bottom: .5rem;
+}
+.tc-eyebrow::before {
+    content: "";
+    width: 6px; height: 6px;
+    background: var(--tc-accent);
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, .18);
 }
 .tc-hero h1 {
-    font-size: 1.25rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
     color: var(--fg);
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.35rem;
+    line-height: 1.1;
 }
-.tc-hero p { color: var(--fg-secondary); font-size: 0.85rem; }
+.tc-hero p { color: var(--fg-secondary); font-size: 0.95rem; max-width: 640px; }
+.tc-hero p b { color: var(--fg); font-weight: 700; }
+@media (max-width: 640px) {
+    .tc-hero { padding: 1.75rem 1rem 1.25rem; }
+    .tc-hero h1 { font-size: 1.55rem; }
+}
 
 .tc-alert {
     margin-top: 0.9rem;
@@ -640,8 +679,11 @@
   </div>
 
   <div class="tc-hero">
-    <h1>{% if edit %}Edit Team{% else %}Create Team{% endif %}</h1>
-    <p>{% if edit %}Update team identity and squad composition. Changes replace the existing profiles on save.{% else %}Fill in team identity, then build squads for T20 and List A from your player pool. Drafts are auto-saved locally.{% endif %}</p>
+    <div class="tc-hero-inner">
+      <span class="tc-eyebrow">{% if edit %}Edit Mode{% else %}New Franchise{% endif %}</span>
+      <h1>{% if edit %}Edit Team{% else %}Create Team{% endif %}</h1>
+      <p>{% if edit %}Update team identity and squad composition. Changes replace the existing profiles on save.{% else %}Fill in team identity, then build squads for <b>T20</b> and <b>List A</b> from your player pool. Drafts are auto-saved locally.{% endif %}</p>
+    </div>
   </div>
 
   {% if error %}
