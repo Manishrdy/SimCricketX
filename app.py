@@ -106,6 +106,8 @@ from routes.webhook_routes import register_webhook_routes
 from routes.player_pool_routes import register_player_pool_routes
 from routes.league_routes import register_league_routes
 from routes.auction_routes import register_auction_routes
+from routes.auction_realtime import register_auction_realtime
+from routes.auction_runtime import register_auction_runtime
 from utils.exception_tracker import log_exception
 
 # SocketIO optional dependency — app works normally via HTTP if not installed
@@ -129,7 +131,7 @@ from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, TournamentTeam, TournamentFixture
 from database.models import MasterPlayer as DBMasterPlayer, UserPlayer as DBUserPlayer
 from database.models import League as DBLeague, Season as DBSeason, SeasonTeam as DBSeasonTeam
-from database.models import Auction as DBAuction, AuctionCategory as DBAuctionCategory, AuctionPlayer as DBAuctionPlayer
+from database.models import Auction as DBAuction, AuctionCategory as DBAuctionCategory, AuctionPlayer as DBAuctionPlayer, AuctionChatMessage as DBAuctionChatMessage, DraftPick as DBDraftPick, AuctionBid as DBAuctionBid, AuctionAuditLog as DBAuctionAuditLog
 from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership, AdminAuditLog  # Distinct from engine.match.Match
 from database.models import (
     FailedLoginAttempt,
@@ -1560,6 +1562,37 @@ def create_app():
         DBMasterPlayer=DBMasterPlayer,
         DBUserPlayer=DBUserPlayer,
     )
+    # Phase 3 realtime: portal + organizer console + /auction socket namespace
+    register_auction_realtime(
+        app,
+        socketio=socketio,
+        db=db,
+        DBLeague=DBLeague,
+        DBSeason=DBSeason,
+        DBSeasonTeam=DBSeasonTeam,
+        DBAuction=DBAuction,
+        DBAuctionCategory=DBAuctionCategory,
+        DBAuctionPlayer=DBAuctionPlayer,
+        DBChatMessage=DBAuctionChatMessage,
+    )
+    # Phase 4 live runtime + Phase 5 draft runtime + Phase 6 roster sync.
+    register_auction_runtime(
+        app,
+        socketio=socketio,
+        db=db,
+        DBSeason=DBSeason,
+        DBSeasonTeam=DBSeasonTeam,
+        DBLeague=DBLeague,
+        DBAuction=DBAuction,
+        DBAuctionCategory=DBAuctionCategory,
+        DBAuctionPlayer=DBAuctionPlayer,
+        DBDraftPick=DBDraftPick,
+        DBTeam=DBTeam,
+        DBTeamProfile=DBTeamProfile,
+        DBPlayer=DBPlayer,
+        DBAuctionBid=DBAuctionBid,
+        DBAuctionAuditLog=DBAuctionAuditLog,
+    )
 
     # --- Request logging ---
     @app.before_request
@@ -1602,6 +1635,11 @@ def create_app():
 
     @app.errorhandler(Exception)
     def handle_unhandled_exception(exc):
+        # Let HTTPException subclasses (403, 404, 409, etc.) pass through to
+        # their dedicated handlers instead of being flattened to 500.
+        from werkzeug.exceptions import HTTPException
+        if isinstance(exc, HTTPException):
+            return exc
         from utils.exception_tracker import log_exception
         exc_log_id = log_exception(exc)
         if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':

@@ -6,11 +6,12 @@ curation from the master + user pool, bid-increment tiers, timers, and
 re-auction rules. No runtime (live bidding) here — that lands in Phase 4.
 """
 
+import io
 import json
 import random
 from datetime import datetime
 
-from flask import abort, flash, redirect, render_template, request, url_for
+from flask import Response, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from utils.exception_tracker import log_exception
@@ -684,6 +685,338 @@ def register_auction_routes(
             log_exception(exc, source="auction_reopen")
             flash("Could not reopen.", "error")
         return redirect(url_for("auction_setup", season_id=season.id))
+
+    # ─── Phase 4: organizer live-control routes ─────────────────────────────
+
+    from routes import auction_runtime as runtime
+    from routes.auction_runtime import RuntimeError_ as _RuntimeOpError
+
+    def _flash_runtime(exc):
+        flash(exc.message or exc.code, "error")
+
+    @app.route("/seasons/<int:season_id>/auction/start", methods=["POST"])
+    @login_required
+    def auction_start(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        try:
+            runtime.start_auction(season, auction, actor_label=current_user.id)
+            flash("Auction is live. Open the next player when ready.", "success")
+        except _RuntimeOpError as exc:
+            _flash_runtime(exc)
+        except Exception as exc:
+            log_exception(exc, source="auction_start")
+            flash("Could not start auction.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/pause", methods=["POST"])
+    @login_required
+    def auction_pause(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        try:
+            runtime.pause_auction(season, auction, actor_label=current_user.id)
+        except _RuntimeOpError as exc:
+            _flash_runtime(exc)
+        except Exception as exc:
+            log_exception(exc, source="auction_pause")
+            flash("Could not pause auction.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/resume", methods=["POST"])
+    @login_required
+    def auction_resume(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        try:
+            runtime.resume_auction(season, auction, actor_label=current_user.id)
+        except _RuntimeOpError as exc:
+            _flash_runtime(exc)
+        except Exception as exc:
+            log_exception(exc, source="auction_resume")
+            flash("Could not resume auction.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/complete", methods=["POST"])
+    @login_required
+    def auction_complete(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        try:
+            runtime.complete_auction(season, auction, actor_label=current_user.id)
+            flash("Auction marked complete.", "success")
+        except _RuntimeOpError as exc:
+            _flash_runtime(exc)
+        except Exception as exc:
+            log_exception(exc, source="auction_complete")
+            flash("Could not complete auction.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/next-lot", methods=["POST"])
+    @login_required
+    def auction_next_lot(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        try:
+            runtime.open_next_lot(season, auction, actor_label=current_user.id)
+        except _RuntimeOpError as exc:
+            _flash_runtime(exc)
+        except Exception as exc:
+            log_exception(exc, source="auction_next_lot")
+            flash("Could not open next lot.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/next-round", methods=["POST"])
+    @login_required
+    def auction_next_round(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        try:
+            n = runtime.next_round(season, auction, actor_label=current_user.id)
+            flash(f"Round {auction.current_round} started — {n} player(s) re-listed.", "success")
+        except _RuntimeOpError as exc:
+            _flash_runtime(exc)
+        except Exception as exc:
+            log_exception(exc, source="auction_next_round")
+            flash("Could not advance round.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/force-sell", methods=["POST"])
+    @login_required
+    def auction_force_sell(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        try:
+            runtime.force_sell(season, auction, actor_label=current_user.id)
+        except _RuntimeOpError as exc:
+            _flash_runtime(exc)
+        except Exception as exc:
+            log_exception(exc, source="auction_force_sell")
+            flash("Could not force-sell.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/force-unsold", methods=["POST"])
+    @login_required
+    def auction_force_unsold(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        try:
+            runtime.force_unsold(season, auction, actor_label=current_user.id)
+        except _RuntimeOpError as exc:
+            _flash_runtime(exc)
+        except Exception as exc:
+            log_exception(exc, source="auction_force_unsold")
+            flash("Could not mark unsold.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/reverse-sale", methods=["POST"])
+    @login_required
+    def auction_reverse_sale(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        try:
+            runtime.reverse_last_sale(season, auction, actor_label=current_user.id)
+            flash("Last sale reversed; lot reopened.", "success")
+        except _RuntimeOpError as exc:
+            _flash_runtime(exc)
+        except Exception as exc:
+            log_exception(exc, source="auction_reverse_sale")
+            flash("Could not reverse sale.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    # ─── Phase 6: roster sync + export ──────────────────────────────────────
+
+    from routes import auction_sync as sync
+
+    @app.route("/seasons/<int:season_id>/auction/sync-rosters", methods=["POST"])
+    @login_required
+    def auction_sync_rosters(season_id):
+        """Manual re-sync — useful if the organizer tweaks captain/WK in
+        TeamProfile after the auto-sync, or re-runs after deleting a team."""
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        if season.status != "auction_done":
+            flash("Rosters can only be synced after the auction is complete.", "error")
+            return redirect(url_for("auction_live", season_id=season.id))
+        try:
+            report = runtime.run_roster_sync(season, auction)
+            ready = sum(1 for r in report if r["publish_ready"])
+            runtime._log_audit(
+                auction, "roster.synced",
+                {"teams_synced": len(report), "teams_ready": ready, "manual": True},
+                actor_type="organizer", actor_label=current_user.id,
+            )
+            flash(f"Rosters synced for {len(report)} team(s). {ready} ready to publish.", "success")
+        except Exception as exc:
+            log_exception(exc, source="auction_sync_rosters")
+            flash("Roster sync failed.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/export.json")
+    @login_required
+    def auction_export_json(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        data = sync.export_rosters_json(
+            db, season, auction,
+            DBSeasonTeam=DBSeasonTeam,
+            DBAuctionPlayer=DBAuctionPlayer,
+            DBAuctionCategory=DBAuctionCategory,
+        )
+        filename = f"auction_{season.id}_{season.name}.json".replace(" ", "_")
+        resp = jsonify(data)
+        resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
+    @app.route("/seasons/<int:season_id>/auction/create-tournament", methods=["POST"])
+    @login_required
+    def auction_create_tournament(season_id):
+        """Phase 7 — materialize a Tournament + fixtures from the completed
+        season so the drafted teams can play matches. Each call creates a new
+        tournament; organizers may generate multiple (e.g., a round-robin and
+        a knockout) from the same season."""
+        season, league = _own_season_or_404(season_id)
+        if season.status != "auction_done":
+            flash("Tournament can only be created after the auction completes.", "error")
+            return redirect(url_for("auction_live", season_id=season.id))
+
+        season_teams = (DBSeasonTeam.query
+                        .filter_by(season_id=season.id)
+                        .order_by(DBSeasonTeam.id.asc())
+                        .all())
+        teams = [DBTeam.query.get(st.team_id) for st in season_teams]
+        teams = [t for t in teams if t is not None]
+
+        # Readiness gate: every team must have a publish-ready roster for the
+        # season's format, otherwise match sim will fail once fixtures run.
+        unready = [t.name for t in teams if t.is_draft]
+        if unready:
+            flash(
+                "Some rosters aren't publish-ready: "
+                + ", ".join(unready)
+                + ". Re-sync rosters or edit the profiles, then try again.",
+                "error",
+            )
+            return redirect(url_for("auction_live", season_id=season.id))
+
+        mode = (request.form.get("mode") or "round_robin").strip()
+        try:
+            playoff_teams = int(request.form.get("playoff_teams", "4"))
+        except (TypeError, ValueError):
+            playoff_teams = 4
+
+        name = (request.form.get("name") or "").strip() or f"{league.name} — {season.name}"
+        team_ids = [t.id for t in teams]
+
+        try:
+            from engine.tournament_engine import TournamentEngine
+            engine_inst = TournamentEngine()
+            min_teams = engine_inst.MIN_TEAMS.get(mode, 2)
+            if len(team_ids) < min_teams:
+                flash(
+                    f"'{mode}' needs at least {min_teams} teams; this season has {len(team_ids)}.",
+                    "error",
+                )
+                return redirect(url_for("auction_live", season_id=season.id))
+
+            t = engine_inst.create_tournament(
+                name=name,
+                user_id=current_user.id,
+                team_ids=team_ids,
+                mode=mode,
+                playoff_teams=playoff_teams,
+                format_type=season.format,
+            )
+            runtime._log_audit(
+                auction, "tournament.created",
+                {"tournament_id": t.id, "tournament_name": t.name,
+                 "mode": mode, "team_count": len(team_ids),
+                 "playoff_teams": playoff_teams},
+                actor_type="organizer", actor_label=current_user.id,
+            )
+            flash(f"Tournament '{t.name}' created from season {season.name}.", "success")
+            return redirect(url_for("tournament_dashboard", tournament_id=t.id))
+        except ValueError as exc:
+            flash(str(exc), "error")
+        except Exception as exc:
+            db.session.rollback()
+            log_exception(exc, source="auction_create_tournament")
+            flash("Could not create tournament.", "error")
+        return redirect(url_for("auction_live", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/history.json")
+    @login_required
+    def auction_history_json(season_id):
+        """Organizer-only read-back of the bid log and audit trail."""
+        from database.models import AuctionBid as _DBAuctionBid, AuctionAuditLog as _DBAuctionAuditLog
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        try:
+            limit = max(1, min(500, int(request.args.get("limit", 100))))
+        except (TypeError, ValueError):
+            limit = 100
+
+        bids = (_DBAuctionBid.query
+                .filter_by(auction_id=auction.id)
+                .order_by(_DBAuctionBid.created_at.desc(), _DBAuctionBid.id.desc())
+                .limit(limit)
+                .all())
+        audit = (_DBAuctionAuditLog.query
+                 .filter_by(auction_id=auction.id)
+                 .order_by(_DBAuctionAuditLog.created_at.desc(), _DBAuctionAuditLog.id.desc())
+                 .limit(limit)
+                 .all())
+
+        # Resolve nicer labels via in-process lookup (one query each).
+        ap_by_id = {}
+        st_by_id = {}
+        if bids:
+            ap_ids = {b.auction_player_id for b in bids if b.auction_player_id}
+            st_ids = {b.season_team_id for b in bids if b.season_team_id}
+            if ap_ids:
+                ap_by_id = {p.id: p for p in DBAuctionPlayer.query.filter(DBAuctionPlayer.id.in_(ap_ids)).all()}
+            if st_ids:
+                st_by_id = {s.id: s for s in DBSeasonTeam.query.filter(DBSeasonTeam.id.in_(st_ids)).all()}
+
+        return jsonify({
+            "auction_id": auction.id,
+            "bids": [{
+                "id": b.id,
+                "auction_player_id": b.auction_player_id,
+                "player_name": ap_by_id.get(b.auction_player_id).name if ap_by_id.get(b.auction_player_id) else None,
+                "season_team_id": b.season_team_id,
+                "team_name": st_by_id.get(b.season_team_id).display_name if st_by_id.get(b.season_team_id) else None,
+                "amount": int(b.amount),
+                "round": int(b.round),
+                "created_at": b.created_at.isoformat() if b.created_at else None,
+            } for b in bids],
+            "audit": [{
+                "id": a.id,
+                "action": a.action,
+                "actor_type": a.actor_type,
+                "actor_label": a.actor_label,
+                "payload": json.loads(a.payload) if a.payload else None,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            } for a in audit],
+        })
+
+    @app.route("/seasons/<int:season_id>/auction/export.csv")
+    @login_required
+    def auction_export_csv(season_id):
+        season, _ = _own_season_or_404(season_id)
+        auction = _get_or_create_auction(season)
+        csv_text = sync.export_rosters_csv(
+            db, season, auction,
+            DBSeasonTeam=DBSeasonTeam,
+            DBAuctionPlayer=DBAuctionPlayer,
+            DBAuctionCategory=DBAuctionCategory,
+        )
+        filename = f"auction_{season.id}_{season.name}.csv".replace(" ", "_")
+        return Response(
+            csv_text,
+            mimetype="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     # ─── Finalize validation ────────────────────────────────────────────────
 

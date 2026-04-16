@@ -362,6 +362,14 @@ class Auction(db.Model):
     current_round = db.Column(db.Integer, default=1)
     started_at = db.Column(db.DateTime, nullable=True)
     ended_at = db.Column(db.DateTime, nullable=True)
+
+    # Phase 4 — live runtime state. Plain Integer (no SA-level FK) to avoid the
+    # auctions⇄auction_players circular dependency at table-create time;
+    # ON DELETE SET NULL is enforced at the SQL level by the migration.
+    live_player_id = db.Column(db.Integer, nullable=True)
+    lot_ends_at = db.Column(db.DateTime, nullable=True)
+    lot_paused_remaining_ms = db.Column(db.Integer, nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -457,6 +465,139 @@ class AuctionPlayer(db.Model):
                 f"AuctionPlayer {self.id or '(new)'}: master_player_id and user_player_id are mutually exclusive."
             )
         return value
+
+
+class DraftPick(db.Model):
+    """One slot in a draft auction. Generated ahead of each round in snake
+    order. A pick is either `pending` (the team has not yet acted), `picked`
+    (a player was chosen), or `missed` (the timer expired). Missed picks
+    create a catch-up carryover pick in a later round so the team's slot
+    count is preserved.
+    """
+    __tablename__ = 'draft_picks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    auction_id = db.Column(
+        db.Integer,
+        db.ForeignKey('auctions.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    round = db.Column(db.Integer, nullable=False)
+    pick_order_in_round = db.Column(db.Integer, nullable=False)
+    season_team_id = db.Column(
+        db.Integer,
+        db.ForeignKey('season_teams.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    # Null if missed; otherwise the chosen player. ON DELETE SET NULL at
+    # DB level via the migration to tolerate mid-auction player removals.
+    auction_player_id = db.Column(db.Integer, nullable=True)
+    category_id = db.Column(
+        db.Integer,
+        db.ForeignKey('auction_categories.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    is_carryover = db.Column(db.Boolean, default=False, nullable=False)
+    carryover_from_round = db.Column(db.Integer, nullable=True)
+    picked_at = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.String(20), default='pending', nullable=False)  # pending | picked | missed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index('ix_draft_picks_auction_round', 'auction_id', 'round'),
+        db.Index('ix_draft_picks_queue', 'auction_id', 'status', 'round', 'pick_order_in_round'),
+    )
+
+
+class AuctionBid(db.Model):
+    """Every accepted bid in a traditional auction — append-only history.
+
+    In Phase 4 this was intentionally in-memory; Phase 8 persists so the
+    organizer has a replayable trail. Rejected bids are NOT stored (noise).
+    """
+    __tablename__ = 'auction_bids'
+
+    id = db.Column(db.Integer, primary_key=True)
+    auction_id = db.Column(
+        db.Integer,
+        db.ForeignKey('auctions.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    auction_player_id = db.Column(
+        db.Integer,
+        db.ForeignKey('auction_players.id', ondelete='SET NULL'),
+        nullable=True, index=True,
+    )
+    season_team_id = db.Column(
+        db.Integer,
+        db.ForeignKey('season_teams.id', ondelete='SET NULL'),
+        nullable=True, index=True,
+    )
+    amount = db.Column(db.BigInteger, nullable=False)
+    round = db.Column(db.Integer, nullable=False, default=1)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        db.Index('ix_auction_bid_auction_created', 'auction_id', 'created_at'),
+    )
+
+
+class AuctionAuditLog(db.Model):
+    """Organizer actions + key system events for a given auction. Readable
+    from the live console; persists for post-auction review/export.
+
+    `action` is a short enum-like string: `auction.start`, `lot.open`,
+    `lot.sold`, `lot.unsold`, `lot.reversed`, `pick.submitted`,
+    `pick.missed`, `round.advance`, `roster.synced`, `tournament.created`,
+    etc. `payload` is JSON-stringified context (team names, amounts, etc.)
+    so the UI can render without joining across tables.
+    """
+    __tablename__ = 'auction_audit_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    auction_id = db.Column(
+        db.Integer,
+        db.ForeignKey('auctions.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    action = db.Column(db.String(50), nullable=False)
+    actor_type = db.Column(db.String(20), nullable=False, default='system')  # system | organizer | team
+    actor_label = db.Column(db.String(120), nullable=True)  # organizer email / team display_name / 'system'
+    payload = db.Column(db.Text, nullable=True)  # JSON
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        db.Index('ix_auction_audit_auction_created', 'auction_id', 'created_at'),
+        db.Index('ix_auction_audit_action', 'action'),
+    )
+
+
+class AuctionChatMessage(db.Model):
+    """Flat per-auction chat room. Organizer has full moderation control."""
+    __tablename__ = 'auction_chat_messages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    auction_id = db.Column(
+        db.Integer,
+        db.ForeignKey('auctions.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    sender_type = db.Column(db.String(20), nullable=False)  # organizer | team
+    # Null for organizer messages; set for team messages.
+    season_team_id = db.Column(
+        db.Integer,
+        db.ForeignKey('season_teams.id', ondelete='SET NULL'),
+        nullable=True, index=True,
+    )
+    sender_label = db.Column(db.String(100), nullable=False)  # "Organizer" or team's display_name snapshot
+    body = db.Column(db.Text, nullable=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)  # soft-delete for moderation visibility
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    auction = relationship(
+        'Auction',
+        backref=db.backref('chat_messages', cascade='all, delete-orphan', passive_deletes=True),
+    )
 
 
 class Match(db.Model):
