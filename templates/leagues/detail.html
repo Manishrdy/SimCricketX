@@ -1,0 +1,184 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ league.name }} | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .lg-container { max-width: 1000px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
+    .lg-breadcrumb { font-size: .85rem; color: var(--text-secondary, var(--fg-secondary)); margin-bottom: 12px; }
+    .lg-breadcrumb a { color: inherit; text-decoration: none; }
+    .lg-breadcrumb a:hover { text-decoration: underline; }
+    .lg-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; gap: 12px; flex-wrap: wrap; }
+    .lg-title { font-size: 1.8rem; font-weight: 700; color: var(--text-primary, var(--fg)); margin: 0; }
+    .lg-badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: .72rem; font-weight: 600; background: var(--accent-light, #f3f4f6); color: var(--fg, #333); vertical-align: middle; }
+    .lg-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; font-size: .9rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; transition: opacity .15s; }
+    .lg-btn:hover { opacity: .88; }
+    .lg-btn-primary { background: var(--brand-primary, #0f766e); color: #fff; }
+    .lg-btn-ghost { background: transparent; color: var(--text-secondary, var(--fg-secondary)); border: 1px solid var(--card-border); }
+    .lg-btn-danger { background: transparent; color: #b91c1c; border: 1px solid #fecaca; }
+    .lg-btn-sm { padding: 6px 12px; font-size: .8rem; }
+    .lg-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 18px 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .lg-card-info h3 { margin: 0 0 4px; font-size: 1.05rem; color: var(--text-primary, var(--fg)); }
+    .lg-card-meta { font-size: .85rem; color: var(--text-secondary, var(--fg-secondary)); display: flex; gap: 14px; flex-wrap: wrap; }
+    .lg-card-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .lg-form { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 18px 20px; margin-bottom: 20px; }
+    .lg-form h3 { margin: 0 0 12px; font-size: 1rem; color: var(--text-primary, var(--fg)); }
+    .lg-form-row { display: grid; gap: 10px; align-items: end; }
+    .lg-form-row.cols-5 { grid-template-columns: 2fr 1fr 1fr 1.5fr auto; }
+    .lg-form-row.cols-4 { grid-template-columns: 2fr 1fr 1fr auto; }
+    .lg-field { display: flex; flex-direction: column; gap: 4px; }
+    .lg-field label { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary, var(--fg-secondary)); }
+    .lg-field input, .lg-field select {
+        padding: 8px 10px; border-radius: 6px; border: 1px solid var(--card-border);
+        background: var(--bg, #fff); color: var(--fg, #111); font-size: .9rem;
+    }
+    .lg-empty { text-align: center; padding: 2.5rem 1rem; color: var(--text-secondary, var(--fg-secondary)); border: 1px dashed var(--card-border); border-radius: 12px; }
+    .lg-status { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: .72rem; font-weight: 600; }
+    .lg-status-setup { background: #dbeafe; color: #1e40af; }
+    .lg-status-ready { background: #fef3c7; color: #92400e; }
+    .lg-status-live { background: #dcfce7; color: #166534; }
+    .lg-status-done { background: #e5e7eb; color: #374151; }
+    [data-theme="dark"] .lg-status-setup { background: #1e3a5f; color: #93c5fd; }
+    [data-theme="dark"] .lg-status-ready { background: #78350f; color: #fde68a; }
+    [data-theme="dark"] .lg-status-live { background: #14532d; color: #86efac; }
+    [data-theme="dark"] .lg-status-done { background: #374151; color: #d1d5db; }
+    details { margin-top: 12px; }
+    details summary { cursor: pointer; color: var(--text-secondary, var(--fg-secondary)); font-size: .85rem; }
+    details[open] { margin-top: 16px; }
+    .danger-zone { border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin-top: 24px; }
+    .danger-zone h4 { margin: 0 0 8px; color: #b91c1c; font-size: .95rem; }
+    .danger-zone p { margin: 0 0 12px; font-size: .85rem; color: var(--text-secondary, var(--fg-secondary)); }
+    @media (max-width: 720px) {
+        .lg-form-row.cols-5, .lg-form-row.cols-4 { grid-template-columns: 1fr; }
+        .lg-card { flex-direction: column; align-items: flex-start; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set status_map = {
+    'setup': ('lg-status-setup', 'Setup'),
+    'teams_ready': ('lg-status-ready', 'Teams Ready'),
+    'auction_ready': ('lg-status-ready', 'Auction Ready'),
+    'auction_live': ('lg-status-live', 'Live'),
+    'auction_paused': ('lg-status-ready', 'Paused'),
+    'auction_done': ('lg-status-done', 'Done'),
+    'archived': ('lg-status-done', 'Archived'),
+} %}
+<div class="lg-container">
+    <div class="lg-breadcrumb">
+        <a href="{{ url_for('leagues_list') }}"><i class="fa-solid fa-arrow-left"></i> Leagues</a>
+    </div>
+
+    <div class="lg-header">
+        <div>
+            <h1 class="lg-title">{{ league.name }}
+                {% if league.short_code %}<span class="lg-badge">{{ league.short_code }}</span>{% endif %}
+            </h1>
+            <div class="lg-card-meta" style="margin-top:6px;">
+                <span><i class="fa-solid fa-rotate"></i> {{ 'Recurring' if league.frequency == 'recurring' else 'One-time' }}</span>
+                <span><i class="fa-solid fa-calendar"></i> {{ seasons|length }} season{{ '' if seasons|length == 1 else 's' }}</span>
+            </div>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+    <div class="lg-card" style="border-left: 4px solid {{ '#16a34a' if category == 'success' else '#dc2626' }};">
+        <div class="lg-card-info"><h3 style="margin:0;font-size:.95rem;">{{ msg }}</h3></div>
+    </div>
+    {% endfor %}
+    {% endwith %}
+
+    <form class="lg-form" method="post" action="{{ url_for('season_create', league_id=league.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <h3><i class="fa-solid fa-plus"></i> New Season</h3>
+        <div class="lg-form-row cols-4">
+            <div class="lg-field">
+                <label for="s-name">Name</label>
+                <input id="s-name" name="name" required maxlength="200" placeholder="{{ (league.short_code or league.name) }} 2026">
+            </div>
+            <div class="lg-field">
+                <label for="s-format">Format</label>
+                <select id="s-format" name="format">
+                    <option value="T20">T20</option>
+                    <option value="ListA">List A</option>
+                </select>
+            </div>
+            <div class="lg-field">
+                <label for="s-mode">Auction</label>
+                <select id="s-mode" name="auction_mode">
+                    <option value="traditional">Traditional</option>
+                    <option value="draft">Draft</option>
+                </select>
+            </div>
+            <button type="submit" class="lg-btn lg-btn-primary">Create</button>
+        </div>
+    </form>
+
+    <details>
+        <summary>Edit league metadata</summary>
+        <form class="lg-form" method="post" action="{{ url_for('league_edit', league_id=league.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="lg-form-row cols-4">
+                <div class="lg-field">
+                    <label for="le-name">Name</label>
+                    <input id="le-name" name="name" required value="{{ league.name }}">
+                </div>
+                <div class="lg-field">
+                    <label for="le-short">Short code</label>
+                    <input id="le-short" name="short_code" value="{{ league.short_code or '' }}" maxlength="10">
+                </div>
+                <div class="lg-field">
+                    <label for="le-freq">Frequency</label>
+                    <select id="le-freq" name="frequency">
+                        <option value="one_time" {{ 'selected' if league.frequency == 'one_time' else '' }}>One-time</option>
+                        <option value="recurring" {{ 'selected' if league.frequency == 'recurring' else '' }}>Recurring</option>
+                    </select>
+                </div>
+                <button type="submit" class="lg-btn lg-btn-ghost">Save</button>
+            </div>
+        </form>
+    </details>
+
+    <h2 style="font-size:1.1rem; margin: 24px 0 10px;">Seasons</h2>
+
+    {% for s in seasons %}
+    {% set status_cls, status_label = status_map.get(s.status, ('lg-status-setup', s.status)) %}
+    <div class="lg-card">
+        <div class="lg-card-info">
+            <h3>
+                <a href="{{ url_for('season_detail', season_id=s.id) }}" style="color:inherit;text-decoration:none;">{{ s.name }}</a>
+                <span class="lg-status {{ status_cls }}">{{ status_label }}</span>
+            </h3>
+            <div class="lg-card-meta">
+                <span>{{ s.format }}</span>
+                <span><i class="fa-solid fa-gavel"></i> {{ 'Traditional' if s.auction_mode == 'traditional' else 'Draft' }}</span>
+                <span><i class="fa-solid fa-users"></i> {{ s.season_teams|length }} team{{ '' if s.season_teams|length == 1 else 's' }}</span>
+            </div>
+        </div>
+        <div class="lg-card-actions">
+            <a class="lg-btn lg-btn-ghost lg-btn-sm" href="{{ url_for('season_detail', season_id=s.id) }}">
+                <i class="fa-solid fa-arrow-right"></i> Open
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% if not seasons %}
+    <div class="lg-empty">No seasons yet. Create one above to start setting up teams.</div>
+    {% endif %}
+
+    <div class="danger-zone">
+        <h4><i class="fa-solid fa-triangle-exclamation"></i> Delete league</h4>
+        <p>Permanently deletes this league and every season, team, and auction beneath it.</p>
+        <form method="post" action="{{ url_for('league_delete', league_id=league.id) }}"
+              onsubmit="return confirm('Delete league \'{{ league.name }}\' and all its seasons and teams? This cannot be undone.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="lg-btn lg-btn-danger lg-btn-sm">
+                <i class="fa-solid fa-trash"></i> Delete league
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

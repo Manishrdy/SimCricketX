@@ -104,6 +104,7 @@ from routes.issue_routes import register_issue_routes
 from routes.admin_issue_routes import register_admin_issue_routes
 from routes.webhook_routes import register_webhook_routes
 from routes.player_pool_routes import register_player_pool_routes
+from routes.league_routes import register_league_routes
 from routes.auction_routes import register_auction_routes
 from utils.exception_tracker import log_exception
 
@@ -127,7 +128,8 @@ except ImportError:
 from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, TournamentTeam, TournamentFixture
 from database.models import MasterPlayer as DBMasterPlayer, UserPlayer as DBUserPlayer
-from database.models import AuctionEvent, AuctionCategory, AuctionTeam, AuctionPlayer, AuctionBid
+from database.models import League as DBLeague, Season as DBSeason, SeasonTeam as DBSeasonTeam
+from database.models import Auction as DBAuction, AuctionCategory as DBAuctionCategory, AuctionPlayer as DBAuctionPlayer
 from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership, AdminAuditLog  # Distinct from engine.match.Match
 from database.models import (
     FailedLoginAttempt,
@@ -1536,15 +1538,25 @@ def create_app():
         DBUserPlayer=DBUserPlayer,
     )
 
-    # --- Auction Routes ---
+    # --- League / Season / Auction Routes (AUCTION-REDESIGN) ---
+    register_league_routes(
+        app,
+        db=db,
+        DBLeague=DBLeague,
+        DBSeason=DBSeason,
+        DBSeasonTeam=DBSeasonTeam,
+        DBTeam=DBTeam,
+    )
     register_auction_routes(
         app,
         db=db,
-        AuctionEvent=AuctionEvent,
-        AuctionCategory=AuctionCategory,
-        AuctionTeam=AuctionTeam,
-        AuctionPlayer=AuctionPlayer,
-        AuctionBid=AuctionBid,
+        DBSeason=DBSeason,
+        DBSeasonTeam=DBSeasonTeam,
+        DBLeague=DBLeague,
+        DBTeam=DBTeam,
+        DBAuction=DBAuction,
+        DBAuctionCategory=DBAuctionCategory,
+        DBAuctionPlayer=DBAuctionPlayer,
         DBMasterPlayer=DBMasterPlayer,
         DBUserPlayer=DBUserPlayer,
     )

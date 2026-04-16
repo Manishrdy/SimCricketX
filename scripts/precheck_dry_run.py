@@ -175,12 +175,15 @@ def _check_recover_archived_stats_from_backup(conn) -> Tuple[str, str]:
     return ("unknown", "requires external source backup DB path at runtime")
 
 
-def _check_add_auction(conn) -> Tuple[str, str]:
-    required = ["auction_events", "auction_categories", "auction_teams", "auction_players", "auction_bids"]
+def _check_redesign_auction_phase1(conn) -> Tuple[str, str]:
+    required = ["leagues", "seasons", "season_teams"]
     missing = [t for t in required if not _table_exists(conn, t)]
-    if not missing:
-        return ("applied", f"all {len(required)} auction tables present")
-    return ("pending" if len(missing) == len(required) else "partial", f"missing tables: {missing}")
+    if missing:
+        return ("pending" if len(missing) == len(required) else "partial", f"missing tables: {missing}")
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(teams)").fetchall()}
+    if "season_id" not in cols:
+        return ("partial", "teams.season_id column missing")
+    return ("applied", "leagues/seasons/season_teams present, teams.season_id present")
 
 
 CHECKS: Dict[str, Callable] = {
@@ -198,7 +201,7 @@ CHECKS: Dict[str, Callable] = {
     "add_scorecard_stumpings":       _check_add_scorecard_stumpings,
     "cleanup_orphaned_stats":        _check_cleanup_orphaned_stats,
     "recover_archived_stats_from_backup": _check_recover_archived_stats_from_backup,
-    "add_auction":                   _check_add_auction,
+    "redesign_auction_phase1":       _check_redesign_auction_phase1,
 }
 
 
@@ -230,7 +233,7 @@ MIGRATION_ORDER: List[str] = [
     "add_scorecard_stumpings",
     "cleanup_orphaned_stats",
     "recover_archived_stats_from_backup",
-    "add_auction",
+    "redesign_auction_phase1",
 ]
 
 

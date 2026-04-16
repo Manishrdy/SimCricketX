@@ -1,150 +1,493 @@
 {% extends "layout.html" %}
 
-{% block title %}Setup — {{ event.name }} | SimCricketX{% endblock %}
+{% block title %}Auction Setup — {{ season.name }} | SimCricketX{% endblock %}
 
 {% block extra_css %}
 <style>
-    .as-container { max-width: 900px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
-    .as-back { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none; font-size: .85rem; margin-bottom: 1rem; }
-    .as-back:hover { color: var(--text-primary); }
-    .as-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 0 0 .25rem; }
-    .as-subtitle { color: var(--text-secondary); font-size: .9rem; margin-bottom: 1.5rem; }
-    .as-tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; background: var(--bg-surface, #f9fafb); padding: 4px; border-radius: 10px; }
-    .as-tab { padding: 8px 16px; border-radius: 8px; font-size: .85rem; font-weight: 600; text-decoration: none; color: var(--text-secondary); transition: all .2s; }
-    .as-tab:hover { color: var(--text-primary); }
-    .as-tab.active { background: var(--bg-raised, #fff); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .as-card { background: var(--bg-raised, #fff); border: 1px solid var(--border-light, #e5e7eb); border-radius: 12px; padding: 24px; margin-bottom: 1.5rem; }
-    .as-card-title { font-size: 1rem; font-weight: 600; color: var(--text-primary); margin: 0 0 16px; }
-    .as-group { margin-bottom: 16px; }
-    .as-label { display: block; font-size: .8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 6px; }
-    .as-hint { font-size: .8rem; color: var(--text-secondary); margin-top: 4px; }
-    .as-input, .as-select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .9rem; background: var(--bg-raised, #fff); color: var(--text-primary); box-sizing: border-box; }
-    .as-input:focus, .as-select:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
-    .as-row { display: grid; gap: 16px; }
-    .as-row-2 { grid-template-columns: 1fr 1fr; }
-    .as-row-3 { grid-template-columns: 1fr 1fr 1fr; }
-    .as-checkbox-label { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--text-primary); cursor: pointer; }
-    .as-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 8px; font-size: .9rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; }
-    .as-btn-primary { background: var(--brand-primary, #0f766e); color: #fff; }
-    .as-btn-primary:hover { opacity: .85; }
-    .as-btn-secondary { background: var(--bg-raised, #fff); color: var(--text-primary); border: 1px solid var(--border-light, #e5e7eb); }
-    .as-textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .85rem; font-family: 'IBM Plex Mono', monospace; background: var(--bg-raised, #fff); color: var(--text-primary); box-sizing: border-box; min-height: 80px; resize: vertical; }
-    .as-summary { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 1.5rem; }
-    .as-summary-item { background: var(--bg-surface, #f9fafb); border-radius: 10px; padding: 12px 20px; text-align: center; }
-    .as-summary-num { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); }
-    .as-summary-label { font-size: .75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; }
-    @media (max-width: 600px) { .as-row-2, .as-row-3 { grid-template-columns: 1fr; } .as-tabs { flex-wrap: wrap; } }
+    .lg-container { max-width: 1200px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
+    .lg-breadcrumb { font-size: .85rem; color: var(--text-secondary, var(--fg-secondary)); margin-bottom: 12px; }
+    .lg-breadcrumb a { color: inherit; text-decoration: none; }
+    .lg-breadcrumb a:hover { text-decoration: underline; }
+    .lg-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 1.2rem; }
+    .lg-title { font-size: 1.8rem; font-weight: 700; color: var(--text-primary, var(--fg)); margin: 0; }
+    .lg-sub { font-size: .85rem; color: var(--text-secondary, var(--fg-secondary)); margin-top: 4px; }
+    .lg-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: 8px; font-size: .88rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; transition: opacity .15s; }
+    .lg-btn:hover { opacity: .88; }
+    .lg-btn-primary { background: var(--brand-primary, #0f766e); color: #fff; }
+    .lg-btn-success { background: #16a34a; color: #fff; }
+    .lg-btn-ghost { background: transparent; color: var(--text-secondary, var(--fg-secondary)); border: 1px solid var(--card-border); }
+    .lg-btn-danger { background: transparent; color: #b91c1c; border: 1px solid #fecaca; }
+    .lg-btn-sm { padding: 5px 10px; font-size: .78rem; }
+    .section { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 18px 20px; margin-bottom: 18px; }
+    .section h2 { margin: 0 0 14px; font-size: 1.05rem; color: var(--text-primary, var(--fg)); display: flex; align-items: center; gap: 8px; }
+    .section h2 .badge { background: var(--accent-light, #f3f4f6); color: var(--fg, #444); font-size: .68rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+    .row { display: grid; gap: 10px; }
+    .row.cols-2 { grid-template-columns: 1fr 1fr; }
+    .row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .row.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary, var(--fg-secondary)); }
+    .field input, .field select, .field textarea {
+        padding: 8px 10px; border-radius: 6px; border: 1px solid var(--card-border);
+        background: var(--bg, #fff); color: var(--fg, #111); font-size: .9rem;
+    }
+    .hint { font-size: .75rem; color: var(--text-secondary, var(--fg-secondary)); margin-top: 4px; }
+    .flash-card { padding: 10px 14px; border-radius: 8px; margin-bottom: 10px; font-size: .88rem; border-left: 4px solid #ccc; background: var(--card-bg); border: 1px solid var(--card-border); }
+    .flash-success { border-left-color: #16a34a; }
+    .flash-error { border-left-color: #dc2626; }
+
+    /* Finalize banner */
+    .finalize-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 18px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--card-border); margin-bottom: 18px; flex-wrap: wrap; }
+    .finalize-status { font-weight: 600; font-size: .95rem; display: flex; align-items: center; gap: 8px; }
+    .finalize-ok { color: #16a34a; }
+    .finalize-err { color: #b91c1c; }
+    .finalize-errors { margin: 8px 0 0; padding: 0; list-style: none; font-size: .82rem; color: #b91c1c; }
+    .finalize-errors li { margin-top: 2px; }
+
+    /* Category list */
+    .cat-card { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 8px; margin-bottom: 8px; background: var(--bg, #fff); }
+    .cat-card .cat-pos { font-weight: 700; font-size: .9rem; color: var(--text-secondary, var(--fg-secondary)); width: 28px; text-align: center; }
+    .cat-card .cat-name { font-weight: 600; color: var(--text-primary, var(--fg)); }
+    .cat-card .cat-meta { font-size: .78rem; color: var(--text-secondary, var(--fg-secondary)); display: flex; gap: 10px; flex-wrap: wrap; }
+    .cat-move { display: flex; flex-direction: column; gap: 2px; }
+    .cat-move button { background: transparent; border: 1px solid var(--card-border); color: var(--text-secondary, var(--fg-secondary)); border-radius: 4px; width: 24px; height: 18px; cursor: pointer; font-size: .7rem; padding: 0; line-height: 1; }
+    .cat-move button:hover { color: var(--fg, #111); }
+
+    /* Player two-pane */
+    .pool { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .pool-pane { border: 1px solid var(--card-border); border-radius: 10px; background: var(--bg, #fff); overflow: hidden; display: flex; flex-direction: column; max-height: 640px; }
+    .pool-pane header { padding: 10px 12px; border-bottom: 1px solid var(--card-border); background: var(--accent-light, #f9fafb); font-weight: 600; font-size: .9rem; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pool-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+    .pool-controls input, .pool-controls select { padding: 5px 8px; font-size: .8rem; border-radius: 4px; border: 1px solid var(--card-border); background: var(--bg,#fff); color: var(--fg,#111); }
+    .pool-list { overflow-y: auto; flex: 1; }
+    .pool-item { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--card-border); align-items: center; font-size: .85rem; }
+    .pool-item:hover { background: var(--accent-light, #f9fafb); }
+    .pool-item .pname { font-weight: 600; color: var(--text-primary, var(--fg)); }
+    .pool-item .pmeta { font-size: .72rem; color: var(--text-secondary, var(--fg-secondary)); }
+    .pool-item input[type="checkbox"] { width: 16px; height: 16px; }
+    .pool-add-bar { padding: 10px 12px; border-top: 1px solid var(--card-border); background: var(--accent-light, #f9fafb); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    .cat-bucket { border: 1px solid var(--card-border); border-radius: 8px; margin-bottom: 10px; background: var(--bg, #fff); }
+    .cat-bucket-hdr { padding: 8px 12px; background: var(--accent-light, #f9fafb); border-bottom: 1px solid var(--card-border); font-weight: 600; font-size: .9rem; display: flex; justify-content: space-between; gap: 10px; }
+    .cat-bucket-body { padding: 6px 0; }
+    .curated-item { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; padding: 6px 12px; font-size: .85rem; border-bottom: 1px solid var(--card-border); }
+    .curated-item:last-child { border-bottom: none; }
+    .curated-item .pname { font-weight: 600; }
+    .curated-item .pmeta { font-size: .72rem; color: var(--text-secondary, var(--fg-secondary)); }
+    .curated-item input[type="number"] { width: 120px; padding: 4px 6px; font-size: .8rem; border-radius: 4px; border: 1px solid var(--card-border); background: var(--bg,#fff); color: var(--fg,#111); }
+    .curated-item select { padding: 4px 6px; font-size: .8rem; border-radius: 4px; border: 1px solid var(--card-border); background: var(--bg,#fff); color: var(--fg,#111); }
+    .curated-empty { padding: 10px 12px; font-size: .8rem; color: var(--text-secondary, var(--fg-secondary)); }
+
+    .team-budget-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--card-border); font-size: .88rem; }
+    .team-budget-row:last-child { border: none; }
+    .status-pill { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: .72rem; font-weight: 600; }
+    .status-setup { background: #dbeafe; color: #1e40af; }
+    .status-ready { background: #dcfce7; color: #166534; }
+    [data-theme="dark"] .status-setup { background: #1e3a5f; color: #93c5fd; }
+    [data-theme="dark"] .status-ready { background: #14532d; color: #86efac; }
+
+    .locked-banner { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; padding: 10px 14px; border-radius: 8px; font-size: .88rem; margin-bottom: 16px; }
+    [data-theme="dark"] .locked-banner { background: #78350f; color: #fde68a; border-color: #92400e; }
+
+    @media (max-width: 900px) {
+        .row.cols-2, .row.cols-3, .row.cols-4 { grid-template-columns: 1fr; }
+        .pool { grid-template-columns: 1fr; }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="as-container">
-    <a href="{{ url_for('auction_list') }}" class="as-back"><i class="fas fa-arrow-left"></i> Back to Auctions</a>
-    <h1 class="as-title">{{ event.name }}</h1>
-    <p class="as-subtitle">Configure your auction before going live.</p>
-
-    <div class="as-tabs">
-        <a href="{{ url_for('auction_setup', event_id=event.id) }}" class="as-tab active">Configuration</a>
-        <a href="{{ url_for('auction_setup_teams', event_id=event.id) }}" class="as-tab">Teams ({{ event.teams|length }}/{{ event.num_teams }})</a>
-        <a href="{{ url_for('auction_setup_categories', event_id=event.id) }}" class="as-tab">Categories ({{ event.categories|length }})</a>
-        <a href="{{ url_for('auction_setup_players', event_id=event.id) }}" class="as-tab">Players ({{ event.players|length }})</a>
+{% set locked = season.status not in ['setup','teams_ready','auction_ready'] %}
+{% set finalized = season.status == 'auction_ready' %}
+<div class="lg-container">
+    <div class="lg-breadcrumb">
+        <a href="{{ url_for('leagues_list') }}">Leagues</a> /
+        <a href="{{ url_for('league_detail', league_id=league.id) }}">{{ league.name }}</a> /
+        <a href="{{ url_for('season_detail', season_id=season.id) }}">{{ season.name }}</a> /
+        Auction setup
     </div>
 
-    <div class="as-summary">
-        <div class="as-summary-item">
-            <div class="as-summary-num">{{ event.teams|length }}/{{ event.num_teams }}</div>
-            <div class="as-summary-label">Teams</div>
-        </div>
-        <div class="as-summary-item">
-            <div class="as-summary-num">{{ event.categories|length }}</div>
-            <div class="as-summary-label">Categories</div>
-        </div>
-        <div class="as-summary-item">
-            <div class="as-summary-num">{{ event.players|length }}</div>
-            <div class="as-summary-label">Players</div>
+    <div class="lg-header">
+        <div>
+            <h1 class="lg-title">Auction Setup</h1>
+            <div class="lg-sub">
+                {{ season.name }} · {{ season.format }} ·
+                {{ 'Draft auction' if is_draft_mode else 'Traditional auction' }} ·
+                <span class="status-pill {{ 'status-ready' if finalized else 'status-setup' }}">{{ season.status.replace('_',' ').title() }}</span>
+            </div>
         </div>
     </div>
 
-    <form method="POST">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+    <div class="flash-card flash-{{ 'success' if category == 'success' else 'error' }}">{{ msg }}</div>
+    {% endfor %}
+    {% endwith %}
 
-        <div class="as-card">
-            <h3 class="as-card-title">Budget</h3>
-            <div class="as-row as-row-2">
-                <div class="as-group">
-                    <label class="as-label">Budget Mode</label>
-                    <select name="budget_mode" class="as-select" id="budgetMode">
-                        <option value="uniform" {{ 'selected' if event.budget_mode == 'uniform' }}>Uniform (same for all teams)</option>
-                        <option value="custom" {{ 'selected' if event.budget_mode == 'custom' }}>Custom (per team)</option>
+    {% if locked %}
+    <div class="locked-banner">
+        <i class="fa-solid fa-lock"></i> Auction is live or complete — setup changes are disabled.
+    </div>
+    {% endif %}
+
+    <!-- FINALIZE BAR -->
+    <div class="finalize-bar">
+        <div>
+            {% if finalize_errors %}
+            <div class="finalize-status finalize-err"><i class="fa-solid fa-circle-xmark"></i> Not ready to finalize</div>
+            <ul class="finalize-errors">
+                {% for e in finalize_errors %}<li>• {{ e }}</li>{% endfor %}
+            </ul>
+            {% else %}
+            <div class="finalize-status finalize-ok"><i class="fa-solid fa-circle-check"></i>
+                {% if finalized %}Auction finalized. Ready to run.{% else %}Ready to finalize.{% endif %}
+            </div>
+            {% endif %}
+        </div>
+        <div style="display:flex; gap:8px;">
+            {% if finalized and not locked %}
+            <form method="post" action="{{ url_for('auction_reopen', season_id=season.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="lg-btn lg-btn-ghost" type="submit"><i class="fa-solid fa-unlock"></i> Reopen setup</button>
+            </form>
+            {% elif not locked %}
+            <form method="post" action="{{ url_for('auction_finalize', season_id=season.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="lg-btn lg-btn-success" type="submit" {% if finalize_errors %}disabled{% endif %}>
+                    <i class="fa-solid fa-check"></i> Finalize auction
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- CONFIG -->
+    <section class="section" id="config">
+        <h2><i class="fa-solid fa-sliders"></i> Configuration <span class="badge">Step 1</span></h2>
+        <form method="post" action="{{ url_for('auction_config', season_id=season.id) }}" id="config-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="row cols-4">
+                <div class="field">
+                    <label>Budget mode</label>
+                    <select name="budget_mode" id="f-budget-mode" {% if locked %}disabled{% endif %}>
+                        <option value="uniform" {{ 'selected' if auction.budget_mode == 'uniform' else '' }}>Uniform</option>
+                        <option value="custom" {{ 'selected' if auction.budget_mode == 'custom' else '' }}>Custom per team</option>
                     </select>
                 </div>
-                <div class="as-group" id="uniformBudgetGroup">
-                    <label class="as-label">Budget per Team</label>
-                    <input type="number" name="uniform_budget" class="as-input" min="0" value="{{ event.uniform_budget }}">
+                <div class="field" id="f-uniform-budget-wrap">
+                    <label>Uniform budget ($)</label>
+                    <input type="number" min="0" step="1" name="uniform_budget" value="{{ auction.uniform_budget or 0 }}" {% if locked %}disabled{% endif %}>
+                </div>
+                <div class="field">
+                    <label>Min players / team</label>
+                    <input type="number" min="1" step="1" name="min_players_per_team" value="{{ auction.min_players_per_team }}" {% if locked %}disabled{% endif %}>
+                </div>
+                <div class="field">
+                    <label>Max players / team</label>
+                    <input type="number" min="1" step="1" name="max_players_per_team" value="{{ auction.max_players_per_team }}" {% if locked %}disabled{% endif %}>
                 </div>
             </div>
+
+            <div id="f-custom-budgets-wrap" style="margin-top:14px; {% if auction.budget_mode != 'custom' %}display:none;{% endif %}">
+                <label style="font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary,var(--fg-secondary));">Per-team budgets ($)</label>
+                <div class="hint">One field per team. Saved together with the rest of the configuration.</div>
+                {% if season_teams %}
+                <div class="row cols-3" style="margin-top:8px;">
+                    {% for st in season_teams %}
+                    <div class="field">
+                        <label>{{ st.display_name }}</label>
+                        <input type="number" min="0" step="1"
+                               name="team_budget_{{ st.id }}"
+                               value="{{ st.custom_budget if st.custom_budget is not none else 0 }}"
+                               {% if locked %}disabled{% endif %}>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="hint">Add teams on the <a href="{{ url_for('season_detail', season_id=season.id) }}">season page</a> first.</div>
+                {% endif %}
+            </div>
+
+            <div class="row cols-3" style="margin-top:10px;">
+                {% if is_draft_mode %}
+                <div class="field">
+                    <label>Pick timer (s)</label>
+                    <input type="number" min="3" max="600" step="1" name="draft_pick_timer_seconds" value="{{ auction.draft_pick_timer_seconds }}" {% if locked %}disabled{% endif %}>
+                    <div class="hint">Seconds each team has to submit its pick each round before the slot is carried over.</div>
+                </div>
+                <input type="hidden" name="per_player_timer_seconds" value="{{ auction.per_player_timer_seconds }}">
+                {% else %}
+                <div class="field">
+                    <label>Per-player timer (s)</label>
+                    <input type="number" min="3" max="600" step="1" name="per_player_timer_seconds" value="{{ auction.per_player_timer_seconds }}" {% if locked %}disabled{% endif %}>
+                    <div class="hint">Seconds on the live bid clock; resets on each new valid bid.</div>
+                </div>
+                <input type="hidden" name="draft_pick_timer_seconds" value="{{ auction.draft_pick_timer_seconds }}">
+                {% endif %}
+                <div class="field">
+                    <label>Re-auction rounds</label>
+                    <input type="number" min="0" max="10" step="1" name="reauction_rounds" value="{{ auction.reauction_rounds }}" {% if locked %}disabled{% endif %}>
+                </div>
+                <div class="field">
+                    <label>Reduction per round (%)</label>
+                    <input type="number" min="0" max="100" step="1" name="reauction_price_reduction_pct" value="{{ auction.reauction_price_reduction_pct }}" {% if locked %}disabled{% endif %}>
+                </div>
+            </div>
+
+            {% if not is_draft_mode %}
+            <div class="row cols-2" style="margin-top:14px;">
+                <div class="field">
+                    <label>Bid increment ($)</label>
+                    <input type="number" min="0" step="1" name="bid_increment" value="{{ auction.bid_increment or 0 }}" {% if locked %}disabled{% endif %}>
+                    <div class="hint">Every new bid must be at least this much higher than the current one. Team budgets act as the ceiling.</div>
+                </div>
+            </div>
+            {% else %}
+            <input type="hidden" name="bid_increment" value="0">
+            {% endif %}
+
+            <div class="row cols-2" style="margin-top:16px;">
+                <div class="field">
+                    <label>Category order</label>
+                    <select name="category_order_mode" {% if locked %}disabled{% endif %}>
+                        <option value="manual" {{ 'selected' if auction.category_order_mode == 'manual' else '' }}>Manual (reorder below)</option>
+                        <option value="random" {{ 'selected' if auction.category_order_mode == 'random' else '' }}>Random</option>
+                    </select>
+                </div>
+                <div style="display:flex; align-items:flex-end;">
+                    <button type="submit" class="lg-btn lg-btn-primary" {% if locked %}disabled{% endif %}><i class="fa-solid fa-save"></i> Save configuration</button>
+                </div>
+            </div>
+        </form>
+    </section>
+
+    <!-- CATEGORIES -->
+    <section class="section" id="categories">
+        <h2><i class="fa-solid fa-layer-group"></i> Categories <span class="badge">Step 2</span></h2>
+
+        <form method="post" action="{{ url_for('auction_category_create', season_id=season.id) }}" style="margin-bottom:14px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row cols-4">
+                <div class="field">
+                    <label>Name</label>
+                    <input type="text" name="name" required maxlength="100" placeholder="Platinum" {% if locked %}disabled{% endif %}>
+                </div>
+                <div class="field">
+                    <label>Default base price ($) {% if is_draft_mode %}<span style="font-weight:400;color:var(--text-secondary,var(--fg-secondary));">— draft, optional</span>{% endif %}</label>
+                    <input type="number" min="0" step="1" name="default_base_price" {% if not is_draft_mode %}required{% endif %} {% if locked %}disabled{% endif %}>
+                </div>
+                <div class="field">
+                    <label>Max players (blank = no cap)</label>
+                    <input type="number" min="0" step="1" name="max_players" value="15" {% if locked %}disabled{% endif %}>
+                </div>
+                <div style="display:flex; align-items:flex-end;">
+                    <button type="submit" class="lg-btn lg-btn-primary" {% if locked %}disabled{% endif %}><i class="fa-solid fa-plus"></i> Add category</button>
+                </div>
+            </div>
+        </form>
+
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+            <form method="post" action="{{ url_for('auction_categories_randomize', season_id=season.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="lg-btn lg-btn-ghost lg-btn-sm" {% if locked or categories|length < 2 %}disabled{% endif %}>
+                    <i class="fa-solid fa-shuffle"></i> Randomize order
+                </button>
+            </form>
+            <span class="hint">Current order applies during the auction.</span>
         </div>
 
-        <div class="as-card">
-            <h3 class="as-card-title">Squad Constraints</h3>
-            <div class="as-row as-row-2">
-                <div class="as-group">
-                    <label class="as-label">Min Players per Team</label>
-                    <input type="number" name="min_players_per_team" class="as-input" min="1" max="50" value="{{ event.min_players_per_team }}">
+        {% for cat in categories %}
+        <div class="cat-card">
+            <span class="cat-pos">{{ loop.index }}.</span>
+            <form method="post" action="{{ url_for('auction_category_edit', cat_id=cat.id) }}" style="display:contents;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div style="display:grid; grid-template-columns: 1.5fr 1fr 1fr auto auto; gap: 8px; align-items:center;">
+                    <input type="text" name="name" value="{{ cat.name }}" required {% if locked %}disabled{% endif %}>
+                    <input type="number" min="0" step="1" name="default_base_price" value="{{ cat.default_base_price if cat.default_base_price is not none else '' }}" placeholder="Default $" {% if not is_draft_mode %}required{% endif %} {% if locked %}disabled{% endif %}>
+                    <input type="number" min="0" step="1" name="max_players" value="{{ cat.max_players if cat.max_players is not none else '' }}" placeholder="Max players" {% if locked %}disabled{% endif %}>
+                    <button type="submit" class="lg-btn lg-btn-ghost lg-btn-sm" {% if locked %}disabled{% endif %}>Save</button>
                 </div>
-                <div class="as-group">
-                    <label class="as-label">Max Players per Team</label>
-                    <input type="number" name="max_players_per_team" class="as-input" min="1" max="50" value="{{ event.max_players_per_team }}">
-                </div>
+            </form>
+            <div class="cat-move">
+                <form method="post" action="{{ url_for('auction_category_move', cat_id=cat.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="direction" value="up">
+                    <button type="submit" title="Move up" {% if locked or loop.first %}disabled{% endif %}>▲</button>
+                </form>
+                <form method="post" action="{{ url_for('auction_category_move', cat_id=cat.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="direction" value="down">
+                    <button type="submit" title="Move down" {% if locked or loop.last %}disabled{% endif %}>▼</button>
+                </form>
             </div>
+            <form method="post" action="{{ url_for('auction_category_delete', cat_id=cat.id) }}"
+                  onsubmit="return confirm('Delete category \'{{ cat.name }}\' and all its curated players?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="lg-btn lg-btn-danger lg-btn-sm" {% if locked %}disabled{% endif %}><i class="fa-solid fa-trash"></i></button>
+            </form>
         </div>
+        {% endfor %}
 
-        <div class="as-card">
-            <h3 class="as-card-title">Bid Increments</h3>
-            <div class="as-group">
-                <label class="as-label">Increment Tiers (JSON)</label>
-                <textarea name="bid_increment_tiers" class="as-textarea" placeholder='[{"up_to": 10000000, "increment": 500000}]'>{{ event.bid_increment_tiers }}</textarea>
-                <p class="as-hint">JSON array of tiers. Each tier: {"up_to": max_price, "increment": bid_step}. The last tier applies to all higher amounts.</p>
-            </div>
-        </div>
+        {% if not categories %}
+        <div class="hint">No categories yet. Add at least one above.</div>
+        {% endif %}
+    </section>
 
-        <div class="as-card">
-            <h3 class="as-card-title">Re-Auction</h3>
-            <div class="as-group">
-                <label class="as-checkbox-label">
-                    <input type="checkbox" name="reauction_enabled" id="reauctionEnabled" {{ 'checked' if event.reauction_enabled }}>
-                    Enable re-auction rounds for unsold players
-                </label>
-            </div>
-            <div class="as-row as-row-2" id="reauctionFields" style="{{ '' if event.reauction_enabled else 'display:none' }}">
-                <div class="as-group">
-                    <label class="as-label">Max Rounds</label>
-                    <input type="number" name="max_reauction_rounds" class="as-input" min="1" max="10" value="{{ event.max_reauction_rounds or '' }}">
-                </div>
-                <div class="as-group">
-                    <label class="as-label">Base Price Reduction (%)</label>
-                    <input type="number" name="reauction_base_price_reduction_pct" class="as-input" min="0" max="100" value="{{ event.reauction_base_price_reduction_pct }}">
-                    <p class="as-hint">Reduce base prices by this % each round.</p>
-                </div>
-            </div>
-        </div>
+    <!-- PLAYERS -->
+    <section class="section" id="players">
+        <h2><i class="fa-solid fa-users"></i> Player pool <span class="badge">Step 3</span></h2>
 
-        <div style="display:flex;gap:12px;">
-            <button type="submit" class="as-btn as-btn-primary"><i class="fas fa-save"></i> Save Configuration</button>
+        {% if not categories %}
+        <div class="hint">Create at least one category before curating players.</div>
+        {% else %}
+        <div class="pool">
+            <!-- LEFT: available pool -->
+            <div class="pool-pane">
+                <header>
+                    <span>Available ({{ pool_available|length }})</span>
+                    <div class="pool-controls">
+                        <input type="text" id="pool-search" placeholder="Search name…">
+                        <select id="pool-role">
+                            <option value="">All roles</option>
+                            <option value="Batsman">Batsman</option>
+                            <option value="Bowler">Bowler</option>
+                            <option value="Allrounder">Allrounder</option>
+                            <option value="Wicketkeeper">Wicketkeeper</option>
+                        </select>
+                    </div>
+                </header>
+                <form method="post" action="{{ url_for('auction_players_add', season_id=season.id) }}" id="add-players-form" style="display:contents;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="pool-list" id="pool-list">
+                        {% for p in pool_available %}
+                        <label class="pool-item" data-name="{{ (p.name or '')|lower }}" data-role="{{ p.role or '' }}">
+                            <input type="checkbox" name="refs" value="{{ p.ref }}" {% if locked %}disabled{% endif %}>
+                            <div>
+                                <div class="pname">{{ p.name }}</div>
+                                <div class="pmeta">{{ p.role or '—' }} · BAT {{ p.batting_rating }} · BOWL {{ p.bowling_rating }} · FIELD {{ p.fielding_rating }} · <span style="opacity:.7">{{ p.source }}</span></div>
+                            </div>
+                            <span class="pmeta">{{ p.batting_hand or '' }}{% if p.bowling_type %}, {{ p.bowling_type }}{% endif %}</span>
+                        </label>
+                        {% endfor %}
+                        {% if not pool_available %}
+                        <div class="curated-empty">Pool is empty or everyone is already curated.</div>
+                        {% endif %}
+                    </div>
+                    <div class="pool-add-bar">
+                        <select name="category_id" {% if locked %}disabled{% endif %}>
+                            {% for cat in categories %}
+                            <option value="{{ cat.id }}">{{ cat.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="lg-btn lg-btn-primary lg-btn-sm" {% if locked %}disabled{% endif %}>
+                            <i class="fa-solid fa-arrow-right"></i> Add selected
+                        </button>
+                        <span class="hint" id="pool-count">0 selected</span>
+                    </div>
+                </form>
+            </div>
+
+            <!-- RIGHT: curated -->
+            <div class="pool-pane">
+                <header><span>Curated ({{ players|length }})</span></header>
+                <div class="pool-list">
+                    {% for cat in categories %}
+                    {% set bucket = players_by_cat.get(cat.id, []) %}
+                    <div class="cat-bucket">
+                        <div class="cat-bucket-hdr">
+                            <span>
+                                {{ cat.name }} — {{ bucket|length }}{% if cat.max_players is not none %} / {{ cat.max_players }}{% endif %} player{{ '' if bucket|length == 1 else 's' }}
+                                {% if cat.max_players is not none and bucket|length >= cat.max_players %}
+                                <span style="color:#b91c1c; font-size:.75rem; margin-left:6px;">(full)</span>
+                                {% endif %}
+                            </span>
+                            <span class="hint">Default ${{ cat.default_base_price if cat.default_base_price is not none else '—' }}</span>
+                        </div>
+                        <div class="cat-bucket-body">
+                            {% for ap in bucket %}
+                            <div class="curated-item">
+                                <div>
+                                    <div class="pname">{{ ap.name }}</div>
+                                    <div class="pmeta">{{ ap.role or '—' }} · BAT {{ ap.batting_rating }} · BOWL {{ ap.bowling_rating }} · FIELD {{ ap.fielding_rating }}</div>
+                                </div>
+                                {% if not is_draft_mode %}
+                                <form method="post" action="{{ url_for('auction_player_base_price', ap_id=ap.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="number" min="0" step="1" name="base_price_override" value="{{ ap.base_price_override if ap.base_price_override is not none else '' }}" placeholder="cat default" {% if locked %}disabled{% endif %} onblur="this.form.submit()">
+                                </form>
+                                {% else %}
+                                <span></span>
+                                {% endif %}
+                                <form method="post" action="{{ url_for('auction_player_category', ap_id=ap.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <select name="category_id" {% if locked %}disabled{% endif %} onchange="this.form.submit()">
+                                        {% for c in categories %}
+                                        <option value="{{ c.id }}" {{ 'selected' if c.id == ap.category_id else '' }}>{{ c.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </form>
+                                <form method="post" action="{{ url_for('auction_player_delete', ap_id=ap.id) }}"
+                                      onsubmit="return confirm('Remove {{ ap.name }}?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="lg-btn lg-btn-danger lg-btn-sm" {% if locked %}disabled{% endif %}><i class="fa-solid fa-xmark"></i></button>
+                                </form>
+                            </div>
+                            {% endfor %}
+                            {% if not bucket %}
+                            <div class="curated-empty">No players in this category yet.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
-    </form>
+        {% endif %}
+    </section>
 </div>
 
 <script>
-(function(){
-    var mode = document.getElementById('budgetMode');
-    var ug = document.getElementById('uniformBudgetGroup');
-    mode.addEventListener('change', function(){ ug.style.display = mode.value === 'uniform' ? '' : 'none'; });
-    if (mode.value !== 'uniform') ug.style.display = 'none';
+(function() {
+    // ── Budget mode live toggle ──
+    const modeSel = document.getElementById('f-budget-mode');
+    const uniformWrap = document.getElementById('f-uniform-budget-wrap');
+    const customWrap = document.getElementById('f-custom-budgets-wrap');
+    function applyBudgetMode() {
+        if (!modeSel) return;
+        const custom = modeSel.value === 'custom';
+        if (customWrap) customWrap.style.display = custom ? '' : 'none';
+        if (uniformWrap) uniformWrap.style.display = custom ? 'none' : '';
+    }
+    if (modeSel) modeSel.addEventListener('change', applyBudgetMode);
+    applyBudgetMode();
 
-    var re = document.getElementById('reauctionEnabled');
-    var rf = document.getElementById('reauctionFields');
-    re.addEventListener('change', function(){ rf.style.display = re.checked ? '' : 'none'; });
+    // ── Pool filter + count ──
+    const search = document.getElementById('pool-search');
+    const roleSel = document.getElementById('pool-role');
+    const poolList = document.getElementById('pool-list');
+    const countEl = document.getElementById('pool-count');
+
+    function applyFilter() {
+        if (!poolList) return;
+        const q = (search && search.value || '').toLowerCase().trim();
+        const role = (roleSel && roleSel.value || '').toLowerCase();
+        poolList.querySelectorAll('.pool-item').forEach(el => {
+            const name = el.dataset.name || '';
+            const r = (el.dataset.role || '').toLowerCase();
+            const hit = (!q || name.includes(q)) && (!role || r === role);
+            el.style.display = hit ? '' : 'none';
+        });
+    }
+    function updateCount() {
+        if (!poolList || !countEl) return;
+        const n = poolList.querySelectorAll('.pool-item input[type="checkbox"]:checked').length;
+        countEl.textContent = n + ' selected';
+    }
+    if (search) search.addEventListener('input', applyFilter);
+    if (roleSel) roleSel.addEventListener('change', applyFilter);
+    if (poolList) poolList.addEventListener('change', updateCount);
+    updateCount();
 })();
 </script>
 {% endblock %}

@@ -69,7 +69,12 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("cleanup_orphaned_stats",   _loader("migrations.cleanup_orphaned_stats")),
     # Optional recovery dry-run (only runs when PRECHECK_RECOVERY_SOURCE_DB is set).
     ("recover_archived_stats_from_backup", _loader("migrations.recover_archived_stats_from_backup")),
-    ("add_auction",              _loader("migrations.add_auction")),
+    # AUCTION-REDESIGN Phase 1: drops legacy auction tables, adds leagues/seasons/season_teams.
+    # (The old `add_auction` migration was removed from the registry; its tables
+    # are DROPped by this step and recreated with new schemas in phase 2.)
+    ("redesign_auction_phase1",  _loader("migrations.redesign_auction_phase1")),
+    # AUCTION-REDESIGN Phase 2: auction + auction_categories + auction_players (setup only).
+    ("auction_setup_phase2",     _loader("migrations.auction_setup_phase2")),
 ]
 
 
