@@ -35,27 +35,15 @@ def register_league_routes(
 ):
     # ─── Helpers ────────────────────────────────────────────────────────────
 
-    def _own_league_or_404(league_id):
-        lg = DBLeague.query.get(league_id)
-        if lg is None or lg.user_id != current_user.id:
-            abort(404)
-        return lg
-
-    def _own_season_or_404(season_id):
-        s = DBSeason.query.get(season_id)
-        if s is None:
-            abort(404)
-        lg = DBLeague.query.get(s.league_id)
-        if lg is None or lg.user_id != current_user.id:
-            abort(404)
-        return s, lg
-
-    def _own_season_team_or_404(season_team_id):
-        st = DBSeasonTeam.query.get(season_team_id)
-        if st is None:
-            abort(404)
-        season, league = _own_season_or_404(st.season_id)
-        return st, season, league
+    # Shared ownership guards — single source of truth across
+    # league_routes / auction_routes / auction_realtime.
+    from routes._auction_guards import make_guards
+    guards = make_guards(
+        DBLeague=DBLeague, DBSeason=DBSeason, DBSeasonTeam=DBSeasonTeam,
+    )
+    _own_league_or_404 = guards.own_league
+    _own_season_or_404 = guards.own_season
+    _own_season_team_or_404 = guards.own_season_team
 
     def _derive_short_code(user_id, display_name):
         base = re.sub(r"[^A-Z0-9]", "", (display_name or "").upper())[:5] or "TM"

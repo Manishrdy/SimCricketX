@@ -182,17 +182,15 @@ def register_auction_realtime(
             "auction": auction,
         }
 
-    def _own_auction(season_id):
-        season = DBSeason.query.get(season_id)
-        if season is None:
-            abort(404)
-        league = DBLeague.query.get(season.league_id)
-        if league is None or league.user_id != current_user.id:
-            abort(404)
-        auction = DBAuction.query.filter_by(season_id=season.id).first()
-        if auction is None:
-            abort(404)
-        return season, league, auction
+    # Shared ownership guards — same module used by league_routes and
+    # auction_routes so ownership semantics can't drift across files.
+    from routes._auction_guards import make_guards
+    guards = make_guards(
+        DBLeague=DBLeague, DBSeason=DBSeason, DBSeasonTeam=DBSeasonTeam,
+        DBAuction=DBAuction, DBAuctionCategory=DBAuctionCategory,
+        DBAuctionPlayer=DBAuctionPlayer,
+    )
+    _own_auction = guards.own_auction
 
     def _serialize_msg(m):
         return {

@@ -38,14 +38,17 @@ def register_auction_routes(
 ):
     # ─── Helpers ────────────────────────────────────────────────────────────
 
-    def _own_season_or_404(season_id):
-        s = DBSeason.query.get(season_id)
-        if s is None:
-            abort(404)
-        lg = DBLeague.query.get(s.league_id)
-        if lg is None or lg.user_id != current_user.id:
-            abort(404)
-        return s, lg
+    # Shared ownership guards — single source of truth across
+    # league_routes / auction_routes / auction_realtime.
+    from routes._auction_guards import make_guards
+    guards = make_guards(
+        DBLeague=DBLeague, DBSeason=DBSeason, DBSeasonTeam=DBSeasonTeam,
+        DBAuction=DBAuction, DBAuctionCategory=DBAuctionCategory,
+        DBAuctionPlayer=DBAuctionPlayer,
+    )
+    _own_season_or_404 = guards.own_season
+    _own_category = guards.own_category
+    _own_ap = guards.own_ap
 
     def _get_or_create_auction(season):
         auc = DBAuction.query.filter_by(season_id=season.id).first()
@@ -59,24 +62,6 @@ def register_auction_routes(
         """Block mutations once the live auction has started or finished."""
         if season.status not in SETUP_EDITABLE_STATUSES:
             abort(409, description=f"Season status '{season.status}' does not allow setup edits.")
-
-    def _own_category(cat_id):
-        cat = DBAuctionCategory.query.get(cat_id)
-        if cat is None:
-            abort(404)
-        auc = DBAuction.query.get(cat.auction_id)
-        season = DBSeason.query.get(auc.season_id)
-        _own_season_or_404(season.id)  # enforces ownership
-        return cat, auc, season
-
-    def _own_ap(ap_id):
-        ap = DBAuctionPlayer.query.get(ap_id)
-        if ap is None:
-            abort(404)
-        auc = DBAuction.query.get(ap.auction_id)
-        season = DBSeason.query.get(auc.season_id)
-        _own_season_or_404(season.id)
-        return ap, auc, season
 
     def _get_pool(user_id):
         """Merge master pool with this user's overrides/custom players.
