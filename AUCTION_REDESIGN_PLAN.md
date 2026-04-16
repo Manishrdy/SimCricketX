@@ -1,17 +1,19 @@
 # Auction Module — Redesign Plan
 
-**Status**: Phases 1–2 shipped (2026-04-15). Phase 3 next.
-**Date**: 2026-04-15
+**Status**: Phases 1–7 shipped + Phase 8 follow-up (history + audit trail) — 2026-04-16.
+**Date**: 2026-04-16
 **Reference**: `AUCTION-REDESIGN`
 
 ## Phase Status
 - [x] **Phase 1** — League/Season/SeasonTeam CRUD, empty Team creation, manager tokens, home nav repointed, legacy auction tables dropped. Migration `redesign_auction_phase1`.
 - [x] **Phase 2** — Auction setup wizard end-to-end. Models: `Auction`, `AuctionCategory`, `AuctionPlayer`. Migration `auction_setup_phase2`. Routes: `/seasons/<id>/auction` hub + config + category CRUD/reorder/randomize + player curation (two-pane master+user pool, search+filter, bulk add) + finalize/reopen with server-side readiness validation. Legacy `add_auction` migration removed from precheck registry.
-- [ ] Phase 3 — Socket.IO + chat + presence (team portal shell, organizer read-only)
-- [ ] Phase 4 — Traditional live auction
-- [ ] Phase 5 — Draft live auction
-- [ ] Phase 6 — Roster sync to `Team.TeamProfile`, export
-- [ ] Phase 7 — Fixtures/matches from a completed season
+- [x] **Phase 3** — Socket.IO `/auction` namespace, presence map, flat per-auction chat with organizer moderation; team portal + organizer read-only console.
+- [x] **Phase 4** — Traditional live auction end-to-end. Migration `auction_live_phase4` adds `live_player_id` / `lot_ends_at` / `lot_paused_remaining_ms` to `auctions`. Pure helpers in `routes/auction_engine.py`; in-memory bid state + server-authoritative 1Hz timer in `routes/auction_runtime.py`. Organizer HTTP routes (start/pause/resume/complete/next-lot/next-round/force-sell/force-unsold/reverse-sale). `bid:place` socket handler with anti-sniping timer reset, budget invariant enforced server-side, reauction round price reduction. Bid history NOT persisted in MVP.
+- [x] **Phase 5** — Draft live auction. Migration `auction_draft_phase5` adds the `draft_picks` table. `DraftPick` model in `database/models.py`. Draft helpers in `routes/auction_engine.py` (`snake_team_order`, `generate_round_picks`, `owed_carryovers`, `validate_pick`, `apply_draft_pick`/`apply_missed_pick`). Runtime extended in `routes/auction_runtime.py` — round generation + auto-advance + per-pick timer (shares `lot_ends_at`) + `pick:turn`/`pick:submitted`/`pick:missed`/`round:advance` emits; missed pick in round N creates a carryover pick in round N+1 that's inserted before the team's regular slot in snake order. `pick:submit` socket handler in `routes/auction_realtime.py`. Portal + live templates render the draft pick card conditional on `season.auction_mode`. Organizer controls in draft mode: start / pause / resume / complete only (no force-sell / reverse / next-lot / next-round — draft flow is fully automatic).
+- [x] **Phase 6** — Roster sync + export. New module `routes/auction_sync.py` with pure `sync_season_rosters()` and `export_rosters_json/csv()`. `complete_auction()` now auto-runs the sync: for each `SeasonTeam` it copies sold `AuctionPlayer` rows into the team's `TeamProfile` (format = `season.format`), applies a captain/WK heuristic (prefers flagged players; falls back to promoting the most fielding-capable to WK and the highest combined-rating non-WK to captain), and flips `Team.is_draft=False` only when the roster passes the publish rules (11–25 players, ≥1 WK, ≥5 Bowlers/All-rounders, captain + WK designated). Manual re-sync route `POST /seasons/<id>/auction/sync-rosters` for post-edit reruns. Idempotent: wipes and repopulates the target `TeamProfile` on each run. Exports at `GET .../export.csv` and `GET .../export.json`. `auction_live` renders a Completed summary card (per-team roster + spend + unsold list + download buttons) when `status == auction_done`; portal + live pages auto-reload 2s after `status:update { auction_done }` so users see the final state without a manual refresh.
+- [x] **Phase 7** — Tournament bootstrap from a completed season. `POST /seasons/<id>/auction/create-tournament` in `routes/auction_routes.py` invokes the existing `TournamentEngine.create_tournament()` with `team_ids` from the season's `SeasonTeam` rows and `format_type = season.format`. Readiness gate: rejects the request if any team is still `is_draft` (i.e., roster didn't pass publish rules). Organizer picks mode (round-robin / knockout / IPL-style / …) and playoff team count in a form on the Completed summary card. Each click creates a new Tournament row, so organizers may spawn multiple formats from the same season. No schema change — reuses existing `Tournament` / `TournamentTeam` / `TournamentFixture` tables. No new migration.
+- [x] **Phase 8.1** (follow-up) — Per-sid socket rate limits in `routes/auction_realtime.py`. Sliding-window limiter (`_rate_allow(sid, event_name)`) enforces `bid:place` ≤ 5/s, `pick:submit` ≤ 2/s, `chat:send` ≤ 4/2s per connection. Over-limit bids/picks reject with `reason: "rate-limited"`; over-limit chat drops silently. State is per-sid and cleaned up on disconnect via `_rate_drop_sid(sid)` called from `_presence_drop_sid`.
+- [x] **Phase 8** (follow-up) — Persisted bid history + auction audit trail. New models `AuctionBid` + `AuctionAuditLog` in `database/models.py`. Migration `auction_history_phase8` creates both tables. `routes/auction_runtime.py` gains `_log_audit()` + `_record_bid()` helpers; every runtime entry point (`start` / `pause` / `resume` / `complete` / `open_next_lot` / `next_round` / `force_sell` / `force_unsold` / `reverse_last_sale` / draft `submit_pick` / `_draft_timeout` / round advance / auto-sell + auto-unsold from `_expire_lot`) records an audit row with `actor_type ∈ {organizer, team, system}` and a JSON payload. Organizer HTTP routes thread `actor_label=current_user.id` through so every operator action is attributable. `place_bid` persists every accepted bid (rejects stay in memory). `sync-rosters` and `create-tournament` also log audit rows. Read-back: `GET /seasons/<id>/auction/history.json?limit=N` returns the newest bids + audit events; live console has a new History card (Audit / Bids tabs, refresh button, collapsible timeline).
 
 ## Post-planning changes applied during Phases 1–2
 - Dropped `Season.start_at` and `Season.timezone` (model + migration + UI). Auction start is strictly manual.
@@ -132,6 +134,7 @@ Auction mode (`traditional` \| `draft`) lives on `Season.auction_mode` (set at s
 | name | str(100) | |
 | display_order | int | |
 | default_base_price | bigint | nullable (draft) |
+| max_players | int | default 15; pool-size cap (null = no cap) |
 
 Unique: `(auction_id, name)`.
 
@@ -148,13 +151,13 @@ Unique: `(auction_id, name)`.
 | batting/bowling/fielding_rating | int | snapshot |
 | batting_hand / bowling_type / bowling_hand | str | snapshot |
 | base_price_override | bigint | nullable |
-| status | enum | `upcoming` \| `live` \| `sold` \| `unsold` |
-| sold_to_season_team_id | FK season_team | nullable |
-| sold_price | bigint | nullable (0 for draft) |
-| sold_in_round | int | nullable |
-| lot_order | int | |
+| lot_order | int | ordering within category |
+| status | enum | `upcoming` \| `live` \| `sold` \| `unsold` (populated in Phase 4) |
+| sold_to_season_team_id | FK season_team | nullable (Phase 4) |
+| sold_price | bigint | nullable (0 for draft) (Phase 4) |
+| sold_in_round | int | nullable (Phase 4) |
 
-Constraint: exactly one of `master_player_id` / `user_player_id` non-null.
+Constraint: exactly one of `master_player_id` / `user_player_id` non-null (enforced via `@validates`).
 
 ### AuctionBid (traditional only)
 | Field | Type | Notes |
