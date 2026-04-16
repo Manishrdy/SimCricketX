@@ -1,0 +1,942 @@
+{% extends "layout.html" %}
+
+{% block title %}Live console — {{ season.name }} | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .lg-container { max-width: 1200px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
+    .lg-breadcrumb { font-size: .85rem; color: var(--text-secondary, var(--fg-secondary)); margin-bottom: 12px; }
+    .lg-breadcrumb a { color: inherit; text-decoration: none; }
+    .lg-breadcrumb a:hover { text-decoration: underline; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 1rem; }
+    .title { font-size: 1.6rem; font-weight: 700; color: var(--text-primary, var(--fg)); margin: 0; }
+    .sub { font-size: .85rem; color: var(--text-secondary, var(--fg-secondary)); margin-top: 4px; }
+    .pill { padding: 2px 10px; border-radius: 10px; font-size: .72rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+    .pill-setup { background: #dbeafe; color: #1e40af; }
+    .pill-ready { background: #fef3c7; color: #92400e; }
+    .pill-live  { background: #dcfce7; color: #166534; }
+    .pill-done  { background: #e5e7eb; color: #374151; }
+    [data-theme="dark"] .pill-setup { background: #1e3a5f; color: #93c5fd; }
+    [data-theme="dark"] .pill-ready { background: #78350f; color: #fde68a; }
+    [data-theme="dark"] .pill-live  { background: #14532d; color: #86efac; }
+    [data-theme="dark"] .pill-done  { background: #374151; color: #d1d5db; }
+
+    .grid { display: grid; gap: 14px; grid-template-columns: 2fr 1fr; }
+    @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+    .card h2 { margin: 0 0 10px; font-size: 1rem; color: var(--text-primary, var(--fg)); display: flex; align-items: center; gap: 8px; }
+
+    .lot-placeholder { padding: 30px 14px; text-align: center; color: var(--text-secondary, var(--fg-secondary)); border: 1px dashed var(--card-border); border-radius: 10px; }
+    .lot-placeholder i { font-size: 1.8rem; opacity: .5; display: block; margin-bottom: 6px; }
+
+    .teams-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    .teams-table th, .teams-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--card-border); }
+    .teams-table th { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary, var(--fg-secondary)); font-weight: 600; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; margin-right: 6px; vertical-align: middle; }
+    .dot.on { background: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,.15); }
+
+    .presence-org { font-size: .82rem; color: var(--text-secondary, var(--fg-secondary)); }
+
+    /* Chat */
+    .chat-wrap { display: flex; flex-direction: column; height: 540px; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 6px 4px; display: flex; flex-direction: column; gap: 6px; }
+    .chat-msg { padding: 6px 10px; border-radius: 8px; background: var(--accent-light, #f3f4f6); max-width: 92%; align-self: flex-start; font-size: .88rem; position: relative; }
+    .chat-msg.org { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; align-self: stretch; text-align: center; font-size: .8rem; }
+    [data-theme="dark"] .chat-msg.org { background: #78350f; color: #fde68a; border-color: #92400e; }
+    .chat-msg.deleted { opacity: .5; font-style: italic; }
+    .chat-meta { font-size: .68rem; opacity: .75; margin-bottom: 2px; }
+    .chat-msg .mod { position: absolute; top: 2px; right: 4px; background: transparent; border: none; color: var(--danger, #b91c1c); cursor: pointer; font-size: .7rem; opacity: .6; }
+    .chat-msg:hover .mod { opacity: 1; }
+    .chat-input { display: flex; gap: 6px; margin-top: 8px; }
+    .chat-input input { flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--bg, #fff); color: var(--fg, #111); font-size: .9rem; }
+    .chat-input button { padding: 8px 14px; border-radius: 6px; background: var(--brand-primary, #0f766e); color: #fff; border: none; cursor: pointer; font-weight: 600; }
+
+    .chat-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .wipe-btn { background: transparent; border: 1px solid #fecaca; color: #b91c1c; padding: 4px 10px; border-radius: 6px; font-size: .75rem; cursor: pointer; }
+
+    .conn-status { font-size: .75rem; padding: 2px 10px; border-radius: 999px; display: inline-flex; gap: 6px; align-items: center; }
+    .conn-status.ok { color: #16a34a; }
+    .conn-status.bad { color: #b91c1c; }
+    .conn-status .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+    .cat-block { padding: 8px 10px; background: var(--accent-light, #f9fafb); border-radius: 8px; margin-bottom: 6px; font-size: .85rem; display: flex; justify-content: space-between; }
+    .cat-block .cat-name { font-weight: 600; }
+    .cat-block .cat-meta { color: var(--text-secondary, var(--fg-secondary)); font-size: .78rem; }
+
+    /* Phase 4 — live lot + controls */
+    .lot-banner { padding: 8px 12px; border-radius: 8px; font-size: .85rem; margin-bottom: 8px; }
+    .lot-banner.sold { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .lot-banner.unsold { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    [data-theme="dark"] .lot-banner.sold { background: #064e3b; color: #6ee7b7; border-color: #047857; }
+    [data-theme="dark"] .lot-banner.unsold { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
+    .lot-live { display: grid; gap: 12px; }
+    .lot-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+    .lot-name { font-size: 1.4rem; font-weight: 700; }
+    .lot-meta { font-size: .8rem; color: var(--text-secondary, var(--fg-secondary)); }
+    .lot-cat-pill { display: inline-block; padding: 2px 8px; background: var(--accent-light, #f3f4f6); border-radius: 10px; font-size: .72rem; color: var(--text-secondary, var(--fg-secondary)); margin-right: 4px; }
+    .lot-timer { font-size: 1.7rem; font-weight: 800; color: var(--brand-primary, #0f766e); font-variant-numeric: tabular-nums; }
+    .lot-timer.warn { color: #d97706; }
+    .lot-timer.danger { color: #b91c1c; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: .55; } }
+    .lot-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .lot-stat { padding: 6px 10px; background: var(--accent-light, #f9fafb); border-radius: 6px; text-align: center; }
+    .lot-stat .l { font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary, var(--fg-secondary)); }
+    .lot-stat .v { font-size: 1.05rem; font-weight: 700; margin-top: 2px; }
+    .lot-bid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .lot-bid-card { padding: 10px; background: var(--accent-light, #f9fafb); border-radius: 8px; }
+    .lot-bid-card .l { font-size: .7rem; text-transform: uppercase; color: var(--text-secondary, var(--fg-secondary)); }
+    .lot-bid-card .v { font-size: 1.2rem; font-weight: 700; margin-top: 2px; }
+
+    .ctrl-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .ctrl-btn { padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: .85rem; display: inline-flex; gap: 6px; align-items: center; text-decoration: none; }
+    .ctrl-btn.primary  { background: var(--brand-primary, #0f766e); color: #fff; }
+    .ctrl-btn.success  { background: #16a34a; color: #fff; }
+    .ctrl-btn.warn     { background: #d97706; color: #fff; }
+    .ctrl-btn.danger   { background: transparent; color: #b91c1c; border: 1px solid #fecaca; }
+    .ctrl-btn.ghost    { background: transparent; color: var(--text-primary, var(--fg)); border: 1px solid var(--card-border); }
+    .ctrl-btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+
+    .feed-list { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; font-size: .82rem; }
+    .feed-list li { padding: 5px 10px; background: var(--accent-light, #f9fafb); border-radius: 6px; }
+    .feed-list li.sold { background: #ecfdf5; color: #065f46; }
+    .feed-list li.unsold { background: #fef2f2; color: #991b1b; }
+    .feed-list li .ts { color: var(--text-secondary, var(--fg-secondary)); font-size: .7rem; margin-right: 6px; }
+
+    /* Phase 6 — post-auction summary */
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+    .summary-team { border: 1px solid var(--card-border); border-radius: 10px; padding: 12px; background: var(--bg, #fff); }
+    .summary-team-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .summary-team-name { font-size: 1.05rem; font-weight: 700; }
+    .summary-team-stats { font-size: .78rem; color: var(--text-secondary, var(--fg-secondary)); text-align: right; }
+    .summary-team-stats strong { color: var(--text-primary, var(--fg)); }
+    .summary-roster { list-style: none; margin: 0; padding: 0; font-size: .85rem; max-height: 260px; overflow-y: auto; }
+    .summary-roster li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 4px 6px; border-bottom: 1px dashed var(--card-border); }
+    .summary-roster li:last-child { border-bottom: none; }
+    .summary-roster .r-name { font-weight: 600; }
+    .summary-roster .r-cat  { font-size: .72rem; color: var(--text-secondary, var(--fg-secondary)); }
+    .summary-roster .r-price{ font-variant-numeric: tabular-nums; color: var(--text-primary, var(--fg)); font-weight: 600; }
+    .summary-empty { color: var(--text-secondary, var(--fg-secondary)); font-style: italic; font-size: .85rem; padding: 6px; }
+    .summary-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .summary-actions a, .summary-actions button { text-decoration: none; }
+    .summary-unsold { margin-top: 10px; font-size: .82rem; color: var(--text-secondary, var(--fg-secondary)); }
+    .summary-unsold strong { color: var(--text-primary, var(--fg)); }
+
+    /* Phase 8 — history panel */
+    .hist-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+    .hist-tab { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--card-border); background: transparent; color: var(--text-primary, var(--fg)); cursor: pointer; font-size: .82rem; font-weight: 600; }
+    .hist-tab.active { background: var(--brand-primary, #0f766e); color: #fff; border-color: var(--brand-primary, #0f766e); }
+    .hist-body { max-height: 320px; overflow-y: auto; border: 1px solid var(--card-border); border-radius: 8px; padding: 6px; font-size: .82rem; background: var(--bg, #fff); }
+    .hist-body ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+    .hist-body li { padding: 5px 8px; border-radius: 4px; background: var(--accent-light, #f9fafb); display: grid; grid-template-columns: 110px 1fr auto; gap: 8px; align-items: center; }
+    .hist-body li .ts { font-size: .7rem; color: var(--text-secondary, var(--fg-secondary)); font-variant-numeric: tabular-nums; }
+    .hist-body li .action { font-weight: 700; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; }
+    .hist-body li .detail { font-size: .8rem; }
+    .hist-body li .actor { font-size: .7rem; color: var(--text-secondary, var(--fg-secondary)); text-align: right; }
+    .hist-empty { padding: 20px 10px; text-align: center; color: var(--text-secondary, var(--fg-secondary)); font-size: .82rem; }
+    .hist-action-auction { color: #1e40af; }
+    .hist-action-lot     { color: #0f766e; }
+    .hist-action-pick    { color: #7c2d12; }
+    .hist-action-round   { color: #b91c1c; }
+    .hist-action-roster  { color: #065f46; }
+    .hist-action-tournament { color: #6b21a8; }
+
+    /* Phase 5 — draft pick view */
+    .pick-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+    .pick-title { font-size: 1.3rem; font-weight: 700; line-height: 1.2; }
+    .pick-sub { font-size: .82rem; color: var(--text-secondary, var(--fg-secondary)); margin-top: 2px; }
+    .pick-carryover { font-size: .78rem; color: #d97706; margin-top: 4px; font-weight: 500; }
+    .pick-list-org { list-style: none; margin: 8px 0 0; padding: 0; max-height: 200px; overflow-y: auto; border: 1px solid var(--card-border); border-radius: 8px; background: var(--bg, #fff); }
+    .pick-list-org li { padding: 6px 12px; font-size: .82rem; border-bottom: 1px solid var(--card-border); display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .pick-list-org li:last-child { border-bottom: none; }
+    .pick-list-org .pi-meta { color: var(--text-secondary, var(--fg-secondary)); font-size: .72rem; text-align: right; }
+    .pick-pool-heading { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary, var(--fg-secondary)); margin-top: 10px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lg-container">
+    <div class="lg-breadcrumb">
+        <a href="{{ url_for('leagues_list') }}">Leagues</a> /
+        <a href="{{ url_for('league_detail', league_id=league.id) }}">{{ league.name }}</a> /
+        <a href="{{ url_for('season_detail', season_id=season.id) }}">{{ season.name }}</a> /
+        <a href="{{ url_for('auction_setup', season_id=season.id) }}">Auction setup</a> /
+        Live console
+    </div>
+
+    <div class="header">
+        <div>
+            <h1 class="title">Live console</h1>
+            <div class="sub">Organizer controls — start, open lots, force-sell, reverse, advance rounds.</div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <span id="status-pill" class="pill pill-{% if season.status == 'auction_live' %}live{% elif season.status == 'auction_done' %}done{% elif season.status == 'auction_ready' or season.status == 'auction_paused' %}ready{% else %}setup{% endif %}">
+                {% if season.status == 'auction_live' %}<i class="fa-solid fa-circle"></i> Live
+                {% elif season.status == 'auction_ready' %}Awaiting start
+                {% elif season.status == 'auction_paused' %}Paused
+                {% elif season.status == 'auction_done' %}Complete
+                {% else %}Setup{% endif %}
+            </span>
+            {% if season.auction_mode == 'draft' %}
+                {% set total_rounds = categories|length %}
+            {% else %}
+                {% set total_rounds = (auction.reauction_rounds or 0) + 1 %}
+            {% endif %}
+            <span id="round-pill" class="pill pill-setup">Round {{ auction.current_round or 1 }} / {{ total_rounds }}</span>
+            <span id="conn-status" class="conn-status bad"><span class="dot"></span><span id="conn-text">connecting…</span></span>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div style="margin-bottom: 12px;">
+            {% for cat, msg in messages %}
+                <div class="lot-banner {% if cat == 'error' %}unsold{% else %}sold{% endif %}">{{ msg }}</div>
+            {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    {% if summary_teams is not none %}
+    <div class="card">
+        <h2 style="margin-top:0;"><i class="fa-solid fa-flag-checkered"></i> Auction complete — final rosters</h2>
+        <div class="summary-actions">
+            <a class="ctrl-btn primary" href="{{ url_for('auction_export_csv', season_id=season.id) }}"><i class="fa-solid fa-file-csv"></i> Download CSV</a>
+            <a class="ctrl-btn ghost" href="{{ url_for('auction_export_json', season_id=season.id) }}"><i class="fa-solid fa-file-code"></i> Download JSON</a>
+            <form method="post" action="{{ url_for('auction_sync_rosters', season_id=season.id) }}" style="display:inline;" onsubmit="return confirm('Re-run the roster sync? Any manual captain/WK edits on the team profiles will be overwritten.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="ctrl-btn warn"><i class="fa-solid fa-rotate"></i> Re-sync rosters</button>
+            </form>
+        </div>
+        <div class="summary-grid">
+            {% for t in summary_teams %}
+            <div class="summary-team">
+                <div class="summary-team-head">
+                    <div>
+                        <div class="summary-team-name">{{ t.display_name }}</div>
+                        <div style="font-size:.72rem; color:var(--text-secondary,var(--fg-secondary));">
+                            {{ t.players_bought }} player{{ '' if t.players_bought == 1 else 's' }} · spent ${{ '{:,}'.format(t.total_spend) }}
+                        </div>
+                    </div>
+                    <div class="summary-team-stats">
+                        Purse left<br><strong>${{ '{:,}'.format(t.purse_remaining) }}</strong>
+                    </div>
+                </div>
+                {% if t.roster %}
+                <ul class="summary-roster">
+                    {% for p in t.roster %}
+                    <li>
+                        <span><span class="r-name">{{ p.name }}</span> <span class="r-cat">· {{ p.role or '—' }} · {{ p.category_name }}</span></span>
+                        <span class="r-cat">B{{ p.batting_rating }}/Bw{{ p.bowling_rating }}</span>
+                        <span class="r-price">${{ '{:,}'.format(p.sold_price) }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="summary-empty">No players acquired.</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% if summary_unsold %}
+        <div class="summary-unsold">
+            <strong>{{ summary_unsold|length }} unsold:</strong>
+            {% for p in summary_unsold %}{{ p.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+
+        {# Phase 7 — Generate a tournament from this completed season #}
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--card-border);">
+            <h3 style="margin:0 0 8px; font-size:.95rem;"><i class="fa-solid fa-trophy"></i> Play these teams — create a tournament</h3>
+            {% if not rosters_ready %}
+            <div class="lot-banner unsold" style="margin:0;">
+                Can't create a tournament yet — one or more rosters aren't publish-ready.
+                Use <strong>Re-sync rosters</strong> above, or edit the team profiles directly to set captain/WK and hit the 11-player minimum.
+            </div>
+            {% else %}
+            <form method="post" action="{{ url_for('auction_create_tournament', season_id=season.id) }}"
+                  style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div style="display:flex; flex-direction:column; gap:4px; flex:1 1 260px;">
+                    <label for="tourney-name" style="font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary,var(--fg-secondary));">Name</label>
+                    <input id="tourney-name" name="name" type="text" value="{{ league.name }} — {{ season.name }}"
+                           style="padding:8px 10px; border-radius:6px; border:1px solid var(--card-border); background:var(--bg,#fff); color:var(--fg,#111); font-size:.88rem;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:4px; flex:1 1 260px;">
+                    <label for="tourney-mode" style="font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary,var(--fg-secondary));">Format</label>
+                    <select id="tourney-mode" name="mode"
+                            style="padding:8px 10px; border-radius:6px; border:1px solid var(--card-border); background:var(--bg,#fff); color:var(--fg,#111); font-size:.88rem;">
+                        {% for mode_id, mode_name, mode_desc in tournament_modes %}
+                            {% if mode_id != 'custom_series' %}
+                            <option value="{{ mode_id }}">{{ mode_name }} — {{ mode_desc }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:4px; width:120px;">
+                    <label for="tourney-playoffs" style="font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary,var(--fg-secondary));">Playoff teams</label>
+                    <input id="tourney-playoffs" name="playoff_teams" type="number" min="2" max="8" value="4"
+                           style="padding:8px 10px; border-radius:6px; border:1px solid var(--card-border); background:var(--bg,#fff); color:var(--fg,#111); font-size:.88rem;">
+                </div>
+                <button type="submit" class="ctrl-btn success"><i class="fa-solid fa-play"></i> Create tournament</button>
+            </form>
+            <div style="font-size:.72rem; color:var(--text-secondary,var(--fg-secondary)); margin-top:6px;">
+                Creates a new tournament using the {{ summary_teams|length }} team{{ '' if summary_teams|length == 1 else 's' }} from this season ({{ season.format }}). You can create multiple — each goes to your tournaments list.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid">
+        <!-- LEFT: lot placeholder + teams + categories -->
+        <div>
+            {% if season.auction_mode == 'draft' %}
+            <div class="card" id="draft-card">
+                <div class="pick-head">
+                    <div>
+                        <div class="pick-title" id="pick-title">Draft — awaiting start</div>
+                        <div class="pick-sub" id="pick-sub">Click <strong>Start auction</strong> below to begin round 1.</div>
+                    </div>
+                    <div class="lot-timer" id="lot-timer" style="display:none;">--s</div>
+                </div>
+                <div id="lot-banner" class="lot-banner" style="display:none;"></div>
+                <div class="pick-carryover" id="pick-carryover" style="display:none;"></div>
+                <div class="pick-pool-heading" id="pick-pool-heading" style="display:none;">Available players in this category</div>
+                <ul class="pick-list-org" id="pick-list-org" style="display:none;"></ul>
+
+                <div class="ctrl-row" style="margin-top: 12px;">
+                    {% if season.status == 'auction_ready' %}
+                        <form method="post" action="{{ url_for('auction_start', season_id=season.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn primary" type="submit"><i class="fa-solid fa-play"></i> Start draft</button>
+                        </form>
+                    {% elif season.status == 'auction_paused' %}
+                        <form method="post" action="{{ url_for('auction_resume', season_id=season.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn primary" type="submit"><i class="fa-solid fa-play"></i> Resume</button>
+                        </form>
+                    {% elif season.status == 'auction_live' %}
+                        <form method="post" action="{{ url_for('auction_pause', season_id=season.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn ghost" type="submit"><i class="fa-solid fa-pause"></i> Pause</button>
+                        </form>
+                        <form method="post" action="{{ url_for('auction_complete', season_id=season.id) }}" style="display:inline;" onsubmit="return confirm('Mark the draft complete? Any unpicked players will be marked unsold.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn danger" type="submit"><i class="fa-solid fa-flag-checkered"></i> Complete</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% else %}
+            <div class="card">
+                <h2><i class="fa-solid fa-gavel"></i> Current player</h2>
+
+                <div id="lot-banner" class="lot-banner" style="display:none;"></div>
+
+                <div id="lot-placeholder" class="lot-placeholder">
+                    <i class="fa-solid fa-hourglass-half"></i>
+                    {% if season.status == 'auction_ready' %}
+                    Auction is finalized. Click <strong>Start auction</strong> below.
+                    {% elif season.status == 'auction_live' %}
+                    No lot is open — click <strong>Open next player</strong>.
+                    {% elif season.status == 'auction_paused' %}
+                    Auction paused. Resume to continue.
+                    {% elif season.status == 'auction_done' %}
+                    Auction complete.
+                    {% else %}
+                    Finish setup and click <em>Finalize</em> to unlock live controls.
+                    {% endif %}
+                </div>
+
+                <div id="lot-card" class="lot-live" style="display:none;">
+                    <div class="lot-head">
+                        <div>
+                            <div class="lot-name" id="lot-name">—</div>
+                            <div class="lot-meta">
+                                <span class="lot-cat-pill" id="lot-cat">—</span>
+                                <span id="lot-role">—</span>
+                            </div>
+                        </div>
+                        <div class="lot-timer" id="lot-timer">--s</div>
+                    </div>
+                    <div class="lot-stats">
+                        <div class="lot-stat"><div class="l">Base</div><div class="v" id="lot-base">$0</div></div>
+                        <div class="lot-stat"><div class="l">Bat</div><div class="v" id="lot-bat">—</div></div>
+                        <div class="lot-stat"><div class="l">Bowl</div><div class="v" id="lot-bowl">—</div></div>
+                        <div class="lot-stat"><div class="l">Field</div><div class="v" id="lot-field">—</div></div>
+                    </div>
+                    <div class="lot-bid-row">
+                        <div class="lot-bid-card">
+                            <div class="l">Current bid</div>
+                            <div class="v" id="lot-cur">—</div>
+                        </div>
+                        <div class="lot-bid-card">
+                            <div class="l">Top bidder</div>
+                            <div class="v" id="lot-curby">—</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ctrl-row" style="margin-top: 12px;">
+                    {% if season.status == 'auction_ready' %}
+                        <form method="post" action="{{ url_for('auction_start', season_id=season.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn primary" type="submit"><i class="fa-solid fa-play"></i> Start auction</button>
+                        </form>
+                    {% elif season.status == 'auction_paused' %}
+                        <form method="post" action="{{ url_for('auction_resume', season_id=season.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn primary" type="submit"><i class="fa-solid fa-play"></i> Resume</button>
+                        </form>
+                    {% elif season.status == 'auction_live' %}
+                        <form method="post" action="{{ url_for('auction_next_lot', season_id=season.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn primary" id="btn-next-lot" type="submit"><i class="fa-solid fa-forward"></i> Open next player</button>
+                        </form>
+                        <form method="post" action="{{ url_for('auction_force_sell', season_id=season.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn success" id="btn-force-sell" type="submit"><i class="fa-solid fa-hammer"></i> Force sell</button>
+                        </form>
+                        <form method="post" action="{{ url_for('auction_force_unsold', season_id=season.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn warn" id="btn-force-unsold" type="submit"><i class="fa-solid fa-ban"></i> Force unsold</button>
+                        </form>
+                        <form method="post" action="{{ url_for('auction_reverse_sale', season_id=season.id) }}" style="display:inline;" onsubmit="return confirm('Reverse the most recent sale in this round?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn ghost" id="btn-reverse" type="submit"><i class="fa-solid fa-rotate-left"></i> Reverse last sale</button>
+                        </form>
+                        <form method="post" action="{{ url_for('auction_pause', season_id=season.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn ghost" type="submit"><i class="fa-solid fa-pause"></i> Pause</button>
+                        </form>
+                        <form method="post" action="{{ url_for('auction_next_round', season_id=season.id) }}" style="display:inline;" onsubmit="return confirm('Start the next re-auction round? Unsold players will be reopened.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn ghost" type="submit"><i class="fa-solid fa-arrows-rotate"></i> Next round</button>
+                        </form>
+                        <form method="post" action="{{ url_for('auction_complete', season_id=season.id) }}" style="display:inline;" onsubmit="return confirm('Mark the auction complete? This is final.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="ctrl-btn danger" type="submit"><i class="fa-solid fa-flag-checkered"></i> Complete</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card">
+                <h2><i class="fa-solid fa-rss"></i> Activity</h2>
+                <ul class="feed-list" id="feed-list">
+                    <li><span class="ts">…</span>Waiting for events.</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h2><i class="fa-solid fa-people-group"></i> Teams</h2>
+                <table class="teams-table">
+                    <thead>
+                        <tr><th></th><th>Team</th><th>Purse</th><th>Bought</th></tr>
+                    </thead>
+                    <tbody id="teams-tbody">
+                    {% for st in season_teams %}
+                    <tr data-team-id="{{ st.id }}">
+                        <td><span class="dot" data-online="off"></span></td>
+                        <td>{{ st.display_name }}</td>
+                        <td>${{ st.purse_remaining or 0 }}</td>
+                        <td>{{ st.players_bought or 0 }} / {{ auction.max_players_per_team }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <div class="presence-org" id="presence-org" style="margin-top:10px;">Your console: connecting…</div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fa-solid fa-clock-rotate-left"></i> History
+                    <button type="button" id="hist-refresh" style="margin-left:auto; padding:4px 10px; border-radius:6px; border:1px solid var(--card-border); background:transparent; color:var(--text-primary,var(--fg)); cursor:pointer; font-size:.75rem;">
+                        <i class="fa-solid fa-rotate"></i> Refresh
+                    </button>
+                </h2>
+                <div class="hist-tabs">
+                    <button type="button" class="hist-tab active" data-tab="audit">Audit trail</button>
+                    <button type="button" class="hist-tab" data-tab="bids">Bid log</button>
+                </div>
+                <div class="hist-body" id="hist-body">
+                    <div class="hist-empty" id="hist-empty">Loading history…</div>
+                    <ul id="hist-list" style="display:none;"></ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fa-solid fa-layer-group"></i> Categories</h2>
+                {% for cat in categories %}
+                <div class="cat-block">
+                    <div>
+                        <span class="cat-name">{{ loop.index }}. {{ cat.name }}</span>
+                        <span class="cat-meta" style="margin-left:8px;">
+                            Default ${{ cat.default_base_price if cat.default_base_price is not none else '—' }}{% if cat.max_players is not none %} · cap {{ cat.max_players }}{% endif %}
+                        </span>
+                    </div>
+                    <div class="cat-meta">{{ cat.players|length }} players</div>
+                </div>
+                {% else %}
+                <div class="cat-meta">No categories configured.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- RIGHT: chat (with moderation) -->
+        <div>
+            <div class="card chat-wrap">
+                <div class="chat-toolbar">
+                    <h2 style="margin:0;"><i class="fa-solid fa-comments"></i> Chat</h2>
+                    <button id="chat-wipe" class="wipe-btn"><i class="fa-solid fa-broom"></i> Wipe all</button>
+                </div>
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input">
+                    <input id="chat-input" type="text" maxlength="500" placeholder="Broadcast to all teams…">
+                    <button id="chat-send"><i class="fa-solid fa-paper-plane"></i> Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+<script>
+(function() {
+    const AUCTION_ID = {{ auction.id }};
+    const INITIAL    = {{ chat_messages|tojson }};
+    const MODE       = {{ season.auction_mode|tojson }};  // 'traditional' | 'draft'
+
+    const connStatus = document.getElementById('conn-status');
+    const connText   = document.getElementById('conn-text');
+    const presenceOrg= document.getElementById('presence-org');
+    const teamsBody  = document.getElementById('teams-tbody');
+    const msgEl      = document.getElementById('chat-messages');
+    const inputEl    = document.getElementById('chat-input');
+    const sendBtn    = document.getElementById('chat-send');
+    const wipeBtn    = document.getElementById('chat-wipe');
+
+    // Live lot refs (null in draft mode — guarded)
+    const lotCard       = document.getElementById('lot-card');
+    const lotPlaceholder= document.getElementById('lot-placeholder');
+    const lotBanner     = document.getElementById('lot-banner');
+    const lotName       = document.getElementById('lot-name');
+    const lotCat        = document.getElementById('lot-cat');
+    const lotRole       = document.getElementById('lot-role');
+    const lotBat        = document.getElementById('lot-bat');
+    const lotBowl       = document.getElementById('lot-bowl');
+    const lotField      = document.getElementById('lot-field');
+    const lotBase       = document.getElementById('lot-base');
+    const lotCur        = document.getElementById('lot-cur');
+    const lotCurBy      = document.getElementById('lot-curby');
+    const lotTimer      = document.getElementById('lot-timer');
+    const roundPill     = document.getElementById('round-pill');
+    const feedList      = document.getElementById('feed-list');
+    const btnForceSell  = document.getElementById('btn-force-sell');
+    const btnReverse    = document.getElementById('btn-reverse');
+
+    // Draft refs (null in traditional mode)
+    const pickTitle     = document.getElementById('pick-title');
+    const pickSub       = document.getElementById('pick-sub');
+    const pickCarryover = document.getElementById('pick-carryover');
+    const pickListOrg   = document.getElementById('pick-list-org');
+    const pickPoolHeading = document.getElementById('pick-pool-heading');
+
+    let currentPick = null;
+
+    let lot = null;
+    let countdownTimer = null;
+
+    function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString(); }
+    function nowStr() { const d = new Date(); return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'}); }
+
+    function pushFeed(kind, html) {
+        if (feedList.children.length === 1 && feedList.children[0].textContent.startsWith('Waiting')) {
+            feedList.innerHTML = '';
+        }
+        const li = document.createElement('li');
+        li.className = kind || '';
+        li.innerHTML = `<span class="ts">${nowStr()}</span>${html}`;
+        feedList.insertBefore(li, feedList.firstChild);
+        while (feedList.children.length > 60) feedList.removeChild(feedList.lastChild);
+    }
+
+    function showPlaceholder(text) {
+        if (MODE === 'draft') {
+            if (pickSub && text) pickSub.innerHTML = text;
+            return;
+        }
+        lotCard.style.display = 'none';
+        lotPlaceholder.style.display = 'block';
+        if (text) lotPlaceholder.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> ' + text;
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        if (btnForceSell) btnForceSell.disabled = true;
+    }
+
+    function startCountdown(endsAt) {
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        if (!lotTimer) return;
+        if (!endsAt) { lotTimer.textContent = '--s'; return; }
+        const tick = () => {
+            const remaining = Math.max(0, Math.round((new Date(endsAt) - new Date()) / 1000));
+            lotTimer.textContent = remaining + 's';
+            lotTimer.className = 'lot-timer' + (remaining <= 3 ? ' danger' : remaining <= 8 ? ' warn' : '');
+            if (remaining <= 0 && countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        };
+        tick();
+        countdownTimer = setInterval(tick, 250);
+    }
+
+    function renderLot(payload) {
+        if (MODE !== 'traditional') return;
+        lot = {
+            player_id: payload.player.id,
+            name: payload.player.name,
+            role: payload.player.role,
+            category_name: payload.player.category_name,
+            base_price: payload.player.base_price,
+            batting_rating: payload.player.batting_rating,
+            bowling_rating: payload.player.bowling_rating,
+            fielding_rating: payload.player.fielding_rating,
+            current_bid: payload.current_bid || null,
+            current_bidder_id: payload.current_bidder_id || null,
+            current_bidder_name: payload.current_bidder_name || null,
+            ends_at: payload.ends_at,
+        };
+        if (payload.round) roundPill.textContent = 'Round ' + payload.round + ' / ' + (parseInt({{ ((auction.reauction_rounds or 0) + 1)|tojson }}, 10));
+        lotName.textContent  = lot.name || '—';
+        lotCat.textContent   = lot.category_name || '—';
+        lotRole.textContent  = lot.role || '—';
+        lotBase.textContent  = fmtMoney(lot.base_price);
+        lotBat.textContent   = lot.batting_rating ?? '—';
+        lotBowl.textContent  = lot.bowling_rating ?? '—';
+        lotField.textContent = lot.fielding_rating ?? '—';
+        renderCurrentBid();
+        lotPlaceholder.style.display = 'none';
+        lotCard.style.display = 'grid';
+        if (btnForceSell) btnForceSell.disabled = !lot.current_bid;
+        startCountdown(lot && lot.ends_at);
+        pushFeed('', `<i class="fa-solid fa-gavel"></i> Lot opened: <strong>${escHtml(lot.name)}</strong> · base ${fmtMoney(lot.base_price)}`);
+    }
+
+    function renderCurrentBid() {
+        if (MODE !== 'traditional') return;
+        if (!lot || !lot.current_bid) {
+            lotCur.textContent = '—';
+            lotCurBy.textContent = 'no bids';
+            if (btnForceSell) btnForceSell.disabled = true;
+        } else {
+            lotCur.textContent = fmtMoney(lot.current_bid);
+            lotCurBy.textContent = lot.current_bidder_name || '—';
+            if (btnForceSell) btnForceSell.disabled = false;
+        }
+    }
+
+    function updateTeamRow(team_id, purse, bought) {
+        const tr = teamsBody.querySelector(`tr[data-team-id="${team_id}"]`);
+        if (!tr) return;
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 4) {
+            cells[2].textContent = fmtMoney(purse);
+            cells[3].textContent = bought + ' / ' + (parseInt({{ auction.max_players_per_team|tojson }}, 10) || 25);
+        }
+    }
+
+    function escHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    }
+    function renderMsg(m) {
+        const cls = m.deleted ? 'chat-msg deleted' :
+                    m.sender_type === 'organizer' ? 'chat-msg org' : 'chat-msg';
+        const body = m.deleted ? '<em>message removed</em>' : escHtml(m.body);
+        const meta = m.sender_type === 'organizer'
+            ? ''
+            : `<div class="chat-meta">${escHtml(m.sender_label)}</div>`;
+        const del  = m.deleted ? '' :
+            `<button class="mod" data-id="${m.id}" title="Delete message"><i class="fa-solid fa-trash"></i></button>`;
+        const div = document.createElement('div');
+        div.className = cls;
+        div.id = 'msg-' + m.id;
+        div.innerHTML = meta + body + del;
+        const btn = div.querySelector('.mod');
+        if (btn) btn.addEventListener('click', () => {
+            if (!confirm('Delete this message?')) return;
+            socket.emit('chat:delete', { id: m.id });
+        });
+        msgEl.appendChild(div);
+        msgEl.scrollTop = msgEl.scrollHeight;
+    }
+    function markDeleted(id) {
+        const el = document.getElementById('msg-' + id);
+        if (!el) return;
+        el.classList.add('deleted');
+        el.innerHTML = '<em>message removed</em>';
+    }
+    function wipeAll() { msgEl.innerHTML = ''; }
+
+    function renderPresence(p) {
+        const onlineTeams = new Set((p.teams || []).filter(t => t.online).map(t => t.team_id));
+        teamsBody.querySelectorAll('tr[data-team-id]').forEach(tr => {
+            const tid = parseInt(tr.getAttribute('data-team-id'), 10);
+            const dot = tr.querySelector('.dot');
+            if (onlineTeams.has(tid)) dot.classList.add('on'); else dot.classList.remove('on');
+        });
+        presenceOrg.textContent = 'Your console: ' + (p.organizer_online ? 'online' : 'offline');
+    }
+
+    (INITIAL || []).forEach(renderMsg);
+
+    const socket = io('/auction', {
+        query: { auction_id: AUCTION_ID },
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+    });
+
+    socket.on('connect',        () => { connStatus.className = 'conn-status ok'; connText.textContent = 'online'; });
+    socket.on('disconnect',     () => { connStatus.className = 'conn-status bad'; connText.textContent = 'offline'; });
+    socket.on('connect_error',  () => { connStatus.className = 'conn-status bad'; connText.textContent = 'auth error'; });
+
+    socket.on('presence:update', renderPresence);
+    socket.on('chat:new',        renderMsg);
+    socket.on('chat:deleted',    d => markDeleted(d.id));
+    socket.on('chat:wiped',      wipeAll);
+
+    // ── Live auction events
+    socket.on('lot:open', renderLot);
+    socket.on('bid:new', d => {
+        if (!lot || d.player_id !== lot.player_id) return;
+        lot.current_bid = d.amount;
+        lot.current_bidder_id = d.team_id;
+        lot.current_bidder_name = d.team_name;
+        lot.ends_at = d.ends_at || lot.ends_at;
+        renderCurrentBid();
+        startCountdown(lot.ends_at);
+        pushFeed('bid', `<i class="fa-solid fa-arrow-up"></i> <strong>${escHtml(d.team_name)}</strong> bid ${fmtMoney(d.amount)}`);
+    });
+    socket.on('lot:sold', d => {
+        const label = lot ? escHtml(lot.name) : 'Player';
+        pushFeed('sold', `<i class="fa-solid fa-circle-check"></i> ${label} sold to <strong>${escHtml(d.team_name)}</strong> for ${fmtMoney(d.amount)}`);
+        lot = null;
+        showPlaceholder('Sold. Click <strong>Open next player</strong>.');
+    });
+    socket.on('lot:unsold', d => {
+        const label = lot ? escHtml(lot.name) : 'Player';
+        pushFeed('unsold', `<i class="fa-solid fa-circle-xmark"></i> ${label} went unsold.`);
+        lot = null;
+        showPlaceholder('Unsold. Click <strong>Open next player</strong>.');
+    });
+    socket.on('lot:reversed', d => {
+        pushFeed('', `<i class="fa-solid fa-rotate-left"></i> Sale reversed; refund ${fmtMoney(d.refund)}.`);
+    });
+    socket.on('team:update', d => {
+        updateTeamRow(d.team_id, d.purse_remaining, d.players_bought);
+    });
+    socket.on('status:update', d => {
+        const sp = document.getElementById('status-pill');
+        if (sp) {
+            sp.className = 'pill pill-' + (
+                d.status === 'auction_live' ? 'live' :
+                d.status === 'auction_done' ? 'done' :
+                (d.status === 'auction_paused' || d.status === 'auction_ready') ? 'ready' : 'setup'
+            );
+            sp.textContent = ({
+                'auction_live': '● Live',
+                'auction_paused': 'Paused',
+                'auction_ready': 'Awaiting start',
+                'auction_done': 'Complete',
+            })[d.status] || d.status;
+        }
+        if (d.status === 'auction_done') {
+            pushFeed('sold', '<i class="fa-solid fa-flag-checkered"></i> Auction complete — preparing final summary…');
+            setTimeout(() => { window.location.reload(); }, 2000);
+        }
+        if (d.current_round && roundPill) {
+            const totalRounds = MODE === 'draft'
+                ? (currentPick && currentPick.total_rounds ? currentPick.total_rounds : '?')
+                : (parseInt({{ ((auction.reauction_rounds or 0) + 1)|tojson }}, 10));
+            roundPill.textContent = 'Round ' + d.current_round + ' / ' + totalRounds;
+        }
+        pushFeed('', `<i class="fa-solid fa-flag"></i> Status: <strong>${escHtml(d.status)}</strong>`);
+    });
+    socket.on('timer:tick', d => {
+        if (MODE === 'draft') {
+            if (!currentPick || d.pick_id !== currentPick.pick_id) return;
+            currentPick.ends_at = new Date(Date.now() + d.seconds_remaining * 1000).toISOString();
+            return;
+        }
+        if (!lot || d.player_id !== lot.player_id) return;
+        lot.ends_at = new Date(Date.now() + d.seconds_remaining * 1000).toISOString();
+    });
+
+    // ── Draft mode events (organizer view)
+    function renderPickOrg(p) {
+        currentPick = {
+            pick_id: p.pick_id,
+            round: p.round,
+            team_id: p.team_id,
+            team_name: p.team_name,
+            category_id: p.category_id,
+            category_name: p.category_name,
+            is_carryover: p.is_carryover,
+            carryover_from_round: p.carryover_from_round,
+            ends_at: p.ends_at,
+            total_rounds: p.total_rounds,
+            players: p.players || [],
+        };
+        if (pickTitle) pickTitle.textContent = `${p.team_name || 'Team'} is picking · ${p.category_name || '—'}`;
+        if (pickSub) pickSub.textContent = `Round ${p.round} / ${p.total_rounds || '?'} · Pick #${p.pick_order_in_round}`;
+        if (pickCarryover) {
+            pickCarryover.style.display = p.is_carryover ? 'block' : 'none';
+            if (p.is_carryover) {
+                pickCarryover.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Carryover pick (catch-up from an earlier missed round)';
+            }
+        }
+        if (lotTimer) { lotTimer.style.display = 'block'; }
+        startCountdown(p.ends_at);
+        if (pickListOrg) {
+            pickListOrg.innerHTML = '';
+            const players = p.players || [];
+            if (!players.length) {
+                pickListOrg.style.display = 'none';
+                pickPoolHeading.style.display = 'none';
+            } else {
+                pickPoolHeading.style.display = 'block';
+                pickListOrg.style.display = 'block';
+                players.forEach(pl => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<div><strong>${escHtml(pl.name)}</strong> <span class="pi-meta">${escHtml(pl.role || '—')}</span></div>
+                                    <div class="pi-meta">B ${pl.batting_rating ?? '—'} · Bw ${pl.bowling_rating ?? '—'} · F ${pl.fielding_rating ?? '—'}</div>`;
+                    pickListOrg.appendChild(li);
+                });
+            }
+        }
+        pushFeed('', `<i class="fa-solid fa-hand-pointer"></i> <strong>${escHtml(p.team_name || '')}</strong> on the clock · ${escHtml(p.category_name || '')} · R${p.round}`);
+    }
+    if (MODE === 'draft') {
+        socket.on('pick:turn', renderPickOrg);
+        socket.on('pick:submitted', d => {
+            pushFeed('sold', `<i class="fa-solid fa-circle-check"></i> <strong>${escHtml(d.team_name)}</strong> picked <strong>${escHtml(d.player_name)}</strong> (${escHtml(d.category_name)}${d.is_carryover ? ' · carryover' : ''})`);
+        });
+        socket.on('pick:missed', d => {
+            pushFeed('unsold', `<i class="fa-solid fa-clock"></i> Pick missed (round ${d.round})${d.is_carryover ? ' · carryover' : ''}`);
+        });
+        socket.on('round:advance', d => {
+            pushFeed('', `<i class="fa-solid fa-forward"></i> Round ${d.round} started`);
+        });
+    }
+
+    setInterval(() => { if (socket.connected) socket.emit('heartbeat'); }, 10000);
+
+    function send() {
+        const body = inputEl.value.trim();
+        if (!body || !socket.connected) return;
+        socket.emit('chat:send', { body });
+        inputEl.value = '';
+    }
+    sendBtn.addEventListener('click', send);
+    inputEl.addEventListener('keypress', e => { if (e.key === 'Enter') send(); });
+    wipeBtn.addEventListener('click', () => {
+        if (!confirm('Erase all chat messages for this auction?')) return;
+        socket.emit('chat:wipe');
+    });
+
+    // ── Phase 8: history panel ───────────────────────────────────────────
+    const HIST_URL = {{ url_for('auction_history_json', season_id=season.id)|tojson }};
+    const histBody  = document.getElementById('hist-body');
+    const histList  = document.getElementById('hist-list');
+    const histEmpty = document.getElementById('hist-empty');
+    const histTabs  = document.querySelectorAll('.hist-tab');
+    const histRefresh = document.getElementById('hist-refresh');
+    let histState = { audit: [], bids: [], tab: 'audit' };
+
+    function fmtTs(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        return d.toLocaleString([], {month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    }
+    function actionClass(a) {
+        if (!a) return '';
+        if (a.startsWith('auction.'))    return 'hist-action-auction';
+        if (a.startsWith('lot.'))        return 'hist-action-lot';
+        if (a.startsWith('pick.'))       return 'hist-action-pick';
+        if (a.startsWith('round.'))      return 'hist-action-round';
+        if (a.startsWith('roster.'))     return 'hist-action-roster';
+        if (a.startsWith('tournament.')) return 'hist-action-tournament';
+        return '';
+    }
+    function renderAuditDetail(row) {
+        const p = row.payload || {};
+        switch (row.action) {
+            case 'auction.start':       return `Auction started (mode: <strong>${escHtml(p.mode || '?')}</strong>)`;
+            case 'auction.pause':       return 'Auction paused';
+            case 'auction.resume':      return 'Auction resumed';
+            case 'auction.complete':    return `Auction completed${p.swept_upcoming ? ` · ${p.swept_upcoming} unsold sweep` : ''}`;
+            case 'lot.open':            return `Lot opened: <strong>${escHtml(p.player_name || '')}</strong> · base ${fmtMoney(p.base_price || 0)}`;
+            case 'lot.sold':            return `Sold: <strong>${escHtml(p.player_name || '')}</strong> → <strong>${escHtml(p.team_name || '')}</strong> for ${fmtMoney(p.amount || 0)}${p.forced ? ' (forced)' : ''}`;
+            case 'lot.unsold':          return `Unsold: <strong>${escHtml(p.player_name || '')}</strong>${p.forced ? ' (forced)' : ''}`;
+            case 'lot.reversed':        return `Reversed: <strong>${escHtml(p.player_name || '')}</strong> · refunded ${fmtMoney(p.refund || 0)} to <strong>${escHtml(p.team_name || '')}</strong>`;
+            case 'pick.submitted':      return `Pick: <strong>${escHtml(p.team_name || '')}</strong> → <strong>${escHtml(p.player_name || '')}</strong> (R${p.round}${p.is_carryover ? ' · carryover' : ''})`;
+            case 'pick.missed':         return `Missed pick (round ${p.round}${p.is_carryover ? ' · carryover' : ''})`;
+            case 'round.advance':       return `Round advanced → <strong>${p.to_round}</strong>${p.replayed ? ` · ${p.replayed} replayed` : ''}`;
+            case 'roster.synced':       return `Rosters synced — ${p.teams_ready || 0} / ${p.teams_synced || 0} ready${p.manual ? ' (manual)' : ''}`;
+            case 'tournament.created':  return `Tournament <strong>${escHtml(p.tournament_name || '')}</strong> created (${escHtml(p.mode || '')}, ${p.team_count} teams)`;
+            default:                    return escHtml(row.action);
+        }
+    }
+    function renderHistory() {
+        const rows = histState[histState.tab] || [];
+        if (!rows.length) {
+            histList.style.display = 'none';
+            histEmpty.style.display = 'block';
+            histEmpty.textContent = histState.tab === 'bids' ? 'No bids recorded yet.' : 'No audit events yet.';
+            return;
+        }
+        histEmpty.style.display = 'none';
+        histList.style.display = 'block';
+        histList.innerHTML = '';
+        rows.forEach(r => {
+            const li = document.createElement('li');
+            if (histState.tab === 'bids') {
+                li.innerHTML = `
+                    <span class="ts">${fmtTs(r.created_at)}</span>
+                    <span class="detail"><strong>${escHtml(r.team_name || '?')}</strong> bid ${fmtMoney(r.amount)} on <strong>${escHtml(r.player_name || '?')}</strong></span>
+                    <span class="actor">R${r.round}</span>`;
+            } else {
+                const actor = r.actor_type === 'system' ? 'system'
+                            : r.actor_type === 'organizer' ? escHtml(r.actor_label || 'organizer')
+                            : escHtml(r.actor_label || 'team');
+                li.innerHTML = `
+                    <span class="ts">${fmtTs(r.created_at)}</span>
+                    <span class="detail"><span class="action ${actionClass(r.action)}">${escHtml(r.action)}</span> · ${renderAuditDetail(r)}</span>
+                    <span class="actor">${actor}</span>`;
+            }
+            histList.appendChild(li);
+        });
+    }
+    function loadHistory() {
+        histEmpty.style.display = 'block';
+        histEmpty.textContent = 'Loading history…';
+        histList.style.display = 'none';
+        fetch(HIST_URL + '?limit=200', { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(data => {
+                histState.audit = data.audit || [];
+                histState.bids  = data.bids  || [];
+                renderHistory();
+            })
+            .catch(() => {
+                histEmpty.textContent = 'Failed to load history.';
+            });
+    }
+    histTabs.forEach(t => t.addEventListener('click', () => {
+        histTabs.forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        histState.tab = t.dataset.tab;
+        renderHistory();
+    }));
+    histRefresh.addEventListener('click', loadHistory);
+    loadHistory();
+})();
+</script>
+{% endblock %}

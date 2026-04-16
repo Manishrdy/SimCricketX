@@ -145,6 +145,11 @@
             {% endif %}
         </div>
         <div style="display:flex; gap:8px;">
+            {% if finalized or locked %}
+            <a href="{{ url_for('auction_live', season_id=season.id) }}" class="lg-btn lg-btn-primary">
+                <i class="fa-solid fa-tv"></i> Open live console
+            </a>
+            {% endif %}
             {% if finalized and not locked %}
             <form method="post" action="{{ url_for('auction_reopen', season_id=season.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

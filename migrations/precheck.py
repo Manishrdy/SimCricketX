@@ -75,6 +75,14 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("redesign_auction_phase1",  _loader("migrations.redesign_auction_phase1")),
     # AUCTION-REDESIGN Phase 2: auction + auction_categories + auction_players (setup only).
     ("auction_setup_phase2",     _loader("migrations.auction_setup_phase2")),
+    # AUCTION-REDESIGN Phase 3: auction_chat_messages (realtime foundation).
+    ("auction_realtime_phase3",  _loader("migrations.auction_realtime_phase3")),
+    # AUCTION-REDESIGN Phase 4: live runtime columns on auctions (live_player_id, lot_ends_at, ...).
+    ("auction_live_phase4",      _loader("migrations.auction_live_phase4")),
+    # AUCTION-REDESIGN Phase 5: draft_picks table (snake-order draft mode).
+    ("auction_draft_phase5",     _loader("migrations.auction_draft_phase5")),
+    # AUCTION-REDESIGN Phase 8: auction_bids + auction_audit_logs (history + moderation trail).
+    ("auction_history_phase8",   _loader("migrations.auction_history_phase8")),
 ]
 
 
