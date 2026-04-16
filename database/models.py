@@ -82,6 +82,7 @@ class Team(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_draft = db.Column(db.Boolean, default=False)
     is_placeholder = db.Column(db.Boolean, default=False)  # True for BYE/TBD teams
+    season_id = db.Column(db.Integer, db.ForeignKey('seasons.id', ondelete='CASCADE'), nullable=True, index=True)
 
     # Unique constraint: one short_code per user
     __table_args__ = (
@@ -263,69 +264,143 @@ class UserPlayer(db.Model):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Auction Module
+#  League / Season / SeasonTeam  (AUCTION-REDESIGN Phase 1)
+#  The auction is a child of a Season. Seasons live under a League. SeasonTeam
+#  wraps an empty Team row created for that season. The auction (added in
+#  later phases) populates those Team rosters.
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class AuctionEvent(db.Model):
-    __tablename__ = 'auction_events'
+class League(db.Model):
+    __tablename__ = 'leagues'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(200), nullable=False)
-    format = db.Column(db.String(20), default='T20')
-    status = db.Column(db.String(20), default='setup')  # setup / live / paused / completed
-    num_teams = db.Column(db.Integer, default=8)
-    budget_mode = db.Column(db.String(20), default='uniform')  # uniform / custom
-    uniform_budget = db.Column(db.BigInteger, default=0)
-    bid_increment_tiers = db.Column(db.Text, default='[]')  # JSON: [{up_to, increment}, ...]
-    min_players_per_team = db.Column(db.Integer, default=12)
-    max_players_per_team = db.Column(db.Integer, default=25)
-    reauction_enabled = db.Column(db.Boolean, default=False)
-    max_reauction_rounds = db.Column(db.Integer, nullable=True)
-    reauction_base_price_reduction_pct = db.Column(db.Integer, default=0)
-    current_round = db.Column(db.Integer, default=1)
+    short_code = db.Column(db.String(10), nullable=True)
+    frequency = db.Column(db.String(20), default='one_time')  # one_time | recurring
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    owner = relationship('User', backref=db.backref('leagues', cascade='all, delete-orphan', passive_deletes=True))
+    seasons = relationship('Season', back_populates='league', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'name', name='uq_league_user_name'),
+    )
+
+
+class Season(db.Model):
+    __tablename__ = 'seasons'
+
+    id = db.Column(db.Integer, primary_key=True)
+    league_id = db.Column(db.Integer, db.ForeignKey('leagues.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False)
+    format = db.Column(db.String(20), default='T20')             # T20 | ListA
+    auction_mode = db.Column(db.String(20), default='traditional')  # traditional | draft
+    status = db.Column(db.String(30), default='setup')
+    # statuses: setup | teams_ready | auction_ready | auction_live | auction_paused | auction_done | archived
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    organizer = relationship('User', backref=db.backref('auction_events', cascade='all, delete-orphan', passive_deletes=True))
-    teams = relationship('AuctionTeam', back_populates='event', cascade='all, delete-orphan')
-    categories = relationship('AuctionCategory', back_populates='event', cascade='all, delete-orphan')
-    players = relationship('AuctionPlayer', back_populates='event', cascade='all, delete-orphan')
+    league = relationship('League', back_populates='seasons')
+    season_teams = relationship('SeasonTeam', back_populates='season', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.UniqueConstraint('league_id', 'name', name='uq_season_league_name'),
+    )
+
+
+class SeasonTeam(db.Model):
+    """Wraps an empty Team row under a Season, with a manager access token."""
+    __tablename__ = 'season_teams'
+
+    id = db.Column(db.Integer, primary_key=True)
+    season_id = db.Column(db.Integer, db.ForeignKey('seasons.id', ondelete='CASCADE'), nullable=False, index=True)
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='CASCADE'), nullable=False, index=True)
+    display_name = db.Column(db.String(200), nullable=False)
+    access_token = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    # Budget fields populated in Phase 2 (auction setup). Safe defaults for Phase 1.
+    custom_budget = db.Column(db.BigInteger, nullable=True)
+    purse_remaining = db.Column(db.BigInteger, default=0)
+    players_bought = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    season = relationship('Season', back_populates='season_teams')
+    team = relationship('Team', foreign_keys=[team_id])
+
+    __table_args__ = (
+        db.UniqueConstraint('season_id', 'display_name', name='uq_season_team_display_name'),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Auction (Phase 2 — setup only; runtime fields populated in later phases)
+#  One Auction row per Season (1:1). Categories and curated players live under
+#  it. Snapshot copies of pool rows are taken at curation so later pool edits
+#  don't mutate a live or completed auction.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class Auction(db.Model):
+    __tablename__ = 'auctions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    season_id = db.Column(
+        db.Integer,
+        db.ForeignKey('seasons.id', ondelete='CASCADE'),
+        nullable=False, unique=True, index=True,
+    )
+    budget_mode = db.Column(db.String(20), default='uniform')   # uniform | custom
+    uniform_budget = db.Column(db.BigInteger, default=0)
+    bid_increment = db.Column(db.BigInteger, default=0)         # flat increment; 0 = next bid must be +1
+    min_players_per_team = db.Column(db.Integer, default=12)
+    max_players_per_team = db.Column(db.Integer, default=25)
+    per_player_timer_seconds = db.Column(db.Integer, default=20)
+    draft_pick_timer_seconds = db.Column(db.Integer, default=30)
+    category_order_mode = db.Column(db.String(10), default='manual')  # manual | random
+    category_order = db.Column(db.Text, default='[]')           # JSON [cat_id,...], frozen on finalize
+    reauction_rounds = db.Column(db.Integer, default=0)
+    reauction_price_reduction_pct = db.Column(db.Integer, default=0)
+    current_round = db.Column(db.Integer, default=1)
+    started_at = db.Column(db.DateTime, nullable=True)
+    ended_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    season = relationship(
+        'Season',
+        backref=db.backref('auction', uselist=False, cascade='all, delete-orphan', passive_deletes=True),
+    )
+    categories = relationship(
+        'AuctionCategory', back_populates='auction',
+        cascade='all, delete-orphan', order_by='AuctionCategory.display_order',
+    )
+    players = relationship(
+        'AuctionPlayer', back_populates='auction',
+        cascade='all, delete-orphan',
+    )
 
 
 class AuctionCategory(db.Model):
     __tablename__ = 'auction_categories'
 
     id = db.Column(db.Integer, primary_key=True)
-    event_id = db.Column(db.Integer, db.ForeignKey('auction_events.id', ondelete='CASCADE'), nullable=False, index=True)
+    auction_id = db.Column(
+        db.Integer,
+        db.ForeignKey('auctions.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
     name = db.Column(db.String(100), nullable=False)
-    default_base_price = db.Column(db.BigInteger, default=0)
-    max_per_team = db.Column(db.Integer, nullable=True)
+    display_order = db.Column(db.Integer, default=0)
+    default_base_price = db.Column(db.BigInteger, nullable=True)   # null only valid in draft mode
+    max_players = db.Column(db.Integer, default=15, nullable=True)  # pool-size cap for this category; null = no cap
 
-    event = relationship('AuctionEvent', back_populates='categories')
-
-    __table_args__ = (
-        db.UniqueConstraint('event_id', 'name', name='uq_auction_category_name'),
+    auction = relationship('Auction', back_populates='categories')
+    players = relationship(
+        'AuctionPlayer', back_populates='category',
+        cascade='all, delete-orphan',
     )
 
-
-class AuctionTeam(db.Model):
-    __tablename__ = 'auction_teams'
-
-    id = db.Column(db.Integer, primary_key=True)
-    event_id = db.Column(db.Integer, db.ForeignKey('auction_events.id', ondelete='CASCADE'), nullable=False, index=True)
-    name = db.Column(db.String(200), nullable=False)
-    access_token = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
-    custom_budget = db.Column(db.BigInteger, nullable=True)
-    purse_remaining = db.Column(db.BigInteger, default=0)
-    players_bought = db.Column(db.Integer, default=0)
-
-    event = relationship('AuctionEvent', back_populates='teams')
-    won_players = relationship('AuctionPlayer', back_populates='sold_to_team', foreign_keys='AuctionPlayer.sold_to')
-    bids = relationship('AuctionBid', back_populates='team', cascade='all, delete-orphan')
-
     __table_args__ = (
-        db.UniqueConstraint('event_id', 'name', name='uq_auction_team_name'),
+        db.UniqueConstraint('auction_id', 'name', name='uq_auction_category_name'),
     )
 
 
@@ -333,11 +408,20 @@ class AuctionPlayer(db.Model):
     __tablename__ = 'auction_players'
 
     id = db.Column(db.Integer, primary_key=True)
-    event_id = db.Column(db.Integer, db.ForeignKey('auction_events.id', ondelete='CASCADE'), nullable=False, index=True)
+    auction_id = db.Column(
+        db.Integer,
+        db.ForeignKey('auctions.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    category_id = db.Column(
+        db.Integer,
+        db.ForeignKey('auction_categories.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
     master_player_id = db.Column(db.Integer, db.ForeignKey('master_players.id', ondelete='SET NULL'), nullable=True)
     user_player_id = db.Column(db.Integer, db.ForeignKey('user_players.id', ondelete='SET NULL'), nullable=True)
 
-    # Snapshotted fields (copied at curation time — immutable during auction)
+    # Snapshotted pool fields (copied at curation, immutable during auction)
     name = db.Column(db.String(100), nullable=False)
     role = db.Column(db.String(50))
     batting_rating = db.Column(db.Integer, default=50)
@@ -347,38 +431,32 @@ class AuctionPlayer(db.Model):
     bowling_type = db.Column(db.String(50))
     bowling_hand = db.Column(db.String(20))
 
-    base_price = db.Column(db.BigInteger, nullable=True)
-    status = db.Column(db.String(20), default='upcoming')  # upcoming / live / sold / unsold
-    sold_to = db.Column(db.Integer, db.ForeignKey('auction_teams.id', ondelete='SET NULL'), nullable=True)
+    base_price_override = db.Column(db.BigInteger, nullable=True)  # null = use category default
+    lot_order = db.Column(db.Integer, nullable=True)               # ordering within category
+
+    # Runtime fields (populated in Phase 4+; defaults safe for Phase 2)
+    status = db.Column(db.String(20), default='upcoming')          # upcoming | live | sold | unsold
+    sold_to_season_team_id = db.Column(
+        db.Integer,
+        db.ForeignKey('season_teams.id', ondelete='SET NULL'),
+        nullable=True,
+    )
     sold_price = db.Column(db.BigInteger, nullable=True)
     sold_in_round = db.Column(db.Integer, nullable=True)
-    lot_order = db.Column(db.Integer, nullable=True)
 
-    event = relationship('AuctionEvent', back_populates='players')
-    sold_to_team = relationship('AuctionTeam', back_populates='won_players', foreign_keys=[sold_to])
-    categories = relationship('AuctionCategory', secondary='auction_player_categories', backref='players')
-    bids = relationship('AuctionBid', back_populates='player', cascade='all, delete-orphan')
+    auction = relationship('Auction', back_populates='players')
+    category = relationship('AuctionCategory', back_populates='players')
 
-
-auction_player_categories = db.Table(
-    'auction_player_categories',
-    db.Column('auction_player_id', db.Integer, db.ForeignKey('auction_players.id', ondelete='CASCADE'), primary_key=True),
-    db.Column('category_id', db.Integer, db.ForeignKey('auction_categories.id', ondelete='CASCADE'), primary_key=True),
-)
-
-
-class AuctionBid(db.Model):
-    __tablename__ = 'auction_bids'
-
-    id = db.Column(db.Integer, primary_key=True)
-    auction_player_id = db.Column(db.Integer, db.ForeignKey('auction_players.id', ondelete='CASCADE'), nullable=False, index=True)
-    team_id = db.Column(db.Integer, db.ForeignKey('auction_teams.id', ondelete='CASCADE'), nullable=False, index=True)
-    amount = db.Column(db.BigInteger, nullable=False)
-    round = db.Column(db.Integer, default=1)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-
-    player = relationship('AuctionPlayer', back_populates='bids')
-    team = relationship('AuctionTeam', back_populates='bids')
+    @validates('master_player_id', 'user_player_id')
+    def _validate_pool_fk_exclusive(self, key, value):
+        if value is None:
+            return value
+        other = 'user_player_id' if key == 'master_player_id' else 'master_player_id'
+        if getattr(self, other) is not None:
+            raise ValueError(
+                f"AuctionPlayer {self.id or '(new)'}: master_player_id and user_player_id are mutually exclusive."
+            )
+        return value
 
 
 class Match(db.Model):

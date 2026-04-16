@@ -1,0 +1,212 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ season.name }} | {{ league.name }} | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .lg-container { max-width: 1000px; margin: 2rem auto 3rem; padding: 0 1.5rem; }
+    .lg-breadcrumb { font-size: .85rem; color: var(--text-secondary, var(--fg-secondary)); margin-bottom: 12px; }
+    .lg-breadcrumb a { color: inherit; text-decoration: none; }
+    .lg-breadcrumb a:hover { text-decoration: underline; }
+    .lg-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; gap: 12px; flex-wrap: wrap; }
+    .lg-title { font-size: 1.8rem; font-weight: 700; color: var(--text-primary, var(--fg)); margin: 0; }
+    .lg-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; font-size: .9rem; font-weight: 600; text-decoration: none; border: none; cursor: pointer; transition: opacity .15s; }
+    .lg-btn:hover { opacity: .88; }
+    .lg-btn-primary { background: var(--brand-primary, #0f766e); color: #fff; }
+    .lg-btn-ghost { background: transparent; color: var(--text-secondary, var(--fg-secondary)); border: 1px solid var(--card-border); }
+    .lg-btn-danger { background: transparent; color: #b91c1c; border: 1px solid #fecaca; }
+    .lg-btn-sm { padding: 6px 12px; font-size: .8rem; }
+    .lg-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; }
+    .lg-form { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 18px 20px; margin-bottom: 20px; }
+    .lg-form h3 { margin: 0 0 12px; font-size: 1rem; color: var(--text-primary, var(--fg)); }
+    .lg-form-row { display: grid; gap: 10px; align-items: end; }
+    .lg-form-row.cols-5 { grid-template-columns: 2fr 1fr 1fr 1.5fr auto; }
+    .lg-form-row.cols-2 { grid-template-columns: 1fr auto; }
+    .lg-field { display: flex; flex-direction: column; gap: 4px; }
+    .lg-field label { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary, var(--fg-secondary)); }
+    .lg-field input, .lg-field select {
+        padding: 8px 10px; border-radius: 6px; border: 1px solid var(--card-border);
+        background: var(--bg, #fff); color: var(--fg, #111); font-size: .9rem;
+    }
+    .lg-empty { text-align: center; padding: 2.5rem 1rem; color: var(--text-secondary, var(--fg-secondary)); border: 1px dashed var(--card-border); border-radius: 12px; }
+    .lg-team { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
+    .lg-team-name { font-weight: 600; color: var(--text-primary, var(--fg)); }
+    .lg-team-meta { font-size: .8rem; color: var(--text-secondary, var(--fg-secondary)); margin-top: 2px; }
+    .portal-row { margin-top: 10px; display: flex; gap: 6px; align-items: stretch; flex-wrap: wrap; }
+    .portal-url {
+        flex: 1; min-width: 240px;
+        font-family: ui-monospace, SFMono-Regular, monospace; font-size: .8rem;
+        padding: 6px 10px; border-radius: 6px; border: 1px solid var(--card-border);
+        background: var(--accent-light, #f9fafb); color: var(--fg, #111); overflow-x: auto; white-space: nowrap;
+    }
+    .lg-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .danger-zone { border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin-top: 24px; }
+    .danger-zone h4 { margin: 0 0 8px; color: #b91c1c; font-size: .95rem; }
+    .danger-zone p { margin: 0 0 12px; font-size: .85rem; color: var(--text-secondary, var(--fg-secondary)); }
+    details summary { cursor: pointer; color: var(--text-secondary, var(--fg-secondary)); font-size: .85rem; }
+    details[open] { margin-top: 12px; }
+    .lg-next { background: var(--accent-light, #f3f4f6); border: 1px dashed var(--card-border); border-radius: 12px; padding: 16px; margin: 20px 0; color: var(--text-secondary, var(--fg-secondary)); font-size: .9rem; }
+    @media (max-width: 720px) {
+        .lg-form-row.cols-5, .lg-form-row.cols-2 { grid-template-columns: 1fr; }
+        .lg-team { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lg-container">
+    <div class="lg-breadcrumb">
+        <a href="{{ url_for('leagues_list') }}">Leagues</a>
+        /
+        <a href="{{ url_for('league_detail', league_id=league.id) }}">{{ league.name }}</a>
+    </div>
+
+    <div class="lg-header">
+        <div>
+            <h1 class="lg-title">{{ season.name }}</h1>
+            <div class="lg-team-meta" style="margin-top:6px;">
+                {{ season.format }} ·
+                {{ 'Traditional auction' if season.auction_mode == 'traditional' else 'Draft auction' }} ·
+                {{ season_teams|length }} team{{ '' if season_teams|length == 1 else 's' }}
+            </div>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+    <div class="lg-card" style="border-left: 4px solid {{ '#16a34a' if category == 'success' else '#dc2626' }};">
+        <div>{{ msg }}</div>
+    </div>
+    {% endfor %}
+    {% endwith %}
+
+    <details>
+        <summary>Edit season metadata</summary>
+        <form class="lg-form" method="post" action="{{ url_for('season_edit', season_id=season.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="lg-form-row cols-4">
+                <div class="lg-field">
+                    <label for="se-name">Name</label>
+                    <input id="se-name" name="name" required value="{{ season.name }}">
+                </div>
+                <div class="lg-field">
+                    <label for="se-format">Format</label>
+                    <select id="se-format" name="format">
+                        <option value="T20" {{ 'selected' if season.format == 'T20' else '' }}>T20</option>
+                        <option value="ListA" {{ 'selected' if season.format == 'ListA' else '' }}>List A</option>
+                    </select>
+                </div>
+                <div class="lg-field">
+                    <label for="se-mode">Auction</label>
+                    <select id="se-mode" name="auction_mode">
+                        <option value="traditional" {{ 'selected' if season.auction_mode == 'traditional' else '' }}>Traditional</option>
+                        <option value="draft" {{ 'selected' if season.auction_mode == 'draft' else '' }}>Draft</option>
+                    </select>
+                </div>
+                <button type="submit" class="lg-btn lg-btn-ghost">Save</button>
+            </div>
+        </form>
+    </details>
+
+    <form class="lg-form" method="post" action="{{ url_for('season_team_create', season_id=season.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <h3><i class="fa-solid fa-plus"></i> Add Team</h3>
+        <div class="lg-form-row cols-2">
+            <div class="lg-field">
+                <label for="t-name">Team name</label>
+                <input id="t-name" name="display_name" required maxlength="200" placeholder="Mumbai Indians">
+            </div>
+            <button type="submit" class="lg-btn lg-btn-primary">Add</button>
+        </div>
+    </form>
+
+    <h2 style="font-size:1.1rem; margin: 24px 0 10px;">Teams</h2>
+
+    {% for st in season_teams %}
+    {% set portal_full = request.url_root.rstrip('/') + portal_path(st.access_token) %}
+    <div class="lg-card">
+        <div class="lg-team">
+            <div>
+                <div class="lg-team-name">{{ st.display_name }}</div>
+                <div class="lg-team-meta">
+                    Empty roster · token <code style="font-size:.75rem;">{{ st.access_token[:8] }}…</code>
+                </div>
+            </div>
+            <div class="lg-actions">
+                <form method="post" action="{{ url_for('season_team_rotate_token', season_team_id=st.id) }}"
+                      onsubmit="return confirm('Rotate token for {{ st.display_name }}? The current portal link will stop working.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="lg-btn lg-btn-ghost lg-btn-sm"><i class="fa-solid fa-rotate"></i> Rotate</button>
+                </form>
+                <form method="post" action="{{ url_for('season_team_delete', season_team_id=st.id) }}"
+                      onsubmit="return confirm('Remove team {{ st.display_name }}?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="lg-btn lg-btn-danger lg-btn-sm"><i class="fa-solid fa-trash"></i></button>
+                </form>
+            </div>
+        </div>
+
+        <div class="portal-row">
+            <input class="portal-url" readonly value="{{ portal_full }}" aria-label="Portal URL for {{ st.display_name }}">
+            <button type="button" class="lg-btn lg-btn-ghost lg-btn-sm copy-btn" data-url="{{ portal_full }}">
+                <i class="fa-solid fa-copy"></i> Copy
+            </button>
+        </div>
+
+        <details style="margin-top:10px;">
+            <summary>Rename team</summary>
+            <form method="post" action="{{ url_for('season_team_edit', season_team_id=st.id) }}" style="margin-top:8px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="lg-form-row cols-2">
+                    <div class="lg-field">
+                        <input name="display_name" required value="{{ st.display_name }}" maxlength="200">
+                    </div>
+                    <button type="submit" class="lg-btn lg-btn-ghost lg-btn-sm">Save</button>
+                </div>
+            </form>
+        </details>
+    </div>
+    {% endfor %}
+
+    {% if not season_teams %}
+    <div class="lg-empty">No teams yet. Add empty teams above — managers use their portal links to join the auction later.</div>
+    {% endif %}
+
+    <div class="lg-next" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+        <div>
+            <strong>Auction setup</strong> — configure categories, curate players from the pool, set budgets and bid tiers.
+        </div>
+        <a class="lg-btn lg-btn-primary lg-btn-sm" href="{{ url_for('auction_setup', season_id=season.id) }}">
+            <i class="fa-solid fa-gavel"></i> Open setup
+        </a>
+    </div>
+
+    <div class="danger-zone">
+        <h4><i class="fa-solid fa-triangle-exclamation"></i> Delete season</h4>
+        <p>Removes this season and every team created under it.</p>
+        <form method="post" action="{{ url_for('season_delete', season_id=season.id) }}"
+              onsubmit="return confirm('Delete season \'{{ season.name }}\' and all its teams? This cannot be undone.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="lg-btn lg-btn-danger lg-btn-sm">
+                <i class="fa-solid fa-trash"></i> Delete season
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const url = btn.getAttribute('data-url');
+            try {
+                await navigator.clipboard.writeText(url);
+                const prev = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied';
+                setTimeout(() => { btn.innerHTML = prev; }, 1400);
+            } catch (err) {
+                alert('Copy failed — select the link manually.');
+            }
+        });
+    });
+</script>
+{% endblock %}
