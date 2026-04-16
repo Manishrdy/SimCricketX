@@ -135,6 +135,53 @@ Notable design choices:
 - Indexes on `user_id`, `tournament_id`, `ip_address`, `timestamp` for query performance
 - `TournamentPlayerStatsCache` avoids expensive per-request aggregation of career stats
 
+### Player Pool Migration Runbook (Prod)
+
+Use this when migrating an existing DB from team-scoped players to the global/user pool model.
+
+1. Backup DB
+```bash
+cp cricket_sim.db cricket_sim.pre_migration_backup.db
+```
+
+2. Dry-run schema precheck
+```bash
+python3 scripts/precheck_dry_run.py --db ./cricket_sim.db
+```
+
+3. Apply idempotent schema migrations
+```bash
+python3 -m migrations.precheck
+```
+
+4. Cleanup orphaned stats (after `add_scorecard_cascade`)
+```bash
+python3 -m migrations.cleanup_orphaned_stats --apply
+```
+
+5. Verify post-migration state
+```bash
+python3 scripts/precheck_dry_run.py --db ./cricket_sim.db
+```
+
+Expected result after successful migration: `0 pending` checks and `cleanup_orphaned_stats` marked applied.
+
+### Linking Existing Players to Pool
+
+After schema migration, link legacy `players` rows to `master_players` / `user_players`:
+
+```bash
+python3 -m migrations.link_players_to_pool --dry-run
+python3 -m migrations.link_players_to_pool --commit
+```
+
+Behavior during linkage:
+- Exact master match (`name` + ratings fields): linked to `master_player_id`.
+- Master name match but rating differences: linked via user override (`user_players.master_player_id` set).
+- No master match: created/reused as user custom player (`user_players.master_player_id` is `NULL`).
+
+This fallback is intentional and protects user squads when names are typo variants or absent from global pool.
+
 ---
 
 ## Security Implementation
