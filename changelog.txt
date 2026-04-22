@@ -1,3 +1,12 @@
+[2.4.1] 2026-04-21
+- Fixed tournament match results not registering in the points table (standings silently stale after match completion)
+- Root cause: match archiver's `_save_to_database()` was committing a DBMatch row for tournament matches before the tournament completion handler ran; if the handler then failed, the match was persisted but never linked to its fixture, so `update_standings()` found no fixture and returned False
+- Fix: guard `_save_to_database()` in `match_archiver.create_archive()` — tournament matches skip the archiver DB write entirely; the tournament completion handler in app.py is the sole owner of that transaction
+- Fix: moved `match.data["current_state"] = "completed"` to after `db.session.commit()` — setting it before the commit permanently blocked retry on any DB failure
+- Fix: moved archiver `_save_to_database()` call in `_handle_tournament_match_completion` to a non-fatal Step 13 after the atomic commit, so a scorecard save failure can never roll back the fixture link or standings
+- Fix: wrapped `_check_tournament_completion` and `check_and_progress_tournament` in independent try/except blocks in `update_standings()` — a playoff fixture creation error no longer rolls back the standings already applied for the current match
+- Added `migrations/repair_tournament_standings.py` — one-time data repair script with dry-run and --apply modes; identifies orphaned matches, links them to their fixtures, re-applies standings, and optionally deletes duplicate-play junk rows
+
 [2.4.0] 2026-04-14
 - Added centralized Player Pool (MasterPlayer) — admins can curate a global pool of players with CSV import; users can browse/search/filter pool players before drafting into teams
 - Added IPL-style Auction module — create auctions, configure categories/teams/players, run live bidding via team portals, and view auction summaries
