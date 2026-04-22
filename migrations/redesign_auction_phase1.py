@@ -39,7 +39,20 @@ def run_migration(db, app):
         conn = db.engine.connect()
         trans = conn.begin()
         try:
-            _drop_old_auction_tables(conn)
+            existing = {
+                row[0]
+                for row in conn.execute(
+                    text("SELECT name FROM sqlite_master WHERE type='table'")
+                ).fetchall()
+            }
+            # Only drop the old tables on the very first run, before the new
+            # schema exists.  On subsequent runs the new auction_categories /
+            # auction_players tables (created by phases 2-8) share these names;
+            # trying to DROP them with FK enforcement ON raises OperationalError.
+            if "leagues" not in existing:
+                _drop_old_auction_tables(conn)
+            else:
+                print("[Migration] redesign_auction_phase1: new schema present — skipping old table drops.")
             _create_leagues(conn)
             _create_seasons(conn)
             _create_season_teams(conn)

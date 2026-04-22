@@ -57,12 +57,14 @@ def _find_orphans(db):
     """
     from database.models import Match as DBMatch, TournamentFixture
 
+    # Sort DESC by date so the most recent play of a fixture is processed first
+    # and gets priority when claiming the fixture slot.
     orphaned = (
         DBMatch.query
         .filter(DBMatch.tournament_id.isnot(None))
         .outerjoin(TournamentFixture, TournamentFixture.match_id == DBMatch.id)
         .filter(TournamentFixture.id.is_(None))
-        .order_by(DBMatch.tournament_id, DBMatch.date)
+        .order_by(DBMatch.tournament_id, DBMatch.date.desc())
         .all()
     )
 
@@ -94,7 +96,24 @@ def _find_orphans(db):
             fixable.append((match, candidate))
             continue
 
-        # No free fixture — check if one exists but is already linked elsewhere
+        # No free fixture — check if the fixture for this pair was already
+        # claimed by another orphaned match in this same pass (older play of
+        # the same fixture that lost out to the more-recent orphan above).
+        fixture_for_pair = (
+            TournamentFixture.query
+            .filter_by(
+                tournament_id=match.tournament_id,
+                home_team_id=match.home_team_id,
+                away_team_id=match.away_team_id,
+            )
+            .first()
+        )
+        pair_fixture_claimed = (
+            fixture_for_pair is not None
+            and fixture_for_pair.id in claimed_fixture_ids
+        )
+
+        # Or check if one exists but is already linked elsewhere in the DB
         linked_fixture = (
             TournamentFixture.query
             .filter_by(
@@ -108,7 +127,8 @@ def _find_orphans(db):
             )
             .first()
         )
-        if linked_fixture:
+
+        if pair_fixture_claimed or linked_fixture:
             duplicate_plays.append(match)
         else:
             no_fixture.append(match)
@@ -188,9 +208,10 @@ def _report(fixable, duplicate_plays, no_fixture):
 
     # ---- DUPLICATE PLAYS -------------------------------------------------
     if duplicate_plays:
-        print("── DUPLICATE-PLAY JUNK (fixture already linked to an earlier play) ─────────")
-        print("   These rows have no standings impact; standings were already applied via")
-        print("   the first successful play.  Use --delete-duplicates to remove them.")
+        print("── DUPLICATE-PLAY JUNK ──────────────────────────────────────────────────────")
+        print("   Either the fixture was already linked to an earlier successful play, or")
+        print("   a newer play of the same fixture was chosen as fixable (sorted by date).")
+        print("   These rows have no standings impact.  Use --delete-duplicates to remove.")
         print()
         by_tourn = {}
         for match in duplicate_plays:
