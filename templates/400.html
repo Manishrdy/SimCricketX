@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+
+{% block title %}400 - Bad Request | SimCricketX{% endblock %}
+
+{% block content %}
+<div style="max-width:760px;margin:3rem auto;padding:1rem 1.25rem;">
+    <h1 style="margin:0 0 .5rem;">400 - Bad Request</h1>
+    <p style="margin:.25rem 0 1rem;">Your request could not be processed.</p>
+    {% if reason %}
+    <p style="margin:0;"><strong>Details:</strong> {{ reason }}</p>
+    {% endif %}
+</div>
+{% endblock %}
