@@ -1639,10 +1639,10 @@ def create_app():
         # or direct POSTs), so return a clean 400 without escalating to the
         # unhandled-exception logger.
         reason = getattr(err, "description", "Invalid CSRF token.")
-        accepts_json = request.accept_mimetypes.best_match(['application/json']) == 'application/json'
+        accepts_json = bool(request.accept_mimetypes.accept_json)
         if request.path.startswith('/api/') or accepts_json:
             return jsonify({"error": "Bad request", "reason": reason}), 400
-        return (f"Bad Request: {reason}", 400)
+        return render_template('404.html', reason=reason), 400
 
     @app.errorhandler(Exception)
     def handle_unhandled_exception(exc):
