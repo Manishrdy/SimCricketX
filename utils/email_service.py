@@ -129,6 +129,22 @@ def send_password_reset_email(
     return send_email(to, "Reset your SimCricketX password", html)
 
 
+def send_password_change_otp(
+    to: str,
+    display_name: str,
+    otp_code: str,
+    ttl_minutes: int = 10,
+) -> bool:
+    """Send a 6-digit OTP to confirm a password change from account settings."""
+    html = _render(
+        "password_change_otp.html",
+        display_name=display_name,
+        otp_code=otp_code,
+        ttl_minutes=ttl_minutes,
+    )
+    return send_email(to, "Your SimCricketX password-change code", html)
+
+
 def send_account_deletion_email(
     to: str,
     display_name: str,

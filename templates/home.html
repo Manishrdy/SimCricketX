@@ -462,6 +462,127 @@
         background: rgba(255, 255, 255, 0.24);
     }
 
+    .changelog-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        padding: 1rem;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .changelog-modal {
+        width: min(680px, 100%);
+        max-height: min(84vh, 760px);
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        overflow: hidden;
+    }
+
+    .changelog-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
+    .changelog-kicker {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+    }
+
+    .changelog-kicker i {
+        color: var(--accent);
+        font-size: 1.05rem;
+    }
+
+    .changelog-kicker span {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: var(--fg-secondary);
+        text-transform: uppercase;
+    }
+
+    .changelog-title {
+        margin: 0 0 4px;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--fg);
+    }
+
+    .changelog-subtitle {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--fg-secondary);
+    }
+
+    .changelog-icon-close {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        background: var(--bg-secondary);
+        color: var(--fg-secondary);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .changelog-scroll {
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+        padding-right: 4px;
+    }
+
+    .changelog-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+    }
+
+    .changelog-item {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        font-size: 0.86rem;
+        line-height: 1.45;
+        color: var(--fg);
+    }
+
+    .changelog-item i {
+        color: var(--accent);
+        margin-top: 3px;
+        flex-shrink: 0;
+        font-size: 0.82rem;
+    }
+
+    .changelog-close-btn {
+        width: 100%;
+        padding: 10px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        cursor: pointer;
+        letter-spacing: 0.02em;
+        margin-top: auto;
+    }
+
     /* Media Queries */
     @media (max-width: 768px) {
         .hero-section {
@@ -524,6 +645,24 @@
 
         .global-announcement-tag {
             font-size: 0.62rem;
+        }
+
+        .changelog-backdrop {
+            padding: 0.6rem;
+        }
+
+        .changelog-modal {
+            max-height: 88vh;
+            border-radius: 10px;
+            padding: 0.85rem;
+        }
+
+        .changelog-title {
+            font-size: 1.05rem;
+        }
+
+        .changelog-item {
+            font-size: 0.82rem;
         }
     }
 </style>
@@ -676,23 +815,32 @@
 {% endif %}
 
 {% if changelog_entries %}
-<div id="changelog-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;">
-    <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;max-width:480px;width:90%;padding:32px;box-shadow:0 8px 32px rgba(0,0,0,0.18);position:relative;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-            <i class="fa-solid fa-rocket" style="color:var(--accent);font-size:1.1rem;"></i>
-            <span style="font-size:0.75rem;font-weight:600;letter-spacing:0.08em;color:var(--fg-secondary);text-transform:uppercase;">What's New</span>
+<div id="changelog-backdrop" class="changelog-backdrop" aria-hidden="true">
+    <div class="changelog-modal" role="dialog" aria-modal="true" aria-labelledby="changelog-title">
+        <div class="changelog-top">
+            <div>
+                <div class="changelog-kicker">
+                    <i class="fa-solid fa-rocket"></i>
+                    <span>What's New</span>
+                </div>
+                <h2 id="changelog-title" class="changelog-title">Version {{ app_version }}</h2>
+                <p class="changelog-subtitle">Here's what changed in this release.</p>
+            </div>
+            <button id="changelog-icon-close-btn" class="changelog-icon-close" type="button" aria-label="Close changelog">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
         </div>
-        <h2 style="margin:0 0 4px;font-size:1.25rem;font-weight:700;color:var(--fg);">Version {{ app_version }}</h2>
-        <p style="margin:0 0 20px;font-size:0.82rem;color:var(--fg-secondary);">Here's what changed in this release.</p>
-        <ul style="list-style:none;padding:0;margin:0 0 24px;display:flex;flex-direction:column;gap:10px;">
-            {% for entry in changelog_entries %}
-            <li style="display:flex;gap:10px;align-items:flex-start;font-size:0.9rem;color:var(--fg);">
-                <i class="fa-solid fa-circle-check" style="color:var(--accent);margin-top:3px;flex-shrink:0;font-size:0.85rem;"></i>
-                <span>{{ entry }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-        <button id="changelog-close-btn" style="width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:0.9rem;font-weight:600;cursor:pointer;letter-spacing:0.02em;">Got it</button>
+        <div class="changelog-scroll">
+            <ul class="changelog-list">
+                {% for entry in changelog_entries %}
+                <li class="changelog-item">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>{{ entry }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <button id="changelog-close-btn" class="changelog-close-btn" type="button">Got it</button>
     </div>
 </div>
 {% endif %}
@@ -735,10 +883,27 @@
         const SEEN_KEY = "scx_seen_version";
         if (localStorage.getItem(SEEN_KEY) !== CURRENT_VERSION) {
             const backdrop = document.getElementById('changelog-backdrop');
-            backdrop.style.display = 'flex';
-            document.getElementById('changelog-close-btn').addEventListener('click', () => {
+            const closeBtn = document.getElementById('changelog-close-btn');
+            const iconCloseBtn = document.getElementById('changelog-icon-close-btn');
+            const closeChangelog = () => {
                 localStorage.setItem(SEEN_KEY, CURRENT_VERSION);
                 backdrop.style.display = 'none';
+                backdrop.setAttribute('aria-hidden', 'true');
+            };
+
+            backdrop.style.display = 'flex';
+            backdrop.setAttribute('aria-hidden', 'false');
+            closeBtn.addEventListener('click', closeChangelog);
+            iconCloseBtn.addEventListener('click', closeChangelog);
+            backdrop.addEventListener('click', (event) => {
+                if (event.target === backdrop) {
+                    closeChangelog();
+                }
+            });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && backdrop.style.display === 'flex') {
+                    closeChangelog();
+                }
             });
         }
         {% endif %}
