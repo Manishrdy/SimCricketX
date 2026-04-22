@@ -1235,13 +1235,26 @@ class TournamentEngine:
             log_exception(psc_err)
             logger.warning(f"[Standings] Failed to update player stats cache: {psc_err}")
 
-        # Check tournament progression
-        logger.info(f"[Standings] Checking tournament completion for tournament {match.tournament_id}")
-        self._check_tournament_completion(match.tournament_id)
+        # Check tournament completion — non-fatal so a failure here does not
+        # roll back the standings we just applied.
+        try:
+            logger.info(f"[Standings] Checking tournament completion for tournament {match.tournament_id}")
+            self._check_tournament_completion(match.tournament_id)
+        except Exception as completion_err:
+            logger.warning(
+                f"[Standings] Tournament completion check failed (non-fatal): {completion_err}",
+                exc_info=True,
+            )
 
-        # Check if we need to progress to next stage
-        logger.info(f"[Standings] Checking tournament progression for tournament {match.tournament_id}")
-        self.check_and_progress_tournament(match.tournament_id)
+        # Check if we need to progress to next stage — non-fatal for the same reason.
+        try:
+            logger.info(f"[Standings] Checking tournament progression for tournament {match.tournament_id}")
+            self.check_and_progress_tournament(match.tournament_id)
+        except Exception as prog_err:
+            logger.warning(
+                f"[Standings] Tournament progression check failed (non-fatal): {prog_err}",
+                exc_info=True,
+            )
 
         # Note: fixture.standings_applied already set above, no need to set again
 
