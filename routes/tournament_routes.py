@@ -226,7 +226,7 @@ def register_tournament_routes(
         fixtures = (
             TournamentFixture.query
             .filter_by(tournament_id=tournament_id)
-            .order_by(TournamentFixture.round_number)
+            .order_by(TournamentFixture.round_number, TournamentFixture.id)
             .all()
         )
 

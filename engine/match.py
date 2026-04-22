@@ -1,7 +1,10 @@
 import builtins
+import copy
 import logging
+import math
 import os
 import random
+import sys
 import time
 from engine.ball_outcome import calculate_outcome
 from engine.super_over_outcome import calculate_super_over_outcome
@@ -20,6 +23,7 @@ from utils.exception_tracker import log_exception
 
 
 logger = logging.getLogger(__name__)
+_MATCH_DEBUG_PRINTS = os.getenv("SIMCRICKET_DEBUG_PRINTS", "").strip().lower() in {"1", "true", "yes", "on"}
 
 # ---------------------------------------------------------------------------
 # Feature 1: Phase-specific bowling effectiveness multipliers.
@@ -63,6 +67,10 @@ _CORRECT_TOSS_CHOICE: dict = {
 from engine.commentary_engine import CommentaryEngine
 
 def safe_print(*args, **kwargs):
+    # Suppress high-volume simulation debug output in production by default.
+    # Enable with `SIMCRICKET_DEBUG_PRINTS=1` when deep tracing is needed.
+    if not _MATCH_DEBUG_PRINTS:
+        return
     try:
         builtins.print(*args, **kwargs)
     except OSError:
@@ -73,7 +81,19 @@ def safe_print(*args, **kwargs):
                 sanitized.append(arg.encode("ascii", "ignore").decode())
             else:
                 sanitized.append(arg)
-        builtins.print(*sanitized, **kwargs)
+        fallback_kwargs = dict(kwargs)
+        fallback_kwargs.pop("file", None)
+        fallback_stream = getattr(sys, "__stderr__", None) or getattr(sys, "stderr", None)
+        if fallback_stream is not None:
+            fallback_kwargs["file"] = fallback_stream
+        try:
+            builtins.print(*sanitized, **fallback_kwargs)
+        except OSError:
+            try:
+                builtins.print(*sanitized)
+            except OSError:
+                # Final fallback: avoid cascading failures from broken streams.
+                pass
 
 # Override module-level print to the safe version
 print = safe_print
@@ -215,10 +235,13 @@ class Match:
         
         self.result = ""  # Store final match result
         self.pending_pre_ball_commentary = []
+        self._second_innings_stats_saved = False
+        self._archive_created = False
 
         # Add super over tracking variables
         self.super_over_round = 0  # Track which super over we're on
         self.super_over_history = []  # Track scores from each super over
+        self.constraint_violations = []  # Constraint violation log for post-match analysis
 
         # Initialize pressure engine (format_config wires phase thresholds + RRs)
         self.pressure_engine = PressureEngine(format_config=self.fmt)
@@ -247,6 +270,16 @@ class Match:
         if team_list is self.home_xi:
             return self.data["team_home"].split("_")[0]
         return self.data["team_away"].split("_")[0]
+
+    @staticmethod
+    def _balls_to_overs_notation(total_balls):
+        total_balls = max(0, int(total_balls or 0))
+        return f"{total_balls // 6}.{total_balls % 6}"
+
+    def _balls_left_in_innings(self):
+        total_balls_in_innings = self.overs * 6
+        balls_played = self.current_over * 6 + self.current_ball
+        return max(0, total_balls_in_innings - balls_played)
 
     def _ball_outcome_token(self, outcome, wicket, runs, extra):
         if wicket:
@@ -311,7 +344,7 @@ class Match:
         if player_name not in self.batsman_stats:
             self.batsman_stats[player_name] = {
                 "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0,
-                "wicket_type": "", "bowler_out": "", "fielder_out": ""
+                "wicket_type": "", "bowler_out": "", "fielder_out": "", "form": 1.0
             }
 
     def _ensure_current_bowler_stats_entry(self):
@@ -626,7 +659,6 @@ class Match:
     @staticmethod
     def _normal_cdf(z: float) -> float:
         """Abramowitz & Stegun rational approximation of the standard normal CDF."""
-        import math
         if z < -6.0:
             return 0.0
         if z > 6.0:
@@ -765,7 +797,23 @@ class Match:
         elif contrib['batsman2']['name'] == striker_name:
             slot = contrib['batsman2']
         else:
-            return
+            # Striker name doesn't match either seeded slot — can happen after a
+            # run-out with crossing, or an unexpected strike rotation edge-case.
+            # Attempt to reseed into whichever slot is still empty; if both slots
+            # are already occupied by other batters we cannot attribute safely and
+            # log a warning instead of silently discarding the contribution.
+            if contrib['batsman1']['name'] == '':
+                contrib['batsman1']['name'] = striker_name
+                slot = contrib['batsman1']
+            elif contrib['batsman2']['name'] == '':
+                contrib['batsman2']['name'] = striker_name
+                slot = contrib['batsman2']
+            else:
+                print(f"⚠️ Partnership contribution dropped: striker '{striker_name}' "
+                      f"not in slots ({contrib['batsman1']['name']!r}, "
+                      f"{contrib['batsman2']['name']!r}). "
+                      f"runs={runs}, balls={balls}")
+                return
 
         slot['runs'] += runs
         slot['balls'] += balls
@@ -791,7 +839,7 @@ class Match:
 
         partnership_data = {
             "innings_number": self.innings,
-            "wicket_number": self.wickets + 1,
+            "wicket_number": self.wickets,
             "batsman1_id": None,  # Will be resolved to player ID later
             "batsman1_name": striker_name,
             "batsman2_id": None,
@@ -828,12 +876,11 @@ class Match:
 
     def _save_first_innings_stats(self):
         """Save first innings stats before resetting for second innings"""
-        import copy
         self.first_innings_batting_stats = copy.deepcopy(self.batsman_stats)
         self.first_innings_bowling_stats = copy.deepcopy(self.bowler_stats)
         
         # Track which teams played in first innings
-        if self.batting_team == self.home_xi:
+        if self.batting_team is self.home_xi:
             self.first_batting_team_name = self.match_data["team_home"].split("_")[0] 
             self.first_bowling_team_name = self.match_data["team_away"].split("_")[0]
         else:
@@ -844,12 +891,13 @@ class Match:
 
     def _save_second_innings_stats(self):
         """Save second innings stats at match completion"""
-        import copy
+        if getattr(self, "_second_innings_stats_saved", False):
+            return
         self.second_innings_batting_stats = copy.deepcopy(self.batsman_stats)
         self.second_innings_bowling_stats = copy.deepcopy(self.bowler_stats)
         
         # Determine second innings teams (opposite of first)
-        if self.batting_team == self.home_xi:
+        if self.batting_team is self.home_xi:
             second_batting_team = self.match_data["team_home"].split("_")[0]
             second_bowling_team = self.match_data["team_away"].split("_")[0]
         else:
@@ -857,6 +905,7 @@ class Match:
             second_bowling_team = self.match_data["team_home"].split("_")[0]
         
         print(f"✅ Saved second innings stats - {second_batting_team} batting: {len(self.second_innings_batting_stats)} players, {second_bowling_team} bowling: {len(self.second_innings_bowling_stats)} bowlers")
+        self._second_innings_stats_saved = True
 
     def set_frontend_commentary(self, frontend_commentary):
         """Set the frontend commentary for archiving"""
@@ -866,6 +915,9 @@ class Match:
 
     def _create_match_archive(self):
         """Create complete match archive when match ends"""
+        if getattr(self, "_archive_created", False):
+            print("ℹ️ Match archive already created; skipping duplicate archive call.")
+            return True
         try:
             # Find original JSON file
             original_json_path = find_original_json_file(self.match_data['match_id'])
@@ -888,6 +940,7 @@ class Match:
             
             if success:
                 print(f"🎉 Match archive created successfully!")
+                self._archive_created = True
                 # Clean up temp JSON — data is now in archive ZIP + DB
                 try:
                     os.remove(original_json_path)
@@ -948,13 +1001,15 @@ class Match:
         print(f"    Available: {bowler_names}")
         print(f"    Previous bowler: {previous_bowler}")
         
-        # Remove previous bowler from first position to avoid consecutive
+        # Remove previous bowler from first position to avoid consecutive.
+        # Explicitly assign: pos 18 = first non-previous, pos 19 = second non-previous,
+        # pos 20 = previous_bowler. This guarantees 17→18 and 19→20 are not consecutive
+        # (all three bowlers are distinct, so 18→19 is safe by definition).
         if previous_bowler in bowler_names:
             non_previous = [b for b in bowler_names if b != previous_bowler]
             bowler_18 = non_previous[0]
-            remaining_after_18 = [b for b in bowler_names if b != bowler_18]
-            bowler_19 = remaining_after_18[0]
-            bowler_20 = remaining_after_18[1]
+            bowler_19 = non_previous[1]   # distinct from bowler_18, never previous_bowler
+            bowler_20 = previous_bowler   # safe: bowler_19 != previous_bowler
         else:
             # Previous bowler not in remaining (normal case)
             bowler_18 = bowler_names[0]
@@ -1211,6 +1266,8 @@ class Match:
         
         # CRITICAL CHECK: Can we create a valid plan without consecutive violations?
         
+        death_plan = None
+
         if previous_bowler == bowler_more_overs:
             # Can't start with bowler who has more overs
             print(f" 🚨 CONSECUTIVE CONSTRAINT: Can't start with {bowler_more_overs}")
@@ -1262,7 +1319,7 @@ class Match:
                 print(f" ✅ Standard Plan: 18→{death_plan[0]}, 19→{death_plan[1]}, 20→{death_plan[2]}")
         
         # Validate the plan if we created one
-        if 'death_plan' not in locals():
+        if death_plan is None:
             print(f" 🚨 NO VALID PLAN CREATED - returning None")
             return None
         
@@ -1553,9 +1610,6 @@ class Match:
         # self.commentary.append(f"<strong>{violation_msg}</strong>")  # Removed
         
         # Track violations for post-match analysis
-        if not hasattr(self, 'constraint_violations'):
-            self.constraint_violations = []
-        
         self.constraint_violations.append({
             'over': self.current_over + 1,
             'type': violation_type,
@@ -1976,9 +2030,12 @@ class Match:
     def _restore_bowler_ratings(self):
         """Restore original bowling ratings after matchup bonuses"""
         for player in self.bowling_team:
-            if hasattr(player, 'original_bowling_rating'):
+            if 'original_bowling_rating' in player:
                 player['bowling_rating'] = player['original_bowling_rating']
                 del player['original_bowling_rating']
+            if player.get("_orig_bowling_rating") is not None:
+                player["bowling_rating"] = player["_orig_bowling_rating"]
+                del player["_orig_bowling_rating"]
 
 
     def _log_bowler_for_over(self, bowler):
@@ -2287,15 +2344,16 @@ class Match:
         print(f"    Pure bowlers available: {[b['name'] for b in pure_bowlers]}")
         print(f"    All-rounders available: {[b['name'] for b in all_rounders]}")
         
-        # Apply 2-over limit to all-rounders
+        # Apply half-quota limit to all-rounders
         limited_all_rounders = []
+        ar_limit = self.fmt.max_bowler_overs // 2
         for ar in all_rounders:
             overs_bowled = quota_analysis[ar['name']]['overs_bowled']
-            if overs_bowled < 2:  # Allow up to 2 overs
+            if overs_bowled < ar_limit:  # Allow up to half-quota
                 limited_all_rounders.append(ar)
-                print(f"    ✅ {ar['name']}: {overs_bowled}/2 overs - Available")
+                print(f"    ✅ {ar['name']}: {overs_bowled}/{ar_limit} overs - Available")
             else:
-                print(f"    🚫 {ar['name']}: {overs_bowled}/2 overs - Limit reached")
+                print(f"    🚫 {ar['name']}: {overs_bowled}/{ar_limit} overs - Limit reached")
         
         # Combine filtered bowlers with pure bowlers prioritized
         filtered_bowlers = pure_bowlers + limited_all_rounders + other_bowlers
@@ -2337,9 +2395,12 @@ class Match:
         print(f"    📈 Form Filter - Crucial over: {is_crucial}")
         
         if is_crucial:
-            # Sort by rating and take top 50%
+            # Sort by rating and keep top 50% (ceiling), with a floor of 2 so that
+            # small pools (e.g. exactly 2 eligible bowlers) retain both candidates
+            # and downstream stages still have variance to work with.
+            import math
             sorted_bowlers = sorted(eligible_bowlers, key=lambda b: b["bowling_rating"], reverse=True)
-            crucial_count = max(1, len(sorted_bowlers) // 2)
+            crucial_count = max(2, math.ceil(len(sorted_bowlers) / 2))
             form_filtered = sorted_bowlers[:crucial_count]
             
             print(f"    Ratings: {[(b['name'], b['bowling_rating']) for b in sorted_bowlers]}")
@@ -2398,10 +2459,17 @@ class Match:
         return eligible_bowlers
 
     def _is_death_specialist(self, bowler):
-        """Check if bowler is a death specialist (optimized version)"""
-        return (self._categorize_bowler(bowler) == "fast" and 
-                bowler["bowling_rating"] >= 75 and
-                bowler["bowling_type"] in ["Fast", "Fast-medium", "Medium-fast"])
+        """Check if bowler is a death specialist.
+
+        A bowler is a death specialist when they are categorised as 'fast'
+        (_categorize_bowler returns 'fast' iff bowling_type is in
+        ['Fast', 'Fast-medium', 'Medium-fast']) AND have a bowling_rating >= 75.
+        The redundant bowling_type membership check has been removed.
+        """
+        return (
+            self._categorize_bowler(bowler) == "fast"
+            and bowler["bowling_rating"] >= 75
+        )
 
     def _calculate_death_overs_risk(self, death_specialists):
         """Calculate risk level for death overs coverage with detailed logging"""
@@ -2410,11 +2478,11 @@ class Match:
         total_remaining_overs = 0
         for specialist in death_specialists:
             bowled = self.bowler_history.get(specialist["name"], 0)
-            remaining = 4 - bowled
+            remaining = self.fmt.max_bowler_overs - bowled
             total_remaining_overs += remaining
             print(f"    {specialist['name']}: bowled={bowled}, remaining={remaining}")
         
-        death_overs_needed = 4  # overs 17-20
+        death_overs_needed = self.fmt.overs - self.fmt.death_phase.start
         print(f"    Total specialist overs remaining: {total_remaining_overs}")
         print(f"    Death overs needed: {death_overs_needed}")
         
@@ -2433,17 +2501,22 @@ class Match:
 
     def _count_specialists_used_in_middle(self):
         """
-        Count death specialists used in middle overs (7-16)
-        TODO: Implement detailed tracking - for now return conservative estimate
+        Count death-specialist overs used in completed middle overs.
         """
-        # Conservative implementation - can be enhanced with detailed over-by-over tracking
-        middle_overs_completed = max(0, self.current_over - 6)
-        specialists_in_team = len([b for b in self.bowling_team if self._is_death_specialist(b)])
-        
-        # Rough estimate: assume some specialist usage if many middle overs completed
-        if middle_overs_completed > 6 and specialists_in_team >= 2:
-            return 1  # Conservative estimate
-        return 0
+        specialist_names = {
+            b["name"] for b in self.bowling_team if self._is_death_specialist(b)
+        }
+        if not specialist_names:
+            return 0
+
+        used = 0
+        for over_idx, bowler_name in getattr(self, "over_bowler_log", {}).items():
+            # Count only completed overs; current_over may already be selected/logged.
+            if over_idx >= self.current_over:
+                continue
+            if self.fmt.is_middle(over_idx) and bowler_name in specialist_names:
+                used += 1
+        return used
 
 
     def _analyze_quota_status(self, all_bowlers):
@@ -2462,10 +2535,10 @@ class Match:
             if overs_bowled >= max_q:
                 status = "EXHAUSTED"
                 exhausted = True
-            elif overs_bowled >= 3:
+            elif max_q > 0 and (overs_bowled / max_q) >= 0.75:
                 status = "CRITICAL (75%+)"
                 exhausted = False
-            elif overs_bowled >= 2:
+            elif max_q > 0 and (overs_bowled / max_q) >= 0.50:
                 status = "WARNING (50%+)"
                 exhausted = False
             else:
@@ -2478,7 +2551,7 @@ class Match:
                 'overs_remaining': overs_remaining,
                 'percentage': percentage,
                 'status': status,
-                'exhausted': exhausted  # STRICT: True only if >= 4 overs
+                'exhausted': exhausted  # STRICT: True only if >= format max overs
             }
             
             print(f"    {bowler['name']}: {overs_bowled}/{self.fmt.max_bowler_overs} ({percentage:.1f}%) - {status}")
@@ -2948,7 +3021,7 @@ class Match:
                 quota_analysis[star['name']]['overs_remaining'] 
                 for star in bowler_tiers['star']
             )
-            death_overs_needed = 4  # overs 17-20
+            death_overs_needed = self.fmt.overs - self.fmt.death_phase.start
             if star_remaining_overs >= death_overs_needed:
                 should_use = True
                 reason = "Saving stars for death overs"
@@ -3185,10 +3258,10 @@ class Match:
         # SPECIAL HANDLING: DEAD or FLAT PITCH → force Spinner/Medium-fast/Medium,
         # then boost their bowling_rating by 10%.
         if self.pitch in ("Dead", "Flat"):
-            # 1. Keep only Spinner / Medium-fast / Medium among constraint_eligible
+            # 1. Keep only Spinner / Medium-fast among constraint_eligible
             filtered = [
                 b for b in constraint_eligible
-                if b["bowling_type"] in ("Spinner", "Medium-fast", "Medium")
+                if b["bowling_type"] in ("Off spin", "Leg spin", "Finger spin", "Wrist spin", "Medium-fast")
             ]
             if filtered:
                 # 2. Replace constraint_eligible with that filtered list
@@ -3275,6 +3348,12 @@ class Match:
                 # ================ TRACKING & PROJECTION ================
         print(f"\n--- TRACKING & PROJECTION ---")
 
+        # Add this right before "return selected_bowler" in pick_bowler()
+        # ================ PRODUCTION SAFETY NET ================
+        print(f"\n--- PRODUCTION CONSECUTIVE VALIDATION ---")
+        self._absolute_consecutive_validation(selected_bowler)
+        print(f"✅ CONSECUTIVE VALIDATION PASSED: {selected_bowler['name']} is safe to bowl")
+
         # Update tracking
         self._update_bowler_tracking(selected_bowler)
 
@@ -3294,12 +3373,6 @@ class Match:
                 bowler["bowling_rating"] = bowler["_orig_bowling_rating"]
                 del bowler["_orig_bowling_rating"]
         # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
-
-        # Add this right before "return selected_bowler" in pick_bowler()
-        # ================ PRODUCTION SAFETY NET ================
-        print(f"\n--- PRODUCTION CONSECUTIVE VALIDATION ---")
-        self._absolute_consecutive_validation(selected_bowler)
-        print(f"✅ CONSECUTIVE VALIDATION PASSED: {selected_bowler['name']} is safe to bowl")
 
         return selected_bowler
 
@@ -3404,7 +3477,9 @@ class Match:
                 ])
         
         # Add pitch-specific pressure elements
-        if self.pitch in ['Green', 'Dusty'] and pressure_score >= 60:
+        # 'Dusty' is not a valid pitch type; valid values are Green/Dry/Hard/Flat/Dead.
+        # Green = seam-friendly, Dry = spin-friendly — both favour bowlers.
+        if self.pitch in ['Green', 'Dry'] and pressure_score >= 60:
             pitch_commentary = random.choice([
                 f"This {self.pitch.lower()} pitch is making life difficult for the batsmen!",
                 f"Conditions favoring the bowlers - tough to score freely!"
@@ -3438,7 +3513,6 @@ class Match:
             self._create_match_archive()
 
             return {
-                "test": "Manish1",
                 "match_over": True,
                 "final_score": self.score,
                 "wickets": self.wickets,
@@ -3569,17 +3643,17 @@ class Match:
                     winner_code = self.data["team_home"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_away"].split("_")[0]
                     wkts_left = 10 - self.wickets
 
-                    total_balls_in_innings = self.overs * 6  # 120 balls for 20 overs
-                    balls_played_including_this_ball = self.current_over * 6 + self.current_ball  # Now includes the match-winning ball
-                    balls_left = total_balls_in_innings - balls_played_including_this_ball
-                    overs_left = balls_left / 6
+                    balls_left = self._balls_left_in_innings()
+                    overs_left = self._balls_to_overs_notation(balls_left)
 
                     print("Check points: {}".format({
                         "current_over": self.current_over,
-                        "current_ball": self.current_ball
+                        "current_ball": self.current_ball,
+                        "balls_left": balls_left,
+                        "overs_left": overs_left
                     }))
 
-                    self.result = f"{winner_code} won by {wkts_left} wicket(s) with {overs_left:.1f} overs remaining."
+                    self.result = f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} overs remaining."
                 else:
                     # Check for tie
                     if self.score == self.target - 1:
@@ -3588,10 +3662,6 @@ class Match:
                         # 🤝 SAVE UNFINISHED PARTNERSHIP (Match Tied)
                         if self.wickets < 10:
                             self._save_partnership("not_out")
-                        
-                        # ✅ Save main match state
-                        self._save_second_innings_stats()
-                        self._create_match_archive()
                         
                         # ✅ Store original scorecard for later display
                         self.original_scorecard = self._generate_detailed_scorecard()
@@ -3639,7 +3709,6 @@ class Match:
                 self._create_match_archive()
 
                 return {
-                    "Test": "Manish4",
                     "innings_end": True,
                     "innings_number": 2,
                     "match_over": True,
@@ -3789,6 +3858,40 @@ class Match:
         _toss_mult = 1.03 if _batting_has_toss_adv else 0.97
         pressure_effects['boundary_modifier'] = pressure_effects.get('boundary_modifier', 1.0) * _toss_mult
         logger.debug("[TossAdv] batting_has_adv=%s toss_mult=%.2f", _batting_has_toss_adv, _toss_mult)
+
+        # Defaults needed by the no-ball re-roll path even when scenario_override
+        # bypasses the main calculate_outcome() branch below.
+        striker_name = self.current_striker["name"]
+        _effective_bowler = self._get_effective_bowler_dict(self.current_bowler)
+        _partnership_balls = self.current_partnership_balls
+        _partnership_runs = self.current_partnership_runs
+        _batting_position = 5
+        for _idx, _player in enumerate(self.batting_team):
+            if _player.get("name") == striker_name:
+                _batting_position = _idx + 1
+                break
+        _total_balls = self.fmt.overs * 6
+        _pitch_wear = min(1.0, self.innings_balls_bowled / _total_balls)
+        _game_mode_override = self._get_dynamic_game_mode()
+        _scenario_phase = (
+            self.scenario_engine.get_phase()
+            if (self.scenario_engine and self.innings == 2)
+            else "inactive"
+        )
+        _gsme_state = compute_game_state_vector(
+            ball_history=self.ball_history,
+            score=self.score,
+            current_over=self.current_over,
+            current_ball=self.current_ball,
+            wickets=self.wickets,
+            innings=self.innings,
+            target=self.target or 0,
+            pitch=self.pitch,
+            partnership_balls=_partnership_balls,
+            partnership_runs=_partnership_runs,
+            scenario_phase=_scenario_phase,
+            format_config=self.fmt,
+        )
 
         # ===== SCENARIO ENGINE HOOK =====
         scenario_override = None
@@ -4115,7 +4218,6 @@ class Match:
                 # 5. Set dismissal info on the dismissed batsman
                 fielder_name = self._select_fielder_for_wicket("Run Out")
                 self.batsman_stats[dismissed_name]["wicket_type"] = "Run Out"
-                self.batsman_stats[dismissed_name]["bowler_out"] = self.current_bowler["name"]
                 self.batsman_stats[dismissed_name]["fielder_out"] = fielder_name
 
                 # 6. Commentary
@@ -4237,7 +4339,6 @@ class Match:
                         self.scenario_engine.on_innings_transition()
 
                     return {
-                        "Test": "AllOut_FirstInnings",
                         "innings_end": True,
                         "innings_number": 1,
                         "match_over": False,  # ✅ Keep match going
@@ -4315,14 +4416,13 @@ class Match:
                     second_block = self._format_scorecard_block(scorecard_data, '2nd Innings Scorecard')
                     scorecards_block = f"<br><br><strong>Scorecards:</strong><br>{first_block}<br><br>{second_block}" if first_block and second_block else ""
                     return {
-                        "Test": "AllOut_SecondInnings", 
                         "match_over": True,
                         "scorecard_data": scorecard_data,
                         "final_score": self.score,
                         "wickets": self.wickets,
                         # "result": f"All out for {self.score}",
                         "commentary": f"{all_out_commentary}<br>Match Over! All out for {self.score}{scorecards_block}",
-                        "result": f"{self.first_batting_team_name} won by {(self.target - 1) - self.score} runs!!"
+                        "result": self.result
                     }
 
             # 1) Gather the dismissed batsman's stats:
@@ -4369,7 +4469,6 @@ class Match:
             dismissal_line += f"{runs_scored}({balls_faced}b) {extra_str}"
 
             # 5) Append it before "New batsman..."
-            print("dismissal_line", dismissal_line)
             commentary_line += "<br>" + dismissal_line + "<br>"
 
             # 6) Load provisional new batter and optionally request manual override
@@ -4550,23 +4649,20 @@ class Match:
                 winner_code = self.data["team_home"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_away"].split("_")[0]
                 wkts_left = 10 - self.wickets
                 
-                # ✅ FIXED CALCULATION: Calculate remaining balls correctly
-                total_balls_in_innings = self.overs * 6  # 120 balls for 20 overs
-                balls_played_including_this_ball = self.current_over * 6 + self.current_ball  # Now includes the match-winning ball
-                balls_left = total_balls_in_innings - balls_played_including_this_ball
-                overs_left = balls_left // 6
-                balls_left_in_over = balls_left % 6
-                overs_left = float(f"{overs_left}.{balls_left_in_over}")
+                balls_left = self._balls_left_in_innings()
+                overs_left = self._balls_to_overs_notation(balls_left)
 
                 
-                print("Check point1: {}".format({
+                # NOTE: current_ball is already post-increment here; balls_left
+                # correctly reflects deliveries remaining *after* this match-winning ball.
+                print("Check point1 (post-delivery state): {}".format({
                         "current_over": self.current_over,
-                        "current_ball": self.current_ball,
-                        "balls_left": balls_left,
+                        "current_ball": self.current_ball,  # post-increment
+                        "balls_left": balls_left,           # accurate remaining balls
                         "overs_left": overs_left
                     }))
                 
-                self.result = f"{winner_code} won by {wkts_left} wicket(s) with {overs_left:.1f} overs remaining."
+                self.result = f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} overs remaining."
                 
                 striker_stats = self.batsman_stats[self.current_striker["name"]]
                 non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
@@ -4604,7 +4700,6 @@ class Match:
                 self._create_match_archive()
 
                 return {
-                    "Test": "Manish6",
                     "match_over": True,
                     "scorecard_data": scorecard_data,
                     "final_score": self.score,
@@ -4802,7 +4897,7 @@ class Match:
     def _generate_detailed_scorecard(self):
         """Generate detailed cricbuzz-style scorecard"""
         
-        if self.batting_team == self.home_xi:
+        if self.batting_team is self.home_xi:
             team_name = self.data["team_home"].split("_")[0]
         else:
             team_name = self.data["team_away"].split("_")[0]
@@ -5009,6 +5104,9 @@ class Match:
             )
         else:
             self.super_over_batsmen = self._select_super_over_batsmen(self.super_over_batting_team)
+        self.super_over_batsmen = self._resolve_super_over_batsmen(
+            self.super_over_batting_team, self.super_over_batsmen
+        )
 
         if bowler_name:
             found = self._find_players_by_name(self.super_over_bowling_team, [bowler_name])
@@ -5040,6 +5138,44 @@ class Match:
                     break
         return result
 
+    def _resolve_super_over_batsmen(self, team, selected):
+        """Return exactly two distinct batter dicts, falling back safely when names are invalid."""
+        resolved = []
+        seen = set()
+
+        for player in selected or []:
+            name = player.get("name")
+            if not name or name in seen:
+                continue
+            resolved.append(player)
+            seen.add(name)
+            if len(resolved) == 2:
+                return resolved
+
+        for player in self._select_super_over_batsmen(team):
+            name = player.get("name")
+            if not name or name in seen:
+                continue
+            resolved.append(player)
+            seen.add(name)
+            if len(resolved) == 2:
+                return resolved
+
+        for player in team:
+            name = player.get("name")
+            if not name or name in seen:
+                continue
+            resolved.append(player)
+            seen.add(name)
+            if len(resolved) == 2:
+                return resolved
+
+        if len(resolved) == 1:
+            resolved.append(resolved[0])
+            return resolved
+
+        raise ValueError("Unable to resolve super over batsmen from team roster")
+
     def _init_super_over_innings_state(self):
         """Initialize/reset super over innings state"""
         self.super_over_ball = 0
@@ -5063,6 +5199,9 @@ class Match:
             )
         else:
             self.super_over_batsmen = self._select_super_over_batsmen(self.super_over_batting_team)
+        self.super_over_batsmen = self._resolve_super_over_batsmen(
+            self.super_over_batting_team, self.super_over_batsmen
+        )
 
         if bowler_name:
             found = self._find_players_by_name(self.super_over_bowling_team, [bowler_name])
@@ -5095,7 +5234,11 @@ class Match:
     def _select_super_over_bowler(self, team):
         """Select best bowler by rating"""
         bowlers = [p for p in team if p.get("will_bowl", False)]
-        return max(bowlers, key=lambda p: p["bowling_rating"])
+        if bowlers:
+            return max(bowlers, key=lambda p: p.get("bowling_rating", 0))
+        if team:
+            return max(team, key=lambda p: p.get("bowling_rating", 0))
+        raise ValueError("Cannot select super over bowler from an empty team")
 
     def next_super_over_ball(self):
         """Process next ball in super over — returns rich data for modal UI"""

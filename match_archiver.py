@@ -672,30 +672,52 @@ class MatchArchiver:
             home_batting_stats = {}
             away_batting_stats = {}
             
-            # Helper to calculate total overs faced
-            def calc_overs(stats_dict):
-                balls = sum(p.get('balls', 0) for p in stats_dict.values())
-                return f"{balls // 6}.{balls % 6}"
+            # Helper to calculate overs from legal deliveries bowled in the innings.
+            # Prefer bowling stats (balls_bowled) because batting balls can include
+            # no-ball deliveries and inflate overs (e.g., 20.1 in a 20-over innings).
+            def calc_overs(batting_stats, bowling_stats):
+                legal_balls = sum(
+                    int(b.get('balls_bowled', 0) or 0)
+                    for b in (bowling_stats or {}).values()
+                )
+                if legal_balls <= 0:
+                    legal_balls = sum(
+                        int(p.get('balls', 0) or 0)
+                        for p in (batting_stats or {}).values()
+                    )
+                return f"{legal_balls // 6}.{legal_balls % 6}"
 
             if first_bat_name == self.match.match_data["team_home"].split('_')[0]:
                 db_match.home_team_score = self.match.first_innings_score
                 db_match.home_team_wickets = sum(1 for p in self.match.first_innings_batting_stats.values() if p.get('wicket_type'))
-                db_match.home_team_overs = calc_overs(self.match.first_innings_batting_stats)
+                db_match.home_team_overs = calc_overs(
+                    self.match.first_innings_batting_stats,
+                    self.match.first_innings_bowling_stats
+                )
                 home_batting_stats = self.match.first_innings_batting_stats
                 
                 db_match.away_team_score = self.match.score
                 db_match.away_team_wickets = self.match.wickets
-                db_match.away_team_overs = calc_overs(self.match.second_innings_batting_stats)
+                db_match.away_team_overs = calc_overs(
+                    self.match.second_innings_batting_stats,
+                    self.match.second_innings_bowling_stats
+                )
                 away_batting_stats = self.match.second_innings_batting_stats
             else:
                 db_match.away_team_score = self.match.first_innings_score
                 db_match.away_team_wickets = sum(1 for p in self.match.first_innings_batting_stats.values() if p.get('wicket_type'))
-                db_match.away_team_overs = calc_overs(self.match.first_innings_batting_stats)
+                db_match.away_team_overs = calc_overs(
+                    self.match.first_innings_batting_stats,
+                    self.match.first_innings_bowling_stats
+                )
                 away_batting_stats = self.match.first_innings_batting_stats
                 
                 db_match.home_team_score = self.match.score
                 db_match.home_team_wickets = self.match.wickets
-                db_match.home_team_overs = calc_overs(self.match.second_innings_batting_stats)
+                db_match.home_team_overs = calc_overs(
+                    self.match.second_innings_batting_stats,
+                    self.match.second_innings_bowling_stats
+                )
                 home_batting_stats = self.match.second_innings_batting_stats
 
             db.session.flush()
