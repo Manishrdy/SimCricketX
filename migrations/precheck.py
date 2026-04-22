@@ -83,6 +83,8 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("auction_draft_phase5",     _loader("migrations.auction_draft_phase5")),
     # AUCTION-REDESIGN Phase 8: auction_bids + auction_audit_logs (history + moderation trail).
     ("auction_history_phase8",   _loader("migrations.auction_history_phase8")),
+    # Password-change OTP columns on users (account-settings flow).
+    ("add_password_change_otp",  _loader("migrations.add_password_change_otp")),
 ]
 
 

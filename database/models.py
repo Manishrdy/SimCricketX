@@ -63,6 +63,11 @@ class User(UserMixin, db.Model):
     pending_email_token = db.Column(db.String(64), nullable=True, index=True)
     pending_email_token_expires = db.Column(db.DateTime, nullable=True)
 
+    # Password change via OTP (new hash staged until email code is verified)
+    pw_change_otp_hash = db.Column(db.String(64), nullable=True)
+    pw_change_otp_expires = db.Column(db.DateTime, nullable=True)
+    pw_change_pending_hash = db.Column(db.String(200), nullable=True)
+
     # Relationships — cascade so deleting a User removes all owned data
     teams = relationship('Team', backref='owner', lazy=True, cascade="all, delete-orphan")
     matches = relationship('Match', backref='user', lazy=True, cascade="all, delete-orphan")
