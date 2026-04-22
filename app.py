@@ -821,6 +821,10 @@ def create_app():
 
     app.jinja_env.filters['localtime'] = _admin_localtime
 
+    @app.context_processor
+    def inject_turnstile_key():
+        return {"cf_turnstile_site_key": os.environ.get("CF_TURNSTILE_SITE_KEY", "")}
+
     # Per-request context used by issue reporting (g.session_id, g.request_id)
     # and the SessionLogHandler. Runs first so subsequent before_request hooks
     # can rely on g being populated.
