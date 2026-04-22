@@ -26,6 +26,9 @@
 
     <!-- Auth styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+    {% if cf_turnstile_site_key %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {% endif %}
 </head>
 <body>
 
@@ -181,6 +184,12 @@
                         Keep me signed in
                     </label>
                 </div>
+
+                {% if cf_turnstile_site_key %}
+                <div class="cf-turnstile" style="margin-bottom:0.75rem;"
+                     data-sitekey="{{ cf_turnstile_site_key }}"
+                     data-theme="auto"></div>
+                {% endif %}
 
                 <button type="submit" class="auth-btn" id="submitBtn">
                     <i class="fas fa-sign-in-alt" aria-hidden="true"></i>

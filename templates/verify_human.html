@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <script>
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('theme'); } catch (e) {}
+            if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', t);
+        }());
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Check — SimCricketX</title>
+    <meta name="robots" content="noindex">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+    {% if cf_turnstile_site_key %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {% endif %}
+</head>
+<body>
+
+<div class="auth-page">
+
+    <aside class="auth-left" aria-hidden="true">
+        <div class="auth-left-glow"></div>
+        <div class="auth-left-glow2"></div>
+        <a href="/" class="auth-left-logo">
+            <span class="auth-left-logo-icon">🏏</span>
+            SimCricketX
+        </a>
+        <div class="auth-left-body">
+            <svg class="auth-left-ball" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <radialGradient id="vh-ballGrad" cx="36%" cy="34%" r="56%">
+                        <stop offset="0%"   stop-color="#e85c50"/>
+                        <stop offset="55%"  stop-color="#c0392b"/>
+                        <stop offset="100%" stop-color="#7d1a0e"/>
+                    </radialGradient>
+                </defs>
+                <circle cx="100" cy="100" r="90" fill="url(#vh-ballGrad)"/>
+                <path d="M100,12 C55,38 55,88 100,100 C55,112 55,162 100,188"
+                      fill="none" stroke="rgba(255,200,185,0.7)" stroke-width="4" stroke-linecap="round"/>
+                <path d="M100,12 C145,38 145,88 100,100 C145,112 145,162 100,188"
+                      fill="none" stroke="rgba(255,200,185,0.7)" stroke-width="4" stroke-linecap="round"/>
+                <ellipse cx="66" cy="64" rx="22" ry="15" fill="rgba(255,255,255,0.18)" transform="rotate(-25,66,64)"/>
+            </svg>
+            <div class="auth-left-tagline">
+                One quick<br>
+                <span class="auth-left-tagline-accent">check.</span>
+            </div>
+            <p class="auth-left-sub">
+                We run a brief security check every 24 hours to keep bots out.
+                This only takes a second.
+            </p>
+        </div>
+    </aside>
+
+    <main class="auth-right">
+
+        <button class="auth-theme-btn" id="themeBtn" aria-label="Toggle dark mode" type="button">
+            <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+        </button>
+
+        <div class="auth-form-wrap">
+
+            <h1 class="auth-form-title">Security check</h1>
+            <p class="auth-form-sub">Complete the verification below to continue</p>
+
+            {% if error %}
+            <div class="auth-alert auth-alert--security" role="alert">
+                <i class="fas fa-shield-halved" aria-hidden="true"></i>
+                <span>{{ error }}</span>
+            </div>
+            {% endif %}
+
+            <form class="auth-form" method="POST" action="{{ url_for('verify_human') }}" id="verifyForm" novalidate>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ next | e }}">
+
+                {% if cf_turnstile_site_key %}
+                <div class="cf-turnstile" style="margin-bottom:1rem;"
+                     data-sitekey="{{ cf_turnstile_site_key }}"
+                     data-theme="auto"
+                     data-callback="onTurnstileSolved"></div>
+                {% endif %}
+
+                <button type="submit" class="auth-btn" id="submitBtn" {% if cf_turnstile_site_key %}disabled{% endif %}>
+                    <i class="fas fa-shield-halved" aria-hidden="true"></i>
+                    <span>Continue</span>
+                </button>
+            </form>
+
+        </div>
+    </main>
+
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var html = document.documentElement;
+    var btn  = document.getElementById('themeBtn');
+    var icon = document.getElementById('themeIcon');
+
+    function applyTheme(t) {
+        html.setAttribute('data-theme', t);
+        icon.className = (t === 'dark') ? 'fas fa-sun' : 'fas fa-moon';
+        try { localStorage.setItem('theme', t); } catch (e) {}
+    }
+    applyTheme(html.getAttribute('data-theme') || 'light');
+    btn.addEventListener('click', function () {
+        applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+}());
+
+function onTurnstileSolved() {
+    var btn = document.getElementById('submitBtn');
+    if (btn) btn.disabled = false;
+}
+</script>
+
+</body>
+</html>

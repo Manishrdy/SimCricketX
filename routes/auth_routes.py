@@ -1,12 +1,15 @@
 """Authentication and account route registration."""
 
+import os
 import re
+import time
 import secrets
 import hashlib
 from datetime import datetime, timedelta
 
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
+from utils.turnstile import verify_turnstile
 from utils.email_service import (
     send_verification_email,
     send_password_reset_email,
@@ -74,6 +77,34 @@ def register_auth_routes(
         'auth_challenge',
     }
 
+    # Endpoints exempt from the per-session Turnstile check
+    _TURNSTILE_EXEMPT = {
+        'login', 'register', 'logout', 'static', 'auth_challenge',
+        'verify_human',
+        'verify_email', 'verify_email_pending', 'resend_verification',
+        'force_verify_email', 'force_verify_email_send', 'force_verify_email_change',
+        'forgot_password', 'reset_password',
+    }
+
+    # How long (seconds) a Turnstile session stamp is valid before re-challenging
+    _TURNSTILE_SESSION_TTL = int(os.environ.get("CF_TURNSTILE_SESSION_TTL", 86400))
+
+    @app.before_request
+    def enforce_turnstile_session():
+        """Once per session (default 24 h), gate authenticated users through Turnstile."""
+        if not os.environ.get("CF_TURNSTILE_SECRET_KEY"):
+            return  # disabled in dev
+        if not current_user.is_authenticated:
+            return
+        if request.endpoint in _TURNSTILE_EXEMPT:
+            return
+        stamped_at = session.get("cf_ts_verified")
+        if stamped_at and (time.time() - stamped_at) < _TURNSTILE_SESSION_TTL:
+            return
+        # Stale or missing stamp — send to challenge page
+        next_url = request.url
+        return redirect(url_for('verify_human', next=next_url))
+
     @app.before_request
     def enforce_force_email_verify():
         """Redirect authenticated users who still need to re-verify their email."""
@@ -101,6 +132,17 @@ def register_auth_routes(
             challenge_id = request.form.get("challenge_id", "")
             challenge_counter = request.form.get("challenge_counter", "")
             challenge_digest = request.form.get("challenge_digest", "")
+
+            ts_ok, ts_err = verify_turnstile(
+                request.form.get("cf-turnstile-response", ""),
+                remote_ip=get_client_ip(),
+            )
+            if not ts_ok:
+                app.logger.warning(f"[Auth] Turnstile failed on register from {get_client_ip()}: {ts_err}")
+                return render_template(
+                    "register.html",
+                    error="Human verification failed. Please try again.",
+                )
 
             challenge_ok, challenge_msg = verify_auth_pow_solution(
                 challenge_id,
@@ -182,6 +224,18 @@ def register_auth_routes(
 
             if not email or not password:
                 return render_template("login.html", error="Email and password are required.", error_type="validation")
+
+            ts_ok, ts_err = verify_turnstile(
+                request.form.get("cf-turnstile-response", ""),
+                remote_ip=get_client_ip(),
+            )
+            if not ts_ok:
+                app.logger.warning(f"[Auth] Turnstile failed on login from {get_client_ip()}: {ts_err}")
+                return render_template(
+                    "login.html",
+                    error="Human verification failed. Please try again.",
+                    error_type="security",
+                )
 
             challenge_ok, challenge_msg = verify_auth_pow_solution(
                 challenge_id,
@@ -367,6 +421,31 @@ def register_auth_routes(
         response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
         response.headers["Cache-Control"] = "no-store, max-age=0"
         return response, 200
+
+    @app.route("/verify-human", methods=["GET", "POST"])
+    @login_required
+    def verify_human():
+        """Per-session Turnstile gate for authenticated users."""
+        next_url = request.args.get("next") or request.form.get("next") or url_for("home")
+        # Prevent open redirect — only allow same-origin paths/URLs
+        from urllib.parse import urlparse
+        parsed = urlparse(next_url)
+        if parsed.netloc and parsed.netloc != urlparse(request.host_url).netloc:
+            next_url = url_for("home")
+
+        if request.method == "POST":
+            ts_ok, ts_err = verify_turnstile(
+                request.form.get("cf-turnstile-response", ""),
+                remote_ip=get_client_ip(),
+            )
+            if not ts_ok:
+                app.logger.warning(f"[Auth] verify-human Turnstile failed for {current_user.id}: {ts_err}")
+                return render_template("verify_human.html", next=next_url,
+                                       error="Verification failed. Please try again.")
+            session["cf_ts_verified"] = time.time()
+            return redirect(next_url)
+
+        return render_template("verify_human.html", next=next_url)
 
     @app.route("/change-password", methods=["GET", "POST"])
     @login_required
