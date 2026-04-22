@@ -146,6 +146,131 @@
         </details>
     </div>
 
+    <!-- ── Password Change Card ── -->
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h2 style="font-size: 1rem; font-weight: 700; color: var(--fg); margin: 0 0 0.25rem;">Change Password</h2>
+        <p style="font-size: 0.83rem; color: var(--fg-secondary); margin: 0 0 1.25rem;">
+            A 6-digit code will be sent to your registered email to confirm the change.
+        </p>
+
+        {% if current_user.pw_change_otp_hash and current_user.pw_change_otp_expires %}
+        <!-- OTP verification form -->
+        <div style="padding: 0.75rem 1rem; border-radius: 8px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); color: #059669; font-size: 0.83rem; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fas fa-envelope-circle-check"></i>
+            <span>Verification code sent — check your inbox and enter it below.</span>
+        </div>
+
+        <form method="POST" action="{{ url_for('account_verify_password_change') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.4rem;" for="otp_code">
+                    6-digit verification code
+                </label>
+                <input type="text"
+                       id="otp_code"
+                       name="otp_code"
+                       placeholder="000000"
+                       inputmode="numeric"
+                       pattern="[0-9]{6}"
+                       maxlength="6"
+                       required
+                       autocomplete="one-time-code"
+                       style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.85rem; background: var(--input-bg, var(--bg)); border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); font-size: 1.1rem; letter-spacing: 0.2em; font-family: monospace; outline: none;">
+                <div style="font-size: 0.75rem; color: var(--fg-secondary); margin-top: 0.3rem;">Code expires in 10 minutes.</div>
+            </div>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <button type="submit"
+                        style="padding: 0.55rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-check"></i> Confirm Change
+                </button>
+            </div>
+        </form>
+
+        <details style="margin-top: 1.25rem;">
+            <summary style="cursor: pointer; font-size: 0.82rem; color: var(--fg-secondary); list-style: none; display: flex; align-items: center; gap: 0.4rem; user-select: none;">
+                <i class="fas fa-rotate-left"></i> Start over with different passwords
+            </summary>
+        {% endif %}
+
+        {% if not current_user.pw_change_otp_hash or not current_user.pw_change_otp_expires %}
+        <!-- Request form (default state) -->
+        <details style="margin-top: 0;">
+            <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--accent); list-style: none; display: flex; align-items: center; gap: 0.4rem; user-select: none;">
+                <i class="fas fa-lock"></i> Change password
+            </summary>
+        {% endif %}
+
+            <form method="POST" action="{{ url_for('account_request_password_change') }}" style="margin-top: 1rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div style="margin-bottom: 0.85rem;">
+                    <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.4rem;" for="pw_current">
+                        Current password
+                    </label>
+                    <div style="position: relative;">
+                        <input type="password"
+                               id="pw_current"
+                               name="current_password"
+                               placeholder="Your current password"
+                               required
+                               autocomplete="current-password"
+                               style="width: 100%; box-sizing: border-box; padding: 0.6rem 2.5rem 0.6rem 0.85rem; background: var(--input-bg, var(--bg)); border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); font-size: 0.9rem; outline: none;">
+                        <button type="button" onclick="togglePw('pw_current', this)"
+                                style="position: absolute; right: 0.65rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--fg-secondary); padding: 0; line-height: 1;">
+                            <i class="fas fa-eye" style="font-size: 0.9rem;"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 0.85rem;">
+                    <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.4rem;" for="pw_new">
+                        New password
+                    </label>
+                    <div style="position: relative;">
+                        <input type="password"
+                               id="pw_new"
+                               name="new_password"
+                               placeholder="Min 8 chars, upper, lower, digit"
+                               required
+                               autocomplete="new-password"
+                               style="width: 100%; box-sizing: border-box; padding: 0.6rem 2.5rem 0.6rem 0.85rem; background: var(--input-bg, var(--bg)); border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); font-size: 0.9rem; outline: none;">
+                        <button type="button" onclick="togglePw('pw_new', this)"
+                                style="position: absolute; right: 0.65rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--fg-secondary); padding: 0; line-height: 1;">
+                            <i class="fas fa-eye" style="font-size: 0.9rem;"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.4rem;" for="pw_confirm">
+                        Confirm new password
+                    </label>
+                    <div style="position: relative;">
+                        <input type="password"
+                               id="pw_confirm"
+                               name="confirm_password"
+                               placeholder="Repeat new password"
+                               required
+                               autocomplete="new-password"
+                               style="width: 100%; box-sizing: border-box; padding: 0.6rem 2.5rem 0.6rem 0.85rem; background: var(--input-bg, var(--bg)); border: 1px solid var(--card-border); border-radius: 8px; color: var(--fg); font-size: 0.9rem; outline: none;">
+                        <button type="button" onclick="togglePw('pw_confirm', this)"
+                                style="position: absolute; right: 0.65rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--fg-secondary); padding: 0; line-height: 1;">
+                            <i class="fas fa-eye" style="font-size: 0.9rem;"></i>
+                        </button>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--fg-secondary); margin-top: 0.3rem;">
+                        Must be at least 8 characters with uppercase, lowercase, and a digit.
+                    </div>
+                </div>
+
+                <button type="submit"
+                        style="padding: 0.55rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-paper-plane"></i> Send Verification Code
+                </button>
+            </form>
+        </details>
+    </div>
+
     <!-- Back links -->
     <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
         <a href="{{ url_for('home') }}" style="font-size: 0.84rem; color: var(--fg-secondary); text-decoration: none;">
@@ -160,5 +285,19 @@
     </div>
 
 </div>
+
+<script>
+function togglePw(inputId, btn) {
+    var inp = document.getElementById(inputId);
+    var icon = btn.querySelector('i');
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        icon.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+        inp.type = 'password';
+        icon.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+}
+</script>
 
 {% endblock %}

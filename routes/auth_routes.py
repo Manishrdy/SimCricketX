@@ -1030,6 +1030,103 @@ def register_auth_routes(
         flash("Email changed successfully. Please sign in with your new email address.", "success")
         return redirect(url_for("login"))
 
+    # ── Password Change (OTP-verified) ──────────────────────────────────────────
+
+    @app.route("/account/settings/request-password-change", methods=["POST"])
+    @login_required
+    @limiter.limit("5 per hour")
+    def account_request_password_change():
+        """Step 1 — validate passwords, stage new hash, send OTP to registered email."""
+        import random
+        from werkzeug.security import check_password_hash, generate_password_hash
+
+        current_password = request.form.get("current_password", "")
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if not check_password_hash(current_user.password_hash, current_password):
+            flash("Current password is incorrect.", "danger")
+            return redirect(url_for("account_settings"))
+
+        if new_password != confirm_password:
+            flash("New passwords do not match.", "danger")
+            return redirect(url_for("account_settings"))
+
+        ok, policy_error = validate_password_policy(new_password)
+        if not ok:
+            flash(policy_error, "danger")
+            return redirect(url_for("account_settings"))
+
+        if check_password_hash(current_user.password_hash, new_password):
+            flash("New password must be different from your current password.", "warning")
+            return redirect(url_for("account_settings"))
+
+        otp = f"{random.randint(0, 999999):06d}"
+        otp_hash = hashlib.sha256(otp.encode()).hexdigest()
+        try:
+            current_user.pw_change_otp_hash = otp_hash
+            current_user.pw_change_otp_expires = datetime.utcnow() + timedelta(minutes=10)
+            current_user.pw_change_pending_hash = generate_password_hash(new_password)
+            db.session.commit()
+        except Exception as e:
+            log_exception(e)
+            db.session.rollback()
+            flash("Failed to initiate password change. Please try again.", "danger")
+            return redirect(url_for("account_settings"))
+
+        from utils.email_service import send_password_change_otp
+        sent = send_password_change_otp(
+            current_user.id,
+            current_user.display_name or current_user.id,
+            otp,
+        )
+        if sent:
+            app.logger.info(f"[Auth] Password-change OTP sent to {current_user.id}")
+            flash("A 6-digit verification code has been sent to your email. Enter it below to confirm the change.", "success")
+        else:
+            flash("Could not send verification email. Please try again later.", "danger")
+        return redirect(url_for("account_settings"))
+
+    @app.route("/account/settings/verify-password-change", methods=["POST"])
+    @login_required
+    @limiter.limit("10 per hour")
+    def account_verify_password_change():
+        """Step 2 — verify OTP and commit the staged password hash."""
+        otp_input = request.form.get("otp_code", "").strip()
+
+        if not current_user.pw_change_otp_hash or not current_user.pw_change_pending_hash:
+            flash("No pending password change. Please start over.", "warning")
+            return redirect(url_for("account_settings"))
+
+        if datetime.utcnow() > current_user.pw_change_otp_expires:
+            try:
+                current_user.pw_change_otp_hash = None
+                current_user.pw_change_otp_expires = None
+                current_user.pw_change_pending_hash = None
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            flash("Verification code has expired. Please request a new one.", "warning")
+            return redirect(url_for("account_settings"))
+
+        if hashlib.sha256(otp_input.encode()).hexdigest() != current_user.pw_change_otp_hash:
+            flash("Incorrect verification code. Please try again.", "danger")
+            return redirect(url_for("account_settings"))
+
+        try:
+            current_user.password_hash = current_user.pw_change_pending_hash
+            current_user.pw_change_otp_hash = None
+            current_user.pw_change_otp_expires = None
+            current_user.pw_change_pending_hash = None
+            db.session.commit()
+            app.logger.info(f"[Auth] Password changed successfully for {current_user.id}")
+            flash("Password changed successfully.", "success")
+        except Exception as e:
+            log_exception(e)
+            db.session.rollback()
+            flash("Failed to update password. Please try again.", "danger")
+        return redirect(url_for("account_settings"))
+
     # ── Login History ────────────────────────────────────────────────────────────
 
     @app.route("/account/login-history")
