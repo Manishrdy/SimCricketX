@@ -62,7 +62,7 @@ from flask_login import (
     logout_user,
     current_user
 )
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFError, CSRFProtect
 from flask_limiter import Limiter
 from auth.user_auth import (
     register_user,
@@ -1632,6 +1632,17 @@ def create_app():
     @admin_required
     def codex_probe_dot():
         return codex_probe()
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(err):
+        # Missing/invalid tokens are expected client failures (often stale forms
+        # or direct POSTs), so return a clean 400 without escalating to the
+        # unhandled-exception logger.
+        reason = getattr(err, "description", "Invalid CSRF token.")
+        accepts_json = request.accept_mimetypes.accept_json
+        if request.path.startswith('/api/') or accepts_json:
+            return jsonify({"error": "Bad request", "reason": reason}), 400
+        return render_template('400.html', reason=reason), 400
 
     @app.errorhandler(Exception)
     def handle_unhandled_exception(exc):
