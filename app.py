@@ -1642,7 +1642,7 @@ def create_app():
         accepts_json = bool(request.accept_mimetypes.accept_json)
         if request.path.startswith('/api/') or accepts_json:
             return jsonify({"error": "Bad request", "reason": reason}), 400
-        return render_template('404.html', reason=reason), 400
+        return render_template('400.html', reason=reason), 400
 
     @app.errorhandler(Exception)
     def handle_unhandled_exception(exc):
