@@ -289,6 +289,7 @@ class TournamentEngine:
         rounds = n - 1
         half = n // 2
         round_offset = 0
+        series_match_number = 1
 
         # Number of passes (1 for single, 2 for double)
         passes = 2 if double else 1
@@ -322,10 +323,12 @@ class TournamentEngine:
                             home_team_id=home,
                             away_team_id=away,
                             round_number=round_offset + r + 1,
+                            series_match_number=series_match_number,
                             stage=self.STAGE_LEAGUE,
                             status='Scheduled'
                         )
                         db.session.add(fixture)
+                        series_match_number += 1
 
                 # Rotate list (Circle method)
                 teams_copy = [teams_copy[0]] + [teams_copy[-1]] + teams_copy[1:-1]

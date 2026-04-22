@@ -167,7 +167,7 @@
                             {% if fixture.stage and fixture.stage != 'league' %}
                                 {{ fixture.stage_description or fixture.stage|replace('_',' ')|title }}
                             {% else %}
-                                Match {{ fixture.round_number }}
+                                Match {{ fixture.series_match_number or loop.index }}
                             {% endif %}
                         </span>
                         <span class="status-badge {{ fixture.status|lower }}">
