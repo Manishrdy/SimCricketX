@@ -135,3 +135,21 @@ def test_log_exception_deduplicates_same_fingerprint(app):
         assert row.first_seen_at is not None
         assert row.last_seen_at is not None
         assert row.fingerprint is not None and len(row.fingerprint) == 64
+
+
+def test_csrf_missing_token_on_league_create_returns_400_without_exception_log(app, authenticated_client):
+    with app.app_context():
+        before_count = ExceptionLog.query.count()
+
+    app.config["WTF_CSRF_ENABLED"] = True
+    response = authenticated_client.post(
+        "/leagues/create",
+        data={"name": "NoToken League"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 400
+    assert b"CSRF token is missing" in response.data
+
+    with app.app_context():
+        after_count = ExceptionLog.query.count()
+        assert after_count == before_count
