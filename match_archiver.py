@@ -307,11 +307,22 @@ class MatchArchiver:
             if cleanup_temp:
                 self._cleanup_temporary_files()
             
-            # Save to Database
-            db_saved = self._save_to_database()
-            if not db_saved:
-                raise MatchArchiverError(f"Failed to save match {self.match_id} to database")
-            self.logger.info(f"Match {self.match_id} saved to database")
+            # Save to Database — skipped for tournament matches; the tournament
+            # completion handler in app.py owns that transaction (fixture link
+            # + standings must be atomic with the DBMatch row).
+            is_tournament = bool(self.match_data.get("tournament_id"))
+            if is_tournament:
+                self.logger.info(
+                    f"[Archive] Match {self.match_id} is a tournament match; "
+                    f"DB write deferred to tournament completion handler."
+                )
+            else:
+                db_saved = self._save_to_database()
+                if not db_saved:
+                    raise MatchArchiverError(
+                        f"Failed to save match {self.match_id} to database"
+                    )
+                self.logger.info(f"Match {self.match_id} saved to database")
 
             archive_size = os.path.getsize(zip_path)
             self.logger.info(f"Archive creation completed successfully: {zip_path} ({archive_size:,} bytes)")

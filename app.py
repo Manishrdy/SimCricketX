@@ -1756,7 +1756,8 @@ def create_app():
                 # Step 4: Prepare match result data
                 final_result = outcome.get("result", "Match Ended")
                 match.data["result_description"] = final_result
-                match.data["current_state"] = "completed"
+                # NOTE: current_state is set to "completed" only after the outer
+                # commit succeeds — see Step 12 below (Fix 2).
                 
                 # Step 5: Create database match record
                 db_match = DBMatch(
@@ -1881,22 +1882,7 @@ def create_app():
                 db.session.flush()  # Ensure match is persisted before scorecard
                 logger.info(f"[Tournament] DBMatch added to session for {match_id}")
                 
-                # Step 9: Save detailed scorecard data
-                scorecard_data = outcome.get("scorecard_data")
-                if scorecard_data:
-                    logger.info(f"[Tournament] Saving detailed scorecard for match {match_id}")
-                    try:
-                        # Fix: MatchArchiver takes (match_data, match_instance)
-                        # and created_by should be in match_data
-                        archiver = MatchArchiver(match.data, match)
-                        archiver._save_to_database()
-                        logger.info(f"[Tournament] Scorecard saved successfully for {match_id}")
-                    except Exception as scorecard_err:
-                        log_exception(scorecard_err)
-                        logger.error(f"[Tournament] Scorecard save failed: {scorecard_err}", exc_info=True)
-                        # Continue - scorecard is supplementary data
-                
-                # Step 10: Update fixture status and link to match
+                # Step 9: Update fixture status and link to match
                 fixture.match_id = match_id
                 fixture.winner_team_id = db_match.winner_team_id
 
@@ -1915,22 +1901,45 @@ def create_app():
                     fixture.status = 'Completed'
 
                 logger.info(f"[Tournament] Fixture {fixture_id} status set to {fixture.status}")
-                
-                # Step 11: Update tournament standings (critical operation)
+
+                # Step 10: Update tournament standings (critical operation)
                 logger.info(f"[Tournament] Updating standings for tournament {tournament_id}")
                 standings_updated = tournament_engine.update_standings(db_match, commit=False)
-                
+
                 if standings_updated:
                     logger.info(f"[Tournament] Standings updated successfully for tournament {tournament_id}")
                 else:
                     logger.warning(f"[Tournament] Standings update returned False for match {match_id}")
-                
-                # Step 12: Commit all changes atomically
+
+                # Step 11: Commit fixture + standings atomically (Fix 3).
+                # The archiver's _save_to_database() was deliberately moved to
+                # Step 13 so its inner commit cannot split this transaction.
                 db.session.commit()
                 logger.info(
-                    f"[Tournament] ✓ Match {match_id} completed successfully. "
-                    f"Tournament {tournament_id} standings updated."
+                    f"[Tournament] ✓ Match {match_id} fixture linked and standings committed. "
+                    f"Tournament {tournament_id}."
                 )
+
+                # Step 12: Mark match as completed ONLY after commit succeeded (Fix 2).
+                # Setting this earlier would permanently block retry if the commit failed.
+                match.data["current_state"] = "completed"
+                logger.info(f"[Tournament] Match {match_id} state set to completed.")
+
+                # Step 13: Persist detailed scorecard — non-fatal supplementary data (Fix 3).
+                # Runs after the atomic commit so a scorecard failure never rolls back
+                # the fixture link or standings.
+                scorecard_data = outcome.get("scorecard_data")
+                if scorecard_data:
+                    try:
+                        archiver = MatchArchiver(match.data, match)
+                        archiver._save_to_database()
+                        logger.info(f"[Tournament] Scorecard saved successfully for {match_id}")
+                    except Exception as scorecard_err:
+                        log_exception(scorecard_err)
+                        logger.error(
+                            f"[Tournament] Scorecard save failed (non-fatal): {scorecard_err}",
+                            exc_info=True,
+                        )
                 
             except ValueError as ve:
                 log_exception(ve)
