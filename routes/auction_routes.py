@@ -11,7 +11,7 @@ import json
 import random
 from datetime import datetime
 
-from flask import Response, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Response, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from utils.exception_tracker import log_exception
@@ -20,6 +20,13 @@ from utils.exception_tracker import log_exception
 VALID_BUDGET_MODES = ("uniform", "custom")
 VALID_CATEGORY_ORDER_MODES = ("manual", "random")
 SETUP_EDITABLE_STATUSES = {"setup", "teams_ready", "auction_ready"}  # can still be reopened/tweaked before start
+STRICT_SETUP_EDITABLE_STATUSES = {"setup", "teams_ready"}
+STARTER_CATEGORIES = [
+    ("Platinum", 300),
+    ("Gold", 200),
+    ("Silver", 120),
+    ("Emerging", 80),
+]
 
 
 def register_auction_routes(
@@ -60,8 +67,13 @@ def register_auction_routes(
 
     def _require_editable(season):
         """Block mutations once the live auction has started or finished."""
-        if season.status not in SETUP_EDITABLE_STATUSES:
-            abort(409, description=f"Season status '{season.status}' does not allow setup edits.")
+        strict_lock = bool(current_app.config.get("AUCTION_SIMPLIFIED_FLOW", False))
+        editable_statuses = STRICT_SETUP_EDITABLE_STATUSES if strict_lock else SETUP_EDITABLE_STATUSES
+        if season.status not in editable_statuses:
+            msg = f"Season status '{season.status}' does not allow setup edits."
+            if strict_lock and season.status == "auction_ready":
+                msg += " Reopen setup first."
+            abort(409, description=msg)
 
     def _get_pool(user_id):
         """Merge master pool with this user's overrides/custom players.
@@ -120,6 +132,58 @@ def register_auction_routes(
         except (ValueError, TypeError):
             return default
 
+    def _starter_price_for(category_name):
+        key = (category_name or "").strip().lower()
+        for name, price in STARTER_CATEGORIES:
+            if key == name.lower():
+                return price
+        return 100
+
+    def _apply_starter_setup(season, auction):
+        """Populate starter defaults for quicker first-time setup."""
+        created_categories = 0
+        updated_fields = 0
+
+        if auction.budget_mode == "uniform" and (auction.uniform_budget is None or auction.uniform_budget <= 0):
+            auction.uniform_budget = 1000
+            updated_fields += 1
+
+        existing = (
+            DBAuctionCategory.query
+            .filter_by(auction_id=auction.id)
+            .order_by(DBAuctionCategory.display_order.asc(), DBAuctionCategory.id.asc())
+            .all()
+        )
+        existing_by_name = {(c.name or "").strip().lower() for c in existing}
+        max_order = db.session.query(func.coalesce(func.max(DBAuctionCategory.display_order), 0))\
+            .filter(DBAuctionCategory.auction_id == auction.id).scalar() or 0
+        next_order = int(max_order)
+
+        for category_name, default_price in STARTER_CATEGORIES:
+            if category_name.lower() in existing_by_name:
+                continue
+            next_order += 10
+            db.session.add(
+                DBAuctionCategory(
+                    auction_id=auction.id,
+                    name=category_name,
+                    default_base_price=(default_price if season.auction_mode == "traditional" else None),
+                    max_players=15,
+                    display_order=next_order,
+                )
+            )
+            created_categories += 1
+
+        # In traditional mode, fill missing default prices with safe starter values.
+        if season.auction_mode == "traditional":
+            all_categories = DBAuctionCategory.query.filter_by(auction_id=auction.id).all()
+            for cat in all_categories:
+                if cat.default_base_price is None or cat.default_base_price < 0:
+                    cat.default_base_price = _starter_price_for(cat.name)
+                    updated_fields += 1
+
+        return created_categories, updated_fields
+
     def _curated_refs(auction_id):
         """Returns a set of 'master:N' / 'user:N' refs already in the curated pool."""
         refs = set()
@@ -129,6 +193,92 @@ def register_auction_routes(
             elif ap.user_player_id is not None:
                 refs.add(f"user:{ap.user_player_id}")
         return refs
+
+    def _autofill_to_min_pool(season, auction, user_id):
+        """Best-effort fill from available pool to satisfy minimum finalize requirement."""
+        season_teams = DBSeasonTeam.query.filter_by(season_id=season.id).all()
+        categories = (
+            DBAuctionCategory.query
+            .filter_by(auction_id=auction.id)
+            .order_by(DBAuctionCategory.display_order.asc(), DBAuctionCategory.id.asc())
+            .all()
+        )
+        if not categories:
+            return {"status": "missing_categories"}
+
+        existing_players = DBAuctionPlayer.query.filter_by(auction_id=auction.id).all()
+        required_pool = len(season_teams) * int(auction.min_players_per_team or 0)
+        if required_pool < 1:
+            required_pool = 1
+        if len(existing_players) >= required_pool:
+            return {
+                "status": "already_sufficient",
+                "added": 0,
+                "final_count": len(existing_players),
+                "required_pool": required_pool,
+            }
+
+        curated_refs = _curated_refs(auction.id)
+        pool_available = [p for p in _get_pool(user_id) if p["ref"] not in curated_refs]
+        if not pool_available:
+            return {
+                "status": "no_available",
+                "added": 0,
+                "final_count": len(existing_players),
+                "required_pool": required_pool,
+            }
+
+        cat_counts = {c.id: DBAuctionPlayer.query.filter_by(category_id=c.id).count() for c in categories}
+
+        def _pick_category(cursor):
+            for offset in range(len(categories)):
+                idx = (cursor + offset) % len(categories)
+                cat = categories[idx]
+                cap = cat.max_players
+                if cap is None or cat_counts.get(cat.id, 0) < cap:
+                    return idx, cat
+            return None, None
+
+        need = required_pool - len(existing_players)
+        added = 0
+        cat_cursor = 0
+        for pool_row in pool_available:
+            if added >= need:
+                break
+            cat_idx, target_cat = _pick_category(cat_cursor)
+            if target_cat is None:
+                break
+            cat_cursor = (cat_idx + 1) % len(categories)
+
+            source = pool_row["source"]
+            raw_id = pool_row["id"]
+            db.session.add(
+                DBAuctionPlayer(
+                    auction_id=auction.id,
+                    category_id=target_cat.id,
+                    master_player_id=(raw_id if source == "master" else None),
+                    user_player_id=(raw_id if source == "user" else None),
+                    name=pool_row["name"] or "",
+                    role=pool_row.get("role"),
+                    batting_rating=pool_row.get("batting_rating"),
+                    bowling_rating=pool_row.get("bowling_rating"),
+                    fielding_rating=pool_row.get("fielding_rating"),
+                    batting_hand=pool_row.get("batting_hand"),
+                    bowling_type=pool_row.get("bowling_type"),
+                    bowling_hand=pool_row.get("bowling_hand"),
+                )
+            )
+            cat_counts[target_cat.id] = cat_counts.get(target_cat.id, 0) + 1
+            added += 1
+
+        final_count = len(existing_players) + added
+        status = "filled" if final_count >= required_pool else "short"
+        return {
+            "status": status,
+            "added": added,
+            "final_count": final_count,
+            "required_pool": required_pool,
+        }
 
     # ─── Setup hub ──────────────────────────────────────────────────────────
 
@@ -169,6 +319,11 @@ def register_auction_routes(
         # Pre-compute finalize readiness.
         errors = _finalize_errors(season, auction, categories, players, season_teams)
         is_draft_mode = season.auction_mode == "draft"
+        simplified_flow = bool(current_app.config.get("AUCTION_SIMPLIFIED_FLOW", False))
+        setup_progress = (
+            _build_setup_progress(season, auction, categories, players, season_teams, errors)
+            if simplified_flow else None
+        )
 
         return render_template(
             "auction/setup.html",
@@ -182,6 +337,8 @@ def register_auction_routes(
             pool_available=pool_available,
             finalize_errors=errors,
             is_draft_mode=is_draft_mode,
+            strict_finalize_lock=simplified_flow,
+            setup_progress=setup_progress,
         )
 
     # ─── Config ─────────────────────────────────────────────────────────────
@@ -276,6 +433,127 @@ def register_auction_routes(
             db.session.rollback()
             log_exception(exc, source="auction_config")
             flash("Could not save configuration.", "error")
+        return redirect(url_for("auction_setup", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/quickstart", methods=["POST"])
+    @login_required
+    def auction_quickstart(season_id):
+        season, _ = _own_season_or_404(season_id)
+        if not bool(current_app.config.get("AUCTION_SIMPLIFIED_FLOW", False)):
+            flash("Starter setup is available only in simplified flow mode.", "error")
+            return redirect(url_for("auction_setup", season_id=season.id))
+        _require_editable(season)
+        auction = _get_or_create_auction(season)
+
+        try:
+            created_categories, updated_fields = _apply_starter_setup(season, auction)
+            db.session.commit()
+            if created_categories == 0 and updated_fields == 0:
+                flash("Starter setup already applied.", "success")
+            else:
+                flash(
+                    f"Starter setup applied. Added {created_categories} categories and updated {updated_fields} field(s).",
+                    "success",
+                )
+        except Exception as exc:
+            db.session.rollback()
+            log_exception(exc, source="auction_quickstart")
+            flash("Could not apply starter setup.", "error")
+        return redirect(url_for("auction_setup", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/autofill-min-pool", methods=["POST"])
+    @login_required
+    def auction_autofill_min_pool(season_id):
+        season, _ = _own_season_or_404(season_id)
+        if not bool(current_app.config.get("AUCTION_SIMPLIFIED_FLOW", False)):
+            flash("Auto-fill is available only in simplified flow mode.", "error")
+            return redirect(url_for("auction_setup", season_id=season.id))
+        _require_editable(season)
+        auction = _get_or_create_auction(season)
+
+        try:
+            fill = _autofill_to_min_pool(season, auction, current_user.id)
+            status = fill.get("status")
+            if status == "missing_categories":
+                flash("Create at least one category before auto-filling players.", "error")
+                return redirect(url_for("auction_setup", season_id=season.id))
+            if status == "already_sufficient":
+                flash(
+                    f"Pool already has {fill['final_count']} players (minimum required: {fill['required_pool']}).",
+                    "success",
+                )
+                return redirect(url_for("auction_setup", season_id=season.id))
+            if status == "no_available":
+                flash("No available players left to auto-fill.", "error")
+                return redirect(url_for("auction_setup", season_id=season.id))
+
+            db.session.commit()
+            if fill["status"] == "filled":
+                flash(
+                    f"Auto-filled {fill['added']} players. Pool now meets minimum "
+                    f"({fill['final_count']}/{fill['required_pool']}).",
+                    "success",
+                )
+            else:  # short
+                flash(
+                    f"Auto-filled {fill['added']} players, but pool is still short "
+                    f"({fill['final_count']}/{fill['required_pool']}). "
+                    "Add more players or increase category caps.",
+                    "error",
+                )
+        except Exception as exc:
+            db.session.rollback()
+            log_exception(exc, source="auction_autofill_min_pool")
+            flash("Could not auto-fill players.", "error")
+        return redirect(url_for("auction_setup", season_id=season.id))
+
+    @app.route("/seasons/<int:season_id>/auction/auto-prepare", methods=["POST"])
+    @login_required
+    def auction_auto_prepare(season_id):
+        season, _ = _own_season_or_404(season_id)
+        if not bool(current_app.config.get("AUCTION_SIMPLIFIED_FLOW", False)):
+            flash("Auto-prepare is available only in simplified flow mode.", "error")
+            return redirect(url_for("auction_setup", season_id=season.id))
+        _require_editable(season)
+        auction = _get_or_create_auction(season)
+
+        try:
+            created_categories, updated_fields = _apply_starter_setup(season, auction)
+            fill = _autofill_to_min_pool(season, auction, current_user.id)
+            status = fill.get("status")
+            if status == "missing_categories":
+                # Should not normally happen after starter setup, but keep fail-safe.
+                db.session.rollback()
+                flash("Auto-prepare needs at least one category.", "error")
+                return redirect(url_for("auction_setup", season_id=season.id))
+
+            db.session.commit()
+            added_players = int(fill.get("added", 0))
+            flash(
+                f"Auto-prepare applied: {created_categories} category(ies) added, "
+                f"{updated_fields} default field(s) updated, {added_players} player(s) auto-filled.",
+                "success",
+            )
+
+            categories = (
+                DBAuctionCategory.query
+                .filter_by(auction_id=auction.id)
+                .order_by(DBAuctionCategory.display_order.asc(), DBAuctionCategory.id.asc())
+                .all()
+            )
+            players = DBAuctionPlayer.query.filter_by(auction_id=auction.id).all()
+            season_teams = DBSeasonTeam.query.filter_by(season_id=season.id).all()
+            errors = _finalize_errors(season, auction, categories, players, season_teams)
+            if errors:
+                flash(f"{len(errors)} finalize blocker(s) remain.", "error")
+                for msg in errors[:2]:
+                    flash(msg, "error")
+            else:
+                flash("Setup is ready to finalize.", "success")
+        except Exception as exc:
+            db.session.rollback()
+            log_exception(exc, source="auction_auto_prepare")
+            flash("Could not auto-prepare setup.", "error")
         return redirect(url_for("auction_setup", season_id=season.id))
 
     @app.route("/season-teams/<int:season_team_id>/budget", methods=["POST"])
@@ -1004,6 +1282,111 @@ def register_auction_routes(
         )
 
     # ─── Finalize validation ────────────────────────────────────────────────
+
+    def _build_setup_progress(season, auction, categories, players, season_teams, finalize_errors):
+        """Build a guided checklist for the setup page without changing rules."""
+        team_count = len(season_teams)
+        category_count = len(categories)
+        player_count = len(players)
+        min_players = max(0, int(auction.min_players_per_team or 0))
+        required_pool = max(1, team_count * min_players)
+
+        teams_ready = team_count >= 2
+        teams_detail = f"{team_count} team(s) ready." if teams_ready else f"Need 2+ teams, currently {team_count}."
+
+        minmax_ready = (
+            auction.min_players_per_team is not None
+            and auction.max_players_per_team is not None
+            and int(auction.min_players_per_team) >= 1
+            and int(auction.max_players_per_team) >= int(auction.min_players_per_team)
+        )
+        if auction.budget_mode == "uniform":
+            budget_ready = auction.uniform_budget is not None and int(auction.uniform_budget) > 0
+            config_detail = (
+                f"Uniform budget ${int(auction.uniform_budget)}."
+                if budget_ready else "Set uniform budget above 0."
+            )
+        else:
+            missing_custom = [st.display_name for st in season_teams if (st.custom_budget or 0) <= 0]
+            budget_ready = len(missing_custom) == 0
+            if budget_ready:
+                config_detail = f"Custom budgets set for {team_count} team(s)."
+            else:
+                names = ", ".join(missing_custom[:3])
+                if len(missing_custom) > 3:
+                    names += f" +{len(missing_custom) - 3} more"
+                config_detail = f"Set custom budgets for: {names}."
+        config_ready = bool(budget_ready and minmax_ready)
+        if config_ready:
+            config_detail += f" Min/Max squad: {int(auction.min_players_per_team)}/{int(auction.max_players_per_team)}."
+        elif not minmax_ready:
+            config_detail += " Fix min/max squad limits."
+
+        missing_price = []
+        if season.auction_mode == "traditional":
+            missing_price = [c.name for c in categories if c.default_base_price is None or c.default_base_price < 0]
+        categories_ready = category_count >= 1 and not missing_price
+        if category_count < 1:
+            categories_detail = "Need at least 1 category."
+        elif missing_price:
+            categories_detail = f"Missing default price: {', '.join(missing_price[:3])}."
+        else:
+            categories_detail = f"{category_count} category(ies) configured."
+
+        players_ready = player_count >= required_pool
+        players_detail = (
+            f"{player_count} curated player(s); need >= {required_pool}."
+            if players_ready else
+            f"Need >= {required_pool} curated players, currently {player_count}."
+        )
+
+        finalize_ready = len(finalize_errors) == 0
+        finalize_detail = "Ready to finalize." if finalize_ready else f"{len(finalize_errors)} blocker(s) left."
+
+        steps = [
+            {
+                "id": "teams",
+                "title": "Teams",
+                "ready": teams_ready,
+                "detail": teams_detail,
+                "action_label": "Open season teams",
+                "href": url_for("season_detail", season_id=season.id),
+            },
+            {
+                "id": "config",
+                "title": "Configuration",
+                "ready": config_ready,
+                "detail": config_detail,
+                "action_label": "Review configuration",
+                "href": "#config",
+            },
+            {
+                "id": "categories",
+                "title": "Categories",
+                "ready": categories_ready,
+                "detail": categories_detail,
+                "action_label": "Add categories",
+                "href": "#categories",
+            },
+            {
+                "id": "players",
+                "title": "Player Pool",
+                "ready": players_ready,
+                "detail": players_detail,
+                "action_label": "Curate players",
+                "href": "#players",
+            },
+            {
+                "id": "finalize",
+                "title": "Finalize",
+                "ready": finalize_ready,
+                "detail": finalize_detail,
+                "action_label": "Resolve finalize blockers",
+                "href": "#top-finalize",
+            },
+        ]
+        next_step = next((s for s in steps if not s["ready"]), None)
+        return {"steps": steps, "next_step": next_step}
 
     def _finalize_errors(season, auction, categories, players, season_teams):
         errs = []
