@@ -89,15 +89,49 @@
     .locked-banner { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; padding: 10px 14px; border-radius: 8px; font-size: .88rem; margin-bottom: 16px; }
     [data-theme="dark"] .locked-banner { background: #78350f; color: #fde68a; border-color: #92400e; }
 
+    .setup-progress-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+    .setup-progress-card {
+        display: block;
+        text-decoration: none;
+        border: 1px solid var(--card-border);
+        border-radius: 10px;
+        background: var(--bg, #fff);
+        padding: 10px 12px;
+        color: inherit;
+    }
+    .setup-progress-card:hover { border-color: var(--brand-primary, #0f766e); }
+    .setup-progress-card.is-ready { border-color: #16a34a; background: #f0fdf4; }
+    [data-theme="dark"] .setup-progress-card.is-ready { background: #0f2d1a; border-color: #15803d; }
+    .setup-progress-title { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary, var(--fg-secondary)); }
+    .setup-progress-state { margin-top: 4px; font-size: .86rem; font-weight: 700; }
+    .setup-progress-state.is-ready { color: #166534; }
+    .setup-progress-state.is-pending { color: #b91c1c; }
+    .setup-progress-detail { margin-top: 4px; font-size: .78rem; color: var(--text-secondary, var(--fg-secondary)); line-height: 1.35; }
+    .quickstart-bar {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px dashed var(--card-border);
+        background: var(--accent-light, #f9fafb);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
     @media (max-width: 900px) {
         .row.cols-2, .row.cols-3, .row.cols-4 { grid-template-columns: 1fr; }
         .pool { grid-template-columns: 1fr; }
+        .setup-progress-grid { grid-template-columns: 1fr; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-{% set locked = season.status not in ['setup','teams_ready','auction_ready'] %}
+{% set strict_finalize_lock = strict_finalize_lock|default(false) %}
+{% set setup_editable_statuses = ['setup','teams_ready'] if strict_finalize_lock else ['setup','teams_ready','auction_ready'] %}
+{% set locked = season.status not in setup_editable_statuses %}
 {% set finalized = season.status == 'auction_ready' %}
 <div class="lg-container">
     <div class="lg-breadcrumb">
@@ -124,14 +158,73 @@
     {% endfor %}
     {% endwith %}
 
+    {% if setup_progress %}
+    <section class="section">
+        <h2><i class="fa-solid fa-list-check"></i> Setup progress</h2>
+        <div class="setup-progress-grid">
+            {% for step in setup_progress.steps %}
+            <a
+                href="{{ step.href }}"
+                class="setup-progress-card {{ 'is-ready' if step.ready else '' }}"
+                data-step-id="{{ step.id }}"
+                data-step-ready="{{ 1 if step.ready else 0 }}"
+            >
+                <div class="setup-progress-title">{{ step.title }}</div>
+                <div class="setup-progress-state {{ 'is-ready' if step.ready else 'is-pending' }}">
+                    {{ 'Complete' if step.ready else 'Pending' }}
+                </div>
+                <div class="setup-progress-detail">{{ step.detail }}</div>
+            </a>
+            {% endfor %}
+        </div>
+        {% if setup_progress.next_step %}
+        <div class="hint" style="margin-top:10px;">
+            Next best action:
+            <a href="{{ setup_progress.next_step.href }}">{{ setup_progress.next_step.action_label }}</a>
+        </div>
+        {% endif %}
+        {% if strict_finalize_lock and not locked %}
+        <div class="quickstart-bar">
+            <span class="hint">
+                Need a fast baseline? Starter setup creates standard categories and fills obvious missing defaults.
+            </span>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <form method="post" action="{{ url_for('auction_auto_prepare', season_id=season.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="lg-btn lg-btn-primary lg-btn-sm">
+                        <i class="fa-solid fa-bolt"></i> Auto-prepare setup
+                    </button>
+                </form>
+                <form method="post" action="{{ url_for('auction_quickstart', season_id=season.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="lg-btn lg-btn-ghost lg-btn-sm">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Apply starter setup
+                    </button>
+                </form>
+                <form method="post" action="{{ url_for('auction_autofill_min_pool', season_id=season.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="lg-btn lg-btn-ghost lg-btn-sm">
+                        <i class="fa-solid fa-users-viewfinder"></i> Auto-fill to minimum
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
+
     {% if locked %}
     <div class="locked-banner">
+        {% if finalized and strict_finalize_lock %}
+        <i class="fa-solid fa-lock"></i> Finalized setup is locked. Click <strong>Reopen setup</strong> to make changes.
+        {% else %}
         <i class="fa-solid fa-lock"></i> Auction is live or complete — setup changes are disabled.
+        {% endif %}
     </div>
     {% endif %}
 
     <!-- FINALIZE BAR -->
-    <div class="finalize-bar">
+    <div class="finalize-bar" id="top-finalize">
         <div>
             {% if finalize_errors %}
             <div class="finalize-status finalize-err"><i class="fa-solid fa-circle-xmark"></i> Not ready to finalize</div>
@@ -150,7 +243,7 @@
                 <i class="fa-solid fa-tv"></i> Open live console
             </a>
             {% endif %}
-            {% if finalized and not locked %}
+            {% if finalized %}
             <form method="post" action="{{ url_for('auction_reopen', season_id=season.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="lg-btn lg-btn-ghost" type="submit"><i class="fa-solid fa-unlock"></i> Reopen setup</button>
