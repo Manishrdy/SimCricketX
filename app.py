@@ -490,6 +490,17 @@ def create_app():
     )
     config = load_config()
 
+    # Module A kill switch for the simplified auction flow.
+    # Priority: explicit env var > config.yaml app.auction_simplified_flow > default False.
+    _auction_flow_env = str(os.getenv("AUCTION_SIMPLIFIED_FLOW", "")).strip().lower()
+    if _auction_flow_env in {"1", "true", "yes", "on"}:
+        auction_simplified_flow = True
+    elif _auction_flow_env in {"0", "false", "no", "off"}:
+        auction_simplified_flow = False
+    else:
+        auction_simplified_flow = bool(config.get("app", {}).get("auction_simplified_flow", False))
+    app.config["AUCTION_SIMPLIFIED_FLOW"] = auction_simplified_flow
+
     # Load maintenance mode from config (persists across restarts)
     MAINTENANCE_MODE = bool(config.get("app", {}).get("maintenance_mode", False))
     # Reset whitelist mode per app instance to avoid cross-instance state leakage in tests/workers.
