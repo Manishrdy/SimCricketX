@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SimCricketX Flask Application"""
+"""SimCricketX Flask Application — v2026.04"""
 
 from __future__ import annotations
 
