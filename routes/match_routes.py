@@ -1041,10 +1041,12 @@ def register_match_routes(
 
         data = request.get_json(silent=True) or {}
         first_batting_team = data.get("first_batting_team")
-        batsmen_names = data.get("batsmen")  # list of 2 names
-        bowler_name = data.get("bowler")      # single name
+        batsmen_names = data.get("batsmen")
+        bowler_name = data.get("bowler")
 
         result = match.start_super_over(first_batting_team, batsmen_names, bowler_name)
+        if isinstance(result, dict) and result.get("error"):
+            return jsonify(result), 400
         return jsonify(result)
 
     @app.route("/match/<match_id>/start-super-over-innings2", methods=["POST"])
@@ -1062,6 +1064,8 @@ def register_match_routes(
         bowler_name = data.get("bowler")
 
         result = match.start_super_over_innings2(batsmen_names, bowler_name)
+        if isinstance(result, dict) and result.get("error"):
+            return jsonify(result), 400
         return jsonify(result)
 
     @app.route("/match/<match_id>/next-super-over-ball", methods=["POST"])

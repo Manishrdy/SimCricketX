@@ -1550,7 +1550,7 @@ function soToggleBatsman(name, card) {
     if (idx >= 0) {
         soState.selectedBatsmen.splice(idx, 1);
         card.classList.remove('selected');
-    } else if (soState.selectedBatsmen.length < 2) {
+    } else if (soState.selectedBatsmen.length < 3) {
         soState.selectedBatsmen.push(name);
         card.classList.add('selected');
     }
@@ -1576,13 +1576,13 @@ function soUpdateSelectionCounts() {
     const bowlCount = document.getElementById('so-bowl-count');
     const btn = document.getElementById('so-start-btn');
 
-    batCount.textContent = `Batsmen: ${soState.selectedBatsmen.length}/2`;
+    batCount.textContent = `Batsmen: ${soState.selectedBatsmen.length}/3`;
     bowlCount.textContent = `Bowler: ${soState.selectedBowler ? 1 : 0}/1`;
 
-    batCount.classList.toggle('valid', soState.selectedBatsmen.length === 2);
+    batCount.classList.toggle('valid', soState.selectedBatsmen.length === 3);
     bowlCount.classList.toggle('valid', !!soState.selectedBowler);
 
-    btn.disabled = !(soState.selectedBatsmen.length === 2 && soState.selectedBowler);
+    btn.disabled = !(soState.selectedBatsmen.length === 3 && soState.selectedBowler);
 }
 
 // --- Start Innings ---
@@ -1603,7 +1603,15 @@ function soStartInnings() {
     })
     .then(r => r.json())
     .then(data => {
-        if (data.error) { console.error(data.error); return; }
+        if (data.error) {
+            console.error(data.error);
+            if (typeof Toast !== 'undefined' && Toast.show) {
+                Toast.show(data.error, 'error');
+            } else {
+                alert(data.error);
+            }
+            return;
+        }
 
         if (data.target) soState.target = data.target;
 
@@ -1613,8 +1621,9 @@ function soStartInnings() {
         // Add super over header to main commentary log
         const teamName = data.batting_team_name || (soState.battingTeam === 'home' ? soState.teamData.home_team : soState.teamData.away_team);
         const roundInfo = soState.round > 1 ? ` (Round ${soState.round})` : '';
+        const lineup = (data.batsmen || []).join(', ');
         appendLog(`══ SUPER OVER${roundInfo} — Innings ${soState.innings} ══`);
-        appendLog(`${teamName} batting | ${data.batsmen[0]}, ${data.batsmen[1]} vs ${data.bowler}`);
+        appendLog(`${teamName} batting | ${lineup} vs ${data.bowler}`);
         if (soState.target) {
             appendLog(`Target: ${soState.target} runs`);
         }
@@ -1634,18 +1643,21 @@ function soSimulateBall() {
     .then(data => {
         if (data.error) { console.error(data.error); return; }
 
-        // Build commentary line with score info for main log
-        let logLine = data.commentary + `  [${data.score}/${data.wickets}]`;
-        if (soState.innings === 2 && soState.target) {
-            const need = soState.target - data.score;
-            const ballsLeft = 6 - data.ball;
-            if (need > 0 && ballsLeft > 0) {
-                logLine += ` Need ${need} off ${ballsLeft}b`;
-            } else if (need <= 0) {
-                logLine += ` TARGET REACHED!`;
+        // Only log per-ball commentary when the backend actually delivered a ball.
+        // End-of-innings / match-over responses don't carry commentary or score fields.
+        if (data.super_over_ball_complete) {
+            let logLine = data.commentary + `  [${data.score}/${data.wickets}]`;
+            if (soState.innings === 2 && soState.target) {
+                const need = soState.target - data.score;
+                const ballsLeft = 6 - data.ball;
+                if (need > 0 && ballsLeft > 0) {
+                    logLine += ` Need ${need} off ${ballsLeft}b`;
+                } else if (need <= 0) {
+                    logLine += ` TARGET REACHED!`;
+                }
             }
+            appendLog(logLine);
         }
-        appendLog(logLine);
 
         // Track ball results
         if (data.ball_data) {
