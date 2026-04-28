@@ -5097,10 +5097,17 @@ class Match:
         # Track which side is batting for team key
         self.super_over_first_batting = first_batting_team
 
-        # Select players: user-chosen or auto
-        if batsmen_names and len(batsmen_names) >= 2:
+        # Validate + resolve players (strict: 3 batsmen + 1 bowler when supplied)
+        validation_error = self._validate_super_over_selection(
+            batsmen_names, bowler_name,
+            self.super_over_batting_team, self.super_over_bowling_team
+        )
+        if validation_error:
+            return {"error": validation_error}
+
+        if batsmen_names:
             self.super_over_batsmen = self._find_players_by_name(
-                self.super_over_batting_team, batsmen_names[:2]
+                self.super_over_batting_team, batsmen_names[:3]
             )
         else:
             self.super_over_batsmen = self._select_super_over_batsmen(self.super_over_batting_team)
@@ -5128,6 +5135,24 @@ class Match:
             "bowler": self.super_over_bowler["name"],
         }
 
+    def _validate_super_over_selection(self, batsmen_names, bowler_name, batting_team, bowling_team):
+        """Strict validation: exactly 3 distinct batsmen from batting team, 1 bowler from bowling team."""
+        if batsmen_names is not None or bowler_name is not None:
+            if not batsmen_names or len(batsmen_names) != 3:
+                return "Super over requires exactly 3 batsmen"
+            if len(set(batsmen_names)) != 3:
+                return "Super over batsmen must be distinct"
+            batting_names = {p["name"] for p in batting_team}
+            for name in batsmen_names:
+                if name not in batting_names:
+                    return f"Batsman '{name}' not in batting team"
+            if not bowler_name:
+                return "Super over requires 1 bowler"
+            bowling_names = {p["name"] for p in bowling_team}
+            if bowler_name not in bowling_names:
+                return f"Bowler '{bowler_name}' not in bowling team"
+        return None
+
     def _find_players_by_name(self, team, names):
         """Find player dicts by name from a team list"""
         result = []
@@ -5139,7 +5164,7 @@ class Match:
         return result
 
     def _resolve_super_over_batsmen(self, team, selected):
-        """Return exactly two distinct batter dicts, falling back safely when names are invalid."""
+        """Return exactly three distinct batter dicts, falling back safely when names are invalid."""
         resolved = []
         seen = set()
 
@@ -5149,7 +5174,7 @@ class Match:
                 continue
             resolved.append(player)
             seen.add(name)
-            if len(resolved) == 2:
+            if len(resolved) == 3:
                 return resolved
 
         for player in self._select_super_over_batsmen(team):
@@ -5158,7 +5183,7 @@ class Match:
                 continue
             resolved.append(player)
             seen.add(name)
-            if len(resolved) == 2:
+            if len(resolved) == 3:
                 return resolved
 
         for player in team:
@@ -5167,21 +5192,26 @@ class Match:
                 continue
             resolved.append(player)
             seen.add(name)
-            if len(resolved) == 2:
+            if len(resolved) == 3:
                 return resolved
 
-        if len(resolved) == 1:
-            resolved.append(resolved[0])
-            return resolved
+        # Last-resort padding when the team roster is too small (e.g., synthetic tests).
+        while len(resolved) < 3 and resolved:
+            resolved.append(resolved[-1])
 
-        raise ValueError("Unable to resolve super over batsmen from team roster")
+        if len(resolved) < 3:
+            raise ValueError("Unable to resolve super over batsmen from team roster")
+
+        return resolved
 
     def _init_super_over_innings_state(self):
         """Initialize/reset super over innings state"""
         self.super_over_ball = 0
         self.super_over_current_striker = self.super_over_batsmen[0]
         self.super_over_current_non_striker = self.super_over_batsmen[1]
+        # First two are at the crease; index 2 is the next batter in.
         self.super_over_batter_idx = [0, 1]
+        self.super_over_next_batter_idx = 2
         self.super_over_bowler_runs = 0
         self.super_over_bowler_wickets = 0
 
@@ -5193,9 +5223,16 @@ class Match:
     def start_super_over_innings2(self, batsmen_names=None, bowler_name=None):
         """Start innings 2 of the current super over with user-chosen players"""
         # Teams were already swapped by _end_super_over_innings
-        if batsmen_names and len(batsmen_names) >= 2:
+        validation_error = self._validate_super_over_selection(
+            batsmen_names, bowler_name,
+            self.super_over_batting_team, self.super_over_bowling_team
+        )
+        if validation_error:
+            return {"error": validation_error}
+
+        if batsmen_names:
             self.super_over_batsmen = self._find_players_by_name(
-                self.super_over_batting_team, batsmen_names[:2]
+                self.super_over_batting_team, batsmen_names[:3]
             )
         else:
             self.super_over_batsmen = self._select_super_over_batsmen(self.super_over_batting_team)
@@ -5227,9 +5264,9 @@ class Match:
         }
 
     def _select_super_over_batsmen(self, team):
-        """Select top 3 batsmen by rating, return top 2 for super over"""
+        """Auto-select top 3 batsmen by rating for the super over (2 openers + 1 reserve)."""
         sorted_batsmen = sorted(team, key=lambda p: p["batting_rating"], reverse=True)
-        return sorted_batsmen[:2]  # Return top 2 batsmen
+        return sorted_batsmen[:3]
 
     def _select_super_over_bowler(self, team):
         """Select best bowler by rating"""
@@ -5336,15 +5373,18 @@ class Match:
                 if so_wk_legal:
                     self.super_over_batsman_stats[self.super_over_current_striker["name"]]["balls"] += 1
 
-            # Super over: only 2 batsmen allowed, 2 wickets = all out
-            # If 1st wicket and non-striker was dismissed, swap so remaining batter is striker
+            # Super over: 3 batsmen selected, max 2 wickets allowed.
+            # On the first wicket, bring the next batter in at the dismissed end.
             if self.super_over_wickets[team_key] < 2:
-                if so_dismissed_end == "non_striker":
-                    # Non-striker run out: striker continues, no replacement needed
-                    pass
-                # If striker was dismissed, non-striker becomes striker (no new batter)
-                elif so_dismissed_end == "striker":
-                    self.super_over_current_striker = self.super_over_current_non_striker
+                next_batter = None
+                if self.super_over_next_batter_idx < len(self.super_over_batsmen):
+                    next_batter = self.super_over_batsmen[self.super_over_next_batter_idx]
+                    self.super_over_next_batter_idx += 1
+                if next_batter is not None:
+                    if so_dismissed_end == "striker":
+                        self.super_over_current_striker = next_batter
+                    else:  # "non_striker" (run out)
+                        self.super_over_current_non_striker = next_batter
         else:
             self.super_over_scores[team_key] += runs
             self.super_over_bowler_runs += runs
