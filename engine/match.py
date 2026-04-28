@@ -5079,6 +5079,15 @@ class Match:
 
     def start_super_over(self, first_batting_team, batsmen_names=None, bowler_name=None):
         """Start the super over with user-chosen or auto-selected players"""
+        # IPL rule: from round 2 onwards, the team that batted second in the
+        # previous super over must bat first. Enforce here regardless of input.
+        required_first = getattr(self, "_super_over_next_first_batting", None)
+        if required_first and first_batting_team != required_first:
+            first_batting_team = required_first
+
+        if first_batting_team not in ("home", "away"):
+            return {"error": "first_batting_team must be 'home' or 'away'"}
+
         self.super_over_round += 1
         self.super_over_innings = 1
 
@@ -5216,9 +5225,15 @@ class Match:
         self.super_over_bowler_wickets = 0
 
         self.super_over_batsman_stats = {
-            p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "wicket_type": "", "out": False}
+            p["name"]: {
+                "runs": 0, "balls": 0, "fours": 0, "sixes": 0,
+                "wicket_type": "", "out": False, "did_bat": False,
+            }
             for p in self.super_over_batsmen
         }
+        # Mark the two openers as having batted; the 3rd flips to True only if they come in.
+        self.super_over_batsman_stats[self.super_over_batsmen[0]["name"]]["did_bat"] = True
+        self.super_over_batsman_stats[self.super_over_batsmen[1]["name"]]["did_bat"] = True
 
     def start_super_over_innings2(self, batsmen_names=None, bowler_name=None):
         """Start innings 2 of the current super over with user-chosen players"""
@@ -5343,11 +5358,14 @@ class Match:
             self.super_over_wickets[team_key] += 1
             self.super_over_bowler_wickets += 1
             wicket_type = outcome["wicket_type"]
+            so_crossed = False  # only meaningful for run-outs
 
             if wicket_type == "Run Out":
-                self.super_over_scores[team_key] += 1
-                self.super_over_bowler_runs += 1
-                self.super_over_batsman_stats[self.super_over_current_striker["name"]]["runs"] += 1
+                # Completed runs before dismissal (0, 1, or 2)
+                completed = max(0, runs)
+                self.super_over_scores[team_key] += completed
+                self.super_over_bowler_runs += completed
+                self.super_over_batsman_stats[self.super_over_current_striker["name"]]["runs"] += completed
                 # Byes/Leg Byes/No Balls are faced deliveries — count the ball
                 so_ro_legal = not extra
                 if extra and extra_type in ("Byes", "Leg Bye", "No Ball"):
@@ -5361,6 +5379,7 @@ class Match:
                                      else self.super_over_current_non_striker["name"])
                 self.super_over_batsman_stats[so_dismissed_name]["wicket_type"] = "Run Out"
                 self.super_over_batsman_stats[so_dismissed_name]["out"] = True
+                so_crossed = (completed % 2 == 1)
             else:
                 so_dismissed_name = self.super_over_current_striker["name"]
                 so_dismissed_end = "striker"
@@ -5375,16 +5394,32 @@ class Match:
 
             # Super over: 3 batsmen selected, max 2 wickets allowed.
             # On the first wicket, bring the next batter in at the dismissed end.
+            # For run-outs, account for whether batters had crossed before the dismissal —
+            # crossing flips which physical end the surviving batter and the new batter occupy.
             if self.super_over_wickets[team_key] < 2:
                 next_batter = None
                 if self.super_over_next_batter_idx < len(self.super_over_batsmen):
                     next_batter = self.super_over_batsmen[self.super_over_next_batter_idx]
                     self.super_over_next_batter_idx += 1
                 if next_batter is not None:
-                    if so_dismissed_end == "striker":
-                        self.super_over_current_striker = next_batter
-                    else:  # "non_striker" (run out)
-                        self.super_over_current_non_striker = next_batter
+                    self.super_over_batsman_stats[next_batter["name"]]["did_bat"] = True
+                    surviving = (self.super_over_current_non_striker
+                                 if so_dismissed_end == "striker"
+                                 else self.super_over_current_striker)
+                    if so_crossed:
+                        # Batters crossed during the runs — surviving batter has swapped ends.
+                        if so_dismissed_end == "striker":
+                            self.super_over_current_striker = surviving
+                            self.super_over_current_non_striker = next_batter
+                        else:
+                            self.super_over_current_striker = next_batter
+                            self.super_over_current_non_striker = surviving
+                    else:
+                        # No crossing — new batter takes the dismissed end.
+                        if so_dismissed_end == "striker":
+                            self.super_over_current_striker = next_batter
+                        else:
+                            self.super_over_current_non_striker = next_batter
         else:
             self.super_over_scores[team_key] += runs
             self.super_over_bowler_runs += runs
@@ -5480,11 +5515,17 @@ class Match:
         batting = []
         for name, stats in self.super_over_batsman_stats.items():
             sr = round((stats["runs"] / stats["balls"]) * 100, 1) if stats["balls"] > 0 else 0
-            status = f"{stats['wicket_type']}" if stats["out"] else "not out"
+            if stats["out"]:
+                status = stats["wicket_type"]
+            elif stats.get("did_bat"):
+                status = "not out"
+            else:
+                status = "did not bat"
             batting.append({
                 "name": name, "runs": stats["runs"], "balls": stats["balls"],
                 "fours": stats["fours"], "sixes": stats["sixes"],
                 "sr": sr, "status": status, "out": stats["out"],
+                "did_bat": stats.get("did_bat", False),
             })
         bowling = {
             "name": self.super_over_bowler["name"],
@@ -5627,6 +5668,10 @@ class Match:
                         "will_bowl": p.get("will_bowl", False),
                     }
 
+                # Per IPL rule: team that batted 2nd in this round bats 1st in next.
+                next_first = "away" if self.super_over_first_batting == "home" else "home"
+                self._super_over_next_first_batting = next_first
+
                 return {
                     "super_over_tied_again": True,
                     "match_over": False,
@@ -5639,4 +5684,5 @@ class Match:
                     "innings2_scorecard": innings_scorecard,
                     "home_players": [_pi(p) for p in self.home_xi],
                     "away_players": [_pi(p) for p in self.away_xi],
+                    "next_first_batting_team": next_first,
                 }
