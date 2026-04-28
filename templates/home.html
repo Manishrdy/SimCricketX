@@ -350,6 +350,22 @@
         color: var(--fg-secondary);
     }
 
+    .menu-lock-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        border: 1px solid var(--card-border);
+        background: var(--bg-secondary);
+        color: var(--fg-secondary);
+        margin-left: 0.5rem;
+        vertical-align: middle;
+        letter-spacing: 0.02em;
+    }
+
     .global-announcement-banner {
         position: fixed;
         left: 50%;
@@ -786,13 +802,16 @@
             <i class="fa-solid fa-arrow-right menu-arrow"></i>
         </a>
 
-        <a class="menu-item" href="{{ url_for('leagues_list') }}">
+        <a class="menu-item is-disabled" href="#" aria-disabled="true" onclick="event.preventDefault(); return false;">
             <div class="menu-icon"><i class="fa-solid fa-gavel"></i></div>
             <div>
-                <h3 class="menu-title">Leagues &amp; Auctions</h3>
+                <h3 class="menu-title">
+                    Leagues &amp; Auctions
+                    <span class="menu-lock-badge"><i class="fa-solid fa-lock"></i> Locked</span>
+                </h3>
                 <p class="menu-desc">Run leagues with auctions, drafts, and seasonal tournaments.</p>
             </div>
-            <i class="fa-solid fa-arrow-right menu-arrow"></i>
+            <i class="fa-solid fa-lock menu-arrow"></i>
         </a>
     </div>
 </section>
