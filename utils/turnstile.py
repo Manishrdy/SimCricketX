@@ -1,12 +1,14 @@
 """Cloudflare Turnstile server-side token verification."""
 
 import os
+from typing import Optional, Tuple
+
 import requests as _http
 
 _VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 
-def verify_turnstile(token: str, remote_ip: str | None = None) -> tuple[bool, str]:
+def verify_turnstile(token: str, remote_ip: Optional[str] = None) -> Tuple[bool, str]:
     """Verify a Turnstile response token with Cloudflare.
 
     Returns (True, "ok") on success.
