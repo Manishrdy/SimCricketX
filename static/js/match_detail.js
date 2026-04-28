@@ -1468,7 +1468,7 @@ function soResetState(round) {
 }
 
 // --- Open Modal ---
-function soOpenModal(teamData, round) {
+function soOpenModal(teamData, round, forcedFirstBatting) {
     soResetState(round);
     soState.teamData = teamData;
 
@@ -1479,12 +1479,18 @@ function soOpenModal(teamData, round) {
     document.getElementById('so-round-badge').textContent = `Round ${round}`;
     document.getElementById('so-innings-badge').textContent = 'Innings 1';
 
-    // Show team pick, hide selection
-    document.getElementById('so-team-pick').style.display = '';
-    document.getElementById('so-selection').style.display = 'none';
-
     document.getElementById('so-pick-home').textContent = teamData.home_team;
     document.getElementById('so-pick-away').textContent = teamData.away_team;
+
+    if (forcedFirstBatting === 'home' || forcedFirstBatting === 'away') {
+        // Round 2+: IPL rule auto-assigns the team that batted 2nd last round.
+        // Skip the team-pick step and go straight to player selection.
+        soPickBattingTeam(forcedFirstBatting);
+    } else {
+        // Round 1: user chooses which side bats first.
+        document.getElementById('so-team-pick').style.display = '';
+        document.getElementById('so-selection').style.display = 'none';
+    }
 }
 window.soOpenModal = soOpenModal;
 
@@ -1709,7 +1715,7 @@ function soSimulateBall() {
                     away_team: data.away_team,
                     home_players: data.home_players,
                     away_players: data.away_players,
-                }, soState.round + 1);
+                }, soState.round + 1, data.next_first_batting_team);
             }, 1500);
             return;
         }
@@ -1723,8 +1729,13 @@ function soSimulateBall() {
 function soLogMiniScorecard(sc) {
     if (!sc) return;
     (sc.batting || []).forEach(b => {
-        const status = b.out ? b.status : 'not out';
-        appendLog(`  ${b.name}: ${b.runs}(${b.balls}) ${b.fours}x4 ${b.sixes}x6 [${status}]`);
+        // Backend pre-computes b.status: wicket type / "not out" / "did not bat".
+        // Show DNB rows without the misleading 0(0) score line.
+        if (b.did_bat === false && !b.out) {
+            appendLog(`  ${b.name}: did not bat`);
+        } else {
+            appendLog(`  ${b.name}: ${b.runs}(${b.balls}) ${b.fours}x4 ${b.sixes}x6 [${b.status}]`);
+        }
     });
     const bowl = sc.bowling || {};
     appendLog(`  ${bowl.name}: ${bowl.overs || '0.0'} ov — ${bowl.runs}/${bowl.wickets}`);

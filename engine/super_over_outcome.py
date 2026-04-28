@@ -206,9 +206,10 @@ def calculate_super_over_outcome(
         result["wicket_type"] = chosen_wicket
         result["description"] = random.choice(commentary_templates["Wicket"])
 
-        # A1: Run Out happens after completing 1 run
+        # A1: Run Out can happen attempting 1, 2, or 3 runs.
+        # Distribution roughly mirrors how often run-outs occur per attempted total.
         if chosen_wicket == "Run Out":
-            result["runs"] = 1
+            result["runs"] = random.choices([0, 1, 2], weights=[0.30, 0.60, 0.10], k=1)[0]
 
     elif chosen == "Extras":
         result["type"] = "extra"
