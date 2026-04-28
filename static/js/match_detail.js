@@ -27,6 +27,7 @@ let simulationMode = (typeof matchData !== 'undefined' && matchData.simulation_m
 let pendingManualDecision = null;
 let pendingDecisionSelection = null;
 let decisionModalVisible = false;
+let modeChangeInFlight = false;
 
 // Global variable to store first innings scorecard image
 let firstInningsImageBlob = null;
@@ -634,6 +635,10 @@ function updateDecisionResumeButton() {
 }
 
 async function setSimulationMode(requestedMode, autoContinue = false) {
+    if (modeChangeInFlight) return false;
+    modeChangeInFlight = true;
+    const modeButtons = document.querySelectorAll('#pill-auto, #pill-manual, #decision-auto-btn');
+    modeButtons.forEach(btn => { btn.disabled = true; });
     try {
         const res = await fetch(`${window.location.pathname}/set-simulation-mode`, {
             method: 'POST',
@@ -661,6 +666,9 @@ async function setSimulationMode(requestedMode, autoContinue = false) {
     } catch (err) {
         appendLog(`[ERROR] ${err.message || err}`, 'error');
         return false;
+    } finally {
+        modeChangeInFlight = false;
+        modeButtons.forEach(btn => { btn.disabled = false; });
     }
 }
 
@@ -1091,6 +1099,13 @@ function _processBallResult(data) {
     }
 
     if (data.decision_required) {
+        if (simulationMode !== 'manual') {
+            if (data.commentary) appendLog(data.commentary, 'comment');
+            clearPendingDecisionState();
+            hideDecisionModal();
+            scheduleNextBall(delay);
+            return;
+        }
         if (data.commentary) appendLog(data.commentary, 'comment');
         showDecisionModal(data);
         return;
