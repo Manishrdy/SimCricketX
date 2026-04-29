@@ -390,10 +390,10 @@ class Match:
         if strict:
             return strict
 
-        quota_only = [(i, p) for i, p in all_bowlers if self.bowler_history.get(p["name"], 0) < self.fmt.max_bowler_overs]
-        if quota_only:
-            return quota_only
-        return all_bowlers
+        non_consecutive = [(i, p) for i, p in all_bowlers if p["name"] != previous_bowler]
+        if non_consecutive:
+            return non_consecutive
+        return []
 
     def _create_next_bowler_decision(self):
         candidates = self._get_manual_bowler_candidates()
@@ -487,7 +487,11 @@ class Match:
             return {"error": "Selected player is not a valid option"}, 400
 
         if decision["type"] == "next_bowler":
-            self.current_bowler = self.bowling_team[selected_index]
+            selected_bowler = self.bowling_team[selected_index]
+            previous_bowler = self.current_bowler["name"] if self.current_bowler else None
+            if previous_bowler and selected_bowler["name"] == previous_bowler:
+                return {"error": "Selected bowler cannot bowl consecutive overs"}, 400
+            self.current_bowler = selected_bowler
             self.bowler_selected_for_over = self.current_over
             self._ensure_current_bowler_stats_entry()
             result = {
@@ -1029,6 +1033,8 @@ class Match:
         print(f"  📋 Complex Scenario ({len(remaining_bowlers)} bowlers, Consecutive-Safe):")
         
         available_bowlers = list(remaining_bowlers.keys())
+        if not available_bowlers:
+            raise Exception("No bowlers available for complex death-over plan")
         death_plan = []
         used_in_plan = {}
         
@@ -1075,7 +1081,11 @@ class Match:
         
         # Ensure we have exactly 3 bowlers
         while len(death_plan) < 3:
-            death_plan.append(available_bowlers[0])  # Emergency fallback
+            last_bowler = death_plan[-1] if death_plan else previous_bowler
+            filler = next((name for name in available_bowlers if name != last_bowler), None)
+            if not filler:
+                raise Exception("No non-consecutive filler available for death-over plan")
+            death_plan.append(filler)
         
         print(f"  ✅ Complex Plan: 18→{death_plan[0]}, 19→{death_plan[1]}, 20→{death_plan[2]}")
         return death_plan[:3]
@@ -1090,12 +1100,7 @@ class Match:
         
         if not remaining_bowlers:
             print(f"  💥 CRITICAL: No bowlers with remaining overs!")
-            # Use any bowler as absolute last resort
-            all_bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
-            if all_bowlers:
-                emergency_bowler = all_bowlers[0]["name"]
-                return [emergency_bowler, emergency_bowler, emergency_bowler]
-            return ["Emergency_Bowler", "Emergency_Bowler", "Emergency_Bowler"]
+            raise Exception("No bowlers with remaining quota for death-over plan")
         
         available_bowlers = list(remaining_bowlers.keys())
         death_plan = []
@@ -1131,19 +1136,11 @@ class Match:
                         print(f"    ⚠️ QUOTA VIOLATION: Using {bowler_name} with {working_quota.get(bowler_name, 0)} quota")
                         break
             
-            # Priority 3: Absolute emergency - allow consecutive if necessary
+            # Priority 3: no valid non-consecutive option exists.
             if not selected_bowler:
-                print(f"    💥 ABSOLUTE EMERGENCY: Allowing consecutive bowling")
-                for bowler_name in available_bowlers:
-                    if working_quota.get(bowler_name, 0) > 0:
-                        selected_bowler = bowler_name
-                        print(f"    💥 CONSECUTIVE VIOLATION: Using {bowler_name}")
-                        break
-                
-                # If still no bowler, use first available
-                if not selected_bowler:
-                    selected_bowler = available_bowlers[0]
-                    print(f"    💥 LAST RESORT: Using {selected_bowler}")
+                raise Exception(
+                    "No non-consecutive bowler available for emergency death-over plan"
+                )
             
             # Add to plan and update tracking
             death_plan.append(selected_bowler)
@@ -1366,9 +1363,7 @@ class Match:
                 print(f"🆘 Emergency quota violation: {bowler['name']}")
                 return bowler
         
-        # Absolute last resort
-        print(f"🆘 Absolute emergency: {all_bowlers[0]['name']}")
-        return all_bowlers[0]
+        raise Exception("No non-consecutive bowler available for emergency selection")
 
     def _pick_death_overs_bowler(self):
         """
@@ -1746,7 +1741,13 @@ class Match:
             overs_remaining,
         )
         if not eligible:
-            eligible = [p for p in self.bowling_team if p.get("will_bowl", False)]
+            previous_name = self.current_bowler["name"] if self.current_bowler else None
+            eligible = [
+                p for p in self.bowling_team
+                if p.get("will_bowl", False) and p["name"] != previous_name
+            ]
+            if not eligible:
+                raise Exception("No non-consecutive bowler available for ListA selection")
 
         pure_bowlers = [b for b in self.bowling_team if self._is_lista_pure_bowler(b)]
         pure_need_overs = any(
@@ -3719,7 +3720,7 @@ class Match:
                     "commentary": final_commentary
                 }
 
-        if self.current_ball == 0 and not getattr(self, "prev_delivery_was_extra", False):
+        if self.current_ball == 0:
             # Initialize partnership contributions if new partnership (moved from inner block)
             if self.current_partnership_balls == 0 and self.current_partnership_runs == 0:
                  if self.current_partnership_contributions['batsman1']['name'] == '':
@@ -3755,9 +3756,13 @@ class Match:
                         if b["name"] != previous_name and self.bowler_history.get(b["name"], 0) < max_q
                     ]
                     non_consecutive = [b for b in eligible if b["name"] != previous_name]
-                    quota_any = [b for b in eligible if self.bowler_history.get(b["name"], 0) < max_q]
-
-                    fallback_pool = quota_non_consecutive or non_consecutive or quota_any or eligible
+                    fallback_pool = quota_non_consecutive or non_consecutive
+                    if not fallback_pool:
+                        return {
+                            "error": "Bowler selection failed and no non-consecutive bowler is available.",
+                            "match_over": True,
+                            "result": "Match aborted: No non-consecutive bowler available."
+                        }
                     fallback_pool.sort(key=lambda b: (-b.get("bowling_rating", 0), b.get("name", "")))
                     self.current_bowler = fallback_pool[0]
                     logger.warning(

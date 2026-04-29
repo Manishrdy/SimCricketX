@@ -163,7 +163,7 @@ _T20 = FormatConfig(
     name="T20",
     overs=20,
     max_bowler_overs=4,
-    allow_consecutive_overs=True,
+    allow_consecutive_overs=False,
     powerplay_phases=[
         Phase("Powerplay", start=0, end=5, max_fielders_outside=2),
     ],
