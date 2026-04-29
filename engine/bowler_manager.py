@@ -9,9 +9,9 @@ match.py (all hardcoding the T20 quota of 4 overs).
 Rules enforced
 --------------
 1. Bowling quota   — a bowler may not exceed format_config.max_bowler_overs
-                     per innings (4 for T20, 10 for ListA).
+                     per innings while quota-safe alternatives exist.
 2. No-consecutive  — when format_config.allow_consecutive_overs is False, a
-                     bowler may not bowl two overs in a row (ListA rule).
+                     bowler may not bowl two overs in a row.
 3. Fresh-bowler    — every bowler marked will_bowl must bowl at least 1 over
                      if the remaining overs allow it (mirrors existing logic
                      in match.py).
@@ -110,9 +110,9 @@ class BowlerManager:
            (if allow_consecutive_overs is False).
 
         If applying all criteria produces an empty list, the method relaxes
-        constraint 3 (consecutive), then constraint 2 (quota), returning the
-        least-restricted non-empty pool found.  This mirrors what a captain
-        does when forced to use an irregular bowler.
+        quota before it relaxes the no-consecutive rule. If the previous bowler
+        is the only available bowler, an empty list is returned so callers can
+        surface a visible match-state error.
 
         Additionally, if the count of "fresh" bowlers (0 overs bowled) equals
         the number of overs remaining, those fresh bowlers are returned
@@ -149,32 +149,29 @@ class BowlerManager:
         if strict:
             return strict
 
-        # --- Fallback 1: relax consecutive rule ---
-        quota_ok: List[dict] = [
+        # --- Fallback 1: relax quota, never consecutive ---
+        non_consecutive: List[dict] = [
             p for p in self._eligible_xi
-            if self._quota.get(p["name"], 0) < max_q
+            if not (no_consec and p["name"] == self._last_bowler)
         ]
-        if quota_ok:
+        if non_consecutive:
             logger.warning(
-                "BowlerManager: relaxing no-consecutive rule at over %d "
-                "(last bowler=%s)",
+                "BowlerManager: relaxing quota rule at over %d "
+                "to preserve no-consecutive rule (last bowler=%s)",
                 current_over, self._last_bowler
             )
-            return quota_ok
-
-        # --- Fallback 2: relax quota too (genuine emergency) ---
-        logger.warning(
-            "BowlerManager: all bowlers at quota at over %d — emergency fallback",
-            current_over
-        )
-        if self._eligible_xi:
-            # Return bowlers sorted by least overs bowled (spread the pain)
             return sorted(
-                self._eligible_xi,
+                non_consecutive,
                 key=lambda p: self._quota.get(p["name"], 0)
             )
 
-        return self._eligible_xi  # should never be empty
+        # --- Fallback 2: no legal non-consecutive bowler exists ---
+        logger.warning(
+            "BowlerManager: no non-consecutive bowler available at over %d "
+            "(last bowler=%s)",
+            current_over, self._last_bowler
+        )
+        return []
 
     def overs_remaining(self, bowler_name: str) -> int:
         """Overs this bowler can still bowl in the current innings."""
