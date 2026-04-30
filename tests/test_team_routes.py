@@ -15,6 +15,9 @@ from database.models import (
     Player as DBPlayer,
     Match as DBMatch,
     MatchScorecard,
+    MatchPartnership,
+    Tournament,
+    TournamentPlayerStatsCache,
 )
 
 
@@ -175,6 +178,59 @@ class TestTeamDeletionRoute:
         assert team is None
         assert DBTeamProfile.query.filter_by(team_id=team_id).count() == 0
         assert DBPlayer.query.filter_by(team_id=team_id).count() == 0
+
+    def test_delete_team_removes_player_dependents(self, authenticated_client, test_team, app):
+        """Team deletion clears player-linked stats rows before deleting players."""
+        team_id = test_team.id
+        short_code = test_team.short_code
+        player = DBPlayer.query.filter_by(team_id=team_id).first()
+
+        tournament = Tournament(user_id=test_team.user_id, name="Delete Team Cup")
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=test_team.user_id,
+            match_format="T20",
+            date=datetime.utcnow(),
+        )
+        db.session.add_all([tournament, match])
+        db.session.flush()
+
+        db.session.add(MatchScorecard(
+            match_id=match.id,
+            player_id=player.id,
+            team_id=team_id,
+            innings_number=1,
+            record_type="batting",
+            runs=12,
+        ))
+        db.session.add(MatchPartnership(
+            match_id=match.id,
+            innings_number=1,
+            wicket_number=1,
+            batsman1_id=player.id,
+            batsman2_id=player.id,
+            runs=12,
+            balls=8,
+        ))
+        db.session.add(TournamentPlayerStatsCache(
+            tournament_id=tournament.id,
+            player_id=player.id,
+            team_id=team_id,
+            matches_played=1,
+        ))
+        db.session.commit()
+
+        response = authenticated_client.post(
+            "/team/delete",
+            data={"short_code": short_code},
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        assert db.session.get(DBTeam, team_id) is None
+        assert MatchScorecard.query.filter_by(team_id=team_id).count() == 0
+        assert MatchPartnership.query.filter_by(match_id=match.id).count() == 0
+        assert TournamentPlayerStatsCache.query.filter_by(team_id=team_id).count() == 0
 
     def test_delete_team_unauthenticated(self, client, test_team):
         """Test team deletion without authentication redirects."""

@@ -1,3 +1,10 @@
+[2.4.2] 2026-04-30
+- Fixed team deletion failing with `sqlite3.IntegrityError: FOREIGN KEY constraint failed` when roster players had linked scorecards, partnerships, or tournament player stat cache rows
+- Root cause: `/team/delete` bulk-deleted `players` rows before clearing all player-dependent stats tables; bulk deletes bypass ORM cascades, and not every dependent table has database-level `ON DELETE CASCADE`
+- Fix: clear player-linked `match_scorecards`, `match_partnerships`, and `tournament_player_stats_cache` rows before deleting team roster `players` rows
+- Clarified delete semantics: deleting a team removes the team roster rows only; canonical `master_players` and reusable `user_players` pool records are preserved
+- Added regression coverage for user and admin team deletion with scorecard, partnership, and tournament stat cache dependencies
+
 [2.4.1] 2026-04-21
 - Fixed tournament match results not registering in the points table (standings silently stale after match completion)
 - Root cause: match archiver's `_save_to_database()` was committing a DBMatch row for tournament matches before the tournament completion handler ran; if the handler then failed, the match was persisted but never linked to its fixture, so `update_standings()` found no fixture and returned False

@@ -2310,6 +2310,9 @@ def create_app():
         DBTeamProfile=DBTeamProfile,
         DBMasterPlayer=DBMasterPlayer,
         DBUserPlayer=DBUserPlayer,
+        MatchScorecard=MatchScorecard,
+        TournamentPlayerStatsCache=TournamentPlayerStatsCache,
+        MatchPartnership=MatchPartnership,
     )
 
     # --- Match & Archive Routes (Phase 4 extraction) ---

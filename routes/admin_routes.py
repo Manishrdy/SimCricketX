@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import yaml
 from flask import Response, after_this_request, flash, jsonify, redirect, render_template, request, send_file, session, stream_with_context, url_for
 from flask_login import current_user, login_user
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from match_archiver import reverse_player_aggregates
 from utils.exception_tracker import log_exception
 from werkzeug.utils import secure_filename
@@ -2032,6 +2032,27 @@ def register_admin_routes(
             return jsonify({"error": "Team not found"}), 404
         name = team.name
         owner = team.user_id
+        player_ids = [
+            pid for (pid,) in db.session.query(DBPlayer.id)
+            .filter_by(team_id=team.id)
+            .all()
+        ]
+        if player_ids:
+            db.session.query(MatchPartnership).filter(
+                (MatchPartnership.batsman1_id.in_(player_ids)) |
+                (MatchPartnership.batsman2_id.in_(player_ids))
+            ).delete(synchronize_session=False)
+        cache_filters = [TournamentPlayerStatsCache.team_id == team.id]
+        scorecard_filters = [MatchScorecard.team_id == team.id]
+        if player_ids:
+            cache_filters.append(TournamentPlayerStatsCache.player_id.in_(player_ids))
+            scorecard_filters.append(MatchScorecard.player_id.in_(player_ids))
+        db.session.query(TournamentPlayerStatsCache).filter(
+            or_(*cache_filters)
+        ).delete(synchronize_session=False)
+        db.session.query(MatchScorecard).filter(
+            or_(*scorecard_filters)
+        ).delete(synchronize_session=False)
         # Defensive cleanup for legacy data that may not be profile-linked.
         db.session.query(DBPlayer).filter_by(team_id=team.id).delete(synchronize_session=False)
         db.session.query(DBTeamProfile).filter_by(team_id=team.id).delete(synchronize_session=False)
