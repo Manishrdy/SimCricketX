@@ -1190,6 +1190,7 @@ def register_auction_routes(
                 playoff_teams=playoff_teams,
                 format_type=season.format,
             )
+            auction = DBAuction.query.filter_by(season_id=season.id).first()
             runtime._log_audit(
                 auction, "tournament.created",
                 {"tournament_id": t.id, "tournament_name": t.name,
