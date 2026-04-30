@@ -22,6 +22,9 @@ from database.models import (
     Player as DBPlayer,
     Match as DBMatch,
     MatchScorecard,
+    MatchPartnership,
+    Tournament,
+    TournamentPlayerStatsCache,
     AdminAuditLog,
     BlockedIP,
     FailedLoginAttempt,
@@ -448,8 +451,43 @@ class TestDataManagement:
         db.session.add(profile)
         db.session.flush()
 
-        db.session.add(DBPlayer(team_id=team.id, profile_id=profile.id, name="Profile Player"))
+        player = DBPlayer(team_id=team.id, profile_id=profile.id, name="Profile Player")
+        db.session.add(player)
         db.session.add(DBPlayer(team_id=team.id, profile_id=None, name="Legacy Player"))
+        db.session.flush()
+
+        tournament = Tournament(user_id=regular_user.id, name="Admin Delete Cup")
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=regular_user.id,
+            match_format="T20",
+            date=datetime.utcnow(),
+        )
+        db.session.add_all([tournament, match])
+        db.session.flush()
+        db.session.add(MatchScorecard(
+            match_id=match.id,
+            player_id=player.id,
+            team_id=team.id,
+            innings_number=1,
+            record_type="batting",
+            runs=20,
+        ))
+        db.session.add(MatchPartnership(
+            match_id=match.id,
+            innings_number=1,
+            wicket_number=1,
+            batsman1_id=player.id,
+            batsman2_id=player.id,
+            runs=20,
+            balls=15,
+        ))
+        db.session.add(TournamentPlayerStatsCache(
+            tournament_id=tournament.id,
+            player_id=player.id,
+            team_id=team.id,
+            matches_played=1,
+        ))
         db.session.commit()
 
         response = admin_client.post(f"/admin/teams/{team.id}/delete")
@@ -457,6 +495,9 @@ class TestDataManagement:
         assert db.session.get(DBTeam, team.id) is None
         assert DBTeamProfile.query.filter_by(team_id=team.id).count() == 0
         assert DBPlayer.query.filter_by(team_id=team.id).count() == 0
+        assert MatchScorecard.query.filter_by(team_id=team.id).count() == 0
+        assert MatchPartnership.query.filter_by(match_id=match.id).count() == 0
+        assert TournamentPlayerStatsCache.query.filter_by(team_id=team.id).count() == 0
 
     def test_admin_delete_player(self, admin_client):
         """Test deleting non-existent player as admin returns 404 or redirects."""

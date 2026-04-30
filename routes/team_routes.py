@@ -5,7 +5,7 @@ import re
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from utils.exception_tracker import log_exception
 
 VALID_FORMATS = ("T20", "ListA")
@@ -22,6 +22,9 @@ def register_team_routes(
     DBTeamProfile,
     DBMasterPlayer=None,
     DBUserPlayer=None,
+    MatchScorecard=None,
+    TournamentPlayerStatsCache=None,
+    MatchPartnership=None,
 ):
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -59,6 +62,38 @@ def register_team_routes(
                 "bowling_hand": bowling_hand,
             })
         return players, None
+
+    def _delete_team_player_dependents(team_id):
+        """Remove rows that reference team players before bulk player deletion."""
+        player_ids = [
+            pid for (pid,) in db.session.query(DBPlayer.id)
+            .filter_by(team_id=team_id)
+            .all()
+        ]
+
+        if player_ids and MatchPartnership is not None:
+            db.session.query(MatchPartnership).filter(
+                or_(
+                    MatchPartnership.batsman1_id.in_(player_ids),
+                    MatchPartnership.batsman2_id.in_(player_ids),
+                )
+            ).delete(synchronize_session=False)
+
+        if TournamentPlayerStatsCache is not None:
+            cache_filters = [TournamentPlayerStatsCache.team_id == team_id]
+            if player_ids:
+                cache_filters.append(TournamentPlayerStatsCache.player_id.in_(player_ids))
+            db.session.query(TournamentPlayerStatsCache).filter(
+                or_(*cache_filters)
+            ).delete(synchronize_session=False)
+
+        if MatchScorecard is not None:
+            scorecard_filters = [MatchScorecard.team_id == team_id]
+            if player_ids:
+                scorecard_filters.append(MatchScorecard.player_id.in_(player_ids))
+            db.session.query(MatchScorecard).filter(
+                or_(*scorecard_filters)
+            ).delete(synchronize_session=False)
 
     def _validate_profile(fmt, profile_data, is_draft):
         """
@@ -874,6 +909,7 @@ def register_team_routes(
             team_name = team.name
             # Defensive cleanup: remove all players/profiles for this team explicitly.
             # This covers legacy rows that may not be profile-linked.
+            _delete_team_player_dependents(team.id)
             db.session.query(DBPlayer).filter_by(team_id=team.id).delete(synchronize_session=False)
             db.session.query(DBTeamProfile).filter_by(team_id=team.id).delete(synchronize_session=False)
             db.session.delete(team)
