@@ -51,7 +51,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash, current_app, has_app_context
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash, current_app, has_app_context, g
 from match_archiver import MatchArchiver, find_original_json_file, reverse_player_aggregates
 from engine.match import Match
 from flask_login import (
