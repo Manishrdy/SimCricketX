@@ -2371,6 +2371,7 @@ def create_app():
         DBMatch=DBMatch,
         TournamentTeam=TournamentTeam,
         TournamentFixture=TournamentFixture,
+        Tournament=Tournament,
     )
 
     # --- Match & Archive Routes (Phase 4 extraction) ---
