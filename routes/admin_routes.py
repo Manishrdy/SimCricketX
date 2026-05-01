@@ -2053,6 +2053,24 @@ def register_admin_routes(
         db.session.query(MatchScorecard).filter(
             or_(*scorecard_filters)
         ).delete(synchronize_session=False)
+        # Clear external FK references (matches, fixtures, standings) — none of
+        # these FKs to teams.id have ON DELETE cascade, so deletion would fail
+        # with an IntegrityError for any team that has been used.
+        for col in (DBMatch.home_team_id, DBMatch.away_team_id,
+                    DBMatch.winner_team_id, DBMatch.toss_winner_team_id):
+            db.session.query(DBMatch).filter(col == team.id).update(
+                {col: None}, synchronize_session=False
+            )
+        db.session.query(TournamentFixture).filter(
+            or_(TournamentFixture.home_team_id == team.id,
+                TournamentFixture.away_team_id == team.id)
+        ).delete(synchronize_session=False)
+        db.session.query(TournamentFixture).filter(
+            TournamentFixture.winner_team_id == team.id
+        ).update({TournamentFixture.winner_team_id: None}, synchronize_session=False)
+        db.session.query(TournamentTeam).filter_by(team_id=team.id).delete(
+            synchronize_session=False
+        )
         # Defensive cleanup for legacy data that may not be profile-linked.
         db.session.query(DBPlayer).filter_by(team_id=team.id).delete(synchronize_session=False)
         db.session.query(DBTeamProfile).filter_by(team_id=team.id).delete(synchronize_session=False)
@@ -2088,8 +2106,20 @@ def register_admin_routes(
             return jsonify({"error": "Tournament not found"}), 404
         name = tourn.name
         owner = tourn.user_id
-        db.session.delete(tourn)
-        db.session.commit()
+        try:
+            # Null Match.tournament_id refs (no ON DELETE cascade on the FK).
+            # Preserves the user's match archive while letting the tournament go.
+            db.session.query(DBMatch).filter_by(tournament_id=tournament_id).update(
+                {DBMatch.tournament_id: None}, synchronize_session=False
+            )
+            # Tournament cascades to TournamentTeam, TournamentFixture, and
+            # TournamentPlayerStatsCache via relationship cascade on the model.
+            db.session.delete(tourn)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[Admin] Error deleting tournament {tournament_id}: {e}", exc_info=True)
+            return jsonify({"error": f"Could not delete tournament: {type(e).__name__}"}), 500
         log_admin_action(current_user.id, 'delete_tournament', f'{name} (id={tournament_id})', f'Owner: {owner}', get_client_ip())
         return jsonify({"message": f"Tournament '{name}' deleted"}), 200
 

@@ -612,11 +612,11 @@ class Match(db.Model):
     id = db.Column(db.String(36), primary_key=True)  # UUID
     user_id = db.Column(db.String(120), db.ForeignKey('users.id'))
     
-    home_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), index=True)
-    away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), index=True)
+    home_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='SET NULL'), index=True)
+    away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='SET NULL'), index=True)
 
-    winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True, index=True)
-    tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=True, index=True)
+    winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='SET NULL'), nullable=True, index=True)
+    tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id', ondelete='SET NULL'), nullable=True, index=True)
     
     # Match Details
     venue = db.Column(db.String(100))
@@ -638,7 +638,7 @@ class Match(db.Model):
     margin_value = db.Column(db.Integer)    # Number of runs/wickets
     
     # Toss Information
-    toss_winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
+    toss_winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='SET NULL'), nullable=True)
     toss_decision = db.Column(db.String(10))  # 'Bat' or 'Bowl'
     
     # Match Format
@@ -832,7 +832,7 @@ class TournamentTeam(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
-    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='CASCADE'), nullable=False)
 
     # Standings Stats
     played = db.Column(db.Integer, default=0, nullable=False)
@@ -864,15 +864,15 @@ class TournamentFixture(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
-    home_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
-    away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
+    home_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='CASCADE'), nullable=True)
+    away_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='CASCADE'), nullable=True)
     round_number = db.Column(db.Integer, default=1, nullable=False)
     status = db.Column(db.String(20), default='Scheduled', nullable=False)
     stage = db.Column(db.String(30), default='league', nullable=False)
     stage_description = db.Column(db.String(100), nullable=True)
     bracket_position = db.Column(db.Integer, nullable=True)
-    match_id = db.Column(db.String(36), db.ForeignKey('matches.id'), nullable=True)
-    winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
+    match_id = db.Column(db.String(36), db.ForeignKey('matches.id', ondelete='SET NULL'), nullable=True)
+    winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='SET NULL'), nullable=True)
     series_match_number = db.Column(db.Integer, nullable=True)
     standings_applied = db.Column(db.Boolean, default=False, nullable=False)
 
