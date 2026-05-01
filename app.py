@@ -980,6 +980,61 @@ def create_app():
             return None
 
 
+    # Endpoints reachable while the user is gated to the squad-cleanup flow.
+    # Anything not in this set is redirected to /account/squad-cleanup.
+    OVERSIZE_SQUAD_ALLOWED_ENDPOINTS = frozenset({
+        'static',
+        'login', 'logout', 'register',
+        'force_change_password', 'set_display_name',
+        'verify_email', 'verify_email_pending', 'resend_verification',
+        'forgot_password', 'reset_password',
+        'admin_stop_impersonation',
+        'squad_cleanup',
+        'manage_teams',
+        'team_squad', 'team_squad_add', 'team_squad_remove',
+        'team_squad_captain', 'team_squad_wicketkeeper',
+        'team_squad_publish', 'team_squad_bulk_publish',
+        'edit_team', 'delete_team',
+        'account_settings',
+    })
+
+    @app.before_request
+    def check_oversize_squads():
+        """Block users whose teams have any profile with >25 players, until they trim."""
+        try:
+            if app.config.get("TESTING"):
+                return None
+            if not current_user.is_authenticated:
+                return None
+            if request.path.startswith('/static') or request.path == '/favicon.ico':
+                return None
+            # Admins bypass entirely (they may need to investigate other users' teams).
+            if getattr(current_user, 'is_admin', False):
+                return None
+            if request.endpoint in OVERSIZE_SQUAD_ALLOWED_ENDPOINTS:
+                return None
+            # Allow all admin endpoints + API endpoints used by the squad page.
+            if request.endpoint and request.endpoint.startswith('admin_'):
+                return None
+
+            has_oversize = (
+                db.session.query(DBTeamProfile.id)
+                .join(DBTeam, DBTeam.id == DBTeamProfile.team_id)
+                .join(DBPlayer, DBPlayer.profile_id == DBTeamProfile.id)
+                .filter(DBTeam.user_id == current_user.id)
+                .group_by(DBTeamProfile.id)
+                .having(func.count(DBPlayer.id) > 25)
+                .first()
+            )
+            if has_oversize:
+                return redirect(url_for('squad_cleanup'))
+            return None
+        except Exception as e:
+            log_exception(e)
+            app.logger.error(f"[OversizeSquad Check] Guard error: {e}", exc_info=True)
+            # Fail open: a guard error must not lock users out of the app.
+            return None
+
 
     def _clear_app_session():
         """Pop only app-specific session keys, preserving Flask-Login and Flask-WTF internals.
@@ -2313,6 +2368,9 @@ def create_app():
         MatchScorecard=MatchScorecard,
         TournamentPlayerStatsCache=TournamentPlayerStatsCache,
         MatchPartnership=MatchPartnership,
+        DBMatch=DBMatch,
+        TournamentTeam=TournamentTeam,
+        TournamentFixture=TournamentFixture,
     )
 
     # --- Match & Archive Routes (Phase 4 extraction) ---

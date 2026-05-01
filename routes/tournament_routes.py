@@ -273,15 +273,40 @@ def register_tournament_routes(
     @limiter.limit("5 per minute")
     def delete_tournament(tournament_id):
         t = db.session.get(Tournament, tournament_id)
-        if t and t.user_id == current_user.id:
+        if not t or t.user_id != current_user.id:
+            flash("Tournament not found or you don't have permission.", "danger")
+            return redirect(url_for("tournaments"))
+
+        try:
             tournament_matches = DBMatch.query.filter_by(tournament_id=tournament_id).all()
+            match_ids = [m.id for m in tournament_matches]
+
+            # Null tournament_fixtures.match_id before deleting the matches —
+            # the FK has no ON DELETE cascade, so the match delete would
+            # otherwise fail with an IntegrityError under Postgres.
+            if match_ids:
+                db.session.query(TournamentFixture).filter(
+                    TournamentFixture.match_id.in_(match_ids)
+                ).update({TournamentFixture.match_id: None}, synchronize_session=False)
+
             for m in tournament_matches:
                 _cleanup_match_artifacts(m)
                 db.session.delete(m)
 
+            # Tournament cascades to TournamentTeam, TournamentFixture, and
+            # TournamentPlayerStatsCache via relationship cascade on the model.
             db.session.delete(t)
             db.session.commit()
             flash("Tournament deleted successfully.", "success")
+        except Exception as e:
+            log_exception(e)
+            db.session.rollback()
+            app.logger.error(f"Error deleting tournament {tournament_id}: {e}", exc_info=True)
+            flash(
+                f"Could not delete the tournament: {type(e).__name__}. "
+                "Please contact support if this keeps happening.",
+                "danger",
+            )
         return redirect(url_for("tournaments"))
 
     @app.route("/fixture/<fixture_id>/resimulate", methods=["POST"])

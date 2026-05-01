@@ -85,6 +85,10 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("auction_history_phase8",   _loader("migrations.auction_history_phase8")),
     # Password-change OTP columns on users (account-settings flow).
     ("add_password_change_otp",  _loader("migrations.add_password_change_otp")),
+    # FK ON DELETE actions for matches/tournament_teams/tournament_fixtures so
+    # team and tournament deletion no longer needs application-layer cleanup
+    # to avoid IntegrityError. See migration docstring for the action matrix.
+    ("add_team_match_fk_actions", _loader("migrations.add_team_match_fk_actions")),
 ]
 
 
