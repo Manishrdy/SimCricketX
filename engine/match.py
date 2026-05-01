@@ -1167,61 +1167,99 @@ class Match:
 
     def _calculate_death_overs_plan_safe(self, bowler_quota):
         """
-        DEBUG VERSION: Calculate optimal 3-over distribution for overs 18-20
+        Calculate a complete bowler sequence for the configured death phase.
+
+        T20 death overs are configured as indexes 16-19 (human overs 17-20),
+        so this planner must start at the format's death_phase.start rather
+        than hard-coding a three-over 18-20 plan.
         """
         print(f"  🐛 DEBUG _calculate_death_overs_plan_safe:")
         print(f"     Input bowler_quota: {list(bowler_quota.keys())}")
-        
-        # Get bowlers with remaining overs
-        remaining_bowlers = {}
-        total_remaining = 0
-        
-        for name, data in bowler_quota.items():
-            if data['overs_remaining'] > 0:
-                remaining_bowlers[name] = data['overs_remaining']
-                total_remaining += data['overs_remaining']
-                print(f"    {name}: {data['overs_remaining']} overs remaining")
-        
+
+        plan_length = self.fmt.overs - self.current_over
+        previous_bowler = self.current_bowler["name"] if self.current_bowler else None
+        remaining_bowlers = {
+            name: max(0, data.get('overs_remaining', 0))
+            for name, data in bowler_quota.items()
+        }
+        total_remaining = sum(remaining_bowlers.values())
+
+        print(f"  🐛 Planning {plan_length} death overs from over {self.current_over + 1}")
         print(f"  🐛 Remaining bowlers: {remaining_bowlers}")
         print(f"  🐛 Total remaining: {total_remaining}")
-        
-        # Get previous bowler
-        previous_bowler = self.current_bowler["name"] if self.current_bowler else None
         print(f"  🐛 Previous bowler: {previous_bowler}")
-        
-        # Check scenario
-        num_bowlers = len(remaining_bowlers)
-        print(f"  🐛 Number of bowlers with quota: {num_bowlers}")
-        
-        death_plan = None
-        
-        if num_bowlers == 2:
-            print(f"  🐛 CASE 1: 2-bowler scenario")
-            death_plan = self._handle_2_bowler_death_scenario_safe(remaining_bowlers, previous_bowler)
-            if death_plan is None:
-                print(f"  🐛 2-bowler scenario returned None - using emergency")
-                death_plan = self._emergency_death_plan_safe(remaining_bowlers, previous_bowler)
-        elif num_bowlers == 3:
-            print(f"  🐛 CASE 2: 3-bowler scenario")
-            death_plan = self._handle_3_bowler_death_scenario_safe(remaining_bowlers, previous_bowler)
-        else:
-            print(f"  🐛 CASE 3: Complex scenario ({num_bowlers} bowlers)")
-            death_plan = self._handle_complex_death_scenario_safe(remaining_bowlers, previous_bowler)
-        
-        print(f"  🐛 Final death plan: {death_plan}")
-        
-        # Validate plan
+
+        def score_plan(plan, quota_violations):
+            rating_total = 0
+            specialist_count = 0
+            for name in plan:
+                bowler = bowler_quota[name]['bowler']
+                rating_total += bowler.get("bowling_rating", 0)
+                if self._is_death_specialist(bowler):
+                    specialist_count += 1
+            return (quota_violations, -specialist_count, -rating_total, tuple(plan))
+
+        def find_plan(allow_quota_violation):
+            best_plan = None
+            best_score = None
+
+            def backtrack(last_bowler, quota_left, plan, quota_violations):
+                nonlocal best_plan, best_score
+
+                if len(plan) == plan_length:
+                    candidate_score = score_plan(plan, quota_violations)
+                    if best_score is None or candidate_score < best_score:
+                        best_score = candidate_score
+                        best_plan = plan[:]
+                    return
+
+                candidates = []
+                for name, data in bowler_quota.items():
+                    if name == last_bowler:
+                        continue
+                    has_quota = quota_left.get(name, 0) > 0
+                    if has_quota or allow_quota_violation:
+                        candidates.append(name)
+
+                candidates.sort(
+                    key=lambda name: (
+                        quota_left.get(name, 0) <= 0,
+                        -quota_left.get(name, 0),
+                        -int(self._is_death_specialist(bowler_quota[name]['bowler'])),
+                        -bowler_quota[name]['bowler'].get("bowling_rating", 0),
+                        name,
+                    )
+                )
+
+                for name in candidates:
+                    next_quota = quota_left.copy()
+                    next_violations = quota_violations
+                    if next_quota.get(name, 0) > 0:
+                        next_quota[name] -= 1
+                    else:
+                        next_violations += 1
+                    backtrack(name, next_quota, plan + [name], next_violations)
+
+            backtrack(previous_bowler, remaining_bowlers.copy(), [], 0)
+            return best_plan, best_score
+
+        death_plan, death_score = find_plan(allow_quota_violation=False)
         if death_plan:
-            validation_copy = remaining_bowlers.copy()
-            if self._validate_death_overs_plan(death_plan, validation_copy):
-                print(f"  🐛 Death plan PASSED validation")
-                return death_plan
-            else:
-                print(f"  🐛 Death plan FAILED validation - using emergency")
-                return self._emergency_death_plan_safe(remaining_bowlers, previous_bowler)
-        else:
-            print(f"  🐛 Death plan is None - using emergency")
-            return self._emergency_death_plan_safe(remaining_bowlers, previous_bowler)
+            print(f"  🐛 Death plan PASSED strict quota search: {death_plan}")
+            return death_plan
+
+        print(f"  🐛 Strict death plan unavailable - allowing quota violation fallback")
+        death_plan, death_score = find_plan(allow_quota_violation=True)
+        if death_plan:
+            if death_score and death_score[0] > 0:
+                self._log_constraint_violation(
+                    "DEATH_PLAN_QUOTA_VIOLATION",
+                    f"Death plan required {death_score[0]} quota violation(s) to preserve no-consecutive rule"
+                )
+            print(f"  🐛 Death plan with quota fallback: {death_plan}")
+            return death_plan
+
+        raise Exception("No non-consecutive bowler available for death-over plan")
 
     def _handle_2_bowler_death_scenario_safe(self, remaining_bowlers, previous_bowler):
         """
@@ -1367,41 +1405,57 @@ class Match:
 
     def _pick_death_overs_bowler(self):
         """
-        FIXED: PRE-CALCULATED death overs bowler selection (Overs 18-20)  
-        Calculates plan ONCE at over 18, then uses stored plan for 19 & 20
+        Pre-calculated death overs bowler selection.
+        Calculates the plan once at the configured death start, then consumes it
+        over the remaining death overs.
         """
         print(f"\n🎯 === DEATH OVERS SELECTION - Over {self.current_over + 1} ===")
         
         # ================ CHECK IF WE NEED TO CALCULATE NEW PLAN ================
-        # Only calculate plan at the START of death overs (over 18)
-        if self.current_over == 17:  # Over 18 (0-indexed)
-            print(f"🔥 CALCULATING NEW DEATH PLAN FOR OVERS 18-20")
+        death_start = self.fmt.death_phase.start
+        existing_plan_start = getattr(self, 'death_overs_plan_start', None)
+        needs_new_plan = (
+            self.current_over == death_start
+            or not getattr(self, 'death_overs_plan', None)
+            or existing_plan_start != death_start
+        )
+
+        if needs_new_plan:
+            plan_end = self.fmt.overs
+            over_labels = list(range(self.current_over + 1, plan_end + 1))
+            print(f"🔥 CALCULATING NEW DEATH PLAN FOR OVERS {over_labels}")
             
             # Get all bowlers and their current quota
             all_bowlers = [p for p in self.bowling_team if p.get("will_bowl", False)]
             
-            # Build quota dictionary with CURRENT state
+            # Build quota dictionary with CURRENT state. Keep exhausted bowlers in
+            # the map so the fallback planner can violate quota before it ever
+            # violates the no-consecutive rule.
             bowler_quota = {}
             for bowler in all_bowlers:
                 overs_bowled = self.bowler_history.get(bowler["name"], 0)
                 overs_remaining = max(0, self.fmt.max_bowler_overs - overs_bowled)
-                if overs_remaining > 0:
-                    bowler_quota[bowler["name"]] = {
-                        'bowler': bowler,
-                        'overs_remaining': overs_remaining,
-                        'overs_bowled': overs_bowled
-                    }
-                    print(f"  {bowler['name']}: {overs_bowled}/{self.fmt.max_bowler_overs} bowled, {overs_remaining} remaining")
+                bowler_quota[bowler["name"]] = {
+                    'bowler': bowler,
+                    'overs_remaining': overs_remaining,
+                    'overs_bowled': overs_bowled
+                }
+                print(f"  {bowler['name']}: {overs_bowled}/{self.fmt.max_bowler_overs} bowled, {overs_remaining} remaining")
             
-            # Calculate complete death plan for all 3 overs
+            # Calculate complete death plan for all remaining configured death overs
             self.death_overs_plan = self._calculate_death_overs_plan_safe(bowler_quota)
+            self.death_overs_plan_start = self.current_over
             self.death_overs_bowler_objects = {}
             
             # Store bowler objects for quick lookup
             for bowler_name in self.death_overs_plan:
                 self.death_overs_bowler_objects[bowler_name] = bowler_quota[bowler_name]['bowler']
             
-            print(f"📋 STORED DEATH PLAN: 18→{self.death_overs_plan[0]}, 19→{self.death_overs_plan[1]}, 20→{self.death_overs_plan[2]}")
+            plan_text = ", ".join(
+                f"{over_label}→{bowler_name}"
+                for over_label, bowler_name in zip(over_labels, self.death_overs_plan)
+            )
+            print(f"📋 STORED DEATH PLAN: {plan_text}")
         
         # ================ USE STORED PLAN ================
         elif hasattr(self, 'death_overs_plan') and self.death_overs_plan:
@@ -1413,8 +1467,7 @@ class Match:
             return self._emergency_single_bowler_selection()
         
         # ================ GET BOWLER FOR CURRENT OVER ================
-        death_over_index = self.current_over - 17  # 17→0, 18→1, 19→2
-        over_names = ["18th", "19th", "20th"]
+        death_over_index = self.current_over - getattr(self, 'death_overs_plan_start', death_start)
         
         if death_over_index >= len(self.death_overs_plan):
             print(f"🚨 ERROR: Death over index {death_over_index} out of range")
@@ -1423,7 +1476,7 @@ class Match:
         selected_bowler_name = self.death_overs_plan[death_over_index]
         selected_bowler = self.death_overs_bowler_objects[selected_bowler_name]
         
-        print(f"🎯 DEATH PLAN SELECTION: {over_names[death_over_index]} over → {selected_bowler_name}")
+        print(f"🎯 DEATH PLAN SELECTION: over {self.current_over + 1} → {selected_bowler_name}")
         
         # ================ SAFETY CHECK ================
         if self.current_bowler and selected_bowler["name"] == self.current_bowler["name"]:
@@ -2000,6 +2053,9 @@ class Match:
         self.lista_bowler_plan = {}
         self.lista_plan_innings = None
         self.lista_plan_roster = ()
+        self.death_overs_plan = []
+        self.death_overs_plan_start = None
+        self.death_overs_bowler_objects = {}
         # Restore any modified bowler ratings
         self._restore_bowler_ratings()
         
@@ -3168,7 +3224,7 @@ class Match:
             return self._pick_bowler_lista()
 
         # ================ DEATH OVERS SPECIAL HANDLING ================
-        if self.current_over >= 17:  # Overs 18, 19, 20
+        if self.fmt.is_death(self.current_over):
             print(f"\n🎯 === SWITCHING TO DEATH OVERS MODE ===")
             return self._pick_death_overs_bowler()
         
