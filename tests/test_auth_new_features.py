@@ -22,6 +22,7 @@ from database.models import (
     ActiveSession,
     FailedLoginAttempt,
     LoginHistory,
+    Team,
     User,
 )
 
@@ -637,6 +638,39 @@ class TestEmailChange:
             # New email must now be the PK
             new_user = db.session.get(User, new_email)
             assert new_user is not None
+
+    def test_confirm_email_change_with_existing_team_succeeds(self, client, app, regular_user):
+        """Regression: confirming an email change must not trip the FK on teams.user_id.
+
+        Previously the cascade UPDATEs ran in child-first order while SQLite enforced
+        FKs per-statement, so the very first child UPDATE blew up with a FOREIGN KEY
+        constraint failure when the user owned any teams. The function now defers FK
+        checks to commit time on SQLite. See Issue #159.
+        """
+        new_email = "team-owner-new@example.com"
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+        with app.app_context():
+            user = db.session.get(User, regular_user.id)
+            user.pending_email = new_email
+            user.pending_email_token = token_hash
+            user.pending_email_token_expires = datetime.utcnow() + timedelta(hours=5)
+            db.session.add(Team(user_id=regular_user.id, name="Test XI", short_code="TXI"))
+            db.session.commit()
+
+        response = client.get(
+            f"/account/confirm-email-change?token={raw_token}",
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+        with app.app_context():
+            assert db.session.get(User, regular_user.id) is None
+            assert db.session.get(User, new_email) is not None
+            team = Team.query.filter_by(name="Test XI").first()
+            assert team is not None
+            assert team.user_id == new_email
 
     def test_confirm_email_change_clears_pending_fields(self, client, app, regular_user):
         """After a successful email change the pending_email_* columns are cleared."""
