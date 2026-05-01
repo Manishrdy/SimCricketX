@@ -247,6 +247,13 @@ def update_user_email(old_email: str, new_email: str, admin_email: str = None) -
     try:
         from sqlalchemy import text
 
+        # SQLite enforces FK checks per-statement, so updating child rows before the
+        # parent users.id row would fail (the new PK doesn't exist yet). Defer FK
+        # checks to commit time for the duration of this transaction. PRAGMA is
+        # transient and SQLite-specific; it's a no-op on other dialects.
+        if db.engine.dialect.name == "sqlite":
+            db.session.execute(text("PRAGMA defer_foreign_keys = ON"))
+
         # Use raw SQL to update the primary key and all FK references in one transaction
         # This is safer than delete+recreate and keeps user-linked records consistent.
         db.session.execute(text("UPDATE teams SET user_id = :new WHERE user_id = :old"), {"new": new_email, "old": old_email})
