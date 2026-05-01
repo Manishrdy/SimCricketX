@@ -157,3 +157,57 @@ def test_auto_mode_aborts_when_only_previous_bowler_exists(monkeypatch):
 
     assert response["match_over"] is True
     assert "no non-consecutive bowler" in response["result"].lower()
+
+
+def test_t20_death_plan_starts_at_over_17_and_solves_four_over_finish():
+    match = match_module.Match(_build_match_data(bowling_count=5))
+    bowler_a, bowler_b, bowler_c, bowler_d, bowler_e = match.bowling_team[:5]
+
+    match.current_over = match.fmt.death_phase.start
+    match.current_ball = 0
+    match.current_bowler = bowler_a
+    match.bowler_history[bowler_a["name"]] = 2
+    match.bowler_history[bowler_b["name"]] = 3
+    match.bowler_history[bowler_c["name"]] = 3
+    match.bowler_history[bowler_d["name"]] = 4
+    match.bowler_history[bowler_e["name"]] = 4
+
+    selected = match._pick_death_overs_bowler()
+
+    assert selected["name"] != bowler_a["name"]
+    assert len(match.death_overs_plan) == 4
+    assert match.death_overs_plan_start == match.fmt.death_phase.start
+    assert match.death_overs_plan.count(bowler_a["name"]) == 2
+    assert match.death_overs_plan.count(bowler_b["name"]) == 1
+    assert match.death_overs_plan.count(bowler_c["name"]) == 1
+    assert all(
+        left != right
+        for left, right in zip(
+            [bowler_a["name"]] + match.death_overs_plan,
+            match.death_overs_plan,
+        )
+    )
+
+
+def test_death_plan_uses_exhausted_non_consecutive_fallback_before_throwing():
+    match = match_module.Match(_build_match_data(bowling_count=5))
+    previous = match.bowling_team[0]
+
+    match.current_over = match.fmt.death_phase.start
+    match.current_ball = 0
+    match.current_bowler = previous
+    for bowler in match.bowling_team[:5]:
+        match.bowler_history[bowler["name"]] = match.fmt.max_bowler_overs
+    match.bowler_history[previous["name"]] = match.fmt.max_bowler_overs - 1
+
+    selected = match._pick_death_overs_bowler()
+
+    assert selected["name"] != previous["name"]
+    assert len(match.death_overs_plan) == 4
+    assert all(
+        left != right
+        for left, right in zip(
+            [previous["name"]] + match.death_overs_plan,
+            match.death_overs_plan,
+        )
+    )
