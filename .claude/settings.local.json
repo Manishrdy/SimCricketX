@@ -15,7 +15,10 @@
       "Bash(ls:*)",
       "Bash(gh run list --limit 5)",
       "Bash(xargs -I{} sqlite3 cricket_sim.db \"PRAGMA foreign_key_list\\({}\\);\")",
-      "Bash(venv/Scripts/python -c ':*)"
+      "Bash(venv/Scripts/python -c ':*)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

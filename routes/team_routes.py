@@ -6,6 +6,7 @@ import re
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from utils.exception_tracker import log_exception
 
 VALID_FORMATS = ("T20", "ListA")
@@ -25,6 +26,9 @@ def register_team_routes(
     MatchScorecard=None,
     TournamentPlayerStatsCache=None,
     MatchPartnership=None,
+    DBMatch=None,
+    TournamentTeam=None,
+    TournamentFixture=None,
 ):
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -95,6 +99,82 @@ def register_team_routes(
                 or_(*scorecard_filters)
             ).delete(synchronize_session=False)
 
+    def _diagnose_team_blockers(team_id):
+        """Return a human-readable list of dependent rows still referencing
+        this team. Used to give the user a concrete error message when delete
+        fails despite the cleanup helpers having run — i.e. some new code
+        path or migration introduced an FK we don't yet handle.
+
+        Best-effort: each query is wrapped so a failure just omits that
+        bullet rather than masking the original IntegrityError.
+        """
+        blockers = []
+
+        def _count(label, query):
+            try:
+                n = query.count()
+                if n:
+                    blockers.append(f"{n} {label}")
+            except Exception:
+                pass
+
+        if DBMatch is not None:
+            _count("archived match(es)", db.session.query(DBMatch).filter(
+                or_(DBMatch.home_team_id == team_id,
+                    DBMatch.away_team_id == team_id,
+                    DBMatch.winner_team_id == team_id,
+                    DBMatch.toss_winner_team_id == team_id)
+            ))
+        if TournamentFixture is not None:
+            _count("tournament fixture(s)", db.session.query(TournamentFixture).filter(
+                or_(TournamentFixture.home_team_id == team_id,
+                    TournamentFixture.away_team_id == team_id,
+                    TournamentFixture.winner_team_id == team_id)
+            ))
+        if TournamentTeam is not None:
+            _count("tournament standings row(s)",
+                   db.session.query(TournamentTeam).filter_by(team_id=team_id))
+        if MatchScorecard is not None:
+            _count("match scorecard(s)",
+                   db.session.query(MatchScorecard).filter_by(team_id=team_id))
+
+        return blockers
+
+    def _cleanup_team_external_refs(team_id):
+        """Clear FK references to this team from matches, fixtures and standings.
+
+        Without this, deleting a team that has played any match or has been
+        registered in any tournament fails with an IntegrityError because the
+        FKs from matches/tournament_fixtures/tournament_teams to teams.id have
+        no ON DELETE cascade. This helper runs the cleanup at the application
+        layer so deletion always succeeds for the owning user.
+        """
+        if DBMatch is not None:
+            # Preserve match history (scores + result_description) by nulling
+            # team FKs rather than deleting the match row.
+            for col in (DBMatch.home_team_id, DBMatch.away_team_id,
+                        DBMatch.winner_team_id, DBMatch.toss_winner_team_id):
+                db.session.query(DBMatch).filter(col == team_id).update(
+                    {col: None}, synchronize_session=False
+                )
+
+        if TournamentFixture is not None:
+            # Fixtures involving this team can no longer be played → drop them.
+            db.session.query(TournamentFixture).filter(
+                or_(TournamentFixture.home_team_id == team_id,
+                    TournamentFixture.away_team_id == team_id)
+            ).delete(synchronize_session=False)
+            # Fixtures already played and won by this team but not deleted above
+            # (defensive — should be empty after the previous step).
+            db.session.query(TournamentFixture).filter(
+                TournamentFixture.winner_team_id == team_id
+            ).update({TournamentFixture.winner_team_id: None}, synchronize_session=False)
+
+        if TournamentTeam is not None:
+            db.session.query(TournamentTeam).filter_by(team_id=team_id).delete(
+                synchronize_session=False
+            )
+
     def _validate_profile(fmt, profile_data, is_draft):
         """
         Validate a single profile dict {captain, wicketkeeper, players: [...]}.
@@ -124,6 +204,8 @@ def register_team_routes(
         if is_draft:
             if len(players) < 1:
                 return f"{fmt} profile: draft must have at least 1 player."
+            if len(players) > 25:
+                return f"{fmt} profile: maximum 25 players (have {len(players)})."
             return None
 
         if not (11 <= len(players) <= 25):
@@ -763,6 +845,9 @@ def register_team_routes(
             resolved.append(p)
 
         n = len(resolved)
+        if is_draft:
+            if n > 25:
+                return json.dumps({"error": f"Maximum 25 players, have {n}."}), 400, {"Content-Type": "application/json"}
         if not is_draft:
             if not (11 <= n <= 25):
                 return json.dumps({"error": f"Need 11-25 players, have {n}."}), 400, {"Content-Type": "application/json"}
@@ -835,6 +920,42 @@ def register_team_routes(
                 continue
             results.append(p)
         return json.dumps(results), 200, {"Content-Type": "application/json"}
+
+    def _user_oversize_profiles(user_id):
+        """
+        Return a list of dicts {team_id, team_name, short_code, format_type, player_count}
+        for every TeamProfile owned by `user_id` that has more than 25 players.
+        """
+        rows = (
+            db.session.query(
+                DBTeam.id, DBTeam.name, DBTeam.short_code,
+                DBTeamProfile.format_type, func.count(DBPlayer.id),
+            )
+            .join(DBTeamProfile, DBTeamProfile.team_id == DBTeam.id)
+            .join(DBPlayer, DBPlayer.profile_id == DBTeamProfile.id)
+            .filter(DBTeam.user_id == user_id)
+            .group_by(DBTeam.id, DBTeam.name, DBTeam.short_code, DBTeamProfile.format_type)
+            .having(func.count(DBPlayer.id) > 25)
+            .all()
+        )
+        return [
+            {
+                "team_id": tid, "team_name": tname, "short_code": scode,
+                "format_type": fmt, "player_count": count,
+            }
+            for (tid, tname, scode, fmt, count) in rows
+        ]
+
+    @app.route("/account/squad-cleanup")
+    @login_required
+    def squad_cleanup():
+        """Remediation page: lists every profile owned by the current user that
+        has more than 25 players, with links to trim each squad."""
+        offending = _user_oversize_profiles(current_user.id)
+        return render_template(
+            "squad_cleanup.html",
+            offending=offending,
+        )
 
     @app.route("/teams/manage")
     @login_required
@@ -910,6 +1031,10 @@ def register_team_routes(
             # Defensive cleanup: remove all players/profiles for this team explicitly.
             # This covers legacy rows that may not be profile-linked.
             _delete_team_player_dependents(team.id)
+            # Clear external FK references (matches, fixtures, standings) — the FKs
+            # to teams.id have no ON DELETE cascade so deletion would otherwise
+            # fail with an IntegrityError for any team that has been used.
+            _cleanup_team_external_refs(team.id)
             db.session.query(DBPlayer).filter_by(team_id=team.id).delete(synchronize_session=False)
             db.session.query(DBTeamProfile).filter_by(team_id=team.id).delete(synchronize_session=False)
             db.session.delete(team)
@@ -919,11 +1044,36 @@ def register_team_routes(
                 f"Team '{short_code}' (ID: {team.id}) deleted by {current_user.id}"
             )
             flash(f"Team '{team_name}' has been deleted.", "success")
+        except IntegrityError as e:
+            log_exception(e)
+            db.session.rollback()
+            app.logger.error(
+                f"Integrity error deleting team {short_code}: {e}", exc_info=True
+            )
+            blockers = _diagnose_team_blockers(team.id)
+            if blockers:
+                flash(
+                    f"Could not delete '{team_name}'. It is still referenced by "
+                    f"{', '.join(blockers)}. Delete or clean up these first, "
+                    "then try again.",
+                    "danger",
+                )
+            else:
+                flash(
+                    f"Could not delete '{team_name}' due to a database constraint "
+                    f"({type(e.orig).__name__ if getattr(e, 'orig', None) else 'IntegrityError'}). "
+                    "Please contact support.",
+                    "danger",
+                )
         except Exception as e:
             log_exception(e)
             db.session.rollback()
             app.logger.error(f"Error deleting team from DB: {e}", exc_info=True)
-            flash("An error occurred while deleting the team. Please try again.", "danger")
+            flash(
+                f"Could not delete the team: {type(e).__name__}. "
+                "Please contact support if this keeps happening.",
+                "danger",
+            )
 
         return redirect(url_for("manage_teams"))
 

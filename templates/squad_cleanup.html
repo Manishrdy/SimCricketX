@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+{% block title %}Squad Cleanup Required | SimCricketX{% endblock %}
+{% block content %}
+<div style="max-width: 640px; margin: 3rem auto; padding: 0 1rem;">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 2rem;">
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+            <i class="fas fa-users-slash" style="font-size: 2rem; color: #dc2626; opacity: 0.7;"></i>
+            <h2 style="font-size: 1.4rem; font-weight: 700; color: var(--fg); margin: 0.75rem 0 0.25rem;">Squad Cleanup Required</h2>
+            <p style="font-size: 0.88rem; color: var(--fg-secondary);">
+                One or more of your squads exceed the 25-player maximum. Trim each squad to between 11 and 25 players to continue using the app.
+            </p>
+        </div>
+
+        {% if not offending %}
+        <div style="background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3); color: #16a34a; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.9rem; margin-bottom: 1rem; text-align: center;">
+            <i class="fas fa-check-circle"></i> All your squads are within the 25-player limit. You can return to the app.
+        </div>
+        <a href="{{ url_for('home') }}"
+           style="display: block; text-align: center; padding: 0.75rem; background: var(--gradient); color: white; border-radius: 8px; font-size: 0.9rem; font-weight: 600; text-decoration: none;">
+            <i class="fas fa-home"></i> Continue
+        </a>
+        {% else %}
+        <div style="background: rgba(220, 38, 38, 0.08); border: 1px solid rgba(220, 38, 38, 0.3); color: #dc2626; padding: 0.65rem 1rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1.25rem;">
+            <i class="fas fa-exclamation-circle"></i>
+            {{ offending|length }} squad{{ 's' if offending|length != 1 else '' }} need attention.
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            {% for row in offending %}
+            <div style="border: 1px solid var(--card-border); border-radius: 10px; padding: 0.9rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                <div>
+                    <div style="font-weight: 600; color: var(--fg); font-size: 0.95rem;">
+                        {{ row.team_name }} <span style="color: var(--fg-secondary); font-weight: 500;">({{ row.short_code }})</span>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--fg-secondary); margin-top: 0.2rem;">
+                        {{ row.format_type }} squad &middot;
+                        <span style="color: #dc2626; font-weight: 600;">{{ row.player_count }} / 25 players</span>
+                    </div>
+                </div>
+                <a href="{{ url_for('team_squad', team_id=row.team_id, fmt=row.format_type) }}"
+                   style="padding: 0.5rem 0.9rem; background: var(--gradient); color: white; border-radius: 8px; font-size: 0.82rem; font-weight: 600; text-decoration: none; white-space: nowrap;">
+                    <i class="fas fa-cut"></i> Trim squad
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--card-border); font-size: 0.8rem; color: var(--fg-secondary); text-align: center;">
+            <i class="fas fa-info-circle"></i> You can also <a href="{{ url_for('manage_teams') }}" style="color: var(--accent);">manage or delete teams</a> from this page.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
