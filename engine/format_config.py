@@ -3,6 +3,7 @@ engine/format_config.py
 =======================
 
 Single source of truth for all format-specific parameters in SimCricketX.
+Last reviewed: 2026-04-30.
 
 Every engine component that has a format-sensitive value reads from a
 FormatConfig instance rather than hardcoding T20 constants.  Adding a new
