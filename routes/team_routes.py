@@ -29,6 +29,7 @@ def register_team_routes(
     DBMatch=None,
     TournamentTeam=None,
     TournamentFixture=None,
+    Tournament=None,
 ):
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -98,6 +99,40 @@ def register_team_routes(
             db.session.query(MatchScorecard).filter(
                 or_(*scorecard_filters)
             ).delete(synchronize_session=False)
+
+    def _list_team_tournaments(team_id):
+        """Return Tournament rows where this team is referenced — via standings,
+        fixtures, or tournament-tagged matches. Used to refuse delete_team and
+        show the user "delete these tournaments first" instead of silently
+        cascade-destroying tournament structure.
+        """
+        if Tournament is None:
+            return []
+        ids = set()
+        if TournamentTeam is not None:
+            for (tid,) in db.session.query(TournamentTeam.tournament_id).filter_by(team_id=team_id).all():
+                if tid is not None:
+                    ids.add(tid)
+        if TournamentFixture is not None:
+            rows = db.session.query(TournamentFixture.tournament_id).filter(
+                or_(TournamentFixture.home_team_id == team_id,
+                    TournamentFixture.away_team_id == team_id,
+                    TournamentFixture.winner_team_id == team_id),
+            ).distinct().all()
+            for (tid,) in rows:
+                if tid is not None:
+                    ids.add(tid)
+        if DBMatch is not None:
+            rows = db.session.query(DBMatch.tournament_id).filter(
+                DBMatch.tournament_id.isnot(None),
+                or_(DBMatch.home_team_id == team_id, DBMatch.away_team_id == team_id),
+            ).distinct().all()
+            for (tid,) in rows:
+                if tid is not None:
+                    ids.add(tid)
+        if not ids:
+            return []
+        return Tournament.query.filter(Tournament.id.in_(ids)).all()
 
     def _diagnose_team_blockers(team_id):
         """Return a human-readable list of dependent rows still referencing
@@ -1025,6 +1060,23 @@ def register_team_routes(
                     f"unauthorized for {current_user.id}"
                 )
                 flash("Team not found or you don't have permission to delete it.", "danger")
+                return redirect(url_for("manage_teams"))
+
+            # Refuse delete if the team is part of any tournament. The cascade
+            # rules added in 2.4.3 would silently delete fixtures and standings,
+            # which would damage the tournament's structure for any opposing
+            # team still in it. Force the user to delete the tournament first
+            # (which cleans up its fixtures + standings + matches as a unit).
+            blocking_tournaments = _list_team_tournaments(team.id)
+            if blocking_tournaments:
+                names = ", ".join(f"'{t.name}'" for t in blocking_tournaments[:3])
+                more = f" and {len(blocking_tournaments) - 3} more" if len(blocking_tournaments) > 3 else ""
+                flash(
+                    f"Cannot delete '{team.name}' — it is part of tournament(s): "
+                    f"{names}{more}. Please delete those tournaments first, "
+                    "then delete the team.",
+                    "danger",
+                )
                 return redirect(url_for("manage_teams"))
 
             team_name = team.name

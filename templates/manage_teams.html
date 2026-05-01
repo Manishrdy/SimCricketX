@@ -810,7 +810,12 @@
             </div>
             <h2 class="modal-title">Delete Team?</h2>
             <p class="modal-text">
-                This will permanently delete the team and all its players. This action cannot be undone.
+                This will permanently delete the team, its players, and all related stats
+                (scorecards, partnerships, tournament standings). Past matches in your archive
+                will be preserved, with this team's name removed.
+                <br><br>
+                <strong>Note:</strong> if this team is part of any tournament, you must delete
+                the tournament first before deleting the team.
             </p>
             <form method="POST" action="/team/delete">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
