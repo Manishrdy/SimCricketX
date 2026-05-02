@@ -675,16 +675,42 @@ class MatchArchiver:
             # Helper to calculate overs from legal deliveries bowled in the innings.
             # Prefer bowling stats (balls_bowled) because batting balls can include
             # no-ball deliveries and inflate overs (e.g., 20.1 in a 20-over innings).
-            def calc_overs(batting_stats, bowling_stats):
+            ops_cap = int(self.match_data.get('overs', 20) or 20)
+            archive_match_id = self.match_id
+            archive_tournament_id = self.match_data.get('tournament_id')
+
+            def calc_overs(batting_stats, bowling_stats, innings_label="?"):
                 legal_balls = sum(
                     int(b.get('balls_bowled', 0) or 0)
                     for b in (bowling_stats or {}).values()
                 )
+                source = "bowling"
                 if legal_balls <= 0:
                     legal_balls = sum(
                         int(p.get('balls', 0) or 0)
                         for p in (batting_stats or {}).values()
                     )
+                    source = "batting_fallback"
+                if legal_balls > ops_cap * 6:
+                    try:
+                        from utils.exception_tracker import log_data_anomaly
+                        log_data_anomaly(
+                            "OversExceedQuota",
+                            f"innings {innings_label} reported {legal_balls} legal balls "
+                            f"in a {ops_cap}-over match (capped to {ops_cap * 6})",
+                            payload={
+                                "match_id": archive_match_id,
+                                "tournament_id": archive_tournament_id,
+                                "innings": innings_label,
+                                "raw_balls": legal_balls,
+                                "overs_per_side": ops_cap,
+                                "balls_source": source,
+                                "writer": "match_archiver.calc_overs",
+                            },
+                        )
+                    except Exception:
+                        pass
+                    legal_balls = ops_cap * 6
                 return f"{legal_balls // 6}.{legal_balls % 6}"
 
             if first_bat_name == self.match.match_data["team_home"].split('_')[0]:
@@ -692,7 +718,8 @@ class MatchArchiver:
                 db_match.home_team_wickets = sum(1 for p in self.match.first_innings_batting_stats.values() if p.get('wicket_type'))
                 db_match.home_team_overs = calc_overs(
                     self.match.first_innings_batting_stats,
-                    self.match.first_innings_bowling_stats
+                    self.match.first_innings_bowling_stats,
+                    innings_label="1",
                 )
                 home_batting_stats = self.match.first_innings_batting_stats
                 
@@ -700,7 +727,8 @@ class MatchArchiver:
                 db_match.away_team_wickets = self.match.wickets
                 db_match.away_team_overs = calc_overs(
                     self.match.second_innings_batting_stats,
-                    self.match.second_innings_bowling_stats
+                    self.match.second_innings_bowling_stats,
+                    innings_label="2",
                 )
                 away_batting_stats = self.match.second_innings_batting_stats
             else:
@@ -708,7 +736,8 @@ class MatchArchiver:
                 db_match.away_team_wickets = sum(1 for p in self.match.first_innings_batting_stats.values() if p.get('wicket_type'))
                 db_match.away_team_overs = calc_overs(
                     self.match.first_innings_batting_stats,
-                    self.match.first_innings_bowling_stats
+                    self.match.first_innings_bowling_stats,
+                    innings_label="1",
                 )
                 away_batting_stats = self.match.first_innings_batting_stats
                 
@@ -716,7 +745,8 @@ class MatchArchiver:
                 db_match.home_team_wickets = self.match.wickets
                 db_match.home_team_overs = calc_overs(
                     self.match.second_innings_batting_stats,
-                    self.match.second_innings_bowling_stats
+                    self.match.second_innings_bowling_stats,
+                    innings_label="2",
                 )
                 home_batting_stats = self.match.second_innings_batting_stats
 

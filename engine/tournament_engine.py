@@ -1299,11 +1299,19 @@ class TournamentEngine:
 
         Per ICC rules, when a team is bowled all out the full quota of
         overs is used for NRR instead of the actual overs faced.
+
+        Also defensively caps at the full quota: legacy match rows in the
+        DB sometimes contain values like "20.1" in a 20-over match (an
+        upstream simulation accounting bug). Letting those through inflates
+        balls-faced/bowled and skews NRR by ~1% per affected match.
         """
+        max_overs = getattr(match, 'overs_per_side', 20) or 20
         if wickets is not None and wickets >= 10:
-            max_overs = getattr(match, 'overs_per_side', 20) or 20
             return f"{max_overs}.0"
-        return actual_overs or '0.0'
+        actual = actual_overs or '0.0'
+        if TournamentEngine.overs_to_balls(actual) > max_overs * 6:
+            return f"{max_overs}.0"
+        return actual
 
     def _update_nrr_components(self, home_stats, away_stats, match):
         """Update Net Run Rate components for both teams."""
