@@ -10,17 +10,15 @@ can return immediately.
 
 Job kinds
 ---------
-- `'exception'`     : ExceptionLog row → auto-filed GitHub issue (Phase 0)
-- `'issue_report'`  : IssueReport row → user-submitted GitHub issue (Phase 1)
+- `'exception'` : ExceptionLog row -> auto-filed GitHub issue
 
-Both go through the same queue / worker / scrubbing pipeline so retries,
-synchronous test mode, and failure handling are identical.
+Manual user support messages are handled in-app and no longer create GitHub
+issues automatically.
 
 Public API
 ----------
 - `start_worker(app)` — call once during create_app()
 - `enqueue_exception(exception_log_id)` — fire-and-forget enqueue
-- `enqueue_issue_report(issue_report_id)` — fire-and-forget enqueue
 - `process_one(job, app)` — exposed for tests / manual flush
 - `flush_for_tests(app)` — drains the queue synchronously
 - `set_synchronous_mode(enabled)` — tests bypass the background thread
@@ -52,7 +50,7 @@ _synchronous_mode = False  # set True in tests; bypasses background thread
 @dataclass
 class Job:
     """A unit of work for the worker."""
-    kind: str        # 'exception' | 'issue_report'
+    kind: str        # 'exception'
     row_id: int
 
 
@@ -98,13 +96,6 @@ def enqueue_exception(exception_log_id: int) -> bool:
     if exception_log_id is None:
         return False
     return _enqueue(Job(kind="exception", row_id=int(exception_log_id)))
-
-
-def enqueue_issue_report(issue_report_id: int) -> bool:
-    """Schedule a GitHub issue creation for an existing IssueReport row."""
-    if issue_report_id is None:
-        return False
-    return _enqueue(Job(kind="issue_report", row_id=int(issue_report_id)))
 
 
 def _enqueue(job: Job) -> bool:
@@ -187,8 +178,6 @@ def process_one(job: Job, app) -> None:
     try:
         if job.kind == "exception":
             _process_exception_job(job.row_id, app)
-        elif job.kind == "issue_report":
-            _process_issue_report_job(job.row_id, app)
         else:
             logger.warning("github_issue_queue: unknown job kind %r", job.kind)
     except Exception:
@@ -273,99 +262,3 @@ def _process_exception_job(row_id: int, app) -> None:
         except Exception:
             db.session.rollback()
             logger.exception("github_issue_queue: db commit failed for exception_log id=%s", row_id)
-
-
-def _process_issue_report_job(row_id: int, app) -> None:
-    """Build a scrubbed GitHub issue body for an IssueReport row and POST it."""
-    import json as _json
-    from database import db
-    from database.models import IssueReport
-    from services import github_issues, issue_scrubber
-
-    if not github_issues.is_enabled():
-        return
-
-    with app.app_context():
-        entry = db.session.get(IssueReport, row_id)
-        if entry is None:
-            return
-        if entry.github_issue_number:
-            return
-
-        # Scrub all user-supplied + auto-captured content.
-        scrubbed_title = issue_scrubber.scrub_text(entry.title or "")
-        scrubbed_description = issue_scrubber.scrub_text(entry.description or "")
-        scrubbed_user_email = issue_scrubber.scrub_text(entry.user_email or "anonymous")
-        scrubbed_user_agent = issue_scrubber.scrub_text(entry.user_agent or "")
-        scrubbed_page_url = issue_scrubber.scrub_text(entry.page_url or "")
-
-        # Session logs are stored as a JSON list of dicts.
-        try:
-            log_entries = _json.loads(entry.session_logs_json) if entry.session_logs_json else []
-            scrubbed_logs = issue_scrubber.scrub_dict(log_entries)
-            scrubbed_logs_json = _json.dumps(scrubbed_logs, default=str, indent=2)[:8000]
-        except Exception:
-            scrubbed_logs_json = issue_scrubber.scrub_text(entry.session_logs_json or "[]")[:8000]
-
-        # Linked exception ids are a tiny JSON array of integers — no scrubbing needed.
-        try:
-            linked_ids = _json.loads(entry.linked_exception_log_ids) if entry.linked_exception_log_ids else []
-        except Exception:
-            linked_ids = []
-        linked_lines = "\n".join(f"- ExceptionLog id={i}" for i in linked_ids) if linked_ids else "_none_"
-
-        category = (entry.category or "other").strip().lower()
-        labels = ["source:in-app", f"type:{category}"]
-        # Mix in any default labels admins configured for the repo.
-        for extra in github_issues.get_default_labels():
-            if extra and extra not in labels:
-                labels.append(extra)
-        assignees = github_issues.get_default_assignees()
-
-        title = f"[User Report] {scrubbed_title[:180]}"
-        body = (
-            "User-submitted issue from the in-app reporting widget.\n\n"
-            f"- Public ID: `{entry.public_id}`\n"
-            f"- Category: `{category}`\n"
-            f"- User: `{scrubbed_user_email}`\n"
-            f"- App version: `{entry.app_version or 'unknown'}`\n"
-            f"- Page URL: `{scrubbed_page_url[:300] or 'n/a'}`\n"
-            f"- User-Agent: `{scrubbed_user_agent[:300] or 'n/a'}`\n"
-            f"- Submitted (UTC): `{entry.created_at}`\n\n"
-            "## Description\n"
-            f"{scrubbed_description[:5000]}\n\n"
-            "## Linked Exception Logs\n"
-            f"{linked_lines}\n\n"
-            "## Recent Session Logs\n"
-            f"```json\n{scrubbed_logs_json}\n```"
-        )
-
-        issue_number, issue_url, error = github_issues.create_issue(
-            title=title,
-            body=body,
-            labels=labels,
-            assignees=assignees,
-        )
-
-        entry = db.session.get(IssueReport, row_id)
-        if entry is None:
-            return
-
-        from datetime import datetime as _dt
-
-        if issue_number and issue_url:
-            entry.github_issue_number = issue_number
-            entry.github_issue_url = issue_url
-            entry.github_sync_status = "synced"
-            entry.github_sync_error = None
-            entry.github_last_synced_at = _dt.utcnow()
-        else:
-            entry.github_sync_status = "failed"
-            entry.github_sync_error = (error or "unknown")[:1000]
-            entry.github_last_synced_at = _dt.utcnow()
-
-        try:
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            logger.exception("github_issue_queue: db commit failed for issue_report id=%s", row_id)

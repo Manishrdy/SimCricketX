@@ -1,0 +1,84 @@
+{# Floating support chat widget. Hidden for anonymous users, admins, admin pages, and auth pages. #}
+{% set _scx_path = (request.path or '') %}
+{% set _hide_support_widget = (
+    (not current_user.is_authenticated)
+    or current_user.is_admin
+    or _scx_path.startswith('/admin')
+    or _scx_path.startswith('/login')
+    or _scx_path.startswith('/logout')
+    or _scx_path.startswith('/register')
+    or _scx_path.startswith('/forgot-password')
+    or _scx_path.startswith('/reset-password')
+    or _scx_path.startswith('/verify-email')
+    or _scx_path.startswith('/force-')
+    or _scx_path.startswith('/static')
+) %}
+{% if not _hide_support_widget %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/support_widget.css') }}">
+
+<button type="button"
+        id="scx-support-trigger"
+        class="scx-support-trigger"
+        aria-label="Message admins"
+        title="Message admins">
+    <span class="scx-support-trigger__icon">
+        <i class="fa-regular fa-message"></i>
+    </span>
+    <span class="scx-support-trigger__label">Support</span>
+    <span id="scx-support-unread" class="scx-support-trigger__badge" hidden>0</span>
+</button>
+
+<section id="scx-support-panel"
+         class="scx-support-panel"
+         aria-hidden="true"
+         aria-labelledby="scx-support-title"
+         data-app-version="{{ app_version }}">
+    <header class="scx-support-panel__header">
+        <div class="scx-support-brand">
+            <div class="scx-support-brand__avatar" aria-hidden="true">
+                <i class="fa-solid fa-headset"></i>
+            </div>
+            <div>
+                <h3 id="scx-support-title">SimCricketX Support</h3>
+                <p id="scx-support-connection">Connecting...</p>
+            </div>
+        </div>
+        <button type="button" id="scx-support-close" class="scx-support-panel__close" aria-label="Close">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </header>
+
+    <div class="scx-support-greeting">
+        <span class="scx-support-greeting__dot"></span>
+        <span>Admin support</span>
+    </div>
+
+    <div id="scx-support-messages" class="scx-support-messages" aria-live="polite">
+        <div class="scx-support-empty">
+            <div class="scx-support-empty__icon">
+                <i class="fa-regular fa-comments"></i>
+            </div>
+            <strong>Need help?</strong>
+            <span>Send a message and an admin will reply here.</span>
+        </div>
+    </div>
+
+    <div id="scx-support-status" class="scx-support-status" aria-live="polite"></div>
+
+    <form id="scx-support-form" class="scx-support-composer">
+        <div class="scx-support-composer__box">
+            <textarea id="scx-support-input"
+                      rows="1"
+                      maxlength="4000"
+                      placeholder="Type your message..."
+                      aria-label="Message admins"></textarea>
+            <button type="submit" id="scx-support-send" aria-label="Send message" title="Send">
+                <i class="fa-solid fa-paper-plane"></i>
+            </button>
+        </div>
+    </form>
+</section>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous" defer></script>
+<script src="{{ url_for('static', filename='js/support_widget.js') }}" defer></script>
+{% endif %}

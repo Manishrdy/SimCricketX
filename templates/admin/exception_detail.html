@@ -134,34 +134,6 @@
 </section>
 {% endif %}
 
-{% if related_reports %}
-<section style="margin-bottom:1rem;">
-    <h2 class="a-section-title"><i class="fas fa-link"></i> User reports referencing this exception</h2>
-    <div class="a-table-wrap">
-        <table class="a-table a-table-pro">
-            <thead>
-                <tr>
-                    <th class="sortable" style="width:140px;">Public ID</th>
-                    <th class="sortable">Title</th>
-                    <th class="sortable">User</th>
-                    <th class="sortable" style="width:180px;">Submitted</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for r in related_reports %}
-                <tr>
-                    <td><a href="{{ url_for('admin_issue_report_detail', public_id=r.public_id) }}"><code class="a-cell-mono">{{ r.public_id }}</code></a></td>
-                    <td class="a-cell-strong">{{ r.title }}</td>
-                    <td class="a-cell-dim">{{ r.user_email }}</td>
-                    <td class="a-cell-dim" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ r.created_at | localtime if r.created_at else '—' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
-{% endif %}
-
 <script>
 function retryExcSync(rowId) {
     const btn = event.currentTarget;

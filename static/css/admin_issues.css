@@ -1,5 +1,5 @@
-/* PLAN-IR-001 Phase 4 — styling for the admin issue tracker.
- * Colors for status / severity badges used across the Issues tab and
+/* Styling for the admin exception tracker.
+ * Colors for status / severity badges used across the Exceptions tab and
  * detail views. Kept in a dedicated file so the existing admin.css stays
  * focused on the shared admin shell.
  */
@@ -20,7 +20,7 @@
     white-space: nowrap;
 }
 
-/* ── IssueReport status badges ──────────────────────────────────────── */
+/* ── Legacy/local status badges ─────────────────────────────────────── */
 .a-tag-new {
     background: #dbeafe;
     color: #1e40af;
