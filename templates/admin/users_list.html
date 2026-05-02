@@ -24,12 +24,15 @@
     <div class="a-toolbar-left">
         <div class="a-search-wrap">
             <i class="fas fa-search a-search-icon"></i>
-            <input type="text" id="userSearch" class="a-search-input" placeholder="Search by email or name…">
+            <input type="text" id="userSearch" class="a-search-input" placeholder="Search email or name…">
+            <kbd class="a-search-kbd">/</kbd>
         </div>
-        <div class="a-chip-group">
-            <button class="a-chip active" data-filter="all">All <span class="count" id="cnt-all">{{ users|length }}</span></button>
-            <button class="a-chip" data-filter="admin">Admins <span class="count" id="cnt-admin">{{ users|selectattr('is_admin')|list|length }}</span></button>
-            <button class="a-chip" data-filter="user">Users <span class="count" id="cnt-user">{{ users|rejectattr('is_admin')|list|length }}</span></button>
+        <div class="a-chip-group" id="userFilters">
+            <button class="a-chip active" data-filter="all">All <span class="count" data-count="all">{{ users|length }}</span></button>
+            <button class="a-chip" data-filter="admin">Admins <span class="count" data-count="admin">{{ users|selectattr('is_admin')|list|length }}</span></button>
+            <button class="a-chip" data-filter="user">Users <span class="count" data-count="user">{{ users|rejectattr('is_admin')|list|length }}</span></button>
+            <button class="a-chip" data-filter="banned">Banned <span class="count" data-count="banned">{{ users|selectattr('is_banned')|list|length }}</span></button>
+            <button class="a-chip" data-filter="unverified">Unverified <span class="count" data-count="unverified">{{ users|rejectattr('email_verified')|list|length }}</span></button>
         </div>
     </div>
     <div class="a-toolbar-right">
@@ -53,23 +56,40 @@
                 <th class="sortable ul-col-role">Role</th>
                 <th class="sortable ul-col-stats">Teams</th>
                 <th class="sortable ul-col-stats">Matches</th>
+                <th class="sortable ul-col-joined">Joined</th>
                 <th class="sortable ul-col-login">Last Login</th>
-                <th class="ul-col-actions" style="text-align: right;">Actions</th>
+                <th class="ul-col-actions">Actions</th>
             </tr>
         </thead>
         <tbody id="usersTableBody">
             {% for user in users %}
             <tr data-email="{{ user.email }}"
                 data-name="{{ (user.display_name or '') | lower }}"
-                data-role="{{ 'admin' if user.is_admin else 'user' }}">
+                data-role="{{ 'admin' if user.is_admin else 'user' }}"
+                data-banned="{{ '1' if user.is_banned else '0' }}"
+                data-verified="{{ '1' if user.email_verified else '0' }}"
+                data-locked="{{ '1' if user.is_locked else '0' }}"
+                data-href="{{ url_for('admin_user_360', user_email=user.email) }}"
+                tabindex="0">
                 <td class="ul-col-email">
                     <div class="ul-email-cell">
                         <div class="ul-avatar">{{ (user.display_name or user.email)[0] | upper }}</div>
                         <div class="ul-email-info">
                             <span class="ul-email-primary">{{ user.email }}</span>
-                            {% if user.display_name %}
-                            <span class="ul-email-name">{{ user.display_name }}</span>
-                            {% endif %}
+                            <div class="ul-email-meta">
+                                {% if user.display_name %}
+                                <span class="ul-email-name">{{ user.display_name }}</span>
+                                {% endif %}
+                                {% if user.is_banned %}
+                                <span class="ul-pill ul-pill-banned" title="User is banned"><i class="fas fa-ban"></i> Banned</span>
+                                {% endif %}
+                                {% if user.is_locked %}
+                                <span class="ul-pill ul-pill-locked" title="Account locked from too many failed logins"><i class="fas fa-lock"></i> Locked</span>
+                                {% endif %}
+                                {% if not user.email_verified %}
+                                <span class="ul-pill ul-pill-unverified" title="Email not verified"><i class="fas fa-envelope-open"></i> Unverified</span>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                 </td>
@@ -86,27 +106,46 @@
                 <td class="a-cell-num" data-sort="{{ user.matches_count }}">
                     <span class="ul-stat">{{ user.matches_count }}</span>
                 </td>
-                <td class="ul-col-login" data-sort="{{ user.last_login or '' }}">
+                <td class="ul-col-joined" data-sort="{{ user.created_at.isoformat() if user.created_at else '' }}">
+                    {% if user.created_at %}
+                    <time class="ul-rel" datetime="{{ user.created_at.isoformat() }}Z">{{ user.created_at | localtime }}</time>
+                    {% else %}
+                    <span class="ul-never">—</span>
+                    {% endif %}
+                </td>
+                <td class="ul-col-login" data-sort="{{ user.last_login.isoformat() if user.last_login else '' }}">
                     {% if user.last_login %}
-                    <span class="ul-login-time">{{ user.last_login | localtime }}</span>
+                    <time class="ul-rel" datetime="{{ user.last_login.isoformat() }}Z">{{ user.last_login | localtime }}</time>
                     {% else %}
                     <span class="ul-never">Never</span>
                     {% endif %}
                 </td>
                 <td class="a-cell-actions">
                     <a href="{{ url_for('admin_user_360', user_email=user.email) }}"
-                       class="a-btn a-btn-secondary a-btn-sm">
+                       class="a-btn a-btn-secondary a-btn-sm"
+                       onclick="event.stopPropagation()">
                         <i class="fas fa-compass"></i> 360
                     </a>
                 </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="6">
+                <td colspan="7">
                     <div class="a-empty"><i class="fas fa-users"></i><p>No users found</p></div>
                 </td>
             </tr>
             {% endfor %}
+            <tr id="ulNoMatches" class="ul-no-matches" hidden>
+                <td colspan="7">
+                    <div class="a-empty">
+                        <i class="fas fa-search-minus"></i>
+                        <p>No users match your filters</p>
+                        <button type="button" class="a-btn a-btn-secondary a-btn-sm" id="ulClearFilters">
+                            <i class="fas fa-times"></i> Clear filters
+                        </button>
+                    </div>
+                </td>
+            </tr>
         </tbody>
     </table>
 </div>
@@ -115,28 +154,37 @@
 /* Column widths — compact friendly */
 .ul-table { table-layout: auto; }
 
-.ul-col-email    { min-width: 220px; }
+.ul-col-email    { min-width: 240px; }
 .ul-col-role     { width: 90px; }
 .ul-col-stats    { width: 72px; text-align: center !important; }
-.ul-col-login    { min-width: 150px; white-space: nowrap; }
+.ul-col-joined   { width: 130px; white-space: nowrap; }
+.ul-col-login    { width: 130px; white-space: nowrap; }
 .ul-col-actions  { width: 90px; text-align: right; }
 
 .ul-table td.a-cell-num { text-align: center; }
+
+/* Row hover affordance — whole row navigates on click */
+.ul-table tbody tr[data-email] { cursor: pointer; }
+.ul-table tbody tr[data-email]:hover { background: var(--bg-hover, rgba(99,102,241,.06)); }
+.ul-table tbody tr[data-email]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
 
 /* Avatar + email cell */
 .ul-email-cell {
     display: flex;
     align-items: center;
-    gap: .6rem;
+    gap: .65rem;
 }
 
 .ul-avatar {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     background: var(--accent-light);
     color: var(--accent);
-    font-size: .76rem;
+    font-size: .78rem;
     font-weight: 700;
     display: flex;
     align-items: center;
@@ -145,15 +193,15 @@
 }
 
 .admin-layout.density-comfy .ul-avatar {
-    width: 34px;
-    height: 34px;
-    font-size: .84rem;
+    width: 36px;
+    height: 36px;
+    font-size: .86rem;
 }
 
 .ul-email-info {
     display: flex;
     flex-direction: column;
-    gap: .05rem;
+    gap: .2rem;
     min-width: 0;
 }
 
@@ -162,11 +210,51 @@
     font-size: .82rem;
     color: var(--fg);
     word-break: break-all;
+    line-height: 1.2;
+}
+
+.ul-email-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .35rem;
+    font-size: .72rem;
+    line-height: 1.2;
 }
 
 .ul-email-name {
-    font-size: .74rem;
     color: var(--fg-secondary);
+}
+
+/* Inline status pills */
+.ul-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 600;
+    line-height: 1.4;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.ul-pill i { font-size: .65rem; }
+
+.ul-pill-banned {
+    color: var(--a-c-security, #ef4444);
+    background: color-mix(in srgb, var(--a-c-security, #ef4444) 12%, transparent);
+    border-color: color-mix(in srgb, var(--a-c-security, #ef4444) 28%, transparent);
+}
+.ul-pill-locked {
+    color: var(--a-c-warning, #f59e0b);
+    background: color-mix(in srgb, var(--a-c-warning, #f59e0b) 12%, transparent);
+    border-color: color-mix(in srgb, var(--a-c-warning, #f59e0b) 28%, transparent);
+}
+.ul-pill-unverified {
+    color: var(--fg-secondary);
+    background: var(--bg-tertiary, rgba(0,0,0,.05));
+    border-color: var(--card-border);
 }
 
 .ul-stat {
@@ -175,7 +263,7 @@
     color: var(--fg);
 }
 
-.ul-login-time {
+.ul-rel {
     font-size: .78rem;
     color: var(--fg-secondary);
     white-space: nowrap;
@@ -187,6 +275,24 @@
     opacity: .5;
     font-style: italic;
 }
+
+/* Search keybinding hint */
+.a-search-wrap { position: relative; }
+.a-search-kbd {
+    position: absolute;
+    right: .5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 1px 6px;
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    font-size: .68rem;
+    color: var(--fg-secondary);
+    background: var(--bg-tertiary, transparent);
+    pointer-events: none;
+    line-height: 1.3;
+}
+.a-search-input:focus + .a-search-kbd { display: none; }
 </style>
 
 <script>
@@ -194,23 +300,53 @@
     const searchInput = document.getElementById('userSearch');
     const tbody       = document.getElementById('usersTableBody');
     const countEl     = document.getElementById('ulCount');
-    const filterBtns  = document.querySelectorAll('.a-chip[data-filter]');
+    const filterBtns  = document.querySelectorAll('#userFilters .a-chip[data-filter]');
+    const noMatchRow  = document.getElementById('ulNoMatches');
+    const clearBtn    = document.getElementById('ulClearFilters');
+    const rows        = Array.from(tbody.querySelectorAll('tr[data-email]'));
     let activeFilter  = 'all';
 
-    function updateCount() {
-        const visible = tbody.querySelectorAll('tr[data-email]:not([style*="display: none"])').length;
-        countEl.textContent = visible + ' shown';
+    function rowMatchesFilter(row, filter) {
+        switch (filter) {
+            case 'all':        return true;
+            case 'admin':      return row.dataset.role === 'admin';
+            case 'user':       return row.dataset.role === 'user';
+            case 'banned':     return row.dataset.banned === '1';
+            case 'unverified': return row.dataset.verified === '0';
+            default:           return true;
+        }
+    }
+
+    function rowMatchesQuery(row, q) {
+        if (!q) return true;
+        return row.dataset.email.toLowerCase().includes(q) || row.dataset.name.includes(q);
     }
 
     function applyFilters() {
         const q = searchInput.value.toLowerCase().trim();
-        tbody.querySelectorAll('tr[data-email]').forEach(row => {
-            const emailMatch = row.dataset.email.toLowerCase().includes(q);
-            const nameMatch  = row.dataset.name.includes(q);
-            const roleMatch  = activeFilter === 'all' || row.dataset.role === activeFilter;
-            row.style.display = (emailMatch || nameMatch) && roleMatch ? '' : 'none';
+        let visible = 0;
+        rows.forEach(row => {
+            const show = rowMatchesQuery(row, q) && rowMatchesFilter(row, activeFilter);
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
         });
-        updateCount();
+
+        /* Recompute chip counts against the search-narrowed set */
+        const narrowed = rows.filter(r => rowMatchesQuery(r, q));
+        const counts = {
+            all:        narrowed.length,
+            admin:      narrowed.filter(r => r.dataset.role === 'admin').length,
+            user:       narrowed.filter(r => r.dataset.role === 'user').length,
+            banned:     narrowed.filter(r => r.dataset.banned === '1').length,
+            unverified: narrowed.filter(r => r.dataset.verified === '0').length,
+        };
+        document.querySelectorAll('#userFilters .count').forEach(el => {
+            const k = el.dataset.count;
+            if (k in counts) el.textContent = counts[k];
+        });
+
+        countEl.textContent = visible + ' shown';
+        if (noMatchRow) noMatchRow.hidden = !(rows.length && visible === 0);
     }
 
     searchInput.addEventListener('input', applyFilters);
@@ -224,7 +360,68 @@
         });
     });
 
-    updateCount();
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            activeFilter = 'all';
+            filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === 'all'));
+            applyFilters();
+            searchInput.focus();
+        });
+    }
+
+    /* Row click → user 360. Inner links/buttons stop propagation. */
+    rows.forEach(row => {
+        row.addEventListener('click', (ev) => {
+            if (ev.target.closest('a, button')) return;
+            const href = row.dataset.href;
+            if (href) window.location.href = href;
+        });
+        row.addEventListener('keydown', (ev) => {
+            if (ev.key !== 'Enter' && ev.key !== ' ') return;
+            if (ev.target !== row) return;
+            ev.preventDefault();
+            const href = row.dataset.href;
+            if (href) window.location.href = href;
+        });
+    });
+
+    /* "/" focuses search (unless typing in another input) */
+    document.addEventListener('keydown', (ev) => {
+        if (ev.key !== '/') return;
+        const t = ev.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        ev.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+    });
+
+    /* Convert "Joined" / "Last Login" cells to relative time, with full timestamp on hover */
+    function relativeTime(iso) {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return null;
+        const diff = (Date.now() - d.getTime()) / 1000;
+        if (diff < 45)        return 'just now';
+        if (diff < 90)        return '1m ago';
+        if (diff < 3600)      return Math.round(diff / 60) + 'm ago';
+        if (diff < 5400)      return '1h ago';
+        if (diff < 86400)     return Math.round(diff / 3600) + 'h ago';
+        if (diff < 86400 * 2) return 'yesterday';
+        if (diff < 86400 * 30)  return Math.round(diff / 86400)  + 'd ago';
+        if (diff < 86400 * 365) return Math.round(diff / 2592000) + 'mo ago';
+        return Math.round(diff / 31536000) + 'y ago';
+    }
+
+    document.querySelectorAll('time.ul-rel').forEach(el => {
+        const iso = el.getAttribute('datetime');
+        const rel = relativeTime(iso);
+        if (!rel) return;
+        const fullText = el.textContent.trim();
+        el.title = fullText;
+        el.textContent = rel;
+    });
+
+    applyFilters();
 })();
 </script>
 {% endblock %}
