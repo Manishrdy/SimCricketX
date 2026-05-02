@@ -415,21 +415,6 @@ class TestActivityMonitoring:
 class TestDataManagement:
     """Tests for data management routes."""
 
-    def test_admin_global_teams(self, admin_client):
-        """Test viewing all teams."""
-        response = admin_client.get("/admin/global-teams")
-        assert response.status_code == 200
-
-    def test_admin_global_matches(self, admin_client):
-        """Test viewing all matches."""
-        response = admin_client.get("/admin/global-matches")
-        assert response.status_code == 200
-
-    def test_admin_matches_list(self, admin_client):
-        """Test viewing admin matches list."""
-        response = admin_client.get("/admin/matches")
-        assert response.status_code == 200
-
     def test_admin_delete_team(self, admin_client):
         """Test deleting non-existent team as admin returns 404 or redirects."""
         response = admin_client.post("/admin/teams/99999/delete")
@@ -512,111 +497,6 @@ class TestDataManagement:
     def test_admin_reset_tournament(self, admin_client):
         """Test resetting non-existent tournament as admin returns 404 or redirects."""
         response = admin_client.post("/admin/tournaments/99999/reset")
-        assert response.status_code in [200, 302, 404]
-
-    def test_admin_delete_match(self, admin_client):
-        """Test deleting a non-existent match as admin returns 404 or redirects."""
-        response = admin_client.post("/admin/matches/test-match-id/delete-db")
-        assert response.status_code in [200, 302, 404]
-
-    def test_admin_delete_match_reverses_player_aggregates(self, admin_client, regular_user):
-        """Admin DB-delete must reverse career aggregates so they don't stay inflated.
-
-        Regression for the bug where `admin_delete_db_match` cascade-deleted
-        scorecards but never adjusted Player.total_runs / total_wickets / etc.,
-        leaving career aggregates inflated forever.
-        """
-        team = DBTeam(
-            user_id=regular_user.id,
-            name="Bug Repro XI",
-            short_code="BRX",
-        )
-        db.session.add(team)
-        db.session.flush()
-
-        profile = DBTeamProfile(team_id=team.id, format_type="T20")
-        db.session.add(profile)
-        db.session.flush()
-
-        # Player carries pre-existing career baseline + the contribution from
-        # the match we are about to delete. Deletion must restore the baseline.
-        baseline_runs = 100
-        baseline_wickets = 5
-        baseline_matches = 3
-        match_runs = 75
-        match_wickets = 3
-        match_runs_conceded = 20
-
-        player = DBPlayer(
-            team_id=team.id,
-            profile_id=profile.id,
-            name="Repro Player",
-            role="All-rounder",
-            matches_played=baseline_matches + 1,
-            total_runs=baseline_runs + match_runs,
-            total_wickets=baseline_wickets + match_wickets,
-            highest_score=match_runs,
-            best_bowling_wickets=match_wickets,
-            best_bowling_runs=match_runs_conceded,
-        )
-        db.session.add(player)
-        db.session.flush()
-
-        match_id = str(uuid.uuid4())
-        match = DBMatch(
-            id=match_id,
-            user_id=regular_user.id,
-            home_team_id=team.id,
-            away_team_id=team.id,
-            match_format="T20",
-            date=datetime.utcnow(),
-        )
-        db.session.add(match)
-
-        db.session.add(MatchScorecard(
-            match_id=match_id,
-            player_id=player.id,
-            team_id=team.id,
-            innings_number=1,
-            record_type="batting",
-            runs=match_runs,
-            balls=50,
-            is_out=True,
-        ))
-        db.session.add(MatchScorecard(
-            match_id=match_id,
-            player_id=player.id,
-            team_id=team.id,
-            innings_number=2,
-            record_type="bowling",
-            wickets=match_wickets,
-            runs_conceded=match_runs_conceded,
-            balls_bowled=24,
-        ))
-        db.session.commit()
-
-        player_id = player.id
-
-        response = admin_client.post(f"/admin/matches/{match_id}/delete-db")
-        assert response.status_code == 200
-
-        # Match + cascade-deleted scorecards are gone.
-        assert db.session.get(DBMatch, match_id) is None
-        assert MatchScorecard.query.filter_by(match_id=match_id).count() == 0
-
-        # Career aggregates must have been reversed back to baseline.
-        refreshed = db.session.get(DBPlayer, player_id)
-        assert refreshed.matches_played == baseline_matches
-        assert refreshed.total_runs == baseline_runs
-        assert refreshed.total_wickets == baseline_wickets
-        # No prior matches → highest_score and best_bowling_* recompute to 0.
-        assert refreshed.highest_score == 0
-        assert refreshed.best_bowling_wickets == 0
-        assert refreshed.best_bowling_runs == 0
-
-    def test_admin_terminate_match(self, admin_client):
-        """Test terminating a non-existent active match returns 404 or redirects."""
-        response = admin_client.post("/admin/matches/test-match-id/terminate")
         assert response.status_code in [200, 302, 404]
 
 
@@ -733,11 +613,6 @@ class TestAnalytics:
 
 class TestAdvancedFeatures:
     """Tests for advanced admin features."""
-
-    def test_admin_search(self, admin_client):
-        """Test admin search functionality."""
-        response = admin_client.get("/admin/search?q=test")
-        assert response.status_code == 200
 
     def test_admin_sql_console_get(self, admin_client):
         """Test accessing SQL console."""

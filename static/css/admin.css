@@ -782,10 +782,21 @@ body.admin-page footer {
 .a-toolbar-right  { flex: 0 0 auto; margin-left: auto; }
 
 .a-toolbar .a-search-wrap {
-    max-width:  320px;
+    max-width:     260px;
+    flex:          0 1 240px;
+    min-width:     170px;
     margin-bottom: 0;
-    flex:       1 1 200px;
-    min-width:  150px;
+}
+
+.a-toolbar .a-search-input {
+    padding:       .32rem .7rem .32rem 1.85rem;
+    font-size:     .76rem;
+    border-radius: var(--a-r-sm);
+}
+
+.a-toolbar .a-search-icon {
+    left:      .6rem;
+    font-size: .72rem;
 }
 
 .a-toolbar-sep {
