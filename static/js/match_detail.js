@@ -1709,6 +1709,10 @@ function soSimulateBall() {
             appendLog(`══ ${data.result} ══`);
             soLogMiniScorecard(data.innings2_scorecard);
             matchOver = true;
+            if (!archiveSaved) {
+                archiveSaved = true;
+                saveMatchArchive();
+            }
             setTimeout(() => {
                 if (data.scorecard_data) {
                     isFinalScoreboard = true;
