@@ -542,7 +542,7 @@ def register_match_routes(
             if card.balls_bowled:
                 return f"{card.balls_bowled // 6}.{card.balls_bowled % 6}"
             if card.overs:
-                return f"{card.overs:.1f}"
+                return str(card.overs)
             return "0.0"
 
         innings_data = {}
@@ -587,7 +587,7 @@ def register_match_routes(
                         "maidens": card.maidens,
                         "wides": card.wides,
                         "noballs": card.noballs,
-                        "economy": (card.runs_conceded / card.overs) if card.overs and card.overs > 0 else 0,
+                        "economy": (card.runs_conceded * 6.0 / card.balls_bowled) if card.balls_bowled else 0,
                         "position": card.position or 9999,
                     }
                 )

@@ -107,13 +107,71 @@ class TestNRRCalculation:
             tournament_id=t_id, team_id=four_teams[0].id
         ).first()
         stats.runs_scored = 100
-        stats.overs_faced = "17.3"  # 105 balls = 17.5 overs
+        stats.overs_faced = "17.3"  # 17 overs + 3 balls = 105 balls (= 17.5 decimal overs)
         stats.runs_conceded = 99
         stats.overs_bowled = "17.3"
         engine._calculate_nrr(stats)
         # Should have more precision than 3 decimals
         nrr_str = f"{stats.net_run_rate:.6f}"
         assert len(nrr_str.split(".")[1]) == 6
+
+
+class TestNRROversCap:
+    """Defensive cap on _get_nrr_overs — overs > full quota are clamped.
+
+    Some legacy match rows store values like "20.1" in a 20-over match
+    (an upstream sim accounting bug). Letting them through to the NRR
+    denominator skews per-team NRR by ~1% per affected match. The cap
+    keeps NRR stable regardless of legacy data drift.
+    """
+
+    class _FakeMatch:
+        def __init__(self, overs_per_side):
+            self.overs_per_side = overs_per_side
+
+    def test_cap_t20_overs_above_quota(self, engine):
+        m = self._FakeMatch(20)
+        # 20.1 / 20.2 / 21.0 in a 20-over match → clamp to 20.0
+        assert engine._get_nrr_overs("20.1", 5, m) == "20.0"
+        assert engine._get_nrr_overs("20.2", 7, m) == "20.0"
+        assert engine._get_nrr_overs("21.0", 3, m) == "20.0"
+
+    def test_no_cap_below_quota(self, engine):
+        m = self._FakeMatch(20)
+        # Below quota: pass through
+        assert engine._get_nrr_overs("19.5", 4, m) == "19.5"
+        assert engine._get_nrr_overs("12.0", 6, m) == "12.0"
+
+    def test_all_out_uses_full_quota(self, engine):
+        m = self._FakeMatch(20)
+        # All out (10 wickets) → full quota regardless of actual
+        assert engine._get_nrr_overs("12.3", 10, m) == "20.0"
+
+    def test_lista_format(self, engine):
+        m = self._FakeMatch(50)
+        assert engine._get_nrr_overs("50.1", 8, m) == "50.0"
+        assert engine._get_nrr_overs("48.3", 5, m) == "48.3"
+
+    def test_cap_isolates_nrr_from_legacy_drift(self, app, engine, regular_user, four_teams):
+        """A team carrying buggy '20.1' in overs_faced should still be
+        capped if the rebuild flow re-runs through _get_nrr_overs."""
+        t_id = _create_tournament(regular_user, four_teams[:2], engine)
+        stats = TournamentTeam.query.filter_by(
+            tournament_id=t_id, team_id=four_teams[0].id
+        ).first()
+        stats.runs_scored = 180
+        stats.overs_faced = "20.0"
+        stats.runs_conceded = 120
+        stats.overs_bowled = "20.0"
+        engine._calculate_nrr(stats)
+        clean_nrr = stats.net_run_rate
+
+        # Simulate one match's worth of buggy "20.1" being aggregated in
+        stats.overs_faced = "20.1"
+        engine._calculate_nrr(stats)
+        buggy_nrr = stats.net_run_rate
+        # Without the cap, NRR shifts measurably (~0.05+ on a 3.0 baseline)
+        assert buggy_nrr != clean_nrr
 
 
 class TestRoundRobinGeneration:

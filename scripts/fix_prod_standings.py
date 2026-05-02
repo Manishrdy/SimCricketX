@@ -58,10 +58,17 @@ def add_overs(o1, o2):
 
 
 def nrr_overs(actual_overs, wickets, overs_per_side):
-    """ICC rule: all-out innings use full quota for NRR denominator."""
+    """ICC rule: all-out innings use full quota for NRR denominator.
+    Also defensively caps at full quota — some legacy rows store "20.1" in a
+    20-over match (upstream sim accounting bug), which would otherwise skew NRR.
+    """
+    ops = int(overs_per_side or 20)
     if wickets is not None and int(wickets) >= 10:
-        return f"{int(overs_per_side or 20)}.0"
-    return actual_overs or '0.0'
+        return f"{ops}.0"
+    actual = actual_overs or '0.0'
+    if overs_to_balls(actual) > ops * 6:
+        return f"{ops}.0"
+    return actual
 
 
 def calc_nrr(runs_scored, overs_faced, runs_conceded, overs_bowled):

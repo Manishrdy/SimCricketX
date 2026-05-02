@@ -153,3 +153,72 @@ def test_csrf_missing_token_on_league_create_returns_400_without_exception_log(a
     with app.app_context():
         after_count = ExceptionLog.query.count()
         assert after_count == before_count
+
+
+def test_log_data_anomaly_persists_with_warning_severity(app):
+    from utils.exception_tracker import log_data_anomaly
+    with app.app_context():
+        before_count = ExceptionLog.query.count()
+
+        row_id = log_data_anomaly(
+            "OversExceedQuota",
+            "innings 1 reported 121 legal balls in a 20-over match (capped to 120)",
+            payload={"match_id": "abc-123", "raw_balls": 121, "overs_per_side": 20},
+        )
+
+        assert row_id is not None
+        assert ExceptionLog.query.count() == before_count + 1
+
+        row = ExceptionLog.query.get(row_id)
+        assert row.exception_type == "OversExceedQuota"
+        assert row.severity == "warning"
+        assert row.source == "data_anomaly"
+        assert row.github_sync_status == "skipped"
+        assert row.handled is True
+
+        payload = json.loads(row.context_json)
+        assert payload["payload"]["match_id"] == "abc-123"
+        assert payload["payload"]["raw_balls"] == 121
+
+
+def test_log_data_anomaly_dedups_same_kind(app):
+    from utils.exception_tracker import log_data_anomaly
+    with app.app_context():
+        first = log_data_anomaly(
+            "OversExceedQuota", "first", payload={"match_id": "m1"}
+        )
+        second = log_data_anomaly(
+            "OversExceedQuota", "second", payload={"match_id": "m2"}
+        )
+
+        # Same fingerprint -> same row id, occurrence_count incremented
+        assert first == second
+        row = ExceptionLog.query.get(first)
+        assert row.occurrence_count >= 2
+        # Latest message + payload win
+        assert row.exception_message == "second"
+        payload = json.loads(row.context_json)
+        assert payload["payload"]["match_id"] == "m2"
+
+
+def test_log_data_anomaly_does_not_enqueue_github_issue(app, monkeypatch):
+    """Anomalies must not flood the GitHub issue queue."""
+    from utils import exception_tracker
+
+    calls = []
+
+    def fake_enqueue(*args, **kwargs):
+        calls.append((args, kwargs))
+        return True
+
+    # log_exception imports the queue lazily inside the function, so patch
+    # the module reference directly.
+    from services import github_issue_queue
+    monkeypatch.setattr(github_issue_queue, "enqueue_exception", fake_enqueue)
+
+    with app.app_context():
+        exception_tracker.log_data_anomaly(
+            "OversExceedQuota", "test", payload={"x": 1}
+        )
+
+    assert calls == [], "log_data_anomaly should not enqueue GitHub issues"

@@ -1851,24 +1851,47 @@ def create_app():
                     (match.toss_winner != team_home_code and match.toss_decision == "Bowl")
                 )
                 
-                def calculate_innings_stats(batting_stats, bowling_stats):
+                ops = int(match.data.get('overs', 20) or 20)
+
+                def calculate_innings_stats(batting_stats, bowling_stats, innings_label="?"):
                     """Calculate runs, wickets, and overs from stats dictionaries."""
                     runs = sum(p.get("runs", 0) for p in batting_stats.values())
                     wickets = sum(1 for p in batting_stats.values() if p.get("wicket_type"))
                     balls_total = sum(b.get("balls_bowled", 0) for b in bowling_stats.values())
+                    if balls_total > ops * 6:
+                        try:
+                            from utils.exception_tracker import log_data_anomaly
+                            log_data_anomaly(
+                                "OversExceedQuota",
+                                f"innings {innings_label} reported {balls_total} legal balls "
+                                f"in a {ops}-over match (capped to {ops * 6})",
+                                payload={
+                                    "match_id": match_id,
+                                    "tournament_id": tournament_id,
+                                    "innings": innings_label,
+                                    "raw_balls": balls_total,
+                                    "overs_per_side": ops,
+                                    "writer": "app.calculate_innings_stats",
+                                },
+                            )
+                        except Exception:
+                            pass
+                        balls_total = ops * 6
                     overs = f"{balls_total // 6}.{balls_total % 6}"
                     return runs, wickets, overs
                 
                 # First innings stats
                 s1_runs, s1_wickets, s1_overs = calculate_innings_stats(
                     match.first_innings_batting_stats,
-                    match.first_innings_bowling_stats
+                    match.first_innings_bowling_stats,
+                    innings_label="1",
                 )
-                
+
                 # Second innings stats
                 s2_runs, s2_wickets, s2_overs = calculate_innings_stats(
                     match.batsman_stats,
-                    match.bowler_stats
+                    match.bowler_stats,
+                    innings_label="2",
                 )
                 
                 # Assign scores based on batting order
