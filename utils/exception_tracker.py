@@ -10,6 +10,11 @@ Usage inside any except block:
 
 GitHub issue creation runs asynchronously via services.github_issue_queue,
 so the call site never blocks on a network round-trip.
+
+For non-exception data quality anomalies (e.g. impossible cricket overs
+detected at write time), use `log_data_anomaly()` — it writes to the same
+table with severity='warning' and skips the GitHub-issue queue, so the
+tracker doesn't flood with non-bug rows.
 """
 
 from __future__ import annotations
@@ -214,6 +219,114 @@ def log_exception(
             # must remain intact.
             db.session.rollback()
         return created_id
+    except Exception:
+        if has_app_context():
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        return None
+
+
+def log_data_anomaly(
+    kind: str,
+    message: str,
+    *,
+    payload: dict | None = None,
+    severity: str = "warning",
+) -> int | None:
+    """Record a data-quality anomaly (not a Python exception) to exception_log.
+
+    Unlike `log_exception`, this never enqueues a GitHub issue — anomalies
+    typically indicate bad upstream data rather than code bugs, and routing
+    them to the issue tracker would be noisy.
+
+    Dedup is keyed on (kind, source) so repeated occurrences of the same
+    anomaly type roll up into one row with an incremented occurrence_count.
+
+    Returns the row id, or None if recording was skipped (no app context).
+    """
+    try:
+        if not has_app_context():
+            sys.stderr.write(
+                f"[exception_tracker] no app context; cannot persist "
+                f"data anomaly {kind}: {message}\n"
+            )
+            return None
+
+        kind_name = (kind or "DataAnomaly")[:200]
+        source_name = "data_anomaly"
+        now = datetime.utcnow()
+
+        user_email = None
+        if has_request_context():
+            try:
+                if current_user and current_user.is_authenticated:
+                    user_email = current_user.id
+            except Exception:
+                pass
+
+        merged_context = {}
+        if has_request_context():
+            try:
+                merged_context.update({
+                    "path": request.path,
+                    "method": request.method,
+                    "endpoint": request.endpoint,
+                })
+            except Exception:
+                pass
+        if payload:
+            merged_context["payload"] = payload
+
+        try:
+            context_json = json.dumps(merged_context, default=str) if merged_context else None
+        except Exception:
+            context_json = str(merged_context) if merged_context else None
+
+        # Dedup: one row per (kind, source). Distinct payloads roll into the
+        # same row; the latest payload overwrites context_json so the row
+        # always reflects a recent example.
+        fingerprint = _build_fingerprint(
+            exception_type=kind_name,
+            exception_message="",
+            module=None,
+            function=None,
+            line_number=None,
+            source=source_name,
+        )
+
+        entry = ExceptionLog.query.filter_by(fingerprint=fingerprint).first()
+        if entry:
+            entry.occurrence_count = int(entry.occurrence_count or 1) + 1
+            entry.last_seen_at = now
+            entry.timestamp = now
+            entry.exception_message = message[:65535] if message else ''
+            if context_json:
+                entry.context_json = context_json
+            if user_email:
+                entry.user_email = user_email
+            db.session.commit()
+            return entry.id
+
+        entry = ExceptionLog(
+            exception_type=kind_name,
+            exception_message=(message or '')[:65535],
+            severity=(severity or "warning")[:10],
+            source=source_name,
+            user_email=user_email,
+            context_json=context_json,
+            handled=True,
+            fingerprint=fingerprint,
+            occurrence_count=1,
+            first_seen_at=now,
+            last_seen_at=now,
+            timestamp=now,
+            github_sync_status="skipped",
+        )
+        db.session.add(entry)
+        db.session.commit()
+        return entry.id
     except Exception:
         if has_app_context():
             try:
