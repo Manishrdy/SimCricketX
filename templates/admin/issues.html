@@ -6,26 +6,22 @@
 {% endblock %}
 
 {% block admin_content %}
-
-{% set kind_titles = {
-    'reports': 'User Reports',
-    'exceptions': 'Exception Logs',
-    'combined': 'Combined Timeline'
-} %}
-
 <div class="a-breadcrumb">
     <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
     <span class="sep">/</span>
-    <span class="current">Issues</span>
+    <span class="current">Exceptions</span>
 </div>
 
 <div class="admin-page-header">
     <div>
-        <h1 class="admin-page-title">Issue Tracker</h1>
-        <p class="admin-page-subtitle">User reports and exception logs from across the app &mdash; backed by GitHub</p>
+        <h1 class="admin-page-title">Exception Logs</h1>
+        <p class="admin-page-subtitle">Automatic exception captures and GitHub sync status.</p>
     </div>
     <div class="admin-page-actions">
-        <button type="button" class="a-btn a-btn-secondary" onclick="syncWithGitHub()">
+        <a href="/admin/support" class="a-btn a-btn-secondary">
+            <i class="fas fa-comments"></i> Support Inbox
+        </a>
+        <button type="button" class="a-btn a-btn-secondary" onclick="syncWithGitHub(event)">
             <i class="fas fa-sync"></i> Sync with GitHub
         </button>
     </div>
@@ -34,109 +30,70 @@
 <div id="alertContainer"></div>
 
 <div class="a-stats-grid" style="margin-bottom: 1rem;">
-    {% set _r = stats.reports %}
     <div class="a-stat-card" style="border-left:3px solid #6b7280;">
         <div class="a-stat-header">
-            <div class="a-stat-icon-pill"><i class="fas fa-list"></i></div>
-            <div class="a-stat-label">Reports total</div>
+            <div class="a-stat-icon-pill"><i class="fas fa-bug"></i></div>
+            <div class="a-stat-label">Exceptions total</div>
         </div>
-        <div class="a-stat-value">{{ _r.total }}</div>
-        <div class="a-stat-sub">all submissions</div>
+        <div class="a-stat-value">{{ stats.exceptions.total }}</div>
+        <div class="a-stat-sub">all captured exceptions</div>
     </div>
-    <div class="a-stat-card" style="--a-stat-accent:#3b82f6; --a-stat-accent-lt:rgba(59,130,246,.1); border-left:3px solid #3b82f6;">
+    <div class="a-stat-card" style="--a-stat-accent:#ef4444; --a-stat-accent-lt:rgba(239,68,68,.1); border-left:3px solid #ef4444;">
         <div class="a-stat-header">
-            <div class="a-stat-icon-pill"><i class="fas fa-circle-dot"></i></div>
-            <div class="a-stat-label">New / Open</div>
+            <div class="a-stat-icon-pill"><i class="fas fa-circle-exclamation"></i></div>
+            <div class="a-stat-label">Unresolved</div>
         </div>
-        <div class="a-stat-value">{{ (_r.by_status.get('new', 0) + _r.by_status.get('open', 0)) }}</div>
-        <div class="a-stat-sub">awaiting triage</div>
-    </div>
-    <div class="a-stat-card" style="--a-stat-accent:#f59e0b; --a-stat-accent-lt:rgba(245,158,11,.1); border-left:3px solid #f59e0b;">
-        <div class="a-stat-header">
-            <div class="a-stat-icon-pill"><i class="fas fa-spinner"></i></div>
-            <div class="a-stat-label">In Progress</div>
-        </div>
-        <div class="a-stat-value">{{ _r.by_status.get('in_progress', 0) }}</div>
-        <div class="a-stat-sub">being worked on</div>
+        <div class="a-stat-value">{{ stats.exceptions.unresolved }}</div>
+        <div class="a-stat-sub">needs investigation</div>
     </div>
     <div class="a-stat-card" style="--a-stat-accent:#16a34a; --a-stat-accent-lt:rgba(22,163,74,.1); border-left:3px solid #16a34a;">
         <div class="a-stat-header">
             <div class="a-stat-icon-pill"><i class="fas fa-check"></i></div>
             <div class="a-stat-label">Resolved</div>
         </div>
-        <div class="a-stat-value">{{ _r.by_status.get('resolved', 0) }}</div>
-        <div class="a-stat-sub">fixed</div>
+        <div class="a-stat-value">{{ stats.exceptions.resolved }}</div>
+        <div class="a-stat-sub">closed locally or via GitHub</div>
     </div>
-    <div class="a-stat-card" style="border-left:3px solid #6b7280;">
+    <div class="a-stat-card" style="--a-stat-accent:#f59e0b; --a-stat-accent-lt:rgba(245,158,11,.1); border-left:3px solid #f59e0b;">
         <div class="a-stat-header">
-            <div class="a-stat-icon-pill"><i class="fas fa-archive"></i></div>
-            <div class="a-stat-label">Closed / Deferred</div>
+            <div class="a-stat-icon-pill"><i class="fab fa-github"></i></div>
+            <div class="a-stat-label">Failed Sync</div>
         </div>
-        <div class="a-stat-value">{{ (_r.by_status.get('closed', 0) + _r.by_status.get('deferred', 0)) }}</div>
-        <div class="a-stat-sub">not actionable now</div>
+        <div class="a-stat-value">{{ stats.exceptions.failed_sync }}</div>
+        <div class="a-stat-sub">GitHub issue creation failed</div>
     </div>
-    <div class="a-stat-card" style="--a-stat-accent:#ef4444; --a-stat-accent-lt:rgba(239,68,68,.1); border-left:3px solid #ef4444;">
-        <div class="a-stat-header">
-            <div class="a-stat-icon-pill"><i class="fas fa-bug"></i></div>
-            <div class="a-stat-label">Exceptions unresolved</div>
-        </div>
-        <div class="a-stat-value">{{ stats.exceptions.unresolved }}</div>
-        <div class="a-stat-sub">{{ stats.exceptions.total }} total &middot; {{ stats.exceptions.failed_sync + _r.failed_sync }} failed sync</div>
-    </div>
-</div>
-
-<div class="a-chip-group" style="margin-bottom: .75rem;">
-    {% for k, label in kind_titles.items() %}
-    <a href="?kind={{ k }}" class="a-chip {% if kind == k %}active{% endif %}">{{ label }}</a>
-    {% endfor %}
 </div>
 
 <form method="GET" class="a-toolbar">
-    <input type="hidden" name="kind" value="{{ kind }}">
     <div class="a-toolbar-left">
         <div class="a-search-wrap" style="margin:0;">
             <i class="fas fa-search a-search-icon"></i>
-            <input type="search" name="q" value="{{ filters.q }}" placeholder="Search title / message / user…" class="a-search-input">
+            <input type="search" name="q" value="{{ filters.q }}" placeholder="Search exception / message / user..." class="a-search-input">
         </div>
-        {% if kind == 'reports' %}
-            <select name="status" class="a-form-input" style="width:auto;max-width:160px;">
-                <option value="">All statuses</option>
-                {% for key, label in status_labels.items() %}
-                <option value="{{ key }}" {% if filters.status==key %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <select name="category" class="a-form-input" style="width:auto;max-width:180px;">
-                <option value="">All categories</option>
-                {% for cat in ['bug','gameplay-balance','ui-ux','performance','feature-request','data-accuracy','other'] %}
-                <option value="{{ cat }}" {% if filters.category==cat %}selected{% endif %}>{{ cat }}</option>
-                {% endfor %}
-            </select>
-        {% elif kind == 'exceptions' %}
-            <select name="severity" class="a-form-input" style="width:auto;max-width:150px;">
-                <option value="">All severities</option>
-                {% for sev in ['critical','error','warning','info'] %}
-                <option value="{{ sev }}" {% if filters.severity==sev %}selected{% endif %}>{{ sev }}</option>
-                {% endfor %}
-            </select>
-            <select name="source" class="a-form-input" style="width:auto;max-width:140px;">
-                <option value="">All sources</option>
-                {% for src in ['backend','sqlite','frontend','migration'] %}
-                <option value="{{ src }}" {% if filters.source==src %}selected{% endif %}>{{ src }}</option>
-                {% endfor %}
-            </select>
-            <select name="resolved" class="a-form-input" style="width:auto;max-width:140px;">
-                <option value="">Any state</option>
-                <option value="no"  {% if filters.resolved=='no'  %}selected{% endif %}>Unresolved</option>
-                <option value="yes" {% if filters.resolved=='yes' %}selected{% endif %}>Resolved</option>
-            </select>
-        {% endif %}
+        <select name="severity" class="a-form-input" style="width:auto;max-width:150px;">
+            <option value="">All severities</option>
+            {% for sev in ['critical','error','warning','info'] %}
+            <option value="{{ sev }}" {% if filters.severity==sev %}selected{% endif %}>{{ sev }}</option>
+            {% endfor %}
+        </select>
+        <select name="source" class="a-form-input" style="width:auto;max-width:140px;">
+            <option value="">All sources</option>
+            {% for src in ['backend','sqlite','frontend','migration'] %}
+            <option value="{{ src }}" {% if filters.source==src %}selected{% endif %}>{{ src }}</option>
+            {% endfor %}
+        </select>
+        <select name="resolved" class="a-form-input" style="width:auto;max-width:140px;">
+            <option value="">Any state</option>
+            <option value="no"  {% if filters.resolved=='no'  %}selected{% endif %}>Unresolved</option>
+            <option value="yes" {% if filters.resolved=='yes' %}selected{% endif %}>Resolved</option>
+        </select>
     </div>
     <div class="a-toolbar-right">
         <button type="submit" class="a-btn a-btn-secondary a-btn-sm">
             <i class="fas fa-filter"></i> Apply
         </button>
-        {% if filters.q or filters.status or filters.category or filters.severity or filters.source or filters.resolved %}
-        <a href="?kind={{ kind }}" class="a-btn a-btn-ghost a-btn-sm">
+        {% if filters.q or filters.severity or filters.source or filters.resolved %}
+        <a href="/admin/issues" class="a-btn a-btn-ghost a-btn-sm">
             <i class="fas fa-times"></i> Clear
         </a>
         {% endif %}
@@ -144,45 +101,6 @@
 </form>
 
 <div class="a-table-wrap">
-    {% if kind == 'reports' %}
-    <table class="a-table a-table-pro">
-        <thead>
-            <tr>
-                <th class="sortable" style="width:130px;">Public ID</th>
-                <th class="sortable" style="width:130px;">Category</th>
-                <th class="sortable">Title</th>
-                <th class="sortable">User</th>
-                <th class="sortable" style="width:120px;">Status</th>
-                <th class="sortable" style="width:130px;">GitHub</th>
-                <th class="sortable" style="width:170px;">Submitted</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in report_rows %}
-            <tr>
-                <td><a href="{{ url_for('admin_issue_report_detail', public_id=row.public_id) }}"><code class="a-cell-mono">{{ row.public_id }}</code></a></td>
-                <td><span class="a-tag">{{ row.category }}</span></td>
-                <td class="a-cell-strong a-cell-trunc">{{ row.title }}</td>
-                <td class="a-cell-dim">{{ row.user_email }}</td>
-                <td><span class="a-tag a-tag-{{ row.status }}">{{ row.status }}</span></td>
-                <td>
-                    {% if row.github_issue_number and row.github_issue_url %}
-                    <a href="{{ row.github_issue_url }}" target="_blank" rel="noopener">#{{ row.github_issue_number }}</a>
-                    {% elif row.github_sync_status == 'failed' %}
-                    <span style="color:#ef4444;">failed</span>
-                    {% else %}
-                    <span style="color:#6b7280;">{{ row.github_sync_status }}</span>
-                    {% endif %}
-                </td>
-                <td class="a-cell-dim" data-sort="{{ row.created_at.isoformat() if row.created_at else '' }}">{{ row.created_at | localtime if row.created_at else '—' }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="7"><div class="a-empty"><i class="fas fa-bug"></i><p>No issue reports yet</p></div></td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    {% elif kind == 'exceptions' %}
     <table class="a-table a-table-pro">
         <thead>
             <tr>
@@ -221,67 +139,16 @@
             {% endfor %}
         </tbody>
     </table>
-
-    {% else %}{# combined #}
-    <table class="a-table a-table-pro">
-        <thead>
-            <tr>
-                <th class="sortable" style="width:90px;">Source</th>
-                <th class="sortable">Title / Message</th>
-                <th class="sortable">User</th>
-                <th class="sortable" style="width:130px;">GitHub</th>
-                <th class="sortable" style="width:170px;">When</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in combined_rows %}
-            <tr>
-                <td>
-                    {% if item.kind == 'report' %}
-                    <span class="a-tag" style="background:#dbeafe; color:#1e40af; border-color:#bfdbfe;">REPORT</span>
-                    {% else %}
-                    <span class="a-tag" style="background:#fee2e2; color:#991b1b; border-color:#fca5a5;">EXC</span>
-                    {% endif %}
-                </td>
-                <td class="a-cell-trunc">
-                    {% if item.kind == 'report' %}
-                    <a href="{{ url_for('admin_issue_report_detail', public_id=item.public_id) }}">
-                        <code class="a-cell-mono">{{ item.public_id }}</code>
-                    </a>
-                    &mdash; {{ item.title }}
-                    {% else %}
-                    <a href="{{ url_for('admin_exception_detail', exc_id=item.id) }}">
-                        <code class="a-cell-mono">{{ item.type }}</code>
-                    </a>
-                    &mdash; {{ item.message }}
-                    {% endif %}
-                </td>
-                <td class="a-cell-dim">{{ item.user_email or '—' }}</td>
-                <td>
-                    {% if item.github_issue_number and item.github_issue_url %}
-                    <a href="{{ item.github_issue_url }}" target="_blank" rel="noopener">#{{ item.github_issue_number }}</a>
-                    {% else %}
-                    <span style="color:#6b7280;">{{ item.github_sync_status or '—' }}</span>
-                    {% endif %}
-                </td>
-                <td class="a-cell-dim">{{ item.created_at if item.kind == 'report' else item.timestamp }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="5"><div class="a-empty"><i class="fas fa-inbox"></i><p>No items</p></div></td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% endif %}
 </div>
 
 {% if page_count > 1 %}
 <div class="a-pagination" style="justify-content:flex-start;">
     <span style="border:none;background:none;color:var(--fg-secondary);">Page {{ page }} of {{ page_count }} &middot; {{ total_rows }} rows</span>
     {% if page > 1 %}
-    <a href="?kind={{ kind }}&page={{ page - 1 }}&q={{ filters.q }}&status={{ filters.status }}&category={{ filters.category }}&severity={{ filters.severity }}&source={{ filters.source }}&resolved={{ filters.resolved }}">‹ Prev</a>
+    <a href="?page={{ page - 1 }}&q={{ filters.q }}&severity={{ filters.severity }}&source={{ filters.source }}&resolved={{ filters.resolved }}">Prev</a>
     {% endif %}
     {% if page < page_count %}
-    <a href="?kind={{ kind }}&page={{ page + 1 }}&q={{ filters.q }}&status={{ filters.status }}&category={{ filters.category }}&severity={{ filters.severity }}&source={{ filters.source }}&resolved={{ filters.resolved }}">Next ›</a>
+    <a href="?page={{ page + 1 }}&q={{ filters.q }}&severity={{ filters.severity }}&source={{ filters.source }}&resolved={{ filters.resolved }}">Next</a>
     {% endif %}
 </div>
 {% endif %}
@@ -292,11 +159,11 @@
 </style>
 
 <script>
-function syncWithGitHub() {
+function syncWithGitHub(event) {
     const btn = event.currentTarget;
     btn.disabled = true;
     const original = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing…';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
 
     fetch('/admin/issues/sync', { method: 'POST', credentials: 'same-origin' })
         .then(r => r.json().then(b => ({ ok: r.ok, body: b })))
@@ -307,8 +174,8 @@ function syncWithGitHub() {
             if (ok) {
                 const s = body.synced || {};
                 alertBox.innerHTML = '<div class="a-alert a-alert-success" style="display:block">Synced ' +
-                    (s.reports || 0) + ' reports + ' + (s.exceptions || 0) + ' exceptions' +
-                    (s.errors ? ' (' + s.errors + ' errors)' : '') + '. Reloading…</div>';
+                    (s.exceptions || 0) + ' exceptions' +
+                    (s.errors ? ' (' + s.errors + ' errors)' : '') + '. Reloading...</div>';
                 setTimeout(() => location.reload(), 1200);
             } else {
                 alertBox.innerHTML = '<div class="a-alert a-alert-error" style="display:block">Sync failed: ' +

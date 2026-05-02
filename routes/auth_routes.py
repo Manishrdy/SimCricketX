@@ -77,12 +77,16 @@ def register_auth_routes(
         'auth_challenge',
     }
 
-    # Endpoints exempt from the per-session Turnstile check
+    # Endpoints exempt from the per-session Turnstile check.
+    # Forced-flow endpoints (force_change_password, set_display_name, force_verify_email*)
+    # MUST stay exempt — other before_request guards bounce users back to those pages,
+    # so requiring Turnstile on them produces a redirect loop with /verify-human.
     _TURNSTILE_EXEMPT = {
         'login', 'register', 'logout', 'static', 'auth_challenge',
         'verify_human',
         'verify_email', 'verify_email_pending', 'resend_verification',
         'force_verify_email', 'force_verify_email_send', 'force_verify_email_change',
+        'force_change_password', 'set_display_name',
         'forgot_password', 'reset_password',
     }
 
