@@ -236,12 +236,18 @@ def register_admin_routes(
         """List all users"""
         try:
             users = db.session.query(DBUser).all()
+            now = datetime.utcnow()
             user_data = []
             for user in users:
+                locked = bool(user.lockout_until and user.lockout_until > now)
                 user_data.append({
                     'email': user.id,
                     'display_name': user.display_name,
                     'is_admin': user.is_admin,
+                    'is_banned': bool(user.is_banned),
+                    'email_verified': bool(user.email_verified),
+                    'is_locked': locked,
+                    'created_at': user.created_at,
                     'teams_count': db.session.query(DBTeam).filter_by(user_id=user.id).count(),
                     'matches_count': db.session.query(DBMatch).filter_by(user_id=user.id).count(),
                     'last_login': user.last_login
@@ -252,53 +258,6 @@ def register_admin_routes(
             log_exception(e)
             app.logger.error(f"[Admin] Users list error: {e}", exc_info=True)
             return "Error loading users", 500
-
-    @app.route('/admin/search')
-    @login_required
-    @admin_required
-    def admin_search():
-        q = request.args.get('q', '').strip()
-        results = {
-            'users': [],
-            'teams': [],
-            'matches': [],
-            'tournaments': [],
-        }
-        if q:
-            results['users'] = db.session.query(DBUser).filter(
-                db.or_(
-                    DBUser.id.ilike(f'%{q}%'),
-                    DBUser.display_name.ilike(f'%{q}%')
-                )
-            ).order_by(DBUser.last_login.desc()).limit(20).all()
-
-            results['teams'] = db.session.query(DBTeam).filter(
-                db.or_(
-                    DBTeam.name.ilike(f'%{q}%'),
-                    DBTeam.short_code.ilike(f'%{q}%'),
-                    DBTeam.user_id.ilike(f'%{q}%')
-                )
-            ).order_by(DBTeam.created_at.desc()).limit(20).all()
-
-            results['matches'] = db.session.query(DBMatch).filter(
-                db.or_(
-                    DBMatch.id.ilike(f'%{q}%'),
-                    DBMatch.user_id.ilike(f'%{q}%'),
-                    DBMatch.result_description.ilike(f'%{q}%'),
-                    DBMatch.venue.ilike(f'%{q}%')
-                )
-            ).order_by(DBMatch.date.desc()).limit(20).all()
-
-            results['tournaments'] = db.session.query(Tournament).filter(
-                db.or_(
-                    Tournament.name.ilike(f'%{q}%'),
-                    Tournament.user_id.ilike(f'%{q}%'),
-                    Tournament.status.ilike(f'%{q}%')
-                )
-            ).order_by(Tournament.created_at.desc()).limit(20).all()
-
-        totals = {k: len(v) for k, v in results.items()}
-        return render_template('admin/search.html', q=q, results=results, totals=totals)
 
     @app.route('/admin/users/<user_email>')
     @login_required
@@ -977,68 +936,6 @@ def register_admin_routes(
             app.logger.error(f"[Admin] Config update error: {e}", exc_info=True)
             return jsonify({"error": "Failed to update config"}), 500
 
-    # --- Match/Tournament Management ---
-    @app.route('/admin/matches')
-    @login_required
-    @admin_required
-    def admin_matches():
-        """View and manage matches and tournaments"""
-        try:
-            # Active in-memory matches
-            active_matches = []
-            with MATCH_INSTANCES_LOCK:
-                for mid, instance in MATCH_INSTANCES.items():
-                    data = getattr(instance, 'data', {})
-                    home = data.get('team_home', '?').split('_')[0]
-                    away = data.get('team_away', '?').split('_')[0]
-                    created_at = data.get('created_at')
-                    if created_at is None:
-                        created_at = getattr(instance, 'created_at', None)
-                    if isinstance(created_at, (int, float)):
-                        created_display = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S')
-                    else:
-                        created_display = created_at
-                    active_matches.append({
-                        'id': mid,
-                        'teams': f"{home} vs {away}",
-                        'user': data.get('created_by', '?'),
-                        'created': created_display,
-                    })
-
-            # Recent DB matches
-            recent_matches = db.session.query(DBMatch).order_by(DBMatch.date.desc()).limit(25).all()
-
-            # Active tournaments
-            active_tournaments = db.session.query(Tournament).filter_by(status='Active').all()
-            completed_tournaments = db.session.query(Tournament).filter_by(status='Completed').order_by(Tournament.created_at.desc()).limit(10).all()
-
-            return render_template('admin/matches.html',
-                                   active_matches=active_matches,
-                                   recent_matches=recent_matches,
-                                   active_tournaments=active_tournaments,
-                                   completed_tournaments=completed_tournaments)
-        except Exception as e:
-            log_exception(e)
-            app.logger.error(f"[Admin] Matches page error: {e}", exc_info=True)
-            return "Error loading matches", 500
-
-    @app.route('/admin/matches/<match_id>/terminate', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_terminate_match(match_id):
-        """Terminate an active in-memory match"""
-        try:
-            with MATCH_INSTANCES_LOCK:
-                if match_id in MATCH_INSTANCES:
-                    del MATCH_INSTANCES[match_id]
-                    log_admin_action(current_user.id, 'terminate_match', match_id, 'Active match terminated', request.remote_addr)
-                    return jsonify({"message": f"Match {match_id[:8]}... terminated"}), 200
-                else:
-                    return jsonify({"error": "Match not found in active instances"}), 404
-        except Exception as e:
-            log_exception(e)
-            return jsonify({"error": "Failed to terminate match"}), 500
-
     # --- Audit Log ---
     @app.route('/admin/audit-log')
     @login_required
@@ -1525,44 +1422,6 @@ def register_admin_routes(
             app.logger.error(f"[Admin] Announcement banner update error: {e}", exc_info=True)
             return jsonify({"error": "Failed to update announcement banner"}), 500
 
-    # --- Global Team Browser ---
-    @app.route('/admin/global-teams')
-    @login_required
-    @admin_required
-    def admin_global_teams():
-        page = request.args.get('page', 1, type=int)
-        search = request.args.get('q', '').strip()
-        per_page = 25
-        query = DBTeam.query.filter(DBTeam.is_placeholder != True)
-        if search:
-            query = query.filter(
-                db.or_(DBTeam.name.ilike(f'%{search}%'), DBTeam.user_id.ilike(f'%{search}%'), DBTeam.short_code.ilike(f'%{search}%'))
-            )
-        total = query.count()
-        teams = query.order_by(DBTeam.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
-        total_pages = (total + per_page - 1) // per_page
-        return render_template('admin/global_teams.html',
-                               teams=teams, page=page, total_pages=total_pages, total=total, search=search)
-
-    # --- Global Match Browser ---
-    @app.route('/admin/global-matches')
-    @login_required
-    @admin_required
-    def admin_global_matches():
-        page = request.args.get('page', 1, type=int)
-        search = request.args.get('q', '').strip()
-        per_page = 25
-        query = DBMatch.query
-        if search:
-            query = query.filter(
-                db.or_(DBMatch.user_id.ilike(f'%{search}%'), DBMatch.result_description.ilike(f'%{search}%'))
-            )
-        total = query.count()
-        matches = query.order_by(DBMatch.date.desc()).offset((page - 1) * per_page).limit(per_page).all()
-        total_pages = (total + per_page - 1) // per_page
-        return render_template('admin/global_matches.html',
-                               matches=matches, page=page, total_pages=total_pages, total=total, search=search)
-
     # --- DB Export ---
     @app.route('/admin/export')
     @login_required
@@ -1989,37 +1848,6 @@ def register_admin_routes(
             db.session.rollback()
             app.logger.error(f"[Admin] Wipe data error for {user_email}: {e}", exc_info=True)
             return jsonify({"error": "Failed to wipe data"}), 500
-
-    # --- 5. Delete DB match ---
-    @app.route('/admin/matches/<match_id>/delete-db', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_delete_db_match(match_id):
-        """Permanently delete a match record from the database."""
-        match = db.session.get(DBMatch, match_id)
-        if not match:
-            return jsonify({"error": "Match not found"}), 404
-        owner = match.user_id
-
-        # Reverse player career aggregates BEFORE deleting the match so cascade
-        # deletion of scorecards doesn't leave inflated career totals behind.
-        scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
-        if scorecards:
-            try:
-                reverse_player_aggregates(scorecards, logger=app.logger)
-            except Exception as rev_err:
-                log_exception(rev_err)
-                app.logger.error(
-                    f"[Admin] Failed to reverse aggregates for match {match_id}: {rev_err}",
-                    exc_info=True,
-                )
-                db.session.rollback()
-                return jsonify({"error": "Failed to reverse player aggregates"}), 500
-
-        db.session.delete(match)
-        db.session.commit()
-        log_admin_action(current_user.id, 'delete_match', match_id, f'Owned by {owner}', get_client_ip())
-        return jsonify({"message": f"Match {match_id[:8]}... deleted from database"}), 200
 
     # --- 6a. Delete team ---
     @app.route('/admin/teams/<int:team_id>/delete', methods=['POST'])
@@ -2551,13 +2379,11 @@ def register_admin_routes(
     _register_admin_fallback('admin_users', '/admin/users')
     _register_admin_fallback('admin_activity', '/admin/activity')
     _register_admin_fallback('admin_health', '/admin/health')
-    _register_admin_fallback('admin_matches', '/admin/matches')
     _register_admin_fallback('admin_database_stats', '/admin/database/stats')
     _register_admin_fallback('admin_backups', '/admin/backups')
     _register_admin_fallback('admin_restore_center', '/admin/restore-center')
     _register_admin_fallback('admin_bot_defense', '/admin/bot-defense')
     _register_admin_fallback('admin_banner', '/admin/banner')
-    _register_admin_fallback('admin_search', '/admin/search')
     _register_admin_fallback('admin_config', '/admin/config')
     _register_admin_fallback('admin_audit_log', '/admin/audit-log')
 

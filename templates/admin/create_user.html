@@ -23,32 +23,137 @@
 
 <div id="alertContainer"></div>
 
-<div class="a-card-flat" style="max-width: 560px;">
+<div class="a-card-flat cu-card">
     <form id="createUserForm" onsubmit="createUser(event)">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="a-form-group">
-            <label class="a-form-label">Email Address <span style="color:#dc2626;">*</span></label>
-            <input type="email" name="email" class="a-form-input" placeholder="user@example.com" required style="max-width:100%;">
+
+        <div class="a-form-group cu-tight">
+            <label class="a-form-label" for="cuEmail">Email Address <span class="cu-req">*</span></label>
+            <input id="cuEmail" type="email" name="email" class="a-form-input cu-input"
+                   placeholder="user@example.com" required autofocus autocomplete="off">
         </div>
-        <div class="a-form-group">
-            <label class="a-form-label">Display Name</label>
-            <input type="text" name="display_name" class="a-form-input" placeholder="Optional display name" style="max-width:100%;">
+
+        <div class="a-form-group cu-tight">
+            <label class="a-form-label" for="cuName">Display Name</label>
+            <input id="cuName" type="text" name="display_name" class="a-form-input cu-input"
+                   placeholder="Optional" autocomplete="off">
         </div>
-        <div class="a-form-group">
-            <label class="a-form-label">Password <span style="color:#dc2626;">*</span></label>
-            <input type="password" name="password" class="a-form-input" placeholder="Min 8 chars, upper/lower/digit" required minlength="8" style="max-width:100%;">
-            <p class="a-form-hint">Min 8 characters, must include uppercase, lowercase, and a digit.</p>
+
+        <div class="a-form-group cu-tight">
+            <label class="a-form-label" for="cuPass">Password <span class="cu-req">*</span></label>
+            <div class="cu-pass-wrap">
+                <input id="cuPass" type="password" name="password" class="a-form-input cu-input"
+                       placeholder="Min 8 chars" required minlength="8" autocomplete="new-password">
+                <button type="button" class="cu-pass-toggle" id="cuPassToggle" tabindex="-1"
+                        aria-label="Show password">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </div>
+            <p class="a-form-hint">Min 8 characters · uppercase, lowercase, and a digit.</p>
         </div>
-        <div class="a-form-group">
-            <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.84rem; font-weight:600; color:var(--fg);">
-                <input type="checkbox" name="make_admin" value="1" style="width:16px;height:16px;">
-                Grant Administrator Role
-            </label>
-            <p class="a-form-hint">The user will have full admin access from creation.</p>
+
+        <label class="cu-check">
+            <input type="checkbox" name="make_admin" value="1">
+            <span>
+                <strong>Grant Administrator Role</strong>
+                <small>Full admin access from creation.</small>
+            </span>
+        </label>
+
+        <div class="cu-actions">
+            <a href="{{ url_for('admin_users') }}" class="a-btn a-btn-ghost a-btn-sm">Cancel</a>
+            <button type="submit" class="a-btn a-btn-primary a-btn-sm">
+                <i class="fas fa-user-plus"></i> Create User
+            </button>
         </div>
-        <button type="submit" class="a-btn a-btn-primary"><i class="fas fa-user-plus"></i> Create User</button>
     </form>
 </div>
+
+<style>
+.cu-card {
+    max-width: 440px;
+    padding:   1rem 1.1rem;
+}
+
+.cu-tight { margin-bottom: .75rem; }
+
+.cu-input {
+    max-width: 100%;
+    padding:   .42rem .7rem;
+    font-size: .82rem;
+}
+
+.cu-req { color: var(--a-c-security, #dc2626); margin-left: 1px; }
+
+/* Password field with reveal toggle */
+.cu-pass-wrap { position: relative; }
+.cu-pass-wrap .cu-input { padding-right: 2.2rem; }
+.cu-pass-toggle {
+    position: absolute;
+    right: .35rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: 0;
+    padding: .25rem .4rem;
+    color: var(--fg-secondary);
+    cursor: pointer;
+    border-radius: var(--a-r-xs);
+    line-height: 1;
+}
+.cu-pass-toggle:hover { color: var(--accent); background: var(--accent-light); }
+.cu-pass-toggle i { font-size: .82rem; }
+
+/* Admin grant — full-width pillbox toggle */
+.cu-check {
+    display: flex;
+    align-items: flex-start;
+    gap: .55rem;
+    padding: .6rem .75rem;
+    border: 1px solid var(--card-border);
+    border-radius: var(--a-r-sm);
+    background: var(--bg);
+    cursor: pointer;
+    margin-bottom: .9rem;
+    transition: border-color .12s, background .12s;
+}
+.cu-check:hover { border-color: var(--accent); }
+.cu-check input[type="checkbox"] {
+    margin-top: 2px;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.cu-check span { display: flex; flex-direction: column; gap: 1px; }
+.cu-check strong {
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--fg);
+    line-height: 1.2;
+}
+.cu-check small {
+    font-size: .72rem;
+    color: var(--fg-secondary);
+    line-height: 1.3;
+}
+.cu-check:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-light);
+}
+
+/* Action footer */
+.cu-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: .5rem;
+    padding-top: .25rem;
+    border-top: 1px solid var(--card-border);
+    margin-top: .25rem;
+    padding-top: .8rem;
+}
+</style>
 
 <script>
 function showAlert(msg, type) {
@@ -56,6 +161,20 @@ function showAlert(msg, type) {
     c.innerHTML = `<div class="a-alert a-alert-${type}" style="display:block">${msg}</div>`;
     setTimeout(() => c.innerHTML = '', 5000);
 }
+
+(function() {
+    const toggle = document.getElementById('cuPassToggle');
+    const pass   = document.getElementById('cuPass');
+    if (toggle && pass) {
+        toggle.addEventListener('click', () => {
+            const isPwd = pass.type === 'password';
+            pass.type = isPwd ? 'text' : 'password';
+            toggle.querySelector('i').className = isPwd ? 'fas fa-eye-slash' : 'fas fa-eye';
+            toggle.setAttribute('aria-label', isPwd ? 'Hide password' : 'Show password');
+        });
+    }
+})();
+
 async function createUser(e) {
     e.preventDefault();
     const fd = new FormData(e.target);

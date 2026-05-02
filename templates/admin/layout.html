@@ -48,10 +48,6 @@
                             class="admin-nav-link {% if request.endpoint == 'admin_activity' %}active{% endif %}">
                             <i class="fas fa-chart-bar"></i> <span>Activity</span>
                         </a></li>
-                    <li><a href="/admin/search" data-label="Global Search"
-                            class="admin-nav-link {% if request.endpoint == 'admin_search' %}active{% endif %}">
-                            <i class="fas fa-search"></i> <span>Global Search</span>
-                        </a></li>
                     <li><a href="/admin/health" data-label="System Health"
                             class="admin-nav-link {% if request.endpoint == 'admin_health' %}active{% endif %}">
                             <i class="fas fa-heartbeat"></i> <span>System Health</span>
@@ -70,18 +66,6 @@
                     <li><a href="/admin/users/create" data-label="Create User"
                             class="admin-nav-link {% if request.endpoint == 'admin_create_user' %}active{% endif %}">
                             <i class="fas fa-user-plus"></i> <span>Create User</span>
-                        </a></li>
-                    <li><a href="/admin/matches" data-label="Matches"
-                            class="admin-nav-link {% if request.endpoint == 'admin_matches' %}active{% endif %}">
-                            <i class="fas fa-cricket-bat-ball"></i> <span>Matches</span>
-                        </a></li>
-                    <li><a href="/admin/global-teams" data-label="All Teams"
-                            class="admin-nav-link {% if request.endpoint == 'admin_global_teams' %}active{% endif %}">
-                            <i class="fas fa-shield-alt"></i> <span>All Teams</span>
-                        </a></li>
-                    <li><a href="/admin/global-matches" data-label="All Matches"
-                            class="admin-nav-link {% if request.endpoint == 'admin_global_matches' %}active{% endif %}">
-                            <i class="fas fa-list"></i> <span>All Matches</span>
                         </a></li>
                     <li><a href="/admin/player-pool" data-label="Player Pool"
                             class="admin-nav-link {% if request.endpoint in ['admin_player_pool','admin_player_pool_add','admin_player_pool_edit','admin_player_pool_import'] %}active{% endif %}">
@@ -240,6 +224,68 @@ function toggleAdminNav(force) {
     if (force === false) { layout.classList.remove('nav-open'); return; }
     layout.classList.toggle('nav-open');
 }
+
+/* ── Preserve sidebar scroll position across navigation ──────────── */
+(function setupSidebarScrollMemory() {
+    const KEY = 'admin.sidebar.scrollTop';
+    /* .admin-sidebar is the actual scroller (.admin-nav has flex:1 but
+       no min-height:0, so it expands to content size). We still query
+       both and pick whichever has scrollable overflow at runtime — keeps
+       the script correct if the CSS ever changes. */
+    const candidates = [
+        document.querySelector('.admin-sidebar'),
+        document.querySelector('.admin-nav'),
+    ].filter(Boolean);
+    if (!candidates.length) return;
+
+    function activeScroller() {
+        for (const el of candidates) {
+            if (el.scrollHeight - el.clientHeight > 2) return el;
+        }
+        return candidates[0];
+    }
+
+    let restoring = false;
+    function restore() {
+        try {
+            const saved = parseInt(sessionStorage.getItem(KEY) || '0', 10);
+            if (saved <= 0) return;
+            restoring = true;
+            /* Set on every candidate — the non-scrolling ones clamp to 0 harmlessly. */
+            candidates.forEach(el => { el.scrollTop = saved; });
+            restoring = false;
+        } catch (e) { restoring = false; }
+    }
+
+    /* Multi-stage restore covers cases where layout/scrollHeight wasn't
+       ready on the first try (icons, fonts loading, etc.). */
+    restore();
+    requestAnimationFrame(restore);
+    window.addEventListener('load', restore);
+    window.addEventListener('pageshow', restore);
+
+    function persist() {
+        try {
+            const el = activeScroller();
+            sessionStorage.setItem(KEY, String(el.scrollTop));
+        } catch (e) {}
+    }
+
+    let pending = false;
+    candidates.forEach(el => {
+        el.addEventListener('scroll', () => {
+            if (restoring || pending) return;
+            pending = true;
+            requestAnimationFrame(() => { pending = false; persist(); });
+        }, { passive: true });
+    });
+
+    /* Final guarantee: capture right before navigation. */
+    document.addEventListener('click', (ev) => {
+        if (!ev.target.closest('.admin-nav-link, .admin-sidebar-footer a, .admin-sidebar-brand')) return;
+        persist();
+    }, true);
+})();
 
 /* ── Sidebar rail collapse (desktop) ──────────────────────────────── */
 (function setupRailToggle() {
