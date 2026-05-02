@@ -26,6 +26,31 @@ def ensure_schema(engine, db_obj=None):
                 for stmt in alters:
                     conn.execute(text(stmt))
 
+    # ── Ensure all tables exist before running table-specific DDL/backfills ──
+    all_required_tables = (
+        "tournament_player_stats_cache", "admin_audit_log",
+        "match_partnerships", "failed_login_attempts",
+        "blocked_ips", "active_sessions", "site_counters",
+        "login_history", "ip_whitelist", "announcement_banner",
+        "user_banner_dismissals", "auth_event_log", "exception_log",
+        "issue_webhook_event", "support_conversation", "support_message",
+        "support_conversation_read_state",
+    )
+    missing = [t for t in all_required_tables if t not in tables]
+    if missing and db_obj is not None:
+        # Import all models so SQLAlchemy knows about them
+        from database.models import (  # noqa: F401
+            TournamentPlayerStatsCache, AdminAuditLog, MatchPartnership,
+            FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter,
+            LoginHistory, IPWhitelistEntry, AnnouncementBanner,
+            UserBannerDismissal, AuthEventLog, ExceptionLog,
+            IssueWebhookEvent, SupportConversation, SupportMessage,
+            SupportConversationReadState,
+        )
+        db_obj.create_all()
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+
     # ── users ──
     # Check before adding so we know if force_email_verify is brand-new (for backfill below)
     _user_cols_before = (
@@ -235,57 +260,27 @@ def ensure_schema(engine, db_obj=None):
     })
 
     # Indexes for exception_log query performance
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_timestamp ON exception_log(timestamp)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_type_ts ON exception_log(exception_type, timestamp)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_source_ts ON exception_log(source, timestamp)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_resolved_ts ON exception_log(resolved, timestamp)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_fingerprint ON exception_log(fingerprint)"))
-    except Exception:
-        log_exception(source="sqlite", context={"scope": "fix_db_schema_exception_indexes"})
-        pass
-
-    # ── issue_report indexes ──
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_issue_report_public_id ON issue_report(public_id)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issue_report_status_created ON issue_report(status, created_at)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issue_report_user_created ON issue_report(user_email, created_at)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issue_report_github_issue_number ON issue_report(github_issue_number)"))
-    except Exception:
-        log_exception(source="sqlite", context={"scope": "fix_db_schema_issue_report_indexes"})
-        pass
+    if "exception_log" in tables:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_timestamp ON exception_log(timestamp)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_type_ts ON exception_log(exception_type, timestamp)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_source_ts ON exception_log(source, timestamp)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_resolved_ts ON exception_log(resolved, timestamp)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_exception_fingerprint ON exception_log(fingerprint)"))
+        except Exception:
+            log_exception(source="sqlite", context={"scope": "fix_db_schema_exception_indexes"})
+            pass
 
     # ── issue_webhook_event indexes ──
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_issue_webhook_event_delivery_id ON issue_webhook_event(delivery_id)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issue_webhook_event_issue_number ON issue_webhook_event(github_issue_number)"))
-    except Exception:
-        log_exception(source="sqlite", context={"scope": "fix_db_schema_issue_webhook_event_indexes"})
-        pass
-
-    # ── Ensure all tables exist (creates any missing ones) ──
-    all_required_tables = (
-        "tournament_player_stats_cache", "admin_audit_log",
-        "match_partnerships", "failed_login_attempts",
-        "blocked_ips", "active_sessions", "site_counters",
-        "login_history", "ip_whitelist", "announcement_banner",
-        "user_banner_dismissals", "auth_event_log", "exception_log",
-        "issue_report", "issue_webhook_event",
-    )
-    missing = [t for t in all_required_tables if t not in tables]
-    if missing and db_obj is not None:
-        # Import all models so SQLAlchemy knows about them
-        from database.models import (  # noqa: F401
-            TournamentPlayerStatsCache, AdminAuditLog, MatchPartnership,
-            FailedLoginAttempt, BlockedIP, ActiveSession, SiteCounter,
-            LoginHistory, IPWhitelistEntry, AnnouncementBanner,
-            UserBannerDismissal, AuthEventLog, ExceptionLog, IssueReport,
-            IssueWebhookEvent,
-        )
-        db_obj.create_all()
+    if "issue_webhook_event" in tables:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_issue_webhook_event_delivery_id ON issue_webhook_event(delivery_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issue_webhook_event_issue_number ON issue_webhook_event(github_issue_number)"))
+        except Exception:
+            log_exception(source="sqlite", context={"scope": "fix_db_schema_issue_webhook_event_indexes"})
+            pass
 
 
 def fix_db_schema():

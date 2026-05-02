@@ -1265,9 +1265,10 @@
                 <i class="fas fa-star" aria-hidden="true"></i>
             </a>
             {% if current_user.is_admin %}
-            <a href="{{ url_for('admin_dashboard') }}" class="theme-toggle" title="Admin Panel"
-                style="background: var(--accent-light); color: var(--accent); border-color: var(--accent);">
+            <a href="{{ url_for('admin_dashboard') }}" class="theme-toggle admin-nav-shield" id="adminNavShield" title="Admin Panel"
+                style="background: var(--accent-light); color: var(--accent); border-color: var(--accent); position: relative;">
                 <i class="fas fa-shield-alt"></i>
+                <span class="admin-nav-shield__dot" id="adminNavShieldDot" hidden aria-hidden="true"></span>
             </a>
             <button onclick="downloadDatabase()" class="theme-toggle" title="Download Database Backup"
                 style="background: var(--accent-light); color: var(--accent); border-color: var(--accent);">
@@ -1753,7 +1754,102 @@
 
     {% block extra_js %}{% endblock %}
 
-    {% include '_report_issue_widget.html' ignore missing %}
+    {% include '_support_widget.html' ignore missing %}
+
+    {% if current_user.is_authenticated and current_user.is_admin %}
+    <style>
+        .admin-nav-shield__dot {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            background: #ef4444;
+            border: 2px solid var(--card-bg, #fff);
+            box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
+            animation: adminNavShieldPulse 2.4s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes adminNavShieldPulse {
+            0%, 100% { box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35); }
+            50%      { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.0); }
+        }
+    </style>
+    <script>
+        (function () {
+            'use strict';
+            var dotEl = document.getElementById('adminNavShieldDot');
+            var shieldEl = document.getElementById('adminNavShield');
+            if (!dotEl || !shieldEl) return;
+
+            var refreshTimer = null;
+            var socket = null;
+
+            function setDot(count) {
+                count = Number(count || 0);
+                if (count > 0) {
+                    dotEl.hidden = false;
+                    shieldEl.title = 'Admin Panel · ' + count + ' unread support message' + (count === 1 ? '' : 's');
+                } else {
+                    dotEl.hidden = true;
+                    shieldEl.title = 'Admin Panel';
+                }
+            }
+
+            function fetchCount() {
+                fetch('/api/admin/support/unread-count', { credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
+                    .then(function (body) { setDot(body && body.count); })
+                    .catch(function () {});
+            }
+
+            function scheduleRefresh() {
+                if (refreshTimer) return;
+                refreshTimer = window.setTimeout(function () {
+                    refreshTimer = null;
+                    fetchCount();
+                }, 250);
+            }
+
+            function loadSocketIo() {
+                return new Promise(function (resolve) {
+                    if (typeof io !== 'undefined') return resolve(true);
+                    var existing = document.querySelector('script[data-socket-io]');
+                    if (existing) {
+                        existing.addEventListener('load', function () { resolve(true); });
+                        existing.addEventListener('error', function () { resolve(false); });
+                        return;
+                    }
+                    var s = document.createElement('script');
+                    s.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+                    s.crossOrigin = 'anonymous';
+                    s.dataset.socketIo = '1';
+                    s.onload = function () { resolve(true); };
+                    s.onerror = function () { resolve(false); };
+                    document.head.appendChild(s);
+                });
+            }
+
+            function initSocket() {
+                if (typeof io === 'undefined') return;
+                socket = io('/support', { transports: ['websocket', 'polling'] });
+                socket.on('connect', fetchCount);
+                socket.on('support:conversation:new',    scheduleRefresh);
+                socket.on('support:conversation:update', scheduleRefresh);
+                socket.on('support:message:new',         scheduleRefresh);
+                socket.on('support:admin:refresh',       scheduleRefresh);
+            }
+
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) fetchCount();
+            });
+
+            fetchCount();
+            loadSocketIo().then(function (ok) { if (ok) initSocket(); });
+        })();
+    </script>
+    {% endif %}
 </body>
 
 </html>

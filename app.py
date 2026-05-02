@@ -100,9 +100,11 @@ from routes.team_routes import register_team_routes
 from routes.core_routes import register_core_routes
 from routes.match_routes import register_match_routes
 from routes.admin_routes import register_admin_routes
-from routes.issue_routes import register_issue_routes
 from routes.admin_issue_routes import register_admin_issue_routes
 from routes.webhook_routes import register_webhook_routes
+from routes.support_routes import register_support_routes
+from routes.admin_support_routes import register_admin_support_routes
+from routes.support_realtime import register_support_realtime
 from routes.player_pool_routes import register_player_pool_routes
 from routes.league_routes import register_league_routes
 from routes.auction_routes import register_auction_routes
@@ -656,7 +658,7 @@ def create_app():
         if _is_trusted_bot_defense_ip(ip_addr):
             return 0
         try:
-            cutoff = datetime.utcnow() - timedelta(minutes=max(1, int(bot_defense_settings.get("window_minutes", 15))))
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=max(1, int(bot_defense_settings.get("window_minutes", 15))))
             recent_failures = db.session.query(FailedLoginAttempt).filter(
                 FailedLoginAttempt.ip_address == (ip_addr or ""),
                 FailedLoginAttempt.timestamp >= cutoff
@@ -1057,6 +1059,7 @@ def create_app():
             return None
         if app.config.get("TESTING") and (
             request.endpoint == "create_team" or request.path.startswith("/match/")
+            or (request.endpoint and request.endpoint.startswith(("support_", "admin_support")))
         ):
             return None
         if request.endpoint in ('login', 'logout', 'static',
@@ -1502,7 +1505,14 @@ def create_app():
         except Exception:
             log_exception(source="backend")
 
-        # Per-session log capture handler for issue reporting widget.
+        try:
+            from services import support_retention
+            support_retention.start_worker(app)
+            app.logger.info("[SupportRetention] Cleanup worker started")
+        except Exception:
+            log_exception(source="backend")
+
+        # Per-session log capture handler for support diagnostics.
         try:
             from middleware import session_log_capture
             root_logger = logging.getLogger()
@@ -1592,8 +1602,9 @@ def create_app():
         get_cleanup_status=lambda: (_cleanup_scheduler_started, _last_cleanup_run),
     )
 
-    # Issue reporting routes for the in-app widget.
-    register_issue_routes(app, db=db)
+    # In-app support messaging routes for the replacement floating chat widget.
+    register_support_routes(app, db=db, socketio=socketio)
+    register_admin_support_routes(app, db=db, socketio=socketio)
 
     # Admin-side issue tracker (PLAN-IR-001 Phase 2).
     register_admin_issue_routes(app, db=db)
@@ -1644,6 +1655,11 @@ def create_app():
         DBAuctionCategory=DBAuctionCategory,
         DBAuctionPlayer=DBAuctionPlayer,
         DBChatMessage=DBAuctionChatMessage,
+    )
+    register_support_realtime(
+        app,
+        socketio=socketio,
+        db=db,
     )
     # Phase 4 live runtime + Phase 5 draft runtime + Phase 6 roster sync.
     register_auction_runtime(
@@ -2597,6 +2613,37 @@ if __name__ == "__main__":
         # Run Flask app (SocketIO-aware when available, plain Flask otherwise)
         # C6: Use computed HOST (127.0.0.1 for local/dev, 0.0.0.0 for prod)
         if _SOCKETIO_AVAILABLE and socketio:
+            # Werkzeug 3.0 + simple-websocket: when simple-websocket hijacks the
+            # raw socket via environ['werkzeug.socket'] for a Socket.IO upgrade,
+            # the WSGI app returns without ever calling start_response. Werkzeug
+            # then trips a strict assertion and tries to write a 500 over the
+            # already-active websocket frames, corrupting the upgrade. Bypass
+            # that path: detect the upgrade header and run the app directly with
+            # a no-op start_response so simple-websocket owns the socket cleanly.
+            import werkzeug.serving as _wzs
+            if not getattr(_wzs.WSGIRequestHandler, "_simcx_ws_patched", False):
+                _orig_run_wsgi = _wzs.WSGIRequestHandler.run_wsgi
+
+                def _ws_aware_run_wsgi(self):
+                    if self.headers.get("Upgrade", "").lower() != "websocket":
+                        return _orig_run_wsgi(self)
+                    environ = self.make_environ()
+                    try:
+                        iter_resp = self.server.app(
+                            environ, lambda *a, **k: lambda b: None
+                        )
+                        try:
+                            for _ in iter_resp:
+                                pass
+                        finally:
+                            if hasattr(iter_resp, "close"):
+                                iter_resp.close()
+                    except Exception:
+                        pass
+
+                _wzs.WSGIRequestHandler.run_wsgi = _ws_aware_run_wsgi
+                _wzs.WSGIRequestHandler._simcx_ws_patched = True
+
             socketio.run(app, host=HOST, port=PORT, debug=is_local,
                          use_reloader=False, allow_unsafe_werkzeug=True)
         else:

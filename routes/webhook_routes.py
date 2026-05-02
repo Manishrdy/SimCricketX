@@ -1,8 +1,8 @@
 """GitHub webhook handler — PLAN-IR-001 Phase 3.
 
-Receives `issues` events from GitHub and mirrors status changes onto the
-local `IssueReport` and `ExceptionLog` rows. GitHub remains the source
-of truth — the webhook just keeps the local copy in sync.
+Receives `issues` events from GitHub and mirrors status changes onto local
+`ExceptionLog` rows. GitHub remains the source of truth for auto-filed
+exceptions.
 
 Endpoint
 --------
@@ -21,17 +21,17 @@ Behavior
 - Verifies the signature via services.github_issues.verify_webhook_signature.
 - Inserts an IssueWebhookEvent row for every accepted delivery (one row
   per delivery_id; replays return 200 quickly).
-- Updates IssueReport / ExceptionLog by github_issue_number.
+- Updates ExceptionLog by github_issue_number.
 
 Status semantics
 ----------------
 GitHub action -> local effect:
   opened       : (no-op for now — we only care about state transitions)
   edited       : (no-op)
-  closed       : status -> closed (or label-derived) ; ExceptionLog.resolved=True
-  reopened     : status -> open ; ExceptionLog.resolved=False
-  labeled      : re-evaluate status from labels
-  unlabeled    : re-evaluate status from labels
+  closed       : ExceptionLog.resolved=True
+  reopened     : ExceptionLog.resolved=False
+  labeled      : no-op except audit
+  unlabeled    : no-op except audit
   deleted      : (no-op — we keep the local row as a historical record)
 """
 
@@ -46,17 +46,8 @@ from utils.exception_tracker import log_exception
 
 
 # ---------------------------------------------------------------------------
-# Label -> local status mapping (also used by manual sync in admin_issue_routes)
+# Helpers
 # ---------------------------------------------------------------------------
-
-LABEL_STATUS_MAP = {
-    "status:triaged": "open",
-    "status:in-progress": "in_progress",
-    "status:resolved": "resolved",
-    "status:deferred": "deferred",
-    "status:wont-fix": "wont_fix",
-    "status:duplicate": "closed",
-}
 
 
 def _label_names(payload_labels):
@@ -68,31 +59,13 @@ def _label_names(payload_labels):
                 out.append(str(name).lower())
     return out
 
-
-def _resolve_status(state: str | None, labels: list[str]) -> str | None:
-    """Translate (GitHub state, labels) into a local IssueReport status.
-
-    Label-derived status takes precedence over the bare state so admins
-    can mark something as `status:deferred` *and* leave the issue open
-    on GitHub if they want.
-    """
-    for lbl in labels:
-        if lbl in LABEL_STATUS_MAP:
-            return LABEL_STATUS_MAP[lbl]
-    if state == "closed":
-        return "closed"
-    if state == "open":
-        return "open"
-    return None
-
-
 # ---------------------------------------------------------------------------
 # Route registration
 # ---------------------------------------------------------------------------
 
 
 def register_webhook_routes(app, *, db, csrf=None):
-    from database.models import IssueReport, ExceptionLog, IssueWebhookEvent
+    from database.models import ExceptionLog, IssueWebhookEvent
     from services import github_issues
 
     @app.route("/webhooks/github/issues", methods=["POST"])
@@ -180,18 +153,6 @@ def register_webhook_routes(app, *, db, csrf=None):
                 # Keep the local row, just record that GitHub side was deleted.
                 processed = True
             else:
-                # Resolve target status (None means "no change").
-                new_status = _resolve_status(github_state, github_labels)
-
-                # Touch every IssueReport that points at this GitHub issue
-                # (almost always 0 or 1).
-                report_rows = IssueReport.query.filter_by(github_issue_number=github_issue_number).all()
-                for r in report_rows:
-                    if new_status:
-                        r.status = new_status
-                    r.github_last_synced_at = datetime.utcnow()
-
-                # Same for ExceptionLog rows (auto-filed exceptions).
                 exc_rows = ExceptionLog.query.filter_by(github_issue_number=github_issue_number).all()
                 for e in exc_rows:
                     if github_state == "closed":

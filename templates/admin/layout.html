@@ -153,9 +153,13 @@
                             class="admin-nav-link {% if request.endpoint == 'admin_audit_log' %}active{% endif %}">
                             <i class="fas fa-scroll"></i> <span>Audit Log</span>
                         </a></li>
-                    <li><a href="/admin/issues" data-label="Issues"
+                    <li><a href="/admin/support" data-label="Support"
+                            class="admin-nav-link {% if request.endpoint and request.endpoint.startswith('admin_support') %}active{% endif %}">
+                            <i class="fas fa-comments"></i> <span>Support</span>
+                        </a></li>
+                    <li><a href="/admin/issues" data-label="Exceptions"
                             class="admin-nav-link {% if request.endpoint and request.endpoint.startswith('admin_issue') %}active{% endif %}">
-                            <i class="fas fa-bug"></i> <span>Issues</span>
+                            <i class="fas fa-bug"></i> <span>Exceptions</span>
                         </a></li>
                     <li><a href="/admin/sql" data-label="SQL Runner"
                             class="admin-nav-link {% if request.endpoint == 'admin_sql_runner' %}active{% endif %}">

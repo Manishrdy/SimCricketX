@@ -1113,57 +1113,6 @@ class ExceptionLog(db.Model):
     )
 
 
-class IssueReport(db.Model):
-    """User-submitted issue / bug report from the in-app widget.
-
-    Distinct from ExceptionLog (which captures stack traces): this table
-    holds free-form user descriptions plus auto-attached session log
-    snapshots and links to recent ExceptionLog rows for the same user.
-    GitHub issues are filed asynchronously via services.github_issue_queue.
-    """
-    __tablename__ = 'issue_report'
-
-    id                  = db.Column(db.Integer, primary_key=True)
-    public_id           = db.Column(db.String(16), nullable=False, unique=True, index=True)
-
-    # Authoring user — login-required so user_email is always populated.
-    user_email          = db.Column(db.String(120), nullable=False, index=True)
-
-    # User-supplied content
-    category            = db.Column(db.String(30), nullable=False, default='other')
-    title               = db.Column(db.String(200), nullable=False)
-    description         = db.Column(db.Text, nullable=False)
-
-    # Auto-captured request context
-    page_url            = db.Column(db.String(500), nullable=True)
-    user_agent          = db.Column(db.String(500), nullable=True)
-    app_version         = db.Column(db.String(50), nullable=True)
-
-    # Captured logs / correlations (JSON-encoded)
-    session_logs_json        = db.Column(db.Text, nullable=True)
-    linked_exception_log_ids = db.Column(db.Text, nullable=True)
-
-    # GitHub sync state (mirrors ExceptionLog)
-    github_issue_number   = db.Column(db.Integer, nullable=True, index=True)
-    github_issue_url      = db.Column(db.String(300), nullable=True)
-    github_sync_status    = db.Column(db.String(20), nullable=False, default='pending')
-    github_sync_error     = db.Column(db.Text, nullable=True)
-    github_last_synced_at = db.Column(db.DateTime, nullable=True)
-
-    # Workflow status (mirrored from GitHub labels via webhook in Phase 3)
-    status              = db.Column(db.String(20), nullable=False, default='new', index=True)
-    severity            = db.Column(db.String(20), nullable=True)
-    admin_notes         = db.Column(db.Text, nullable=True)
-
-    created_at          = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
-    updated_at          = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    __table_args__ = (
-        db.Index('ix_issue_report_status_created', 'status', 'created_at'),
-        db.Index('ix_issue_report_user_created', 'user_email', 'created_at'),
-    )
-
-
 class IssueWebhookEvent(db.Model):
     """Audit + idempotency record for inbound GitHub webhook deliveries.
 
@@ -1183,3 +1132,87 @@ class IssueWebhookEvent(db.Model):
     processed           = db.Column(db.Boolean, nullable=False, default=False)
     processing_error    = db.Column(db.Text, nullable=True)
     received_at         = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class SupportConversation(db.Model):
+    """One-to-one support thread between a user and the admin team."""
+    __tablename__ = 'support_conversation'
+
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(16), nullable=False, unique=True, index=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    assigned_admin_id = db.Column(db.String(120), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    status = db.Column(db.String(20), nullable=False, default='open', index=True)
+    priority = db.Column(db.String(20), nullable=False, default='normal')
+    subject = db.Column(db.String(200), nullable=True)
+
+    source_page_url = db.Column(db.String(500), nullable=True)
+    app_version = db.Column(db.String(50), nullable=True)
+    user_agent = db.Column(db.String(500), nullable=True)
+
+    last_message_at = db.Column(db.DateTime, nullable=True, index=True)
+    last_user_message_at = db.Column(db.DateTime, nullable=True)
+    last_admin_message_at = db.Column(db.DateTime, nullable=True)
+
+    retention_eligible_at = db.Column(db.DateTime, nullable=True, index=True)
+    hard_delete_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    closed_by = db.Column(db.String(120), nullable=True)
+
+    user = relationship('User', foreign_keys=[user_id], backref=db.backref('support_conversations', cascade='all, delete-orphan', passive_deletes=True))
+    assigned_admin = relationship('User', foreign_keys=[assigned_admin_id])
+    messages = relationship('SupportMessage', back_populates='conversation', cascade='all, delete-orphan', passive_deletes=True)
+    read_states = relationship('SupportConversationReadState', back_populates='conversation', cascade='all, delete-orphan', passive_deletes=True)
+
+    __table_args__ = (
+        db.Index('ix_support_conversation_status_last', 'status', 'last_message_at'),
+        db.Index('ix_support_conversation_user_status', 'user_id', 'status'),
+    )
+
+
+class SupportMessage(db.Model):
+    """Persisted support chat message."""
+    __tablename__ = 'support_message'
+
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey('support_conversation.id', ondelete='CASCADE'), nullable=False, index=True)
+    sender_type = db.Column(db.String(20), nullable=False)  # user | admin | system
+    sender_id = db.Column(db.String(120), nullable=True, index=True)
+    body = db.Column(db.Text, nullable=False)
+    message_type = db.Column(db.String(20), nullable=False, default='text')
+    client_nonce = db.Column(db.String(80), nullable=True)
+    metadata_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    edited_at = db.Column(db.DateTime, nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
+    conversation = relationship('SupportConversation', back_populates='messages')
+
+    __table_args__ = (
+        db.Index('ix_support_message_conversation_created', 'conversation_id', 'created_at'),
+        db.UniqueConstraint('conversation_id', 'sender_id', 'client_nonce', name='uq_support_message_client_nonce'),
+    )
+
+
+class SupportConversationReadState(db.Model):
+    """Read cursor per user/admin for a support conversation."""
+    __tablename__ = 'support_conversation_read_state'
+
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey('support_conversation.id', ondelete='CASCADE'), nullable=False, index=True)
+    reader_type = db.Column(db.String(20), nullable=False)  # user | admin
+    reader_id = db.Column(db.String(120), nullable=False, index=True)
+    last_read_message_id = db.Column(db.Integer, db.ForeignKey('support_message.id', ondelete='SET NULL'), nullable=True)
+    last_read_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    conversation = relationship('SupportConversation', back_populates='read_states')
+    last_read_message = relationship('SupportMessage', foreign_keys=[last_read_message_id])
+
+    __table_args__ = (
+        db.UniqueConstraint('conversation_id', 'reader_type', 'reader_id', name='uq_support_read_state_reader'),
+        db.Index('ix_support_read_state_reader', 'reader_type', 'reader_id'),
+    )

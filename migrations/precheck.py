@@ -89,6 +89,12 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # team and tournament deletion no longer needs application-layer cleanup
     # to avoid IntegrityError. See migration docstring for the action matrix.
     ("add_team_match_fk_actions", _loader("migrations.add_team_match_fk_actions")),
+    # In-app user -> admin support messaging. Manual user reports no longer
+    # flow to GitHub; exception automation remains separate.
+    ("add_support_messaging",    _loader("migrations.add_support_messaging")),
+    # Remove the retired manual issue-report storage after support messaging
+    # is in place.
+    ("drop_issue_reports",       _loader("migrations.drop_issue_reports")),
 ]
 
 

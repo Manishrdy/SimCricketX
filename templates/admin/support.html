@@ -1,0 +1,110 @@
+{% extends "admin/layout.html" %}
+
+{% block extra_css %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_support.css') }}">
+{% endblock %}
+
+{% block admin_content %}
+<div class="support-shell">
+    <aside class="support-inbox">
+        <div class="support-inbox__head">
+            <div>
+                <div class="a-breadcrumb">
+                    <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
+                    <span class="sep">/</span>
+                    <span class="current">Support</span>
+                </div>
+                <h1>
+                    Inbox
+                    <span class="support-inbox__count" id="support-inbox-count" hidden></span>
+                </h1>
+            </div>
+            <button type="button" id="support-refresh" title="Refresh" aria-label="Refresh">
+                <i class="fas fa-rotate"></i>
+            </button>
+        </div>
+
+        <div class="support-filters">
+            <div class="support-search-wrap">
+                <i class="fas fa-search"></i>
+                <input type="search" id="support-search" placeholder="Search conversations" aria-label="Search conversations">
+            </div>
+            <div class="support-segments" role="tablist">
+                <button type="button" data-filter-status="open" class="active" role="tab">Active</button>
+                <button type="button" data-filter-status="closed" role="tab">Closed</button>
+            </div>
+        </div>
+
+        <div id="support-conversation-list" class="support-conversation-list">
+            <div class="support-empty">
+                <i class="fas fa-inbox"></i>
+                <span>Loading conversations…</span>
+            </div>
+        </div>
+    </aside>
+
+    <main class="support-thread">
+        <header class="support-thread__head">
+            <div class="support-thread__identity">
+                <div class="support-thread__avatar is-empty" id="support-thread-avatar">
+                    <i class="fas fa-comment-dots"></i>
+                </div>
+                <div class="support-thread__id">
+                    <h2>
+                        <span id="support-thread-title">Select a conversation</span>
+                        <span class="support-status-pill" id="support-thread-status" hidden></span>
+                    </h2>
+                    <p id="support-thread-subtitle">Live user messages appear in the inbox.</p>
+                </div>
+            </div>
+            <div class="support-thread__actions">
+                <button type="button" id="support-close" class="a-btn a-btn-secondary a-btn-sm" disabled hidden>
+                    <i class="fas fa-check"></i> Close
+                </button>
+                <button type="button" id="support-reopen" class="a-btn a-btn-secondary a-btn-sm" disabled hidden>
+                    <i class="fas fa-lock-open"></i> Reopen
+                </button>
+                <button type="button" id="support-delete" class="a-btn a-btn-danger a-btn-sm" disabled hidden>
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </header>
+
+        <div id="support-thread-messages" class="support-thread__messages">
+            <div class="support-empty">
+                <i class="fas fa-comments"></i>
+                <strong>No conversation selected</strong>
+                <span>Choose a user from the inbox to read and respond to their messages.</span>
+            </div>
+        </div>
+
+        <form id="support-admin-composer" class="support-admin-composer">
+            <div class="support-admin-composer__field">
+                <textarea id="support-admin-input" rows="1" placeholder="Reply to user…" disabled></textarea>
+            </div>
+            <button type="submit" id="support-admin-send" title="Send" aria-label="Send" disabled>
+                <i class="fas fa-paper-plane"></i>
+            </button>
+            <p class="support-admin-composer__hint">
+                <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for new line
+            </p>
+        </form>
+    </main>
+
+    <aside class="support-context">
+        <div class="support-context__head">
+            <h3><i class="fas fa-circle-info"></i> User Context</h3>
+        </div>
+        <div id="support-context-body" class="support-context__body">
+            <div class="support-empty">
+                <i class="fas fa-user"></i>
+                <span>No conversation selected.</span>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='js/admin_support.js') }}"></script>
+{% endblock %}

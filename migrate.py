@@ -50,7 +50,8 @@ def _import_all_models():
         AdminAuditLog, FailedLoginAttempt, BlockedIP,
         ActiveSession, SiteCounter, LoginHistory, IPWhitelistEntry,
         UserGroundConfig, AnnouncementBanner, UserBannerDismissal,
-        AuthEventLog, ExceptionLog,
+        AuthEventLog, ExceptionLog, IssueWebhookEvent,
+        SupportConversation, SupportMessage, SupportConversationReadState,
     )
 
 
