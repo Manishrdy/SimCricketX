@@ -4570,6 +4570,19 @@ class Match:
                     }
             self.remaining_batter_indices.discard(provisional_index)
             self._bring_new_batter(dismissed_end, provisional_index)
+            # Run-Out cross handling: a run-out implies 1 completed run before
+            # the dismissal, so the batters had physically crossed. When the
+            # original striker was dismissed, the surviving non-striker is now
+            # at the striker end and the new batter takes the non-striker end.
+            # _bring_new_batter("striker", ...) does not account for the cross
+            # (it just replaces current_striker), so swap pointers here.
+            # The "non_striker" branch of _bring_new_batter already handles the
+            # cross correctly via its own swap, so no fix-up is needed there.
+            if wicket_type == "Run Out" and dismissed_end == "striker":
+                self.current_striker, self.current_non_striker = (
+                    self.current_non_striker, self.current_striker
+                )
+                self.batter_idx.reverse()
             commentary_line += f"<br>{self.current_striker['name']} walks in next."
             if self._is_manual_mode():
                 pending_decision_for_response = {
