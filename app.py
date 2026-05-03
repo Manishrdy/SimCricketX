@@ -106,10 +106,6 @@ from routes.support_routes import register_support_routes
 from routes.admin_support_routes import register_admin_support_routes
 from routes.support_realtime import register_support_realtime
 from routes.player_pool_routes import register_player_pool_routes
-from routes.league_routes import register_league_routes
-from routes.auction_routes import register_auction_routes
-from routes.auction_realtime import register_auction_realtime
-from routes.auction_runtime import register_auction_runtime
 from utils.exception_tracker import log_exception
 
 # SocketIO optional dependency — app works normally via HTTP if not installed
@@ -132,8 +128,6 @@ except ImportError:
 from database import db
 from database.models import User as DBUser, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, TournamentTeam, TournamentFixture
 from database.models import MasterPlayer as DBMasterPlayer, UserPlayer as DBUserPlayer
-from database.models import League as DBLeague, Season as DBSeason, SeasonTeam as DBSeasonTeam
-from database.models import Auction as DBAuction, AuctionCategory as DBAuctionCategory, AuctionPlayer as DBAuctionPlayer, AuctionChatMessage as DBAuctionChatMessage, DraftPick as DBDraftPick, AuctionBid as DBAuctionBid, AuctionAuditLog as DBAuctionAuditLog
 from database.models import Match as DBMatch, MatchScorecard, TournamentPlayerStatsCache, MatchPartnership, AdminAuditLog  # Distinct from engine.match.Match
 from database.models import (
     FailedLoginAttempt,
@@ -491,17 +485,6 @@ def create_app():
         or _is_pytest_runtime()
     )
     config = load_config()
-
-    # Module A kill switch for the simplified auction flow.
-    # Priority: explicit env var > config.yaml app.auction_simplified_flow > default False.
-    _auction_flow_env = str(os.getenv("AUCTION_SIMPLIFIED_FLOW", "")).strip().lower()
-    if _auction_flow_env in {"1", "true", "yes", "on"}:
-        auction_simplified_flow = True
-    elif _auction_flow_env in {"0", "false", "no", "off"}:
-        auction_simplified_flow = False
-    else:
-        auction_simplified_flow = bool(config.get("app", {}).get("auction_simplified_flow", False))
-    app.config["AUCTION_SIMPLIFIED_FLOW"] = auction_simplified_flow
 
     # Load maintenance mode from config (persists across restarts)
     MAINTENANCE_MODE = bool(config.get("app", {}).get("maintenance_mode", False))
@@ -1621,63 +1604,10 @@ def create_app():
         DBUserPlayer=DBUserPlayer,
     )
 
-    # --- League / Season / Auction Routes (AUCTION-REDESIGN) ---
-    register_league_routes(
-        app,
-        db=db,
-        DBLeague=DBLeague,
-        DBSeason=DBSeason,
-        DBSeasonTeam=DBSeasonTeam,
-        DBTeam=DBTeam,
-    )
-    register_auction_routes(
-        app,
-        db=db,
-        DBSeason=DBSeason,
-        DBSeasonTeam=DBSeasonTeam,
-        DBLeague=DBLeague,
-        DBTeam=DBTeam,
-        DBAuction=DBAuction,
-        DBAuctionCategory=DBAuctionCategory,
-        DBAuctionPlayer=DBAuctionPlayer,
-        DBMasterPlayer=DBMasterPlayer,
-        DBUserPlayer=DBUserPlayer,
-    )
-    # Phase 3 realtime: portal + organizer console + /auction socket namespace
-    register_auction_realtime(
-        app,
-        socketio=socketio,
-        db=db,
-        DBLeague=DBLeague,
-        DBSeason=DBSeason,
-        DBSeasonTeam=DBSeasonTeam,
-        DBAuction=DBAuction,
-        DBAuctionCategory=DBAuctionCategory,
-        DBAuctionPlayer=DBAuctionPlayer,
-        DBChatMessage=DBAuctionChatMessage,
-    )
     register_support_realtime(
         app,
         socketio=socketio,
         db=db,
-    )
-    # Phase 4 live runtime + Phase 5 draft runtime + Phase 6 roster sync.
-    register_auction_runtime(
-        app,
-        socketio=socketio,
-        db=db,
-        DBSeason=DBSeason,
-        DBSeasonTeam=DBSeasonTeam,
-        DBLeague=DBLeague,
-        DBAuction=DBAuction,
-        DBAuctionCategory=DBAuctionCategory,
-        DBAuctionPlayer=DBAuctionPlayer,
-        DBDraftPick=DBDraftPick,
-        DBTeam=DBTeam,
-        DBTeamProfile=DBTeamProfile,
-        DBPlayer=DBPlayer,
-        DBAuctionBid=DBAuctionBid,
-        DBAuctionAuditLog=DBAuctionAuditLog,
     )
 
     # --- Request logging ---
