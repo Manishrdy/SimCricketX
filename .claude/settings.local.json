@@ -18,7 +18,10 @@
       "Bash(venv/Scripts/python -c ':*)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(gh pr *)",
+      "Bash(git merge *)",
+      "Bash(git branch *)"
     ]
   }
 }
