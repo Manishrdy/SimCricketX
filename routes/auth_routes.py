@@ -96,6 +96,8 @@ def register_auth_routes(
     @app.before_request
     def enforce_turnstile_session():
         """Once per session (default 24 h), gate authenticated users through Turnstile."""
+        if app.config.get("TESTING") or os.environ.get("SIMCRICKETX_TEST_MODE", "").strip().lower() in {"1", "true"}:
+            return
         if not os.environ.get("CF_TURNSTILE_SECRET_KEY"):
             return  # disabled in dev
         if not current_user.is_authenticated:

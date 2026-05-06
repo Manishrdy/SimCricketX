@@ -1041,7 +1041,8 @@ def create_app():
             # Unregistered path (e.g. /favicon.ico) — skip session guard
             return None
         if app.config.get("TESTING") and (
-            request.endpoint == "create_team" or request.path.startswith("/match/")
+            request.endpoint in {"create_team", "manage_teams", "team_squad"}
+            or request.path.startswith("/match/")
             or (request.endpoint and request.endpoint.startswith(("support_", "admin_support")))
         ):
             return None
