@@ -2260,7 +2260,15 @@ class Match:
             wicket_keeper = next((p for p in self.bowling_team if p["role"] == "Wicketkeeper"), None)
             if wicket_keeper:
                 return wicket_keeper["name"]
-            return random.choice(self.bowling_team)["name"]
+            # No keeper in XI: a stumping is physically impossible. Log loudly and
+            # pick any non-bowler so we don't generate "bowler stumped batter" commentary.
+            logger.warning(
+                "Stumping requested but no Wicketkeeper in bowling XI for match %s; "
+                "falling back to a non-bowler fielder.",
+                getattr(self, "match_id", "<unknown>"),
+            )
+            non_bowlers = [p for p in self.bowling_team if p["name"] != self.current_bowler["name"]]
+            return random.choice(non_bowlers or self.bowling_team)["name"]
 
         # For wicket keeper dismissals (common in caught behind, stumpings)
         wicket_keeper = next((p for p in self.bowling_team if p["role"] == "Wicketkeeper"), None)
@@ -2329,7 +2337,108 @@ class Match:
 
         # Fallback
         return f"Wicket! {outcome['description']}"
-    
+
+    def _apply_run_out(self, outcome, extra, commentary_line):
+        """
+        Apply a Run Out dismissal: credit the 1 completed run, count the ball,
+        save the partnership, choose the dismissed end (50/50 striker/non-striker),
+        and append the wicket commentary.
+
+        Returns (dismissed_end, dismissed_name, fielder_name, commentary_line).
+        """
+        # 1. Credit the 1 completed run to score
+        self.score += 1
+        self.current_over_runs += 1
+        self.current_over_maiden_invalid = True  # A2: bat-run invalidates maiden
+
+        # For Byes/Leg Byes the run is an extra — not charged to bowler/batter.
+        if extra:
+            extra_type = outcome.get("extra_type", "")
+            if extra_type not in ("Byes", "Leg Bye"):
+                self.bowler_stats[self.current_bowler["name"]]["runs"] += 1
+                self.batsman_stats[self.current_striker["name"]]["runs"] += 1
+                self.batsman_stats[self.current_striker["name"]]["ones"] += 1
+                self._credit_partnership_contribution(runs=1)
+        else:
+            self.bowler_stats[self.current_bowler["name"]]["runs"] += 1
+            self.batsman_stats[self.current_striker["name"]]["runs"] += 1
+            self.batsman_stats[self.current_striker["name"]]["ones"] += 1
+            self._credit_partnership_contribution(runs=1)
+
+        # 2. Count the ball (Byes/Leg Byes are legal deliveries).
+        is_legal_delivery = not extra
+        if extra:
+            extra_type = outcome.get("extra_type", "")
+            if extra_type in ("Byes", "Leg Bye"):
+                is_legal_delivery = True
+
+        if is_legal_delivery:
+            self.current_ball += 1
+            self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
+            self.batsman_stats[self.current_striker["name"]]["balls"] += 1
+            self.current_partnership_balls += 1
+            self._credit_partnership_contribution(balls=1)
+
+        # 3. Add 1 run to partnership, then save before the dismissal.
+        self.current_partnership_runs += 1
+        self._save_partnership("Run Out")
+
+        # 4. 50/50: either batter can be dismissed at run-out.
+        dismissed_end = random.choice(["striker", "non_striker"])
+        if dismissed_end == "striker":
+            dismissed_name = self.current_striker["name"]
+        else:
+            dismissed_name = self.current_non_striker["name"]
+
+        # 5. Set dismissal info on the dismissed batter.
+        fielder_name = self._select_fielder_for_wicket("Run Out")
+        self.batsman_stats[dismissed_name]["wicket_type"] = "Run Out"
+        self.batsman_stats[dismissed_name]["fielder_out"] = fielder_name
+
+        # 6. Commentary
+        commentary_line += self._generate_wicket_commentary(outcome, fielder_name)
+        self.commentary.append(commentary_line)
+
+        return dismissed_end, dismissed_name, fielder_name, commentary_line
+
+    def _apply_normal_wicket(self, outcome, extra, commentary_line):
+        """
+        Apply a non-run-out dismissal (Bowled / LBW / Caught / Stumped / Hit Wicket):
+        striker is always dismissed and no runs are scored from the bat.
+
+        Returns (dismissed_end, dismissed_name, fielder_name, commentary_line).
+        """
+        wicket_type = outcome["wicket_type"]
+
+        is_legal_delivery = not extra
+        if extra:
+            extra_type = outcome.get("extra_type", "")
+            if extra_type in ("Byes", "Leg Bye"):
+                is_legal_delivery = True
+
+        if is_legal_delivery:
+            self.current_ball += 1
+            self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
+            self.batsman_stats[self.current_striker["name"]]["balls"] += 1
+            self._credit_partnership_contribution(balls=1)
+
+        self._save_partnership(wicket_type)
+
+        dismissed_end = "striker"
+        dismissed_name = self.current_striker["name"]
+        fielder_name = None
+
+        self.batsman_stats[dismissed_name]["wicket_type"] = wicket_type
+        self.batsman_stats[dismissed_name]["bowler_out"] = self.current_bowler["name"]
+
+        if wicket_type in ("Caught", "Stumped"):
+            fielder_name = self._select_fielder_for_wicket(wicket_type)
+            self.batsman_stats[dismissed_name]["fielder_out"] = fielder_name
+
+        commentary_line += self._generate_wicket_commentary(outcome, fielder_name)
+        self.commentary.append(commentary_line)
+
+        return dismissed_end, dismissed_name, fielder_name, commentary_line
 
     def _apply_pattern_strategy(self, eligible_bowlers, preferred_type):
         """Apply pattern strategy with RATING-WEIGHTED selection"""
@@ -4227,93 +4336,14 @@ class Match:
             if wicket_type != "Run Out":
                 self.bowler_stats[self.current_bowler["name"]]["wickets"] += 1
 
-            fielder_name = None
-
             if wicket_type == "Run Out":
-                # A1: Run out after completing 1 run, dismissed attempting the 2nd
-                # 1. Credit the 1 completed run to score
-                self.score += 1
-                self.current_over_runs += 1
-                self.current_over_maiden_invalid = True  # A2: bat-run invalidates maiden
-                
-                # For Byes/Leg Byes, don't charge runs to bowler or batsman (extras only)
-                if extra:
-                    extra_type = outcome.get("extra_type", "")
-                    if extra_type not in ("Byes", "Leg Bye"):
-                        self.bowler_stats[self.current_bowler["name"]]["runs"] += 1
-                        self.batsman_stats[self.current_striker["name"]]["runs"] += 1
-                        self.batsman_stats[self.current_striker["name"]]["ones"] += 1
-                        self._credit_partnership_contribution(runs=1)
-                    # Byes/Leg Byes: runs are extras, not charged to bowler or credited to batsman
-                else:
-                    self.bowler_stats[self.current_bowler["name"]]["runs"] += 1
-                    self.batsman_stats[self.current_striker["name"]]["runs"] += 1
-                    self.batsman_stats[self.current_striker["name"]]["ones"] += 1
-                    self._credit_partnership_contribution(runs=1)
-
-                # 2. Count the ball (Byes/Leg Byes are legal deliveries)
-                is_legal_delivery = not extra
-                if extra:
-                    extra_type = outcome.get("extra_type", "")
-                    if extra_type in ("Byes", "Leg Bye"):
-                        is_legal_delivery = True
-                
-                if is_legal_delivery:
-                    self.current_ball += 1
-                    self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
-                    self.batsman_stats[self.current_striker["name"]]["balls"] += 1
-                    self.current_partnership_balls += 1
-                    self._credit_partnership_contribution(balls=1)
-
-                # 3. Add 1 run to partnership, then save before dismissal
-                self.current_partnership_runs += 1
-                self._save_partnership(wicket_type)
-
-                # 4. Random 50/50: either batsman can be run out
-                dismissed_end = random.choice(["striker", "non_striker"])
-                if dismissed_end == "striker":
-                    dismissed_name = self.current_striker["name"]
-                else:
-                    dismissed_name = self.current_non_striker["name"]
-
-                # 5. Set dismissal info on the dismissed batsman
-                fielder_name = self._select_fielder_for_wicket("Run Out")
-                self.batsman_stats[dismissed_name]["wicket_type"] = "Run Out"
-                self.batsman_stats[dismissed_name]["fielder_out"] = fielder_name
-
-                # 6. Commentary
-                commentary_line += self._generate_wicket_commentary(outcome, fielder_name)
-                self.commentary.append(commentary_line)
-
+                dismissed_end, dismissed_name, fielder_name, commentary_line = (
+                    self._apply_run_out(outcome, extra, commentary_line)
+                )
             else:
-                # Non-Run-Out dismissals: striker is always out, 0 runs scored
-                # (Byes/Leg Byes are legal deliveries)
-                is_legal_delivery = not extra
-                if extra:
-                    extra_type = outcome.get("extra_type", "")
-                    if extra_type in ("Byes", "Leg Bye"):
-                        is_legal_delivery = True
-                
-                if is_legal_delivery:
-                    self.current_ball += 1
-                    self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
-                    self.batsman_stats[self.current_striker["name"]]["balls"] += 1
-                    self._credit_partnership_contribution(balls=1)
-
-                self._save_partnership(wicket_type)
-
-                dismissed_end = "striker"
-                dismissed_name = self.current_striker["name"]
-
-                self.batsman_stats[dismissed_name]["wicket_type"] = wicket_type
-                self.batsman_stats[dismissed_name]["bowler_out"] = self.current_bowler["name"]
-
-                if wicket_type in ["Caught", "Stumped"]:
-                    fielder_name = self._select_fielder_for_wicket(wicket_type)
-                    self.batsman_stats[dismissed_name]["fielder_out"] = fielder_name
-
-                commentary_line += self._generate_wicket_commentary(outcome, fielder_name)
-                self.commentary.append(commentary_line)
+                dismissed_end, dismissed_name, fielder_name, commentary_line = (
+                    self._apply_normal_wicket(outcome, extra, commentary_line)
+                )
 
             # Check if team is all out (works for both striker and non-striker dismissals)
             if not self.remaining_batter_indices:
@@ -4707,6 +4737,19 @@ class Match:
                     if not self.current_over_maiden_invalid:
                         self.bowler_stats[self.current_bowler["name"]]["maidens"] += 1
                     self.bowler_stats[self.current_bowler["name"]]["overs"] += 1
+                    # Mirror the regular end-of-over finalisation so BowlerManager,
+                    # bowler_history, prev-over-runs and per-over counters stay
+                    # consistent for the archiver and any post-match readers.
+                    self.bowler_manager.record_over_completion(
+                        self.current_bowler["name"], self.current_over_runs
+                    )
+                    self.bowler_prev_over_runs[self.current_bowler["name"]] = self.current_over_runs
+                    self.current_ball = 0
+                    self.current_over += 1
+                    self.bowler_selected_for_over = -1
+                    self.current_over_runs = 0
+                    self.current_over_outcomes = []
+                    self.current_over_maiden_invalid = False
 
                 # Handle extras for bowler stats
                 if extra:
@@ -4727,12 +4770,14 @@ class Match:
                 overs_left = self._balls_to_overs_notation(balls_left)
 
                 
-                # NOTE: current_ball is already post-increment here; balls_left
-                # correctly reflects deliveries remaining *after* this match-winning ball.
+                # NOTE: current_ball/current_over reflect post-finalisation state —
+                # if the match-winning ball completed an over, current_ball was
+                # rolled to 0 and current_over incremented. balls_left is computed
+                # from both, so it remains accurate either way.
                 print("Check point1 (post-delivery state): {}".format({
                         "current_over": self.current_over,
-                        "current_ball": self.current_ball,  # post-increment
-                        "balls_left": balls_left,           # accurate remaining balls
+                        "current_ball": self.current_ball,
+                        "balls_left": balls_left,
                         "overs_left": overs_left
                     }))
                 
