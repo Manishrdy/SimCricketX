@@ -243,16 +243,16 @@ def register_team_routes(
                 return f"{fmt} profile: maximum 25 players (have {len(players)})."
             return None
 
-        if not (11 <= len(players) <= 25):
-            return f"{fmt} profile: You must enter between 11 and 25 players."
+        if not (12 <= len(players) <= 25):
+            return f"{fmt} profile: You must enter between 12 and 25 players."
 
         wk_count = sum(1 for p in players if p["role"] == "Wicketkeeper")
         if wk_count < 1:
             return f"{fmt} profile: needs at least one Wicketkeeper."
 
         bowl_count = sum(1 for p in players if p["role"] in ("Bowler", "All-rounder"))
-        if bowl_count < 5:
-            return f"{fmt} profile: needs at least five Bowlers/All-rounders."
+        if bowl_count < 6:
+            return f"{fmt} profile: needs at least six Bowlers/All-rounders."
 
         if not captain:
             return f"{fmt} profile: captain must be selected."
@@ -512,9 +512,13 @@ def register_team_routes(
                 color = request.form.get("team_color", "#4f46e5")
 
                 # New single-page flow: if profiles_payload is present, atomically
-                # create team + profiles + players and auto-decide draft vs publish.
+                # create team + profiles + players. Legacy flat player arrays are
+                # still accepted below for older forms/tests.
                 raw_payload = (request.form.get("profiles_payload") or "").strip()
-                if raw_payload:
+                has_legacy_players = any(
+                    str(v).strip() for v in request.form.getlist("player_name")
+                )
+                if raw_payload or has_legacy_players:
                     profiles, parse_err = _parse_profiles_payload(request.form)
                     if parse_err:
                         return render_template("team_create.html", error=parse_err)
@@ -530,10 +534,12 @@ def register_team_routes(
                             error="Add at least one player to a profile before saving.",
                         )
 
-                    # Strict validation on every non-empty profile. No draft fallback —
-                    # the Save action always publishes a fully-valid team.
+                    is_draft = (request.form.get("action") == "save_draft") and not raw_payload
+
+                    # Strict validation on every non-empty profile unless this is
+                    # the legacy draft-save action.
                     for fmt, pdata in non_empty.items():
-                        err = _validate_profile(fmt, pdata, is_draft=False)
+                        err = _validate_profile(fmt, pdata, is_draft=is_draft)
                         if err:
                             return render_template("team_create.html", error=err)
 
@@ -544,12 +550,12 @@ def register_team_routes(
                         home_ground=home_ground,
                         pitch_preference=pitch,
                         team_color=color,
-                        is_draft=False,
+                        is_draft=is_draft,
                     )
                     db.session.add(new_team)
                     db.session.flush()
 
-                    save_err = _save_profiles(new_team.id, non_empty, is_draft=False)
+                    save_err = _save_profiles(new_team.id, non_empty, is_draft=is_draft)
                     if save_err:
                         db.session.rollback()
                         return render_template("team_create.html", error=save_err)
@@ -558,9 +564,12 @@ def register_team_routes(
 
                     app.logger.info(
                         f"Team '{new_team.name}' (ID: {new_team.id}) created as "
-                        f"published by {current_user.id}"
+                        f"{'Draft' if is_draft else 'published'} by {current_user.id}"
                     )
-                    flash(f"Team '{new_team.name}' saved. Ready to play!", "success")
+                    if is_draft:
+                        flash("Team saved as draft.", "success")
+                    else:
+                        flash(f"Team '{new_team.name}' saved. Ready to play!", "success")
                     return redirect(url_for("manage_teams"))
 
                 # Legacy flow: identity only → create draft team + default T20 profile.

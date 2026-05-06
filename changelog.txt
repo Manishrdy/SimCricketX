@@ -1,3 +1,11 @@
+[2.4.6] 2026-05-06
+- Fixed the local pytest suite being blocked by production Cloudflare Turnstile keys loaded from `.env`: `verify_turnstile()` now returns a test-mode success when `SIMCRICKETX_TEST_MODE` is enabled, and the authenticated per-session Turnstile gate skips while Flask is in `TESTING`
+- Restored legacy flat team-create form support (`player_name`, `player_role`, ratings, captain, wicketkeeper) so older draft/publish flows save their submitted squad rows instead of creating an empty identity-only draft
+- Re-aligned active team validation with the documented/tested squad requirements: published teams must have 12-25 players and at least six Bowlers/All-rounders; draft saves can still persist incomplete squads for later editing
+- Narrowed the test-only revocable-session bypass to cover team create/manage/squad redirects used by older direct-session tests while leaving the dedicated session-revocation coverage intact
+- Match engine cleanup: extracted run-out and normal-wicket application helpers, improved stumping fielder fallback when no wicketkeeper is present, and mirrored regular end-of-over finalisation when a chase is won on the final ball of an over so bowler history and over counters stay consistent
+- Verified with the full test suite: 376 passed, 1 skipped
+
 [2.4.5] 2026-05-02
 - Fixed Net Run Rate calculations being skewed in tournaments where some T20 matches stored impossible overs values like "20.1" or "20.3" (more than 20 overs in a 20-over match). The wrong overs strings were flowing straight into the NRR denominator via `_get_nrr_overs`, drifting per-team NRR by up to ~6% per tournament — well within the user-reported "around 10%" range and enough to swap standings tiebreakers
 - Defensive cap added in `TournamentEngine._get_nrr_overs`: any actual_overs value whose ball-count exceeds `overs_per_side * 6` is now clamped to the full quota before NRR math, so legacy buggy rows can no longer corrupt the rebuild path

@@ -12,9 +12,13 @@ def verify_turnstile(token: str, remote_ip: Optional[str] = None) -> Tuple[bool,
     """Verify a Turnstile response token with Cloudflare.
 
     Returns (True, "ok") on success.
+    Returns (True, "test-mode") when SIMCRICKETX_TEST_MODE is enabled.
     Returns (True, "disabled") when CF_TURNSTILE_SECRET_KEY is not set (dev mode).
     Returns (False, error_code) on failure.
     """
+    if os.environ.get("SIMCRICKETX_TEST_MODE", "").strip().lower() in {"1", "true"}:
+        return True, "test-mode"
+
     secret = os.environ.get("CF_TURNSTILE_SECRET_KEY", "")
     if not secret:
         return True, "disabled"
