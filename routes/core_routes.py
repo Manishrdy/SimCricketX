@@ -180,6 +180,11 @@ def register_core_routes(
     def robots_txt():
         return send_from_directory(basedir, "robots.txt", mimetype="text/plain")
 
+    @app.route("/.well-known/security.txt")
+    @app.route("/security.txt")
+    def security_txt():
+        return send_from_directory(basedir, "security.txt", mimetype="text/plain")
+
     @app.route("/sitemap.xml")
     def sitemap_xml():
         pages = [
