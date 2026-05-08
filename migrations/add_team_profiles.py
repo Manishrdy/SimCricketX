@@ -172,24 +172,45 @@ def _step4_create_t20_profiles(conn):
 
 
 def _step5_assign_orphaned_players(conn):
-    """Assign players with profile_id IS NULL to their team's T20 profile."""
+    """Assign players with profile_id IS NULL to their team's T20 profile.
+
+    Orphans whose name already exists in the target profile are stale duplicates
+    (left over from pre-profile data) and are deleted instead of migrated, since
+    the (profile_id, name) unique constraint would otherwise fail the UPDATE.
+    """
     orphans = conn.execute(
-        text("SELECT id, team_id FROM players WHERE profile_id IS NULL")
+        text("SELECT id, team_id, name FROM players WHERE profile_id IS NULL")
     ).fetchall()
 
     updated = 0
-    for (player_id, team_id) in orphans:
+    deleted = 0
+    for (player_id, team_id, name) in orphans:
         profile = conn.execute(
             text("SELECT id FROM team_profiles WHERE team_id = :tid AND format_type = 'T20'"),
             {"tid": team_id},
         ).fetchone()
-        if profile:
+        if not profile:
+            continue
+        dupe = conn.execute(
+            text("SELECT id FROM players WHERE profile_id = :pid AND name = :name"),
+            {"pid": profile[0], "name": name},
+        ).fetchone()
+        if dupe:
+            conn.execute(
+                text("DELETE FROM players WHERE id = :plid"),
+                {"plid": player_id},
+            )
+            deleted += 1
+        else:
             conn.execute(
                 text("UPDATE players SET profile_id = :pid WHERE id = :plid"),
                 {"pid": profile[0], "plid": player_id},
             )
             updated += 1
-    print(f"[Migration] Step 5: Assigned {updated} orphaned player(s) to T20 profiles.")
+    print(
+        f"[Migration] Step 5: assigned {updated} orphan(s) to T20 profiles, "
+        f"deleted {deleted} stale duplicate(s)."
+    )
 
 
 # ── Standalone entry point ────────────────────────────────────────────────────
