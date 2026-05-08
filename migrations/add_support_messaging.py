@@ -6,6 +6,8 @@ Creates the DB-backed in-app support chat tables that replace manual
 user-report-to-GitHub submission. Safe to run multiple times.
 """
 
+from __future__ import annotations
+
 import os
 import sys
 
