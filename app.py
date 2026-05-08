@@ -31,6 +31,13 @@ if sys.platform == "win32":
     # Set environment variables for UTF-8
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 
+# gevent monkey-patching MUST run before threading/socket/ssl/select are imported.
+# This converts threading.Lock, threading.Thread, sockets, time.sleep, etc. to
+# cooperative green-thread versions so flask-socketio can serve WebSockets under
+# gunicorn (worker_class=gevent). Required for production real-time messaging.
+from gevent import monkey  # noqa: E402
+monkey.patch_all()
+
 # Load .env before anything reads environment variables
 from dotenv import load_dotenv
 load_dotenv()
@@ -2421,7 +2428,7 @@ def create_app():
     # helper functions (_load_match_file_for_user, etc.) defined above.
     # ======================================================================
     if _SOCKETIO_AVAILABLE and socketio:
-        socketio.init_app(app, async_mode='threading',
+        socketio.init_app(app, async_mode='gevent',
                           cors_allowed_origins="*",
                           logger=False, engineio_logger=False)
 
