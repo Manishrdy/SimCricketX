@@ -20,7 +20,7 @@
     min-height: 620px;
     min-width: 0;
     display: grid;
-    grid-template-columns: var(--sup-rail-w) minmax(440px, 1fr) var(--sup-context-w);
+    grid-template-columns: var(--sup-rail-w) minmax(0, 1fr) var(--sup-context-w);
     background: var(--card-bg, #fff);
     border: 1px solid var(--sup-line);
     border-radius: var(--sup-radius);
@@ -351,6 +351,8 @@
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     background: var(--sup-thread-bg);
+    min-width: 0;
+    overflow: hidden;
 }
 
 .support-thread__head {
@@ -511,7 +513,7 @@
 .support-msg.is-leading { margin-top: 14px; }
 
 .support-msg__bubble {
-    max-width: min(620px, 76%);
+    max-width: min(620px, 72%);
     padding: 9px 14px;
     border: 0;
     border-radius: 18px;
@@ -826,13 +828,33 @@
 }
 
 /* ── RESPONSIVE ─────────────────────────────────────────────────────── */
-@media (max-width: 1280px) {
+
+/* Narrow desktops: shrink the rail + context columns so the messages
+   column keeps enough room for the bubble to breathe away from context. */
+@media (max-width: 1500px) {
     .support-shell {
-        grid-template-columns: minmax(300px, var(--sup-rail-w)) minmax(0, 1fr);
+        --sup-rail-w:    300px;
+        --sup-context-w: 264px;
+    }
+
+    .support-msg__bubble {
+        max-width: min(560px, 80%);
+    }
+}
+
+/* Below this, three columns get cramped — drop the context panel and
+   let messages take the full remaining width. */
+@media (max-width: 1380px) {
+    .support-shell {
+        grid-template-columns: minmax(280px, var(--sup-rail-w)) minmax(0, 1fr);
     }
 
     .support-context {
         display: none;
+    }
+
+    .support-msg__bubble {
+        max-width: min(620px, 76%);
     }
 }
 
