@@ -4,15 +4,15 @@
 # Multiple workers each get their own memory space, causing match state
 # to diverge across workers. Must use exactly 1 worker.
 #
-# worker_class = "gevent" is required for flask-socketio WebSocket transport.
-# gevent provides cooperative green threads that let a single worker hold
-# many long-lived WebSocket connections in a few KB each. app.py runs
-# gevent.monkey.patch_all() at import time so existing threading.Lock /
-# threading.Thread code keeps working with green-thread semantics.
-# gevent-websocket package is also required (see requirements.txt) for the
-# WS handshake handler.
+# worker_class GeventWebSocketWorker is required for flask-socketio WebSocket
+# transport. The plain "gevent" worker only handles HTTP — it cannot complete
+# WS handshakes and produces "Invalid websocket upgrade" errors. The
+# geventwebsocket worker subclasses gevent's worker and adds the WS handler.
+# gevent.monkey.patch_all() runs at the top of app.py so existing
+# threading.Lock / threading.Thread code keeps working with green-thread
+# semantics.
 
 bind = "127.0.0.1:5000"
 workers = 1
-worker_class = "gevent"
+worker_class = "geventwebsocket.gunicorn.workers.GeventWebSocketWorker"
 timeout = 600
