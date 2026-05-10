@@ -4,6 +4,7 @@
     var listEl = document.getElementById('support-conversation-list');
     var searchEl = document.getElementById('support-search');
     var refreshBtn = document.getElementById('support-refresh');
+    var notifyToggleBtn = document.getElementById('support-notify-toggle');
     var inboxCountEl = document.getElementById('support-inbox-count');
     var titleEl = document.getElementById('support-thread-title');
     var subtitleEl = document.getElementById('support-thread-subtitle');
@@ -27,6 +28,10 @@
     var renderedMessages = [];
 
     var GROUP_WINDOW_MS = 3 * 60 * 1000;
+
+    var NOTIFY_LS_KEY = 'scx-support-notify-enabled';
+    var notifyEnabled = false;
+    var activeNotifications = {};
 
     function requestJson(url, options) {
         return fetch(url, options || {}).then(function (resp) {
@@ -518,6 +523,113 @@
         input.style.height = Math.min(input.scrollHeight, 140) + 'px';
     }
 
+    function notificationsSupported() {
+        return typeof window.Notification !== 'undefined';
+    }
+
+    function updateNotifyButton() {
+        if (!notifyToggleBtn) return;
+        var icon = notifyToggleBtn.querySelector('i');
+        notifyToggleBtn.classList.remove('is-on', 'is-blocked');
+        if (!notificationsSupported()) {
+            notifyToggleBtn.disabled = true;
+            notifyToggleBtn.title = 'Notifications are not supported in this browser';
+            notifyToggleBtn.setAttribute('aria-pressed', 'false');
+            if (icon) icon.className = 'fas fa-bell-slash';
+            return;
+        }
+        if (Notification.permission === 'denied') {
+            notifyToggleBtn.classList.add('is-blocked');
+            notifyToggleBtn.title = 'Notifications are blocked in browser settings';
+            notifyToggleBtn.setAttribute('aria-pressed', 'false');
+            if (icon) icon.className = 'fas fa-bell-slash';
+            return;
+        }
+        if (notifyEnabled && Notification.permission === 'granted') {
+            notifyToggleBtn.classList.add('is-on');
+            notifyToggleBtn.title = 'Browser notifications on — click to mute';
+            notifyToggleBtn.setAttribute('aria-pressed', 'true');
+            if (icon) icon.className = 'fas fa-bell';
+        } else {
+            notifyToggleBtn.title = 'Enable browser notifications for new messages';
+            notifyToggleBtn.setAttribute('aria-pressed', 'false');
+            if (icon) icon.className = 'fas fa-bell-slash';
+        }
+    }
+
+    function setNotifyEnabled(value) {
+        notifyEnabled = !!value;
+        try { window.localStorage.setItem(NOTIFY_LS_KEY, notifyEnabled ? '1' : '0'); } catch (e) {}
+        updateNotifyButton();
+    }
+
+    function initNotifyState() {
+        if (!notificationsSupported()) {
+            updateNotifyButton();
+            return;
+        }
+        var stored = '0';
+        try { stored = window.localStorage.getItem(NOTIFY_LS_KEY) || '0'; } catch (e) {}
+        notifyEnabled = stored === '1' && Notification.permission === 'granted';
+        updateNotifyButton();
+    }
+
+    function toggleNotifications() {
+        if (!notificationsSupported()) return;
+        if (Notification.permission === 'denied') return;
+        if (notifyEnabled) {
+            setNotifyEnabled(false);
+            return;
+        }
+        if (Notification.permission === 'granted') {
+            setNotifyEnabled(true);
+            return;
+        }
+        try {
+            var p = Notification.requestPermission(function (perm) {
+                setNotifyEnabled(perm === 'granted');
+            });
+            if (p && typeof p.then === 'function') {
+                p.then(function (perm) { setNotifyEnabled(perm === 'granted'); });
+            }
+        } catch (e) {
+            updateNotifyButton();
+        }
+    }
+
+    function maybeShowNotification(payload) {
+        if (!notifyEnabled || !notificationsSupported()) return;
+        if (Notification.permission !== 'granted') return;
+        if (!document.hidden) return;
+        var msg = payload && payload.message;
+        var conv = payload && payload.conversation;
+        if (!msg || !conv) return;
+        if (msg.sender_type !== 'user') return;
+
+        var label = conv.user_label || conv.user_id || 'New support message';
+        var body = (msg.body || '').slice(0, 140);
+        var tag = 'scx-support-' + conv.id;
+        try {
+            if (activeNotifications[tag]) {
+                try { activeNotifications[tag].close(); } catch (e) {}
+            }
+            var n = new Notification(label, {
+                body: body,
+                tag: tag,
+                renotify: true
+            });
+            activeNotifications[tag] = n;
+            n.onclick = function () {
+                try { window.focus(); } catch (e) {}
+                if (conv.id && conv.id !== selectedId) selectConversation(conv.id);
+                try { n.close(); } catch (e) {}
+            };
+            n.onclose = function () {
+                if (activeNotifications[tag] === n) delete activeNotifications[tag];
+            };
+        } catch (e) {}
+    }
+
     function initSocket() {
         if (typeof io === 'undefined') return;
         socket = io('/support', { transports: ['websocket', 'polling'] });
@@ -529,6 +641,7 @@
                 renderMessage(payload.message);
                 markRead(selectedId);
             }
+            maybeShowNotification(payload);
         });
     }
 
@@ -542,6 +655,7 @@
         searchTimer = window.setTimeout(loadConversations, 250);
     });
     refreshBtn.addEventListener('click', loadConversations);
+    if (notifyToggleBtn) notifyToggleBtn.addEventListener('click', toggleNotifications);
     composer.addEventListener('submit', function (e) {
         e.preventDefault();
         var body = input.value.trim();
@@ -561,6 +675,7 @@
     reopenBtn.addEventListener('click', function () { mutateConversation('reopen'); });
     deleteBtn.addEventListener('click', deleteConversation);
 
+    initNotifyState();
     initSocket();
     resetThread();
     loadConversations();

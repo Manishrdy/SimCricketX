@@ -24,6 +24,19 @@ def _message_page(conversation, limit: int = 50):
     return [support_service.serialize_message(row) for row in rows]
 
 
+def _messages_since(conversation, since_id: int, limit: int = 200):
+    limit = max(1, min(int(limit or 200), 500))
+    rows = (
+        SupportMessage.query
+        .filter_by(conversation_id=conversation.id)
+        .filter(SupportMessage.id > since_id)
+        .order_by(SupportMessage.id.asc())
+        .limit(limit)
+        .all()
+    )
+    return [support_service.serialize_message(row) for row in rows]
+
+
 def register_support_routes(app, *, db, socketio=None):
     @app.route("/api/support/current", methods=["GET"])
     @login_required
@@ -50,6 +63,23 @@ def register_support_routes(app, *, db, socketio=None):
         conv = support_service.get_conversation_for_user(public_id, current_user.id)
         if conv is None:
             return jsonify({"error": "Conversation not found"}), 404
+        since_raw = request.args.get("since")
+        since_id = None
+        if since_raw not in (None, ""):
+            try:
+                since_id = int(since_raw)
+            except (TypeError, ValueError):
+                since_id = None
+        if since_id is not None:
+            return jsonify({
+                "conversation": support_service.serialize_conversation(
+                    conv,
+                    viewer_id=current_user.id,
+                    viewer_type="user",
+                ),
+                "messages": _messages_since(conv, since_id),
+                "since": since_id,
+            })
         limit = request.args.get("limit", 50)
         return jsonify({
             "conversation": support_service.serialize_conversation(

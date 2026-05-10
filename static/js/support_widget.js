@@ -17,6 +17,9 @@
     var socket = null;
     var conversationId = null;
     var seenMessageIds = {};
+    var lastMessageId = 0;
+    var hasConnectedOnce = false;
+    var resyncInFlight = false;
     var cooldownTimer = null;
     var cooldownUntil = 0;
     var lockedUntilAdminReply = false;
@@ -83,6 +86,9 @@
     function renderMessage(message) {
         if (!message || seenMessageIds[message.id]) return;
         seenMessageIds[message.id] = true;
+        if (typeof message.id === 'number' && message.id > lastMessageId) {
+            lastMessageId = message.id;
+        }
         ensureNotEmpty();
         var isUser = message.sender_type === 'user';
         var row = document.createElement('div');
@@ -117,6 +123,7 @@
     function renderMessages(messages) {
         messagesEl.innerHTML = '';
         seenMessageIds = {};
+        lastMessageId = 0;
         if (!messages || !messages.length) {
             messagesEl.innerHTML = '<div class="scx-support-empty"><div class="scx-support-empty__icon"><i class="fa-regular fa-comments"></i></div><strong>Need help?</strong><span>Send a message and an admin will reply here.</span></div>';
             return;
@@ -294,18 +301,51 @@
         });
     }
 
+    function resyncMessages() {
+        if (resyncInFlight || !conversationId || !lastMessageId) return;
+        resyncInFlight = true;
+        var url = '/api/support/conversations/' + encodeURIComponent(conversationId) +
+                  '/messages?since=' + encodeURIComponent(String(lastMessageId));
+        fetch(url, { credentials: 'same-origin' })
+            .then(function (resp) { return resp.json(); })
+            .then(function (body) {
+                if (body && Array.isArray(body.messages) && body.messages.length) {
+                    body.messages.forEach(renderMessage);
+                    if (isOpen) markRead();
+                }
+                if (body && body.conversation) applyConversation(body.conversation);
+            })
+            .catch(function () {})
+            .finally(function () { resyncInFlight = false; });
+    }
+
     function initSocket() {
         if (typeof io === 'undefined') {
             setConnection('Realtime unavailable');
             return;
         }
-        socket = io('/support', { transports: ['websocket', 'polling'] });
+        socket = io('/support', {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 60000,
+            randomizationFactor: 0.5
+        });
         socket.on('connect', function () {
             setConnection('Connected');
             if (conversationId) socket.emit('support:conversation:join', { conversation_id: conversationId });
+            if (hasConnectedOnce) resyncMessages();
+            hasConnectedOnce = true;
         });
         socket.on('disconnect', function () {
             setConnection('Reconnecting...');
+        });
+        socket.io.on('reconnect_attempt', function () {
+            setConnection('Reconnecting...');
+        });
+        socket.io.on('reconnect_failed', function () {
+            setConnection('Offline');
         });
         socket.on('support:hello', function () {
             setConnection('Connected');

@@ -83,7 +83,15 @@
     letter-spacing: 0.02em;
 }
 
-#support-refresh {
+.support-inbox__head-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+#support-refresh,
+#support-notify-toggle {
     width: 34px;
     height: 34px;
     border: 1px solid var(--sup-line);
@@ -97,14 +105,29 @@
     cursor: pointer;
 }
 
-#support-refresh:hover {
+#support-refresh:hover,
+#support-notify-toggle:hover {
     border-color: var(--accent, #24292f);
     color: var(--accent, #24292f);
     background: var(--accent-light, #f3f4f6);
 }
 
-#support-refresh:active {
+#support-refresh:active,
+#support-notify-toggle:active {
     transform: scale(0.96);
+}
+
+#support-notify-toggle.is-on {
+    border-color: var(--accent, #24292f);
+    color: var(--accent, #24292f);
+    background: var(--accent-light, #f3f4f6);
+}
+
+#support-notify-toggle.is-blocked {
+    color: #b42318;
+    border-color: #fecdca;
+    background: #fef3f2;
+    cursor: not-allowed;
 }
 
 .support-filters {
