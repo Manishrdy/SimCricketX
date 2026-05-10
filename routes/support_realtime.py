@@ -57,7 +57,7 @@ def emit_support_message(socketio, conversation, message, *, rate=None, admin_vi
     socketio.emit("support:message:new", {
         "conversation": admin_payload,
         "message": message_payload,
-    }, to=_conversation_room(conversation.id), namespace="/support")
+    }, to="support:admin", namespace="/support")
     socketio.emit("support:conversation:update", {
         "conversation": admin_payload,
     }, to="support:admin", namespace="/support")
