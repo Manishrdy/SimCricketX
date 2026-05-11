@@ -30,6 +30,16 @@ SimCricketX was built to demonstrate end-to-end software engineering capability 
 
 ---
 
+## Local Sanity Check
+
+Run the focused route suite before shipping small Flask changes:
+
+```bash
+pytest tests/test_core_routes.py tests/test_auth_routes.py tests/test_team_routes.py
+```
+
+---
+
 ## Architecture Overview
 
 ```
