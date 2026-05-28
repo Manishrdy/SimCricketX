@@ -1,5 +1,5 @@
 # If you have found a security vulnerability in SimCricketX,
-# please report it to the contact listed below. Thank you!
+# please report it to the contact listed below. Thank you!.
 
 Contact: mailto:d6mr07@gmail.com
 Expires: 2027-05-07T00:00:00.000Z
