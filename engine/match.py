@@ -3673,6 +3673,19 @@ class Match:
         return f"<em>{commentary}</em>" if commentary else None
 
     def next_ball(self):
+        # Super Over guard: once a tie pushes the match into super-over state
+        # (innings 4 = super over pending/in progress, 5 = decided), the normal
+        # ball loop must NOT run. Without this guard a stray next_ball() — from a
+        # page refresh/resume or a duplicated client loop — falls through to the
+        # second-innings-end branch and corrupts the result. Return a safe signal
+        # so the frontend can route to the super-over flow instead of looping.
+        if self.innings >= 4:
+            return {
+                "super_over_in_progress": True,
+                "match_over": self.innings == 5,
+                "result": getattr(self, "result", None),
+            }
+
         if self.innings == 3:
 
             self._save_second_innings_stats()
