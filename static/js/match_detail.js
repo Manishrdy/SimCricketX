@@ -1078,6 +1078,27 @@ function _processBallResult(data) {
         updateScoreBanner(data);
     }
 
+    // Super Over guard signal from the engine: the match is in super-over state
+    // but a NORMAL ball request arrived (stray resume/duplicate loop). Stop the
+    // normal loop so it can't spin on empty responses or corrupt state.
+    if (data.super_over_in_progress) {
+        if (data.match_over) {
+            // Super over already decided — send the user to the final scoreboard.
+            matchOver = true;
+            const mid = matchData.match_id;
+            appendLog(`══ ${data.result || 'Super Over complete'} ══`, 'comment');
+            setTimeout(() => { window.location.href = `/match/${mid}/scoreboard`; }, 1200);
+        } else {
+            // Super over still in progress and cannot be resumed inline yet.
+            appendLog(
+                '<span style="color:#f59e0b;font-weight:700;">⚠ Super Over in progress</span> — ' +
+                'please reload the page to continue from the Super Over panel.',
+                'comment'
+            );
+        }
+        return; // never schedule another normal ball
+    }
+
     // Win probability meter (2nd innings only)
     updateWinProbBanner(data);
 
@@ -1539,7 +1560,13 @@ function soPopulatePlayerCards(battingPlayers, bowlingPlayers) {
 
     // Sort by rating
     const sortedBat = [...battingPlayers].sort((a, b) => b.batting_rating - a.batting_rating);
-    const sortedBowl = [...bowlingPlayers].filter(p => p.will_bowl).sort((a, b) => b.bowling_rating - a.bowling_rating);
+    // Prefer designated bowlers, but if the squad has none flagged `will_bowl`
+    // (some TeamProfiles don't), fall back to the whole side — otherwise the
+    // bowler list renders empty and the user can never start the super over.
+    // Mirrors the backend's _select_super_over_bowler fallback.
+    let bowlPool = bowlingPlayers.filter(p => p.will_bowl);
+    if (bowlPool.length === 0) bowlPool = [...bowlingPlayers];
+    const sortedBowl = bowlPool.sort((a, b) => b.bowling_rating - a.bowling_rating);
 
     sortedBat.forEach(p => {
         const card = document.createElement('div');
@@ -1608,6 +1635,21 @@ function soUpdateSelectionCounts() {
 
 // --- Start Innings ---
 function soStartInnings() {
+    // Guard against double-submit: a second click would start a fresh super-over
+    // round on the backend (super_over_round += 1) and desync the state.
+    if (soState._starting) return;
+    soState._starting = true;
+    const startBtn = document.getElementById('so-start-btn');
+    if (startBtn) startBtn.disabled = true;
+
+    const reEnableStart = () => {
+        soState._starting = false;
+        // Only re-enable if a valid selection is still present (modal stayed open).
+        if (startBtn) {
+            startBtn.disabled = !(soState.selectedBatsmen.length === 3 && soState.selectedBowler);
+        }
+    };
+
     const isInnings2 = soState.innings === 2;
     const url = isInnings2
         ? `${window.location.pathname}/start-super-over-innings2`
@@ -1631,8 +1673,13 @@ function soStartInnings() {
             } else {
                 alert(data.error);
             }
+            reEnableStart();
             return;
         }
+
+        // Successful start — clear the in-flight guard (modal closes anyway,
+        // but innings 2 reuses the same soState object and must not stay locked).
+        soState._starting = false;
 
         if (data.target) soState.target = data.target;
 
@@ -1653,16 +1700,38 @@ function soStartInnings() {
 
         // Start simulation in main commentary log
         setTimeout(soSimulateBall, 600);
+    })
+    .catch(err => {
+        // Without this, a dropped request leaves the modal stuck and silent.
+        console.error('Super over start failed:', err);
+        const msg = 'Network error starting the Super Over. Please try again.';
+        if (typeof Toast !== 'undefined' && Toast.show) Toast.show(msg, 'error');
+        else appendLog(`[system_error] ${msg}`, 'error');
+        reEnableStart();
     });
 }
 window.soStartInnings = soStartInnings;
 
 // --- Simulate Ball (commentary in main simulation_log) ---
 function soSimulateBall() {
+    // Prevent overlapping ball requests (duplicate loops / double-advance).
+    if (soState._ballInFlight) return;
+    soState._ballInFlight = true;
+
     fetch(`${window.location.pathname}/next-super-over-ball`, { method: 'POST' })
     .then(r => r.json())
     .then(data => {
-        if (data.error) { console.error(data.error); return; }
+        soState._ballInFlight = false;
+        soState._ballRetries = 0;
+
+        if (data.error) {
+            // Backend error — surface it and offer a manual resume instead of
+            // dying silently in the console (a top user-reported symptom).
+            console.error(data.error);
+            appendLog(`<span style="color:#ef4444;font-weight:700;">Super Over error:</span> ${escapeHtml(data.error)}`, 'comment');
+            soShowResumeButton();
+            return;
+        }
 
         // Only log per-ball commentary when the backend actually delivered a ball.
         // End-of-innings / match-over responses don't carry commentary or score fields.
@@ -1741,7 +1810,39 @@ function soSimulateBall() {
 
         // Normal ball — continue
         setTimeout(soSimulateBall, delay);
+    })
+    .catch(err => {
+        // Without this, a single dropped request froze the super over silently.
+        soState._ballInFlight = false;
+        console.error('Super over ball failed:', err);
+        soState._ballRetries = (soState._ballRetries || 0) + 1;
+        if (soState._ballRetries <= 3) {
+            // Transient blip — back off and retry automatically.
+            appendLog(`<span style="color:#f59e0b;">Connection hiccup — retrying Super Over (${soState._ballRetries}/3)…</span>`, 'comment');
+            setTimeout(soSimulateBall, 1500 * soState._ballRetries);
+        } else {
+            appendLog('<span style="color:#ef4444;font-weight:700;">Super Over stalled.</span> Tap "Resume Super Over" to continue.', 'comment');
+            soShowResumeButton();
+        }
     });
+}
+
+// Floating manual-resume button shown when the super-over loop can't continue
+// on its own (backend error or repeated network failures). Lets the user pick
+// the loop back up without losing the in-memory super-over state.
+function soShowResumeButton() {
+    if (document.getElementById('so-resume-btn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'so-resume-btn';
+    btn.textContent = 'Resume Super Over';
+    btn.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;padding:12px 24px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+    btn.onclick = () => {
+        btn.remove();
+        soState._ballRetries = 0;
+        soState._ballInFlight = false;
+        soSimulateBall();
+    };
+    document.body.appendChild(btn);
 }
 
 // Log mini scorecard as text to the main commentary log
