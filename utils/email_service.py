@@ -13,6 +13,8 @@ Environment variable:
 
 import logging
 import os
+import time
+from requests.exceptions import Timeout, ConnectionError as RequestsConnectionError
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -73,26 +75,40 @@ def _render(template_name: str, **kwargs) -> str:
 
 # ── Core send ─────────────────────────────────────────────────────────────────
 
+MAX_RETRIES = 3
+
 def send_email(to: str, subject: str, html: str) -> bool:
     """Send a transactional email via Resend. Returns True on success."""
     api_key = _api_key()
     if not api_key:
         log.error("[Email] RESEND_API_KEY not set — email not sent to %s", to)
         return False
-    try:
-        resend.api_key = api_key
-        resend.Emails.send({
-            "from": _from_addr(),
-            "to": [to],
-            "subject": subject,
-            "html": html,
-        })
-        log.info("[Email] '%s' sent to %s", subject, to)
-        return True
-    except Exception as exc:
-        log_exception(exc)
-        log.error("[Email] Failed to send '%s' to %s: %s", subject, to, exc)
-        return False
+
+    resend.api_key = api_key
+    
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            resend.Emails.send({
+                "from": _from_addr(),
+                "to": [to],
+                "subject": subject,
+                "html": html,
+            })
+            log.info("[Email] '%s' sent to %s", subject, to)
+            return True
+        except (Timeout, RequestsConnectionError) as exc:
+            if attempt < MAX_RETRIES:
+                log.warning("[Email] Attempt %d failed due to timeout/connection error: %s. Retrying...", attempt, exc)
+                time.sleep(2 ** attempt)  # 2, 4, 8 seconds backoff
+                continue
+            else:
+                log_exception(exc)
+                log.error("[Email] Failed to send '%s' to %s after %d attempts: %s", subject, to, MAX_RETRIES, exc)
+                return False
+        except Exception as exc:
+            log_exception(exc)
+            log.error("[Email] Failed to send '%s' to %s: %s", subject, to, exc)
+            return False
 
 
 # ── Public helpers ─────────────────────────────────────────────────────────────
