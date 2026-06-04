@@ -241,6 +241,15 @@ class Match:
         # Add super over tracking variables
         self.super_over_round = 0  # Track which super over we're on
         self.super_over_history = []  # Track scores from each super over
+        # Resume support: a phase string describing where the super over is, so a
+        # page refresh can rebuild the correct UI (see get_super_over_resume_state).
+        self.super_over_phase = None
+        # Cumulative super-over data that must persist ACROSS rounds/innings:
+        #   - team boundaries → 5-round tie boundary count-back
+        #   - per-team/per-player batting & bowling → career-stat aggregation
+        self.super_over_team_boundaries = {"home": 0, "away": 0}
+        self.super_over_career_batting = {"home": {}, "away": {}}
+        self.super_over_career_bowling = {"home": {}, "away": {}}
         self.constraint_violations = []  # Constraint violation log for post-match analysis
 
         # Initialize pressure engine (format_config wires phase thresholds + RRs)
@@ -5186,6 +5195,7 @@ class Match:
     
     def _setup_super_over(self):
         """Setup super over after a tie — returns team rosters for player selection"""
+        self.super_over_phase = "awaiting_innings1_selection"
         scorecard_data = self._generate_detailed_scorecard()
         scorecard_data["target_info"] = "Match Tied - Super Over Required!"
 
@@ -5263,6 +5273,7 @@ class Match:
             self.super_over_bowler = self._select_super_over_bowler(self.super_over_bowling_team)
 
         self._init_super_over_innings_state()
+        self.super_over_phase = "innings_in_progress"
 
         batting_team_name = self.data["team_home"].split("_")[0] if self.super_over_batting_team is self.home_xi else self.data["team_away"].split("_")[0]
 
@@ -5394,6 +5405,7 @@ class Match:
             self.super_over_bowler = self._select_super_over_bowler(self.super_over_bowling_team)
 
         self._init_super_over_innings_state()
+        self.super_over_phase = "innings_in_progress"
 
         batting_team_name = self.data["team_home"].split("_")[0] if self.super_over_batting_team is self.home_xi else self.data["team_away"].split("_")[0]
         team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
@@ -5437,14 +5449,19 @@ class Match:
             if self.super_over_scores[team_key] >= self.super_over_scores[other_key] + 1:
                 return self._end_super_over_innings()
 
-        # Calculate outcome
+        # Calculate outcome.
+        # Thread the striker's running boundary count into `streak` so the
+        # pressure dynamics in super_over_outcome.py actually fire (≥3 boundaries
+        # dampens further boundaries ×0.9; ≥2 boundaries raises wicket chance
+        # ×1.4). Previously an empty dict was passed, making that logic dead code.
+        striker_so_stats = self.super_over_batsman_stats[self.super_over_current_striker["name"]]
         outcome = calculate_super_over_outcome(
             batter=self.super_over_current_striker,
             bowler=self.super_over_bowler,
             pitch=self.pitch,
-            streak={},
+            streak={"boundaries": striker_so_stats["fours"] + striker_so_stats["sixes"]},
             over_number=0,
-            batter_runs=self.super_over_batsman_stats[self.super_over_current_striker["name"]]["runs"]
+            batter_runs=striker_so_stats["runs"]
         )
 
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
@@ -5681,9 +5698,15 @@ class Match:
         # Save innings 1 scorecard before swapping
         innings_scorecard = self._get_super_over_innings_scorecard()
 
+        # Accumulate this innings into the cumulative super-over stores (used for
+        # the boundary count-back and for career-stat aggregation at archive time).
+        # The batting side is team_key; the bowler belongs to the other side.
+        self._accumulate_super_over_player_stats(innings_scorecard, team_key)
+
         if self.super_over_innings == 1:
             # Save innings 1 data
             self.super_over_innings1_scorecard = innings_scorecard
+            self.super_over_phase = "awaiting_innings2_selection"
 
             # Swap teams for innings 2
             self.super_over_innings = 2
@@ -5742,6 +5765,7 @@ class Match:
                 result = f"{winner} won by Super Over"
                 self.result = result
                 self.innings = 5
+                self.super_over_phase = "complete"
 
                 if hasattr(self, 'original_scorecard'):
                     self.original_scorecard["target_info"] = result
@@ -5765,11 +5789,23 @@ class Match:
             else:
                 # Another tie — but cap at 5 super overs max
                 if self.super_over_round >= 5:
-                    # After 5 super overs, decide by total boundaries across all super overs
-                    # or declare shared victory
-                    result = f"Match Drawn after {self.super_over_round} Super Overs — scores level"
+                    # After 5 super overs still level, decide by total boundaries
+                    # (fours + sixes) hit across ALL super overs — the classic
+                    # count-back tie-breaker. Only a dead-level boundary count
+                    # results in an actual draw.
+                    home_b = self.super_over_team_boundaries.get("home", 0)
+                    away_b = self.super_over_team_boundaries.get("away", 0)
+                    if home_b != away_b:
+                        bound_winner = home_name if home_b > away_b else away_name
+                        result = (f"{bound_winner} won on boundary count-back after "
+                                  f"{self.super_over_round} Super Overs "
+                                  f"({max(home_b, away_b)}-{min(home_b, away_b)})")
+                    else:
+                        result = (f"Match Drawn after {self.super_over_round} Super Overs "
+                                  f"— scores and boundaries level")
                     self.result = result
                     self.innings = 5
+                    self.super_over_phase = "complete"
 
                     if hasattr(self, 'original_scorecard'):
                         self.original_scorecard["target_info"] = result
@@ -5803,6 +5839,7 @@ class Match:
                 # Per IPL rule: team that batted 2nd in this round bats 1st in next.
                 next_first = "away" if self.super_over_first_batting == "home" else "home"
                 self._super_over_next_first_batting = next_first
+                self.super_over_phase = "awaiting_innings1_selection"
 
                 return {
                     "super_over_tied_again": True,
@@ -5818,3 +5855,100 @@ class Match:
                     "away_players": [_pi(p) for p in self.away_xi],
                     "next_first_batting_team": next_first,
                 }
+
+    def _accumulate_super_over_player_stats(self, sc, batting_key):
+        """Fold one finished super-over innings into the cumulative cross-round
+        stores: per-player batting/bowling (for career-stat aggregation at
+        archive time) and per-team boundaries (for the count-back tie-breaker).
+        ``batting_key`` is the side that just batted; the bowler is the other side."""
+        bowling_key = "away" if batting_key == "home" else "home"
+        bat_store = self.super_over_career_batting.setdefault(batting_key, {})
+        bowl_store = self.super_over_career_bowling.setdefault(bowling_key, {})
+
+        team_boundaries = 0
+        for b in sc.get("batting", []):
+            if not b.get("did_bat"):
+                continue
+            agg = bat_store.setdefault(b["name"], {
+                "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "wicket_type": "",
+            })
+            agg["runs"] += b.get("runs", 0)
+            agg["balls"] += b.get("balls", 0)
+            agg["fours"] += b.get("fours", 0)
+            agg["sixes"] += b.get("sixes", 0)
+            # status carries the dismissal type for out batters (else "not out").
+            if b.get("out") and b.get("status"):
+                agg["wicket_type"] = b["status"]
+            team_boundaries += b.get("fours", 0) + b.get("sixes", 0)
+
+        self.super_over_team_boundaries[batting_key] = \
+            self.super_over_team_boundaries.get(batting_key, 0) + team_boundaries
+
+        bowl = sc.get("bowling", {})
+        bname = bowl.get("name")
+        if bname:
+            bagg = bowl_store.setdefault(bname, {
+                "balls_bowled": 0, "runs": 0, "wickets": 0,
+            })
+            bagg["balls_bowled"] += bowl.get("balls", 0)
+            bagg["runs"] += bowl.get("runs", 0)
+            bagg["wickets"] += bowl.get("wickets", 0)
+
+    def get_super_over_resume_state(self):
+        """Snapshot of super-over state for resuming the UI after a page refresh
+        (in-memory only). The frontend maps ``phase`` to the right modal/loop."""
+        phase = getattr(self, "super_over_phase", None)
+        if self.innings >= 5 or phase == "complete":
+            return {"phase": "complete"}
+
+        home_name = self.data["team_home"].split("_")[0]
+        away_name = self.data["team_away"].split("_")[0]
+
+        def _pi(p):
+            return {
+                "name": p["name"], "role": p.get("role", ""),
+                "batting_rating": p.get("batting_rating", 0),
+                "bowling_rating": p.get("bowling_rating", 0),
+                "will_bowl": p.get("will_bowl", False),
+            }
+
+        scores = getattr(self, "super_over_scores", None) or {"home": 0, "away": 0}
+        state = {
+            "phase": phase,
+            "round": self.super_over_round,
+            "innings": getattr(self, "super_over_innings", 1),
+            "home_team": home_name,
+            "away_team": away_name,
+            "home_score": scores.get("home", 0),
+            "away_score": scores.get("away", 0),
+        }
+
+        if phase == "awaiting_innings1_selection":
+            state.update({
+                # Round about to be played (start_super_over increments the counter).
+                "display_round": self.super_over_round + 1,
+                "forced_first_batting": getattr(self, "_super_over_next_first_batting", None),
+                "home_players": [_pi(p) for p in self.home_xi],
+                "away_players": [_pi(p) for p in self.away_xi],
+            })
+        elif phase == "awaiting_innings2_selection":
+            team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
+            other_key = "away" if team_key == "home" else "home"
+            state.update({
+                "target": scores.get(other_key, 0) + 1,
+                "batting_team_name": home_name if team_key == "home" else away_name,
+                "batting_team_players": [_pi(p) for p in self.super_over_batting_team],
+                "bowling_team_players": [_pi(p) for p in self.super_over_bowling_team],
+                "innings1_scorecard": getattr(self, "super_over_innings1_scorecard", None),
+            })
+        elif phase == "innings_in_progress":
+            team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
+            other_key = "away" if team_key == "home" else "home"
+            in2 = getattr(self, "super_over_innings", 1) == 2
+            state.update({
+                "target": (scores.get(other_key, 0) + 1) if in2 else None,
+                "ball": getattr(self, "super_over_ball", 0),
+                "batting_team_name": home_name if team_key == "home" else away_name,
+            })
+
+        return state
