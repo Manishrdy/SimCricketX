@@ -1885,6 +1885,57 @@ function soSetupInnings2(data) {
     soUpdateSelectionCounts();
 }
 
+// Rebuild the super-over UI after a page refresh, from the live-state snapshot.
+// In-memory resume only — the engine state still lives in MATCH_INSTANCES, so
+// this restores the modal (mid-selection) or continues the ball loop (mid-over).
+function soResumeFromState(state) {
+    const so = state.super_over || {};
+
+    // Replay prior commentary so the log isn't blank after the refresh.
+    if (state.commentary_log && state.commentary_log.length) {
+        state.commentary_log.forEach(entry => appendLog(entry, 'comment'));
+    }
+    // Make sure no normal-innings ball loop runs alongside the super over.
+    matchOver = true;
+
+    const teamData = {
+        home_team: so.home_team,
+        away_team: so.away_team,
+        home_players: so.home_players,
+        away_players: so.away_players,
+    };
+
+    if (so.phase === 'awaiting_innings1_selection') {
+        appendLog('<span style="color:#10b981;font-weight:700;">▶ RESUMED</span> — Super Over: pick your players.', 'comment');
+        soOpenModal(teamData, so.display_round || so.round || 1, so.forced_first_batting || undefined);
+    } else if (so.phase === 'awaiting_innings2_selection') {
+        appendLog('<span style="color:#10b981;font-weight:700;">▶ RESUMED</span> — Super Over Innings 2: pick your players.', 'comment');
+        soResetState(so.round || 1);
+        soState.round = so.round || 1;
+        soState.innings1Scorecard = so.innings1_scorecard || null;
+        soSetupInnings2({
+            target: so.target,
+            batting_team_name: so.batting_team_name,
+            batting_team_players: so.batting_team_players,
+            bowling_team_players: so.bowling_team_players,
+        });
+    } else if (so.phase === 'innings_in_progress') {
+        soResetState(so.round || 1);
+        soState.round = so.round || 1;
+        soState.innings = so.innings || 1;
+        soState.target = so.target || null;
+        appendLog(`<span style="color:#10b981;font-weight:700;">▶ RESUMED</span> — Super Over (Round ${soState.round}), Innings ${soState.innings} continuing…`, 'comment');
+        setTimeout(soSimulateBall, 800);
+    } else {
+        // Decided or unknown phase — go to the scoreboard.
+        const mid = (typeof matchData !== 'undefined' && matchData.match_id)
+            ? matchData.match_id
+            : window.location.pathname.split('/match/')[1].split('/')[0];
+        window.location.href = `/match/${mid}/scoreboard`;
+    }
+}
+window.soResumeFromState = soResumeFromState;
+
 // Expose for inline onclick handlers
 window.soPickBattingTeam = soPickBattingTeam;
 window.soStartInnings = soStartInnings;
@@ -1915,6 +1966,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.status !== 'in_progress') {
                 // Nothing in memory — let user start fresh
                 if (spinBtn) spinBtn.disabled = false;
+                return;
+            }
+
+            // Super over in progress — rebuild the super-over UI from memory
+            // instead of the normal-innings banner/loop.
+            if (state.super_over) {
+                if (spinBtn) spinBtn.disabled = true;
+                soResumeFromState(state);
                 return;
             }
 
