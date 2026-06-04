@@ -43,7 +43,13 @@
     <div class="lp-nav-inner">
 
         <a href="/" class="lp-logo" aria-label="SimCricketX — home">
-            <span class="lp-logo-icon" aria-hidden="true">🏏</span>
+            <svg class="lp-logo-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="9.5" fill="#c0392b"/>
+                <circle cx="12" cy="12" r="9.5" fill="none" stroke="#7d1a0e" stroke-width="1"/>
+                <path d="M8.4 3.7 C 12 8, 12 16, 8.4 20.3" fill="none" stroke="#ffd9cf"
+                      stroke-width="1.1" stroke-linecap="round" stroke-dasharray="0.1 2.05"/>
+                <ellipse cx="9" cy="8" rx="2.6" ry="1.7" fill="rgba(255,255,255,0.28)" transform="rotate(-25 9 8)"/>
+            </svg>
             <span class="lp-logo-text">SimCricketX</span>
         </a>
 
@@ -127,89 +133,70 @@
             </div>
         </div>
 
-        <!-- ── Right: animated cricket ball ── -->
+        <!-- ── Right: mock live scorecard (product preview) ── -->
         <div class="lp-hero-visual" aria-hidden="true">
-            <div class="lp-ball-wrap">
 
-                <!-- Orbit ring with orbiting dot -->
-                <div class="lp-ball-orbit"></div>
+            <!-- Floating accent chip -->
+            <div class="lp-sc-chip lp-sc-chip-rate">
+                <span class="lp-sc-chip-label">Run rate</span>
+                <span class="lp-sc-chip-val">9.78</span>
+            </div>
 
-                <!-- SVG cricket ball -->
-                <svg class="lp-hero-ball"
-                     viewBox="0 0 200 200"
-                     xmlns="http://www.w3.org/2000/svg"
-                     role="img"
-                     aria-label="Animated cricket ball">
-                    <defs>
-                        <radialGradient id="lp-ballGrad" cx="36%" cy="34%" r="56%">
-                            <stop offset="0%"   stop-color="#e85c50"/>
-                            <stop offset="55%"  stop-color="#c0392b"/>
-                            <stop offset="100%" stop-color="#7d1a0e"/>
-                        </radialGradient>
-                        <filter id="lp-ballShadow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="rgba(192,57,43,0.40)"/>
-                        </filter>
-                    </defs>
+            <div class="lp-scorecard">
 
-                    <!-- Ball body -->
-                    <circle cx="100" cy="100" r="90"
-                            fill="url(#lp-ballGrad)"
-                            filter="url(#lp-ballShadow)"/>
+                <!-- Card header -->
+                <div class="lp-sc-head">
+                    <span class="lp-sc-live">
+                        <span class="lp-sc-live-dot"></span>LIVE
+                    </span>
+                    <span class="lp-sc-meta">T20 · Innings 2</span>
+                </div>
 
-                    <!-- Left seam -->
-                    <path d="M100,12 C55,38 55,88 100,100 C55,112 55,162 100,188"
-                          fill="none"
-                          stroke="rgba(255,200,185,0.72)"
-                          stroke-width="4"
-                          stroke-linecap="round"/>
+                <!-- Score line -->
+                <div class="lp-sc-score">
+                    <div class="lp-sc-team">Mumbai</div>
+                    <div class="lp-sc-runs">184<span class="lp-sc-wkts">/4</span></div>
+                    <div class="lp-sc-overs">18.2 ov</div>
+                </div>
 
-                    <!-- Right seam -->
-                    <path d="M100,12 C145,38 145,88 100,100 C145,112 145,162 100,188"
-                          fill="none"
-                          stroke="rgba(255,200,185,0.72)"
-                          stroke-width="4"
-                          stroke-linecap="round"/>
+                <!-- Chase context -->
+                <div class="lp-sc-target">
+                    Need <strong>18</strong> off <strong>10</strong> · Target 202 · RRR 10.80
+                </div>
 
-                    <!-- Left seam stitching -->
-                    <g stroke="rgba(255,210,195,0.62)" stroke-width="2.2" stroke-linecap="round">
-                        <line x1="62" y1="34" x2="58" y2="42"/>
-                        <line x1="51" y1="55" x2="47" y2="63"/>
-                        <line x1="47" y1="78" x2="43" y2="86"/>
-                        <line x1="51" y1="115" x2="47" y2="123"/>
-                        <line x1="62" y1="140" x2="58" y2="148"/>
-                        <line x1="51" y1="161" x2="47" y2="169"/>
-                    </g>
-
-                    <!-- Right seam stitching -->
-                    <g stroke="rgba(255,210,195,0.62)" stroke-width="2.2" stroke-linecap="round">
-                        <line x1="138" y1="34" x2="142" y2="42"/>
-                        <line x1="149" y1="55" x2="153" y2="63"/>
-                        <line x1="153" y1="78" x2="157" y2="86"/>
-                        <line x1="149" y1="115" x2="153" y2="123"/>
-                        <line x1="138" y1="140" x2="142" y2="148"/>
-                        <line x1="149" y1="161" x2="153" y2="169"/>
-                    </g>
-
-                    <!-- Primary shine -->
-                    <ellipse cx="66" cy="64" rx="22" ry="15"
-                             fill="rgba(255,255,255,0.20)"
-                             transform="rotate(-25,66,64)"/>
-                    <!-- Secondary shine -->
-                    <ellipse cx="136" cy="145" rx="10" ry="7"
-                             fill="rgba(255,255,255,0.09)"
-                             transform="rotate(-20,136,145)"/>
-                </svg>
-
-                <!-- Ball ground shadow -->
-                <div class="lp-ball-shadow"></div>
-
-                <!-- Cricket stumps -->
-                <div class="lp-stumps">
-                    <div class="lp-stump lp-stump-1">
-                        <div class="lp-bail"></div>
+                <!-- Batters -->
+                <div class="lp-sc-batters">
+                    <div class="lp-sc-batter">
+                        <span class="lp-sc-bat-name">R Sharma <span class="lp-sc-strike">●</span></span>
+                        <span class="lp-sc-bat-line">72<span class="lp-sc-not-out">*</span> <span class="lp-sc-balls">(41)</span></span>
                     </div>
-                    <div class="lp-stump lp-stump-2"></div>
-                    <div class="lp-stump lp-stump-3"></div>
+                    <div class="lp-sc-batter">
+                        <span class="lp-sc-bat-name">H Pandya</span>
+                        <span class="lp-sc-bat-line">23 <span class="lp-sc-balls">(12)</span></span>
+                    </div>
+                </div>
+
+                <!-- This over -->
+                <div class="lp-sc-over">
+                    <span class="lp-sc-over-label">Last 6</span>
+                    <span class="lp-sc-balls-row">
+                        <span class="lp-sc-ball lp-sc-ball-dot">•</span>
+                        <span class="lp-sc-ball lp-sc-ball-dot">•</span>
+                        <span class="lp-sc-ball lp-sc-ball-four">4</span>
+                        <span class="lp-sc-ball lp-sc-ball-wkt">W</span>
+                        <span class="lp-sc-ball lp-sc-ball-run">1</span>
+                        <span class="lp-sc-ball lp-sc-ball-six">6</span>
+                    </span>
+                </div>
+
+                <!-- Footer -->
+                <div class="lp-sc-foot">
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                        <circle cx="12" cy="12" r="9.5" fill="#c0392b"/>
+                        <path d="M8.4 3.7 C 12 8, 12 16, 8.4 20.3" fill="none" stroke="#ffd9cf"
+                              stroke-width="1.1" stroke-linecap="round" stroke-dasharray="0.1 2.05"/>
+                    </svg>
+                    Simulated ball-by-ball
                 </div>
 
             </div>
@@ -262,24 +249,35 @@
 
         <div class="lp-features-grid">
 
-            <div class="lp-feature-card">
+            <!-- Featured cell -->
+            <div class="lp-feature-card lp-reveal is-featured">
                 <div class="lp-feature-icon">
                     <i class="fas fa-baseball-ball" aria-hidden="true"></i>
                 </div>
-                <div>
+                <div class="lp-feature-body">
                     <div class="lp-feature-title">Ball-by-Ball Engine</div>
                     <div class="lp-feature-desc">
                         Every delivery resolved via weighted probability — batting/bowling matchups,
-                        pitch conditions, and over-phase dynamics working together.
+                        pitch conditions, and over-phase dynamics working together. No two simulations
+                        play out the same way.
                     </div>
+                </div>
+                <!-- Outcome-distribution visual -->
+                <div class="lp-feat-viz" aria-hidden="true">
+                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-run" style="height:42%"></span><b>0</b></div>
+                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-run" style="height:60%"></span><b>1</b></div>
+                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-run" style="height:34%"></span><b>2</b></div>
+                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-four" style="height:52%"></span><b>4</b></div>
+                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-six" style="height:26%"></span><b>6</b></div>
+                    <div class="lp-feat-bar"><span class="lp-fb lp-fb-wkt" style="height:20%"></span><b>W</b></div>
                 </div>
             </div>
 
-            <div class="lp-feature-card">
+            <div class="lp-feature-card lp-reveal is-wide">
                 <div class="lp-feature-icon">
                     <i class="fas fa-layer-group" aria-hidden="true"></i>
                 </div>
-                <div>
+                <div class="lp-feature-body">
                     <div class="lp-feature-title">T20 &amp; List A Formats</div>
                     <div class="lp-feature-desc">
                         Separate format-specific squads per team — your 50-over specialists
@@ -288,37 +286,37 @@
                 </div>
             </div>
 
-            <div class="lp-feature-card">
+            <div class="lp-feature-card lp-reveal">
                 <div class="lp-feature-icon">
                     <i class="fas fa-sliders" aria-hidden="true"></i>
                 </div>
-                <div>
+                <div class="lp-feature-body">
                     <div class="lp-feature-title">Ground Conditions</div>
                     <div class="lp-feature-desc">
-                        Choose pitch profile (Green, Dry, Hard, Flat, Dead), game mode,
-                        and over-phase boosts to shape batting and bowling outcomes.
+                        Pitch profiles (Green, Dry, Hard, Flat, Dead), game modes,
+                        and over-phase boosts shape every outcome.
                     </div>
                 </div>
             </div>
 
-            <div class="lp-feature-card">
+            <div class="lp-feature-card lp-reveal">
                 <div class="lp-feature-icon">
                     <i class="fas fa-trophy" aria-hidden="true"></i>
                 </div>
-                <div>
+                <div class="lp-feature-body">
                     <div class="lp-feature-title">Tournament System</div>
                     <div class="lp-feature-desc">
-                        Round-robin or knockout tournaments with automatic standings,
+                        Round-robin or knockout with automatic standings,
                         point tables, and bracket progression.
                     </div>
                 </div>
             </div>
 
-            <div class="lp-feature-card">
+            <div class="lp-feature-card lp-reveal is-wide">
                 <div class="lp-feature-icon">
                     <i class="fas fa-chart-line" aria-hidden="true"></i>
                 </div>
-                <div>
+                <div class="lp-feature-body">
                     <div class="lp-feature-title">Player Analytics</div>
                     <div class="lp-feature-desc">
                         Career stats, match-by-match breakdowns, and head-to-head comparisons
@@ -327,11 +325,11 @@
                 </div>
             </div>
 
-            <div class="lp-feature-card">
+            <div class="lp-feature-card lp-reveal is-wide">
                 <div class="lp-feature-icon">
                     <i class="fas fa-download" aria-hidden="true"></i>
                 </div>
-                <div>
+                <div class="lp-feature-body">
                     <div class="lp-feature-title">Export Your Data</div>
                     <div class="lp-feature-desc">
                         Download your full match history, scorecards, and player statistics
@@ -359,7 +357,7 @@
 
         <div class="lp-steps">
 
-            <div class="lp-step">
+            <div class="lp-step lp-reveal">
                 <div class="lp-step-num">01</div>
                 <div class="lp-step-body">
                     <div class="lp-step-title">Create a Free Account</div>
@@ -370,7 +368,7 @@
                 </div>
             </div>
 
-            <div class="lp-step">
+            <div class="lp-step lp-reveal">
                 <div class="lp-step-num">02</div>
                 <div class="lp-step-body">
                     <div class="lp-step-title">Build Your Squads</div>
@@ -381,7 +379,7 @@
                 </div>
             </div>
 
-            <div class="lp-step">
+            <div class="lp-step lp-reveal">
                 <div class="lp-step-num">03</div>
                 <div class="lp-step-body">
                     <div class="lp-step-title">Set Ground Conditions</div>
@@ -392,7 +390,7 @@
                 </div>
             </div>
 
-            <div class="lp-step">
+            <div class="lp-step lp-reveal">
                 <div class="lp-step-num">04</div>
                 <div class="lp-step-body">
                     <div class="lp-step-title">Simulate &amp; Analyse</div>
@@ -402,6 +400,92 @@
                     </div>
                 </div>
             </div>
+
+        </div>
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     FAQ
+     ════════════════════════════════════════════════════════════ -->
+<section class="lp-section lp-faq" aria-labelledby="faq-title">
+    <div class="lp-section-inner">
+
+        <div class="lp-section-label" aria-hidden="true">03 — Questions</div>
+        <h2 class="lp-section-title" id="faq-title">Frequently asked questions</h2>
+        <p class="lp-section-sub">
+            Everything you need to know before you run your first simulation.
+        </p>
+
+        <div class="lp-faq-list">
+
+            <details class="lp-faq-item lp-reveal">
+                <summary class="lp-faq-q">
+                    Is SimCricketX really free?
+                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
+                </summary>
+                <div class="lp-faq-a">
+                    Yes — completely free, with no credit card required. Create an account with
+                    your email and start building squads and simulating matches right away.
+                </div>
+            </details>
+
+            <details class="lp-faq-item lp-reveal">
+                <summary class="lp-faq-q">
+                    Which match formats are supported?
+                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
+                </summary>
+                <div class="lp-faq-a">
+                    Both T20 and List A (50-over). Each team keeps separate, format-specific squads,
+                    so your 50-over specialists are never forced into a T20 line-up.
+                </div>
+            </details>
+
+            <details class="lp-faq-item lp-reveal">
+                <summary class="lp-faq-q">
+                    How does the simulation actually work?
+                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
+                </summary>
+                <div class="lp-faq-a">
+                    A probabilistic engine resolves every delivery using batting and bowling
+                    matchups, the pitch profile you choose, and over-phase dynamics — producing
+                    authentic, varied outcomes rather than fixed or purely random results.
+                </div>
+            </details>
+
+            <details class="lp-faq-item lp-reveal">
+                <summary class="lp-faq-q">
+                    Do I need to install anything?
+                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
+                </summary>
+                <div class="lp-faq-a">
+                    No installation and no config files. SimCricketX runs entirely in your browser —
+                    sign up and you're simulating within a couple of minutes.
+                </div>
+            </details>
+
+            <details class="lp-faq-item lp-reveal">
+                <summary class="lp-faq-q">
+                    Can I run full tournaments?
+                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
+                </summary>
+                <div class="lp-faq-a">
+                    Yes. Set up round-robin or knockout tournaments with automatic standings,
+                    point tables, and bracket progression across both formats.
+                </div>
+            </details>
+
+            <details class="lp-faq-item lp-reveal">
+                <summary class="lp-faq-q">
+                    Is my data exportable?
+                    <i class="fas fa-chevron-down lp-faq-chevron" aria-hidden="true"></i>
+                </summary>
+                <div class="lp-faq-a">
+                    Absolutely — your full match history, scorecards, and player statistics can be
+                    downloaded as structured data whenever you need them.
+                </div>
+            </details>
 
         </div>
     </div>
@@ -442,7 +526,13 @@
     <div class="lp-footer-inner">
 
         <a href="/" class="lp-footer-logo" aria-label="SimCricketX home">
-            <span aria-hidden="true">🏏</span>
+            <svg class="lp-logo-mark" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="9.5" fill="#c0392b"/>
+                <circle cx="12" cy="12" r="9.5" fill="none" stroke="#7d1a0e" stroke-width="1"/>
+                <path d="M8.4 3.7 C 12 8, 12 16, 8.4 20.3" fill="none" stroke="#ffd9cf"
+                      stroke-width="1.1" stroke-linecap="round" stroke-dasharray="0.1 2.05"/>
+                <ellipse cx="9" cy="8" rx="2.6" ry="1.7" fill="rgba(255,255,255,0.28)" transform="rotate(-25 9 8)"/>
+            </svg>
             <span class="lp-footer-logo-text">SimCricketX</span>
         </a>
 
@@ -513,6 +603,35 @@
     /* ── Footer year ───────────────────────────────────────────── */
     var fy = document.getElementById('footerYear');
     if (fy) fy.textContent = new Date().getFullYear();
+
+    /* ── Scroll reveal (staggered, reduced-motion aware) ───────── */
+    var reveals = [].slice.call(document.querySelectorAll('.lp-reveal'));
+    var prefersReduced = window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!reveals.length) return;
+
+    if (prefersReduced || !('IntersectionObserver' in window)) {
+        // No motion: just show everything immediately.
+        reveals.forEach(function (el) { el.classList.add('is-visible'); });
+        return;
+    }
+
+    var io = new IntersectionObserver(function (entries, obs) {
+        entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            var el = entry.target;
+            // Stagger by position among its reveal siblings (cap so it never drags).
+            var siblings = [].slice.call(el.parentNode.children)
+                .filter(function (c) { return c.classList.contains('lp-reveal'); });
+            var i = Math.min(siblings.indexOf(el), 5);
+            el.style.transitionDelay = (i * 60) + 'ms';
+            el.classList.add('is-visible');
+            obs.unobserve(el);
+        });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+    reveals.forEach(function (el) { io.observe(el); });
 }());
 </script>
 
