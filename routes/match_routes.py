@@ -464,6 +464,20 @@ def register_match_routes(
         if match.data.get("current_state") == "completed":
             return jsonify({"status": "completed"})
 
+        # Super-over state (innings >= 4): return a super-over-specific snapshot so
+        # the frontend can rebuild the right modal / resume the ball loop instead
+        # of trying to restore a normal-innings banner.
+        if getattr(match, "innings", 1) >= 4:
+            so_state = match.get_super_over_resume_state()
+            if so_state.get("phase") == "complete":
+                return jsonify({"status": "completed"})
+            return jsonify({
+                "status": "in_progress",
+                "super_over": so_state,
+                "match_format": match.data.get("match_format", "T20"),
+                "commentary_log": getattr(match, "commentary_replay_log", []),
+            })
+
         striker = match.current_striker or {}
         non_striker = match.current_non_striker or {}
         current_bowler = getattr(match, "current_bowler", None) or {}
@@ -547,6 +561,10 @@ def register_match_routes(
 
         innings_data = {}
         for card in scorecards:
+            # Super-over rows (innings_number 3) exist only for career-stat
+            # aggregation/reversal — they are not part of the displayed innings.
+            if (card.innings_number or 0) > 2:
+                continue
             entry = innings_data.setdefault(
                 card.innings_number,
                 {
