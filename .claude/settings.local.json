@@ -21,7 +21,28 @@
       "Bash(git push *)",
       "Bash(gh pr *)",
       "Bash(git merge *)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "Bash(node --check static/js/match_detail.js)",
+      "Bash(cd /tmp/ui-ux-pro-max-skill && echo \"===.claude tree===\" && find .claude -type f -o -type l | head -40 && echo \"\" && echo \"===.claude detail===\" && ls -la .claude/skills/ 2>/dev/null; ls -la .claude/skills/ui-ux-pro-max 2>/dev/null)",
+      "Bash(/tmp/scx_venv/bin/python -m pytest tests/test_career_stats_multiplayer.py -q)",
+      "Bash(cp /tmp/archiver_fixed.py match_archiver.py)",
+      "Bash(/tmp/scx_venv/bin/python -m pytest tests/test_career_stats_multiplayer.py tests/test_super_over_career_stats.py -q)",
+      "Bash(set -e)",
+      "Bash(mkdir -p ~/.claude/skills)",
+      "Bash(cp -RL /tmp/ui-ux-pro-max-skill/.claude/skills/ui-ux-pro-max ~/.claude/skills/ui-ux-pro-max)",
+      "Read(//Users/manish/.claude/skills/**)",
+      "Read(//Users/manish/.claude/skills/ui-ux-pro-max/**)",
+      "Bash(/tmp/scx_venv/bin/python -m pytest tests/ -q -k \"archiv or stat or career or aggregat or milestone or scorecard\")",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "Bash(mkdir -p /tmp/lp_preview)",
+      "Bash(/tmp/lpvenv/bin/python -)",
+      "Bash(cat)",
+      "Bash(pkill -f \"_preview_server.py\")",
+      "Bash(rm -rf /tmp/lp_preview /tmp/lp_serve.py /tmp/lpvenv)",
+      "Bash(claude mcp *)",
+      "Bash(cd /Users/manish/Documents/SimCricketX *)",
+      "Bash(/tmp/lpvenv/bin/pip install *)"
     ]
   }
 }
