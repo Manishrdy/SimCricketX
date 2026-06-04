@@ -877,16 +877,86 @@ class MatchArchiver:
             for innings_number, batting_team_id, bowling_team_id, batting_stats, bowling_stats in innings_plan:
                 save_stats(batting_stats, batting_team_id, innings_number, "batting")
                 save_stats(bowling_stats, bowling_team_id, innings_number, "bowling", batting_stats)
-                
+
                 # NEW: Save fielding stats for the bowling/fielding team
                 self._save_fielding_stats(batting_stats, bowling_team_id, innings_number)
-            
+
+            # Super Over stats → dedicated scorecard rows at innings_number = 3.
+            # Writing them as real rows means the SAME forward aggregation (below)
+            # AND reverse aggregation (reverse_player_aggregates, on re-sim) that
+            # handle innings 1/2 also count and un-count super-over runs/wickets
+            # toward career totals — no separate, drift-prone code path. The
+            # scoreboard view skips innings_number > 2, so these never render as a
+            # phantom innings. Empty for non-super-over matches (no-op).
+            #
+            # The aggregate loop below reads this match's persisted rows (it
+            # flushes + re-queries by match_id), so it no longer matters whether
+            # these cards are still pending in db.session.new. The two-phase
+            # write (resolve all players first, then add every card) is kept
+            # purely as a tidy structure; correctness no longer depends on
+            # avoiding interleaved queries. Re-sim deletes prior scorecards, so
+            # an always-insert here is safe.
+            so_bat = getattr(self.match, "super_over_career_batting", None) or {}
+            so_bowl = getattr(self.match, "super_over_career_bowling", None) or {}
+            _so_specs = [
+                (so_bat.get("home"), home_team.id, "batting"),
+                (so_bat.get("away"), away_team.id, "batting"),
+                (so_bowl.get("home"), home_team.id, "bowling"),
+                (so_bowl.get("away"), away_team.id, "bowling"),
+            ]
+            _so_resolved = []
+            for _stats, _team_id, _rectype in _so_specs:
+                if not _stats:
+                    continue
+                for _pos, (_pname, _s) in enumerate(_stats.items(), start=1):
+                    _player = _lookup_player(_pname, _team_id)
+                    if not _player:
+                        self.logger.warning(
+                            "Super-over scorecard skipped: player '%s' not found "
+                            "(match_id=%s, team_id=%s).", _pname, self.match_id, _team_id,
+                        )
+                        continue
+                    _so_resolved.append((_player, _team_id, _rectype, _pos, _s))
+            for _player, _team_id, _rectype, _pos, _s in _so_resolved:
+                _card = MatchScorecard(
+                    match_id=self.match_id, player_id=_player.id, team_id=_team_id,
+                    innings_number=3, record_type=_rectype, position=_pos,
+                )
+                if _rectype == "batting":
+                    _card.runs = _s.get("runs", 0)
+                    _card.balls = _s.get("balls", 0)
+                    _card.fours = _s.get("fours", 0)
+                    _card.sixes = _s.get("sixes", 0)
+                    _card.is_out = bool(_s.get("wicket_type"))
+                    _card.wicket_type = _s.get("wicket_type")
+                    _card.strike_rate = (_s.get("runs", 0) * 100.0 / _s["balls"]) if _s.get("balls", 0) > 0 else 0.0
+                    _card.batting_position = _pos
+                else:
+                    _card.balls_bowled = _s.get("balls_bowled", 0)
+                    _card.runs_conceded = _s.get("runs", 0)
+                    _card.wickets = _s.get("wickets", 0)
+                    _card.maidens = _s.get("maidens", 0)
+                db.session.add(_card)
+
             # Update Player Aggregates. Track per-player deltas so milestone
             # detection knows the exact "before" total (multi-wicket / multi-
             # catch matches that straddle a milestone need the precise jump).
+            #
+            # Aggregate from this match's PERSISTED scorecard rows, not from
+            # db.session.new. The session runs with autoflush=True (Flask-
+            # SQLAlchemy default), and every save_stats() call issues a
+            # MatchScorecard lookup query that autoflushes previously-added
+            # cards out of db.session.new — so by the time this loop runs only
+            # the last-added card(s) would still be pending. Flushing then
+            # re-querying by match_id gives us every batting/bowling card
+            # (innings 1, 2, and super-over innings 3) exactly once. Old rows
+            # for this match were already reversed + deleted above, so this
+            # set contains only the cards just written for this archive.
+            db.session.flush()
+            match_cards = MatchScorecard.query.filter_by(match_id=self.match_id).all()
             updated_players = set()
             player_deltas = {}
-            for card in [c for c in db.session.new if isinstance(c, MatchScorecard)]:
+            for card in match_cards:
                 # relationship loading fallback
                 p = DBPlayer.query.get(card.player_id)
                 if not p: continue
