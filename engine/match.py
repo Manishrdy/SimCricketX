@@ -271,8 +271,8 @@ class Match:
         self.scenario_mode = match_data.get("scenario_mode", None)
         self.scenario_engine = None
         if self.scenario_mode:
-            from engine.scenario_engine import ScenarioEngine
-            self.scenario_engine = ScenarioEngine(self.scenario_mode, self)
+            from engine.scenario_engine import create_scenario_engine
+            self.scenario_engine = create_scenario_engine(self.scenario_mode, self)
 
 
     def _get_team_name(self, team_list):
@@ -4065,10 +4065,14 @@ class Match:
         _total_balls = self.fmt.overs * 6
         _pitch_wear = min(1.0, self.innings_balls_bowled / _total_balls)
         _game_mode_override = self._get_dynamic_game_mode()
+        # Historical scenario engines steer both innings; classic scripted
+        # scenarios only ever act on the 2nd innings.
+        _scenario_steers_now = bool(self.scenario_engine) and (
+            self.innings == 2
+            or getattr(self.scenario_engine, "steers_first_innings", False)
+        )
         _scenario_phase = (
-            self.scenario_engine.get_phase()
-            if (self.scenario_engine and self.innings == 2)
-            else "inactive"
+            self.scenario_engine.get_phase() if _scenario_steers_now else "inactive"
         )
         _gsme_state = compute_game_state_vector(
             ball_history=self.ball_history,
@@ -4087,7 +4091,7 @@ class Match:
 
         # ===== SCENARIO ENGINE HOOK =====
         scenario_override = None
-        if self.scenario_engine and self.innings == 2:
+        if _scenario_steers_now:
             scenario_override = self.scenario_engine.get_override_outcome(
                 batter=self.current_striker, bowler=self.current_bowler
             )
@@ -4096,7 +4100,7 @@ class Match:
             outcome = scenario_override
         else:
             # Merge scenario bias into pressure_effects (convergence/free-play phases)
-            if self.scenario_engine and self.innings == 2:
+            if _scenario_steers_now:
                 scenario_bias = self.scenario_engine.get_scenario_bias(
                     self._calculate_current_match_state()
                 )
@@ -5221,6 +5225,15 @@ class Match:
 
     def start_super_over(self, first_batting_team, batsmen_names=None, bowler_name=None):
         """Start the super over with user-chosen or auto-selected players"""
+        # Re-entry guard: a duplicate POST would increment super_over_round and
+        # reset the round's scores mid-flight. Only valid while awaiting the
+        # innings-1 selection (set by _setup_super_over / a tied-again round).
+        if getattr(self, "super_over_phase", None) != "awaiting_innings1_selection":
+            return {
+                "error": "super_over_not_awaiting_selection",
+                "phase": getattr(self, "super_over_phase", None),
+            }
+
         # IPL rule: from round 2 onwards, the team that batted second in the
         # previous super over must bat first. Enforce here regardless of input.
         required_first = getattr(self, "_super_over_next_first_batting", None)
@@ -5380,6 +5393,14 @@ class Match:
 
     def start_super_over_innings2(self, batsmen_names=None, bowler_name=None):
         """Start innings 2 of the current super over with user-chosen players"""
+        # Re-entry guard: a duplicate POST after innings 2 has started would
+        # wipe its in-progress state via _init_super_over_innings_state.
+        if getattr(self, "super_over_phase", None) != "awaiting_innings2_selection":
+            return {
+                "error": "super_over_not_awaiting_selection",
+                "phase": getattr(self, "super_over_phase", None),
+            }
+
         # Teams were already swapped by _end_super_over_innings
         validation_error = self._validate_super_over_selection(
             batsmen_names, bowler_name,
@@ -5438,6 +5459,19 @@ class Match:
 
     def next_super_over_ball(self):
         """Process next ball in super over — returns rich data for modal UI"""
+        # Re-entry guard: between innings the phase is "awaiting_*_selection"
+        # and after the decision it is "complete", but super_over_ball and
+        # super_over_batsman_stats stay stale until the next start_super_over*
+        # call resets them. A duplicate/retried POST in those windows would
+        # re-run _end_super_over_innings on already-accumulated stats —
+        # double-counting boundaries/career runs under the swapped team key
+        # and declaring a winner before innings 2 is ever played.
+        if getattr(self, "super_over_phase", None) != "innings_in_progress":
+            return {
+                "error": "super_over_not_in_progress",
+                "phase": getattr(self, "super_over_phase", None),
+            }
+
         team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
 
         if self.super_over_ball >= 6 or self.super_over_wickets[team_key] >= 2:

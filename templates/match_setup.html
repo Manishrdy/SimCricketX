@@ -970,6 +970,24 @@
 
                     <div class="form-group">
                         <div class="condition-header">
+                            <div class="condition-icon"><i class="fas fa-landmark"></i></div>
+                            <span class="condition-tag">Story</span>
+                        </div>
+                        <label class="form-label" for="story-select">Story Mode</label>
+                        <select id="story-select">
+                            <option value="">None — no story arc</option>
+                            {% for sp in story_packs %}
+                            <option value="{{ sp.id }}" data-format="{{ sp.format }}"
+                                    {% if preselect_story == sp.id %}selected{% endif %}>
+                                {{ sp.title }} ({{ sp.format }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="helper-text"><span id="story-help">Steer this match through a legendary arc — your teams, an open ending.</span></p>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="condition-header">
                             <div class="condition-icon"><i class="fas fa-cricket-bat-ball"></i></div>
                             <span class="condition-tag">Format</span>
                         </div>
@@ -1471,6 +1489,13 @@
                 updateConditionsSummary();
             };
         }
+        const storySelect = document.getElementById('story-select');
+        if (storySelect) {
+            storySelect.onchange = () => {
+                syncStoryControl();
+                updateConditionsSummary();
+            };
+        }
         // Wire up format radio group.
         document.querySelectorAll('input[name="match-format-radio"]').forEach(radio => {
             radio.onchange = () => {
@@ -1491,8 +1516,45 @@
         syncInterestingMatchControl();
         refreshMatchFormatOptions();
         syncFormatControl();
+        syncStoryControl();
         syncDayNightControl();
         updateConditionsSummary();
+    }
+
+    function syncStoryControl() {
+        const storySelect = document.getElementById('story-select');
+        const storyHelp = document.getElementById('story-help');
+        const interestingToggle = document.getElementById('interesting-match-toggle');
+        if (!storySelect) return;
+
+        // Stories are format-specific: hide options that don't match the
+        // current format and clear the selection if it became invalid.
+        const format = document.getElementById('match-format-value')?.value || 'T20';
+        Array.from(storySelect.options).forEach(opt => {
+            if (!opt.value) return;
+            const fits = (opt.dataset.format || 'T20') === format;
+            opt.hidden = !fits;
+            opt.disabled = !fits;
+        });
+        const current = storySelect.selectedOptions[0];
+        if (current && current.value && current.disabled) {
+            storySelect.value = '';
+        }
+
+        const hasStory = !!storySelect.value;
+        // A named story overrides random drama — make that visible.
+        if (interestingToggle) {
+            interestingToggle.disabled = hasStory;
+            if (hasStory) {
+                interestingToggle.checked = false;
+                syncInterestingMatchControl();
+            }
+        }
+        if (storyHelp) {
+            storyHelp.textContent = hasStory
+                ? 'The match follows this story\'s pressure arc — the ending stays open.'
+                : 'Steer this match through a legendary arc — your teams, an open ending.';
+        }
     }
 
     function syncSimulationModeControl() {
@@ -1546,6 +1608,9 @@
         // Update team card availability badges + disabled state.
         updateTeamCardFormats(newFormat);
 
+        // Re-gate story options for the new format.
+        syncStoryControl();
+
         // If already on Step 3, re-render squads for the new format.
         if (currentStep === 3 && selectedTeamIndices.length === 2) {
             initializeStep3();
@@ -1584,7 +1649,13 @@
         setText('summary-pitch', `${pitch} Pitch`);
         setText('summary-toss', toss);
         setText('summary-mode', mode === 'manual' ? 'Manual' : 'Auto');
-        setText('summary-scenario', interesting ? 'Enabled' : 'Disabled');
+        const storySelect = document.getElementById('story-select');
+        const storyOption = storySelect && storySelect.value ? storySelect.selectedOptions[0] : null;
+        if (storyOption) {
+            setText('summary-scenario', storyOption.textContent.trim());
+        } else {
+            setText('summary-scenario', interesting ? 'Surprise drama' : 'Disabled');
+        }
         const formatLabels = { 'T20': 'T20', 'ListA': 'List A (50-ov)' };
         setText('summary-format', formatLabels[format] || format);
         setText('summary-day-night', isDayNight ? 'Day/Night' : 'Day');
@@ -2082,6 +2153,7 @@
                 toss: document.querySelector('input[name="toss"]:checked').value,
                 simulation_mode: document.getElementById('simulation-mode-select').value,
                 make_match_interesting: document.getElementById('interesting-match-flag').value === 'true',
+                story_id: document.getElementById('story-select')?.value || null,
                 match_format: currentFormat,
                 is_day_night: document.getElementById('day-night-value').value === 'true',
                 playing_xi: {

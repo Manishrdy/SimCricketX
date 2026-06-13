@@ -470,6 +470,169 @@ def _generate_super_over_script(runs_needed, wickets_remaining, balls_left):
 
 
 # --------------------------------------------------------------------------- #
+#  Historical scenario engine (beat-driven, pack-defined)
+# --------------------------------------------------------------------------- #
+
+HISTORICAL_MODE_PREFIX = "historical:"
+
+
+class HistoricalScenarioEngine:
+    """
+    Steers a match through the pressure arc of a historical game defined by a
+    scenario pack (see engine/scenario_packs.py).
+
+    Unlike ScenarioEngine, this engine:
+      - steers BOTH innings (e.g. nudges the first innings toward the
+        historical total corridor),
+      - never scripts outcomes — get_override_outcome() always returns None,
+        so the ending is genuinely open. Once the last checkpoint of an
+        innings has passed, the simulation runs completely free.
+
+    Checkpoints are corridors, not rails: between beats the match plays out
+    naturally, and the bias only grows when the trajectory drifts off the
+    historical arc.
+    """
+
+    steers_first_innings = True
+
+    def __init__(self, pack, match):
+        self.pack = pack or {}
+        self.match = match
+        self.scenario_type = HISTORICAL_MODE_PREFIX + str(self.pack.get("id", "unknown"))
+        self.active = bool(self.pack.get("beats"))
+        logger.info("[Scenario] Initialized historical pack: %s", self.pack.get("id"))
+
+    # -- lifecycle ------------------------------------------------------- #
+
+    def on_innings_transition(self):
+        logger.info("[Scenario] Historical pack %s — innings transition", self.pack.get("id"))
+
+    # -- checkpoint helpers ---------------------------------------------- #
+
+    def _checkpoints(self):
+        beats = self.pack.get("beats") or {}
+        return beats.get(str(self.match.innings)) or []
+
+    def _next_checkpoint(self, balls_now):
+        """Return (checkpoint, checkpoint_ball_index) for the first checkpoint
+        still ahead of the current ball, or (None, None) when past them all."""
+        for cp in self._checkpoints():
+            cp_balls = int(cp.get("at_over", 0)) * 6
+            if cp_balls > balls_now:
+                return cp, cp_balls
+        return None, None
+
+    def _resolve_score_range(self, cp):
+        """A checkpoint corridor comes in one of three forms:
+        'score' (absolute runs), 'score_pct' (fraction of the chase target),
+        or 'par_pct' (fraction of the par score at that over for this match's
+        pitch/format — lets one story adapt to any teams and conditions)."""
+        if "score" in cp:
+            lo, hi = cp["score"]
+            return float(lo), float(hi)
+        if "score_pct" in cp and self.match.target:
+            lo, hi = cp["score_pct"]
+            return lo * self.match.target, hi * self.match.target
+        if "par_pct" in cp:
+            from engine.game_state_engine import get_par_score
+            fmt = getattr(self.match, "fmt", None)
+            pitch = getattr(self.match, "pitch", "Hard")
+            par = get_par_score(int(cp.get("at_over", 0)), fmt, pitch)
+            lo, hi = cp["par_pct"]
+            return lo * par, hi * par
+        return None
+
+    # -- public API (same surface as ScenarioEngine) ---------------------- #
+
+    def get_phase(self):
+        if not self.active:
+            return "inactive"
+        balls_now = self.match.current_over * 6 + self.match.current_ball
+        cp, cp_balls = self._next_checkpoint(balls_now)
+        if cp is None:
+            return "free_play"
+        return "convergence" if (cp_balls - balls_now) <= 12 else "free_play"
+
+    def get_override_outcome(self, batter, bowler):
+        # Historical scenarios never script balls — the ending stays open.
+        return None
+
+    def get_scenario_bias(self, match_state):
+        if not self.active:
+            return {}
+
+        m = self.match
+        balls_now = m.current_over * 6 + m.current_ball
+        cp, cp_balls = self._next_checkpoint(balls_now)
+        if cp is None:
+            return {}  # past the last beat — fully free play
+
+        balls_to_cp = cp_balls - balls_now
+        overs_to_cp = balls_to_cp / 6.0
+        # Proximity ramp: ~0.55 several overs out, 1.0 in the beat's final over.
+        # Keeps the early game loose and tightens the screw as the beat nears.
+        proximity = 1.0 - min(0.45, max(0.0, (overs_to_cp - 1.0) * 0.07))
+
+        bias = {}
+
+        # Need at least an over of data before run-rate projection is meaningful.
+        run_excess = 0.0  # how far ahead of the corridor the side is scoring
+        score_range = self._resolve_score_range(cp)
+        if score_range and balls_now >= 6:
+            lo, hi = score_range
+            corridor_width = max(6.0, hi - lo)
+            projected = m.score + (m.score / balls_now) * balls_to_cp
+            if projected < lo:
+                severity = min(1.5, (lo - projected) / corridor_width)
+                bias["boundary_modifier"] = min(2.2, 1 + (0.45 + 0.75 * severity) * proximity)
+                bias["dot_bonus"] = -0.06 * proximity
+            elif projected > hi:
+                run_excess = min(2.0, (projected - hi) / corridor_width)
+                bias["boundary_modifier"] = max(0.25, 1 - (0.40 + 0.35 * run_excess) * proximity)
+                bias["dot_bonus"] = min(0.20, (0.05 + 0.06 * run_excess) * proximity)
+
+        wk_range = cp.get("wickets")
+        if wk_range:
+            wlo, whi = wk_range
+            if m.wickets > whi:
+                # Over the corridor ceiling — protect the remaining batters so
+                # the side isn't bowled out before the arc completes.
+                bias["wicket_modifier"] = 0.35
+            elif m.wickets == whi:
+                bias["wicket_modifier"] = 0.6
+            elif m.wickets < wlo:
+                # Behind on the collapse — raise wicket pressure per strike
+                # owed. When the side is also scoring ahead of the arc, the
+                # collapse is the story's brake (run-suppression alone can't
+                # rein in flat decks) — push harder. Self-regulating: the
+                # modifier vanishes once wickets enter the corridor and flips
+                # to protection at the ceiling.
+                owed = wlo - m.wickets
+                bias["wicket_modifier"] = min(4.0, 1 + (0.9 * owed + 0.5 * run_excess) * proximity)
+
+        return bias
+
+
+def create_scenario_engine(scenario_mode, match):
+    """
+    Factory used by Match.__init__. Classic modes ("last_ball_six", ...) get
+    the scripted ScenarioEngine; "historical:<pack_id>" modes get the
+    beat-driven HistoricalScenarioEngine. Returns None when a historical pack
+    cannot be resolved so the match falls back to normal simulation.
+    """
+    if isinstance(scenario_mode, str) and scenario_mode.startswith(HISTORICAL_MODE_PREFIX):
+        pack = match.data.get("scenario_pack")
+        if not pack:
+            from engine.scenario_packs import get_scenario_pack
+            pack = get_scenario_pack(scenario_mode[len(HISTORICAL_MODE_PREFIX):])
+        if not pack:
+            logger.warning("[Scenario] Could not resolve historical pack for mode '%s'", scenario_mode)
+            return None
+        return HistoricalScenarioEngine(pack, match)
+    return ScenarioEngine(scenario_mode, match)
+
+
+# --------------------------------------------------------------------------- #
 #  Main ScenarioEngine class
 # --------------------------------------------------------------------------- #
 

@@ -46,13 +46,15 @@ class StatsService:
         """
         self._log(f"Fetching overall stats for user {user_id}, format={match_format}")
 
-        # Query all match scorecards for this user's teams
+        # Query all match scorecards for this user's teams.
+        # Super-over career-stat rows are not real innings — exclude them.
         query = (
             db.session.query(MatchScorecard, Match, Player, Team)
             .join(Match, MatchScorecard.match_id == Match.id)
             .join(Player, MatchScorecard.player_id == Player.id)
             .join(Team, Player.team_id == Team.id)
             .filter(Team.user_id == user_id)
+            .filter(MatchScorecard.is_super_over.isnot(True))
         )
 
         if match_format:
@@ -100,7 +102,7 @@ class StatsService:
         if cached:
             return cached
 
-        # Full computation fallback
+        # Full computation fallback (super-over rows are not real innings)
         query = (
             db.session.query(MatchScorecard, Match, Player, Team)
             .join(Match, MatchScorecard.match_id == Match.id)
@@ -108,6 +110,7 @@ class StatsService:
             .join(Team, Player.team_id == Team.id)
             .filter(Match.tournament_id == tournament_id)
             .filter(Team.user_id == user_id)
+            .filter(MatchScorecard.is_super_over.isnot(True))
         )
 
         if match_format:
@@ -274,13 +277,14 @@ class StatsService:
         insights["conditions"]["venues"] = _top_conditions(venue_agg, limit=4)
         insights["conditions"]["pitches"] = _top_conditions(pitch_agg, limit=4)
 
-        # Player-level data for impact + form
+        # Player-level data for impact + form (excluding super-over rows)
         record_query = (
             db.session.query(MatchScorecard, Match, Player, Team)
             .join(Match, MatchScorecard.match_id == Match.id)
             .join(Player, MatchScorecard.player_id == Player.id)
             .join(Team, Player.team_id == Team.id)
             .filter(Team.user_id == user_id)
+            .filter(MatchScorecard.is_super_over.isnot(True))
         )
         if tournament_id:
             record_query = record_query.filter(Match.tournament_id == tournament_id)
@@ -842,6 +846,7 @@ class StatsService:
                 .filter(Team.user_id == user_id)
                 .filter(MatchScorecard.record_type == 'bowling')
                 .filter(MatchScorecard.wickets > 0)  # Only include actual wickets
+                .filter(MatchScorecard.is_super_over.isnot(True))  # SO spells aren't innings figures
             )
             
             # Apply tournament filter if specified
@@ -998,12 +1003,13 @@ class StatsService:
                     profile_format = profile.format_type
             effective_format = match_format or profile_format
 
-            # Query scorecard records
+            # Query scorecard records (super-over rows are not real innings)
             query = (
                 db.session.query(MatchScorecard, Match)
                 .join(Match, MatchScorecard.match_id == Match.id)
                 .filter(MatchScorecard.player_id == player_id)
                 .filter(Match.user_id == user_id)  # Ensure we only get current user's matches
+                .filter(MatchScorecard.is_super_over.isnot(True))
             )
 
             if tournament_id:
@@ -1471,6 +1477,7 @@ class StatsService:
                     .filter(
                         MatchScorecard.match_id.in_(match_ids),
                         MatchScorecard.team_id == team_id,
+                        MatchScorecard.is_super_over.isnot(True),
                     )
                     .group_by(Player.name)
                     .all()
@@ -1523,6 +1530,7 @@ class StatsService:
                 db.session.query(MatchScorecard, Match)
                 .join(Match, MatchScorecard.match_id == Match.id)
                 .filter(MatchScorecard.player_id == player_id, Match.user_id == user_id)
+                .filter(MatchScorecard.is_super_over.isnot(True))
             )
             if effective_format:
                 query = query.filter(Match.match_format == effective_format)

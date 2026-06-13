@@ -1,0 +1,132 @@
+{% extends "layout.html" %}
+
+{% block title %}Story Mode | SimCricketX{% endblock %}
+
+{% block extra_css %}
+<style>
+    .scenario-hero {
+        padding: 2.5rem 0 1.5rem;
+        text-align: center;
+    }
+    .scenario-hero h1 {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    .scenario-hero p {
+        color: var(--text-secondary, #888);
+        max-width: 640px;
+        margin: 0 auto;
+    }
+    .scenario-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 1.5rem;
+        margin: 1.5rem 0 3rem;
+    }
+    .scenario-card {
+        border: 1px solid var(--border-color, #2a2a2a);
+        border-radius: 16px;
+        padding: 1.5rem;
+        background: var(--card-bg, rgba(255, 255, 255, 0.03));
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    .scenario-card h2 {
+        font-size: 1.35rem;
+        margin: 0;
+    }
+    .scenario-sub {
+        font-size: 0.85rem;
+        color: var(--text-secondary, #888);
+    }
+    .scenario-tagline {
+        font-style: italic;
+        font-size: 0.95rem;
+        color: var(--accent-color, #14b8a6);
+    }
+    .scenario-story {
+        font-size: 0.92rem;
+        line-height: 1.55;
+        flex: 1;
+    }
+    .scenario-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+    .scenario-chip {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        border: 1px solid var(--border-color, #2a2a2a);
+        color: var(--text-secondary, #aaa);
+    }
+    .scenario-beats {
+        font-size: 0.82rem;
+        color: var(--text-secondary, #999);
+        padding-left: 1.1rem;
+        margin: 0;
+    }
+    .scenario-beats li { margin-bottom: 0.2rem; }
+    .scenario-play-btn {
+        display: block;
+        margin-top: 0.5rem;
+        padding: 0.7rem 1.2rem;
+        border: none;
+        border-radius: 10px;
+        background: var(--accent-color, #14b8a6);
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.95rem;
+        text-align: center;
+        text-decoration: none;
+        transition: opacity 0.15s ease;
+    }
+    .scenario-play-btn:hover { opacity: 0.88; }
+    .scenario-empty {
+        text-align: center;
+        color: var(--text-secondary, #888);
+        padding: 3rem 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="scenario-hero">
+    <h1><i class="fa-solid fa-landmark"></i> Story Mode</h1>
+    <p>Steer your own teams through cricket's most famous pressure arcs. Pick a story, then set up
+       the match exactly like always — your squads, your venue, your pitch. The simulation recreates
+       the story's shape: the collapse will come. How it ends is never written.</p>
+</section>
+
+{% if packs %}
+<div class="scenario-grid">
+    {% for pack in packs %}
+    <article class="scenario-card">
+        <h2>{{ pack.title }}</h2>
+        <div class="scenario-sub">{{ pack.subtitle }}{% if pack.match_date %} · {{ pack.match_date }}{% endif %}</div>
+        {% if pack.tagline %}<div class="scenario-tagline">{{ pack.tagline }}</div>{% endif %}
+        <p class="scenario-story">{{ pack.story }}</p>
+        <div class="scenario-meta">
+            <span class="scenario-chip">{{ pack.format }}</span>
+            <span class="scenario-chip">Your teams</span>
+            <span class="scenario-chip">Open ending</span>
+        </div>
+        {% if pack.beats and pack.beats['2'] %}
+        <ul class="scenario-beats">
+            {% for beat in pack.beats['2'] %}
+            <li>{{ beat.note }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        <a class="scenario-play-btn" href="{{ url_for('match_setup', story=pack.id) }}">
+            <i class="fa-solid fa-circle-play"></i> Play this story
+        </a>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<div class="scenario-empty">No stories available yet — check back soon.</div>
+{% endif %}
+{% endblock %}

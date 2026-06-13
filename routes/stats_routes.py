@@ -273,6 +273,7 @@ def register_stats_routes(
                     .join(DBMatch, MatchScorecard.match_id == DBMatch.id)
                     .join(DBTeam, DBPlayer.team_id == DBTeam.id)
                     .filter(DBMatch.user_id == current_user.id)
+                    .filter(MatchScorecard.is_super_over.isnot(True))
                     .group_by(DBPlayer.id, DBPlayer.name, DBTeam.name)
                     .all()
                 )

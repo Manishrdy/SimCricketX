@@ -1725,6 +1725,13 @@ function soSimulateBall() {
         soState._ballRetries = 0;
 
         if (data.error) {
+            if (data.error === 'super_over_not_in_progress') {
+                // The engine already moved past this innings (our earlier
+                // request landed but the response was lost). The server
+                // snapshot, not a replayed ball request, has the truth.
+                soResyncFromServer();
+                return;
+            }
             // Backend error — surface it and offer a manual resume instead of
             // dying silently in the console (a top user-reported symptom).
             console.error(data.error);
@@ -1827,6 +1834,25 @@ function soSimulateBall() {
     });
 }
 
+// Re-fetch the live-state snapshot and rebuild the super-over UI from it.
+// Used when a duplicate/retried request is rejected because the engine has
+// already advanced to the next phase (e.g. innings ended but the response
+// was dropped): the snapshot restores the correct modal or ball loop.
+function soResyncFromServer() {
+    fetch(`${window.location.pathname}/live-state`)
+        .then(r => r.json())
+        .then(state => {
+            if (state.status === 'completed') {
+                window.location.href = `${window.location.pathname}/scoreboard`;
+            } else if (state.super_over) {
+                soResumeFromState(state, { skipLogReplay: true });
+            } else {
+                soShowResumeButton();
+            }
+        })
+        .catch(() => soShowResumeButton());
+}
+
 // Floating manual-resume button shown when the super-over loop can't continue
 // on its own (backend error or repeated network failures). Lets the user pick
 // the loop back up without losing the in-memory super-over state.
@@ -1888,11 +1914,12 @@ function soSetupInnings2(data) {
 // Rebuild the super-over UI after a page refresh, from the live-state snapshot.
 // In-memory resume only — the engine state still lives in MATCH_INSTANCES, so
 // this restores the modal (mid-selection) or continues the ball loop (mid-over).
-function soResumeFromState(state) {
+function soResumeFromState(state, opts = {}) {
     const so = state.super_over || {};
 
     // Replay prior commentary so the log isn't blank after the refresh.
-    if (state.commentary_log && state.commentary_log.length) {
+    // Skipped on mid-session re-syncs, where the log is already populated.
+    if (!opts.skipLogReplay && state.commentary_log && state.commentary_log.length) {
         state.commentary_log.forEach(entry => appendLog(entry, 'comment'));
     }
     // Make sure no normal-innings ball loop runs alongside the super over.
