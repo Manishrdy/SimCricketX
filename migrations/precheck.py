@@ -95,6 +95,9 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # Remove the retired manual issue-report storage after support messaging
     # is in place.
     ("drop_issue_reports",       _loader("migrations.drop_issue_reports")),
+    # Explicit discriminator for super-over career-stat scorecard rows
+    # (previously only distinguishable by the magic innings_number=3).
+    ("add_super_over_flag",      _loader("migrations.add_super_over_flag")),
 ]
 
 

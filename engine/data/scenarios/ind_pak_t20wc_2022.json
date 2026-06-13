@@ -1,0 +1,22 @@
+{
+  "id": "ind_pak_t20wc_2022",
+  "title": "The Kohli Chase",
+  "subtitle": "Inspired by India v Pakistan — T20 World Cup 2022, Melbourne Cricket Ground",
+  "match_date": "23 October 2022",
+  "story": "90,293 fans at the MCG. Pakistan post a defendable total after a late collapse, then reduce India to 31/4 inside seven overs. What follows is widely called the greatest T20I innings ever played — Virat Kohli's unbeaten 82 off 53 and a final over of pure chaos. Play this arc with YOUR teams: a pegged-back first innings, a top-order collapse in the chase, a long rebuild, and a mountain to climb at the death. The match always reaches the same crossroads — how it ends is up to the simulation.",
+  "tagline": "Same collapse. Same pressure. Your teams, a different ending every time.",
+  "format": "T20",
+  "beats": {
+    "1": [
+      { "at_over": 4, "par_pct": [0.50, 0.98], "wickets": [1, 2], "note": "New-ball strikes — the top order under siege" },
+      { "at_over": 10, "par_pct": [0.68, 0.99], "wickets": [2, 4], "note": "A patient rebuild from the wreckage" },
+      { "at_over": 15, "par_pct": [0.80, 1.05], "wickets": [3, 5], "note": "The platform is set for a late launch" },
+      { "at_over": 20, "par_pct": [0.85, 1.03], "wickets": [5, 9], "note": "Death-overs squeeze pegs the total back" }
+    ],
+    "2": [
+      { "at_over": 7, "score_pct": [0.17, 0.27], "wickets": [3, 4], "note": "The collapse — four down and the chase in ruins" },
+      { "at_over": 12, "score_pct": [0.40, 0.52], "wickets": [4, 5], "note": "Two batters dig in as the asking rate climbs" },
+      { "at_over": 17, "score_pct": [0.72, 0.86], "wickets": [4, 6], "note": "A mountain to climb in the last three overs" }
+    ]
+  }
+}

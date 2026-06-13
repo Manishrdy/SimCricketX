@@ -1457,6 +1457,7 @@ class TournamentEngine:
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "batting",
                 MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.is_super_over.isnot(True),
                 valid_innings,
             ).first()
 
@@ -1479,6 +1480,7 @@ class TournamentEngine:
                 MatchScorecard.record_type == "batting",
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.is_out == False,
+                MatchScorecard.is_super_over.isnot(True),
                 sa_or(MatchScorecard.balls > 0, MatchScorecard.runs > 0),
             ).scalar() or 0
             cache.not_outs = not_outs
@@ -1489,6 +1491,7 @@ class TournamentEngine:
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.runs >= 50,
                 MatchScorecard.runs < 100,
+                MatchScorecard.is_super_over.isnot(True),
             ).scalar() or 0
             cache.fifties = fifties
 
@@ -1497,6 +1500,7 @@ class TournamentEngine:
                 MatchScorecard.record_type == "batting",
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.runs >= 100,
+                MatchScorecard.is_super_over.isnot(True),
             ).scalar() or 0
             cache.centuries = centuries
 
@@ -1517,6 +1521,7 @@ class TournamentEngine:
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "bowling",
                 MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.is_super_over.isnot(True),
             ).first()
 
             if bowl:
@@ -1543,6 +1548,7 @@ class TournamentEngine:
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "bowling",
                 MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.is_super_over.isnot(True),
             ).order_by(
                 MatchScorecard.wickets.desc(),
                 MatchScorecard.runs_conceded.asc(),
@@ -1556,6 +1562,7 @@ class TournamentEngine:
                 MatchScorecard.record_type == "bowling",
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.wickets >= 5,
+                MatchScorecard.is_super_over.isnot(True),
             ).scalar() or 0
             cache.five_wicket_hauls = five_wkt
 
@@ -1573,7 +1580,9 @@ class TournamentEngine:
                 cache.run_outs = fielding[1]
                 cache.stumpings = fielding[2]
 
-            # Matches played = distinct match IDs
+            # Matches played = distinct match IDs. Deliberately NOT filtered on
+            # is_super_over: a player whose only card is a super-over row still
+            # played that match (mirrors DBPlayer.matches_played).
             matches_played = db.session.query(
                 sa_func.count(sa_func.distinct(MatchScorecard.match_id))
             ).filter(

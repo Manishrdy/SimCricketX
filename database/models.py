@@ -664,7 +664,13 @@ class MatchScorecard(db.Model):
     innings_number = db.Column(db.Integer, default=1, nullable=False)
     record_type = db.Column(db.String(20), default="batting", nullable=False)
     position = db.Column(db.Integer, nullable=True)
-    
+    # True for super-over career-stat rows (written at innings_number=3).
+    # These are NOT real innings: they exist only so career run/wicket TOTALS
+    # aggregate (and reverse, on re-sim) through the standard paths. Anything
+    # that counts innings, dismissals, averages, or high-water marks must
+    # exclude them — filter with MatchScorecard.is_super_over.isnot(True).
+    is_super_over = db.Column(db.Boolean, default=False)
+
     # Batting
     runs = db.Column(db.Integer, default=0)
     balls = db.Column(db.Integer, default=0)
