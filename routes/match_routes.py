@@ -177,6 +177,27 @@ def register_match_routes(
                 if _tournament and _tournament.format_type:
                     data["match_format"] = _tournament.format_type
 
+            # Story mode: a named story arc (historical scenario pack) takes
+            # precedence over the random "interesting" drama modes. Validated
+            # after the tournament format override so format gating is exact.
+            story_id = data.get("story_id")
+            if story_id:
+                from engine.scenario_packs import get_scenario_pack
+                story_pack = get_scenario_pack(str(story_id))
+                if not story_pack:
+                    return jsonify({"error": "Unknown story"}), 400
+                if story_pack.get("format", "T20") != data["match_format"]:
+                    return jsonify({
+                        "error": (
+                            f"The story '{story_pack.get('title', story_id)}' is a "
+                            f"{story_pack.get('format')} story and cannot run as "
+                            f"{data['match_format']}."
+                        )
+                    }), 400
+                data["scenario_mode"] = f"historical:{story_pack['id']}"
+                data["scenario_pack"] = story_pack
+                data["scenario_title"] = story_pack.get("title")
+
             # Fix: Define codes for filename generation later
             home_code = home_db.short_code
             away_code = away_db.short_code
@@ -350,6 +371,17 @@ def register_match_routes(
         _modes = _setup_cfg.get("game_modes", {})
         active_mode_label = _modes.get(_mode_name, {}).get("label", "Natural Game")
 
+        from engine.scenario_packs import list_scenario_packs
+        story_packs = [
+            {
+                "id": p["id"],
+                "title": p.get("title", p["id"]),
+                "tagline": p.get("tagline", ""),
+                "format": p.get("format", "T20"),
+            }
+            for p in list_scenario_packs()
+        ]
+
         return render_template("match_setup.html",
                                teams=teams,
                                preselect_home=preselect_home,
@@ -357,7 +389,9 @@ def register_match_routes(
                                tournament_id=tournament_id,
                                fixture_id=fixture_id,
                                tournament_format=tournament_format,
-                               active_game_mode_label=active_mode_label)
+                               active_game_mode_label=active_mode_label,
+                               story_packs=story_packs,
+                               preselect_story=request.args.get("story", ""))
 
     @app.route("/api/match/verify-lineups", methods=["POST"])
     @login_required
@@ -561,9 +595,9 @@ def register_match_routes(
 
         innings_data = {}
         for card in scorecards:
-            # Super-over rows (innings_number 3) exist only for career-stat
-            # aggregation/reversal — they are not part of the displayed innings.
-            if (card.innings_number or 0) > 2:
+            # Super-over rows exist only for career-stat aggregation/reversal —
+            # they are not part of the displayed innings.
+            if card.is_super_over:
                 continue
             entry = innings_data.setdefault(
                 card.innings_number,
@@ -918,6 +952,21 @@ def register_match_routes(
             app.logger.error(f"Error updating final lineups: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
         
+    def _finalize_completed_match(match, match_id, outcome):
+        """One-time completion side effects for a finished match: simulated-
+        match counter + DB persistence (tournament fixture/standings or plain
+        match history, which also sets current_state to "completed"). Shared
+        by the regular next-ball path and the super-over path — both end
+        matches mid-request. No-op when the match is already finalized, so
+        repeated calls cannot double-count."""
+        if match.data.get("current_state") == "completed":
+            return
+        increment_matches_simulated()
+        if match.data.get("tournament_id"):
+            _handle_tournament_match_completion(match, match_id, outcome, app.logger)
+        else:
+            _persist_non_tournament_match_completion(match, match_id, outcome, app.logger)
+
     @app.route("/match/<match_id>/next-ball", methods=["POST"])
     @login_required
     @rate_limit(max_requests=60, window_seconds=10)  # C3: Rate limit to prevent DoS
@@ -948,17 +997,7 @@ def register_match_routes(
 
             # Explicitly send final score and wickets clearly
             if outcome.get("match_over"):
-                # Only increment if this is the first time we're seeing the match end
-                # (Checking if it wasn't already marked completed prevents double counting on repeated API calls)
-                first_completion = match.data.get("current_state") != "completed"
-                if first_completion:
-                    increment_matches_simulated()
-
-                    # Persist completed match data in DB.
-                    if match.data.get("tournament_id"):
-                        _handle_tournament_match_completion(match, match_id, outcome, app.logger)
-                    else:
-                        _persist_non_tournament_match_completion(match, match_id, outcome, app.logger)
+                _finalize_completed_match(match, match_id, outcome)
 
                 return jsonify({
                     "innings_end":     match.innings == 2, # Flag generic innings end
@@ -1097,6 +1136,13 @@ def register_match_routes(
                 return jsonify({"error": "Unauthorized"}), 403
         try:
             result = match.next_super_over_ball()
+            # A super over can decide the match inside this request. Run the
+            # same completion side effects as the regular next-ball path —
+            # without this, tournament fixtures decided by super over never
+            # get their DBMatch row / standings update, and the match stays
+            # "in_progress" (resumable) forever.
+            if isinstance(result, dict) and result.get("match_over"):
+                _finalize_completed_match(match, match_id, result)
             return jsonify(result)
         except Exception as e:
             log_exception(e)

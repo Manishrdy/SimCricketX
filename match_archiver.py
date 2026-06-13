@@ -81,13 +81,16 @@ def reverse_player_aggregates(scorecards, logger=None):
             player.total_fours = max(0, player.total_fours - (card.fours or 0))
             player.total_sixes = max(0, player.total_sixes - (card.sixes or 0))
 
-            if card.runs and card.runs >= 50 and card.runs < 100:
-                player.total_fifties = max(0, player.total_fifties - 1)
-            elif card.runs and card.runs >= 100:
-                player.total_centuries = max(0, player.total_centuries - 1)
+            # Mirror of the forward aggregation: super-over cards never
+            # contributed fifties/centuries/not-outs, so don't reverse them.
+            if not card.is_super_over:
+                if card.runs and card.runs >= 50 and card.runs < 100:
+                    player.total_fifties = max(0, player.total_fifties - 1)
+                elif card.runs and card.runs >= 100:
+                    player.total_centuries = max(0, player.total_centuries - 1)
 
-            if not card.is_out and card.balls and card.balls > 0:
-                player.not_outs = max(0, player.not_outs - 1)
+                if not card.is_out and card.balls and card.balls > 0:
+                    player.not_outs = max(0, player.not_outs - 1)
 
         # Reverse bowling stats
         if card.record_type == "bowling":
@@ -96,7 +99,7 @@ def reverse_player_aggregates(scorecards, logger=None):
             player.total_runs_conceded = max(0, player.total_runs_conceded - (card.runs_conceded or 0))
             player.total_maidens = max(0, player.total_maidens - (card.maidens or 0))
 
-            if card.wickets and card.wickets >= 5:
+            if not card.is_super_over and card.wickets and card.wickets >= 5:
                 player.five_wicket_hauls = max(0, player.five_wicket_hauls - 1)
 
     # Recalculate high-water-mark stats using DB-level aggregation (O(1) per player).
@@ -107,13 +110,15 @@ def reverse_player_aggregates(scorecards, logger=None):
             if not player:
                 continue
 
-            # Highest score — single DB query instead of loading all rows
+            # Highest score — single DB query instead of loading all rows.
+            # Super-over rows are excluded: they never set high-water marks.
             best_score = db.session.query(
                 sa_func.coalesce(sa_func.max(MatchScorecard.runs), 0)
             ).filter(
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "batting",
                 MatchScorecard.match_id != match_id,
+                MatchScorecard.is_super_over.isnot(True),
             ).scalar()
             player.highest_score = best_score or 0
 
@@ -124,6 +129,7 @@ def reverse_player_aggregates(scorecards, logger=None):
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "bowling",
                 MatchScorecard.match_id != match_id,
+                MatchScorecard.is_super_over.isnot(True),
             ).order_by(
                 MatchScorecard.wickets.desc(),
                 MatchScorecard.runs_conceded.asc(),
@@ -921,6 +927,7 @@ class MatchArchiver:
                 _card = MatchScorecard(
                     match_id=self.match_id, player_id=_player.id, team_id=_team_id,
                     innings_number=3, record_type=_rectype, position=_pos,
+                    is_super_over=True,
                 )
                 if _rectype == "batting":
                     _card.runs = _s.get("runs", 0)
@@ -971,14 +978,19 @@ class MatchArchiver:
                     p.total_balls_faced += card.balls
                     p.total_fours += card.fours
                     p.total_sixes += card.sixes
-                    if card.runs >= 50 and card.runs < 100:
-                        p.total_fifties += 1
-                    if card.runs >= 100:
-                        p.total_centuries += 1
-                    if card.runs > p.highest_score:
-                        p.highest_score = card.runs
-                    if not card.is_out and card.balls > 0:
-                        p.not_outs += 1
+                    # Innings-shaped stats: a super-over card is not a real
+                    # innings, so it must not mint fifties, claim the career
+                    # highest score, or count as a not-out (totals above DO
+                    # include it — that's the designed behavior).
+                    if not card.is_super_over:
+                        if card.runs >= 50 and card.runs < 100:
+                            p.total_fifties += 1
+                        if card.runs >= 100:
+                            p.total_centuries += 1
+                        if card.runs > p.highest_score:
+                            p.highest_score = card.runs
+                        if not card.is_out and card.balls > 0:
+                            p.not_outs += 1
                     d["runs"] += card.runs or 0
 
                 if card.record_type == "bowling":
@@ -986,15 +998,18 @@ class MatchArchiver:
                     p.total_balls_bowled += card.balls_bowled
                     p.total_runs_conceded += card.runs_conceded
                     p.total_maidens += card.maidens
-                    if card.wickets >= 5:
-                        p.five_wicket_hauls += 1
+                    # Same rule as batting: super-over spells don't set career
+                    # best bowling or five-wicket hauls.
+                    if not card.is_super_over:
+                        if card.wickets >= 5:
+                            p.five_wicket_hauls += 1
 
-                    if card.wickets > p.best_bowling_wickets:
-                        p.best_bowling_wickets = card.wickets
-                        p.best_bowling_runs = card.runs_conceded
-                    elif card.wickets == p.best_bowling_wickets:
-                        if card.runs_conceded < p.best_bowling_runs:
+                        if card.wickets > p.best_bowling_wickets:
+                            p.best_bowling_wickets = card.wickets
                             p.best_bowling_runs = card.runs_conceded
+                        elif card.wickets == p.best_bowling_wickets:
+                            if card.runs_conceded < p.best_bowling_runs:
+                                p.best_bowling_runs = card.runs_conceded
                     d["wickets"] += card.wickets or 0
 
                 # Fielding contributions live on any record_type — they can

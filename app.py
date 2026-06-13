@@ -113,6 +113,7 @@ from routes.support_routes import register_support_routes
 from routes.admin_support_routes import register_admin_support_routes
 from routes.support_realtime import register_support_realtime
 from routes.player_pool_routes import register_player_pool_routes
+from routes.scenario_routes import register_scenario_routes
 from utils.exception_tracker import log_exception
 
 # SocketIO optional dependency — app works normally via HTTP if not installed
@@ -1612,6 +1613,9 @@ def create_app():
         DBUserPlayer=DBUserPlayer,
     )
 
+    # --- Story Mode Routes (legendary match arcs gallery) ---
+    register_scenario_routes(app)
+
     register_support_realtime(
         app,
         socketio=socketio,
@@ -2048,6 +2052,9 @@ def create_app():
             .join(DBTeam, DBPlayer.team_id == DBTeam.id)
             .filter(DBMatch.tournament_id == tournament_id)
             .filter(DBTeam.user_id == user_id)
+            # Super-over career-stat rows are not real innings — exclude them
+            # from per-innings counts/averages.
+            .filter(MatchScorecard.is_super_over.isnot(True))
         )
 
         records = q.all()
