@@ -122,6 +122,35 @@ def test_start_super_over_rejected_outside_selection_phase(app, regular_user):
         assert m.super_over_round == round_before
 
 
+def test_failed_validation_does_not_advance_round(app, regular_user):
+    """A rejected selection must not mutate round state: start_super_over
+    validates BEFORE committing, so each failed attempt used to inflate
+    super_over_round — tripping the 5-round cap / boundary count-back early."""
+    with app.app_context():
+        m = _make_match(regular_user.id)
+        m.super_over_phase = "awaiting_innings1_selection"
+
+        # Only 2 batsmen — rejected, round counter must not move.
+        res = m.start_super_over("home", batsmen_names=["H_P1", "H_P2"], bowler_name="A_P1")
+        assert res.get("error") == "Super over requires exactly 3 batsmen"
+        assert m.super_over_round == 0
+        assert m.super_over_phase == "awaiting_innings1_selection"
+
+        # Batsman from the bowling side (stale-client scenario: the forced
+        # first-batting override invalidates the client's picks).
+        res = m.start_super_over("home", batsmen_names=["A_P1", "H_P2", "H_P3"], bowler_name="A_P1")
+        assert res.get("error") == "Batsman 'A_P1' not in batting team"
+        assert m.super_over_round == 0
+        assert m.super_over_phase == "awaiting_innings1_selection"
+
+        # A valid retry then starts round 1 — not a phantom later round.
+        res = m.start_super_over("home", batsmen_names=["H_P6", "H_P7", "H_P8"], bowler_name="A_P1")
+        assert res.get("super_over_started") is True
+        assert res.get("round") == 1
+        assert m.super_over_round == 1
+        assert m.super_over_phase == "innings_in_progress"
+
+
 def test_start_innings2_rejected_after_innings_started(app, regular_user):
     with app.app_context():
         m = _make_match(regular_user.id)
