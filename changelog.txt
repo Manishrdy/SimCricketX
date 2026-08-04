@@ -1,3 +1,12 @@
+[2.5.0] 2026-08-04
+- Added Historical Scenarios (Story Mode): pick a real-match story arc in match setup and play it out with your own teams
+- Hardened Super Over: fixed freezes/dead-ends, added resume-from-memory after a dropped request, boundary count-back after 5 level overs, streak-based pressure dynamics, and per-player career stats
+- Fixed login/session bugs and tightened Turnstile handling on registration and account sessions
+- Fixed team save rejections caused by frontend/backend squad-size thresholds being out of sync
+- Added security.txt for vulnerability disclosure; moved support websockets to gevent for Python 3.8 compatibility
+- Improved admin support module UI; fixed a migration crash on stale orphan player duplicates
+- Updated landing page
+
 [2.4.6] 2026-05-06
 - Fixed the local pytest suite being blocked by production Cloudflare Turnstile keys loaded from `.env`: `verify_turnstile()` now returns a test-mode success when `SIMCRICKETX_TEST_MODE` is enabled, and the authenticated per-session Turnstile gate skips while Flask is in `TESTING`
 - Restored legacy flat team-create form support (`player_name`, `player_role`, ratings, captain, wicketkeeper) so older draft/publish flows save their submitted squad rows instead of creating an empty identity-only draft
