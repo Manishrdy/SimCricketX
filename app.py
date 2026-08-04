@@ -1896,7 +1896,7 @@ def create_app():
                     if not result_text:
                         return None
                     lower = result_text.lower()
-                    if "match tied" in lower or "no result" in lower or "abandoned" in lower:
+                    if "match tied" in lower or "match drawn" in lower or "no result" in lower or "abandoned" in lower:
                         return None
                     match_obj = re.search(r"\b([A-Za-z0-9 _-]+?)\s+won\b", result_text, re.IGNORECASE)
                     if match_obj:
@@ -1910,9 +1910,9 @@ def create_app():
                         return True
                     if team_code and team_code == candidate:
                         return True
-                    if team_name and re.search(rf"\\b{re.escape(team_name)}\\b", candidate):
+                    if team_name and re.search(rf"\b{re.escape(team_name)}\b", candidate):
                         return True
-                    if team_code and re.search(rf"\\b{re.escape(team_code)}\\b", candidate):
+                    if team_code and re.search(rf"\b{re.escape(team_code)}\b", candidate):
                         return True
                     return False
 

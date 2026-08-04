@@ -4475,7 +4475,28 @@ class Match:
                     }
                 else:
                     # ✅ SECOND INNINGS ALL OUT - Match over
-                    
+
+                    # Scores level (tie) — or target already reached via runs
+                    # completed before a run out — when the last wicket fell.
+                    # Neither is a win for the bowling side, so don't declare
+                    # one here: return a non-final ball response and let the
+                    # next next_ball() call run the innings-end branch, which
+                    # detects the tie and sets up the super over (or awards
+                    # the chase). Declaring the result here produced
+                    # "won by 0 run(s)" and skipped the super over entirely.
+                    if self.score >= self.target - 1:
+                        return {
+                            "match_over": False,
+                            "score": self.score,
+                            "wickets": self.wickets,
+                            "over": self.current_over,
+                            "ball": self.current_ball,
+                            "commentary": all_out_commentary,
+                            "striker": self.current_striker["name"] if self.current_striker else "",
+                            "non_striker": self.current_non_striker["name"] if self.current_non_striker else "",
+                            "bowler": self.current_bowler["name"] if self.current_bowler else ""
+                        }
+
                     # Determine winner (Bowling team won)
                     winner_code = self.data["team_home"].split("_")[0] if self.bowling_team is self.home_xi else self.data["team_away"].split("_")[0]
                     run_diff = self.target - self.score - 1
@@ -5539,8 +5560,12 @@ class Match:
 
         if wicket:
             self.super_over_wickets[team_key] += 1
-            self.super_over_bowler_wickets += 1
             wicket_type = outcome["wicket_type"]
+            # Run outs are not credited to the bowler (same rule as the main
+            # innings) — they still count against the batting side's 2-wicket
+            # limit above.
+            if wicket_type != "Run Out":
+                self.super_over_bowler_wickets += 1
             so_crossed = False  # only meaningful for run-outs
 
             if wicket_type == "Run Out":
@@ -5605,7 +5630,10 @@ class Match:
                             self.super_over_current_non_striker = next_batter
         else:
             self.super_over_scores[team_key] += runs
-            self.super_over_bowler_runs += runs
+            # Byes and Leg Byes are not charged to the bowler (same rule as
+            # the main innings); Wides/No Balls are.
+            if not (extra and extra_type in ("Byes", "Leg Bye")):
+                self.super_over_bowler_runs += runs
 
             if not extra:
                 # Legal delivery: credit runs, balls, boundaries to batsman

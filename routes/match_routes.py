@@ -1136,6 +1136,13 @@ def register_match_routes(
                 return jsonify({"error": "Unauthorized"}), 403
         try:
             result = match.next_super_over_ball()
+            # Accumulate super-over ball commentary for resume replay — the
+            # same log the regular next-ball path feeds. Without this, a page
+            # refresh mid-super-over replayed only main-innings commentary.
+            if isinstance(result, dict) and result.get("commentary"):
+                if not hasattr(match, "commentary_replay_log"):
+                    match.commentary_replay_log = []
+                match.commentary_replay_log.append(result["commentary"])
             # A super over can decide the match inside this request. Run the
             # same completion side effects as the regular next-ball path —
             # without this, tournament fixtures decided by super over never
