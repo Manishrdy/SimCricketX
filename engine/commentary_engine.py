@@ -87,8 +87,11 @@ class CommentaryEngine:
         """Derive filter tags from the ball context (bowler type etc.)."""
         tags = set()
         # We don't have the full bowler dict here, but match.py enriches
-        # outcome with 'bowling_type' before calling us.
-        bowling_type = context.get("bowling_type", "").lower()
+        # outcome with 'bowling_type' before calling us. Players imported
+        # without a bowling style carry None (nullable DB column), and
+        # .get()'s default doesn't apply when the key exists with None —
+        # guard with `or ""` so commentary never crashes the ball loop.
+        bowling_type = (context.get("bowling_type") or "").lower()
         if bowling_type in ("fast", "medium", "fast-medium", "medium-fast"):
             tags.add("pace")
         elif bowling_type in ("spin", "off-spin", "leg-spin", "left-arm spin",
@@ -138,6 +141,12 @@ class CommentaryEngine:
 
     def _check_narratives(self, context, state):
         """Check for narrative triggers — all 10 categories."""
+        # Super over: every narrative category here is a main-innings concept
+        # (powerplay, death overs, milestones, maidens). A super over's first
+        # ball sits at over 0 / ball 0 and would wrongly announce "Powerplay",
+        # so skip macro narratives entirely.
+        if state.get("is_super_over"):
+            return None
         triggers = []
         batter = context.get("batter", "The batter")
         bowler = context.get("bowler", "The bowler")

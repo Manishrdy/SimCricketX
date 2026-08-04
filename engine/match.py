@@ -4210,7 +4210,7 @@ class Match:
             outcome['bowler'] = self.current_bowler['name']
             outcome['batting_team'] = self._get_team_name(self.batting_team)
             outcome['bowling_team'] = self._get_team_name(self.bowling_team)
-            outcome['bowling_type'] = self.current_bowler.get('bowling_type', '')
+            outcome['bowling_type'] = self.current_bowler.get('bowling_type') or ''
             if outcome.get('batter_out'):
                 outcome['type'] = 'wicket'
 
@@ -5532,12 +5532,13 @@ class Match:
             outcome['bowler'] = self.super_over_bowler['name']
             outcome['batting_team'] = self._get_team_name(self.super_over_batting_team)
             outcome['bowling_team'] = self._get_team_name(self.super_over_bowling_team)
-            outcome['bowling_type'] = self.super_over_bowler.get('bowling_type', '')
+            outcome['bowling_type'] = self.super_over_bowler.get('bowling_type') or ''
             if outcome.get('batter_out'):
                 outcome['type'] = 'wicket'
 
             # Build minimal match state for commentary engine
             so_comm_state = {
+                'is_super_over': True,  # suppress main-innings narratives (powerplay etc.)
                 'innings': self.super_over_innings,
                 'score': self.super_over_scores[team_key],
                 'wickets': self.super_over_wickets[team_key],

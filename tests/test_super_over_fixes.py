@@ -315,3 +315,52 @@ def test_super_over_byes_not_charged_to_bowler(app, regular_user, monkeypatch):
         assert res.get("error") is None, res
         assert m.super_over_scores[team_key] == 2  # wide adds to the total
         assert m.super_over_bowler_runs == 1       # and IS charged to the bowler
+
+
+# ── 5. Robustness: NULL bowling_type + no super-over "Powerplay" ─────────────
+
+def test_super_over_survives_null_bowling_type_bowler(app, regular_user):
+    """A bowler with bowling_type=None (nullable DB column, imported players)
+    crashed the commentary path (None.lower()) on EVERY super-over ball —
+    a permanent 500 stall. The super over is uniquely exposed: with no
+    will_bowl players the bowler fallback picks from the whole squad."""
+    with app.app_context():
+        m = _make_match(regular_user.id)
+
+        # The exact user scenario: bowling side has nobody flagged will_bowl,
+        # and squad players carry no bowling style.
+        for p in m.away_xi:
+            p["bowling_type"] = None
+            p["will_bowl"] = False
+
+        m.innings = 4
+        m._setup_super_over()
+        started = m.start_super_over("home")  # auto-select: fallback bowler
+        assert started.get("super_over_started"), started
+        assert m.super_over_bowler.get("bowling_type") is None
+
+        # Drive the full innings through the REAL outcome + commentary path.
+        for _ in range(40):
+            res = m.next_super_over_ball()
+            assert res.get("error") is None, res
+            if res.get("super_over_innings_end"):
+                break
+        else:
+            raise AssertionError("super over innings 1 never ended")
+
+
+def test_no_powerplay_narrative_in_super_over():
+    """Super over ball 1 sits at over 0 / ball 0 — without the is_super_over
+    flag the commentary engine announced 'Powerplay' field restrictions."""
+    from engine.commentary_engine import CommentaryEngine
+    eng = CommentaryEngine()
+    context = {"type": "run", "runs": 4, "batter": "A", "bowler": "B",
+               "batting_team": "X", "bowling_team": "Y", "bowling_type": None}
+    so_state = {"is_super_over": True, "innings": 1, "score": 0, "wickets": 0,
+                "overs": 0, "current_ball": 0, "batter_runs": 0,
+                "partnership_runs": 0, "current_over_runs": 0,
+                "recent_wickets_match": 0, "is_maiden_over": False}
+    assert eng._check_narratives(context, so_state) is None
+    # And the full path (with a None bowling_type) must not raise.
+    text = eng.get_commentary(context, so_state)
+    assert isinstance(text, str) and text
