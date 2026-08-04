@@ -781,7 +781,7 @@
       <section class="tc-panel">
         <div class="tc-panel-head">
           <div class="tc-panel-title">Team Roster</div>
-          <div class="tc-panel-sub">Double-click a player to remove. Each profile: 11–25 players, ≥1 WK, ≥5 Bowl/AR.</div>
+          <div class="tc-panel-sub">Double-click a player to remove. Each profile: 12–25 players, ≥1 WK, ≥6 Bowl/AR.</div>
           <div class="tc-tabs" role="tablist">
             <button type="button" class="tc-tab active" data-fmt="T20" role="tab">
               <span class="tc-tab-status" id="tc-tab-status-T20" aria-hidden="true"></span>
@@ -1303,9 +1303,9 @@
     const wk = list.filter(p => p.role === 'Wicketkeeper').length;
     const bowl = list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length;
     const count = list.length;
-    const countOk = count >= 11 && count <= 25;
+    const countOk = count >= 12 && count <= 25;
     const wkOk = wk >= 1;
-    const bowlOk = bowl >= 5;
+    const bowlOk = bowl >= 6;
     rosterCounter.innerHTML = `
       <span class="${countOk ? 'ok' : (count ? 'warn' : '')}">
         <strong>${count}</strong>/25 players
@@ -1453,10 +1453,10 @@
     const list = state.rosters[fmt];
     const leaders = state.leaders[fmt];
     if (!list.length) return { empty: true, ok: false, reason: '' };
-    if (list.length < 11) return { empty: false, ok: false, reason: `${fmt}: need 11+` };
+    if (list.length < 12) return { empty: false, ok: false, reason: `${fmt}: need 12+` };
     if (list.length > 25) return { empty: false, ok: false, reason: `${fmt}: over 25` };
     if (list.filter(p => p.role === 'Wicketkeeper').length < 1) return { empty: false, ok: false, reason: `${fmt}: need a WK` };
-    if (list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length < 5) return { empty: false, ok: false, reason: `${fmt}: need 5 bowlers/AR` };
+    if (list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length < 6) return { empty: false, ok: false, reason: `${fmt}: need 6 bowlers/AR` };
     if (!leaders.captain) return { empty: false, ok: false, reason: `${fmt}: pick a captain` };
     if (!leaders.wicketkeeper) return { empty: false, ok: false, reason: `${fmt}: pick a WK` };
     return { empty: false, ok: true, reason: '' };
@@ -1469,9 +1469,9 @@
     const wk = list.filter(p => p.role === 'Wicketkeeper').length;
     const bowl = list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length;
     return [
-      { label: `${players}/11 Players`, ok: players >= 11 && players <= 25 },
+      { label: `${players}/12 Players`, ok: players >= 12 && players <= 25 },
       { label: `${wk}/1 Wicketkeeper`, ok: wk >= 1 },
-      { label: `${bowl}/5 Bowl/AR`, ok: bowl >= 5 },
+      { label: `${bowl}/6 Bowl/AR`, ok: bowl >= 6 },
       { label: 'Captain', ok: !!leaders.captain },
       { label: 'WK selected', ok: !!leaders.wicketkeeper },
     ];
