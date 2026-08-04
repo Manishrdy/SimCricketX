@@ -1,7 +1,6 @@
 """Tests for in-app support messaging."""
 
 from datetime import datetime, timedelta
-import time
 
 from database import db
 from database.models import ActiveSession, SupportConversation, SupportMessage
@@ -26,7 +25,6 @@ def _login(client, user):
         sess["_user_id"] = user.id
         sess["_fresh"] = True
         sess["session_token"] = token
-        sess["cf_ts_verified"] = time.time()
 
 
 def test_user_can_send_support_message_and_admin_can_reply(client, app, regular_user, admin_user):

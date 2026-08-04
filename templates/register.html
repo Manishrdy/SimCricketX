@@ -181,6 +181,9 @@
                         </button>
                     </div>
                     <span class="auth-hint">At least 8 characters with uppercase, lowercase, and a number.</span>
+                    <span class="auth-hint" id="policyHint" style="display:none; color: var(--danger);">
+                        <i class="fas fa-exclamation-circle"></i> <span id="policyHintText"></span>
+                    </span>
                 </div>
 
                 <!-- Confirm password -->
@@ -281,6 +284,32 @@
     confirmInput.addEventListener('input', checkMatch);
     pwInput.addEventListener('input', function () { if (confirmInput.value) checkMatch(); });
 
+    /* ── Password policy validation (mirrors server-side validate_password_policy) ── */
+    var policyHint     = document.getElementById('policyHint');
+    var policyHintText = document.getElementById('policyHintText');
+
+    function passwordPolicyError(pw) {
+        if (pw.length < 8) return 'At least 8 characters required.';
+        if (!/[A-Z]/.test(pw)) return 'Add at least one uppercase letter.';
+        if (!/[a-z]/.test(pw)) return 'Add at least one lowercase letter.';
+        if (!/[0-9]/.test(pw)) return 'Add at least one digit.';
+        return '';
+    }
+
+    function checkPolicy() {
+        if (!pwInput.value) {
+            policyHint.style.display = 'none';
+            pwInput.setCustomValidity('');
+            return true;
+        }
+        var err = passwordPolicyError(pwInput.value);
+        policyHintText.textContent = err;
+        policyHint.style.display = err ? 'block' : 'none';
+        pwInput.setCustomValidity(err);
+        return !err;
+    }
+    pwInput.addEventListener('input', checkPolicy);
+
     /* ── Proof-of-Work challenge ─────────────────────────────── */
     var registerForm          = document.getElementById('registerForm');
     var submitBtn             = document.getElementById('submitBtn');
@@ -325,7 +354,13 @@
         if (submittingWithPow) return;
         e.preventDefault();
 
-        // Client-side password match check before PoW
+        // Client-side password policy + match checks before the expensive PoW
+        // solve — catch what the server would reject anyway before paying for
+        // a proof-of-work grind and a full round trip.
+        if (!checkPolicy()) {
+            pwInput.focus();
+            return;
+        }
         checkMatch();
         if (pwInput.value !== confirmInput.value) {
             confirmInput.focus();

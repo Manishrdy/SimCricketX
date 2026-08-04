@@ -115,6 +115,7 @@ from routes.support_realtime import register_support_realtime
 from routes.player_pool_routes import register_player_pool_routes
 from routes.scenario_routes import register_scenario_routes
 from utils.exception_tracker import log_exception
+from utils.turnstile import turnstile_enabled, turnstile_config_warning
 
 # SocketIO optional dependency — app works normally via HTTP if not installed
 _SOCKETIO_AVAILABLE = False
@@ -827,6 +828,11 @@ def create_app():
 
     @app.context_processor
     def inject_turnstile_key():
+        # Only expose the site key (which makes the widget render) when the
+        # server actually has a matching secret key to verify it against —
+        # see turnstile_enabled() for why a partial config must not half-enable.
+        if not turnstile_enabled():
+            return {"cf_turnstile_site_key": ""}
         return {"cf_turnstile_site_key": os.environ.get("CF_TURNSTILE_SITE_KEY", "")}
 
     # Per-request context used by issue reporting (g.session_id, g.request_id)
@@ -1109,6 +1115,17 @@ def create_app():
     def add_runtime_fingerprint_header(response):
         response.headers["X-SimCricketX-Build"] = RUNTIME_FINGERPRINT
         return response
+
+    # --- Turnstile config sanity check ---
+    # CF_TURNSTILE_SITE_KEY (public, renders the widget) and CF_TURNSTILE_SECRET_KEY
+    # (private, verifies it server-side) are a matched pair. If only one is set,
+    # every login/register would be rejected with no widget ever shown to satisfy
+    # the check. turnstile_enabled() already fails safe (treats a partial config as
+    # fully disabled) — this just makes sure the mismatch is impossible to miss.
+    _turnstile_warning = turnstile_config_warning()
+    if _turnstile_warning:
+        print(f"[CRITICAL] {_turnstile_warning}")
+        log_exception(ValueError(_turnstile_warning), source="backend", severity="critical")
 
     # --- Secret key setup ---
     secret = None
