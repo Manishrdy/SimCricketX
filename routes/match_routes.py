@@ -490,7 +490,17 @@ def register_match_routes(
             db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
             if db_match:
                 return jsonify({"status": "completed"})
-            return jsonify({"status": "not_in_memory"})
+            # Not in memory — but a persisted super-over snapshot means this
+            # match is mid-super-over and CAN be rebuilt. Restore it so the
+            # frontend resumes the super over instead of offering a fresh
+            # toss (which would silently resimulate the tied match).
+            match_data, _path, _err = _load_match_file_for_user(match_id)
+            if match_data and match_data.get("super_over_snapshot"):
+                match, err = _get_or_restore_match_instance(match_id)
+                if err:
+                    return jsonify({"status": "not_in_memory"})
+            else:
+                return jsonify({"status": "not_in_memory"})
 
         if match.data.get("created_by") != current_user.id:
             return jsonify({"error": "Unauthorized"}), 403
@@ -952,6 +962,68 @@ def register_match_routes(
             app.logger.error(f"Error updating final lineups: {e}", exc_info=True)
             return jsonify({"error": "An internal error occurred"}), 500
         
+    def _persist_super_over_snapshot(match, match_id):
+        """Write the current super-over snapshot into the match JSON so the
+        super over survives process restarts and instance eviction. Called
+        after every state-changing super-over step; a completed match skips
+        this (the archiver deletes the JSON). Non-fatal on failure — the
+        in-memory state is still authoritative for the live session."""
+        try:
+            snap = match.serialize_super_over_snapshot()
+            if not snap:
+                return
+            with _get_match_file_lock(match_id):
+                match_data, match_path, err = _load_match_file_for_user(match_id)
+                if err or not match_path:
+                    return
+                match_data["super_over_snapshot"] = snap
+                with open(match_path, "w", encoding="utf-8") as f:
+                    json.dump(match_data, f, indent=2)
+        except Exception as e:
+            log_exception(e)
+            app.logger.warning(f"[SuperOver] Snapshot persist failed for {match_id}: {e}")
+
+    def _get_or_restore_match_instance(match_id):
+        """Fetch the in-memory match instance; if absent, rebuild it from the
+        match JSON — restoring a persisted super-over snapshot when present,
+        so a restart/eviction mid-super-over resumes instead of stranding the
+        match (or silently resimulating it). Returns (match, error_response);
+        exactly one is non-None."""
+        with MATCH_INSTANCES_LOCK:
+            match = MATCH_INSTANCES.get(match_id)
+            if match is not None:
+                match.last_accessed = time.time()
+                return match, None
+
+            match_data, _path, err = _load_match_file_for_user(match_id)
+            if not match_data:
+                return None, (err if err else (jsonify({"error": "Match not found"}), 404))
+            if 'rain_probability' not in match_data:
+                match_data['rain_probability'] = load_config().get('rain_probability', 0.0)
+
+            match = Match(match_data)
+            snap = match_data.get("super_over_snapshot")
+            if snap:
+                try:
+                    match.restore_super_over_snapshot(snap)
+                    app.logger.info(
+                        f"[SuperOver] Restored super-over state for {match_id} "
+                        f"(phase={match.super_over_phase}, round={match.super_over_round})"
+                    )
+                except Exception as e:
+                    # Do NOT fall through to a fresh instance: that would
+                    # silently restart the tied match — the exact failure mode
+                    # this snapshot exists to prevent.
+                    log_exception(e)
+                    app.logger.error(
+                        f"[SuperOver] Snapshot restore failed for {match_id}: {e}", exc_info=True
+                    )
+                    return None, (jsonify({"error": "Super over state could not be restored"}), 500)
+
+            match.last_accessed = time.time()
+            MATCH_INSTANCES[match_id] = match
+            return match, None
+
     def _finalize_completed_match(match, match_id, outcome):
         """One-time completion side effects for a finished match: simulated-
         match counter + DB persistence (tournament fixture/standings or plain
@@ -972,18 +1044,11 @@ def register_match_routes(
     @rate_limit(max_requests=60, window_seconds=10)  # C3: Rate limit to prevent DoS
     def next_ball(match_id):
         try:
-            with MATCH_INSTANCES_LOCK:  # Bug Fix B2: Thread-safe match creation
-                if match_id not in MATCH_INSTANCES:
-                    # Try loading match data from JSON file first (for active/new matches)
-                    match_data, _path, err = _load_match_file_for_user(match_id)
-                    if match_data:
-                        if 'rain_probability' not in match_data:
-                            match_data['rain_probability'] = load_config().get('rain_probability', 0.0)
-                        MATCH_INSTANCES[match_id] = Match(match_data)
-                    else:
-                        return err if err else (jsonify({"error": "Match not found"}), 404)
-                
-                match = MATCH_INSTANCES[match_id]
+            # Thread-safe fetch/rebuild (Bug Fix B2), now snapshot-aware: a
+            # rebuilt instance restores any persisted super-over state.
+            match, err = _get_or_restore_match_instance(match_id)
+            if err:
+                return err
             if match.data.get("created_by") != current_user.id:
                 return jsonify({"error": "Unauthorized"}), 403
             outcome = match.next_ball()
@@ -994,6 +1059,12 @@ def register_match_routes(
                 if not hasattr(match, "commentary_replay_log"):
                     match.commentary_replay_log = []
                 match.commentary_replay_log.append(commentary_html)
+
+            # A tie just pushed the match into super-over state — persist the
+            # snapshot immediately so a crash before the first super-over ball
+            # is already recoverable.
+            if outcome.get("super_over_required"):
+                _persist_super_over_snapshot(match, match_id)
 
             # Explicitly send final score and wickets clearly
             if outcome.get("match_over"):
@@ -1064,15 +1135,9 @@ def register_match_routes(
         if selected_index is None:
             return jsonify({"error": "selected_index is required"}), 400
 
-        with MATCH_INSTANCES_LOCK:
-            if match_id not in MATCH_INSTANCES:
-                match_data, _path, err = _load_match_file_for_user(match_id)
-                if err:
-                    return err
-                if 'rain_probability' not in match_data:
-                    match_data['rain_probability'] = load_config().get('rain_probability', 0.0)
-                MATCH_INSTANCES[match_id] = Match(match_data)
-            match = MATCH_INSTANCES[match_id]
+        match, err = _get_or_restore_match_instance(match_id)
+        if err:
+            return err
 
         if match.data.get("created_by") != current_user.id:
             return jsonify({"error": "Unauthorized"}), 403
@@ -1089,12 +1154,12 @@ def register_match_routes(
     @app.route("/match/<match_id>/start-super-over", methods=["POST"])
     @login_required
     def start_super_over(match_id):
-        with MATCH_INSTANCES_LOCK:
-            if match_id not in MATCH_INSTANCES:
-                return jsonify({"error": "Match not found"}), 404
-            match = MATCH_INSTANCES[match_id]
-            if match.data.get("created_by") != current_user.id:
-                return jsonify({"error": "Unauthorized"}), 403
+        # Snapshot-aware fetch: rebuilds + restores after restart/eviction.
+        match, err = _get_or_restore_match_instance(match_id)
+        if err:
+            return err
+        if match.data.get("created_by") != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
 
         data = request.get_json(silent=True) or {}
         first_batting_team = data.get("first_batting_team")
@@ -1104,17 +1169,17 @@ def register_match_routes(
         result = match.start_super_over(first_batting_team, batsmen_names, bowler_name)
         if isinstance(result, dict) and result.get("error"):
             return jsonify(result), 400
+        _persist_super_over_snapshot(match, match_id)
         return jsonify(result)
 
     @app.route("/match/<match_id>/start-super-over-innings2", methods=["POST"])
     @login_required
     def start_super_over_innings2(match_id):
-        with MATCH_INSTANCES_LOCK:
-            if match_id not in MATCH_INSTANCES:
-                return jsonify({"error": "Match not found"}), 404
-            match = MATCH_INSTANCES[match_id]
-            if match.data.get("created_by") != current_user.id:
-                return jsonify({"error": "Unauthorized"}), 403
+        match, err = _get_or_restore_match_instance(match_id)
+        if err:
+            return err
+        if match.data.get("created_by") != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
 
         data = request.get_json(silent=True) or {}
         batsmen_names = data.get("batsmen")
@@ -1123,17 +1188,17 @@ def register_match_routes(
         result = match.start_super_over_innings2(batsmen_names, bowler_name)
         if isinstance(result, dict) and result.get("error"):
             return jsonify(result), 400
+        _persist_super_over_snapshot(match, match_id)
         return jsonify(result)
 
     @app.route("/match/<match_id>/next-super-over-ball", methods=["POST"])
     @login_required
     def next_super_over_ball(match_id):
-        with MATCH_INSTANCES_LOCK:
-            if match_id not in MATCH_INSTANCES:
-                return jsonify({"error": "Match not found"}), 404
-            match = MATCH_INSTANCES[match_id]
-            if match.data.get("created_by") != current_user.id:
-                return jsonify({"error": "Unauthorized"}), 403
+        match, err = _get_or_restore_match_instance(match_id)
+        if err:
+            return err
+        if match.data.get("created_by") != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
         try:
             result = match.next_super_over_ball()
             # Accumulate super-over ball commentary for resume replay — the
@@ -1149,7 +1214,11 @@ def register_match_routes(
             # get their DBMatch row / standings update, and the match stays
             # "in_progress" (resumable) forever.
             if isinstance(result, dict) and result.get("match_over"):
+                # No snapshot write here: the archiver deletes the match JSON
+                # at completion; writing after would resurrect a stale file.
                 _finalize_completed_match(match, match_id, result)
+            elif isinstance(result, dict) and not result.get("error"):
+                _persist_super_over_snapshot(match, match_id)
             return jsonify(result)
         except Exception as e:
             log_exception(e)

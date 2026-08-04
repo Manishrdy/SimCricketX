@@ -5264,6 +5264,22 @@ class Match:
         if first_batting_team not in ("home", "away"):
             return {"error": "first_batting_team must be 'home' or 'away'"}
 
+        # Resolve prospective teams into locals — nothing committed to self yet.
+        if first_batting_team == "home":
+            batting_team, bowling_team = self.home_xi, self.away_xi
+        else:
+            batting_team, bowling_team = self.away_xi, self.home_xi
+
+        # Validate BEFORE committing any round state: a rejected selection must
+        # leave the round counter untouched so the retry starts the SAME round —
+        # the 5-round cap and boundary count-back key off super_over_round.
+        validation_error = self._validate_super_over_selection(
+            batsmen_names, bowler_name, batting_team, bowling_team
+        )
+        if validation_error:
+            return {"error": validation_error}
+
+        # Input accepted — commit the round state.
         self.super_over_round += 1
         self.super_over_innings = 1
 
@@ -5271,24 +5287,11 @@ class Match:
         self.super_over_scores = {"home": 0, "away": 0}
         self.super_over_wickets = {"home": 0, "away": 0}
 
-        # Determine teams
-        if first_batting_team == "home":
-            self.super_over_batting_team = self.home_xi
-            self.super_over_bowling_team = self.away_xi
-        else:
-            self.super_over_batting_team = self.away_xi
-            self.super_over_bowling_team = self.home_xi
+        self.super_over_batting_team = batting_team
+        self.super_over_bowling_team = bowling_team
 
         # Track which side is batting for team key
         self.super_over_first_batting = first_batting_team
-
-        # Validate + resolve players (strict: 3 batsmen + 1 bowler when supplied)
-        validation_error = self._validate_super_over_selection(
-            batsmen_names, bowler_name,
-            self.super_over_batting_team, self.super_over_bowling_team
-        )
-        if validation_error:
-            return {"error": validation_error}
 
         if batsmen_names:
             self.super_over_batsmen = self._find_players_by_name(
@@ -5958,8 +5961,9 @@ class Match:
             bagg["wickets"] += bowl.get("wickets", 0)
 
     def get_super_over_resume_state(self):
-        """Snapshot of super-over state for resuming the UI after a page refresh
-        (in-memory only). The frontend maps ``phase`` to the right modal/loop."""
+        """Snapshot of super-over state for resuming the UI after a page refresh.
+        The frontend maps ``phase`` to the right modal/loop. (Process-restart
+        resume is handled separately — see serialize_super_over_snapshot.)"""
         phase = getattr(self, "super_over_phase", None)
         if self.innings >= 5 or phase == "complete":
             return {"phase": "complete"}
@@ -6015,3 +6019,181 @@ class Match:
             })
 
         return state
+
+    def serialize_super_over_snapshot(self):
+        """JSON-safe snapshot of the super-over state PLUS the tied main match's
+        completion payload (everything MatchArchiver / the tournament finalizer
+        read off this object at super-over completion). Persisted into the match
+        JSON by the routes layer after every super-over transition so a process
+        restart or instance eviction mid-super-over is recoverable instead of
+        silently resimulating the whole match. Returns None when there is no
+        live super over to snapshot."""
+        phase = getattr(self, "super_over_phase", None)
+        if self.innings < 4 or phase in (None, "complete"):
+            return None
+
+        def _side(team):
+            return "home" if team is self.home_xi else "away"
+
+        snap = {
+            "v": 1,
+            "innings": self.innings,
+            "main_match": {
+                # Side batting the (tied) second innings — batting_team identity
+                # must survive the round-trip for _save_second_innings_stats.
+                "second_batting_side": _side(self.batting_team),
+                "score": self.score,
+                "wickets": self.wickets,
+                "target": getattr(self, "target", None),
+                "first_innings_score": getattr(self, "first_innings_score", None),
+                "batsman_stats": self.batsman_stats,
+                "bowler_stats": self.bowler_stats,
+                "first_innings_batting_stats": self.first_innings_batting_stats,
+                "first_innings_bowling_stats": self.first_innings_bowling_stats,
+                "first_innings_partnerships": self.first_innings_partnerships,
+                "second_innings_partnerships": self.second_innings_partnerships,
+                "first_batting_team_name": self.first_batting_team_name,
+                "first_bowling_team_name": self.first_bowling_team_name,
+                "rain_affected": getattr(self, "rain_affected", False),
+                "original_scorecard": getattr(self, "original_scorecard", None),
+                "first_innings_scorecard": getattr(self, "first_innings_scorecard", None),
+                "commentary": self.commentary,
+                "commentary_replay_log": getattr(self, "commentary_replay_log", []),
+            },
+            "super_over": {
+                "phase": phase,
+                "round": self.super_over_round,
+                "so_innings": getattr(self, "super_over_innings", 1),
+                "scores": getattr(self, "super_over_scores", None),
+                "wickets_by_side": getattr(self, "super_over_wickets", None),
+                "first_batting": getattr(self, "super_over_first_batting", None),
+                "next_first_batting": getattr(self, "_super_over_next_first_batting", None),
+                "history": self.super_over_history,
+                "team_boundaries": self.super_over_team_boundaries,
+                "career_batting": self.super_over_career_batting,
+                "career_bowling": self.super_over_career_bowling,
+                "innings1_scorecard": getattr(self, "super_over_innings1_scorecard", None),
+            },
+        }
+
+        so = snap["super_over"]
+        if getattr(self, "super_over_batting_team", None) is not None:
+            so["batting_side"] = _side(self.super_over_batting_team)
+        if getattr(self, "super_over_batsmen", None):
+            so["batsmen"] = [p["name"] for p in self.super_over_batsmen]
+        if getattr(self, "super_over_bowler", None):
+            so["bowler"] = self.super_over_bowler["name"]
+
+        if phase == "innings_in_progress":
+            so["in_progress"] = {
+                "ball": self.super_over_ball,
+                "striker": self.super_over_current_striker["name"],
+                "non_striker": self.super_over_current_non_striker["name"],
+                "next_batter_idx": self.super_over_next_batter_idx,
+                "bowler_runs": self.super_over_bowler_runs,
+                "bowler_wickets": self.super_over_bowler_wickets,
+                "batsman_stats": self.super_over_batsman_stats,
+            }
+
+        return snap
+
+    def restore_super_over_snapshot(self, snap):
+        """Rebuild super-over + tied-main-match state onto a freshly constructed
+        Match (built from the same match JSON). Inverse of
+        serialize_super_over_snapshot. Player references are re-resolved by name
+        against this instance's XIs so identity checks (``team is self.home_xi``)
+        keep working. Raises ValueError on a snapshot it cannot safely restore —
+        callers should surface that rather than silently starting the match over."""
+        if not isinstance(snap, dict) or snap.get("v") != 1:
+            raise ValueError("Unsupported super-over snapshot format")
+
+        xi = {"home": self.home_xi, "away": self.away_xi}
+        other = {"home": "away", "away": "home"}
+
+        main = snap.get("main_match") or {}
+        second_side = main.get("second_batting_side")
+        if second_side not in xi:
+            raise ValueError("Super-over snapshot missing second-innings side")
+        self.batting_team = xi[second_side]
+        self.bowling_team = xi[other[second_side]]
+        self.innings = snap.get("innings", 4)
+        self.score = main.get("score", 0)
+        self.wickets = main.get("wickets", 0)
+        if main.get("target") is not None:
+            self.target = main["target"]
+        if main.get("first_innings_score") is not None:
+            self.first_innings_score = main["first_innings_score"]
+        self.batsman_stats = main.get("batsman_stats") or {}
+        self.bowler_stats = main.get("bowler_stats") or {}
+        self.first_innings_batting_stats = main.get("first_innings_batting_stats") or {}
+        self.first_innings_bowling_stats = main.get("first_innings_bowling_stats") or {}
+        self.first_innings_partnerships = main.get("first_innings_partnerships") or []
+        self.second_innings_partnerships = main.get("second_innings_partnerships") or []
+        self.first_batting_team_name = main.get("first_batting_team_name", "")
+        self.first_bowling_team_name = main.get("first_bowling_team_name", "")
+        self.rain_affected = main.get("rain_affected", False)
+        if main.get("original_scorecard") is not None:
+            self.original_scorecard = main["original_scorecard"]
+        if main.get("first_innings_scorecard") is not None:
+            self.first_innings_scorecard = main["first_innings_scorecard"]
+        self.commentary = main.get("commentary") or []
+        self.commentary_replay_log = main.get("commentary_replay_log") or []
+
+        so = snap.get("super_over") or {}
+        phase = so.get("phase")
+        if phase not in ("awaiting_innings1_selection", "awaiting_innings2_selection",
+                         "innings_in_progress"):
+            raise ValueError(f"Super-over snapshot has invalid phase: {phase!r}")
+        self.super_over_phase = phase
+        self.super_over_round = so.get("round", 0)
+        self.super_over_innings = so.get("so_innings", 1)
+        if so.get("scores"):
+            self.super_over_scores = so["scores"]
+        if so.get("wickets_by_side"):
+            self.super_over_wickets = so["wickets_by_side"]
+        self.super_over_first_batting = so.get("first_batting")
+        if so.get("next_first_batting"):
+            self._super_over_next_first_batting = so["next_first_batting"]
+        self.super_over_history = so.get("history") or []
+        self.super_over_team_boundaries = so.get("team_boundaries") or {"home": 0, "away": 0}
+        self.super_over_career_batting = so.get("career_batting") or {"home": {}, "away": {}}
+        self.super_over_career_bowling = so.get("career_bowling") or {"home": {}, "away": {}}
+        if so.get("innings1_scorecard") is not None:
+            self.super_over_innings1_scorecard = so["innings1_scorecard"]
+
+        bat_side = so.get("batting_side")
+        if bat_side in xi:
+            self.super_over_batting_team = xi[bat_side]
+            self.super_over_bowling_team = xi[other[bat_side]]
+
+        # Resolve player refs by name, preferring the side they belong to but
+        # falling back to both XIs: in the awaiting_innings2_selection window
+        # super_over_batsmen still belong to the innings-1 side while
+        # batting_side already points at the innings-2 side (those refs are
+        # replaced by the next start_super_over_innings2 call anyway).
+        if bat_side in xi:
+            bat_pool = xi[bat_side] + xi[other[bat_side]]
+            bowl_pool = xi[other[bat_side]] + xi[bat_side]
+        else:
+            bat_pool = bowl_pool = self.home_xi + self.away_xi
+        if so.get("batsmen"):
+            self.super_over_batsmen = self._find_players_by_name(bat_pool, so["batsmen"])
+        if so.get("bowler"):
+            found = self._find_players_by_name(bowl_pool, [so["bowler"]])
+            if found:
+                self.super_over_bowler = found[0]
+
+        if phase == "innings_in_progress":
+            prog = so.get("in_progress") or {}
+            by_name = {p["name"]: p for p in getattr(self, "super_over_batsmen", [])}
+            striker = by_name.get(prog.get("striker"))
+            non_striker = by_name.get(prog.get("non_striker"))
+            if striker is None or non_striker is None or not getattr(self, "super_over_bowler", None):
+                raise ValueError("Super-over snapshot references unknown players")
+            self.super_over_ball = prog.get("ball", 0)
+            self.super_over_next_batter_idx = prog.get("next_batter_idx", 2)
+            self.super_over_bowler_runs = prog.get("bowler_runs", 0)
+            self.super_over_bowler_wickets = prog.get("bowler_wickets", 0)
+            self.super_over_batsman_stats = prog.get("batsman_stats") or {}
+            self.super_over_current_striker = striker
+            self.super_over_current_non_striker = non_striker
