@@ -209,3 +209,109 @@ def test_super_over_rows_reverse_cleanly_on_re_archive(app, regular_user, test_t
         assert john.matches_played == 1
         assert allr.total_wickets == 2
         assert allr.best_bowling_wickets == 0
+
+
+# ── 3. All-out tie must reach the super over ─────────────────────────────────
+
+def test_all_out_tie_triggers_super_over(app, regular_user, monkeypatch):
+    """Chasing side bowled out with scores level: this is a tie → super over.
+    The second-innings all-out branch used to declare the bowling side winner
+    "by 0 run(s)" and skip the super over entirely."""
+    with app.app_context():
+        m = _make_match(regular_user.id)
+
+        # Fast-forward innings 1: overs exhausted at 100/3.
+        m.score = 100
+        m.wickets = 3
+        m.current_over = m.overs
+        res = m.next_ball()
+        assert res.get("innings_end"), res
+        assert m.innings == 2 and m.target == 101
+
+        # Innings 2: nine down, scores level, no batters left to come in.
+        m.score = 100  # == target - 1
+        m.wickets = 9
+        m.remaining_batter_indices = set()
+
+        def forced_wicket(**_kwargs):
+            return {
+                "type": "wicket", "runs": 0, "batter_out": True,
+                "is_extra": False, "wicket_type": "Bowled",
+                "description": "Cleaned him up!",
+            }
+        monkeypatch.setattr(match_module, "calculate_outcome", forced_wicket)
+
+        # The 10th wicket with scores level must NOT declare a winner.
+        res = m.next_ball()
+        assert res.get("error") is None, res
+        assert not res.get("match_over"), res
+        assert "won by" not in (m.result or ""), m.result
+
+        # The next call detects the tie and sets up the super over.
+        res2 = m.next_ball()
+        assert res2.get("match_tied") and res2.get("super_over_required"), res2
+        assert m.innings == 4
+        assert m.super_over_phase == "awaiting_innings1_selection"
+
+        # And the super over is actually startable from here.
+        started = m.start_super_over("home")
+        assert started.get("super_over_started"), started
+
+
+# ── 4. Super-over bowler stat attribution ────────────────────────────────────
+
+def _start_plain_super_over(m):
+    m.innings = 4
+    m._setup_super_over()
+    started = m.start_super_over("home")
+    assert started.get("super_over_started"), started
+    return "home"
+
+
+def test_super_over_run_out_not_credited_to_bowler(app, regular_user, monkeypatch):
+    with app.app_context():
+        m = _make_match(regular_user.id)
+        team_key = _start_plain_super_over(m)
+
+        def forced_run_out(**_kwargs):
+            return {
+                "type": "wicket", "runs": 1, "batter_out": True,
+                "is_extra": False, "wicket_type": "Run Out",
+                "description": "Direct hit!",
+            }
+        monkeypatch.setattr(match_module, "calculate_super_over_outcome", forced_run_out)
+
+        res = m.next_super_over_ball()
+        assert res.get("error") is None, res
+        assert m.super_over_wickets[team_key] == 1   # counts against the side
+        assert m.super_over_bowler_wickets == 0      # but not for the bowler
+
+
+def test_super_over_byes_not_charged_to_bowler(app, regular_user, monkeypatch):
+    with app.app_context():
+        m = _make_match(regular_user.id)
+        team_key = _start_plain_super_over(m)
+
+        def forced_byes(**_kwargs):
+            return {
+                "type": "extra", "runs": 1, "batter_out": False,
+                "is_extra": True, "extra_type": "Byes",
+                "description": "Sneaks past everyone.",
+            }
+        monkeypatch.setattr(match_module, "calculate_super_over_outcome", forced_byes)
+        res = m.next_super_over_ball()
+        assert res.get("error") is None, res
+        assert m.super_over_scores[team_key] == 1  # team total includes byes
+        assert m.super_over_bowler_runs == 0       # bowler is not charged
+
+        def forced_wide(**_kwargs):
+            return {
+                "type": "extra", "runs": 1, "batter_out": False,
+                "is_extra": True, "extra_type": "Wide",
+                "description": "Down the leg side.",
+            }
+        monkeypatch.setattr(match_module, "calculate_super_over_outcome", forced_wide)
+        res = m.next_super_over_ball()
+        assert res.get("error") is None, res
+        assert m.super_over_scores[team_key] == 2  # wide adds to the total
+        assert m.super_over_bowler_runs == 1       # and IS charged to the bowler
