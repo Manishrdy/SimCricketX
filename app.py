@@ -365,11 +365,16 @@ def cleanup_old_match_instances(app):
         current_time = time.time()
         cutoff_time = current_time - (24 * 3600)  # 24 hours ago
 
-        # Phase 1: Clean up old in-memory match instances
+        # Phase 1: Clean up old in-memory match instances.
+        # Evict by LAST ACCESS, not creation time — an actively-played (or
+        # recently resumed) match must not hit a 24h-since-creation cliff
+        # mid-game. last_accessed is stamped by the match routes on every
+        # fetch; created_at is the fallback for instances that predate it.
         with MATCH_INSTANCES_LOCK:
             instances_to_remove = []
             for match_id, instance in MATCH_INSTANCES.items():
-                instance_time = getattr(instance, 'created_at', current_time)
+                instance_time = (getattr(instance, 'last_accessed', None)
+                                 or getattr(instance, 'created_at', current_time))
                 if instance_time < cutoff_time:
                     instances_to_remove.append(match_id)
 
