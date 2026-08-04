@@ -783,6 +783,10 @@ def register_admin_routes(
             login_user(target)
             try:
                 import secrets
+                # Mirror the single-active-session invariant enforced at normal
+                # login: without this, the impersonated user would see a second,
+                # unexplained "session" on their own Active Sessions page.
+                ActiveSession.query.filter_by(user_id=user_email).delete(synchronize_session=False)
                 token = secrets.token_hex(32)
                 session['session_token'] = token
                 active = ActiveSession(

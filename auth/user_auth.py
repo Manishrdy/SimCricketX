@@ -101,7 +101,6 @@ def register_user(email: str, password: str, display_name: Optional[str] = None)
             id=email,
             password_hash=generate_password_hash(password),
             ip_address=get_ip_address(),
-            last_login=datetime.now(timezone.utc),
             display_name=display_name,
             email_verified=False,
             email_verify_token=_hash_token(token),
