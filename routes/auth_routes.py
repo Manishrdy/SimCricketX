@@ -2,7 +2,6 @@
 
 import os
 import re
-import time
 import secrets
 import hashlib
 from datetime import datetime, timedelta
@@ -76,40 +75,6 @@ def register_auth_routes(
         'static',
         'auth_challenge',
     }
-
-    # Endpoints exempt from the per-session Turnstile check.
-    # Forced-flow endpoints (force_change_password, set_display_name, force_verify_email*)
-    # MUST stay exempt — other before_request guards bounce users back to those pages,
-    # so requiring Turnstile on them produces a redirect loop with /verify-human.
-    _TURNSTILE_EXEMPT = {
-        'login', 'register', 'logout', 'static', 'auth_challenge',
-        'verify_human',
-        'verify_email', 'verify_email_pending', 'resend_verification',
-        'force_verify_email', 'force_verify_email_send', 'force_verify_email_change',
-        'force_change_password', 'set_display_name',
-        'forgot_password', 'reset_password',
-    }
-
-    # How long (seconds) a Turnstile session stamp is valid before re-challenging
-    _TURNSTILE_SESSION_TTL = int(os.environ.get("CF_TURNSTILE_SESSION_TTL", 86400))
-
-    @app.before_request
-    def enforce_turnstile_session():
-        """Once per session (default 24 h), gate authenticated users through Turnstile."""
-        if app.config.get("TESTING") or os.environ.get("SIMCRICKETX_TEST_MODE", "").strip().lower() in {"1", "true"}:
-            return
-        if not os.environ.get("CF_TURNSTILE_SECRET_KEY"):
-            return  # disabled in dev
-        if not current_user.is_authenticated:
-            return
-        if request.endpoint in _TURNSTILE_EXEMPT:
-            return
-        stamped_at = session.get("cf_ts_verified")
-        if stamped_at and (time.time() - stamped_at) < _TURNSTILE_SESSION_TTL:
-            return
-        # Stale or missing stamp — send to challenge page
-        next_url = request.url
-        return redirect(url_for('verify_human', next=next_url))
 
     @app.before_request
     def enforce_force_email_verify():
@@ -334,7 +299,6 @@ def register_auth_routes(
                         db.session.flush()
 
                         token = secrets.token_hex(32)
-                        session["session_token"] = token
                         active = ActiveSession(
                             session_token=token,
                             user_id=email,
@@ -351,10 +315,28 @@ def register_auth_routes(
                             event='login',
                         ))
                         db.session.commit()
+                        # Only stamp the session cookie once the ActiveSession row
+                        # backing it is durably committed — handing out a token
+                        # before the commit succeeds risks a cookie that points at
+                        # a row that was actually rolled back.
+                        session["session_token"] = token
                     except Exception as e:
                         log_exception(e)
                         db.session.rollback()
                         app.logger.error(f"[Auth] Session tracking error: {e}")
+                        # No ActiveSession row means the very next request would be
+                        # silently bounced by the session guard with a confusing
+                        # "session expired" message despite a correct password.
+                        # Fail the login attempt honestly here instead of letting
+                        # it look like a success that unravels one click later.
+                        logout_user()
+                        session.pop("show_github_star_prompt", None)
+                        session.permanent = False
+                        return render_template(
+                            "login.html",
+                            error="We hit a temporary problem signing you in. Please try again.",
+                            error_type="system",
+                        )
 
                     if user.force_email_verify:
                         session["force_email_verify"] = True
@@ -427,31 +409,6 @@ def register_auth_routes(
         response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
         response.headers["Cache-Control"] = "no-store, max-age=0"
         return response, 200
-
-    @app.route("/verify-human", methods=["GET", "POST"])
-    @login_required
-    def verify_human():
-        """Per-session Turnstile gate for authenticated users."""
-        next_url = request.args.get("next") or request.form.get("next") or url_for("home")
-        # Prevent open redirect — only allow same-origin paths/URLs
-        from urllib.parse import urlparse
-        parsed = urlparse(next_url)
-        if parsed.netloc and parsed.netloc != urlparse(request.host_url).netloc:
-            next_url = url_for("home")
-
-        if request.method == "POST":
-            ts_ok, ts_err = verify_turnstile(
-                request.form.get("cf-turnstile-response", ""),
-                remote_ip=get_client_ip(),
-            )
-            if not ts_ok:
-                app.logger.warning(f"[Auth] verify-human Turnstile failed for {current_user.id}: {ts_err}")
-                return render_template("verify_human.html", next=next_url,
-                                       error="Verification failed. Please try again.")
-            session["cf_ts_verified"] = time.time()
-            return redirect(next_url)
-
-        return render_template("verify_human.html", next=next_url)
 
     @app.route("/change-password", methods=["GET", "POST"])
     @login_required
@@ -546,62 +503,20 @@ def register_auth_routes(
     @app.route("/account/sessions", methods=["GET"])
     @login_required
     def account_sessions():
-        """Show all active sessions for the current user."""
-        sessions = ActiveSession.query.filter_by(
-            user_id=current_user.id
-        ).order_by(ActiveSession.last_active.desc()).all()
-        current_token = session.get("session_token")
-        return render_template("account_sessions.html", sessions=sessions, current_token=current_token)
+        """Show the current session.
 
-    @app.route("/account/sessions/revoke", methods=["POST"])
-    @login_required
-    def revoke_session():
-        """Revoke a specific session by ID."""
-        session_id = request.form.get("session_id", type=int)
+        SimCricketX allows exactly one active session per account — logging in
+        anywhere automatically signs out every other device (enforced at login
+        in this route module, and on admin impersonation in admin_routes.py) —
+        so there is never another session here to list or revoke. For an audit
+        trail of past logins, see account_login_history (an append-only log,
+        unlike this table which always reflects only the current session).
+        """
         current_token = session.get("session_token")
-        if not session_id:
-            flash("Invalid request.", "danger")
-            return redirect(url_for("account_sessions"))
-        target = ActiveSession.query.filter_by(
-            id=session_id, user_id=current_user.id
+        current_session = ActiveSession.query.filter_by(
+            user_id=current_user.id, session_token=current_token
         ).first()
-        if not target:
-            flash("Session not found.", "danger")
-            return redirect(url_for("account_sessions"))
-        if target.session_token == current_token:
-            flash("Cannot revoke your current session. Use Sign Out instead.", "warning")
-            return redirect(url_for("account_sessions"))
-        try:
-            db.session.delete(target)
-            db.session.commit()
-            app.logger.info(f"[Auth] Session {session_id} revoked by {current_user.id}")
-            flash("Session revoked successfully.", "success")
-        except Exception as e:
-            log_exception(e)
-            db.session.rollback()
-            app.logger.error(f"[Auth] Session revoke error: {e}")
-            flash("Failed to revoke session.", "danger")
-        return redirect(url_for("account_sessions"))
-
-    @app.route("/account/sessions/revoke-all", methods=["POST"])
-    @login_required
-    def revoke_all_sessions():
-        """Revoke all sessions except the current one."""
-        current_token = session.get("session_token")
-        try:
-            deleted = ActiveSession.query.filter(
-                ActiveSession.user_id == current_user.id,
-                ActiveSession.session_token != current_token
-            ).delete(synchronize_session=False)
-            db.session.commit()
-            app.logger.info(f"[Auth] {deleted} other session(s) revoked by {current_user.id}")
-            flash(f"Signed out of {deleted} other device(s).", "success")
-        except Exception as e:
-            log_exception(e)
-            db.session.rollback()
-            app.logger.error(f"[Auth] Revoke-all error: {e}")
-            flash("Failed to sign out other devices.", "danger")
-        return redirect(url_for("account_sessions"))
+        return render_template("account_sessions.html", current_session=current_session)
 
     @app.route("/logout", methods=["POST"])
     @login_required
