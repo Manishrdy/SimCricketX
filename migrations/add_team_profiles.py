@@ -41,7 +41,16 @@ def run_migration(db, app):
             _step3_swap_unique_constraint(conn)
             with conn.begin():
                 _step4_create_t20_profiles(conn)
-                _step5_assign_orphaned_players(conn)
+                step5_failures = _step5_assign_orphaned_players(conn)
+            # Log after the write transaction commits — log_exception writes to
+            # exception_log on a separate connection and would deadlock against
+            # the migration's own SQLite write lock if called mid-transaction.
+            for player_id, exc in step5_failures:
+                log_exception(exc, source="sqlite", context={
+                    "migration": "add_team_profiles",
+                    "step": "step5_assign_orphaned_players",
+                    "player_id": player_id,
+                })
             print("[Migration] add_team_profiles: completed successfully.")
         except Exception as exc:
             log_exception(exc, source="sqlite", context={"migration": "add_team_profiles"})
@@ -171,45 +180,150 @@ def _step4_create_t20_profiles(conn):
     print(f"[Migration] Step 4: Created T20 profiles for {created} team(s).")
 
 
+# Career-stat columns that are summed when merging a duplicate player pair.
+_SUM_STAT_COLS = (
+    "matches_played", "total_runs", "total_balls_faced", "total_fours",
+    "total_sixes", "total_fifties", "total_centuries", "not_outs",
+    "total_balls_bowled", "total_runs_conceded", "total_wickets",
+    "total_maidens", "five_wicket_hauls",
+)
+
+
 def _step5_assign_orphaned_players(conn):
     """Assign players with profile_id IS NULL to their team's T20 profile.
 
-    Orphans whose name already exists in the target profile are stale duplicates
-    (left over from pre-profile data) and are deleted instead of migrated, since
-    the (profile_id, name) unique constraint would otherwise fail the UPDATE.
+    An orphan whose name already exists in the target profile is the same real
+    person twice: the legacy pre-profile row (often carrying career stats and
+    match history) plus a profile row recreated through the team UI. The two
+    are MERGED — history rows re-pointed, career aggregates combined — and only
+    then is the legacy row deleted. A bare DELETE is never issued:
+    match_partnerships and tournament_player_stats_cache reference players(id)
+    without ON DELETE CASCADE, so it fails whenever the orphan has history, and
+    match_scorecards' CASCADE would silently erase career scorecards.
+
+    Each orphan runs in its own SAVEPOINT so one bad row cannot roll back the
+    whole step (previously one failure wedged the migration on every startup).
+    Returns a list of (player_id, exception) for rows that could not be
+    processed; the caller logs them after the transaction commits.
     """
     orphans = conn.execute(
         text("SELECT id, team_id, name FROM players WHERE profile_id IS NULL")
     ).fetchall()
 
     updated = 0
-    deleted = 0
+    merged = 0
+    failures = []
     for (player_id, team_id, name) in orphans:
-        profile = conn.execute(
-            text("SELECT id FROM team_profiles WHERE team_id = :tid AND format_type = 'T20'"),
-            {"tid": team_id},
-        ).fetchone()
-        if not profile:
-            continue
-        dupe = conn.execute(
-            text("SELECT id FROM players WHERE profile_id = :pid AND name = :name"),
-            {"pid": profile[0], "name": name},
-        ).fetchone()
-        if dupe:
-            conn.execute(
-                text("DELETE FROM players WHERE id = :plid"),
-                {"plid": player_id},
-            )
-            deleted += 1
-        else:
-            conn.execute(
-                text("UPDATE players SET profile_id = :pid WHERE id = :plid"),
-                {"pid": profile[0], "plid": player_id},
-            )
-            updated += 1
+        try:
+            with conn.begin_nested():
+                profile = conn.execute(
+                    text("SELECT id FROM team_profiles WHERE team_id = :tid AND format_type = 'T20'"),
+                    {"tid": team_id},
+                ).fetchone()
+                if not profile:
+                    continue
+                dupe = conn.execute(
+                    text("SELECT id FROM players WHERE profile_id = :pid AND name = :name"),
+                    {"pid": profile[0], "name": name},
+                ).fetchone()
+                if dupe:
+                    _merge_duplicate_player(conn, orphan_id=player_id, survivor_id=dupe[0])
+                    merged += 1
+                else:
+                    conn.execute(
+                        text("UPDATE players SET profile_id = :pid WHERE id = :plid"),
+                        {"pid": profile[0], "plid": player_id},
+                    )
+                    updated += 1
+        except Exception as exc:  # noqa: BLE001 — isolate per-player failures
+            failures.append((player_id, exc))
     print(
         f"[Migration] Step 5: assigned {updated} orphan(s) to T20 profiles, "
-        f"deleted {deleted} stale duplicate(s)."
+        f"merged {merged} duplicate(s), {len(failures)} failure(s)."
+    )
+    return failures
+
+
+def _merge_duplicate_player(conn, orphan_id, survivor_id):
+    """Fold a legacy duplicate player row into its profile-bound survivor.
+
+    Re-points every table referencing players(id), combines career aggregates
+    onto the survivor, then deletes the legacy row. Identity fields (role,
+    ratings, captain/keeper flags) keep the survivor's values — they reflect
+    the user's latest edits through the profile UI.
+    """
+    conn.execute(
+        text("UPDATE match_scorecards SET player_id = :sid WHERE player_id = :oid"),
+        {"sid": survivor_id, "oid": orphan_id},
+    )
+    conn.execute(
+        text("UPDATE match_partnerships SET batsman1_id = :sid WHERE batsman1_id = :oid"),
+        {"sid": survivor_id, "oid": orphan_id},
+    )
+    conn.execute(
+        text("UPDATE match_partnerships SET batsman2_id = :sid WHERE batsman2_id = :oid"),
+        {"sid": survivor_id, "oid": orphan_id},
+    )
+
+    # Tournament stats cache: where BOTH rows appear in the same tournament the
+    # merged numbers cannot be derived from cache rows alone, so drop that
+    # tournament's cache entirely — the stats service recomputes from
+    # match_scorecards, which is authoritative after the re-point above.
+    # Remaining orphan rows (no overlap) are simply re-pointed.
+    conn.execute(text("""
+        DELETE FROM tournament_player_stats_cache
+        WHERE tournament_id IN (
+            SELECT o.tournament_id
+            FROM tournament_player_stats_cache o
+            JOIN tournament_player_stats_cache s
+              ON s.tournament_id = o.tournament_id AND s.player_id = :sid
+            WHERE o.player_id = :oid
+        )
+    """), {"sid": survivor_id, "oid": orphan_id})
+    conn.execute(
+        text("UPDATE tournament_player_stats_cache SET player_id = :sid WHERE player_id = :oid"),
+        {"sid": survivor_id, "oid": orphan_id},
+    )
+
+    _combine_career_stats(conn, orphan_id, survivor_id)
+
+    conn.execute(text("DELETE FROM players WHERE id = :oid"), {"oid": orphan_id})
+
+
+def _combine_career_stats(conn, orphan_id, survivor_id):
+    """Write the pair's combined career aggregates onto the survivor row."""
+    cols_csv = ", ".join(
+        _SUM_STAT_COLS + ("highest_score", "best_bowling_wickets", "best_bowling_runs")
+    )
+    rows = conn.execute(
+        text(f"SELECT id, {cols_csv} FROM players WHERE id IN (:oid, :sid)"),
+        {"oid": orphan_id, "sid": survivor_id},
+    ).mappings().fetchall()
+    by_id = {row["id"]: row for row in rows}
+    orphan, survivor = by_id[orphan_id], by_id[survivor_id]
+
+    combined = {
+        col: (orphan[col] or 0) + (survivor[col] or 0) for col in _SUM_STAT_COLS
+    }
+    combined["highest_score"] = max(
+        orphan["highest_score"] or 0, survivor["highest_score"] or 0
+    )
+
+    # Best bowling: only rows that actually bowled may contribute, otherwise a
+    # never-bowled row's (0, 0) default would beat a genuine best like 1/23.
+    candidates = [
+        (row["best_bowling_wickets"] or 0, row["best_bowling_runs"] or 0)
+        for row in (orphan, survivor)
+        if (row["total_balls_bowled"] or 0) > 0
+    ]
+    if candidates:
+        best = min(candidates, key=lambda wr: (-wr[0], wr[1]))
+        combined["best_bowling_wickets"], combined["best_bowling_runs"] = best
+
+    set_sql = ", ".join(f"{col} = :{col}" for col in combined)
+    conn.execute(
+        text(f"UPDATE players SET {set_sql} WHERE id = :sid"),
+        {**combined, "sid": survivor_id},
     )
 
 
