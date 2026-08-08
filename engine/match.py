@@ -2057,6 +2057,13 @@ class Match:
         self.free_hit_active = False
         self.current_over_runs = 0
         self.current_over_outcomes = []
+        # The sides have swapped, so the bowler still held here belongs to the
+        # team that is now batting. next_ball() calls
+        # _ensure_current_bowler_stats_entry() before picking the new over's
+        # bowler, so leaving it set puts a phantom opposition row in the fresh
+        # innings' bowler_stats. Cleared alongside bowler_selected_for_over,
+        # which is what forces the new pick.
+        self.current_bowler = None
         self.bowler_selected_for_over = -1
         self.remaining_batter_indices = set(range(2, len(self.batting_team)))
         self.lista_bowler_plan = {}
