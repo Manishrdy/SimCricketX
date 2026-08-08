@@ -19,6 +19,7 @@ from engine.game_state_engine import (
 )
 from engine.format_config import get_format
 from engine.bowler_manager import BowlerManager
+from engine.toss import innings_teams
 from utils.exception_tracker import log_exception
 
 
@@ -129,16 +130,10 @@ class Match:
         team_away = match_data["team_away"].split("_")[0]
 
         # Correct toss logic clearly defined
-        if self.toss_winner == team_home:
-            if self.toss_decision == "Bat":
-                self.batting_team, self.bowling_team = self.home_xi, self.away_xi
-            else:  # toss_decision == "Bowl"
-                self.batting_team, self.bowling_team = self.away_xi, self.home_xi
-        else:  # toss_winner == team_away
-            if self.toss_decision == "Bat":
-                self.batting_team, self.bowling_team = self.away_xi, self.home_xi
-            else:  # toss_decision == "Bowl"
-                self.batting_team, self.bowling_team = self.home_xi, self.away_xi
+        self.batting_team, self.bowling_team = innings_teams(
+            self.toss_winner, self.toss_decision, team_home,
+            self.home_xi, self.away_xi, innings=1,
+        )
 
         # Load format config (T20 by default for backward compatibility)
         self.fmt = get_format(match_data.get("match_format", "T20"))
@@ -3761,18 +3756,10 @@ class Match:
                 # --- START FIX ---
                 # Re-determine batting and bowling teams based on original toss decision and the UPDATED XIs
                 team_home_code = self.match_data["team_home"].split("_")[0]
-                if self.toss_winner == team_home_code:
-                    if self.toss_decision == "Bat":
-                        # Home batted first, so Away bats second
-                        self.batting_team, self.bowling_team = self.away_xi, self.home_xi
-                    else:  # Home bowled first, so Home bats second
-                        self.batting_team, self.bowling_team = self.home_xi, self.away_xi
-                else:  # Away won toss
-                    if self.toss_decision == "Bat":
-                        # Away batted first, so Home bats second
-                        self.batting_team, self.bowling_team = self.home_xi, self.away_xi
-                    else:  # Away bowled first, so Away bats second
-                        self.batting_team, self.bowling_team = self.away_xi, self.home_xi
+                self.batting_team, self.bowling_team = innings_teams(
+                    self.toss_winner, self.toss_decision, team_home_code,
+                    self.home_xi, self.away_xi, innings=2,
+                )
                 # --- END FIX ---
 
                 # Capture first innings wickets before reset
@@ -4428,16 +4415,10 @@ class Match:
                     # D5: Re-derive teams from toss logic (same as overs-exhausted path)
                     # Simple swap breaks when impact player changes update home_xi/away_xi
                     team_home_code = self.match_data["team_home"].split("_")[0]
-                    if self.toss_winner == team_home_code:
-                        if self.toss_decision == "Bat":
-                            self.batting_team, self.bowling_team = self.away_xi, self.home_xi
-                        else:
-                            self.batting_team, self.bowling_team = self.home_xi, self.away_xi
-                    else:
-                        if self.toss_decision == "Bat":
-                            self.batting_team, self.bowling_team = self.home_xi, self.away_xi
-                        else:
-                            self.batting_team, self.bowling_team = self.away_xi, self.home_xi
+                    self.batting_team, self.bowling_team = innings_teams(
+                        self.toss_winner, self.toss_decision, team_home_code,
+                        self.home_xi, self.away_xi, innings=2,
+                    )
                     innings_complete_summary = self._format_innings_complete_summary("End of innings")
                     self.score = 0
                     self.wickets = 0
