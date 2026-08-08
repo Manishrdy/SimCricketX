@@ -787,8 +787,22 @@ function spinTossAndStartMatch() {
     }
 
     fetch(`${window.location.pathname}/spin-toss`, { method: 'POST' })
-        .then(r => r.json())
-        .then(d => {
+        .then(r => r.json().then(d => ({ ok: r.ok, status: r.status, body: d })))
+        .then(({ ok, status, body }) => {
+            if (!ok) {
+                // 409 = the match is already past the toss. Re-spinning will
+                // never succeed, so surface it and leave the button disabled
+                // rather than falling through and starting the ball loop.
+                const msg = body.error || `Toss failed (${status})`;
+                resultEl.textContent = msg;
+                appendLog(`[ERROR] ${msg}`, 'error');
+                if (spinBtn && status !== 409) {
+                    spinBtn.disabled = false;
+                    spinBtn.textContent = 'Spin Toss';
+                }
+                return;
+            }
+            const d = body;
             resultEl.textContent = `${d.toss_winner} chose to ${d.toss_decision}`;
             appendLog(`[TOSS] ${d.toss_commentary}`, 'comment');
 
