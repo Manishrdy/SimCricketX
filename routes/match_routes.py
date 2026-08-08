@@ -9,6 +9,7 @@ import uuid
 import zipfile
 from datetime import datetime, timedelta
 
+from engine.toss import home_bats_first
 from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
@@ -722,6 +723,21 @@ def register_match_routes(
             app.logger.info(f"[MatchToss] {toss_winner} chose to {decision} (Match: {match_id})")
             return jsonify({"status": "success"}), 200
     
+    def _match_is_underway(match_id, match_data):
+        """True once the match has moved past the toss — a ball bowled, a super
+        over started, or the match archived as completed. Re-tossing at that
+        point cannot be honoured without restarting the match, so the toss is
+        locked in. Caller must already hold the match file lock."""
+        if match_data.get("current_state") == "completed":
+            return True
+        if match_data.get("super_over_snapshot"):
+            return True
+        with MATCH_INSTANCES_LOCK:
+            inst = MATCH_INSTANCES.get(match_id)
+            if inst is None:
+                return False
+            return bool(inst.innings > 1 or inst.current_over > 0 or inst.current_ball > 0)
+
     @app.route("/match/<match_id>/spin-toss", methods=["POST"])
     @login_required
     def spin_toss(match_id):
@@ -732,6 +748,10 @@ def register_match_routes(
 
             if not match_data:
                 return jsonify({"error": "Match not found"}), 404
+
+            if match_data.get("toss_winner") and _match_is_underway(match_id, match_data):
+                app.logger.warning(f"[MatchToss] Re-toss rejected for in-progress match {match_id}")
+                return jsonify({"error": "Toss already completed for this match"}), 409
 
             team_home = match_data["team_home"].split('_')[0]
             team_away = match_data["team_away"].split('_')[0]
@@ -767,15 +787,15 @@ def register_match_routes(
             with open(match_path, "w") as f:
                 json.dump(match_data, f, indent=2)
 
-            # Update the in-memory Match instance, if created
+            # Every toss-derived field on a cached instance is now stale — not
+            # just batting_team/bowling_team, but the BowlerManager, the
+            # batsman/bowler stat dicts keyed off each XI, the openers, and the
+            # toss-advantage flags. Drop the instance rather than patching it:
+            # the next request rebuilds it from the JSON we just wrote via
+            # Match.__init__, the one path that derives all of it consistently.
             with MATCH_INSTANCES_LOCK:
-                if match_id in MATCH_INSTANCES:
-                    app.logger.info(f"[ImpactSwap] Found active match instance for {match_id}. Updating state.")
-                    match_instance = MATCH_INSTANCES[match_id]
-                    match_instance.toss_winner   = toss_winner
-                    match_instance.toss_decision = toss_decision
-                    match_instance.batting_team  = match_instance.home_xi if toss_decision=="Bat" else match_instance.away_xi
-                    match_instance.bowling_team  = match_instance.away_xi if match_instance.batting_team==match_instance.home_xi else match_instance.home_xi
+                if MATCH_INSTANCES.pop(match_id, None) is not None:
+                    app.logger.info(f"[MatchToss] Discarded stale instance for {match_id} after toss")
 
         # Build toss commentary (outside lock — no file/instance access needed)
         full_commentary = f"{home_captain} spins the coin and {away_captain} calls for {toss_choice}.<br>" \
@@ -901,8 +921,9 @@ def register_match_routes(
             # --- START FIX ---
             # Determine the current batting and bowling teams based on the updated XIs
             team_home_code = match_instance.match_data["team_home"].split("_")[0]
-            first_batting_team_was_home = (match_instance.toss_winner == team_home_code and match_instance.toss_decision == "Bat") or \
-                                        (match_instance.toss_winner != team_home_code and match_instance.toss_decision == "Bowl")
+            first_batting_team_was_home = home_bats_first(
+                match_instance.toss_winner, match_instance.toss_decision, team_home_code
+            )
 
             current_batting_team_list = None
             if match_instance.innings == 1:

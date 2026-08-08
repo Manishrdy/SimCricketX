@@ -61,6 +61,7 @@ from utils.helpers import load_config
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash, current_app, has_app_context, g
 from match_archiver import MatchArchiver, find_original_json_file, reverse_player_aggregates
 from engine.match import Match
+from engine.toss import home_bats_first
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -1826,9 +1827,8 @@ def create_app():
                 
                 # Step 6: Calculate and assign innings statistics
                 team_home_code = match.data["team_home"].split("_")[0]
-                first_bat_is_home = (
-                    (match.toss_winner == team_home_code and match.toss_decision == "Bat") or
-                    (match.toss_winner != team_home_code and match.toss_decision == "Bowl")
+                first_bat_is_home = home_bats_first(
+                    match.toss_winner, match.toss_decision, team_home_code
                 )
                 
                 ops = int(match.data.get('overs', 20) or 20)
