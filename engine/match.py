@@ -2076,6 +2076,12 @@ class Match:
         # Reset GSME ball history for new innings
         self.ball_history = []
 
+        # Reset collapse/wicket-cluster tracking for new innings — otherwise
+        # first-innings wickets keep boosting wicket probability into the
+        # second innings (see recent_wickets_tracker in next_ball()).
+        self.recent_wickets_tracker = []
+        self.recent_wickets_count = 0
+
         # Feature 3: reset pitch wear counter for new innings
         self.innings_balls_bowled = 0
 
@@ -4010,16 +4016,22 @@ class Match:
             risk_effects = self.pressure_engine.get_risk_based_effects(match_state)
             
             if risk_effects and risk_effects['risk_active']:
-                # Check wicket cluster
-                recent_wickets = getattr(self, 'recent_wickets_count', 0)
-                cluster_trigger = self.pressure_engine.should_trigger_wicket_cluster(
-                    match_state, recent_wickets
-                )
-                
-                if cluster_trigger:
-                    pressure_effects['wicket_modifier'] *= 1.3  # Reduced from 1.5
-                    logger.info(f"WICKET CLUSTER: 1.3x additional wicket boost!")
-                
+                # Wicket-cluster check for the 2nd-innings chase-collapse case
+                # only. First-innings clusters are evaluated exclusively by
+                # the "First innings collapse psychology" block below —
+                # calling should_trigger_wicket_cluster() here too would
+                # re-roll the same RNG draw for the same ball and could stack
+                # both boosts (up to 1.3 * 1.25 = 1.625x).
+                if self.innings == 2:
+                    recent_wickets = getattr(self, 'recent_wickets_count', 0)
+                    cluster_trigger = self.pressure_engine.should_trigger_wicket_cluster(
+                        match_state, recent_wickets
+                    )
+
+                    if cluster_trigger:
+                        pressure_effects['wicket_modifier'] *= 1.3  # Reduced from 1.5
+                        logger.info(f"WICKET CLUSTER: 1.3x additional wicket boost!")
+
                 # Apply effects
                 pressure_effects['boundary_modifier'] *= risk_effects['boundary_boost']
                 pressure_effects['dot_bonus'] += risk_effects['dot_increase']
@@ -4153,28 +4165,13 @@ class Match:
                 self.current_striker["batting_rating"] * _form
             )
 
-            # ── GSME: build the game-state vector from the last 18 deliveries ──
-            # Pass the scenario phase so GSME can dampen collapse layers during
-            # convergence (overs 15–17) and let the scenario engine steer freely.
-            _scenario_phase = (
-                self.scenario_engine.get_phase()
-                if (self.scenario_engine and self.innings == 2)
-                else "inactive"
-            )
-            _gsme_state = compute_game_state_vector(
-                ball_history=self.ball_history,
-                score=self.score,
-                current_over=self.current_over,
-                current_ball=self.current_ball,
-                wickets=self.wickets,
-                innings=self.innings,
-                target=self.target or 0,
-                pitch=self.pitch,
-                partnership_balls=_partnership_balls,
-                partnership_runs=_partnership_runs,
-                scenario_phase=_scenario_phase,
-                format_config=self.fmt,
-            )
+            # _gsme_state was already built further up from _scenario_steers_now
+            # (which correctly honors HistoricalScenarioEngine.steers_first_innings).
+            # Do not rebuild it here: a second build used to live in this spot with
+            # a narrower `innings == 2` check, silently resetting scenario_phase to
+            # "inactive" for every first-innings ball of a historical scenario —
+            # since HistoricalScenarioEngine.get_override_outcome() always returns
+            # None, that routed every single ball through this branch.
 
             outcome = calculate_outcome(
                 batter=_batter_with_form,
@@ -4269,6 +4266,20 @@ class Match:
             outcome["batter_out"] = False
             outcome["wicket_type"] = None
 
+        # A5: Free hit - convert non-Run-Out wickets to a dot ball BEFORE any
+        # downstream state (pressure engine, partnership tracking, batter
+        # form, wicket/collapse tracker, GSME ball history) observes the
+        # dismissal. This must run first: previously it ran after all of
+        # those updates, so a batter who "survived" a free hit was still
+        # treated as dismissed everywhere except the scorecard (momentum
+        # swung as if a wicket fell and the batter's form multiplier was
+        # wiped back to 1.0).
+        if self.free_hit_active and outcome.get("batter_out") and outcome.get("wicket_type") != "Run Out":
+            outcome["batter_out"] = False
+            outcome["runs"] = 0
+            outcome["wicket_type"] = None
+            outcome["description"] = "Free hit! Batsman survives, no run."
+
         # Update pressure engine with outcome
         self.pressure_engine.update_recent_events(outcome)
         
@@ -4294,18 +4305,22 @@ class Match:
         _bd_score_before = self.score
         _bd_was_free_hit = self.free_hit_active
 
-        # 🔧 NOW ADD WICKET TRACKING HERE (after wicket is defined)
+        # 🔧 WICKET TRACKING (after wicket is defined)
+        # Trim + recompute every ball (not just wicket balls) so the collapse
+        # window actually decays once wickets fall outside the last 12 balls,
+        # instead of freezing at whatever count the last wicket produced.
+        if not hasattr(self, 'recent_wickets_tracker'):
+            self.recent_wickets_tracker = []
+
+        current_ball_number = self.current_over * 6 + self.current_ball
         if wicket:
-            # Update recent wickets tracking
-            if not hasattr(self, 'recent_wickets_tracker'):
-                self.recent_wickets_tracker = []
-            
-            self.recent_wickets_tracker.append(self.current_over * 6 + self.current_ball)
-            # Keep only last 12 balls (2 overs)
-            current_ball_number = self.current_over * 6 + self.current_ball
-            self.recent_wickets_tracker = [w for w in self.recent_wickets_tracker
-                                        if current_ball_number - w <= 12]
-            self.recent_wickets_count = len(self.recent_wickets_tracker)
+            self.recent_wickets_tracker.append(current_ball_number)
+
+        # Keep only last 12 balls (2 overs)
+        self.recent_wickets_tracker = [w for w in self.recent_wickets_tracker
+                                    if 0 <= current_ball_number - w <= 12]
+        self.recent_wickets_count = len(self.recent_wickets_tracker)
+        if wicket:
             logger.info(f"Wicket tracking: {self.recent_wickets_count} wickets in last 12 balls")
 
         # Update batter streak tracking (boundaries in a row)
@@ -4338,16 +4353,10 @@ class Match:
         commentary_line = f"{ball_number} {self.current_bowler['name']} to {self.current_striker['name']} - "
         pending_decision_for_response = None
 
-        # A5: Free hit - prepend indicator and convert non-Run-Out wickets to dot balls
+        # A5: Free hit - prepend indicator (dismissal conversion already
+        # happened earlier, before pressure/GSME/form state was updated)
         if self.free_hit_active:
             commentary_line = f"FREE HIT! {commentary_line}"
-            if wicket and outcome.get("wicket_type") != "Run Out":
-                # On free hit, only Run Out can dismiss; convert others to dot ball
-                wicket = False
-                outcome["batter_out"] = False
-                runs = 0
-                outcome["runs"] = 0
-                outcome["description"] = "Free hit! Batsman survives, no run."
 
         if wicket:
             self.wickets += 1

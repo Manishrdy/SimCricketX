@@ -31,7 +31,8 @@ def _valid_team_form(name="New Test Team", short_code="NTT", num_players=12):
       fielding_rating, batting_hand, bowling_type, bowling_hand
 
     Roles MUST match the validator strings: Wicketkeeper, Batsman, Bowler, All-rounder.
-    Active teams require 12–25 players, ≥1 Wicketkeeper, ≥6 Bowler/All-rounder.
+    Active teams require 11–25 players, ≥1 Wicketkeeper, ≥5 Bowler/All-rounder
+    (see utils/squad_rules.py — the single source of truth for these numbers).
     """
     # Build per-player lists (first player = Wicketkeeper, next 6 = All-rounders, rest = Batsmen)
     player_names = [f"Player {i}" for i in range(1, num_players + 1)]
@@ -113,9 +114,9 @@ class TestTeamCreationRoute:
         )
 
     def test_create_team_insufficient_players(self, authenticated_client):
-        """Test creating a team with fewer than 12 players shows a validation error."""
+        """Test creating a team with fewer than 11 players shows a validation error."""
         form = _valid_team_form(num_players=5)
-        # Ensure there are still 6 All-rounders for the "12+ players" check to trigger first
+        # Ensure there are still 5 All-rounders for the "11+ players" check to trigger first
         form["player_role"] = ["Wicketkeeper"] + ["All-rounder"] * 4
         response = authenticated_client.post(
             "/team/create",
@@ -123,7 +124,7 @@ class TestTeamCreationRoute:
             follow_redirects=True,
         )
         assert response.status_code == 200
-        assert b"12" in response.data or b"player" in response.data.lower()
+        assert b"11" in response.data or b"player" in response.data.lower()
 
 
 class TestTeamManagementRoute:
@@ -363,10 +364,26 @@ class TestTeamValidation:
         assert response.status_code == 200
         assert b"wicketkeeper" in response.data.lower()
 
-    def test_team_requires_six_bowlers(self, authenticated_client):
-        """Test that fewer than 6 Bowler/All-rounder roles is rejected."""
+    def test_team_requires_five_bowlers(self, authenticated_client):
+        """Test that fewer than 5 Bowler/All-rounder roles is rejected."""
         form = _valid_team_form()
-        # 1 WK + 5 All-rounders + 6 Batsmen = only 5 bowling roles
+        # 1 WK + 4 All-rounders + 7 Batsmen = only 4 bowling roles
+        form["player_role"] = ["Wicketkeeper"] + ["All-rounder"] * 4 + ["Batsman"] * 7
+        form["bowling_type"] = [""] + ["medium"] * 4 + [""] * 7
+
+        response = authenticated_client.post(
+            "/team/create",
+            data=form,
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        assert b"5" in response.data or b"bowler" in response.data.lower()
+
+    def test_team_allows_exactly_five_bowlers(self, authenticated_client):
+        """Test that exactly 5 Bowler/All-rounder roles (the new floor) is accepted."""
+        form = _valid_team_form()
+        # 1 WK + 5 All-rounders + 6 Batsmen = exactly 5 bowling roles
         form["player_role"] = ["Wicketkeeper"] + ["All-rounder"] * 5 + ["Batsman"] * 6
         form["bowling_type"] = [""] + ["medium"] * 5 + [""] * 6
 
@@ -377,7 +394,7 @@ class TestTeamValidation:
         )
 
         assert response.status_code == 200
-        assert b"six" in response.data.lower() or b"bowler" in response.data.lower()
+        assert b"needs at least" not in response.data.lower()
 
     def test_team_requires_captain_and_wicketkeeper_selection(self, authenticated_client):
         """Test that missing captain/wicketkeeper names is rejected for active teams."""
@@ -396,6 +413,135 @@ class TestTeamValidation:
             b"captain" in response.data.lower()
             or b"wicketkeeper" in response.data.lower()
         )
+
+
+class TestSquadValidationConsistency:
+    """
+    Regression coverage for the three independent squad-legality checks
+    (team create/edit, squad-page publish, squad-page bulk-publish) that
+    used to disagree on thresholds (12/6 vs 11/5). All three now delegate
+    to utils.squad_rules.validate_squad_composition, so they must accept
+    and reject identically at the shared 11-player / 5-bowler boundary.
+    """
+
+    def _make_persisted_squad(self, regular_user, short_code, n_players, n_bowlers,
+                               set_captain_wk=True):
+        """Create a team + profile with n_players persisted DBPlayer rows
+        (1 Wicketkeeper, n_bowlers-1 All-rounders, rest Batsmen), for hitting
+        the squad-page /publish endpoint which reads already-saved rows."""
+        team = DBTeam(
+            user_id=regular_user.id,
+            name=f"Team {short_code}",
+            short_code=short_code,
+            home_ground="Ground",
+            pitch_preference="flat",
+            team_color="#123456",
+            is_draft=True,
+            is_placeholder=False,
+        )
+        db.session.add(team)
+        db.session.flush()
+        profile = DBTeamProfile(team_id=team.id, format_type="T20")
+        db.session.add(profile)
+        db.session.flush()
+
+        roles = ["Wicketkeeper"] + ["All-rounder"] * n_bowlers
+        roles += ["Batsman"] * (n_players - len(roles))
+        for i, role in enumerate(roles):
+            db.session.add(DBPlayer(
+                team_id=team.id, profile_id=profile.id,
+                name=f"P{i}", role=role,
+                is_captain=(set_captain_wk and i == 0),
+                is_wicketkeeper=(set_captain_wk and role == "Wicketkeeper"),
+            ))
+        db.session.commit()
+        return team
+
+    def _bulk_publish_payload(self, n_players, n_bowlers, is_draft=False):
+        roles = ["Wicketkeeper"] + ["All-rounder"] * n_bowlers
+        roles += ["Batsman"] * (n_players - len(roles))
+        players = [
+            {
+                "name": f"P{i}", "role": role,
+                "batting_rating": 50, "bowling_rating": 50, "fielding_rating": 50,
+                "batting_hand": "Right", "bowling_type": "" if role == "Wicketkeeper" else "Medium",
+                "bowling_hand": "Right",
+            }
+            for i, role in enumerate(roles)
+        ]
+        return {
+            "players": players,
+            "captain_name": "P0",
+            "wk_name": "P0",
+            "is_draft": is_draft,
+        }
+
+    def test_boundary_legal_squad_accepted_by_all_three_paths(self, authenticated_client, regular_user):
+        """11 players / 5 bowlers is the documented floor — every path must accept it."""
+        # Path 1: /team/create
+        form = _valid_team_form(num_players=11)
+        form["player_role"] = ["Wicketkeeper"] + ["All-rounder"] * 5 + ["Batsman"] * 5
+        form["bowling_type"] = [""] + ["medium"] * 5 + [""] * 5
+        resp = authenticated_client.post("/team/create", data=form, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"must enter between" not in resp.data.lower()
+        assert b"bowlers/all-rounders" not in resp.data.lower()
+
+        # Path 2: squad-page /publish (validates already-persisted rows)
+        team2 = self._make_persisted_squad(regular_user, "SQP", n_players=11, n_bowlers=5)
+        resp2 = authenticated_client.post(f"/api/team/{team2.id}/squad/T20/publish")
+        body2 = json.loads(resp2.data)
+        assert resp2.status_code == 200, body2
+        assert body2 == {"ok": True}
+
+        # Path 3: squad-page /bulk-publish
+        team3 = DBTeam(
+            user_id=regular_user.id, name="Team BLKOK", short_code="BLKOK",
+            home_ground="Ground", pitch_preference="flat", team_color="#111111",
+            is_draft=True, is_placeholder=False,
+        )
+        db.session.add(team3)
+        db.session.commit()
+        resp3 = authenticated_client.post(
+            f"/api/team/{team3.id}/squad/T20/bulk-publish",
+            json=self._bulk_publish_payload(n_players=11, n_bowlers=5, is_draft=False),
+        )
+        body3 = json.loads(resp3.data)
+        assert resp3.status_code == 200, body3
+        assert body3.get("ok") is True
+
+    def test_below_boundary_squad_rejected_by_all_three_paths(self, authenticated_client, regular_user):
+        """11 players / 4 bowlers is one short on bowling options — every path must reject it."""
+        # Path 1: /team/create
+        form = _valid_team_form(num_players=11)
+        form["player_role"] = ["Wicketkeeper"] + ["All-rounder"] * 4 + ["Batsman"] * 6
+        form["bowling_type"] = [""] + ["medium"] * 4 + [""] * 6
+        resp = authenticated_client.post("/team/create", data=form, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"bowlers/all-rounders" in resp.data.lower()
+
+        # Path 2: squad-page /publish
+        team2 = self._make_persisted_squad(regular_user, "SQB", n_players=11, n_bowlers=4)
+        resp2 = authenticated_client.post(f"/api/team/{team2.id}/squad/T20/publish")
+        body2 = json.loads(resp2.data)
+        assert resp2.status_code == 400
+        assert "bowlers/all-rounders" in body2["error"].lower()
+
+        # Path 3: squad-page /bulk-publish
+        team3 = DBTeam(
+            user_id=regular_user.id, name="Team BLKBAD", short_code="BLKBAD",
+            home_ground="Ground", pitch_preference="flat", team_color="#222222",
+            is_draft=True, is_placeholder=False,
+        )
+        db.session.add(team3)
+        db.session.commit()
+        resp3 = authenticated_client.post(
+            f"/api/team/{team3.id}/squad/T20/bulk-publish",
+            json=self._bulk_publish_payload(n_players=11, n_bowlers=4, is_draft=False),
+        )
+        body3 = json.loads(resp3.data)
+        assert resp3.status_code == 400
+        assert "bowlers/all-rounders" in body3["error"].lower()
 
 
 class TestSquadHistoryPreservation:
