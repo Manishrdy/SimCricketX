@@ -1,3 +1,7 @@
+[2.5.1] 2026-08-09
+- Fixed squad-legality validation for real this time: `/team/create`/`/team/<code>/edit` required 12-25 players and >=6 Bowlers/All-rounders while the squad-builder's `/publish` and `/bulk-publish` APIs required 11-25 and >=5 (a divergence the 2.5.0 entry below only fixed between one backend path and its own frontend, not between the two backend paths). All three now call a single `validate_squad_composition()` in the new `utils/squad_rules.py`, using the squad-builder's 11/>=5 thresholds since those match real XI-sized squads. The `team_create.html` and `team_squad.html` client-side rule text/JS now render from the same constants via a Flask context processor instead of hardcoding numbers, so frontend and backend can no longer drift independently again
+- Added `TestSquadValidationConsistency` regression tests that publish an identical boundary-legal (11 players/5 bowlers) and boundary-illegal (11 players/4 bowlers) squad through all three paths and assert they agree
+
 [2.5.0] 2026-08-04
 - Added Historical Scenarios (Story Mode): pick a real-match story arc in match setup and play it out with your own teams
 - Hardened Super Over: fixed freezes/dead-ends, added resume-from-memory after a dropped request, boundary count-back after 5 level overs, streak-based pressure dynamics, and per-player career stats

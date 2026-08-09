@@ -781,7 +781,7 @@
       <section class="tc-panel">
         <div class="tc-panel-head">
           <div class="tc-panel-title">Team Roster</div>
-          <div class="tc-panel-sub">Double-click a player to remove. Each profile: 12–25 players, ≥1 WK, ≥6 Bowl/AR.</div>
+          <div class="tc-panel-sub">Double-click a player to remove. Each profile: {{ SQUAD_MIN_PLAYERS }}–{{ SQUAD_MAX_PLAYERS }} players, ≥{{ SQUAD_MIN_WICKETKEEPERS }} WK, ≥{{ SQUAD_MIN_BOWLING_OPTIONS }} Bowl/AR.</div>
           <div class="tc-tabs" role="tablist">
             <button type="button" class="tc-tab active" data-fmt="T20" role="tab">
               <span class="tc-tab-status" id="tc-tab-status-T20" aria-hidden="true"></span>
@@ -846,6 +846,10 @@
   const LS_KEY = 'team_create_draft_v1';
   const POOL_PAGE = 50;
   const VALID_FORMATS = ['T20', 'ListA'];
+  const MIN_PLAYERS = {{ SQUAD_MIN_PLAYERS }};
+  const MAX_PLAYERS = {{ SQUAD_MAX_PLAYERS }};
+  const MIN_WK = {{ SQUAD_MIN_WICKETKEEPERS }};
+  const MIN_BOWL = {{ SQUAD_MIN_BOWLING_OPTIONS }};
 
   // Edit mode — hydrated from server-rendered JSON. When present, we skip
   // localStorage draft persistence so editing one team doesn't clobber an
@@ -1070,8 +1074,8 @@
   // insertAt: optional index; defaults to end-of-list.
   function addToRoster(pool, insertAt) {
     const list = state.rosters[state.activeFmt];
-    if (list.length >= 25) {
-      flashValidation('Maximum 25 players per profile.', 'warn');
+    if (list.length >= MAX_PLAYERS) {
+      flashValidation(`Maximum ${MAX_PLAYERS} players per profile.`, 'warn');
       return;
     }
     const key = normName(pool.name);
@@ -1303,12 +1307,12 @@
     const wk = list.filter(p => p.role === 'Wicketkeeper').length;
     const bowl = list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length;
     const count = list.length;
-    const countOk = count >= 12 && count <= 25;
-    const wkOk = wk >= 1;
-    const bowlOk = bowl >= 6;
+    const countOk = count >= MIN_PLAYERS && count <= MAX_PLAYERS;
+    const wkOk = wk >= MIN_WK;
+    const bowlOk = bowl >= MIN_BOWL;
     rosterCounter.innerHTML = `
       <span class="${countOk ? 'ok' : (count ? 'warn' : '')}">
-        <strong>${count}</strong>/25 players
+        <strong>${count}</strong>/${MAX_PLAYERS} players
       </span>
       <span class="${wkOk ? 'ok' : 'warn'}">
         <strong>${wk}</strong> WK
@@ -1453,10 +1457,10 @@
     const list = state.rosters[fmt];
     const leaders = state.leaders[fmt];
     if (!list.length) return { empty: true, ok: false, reason: '' };
-    if (list.length < 12) return { empty: false, ok: false, reason: `${fmt}: need 12+` };
-    if (list.length > 25) return { empty: false, ok: false, reason: `${fmt}: over 25` };
-    if (list.filter(p => p.role === 'Wicketkeeper').length < 1) return { empty: false, ok: false, reason: `${fmt}: need a WK` };
-    if (list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length < 6) return { empty: false, ok: false, reason: `${fmt}: need 6 bowlers/AR` };
+    if (list.length < MIN_PLAYERS) return { empty: false, ok: false, reason: `${fmt}: need ${MIN_PLAYERS}+` };
+    if (list.length > MAX_PLAYERS) return { empty: false, ok: false, reason: `${fmt}: over ${MAX_PLAYERS}` };
+    if (list.filter(p => p.role === 'Wicketkeeper').length < MIN_WK) return { empty: false, ok: false, reason: `${fmt}: need a WK` };
+    if (list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length < MIN_BOWL) return { empty: false, ok: false, reason: `${fmt}: need ${MIN_BOWL} bowlers/AR` };
     if (!leaders.captain) return { empty: false, ok: false, reason: `${fmt}: pick a captain` };
     if (!leaders.wicketkeeper) return { empty: false, ok: false, reason: `${fmt}: pick a WK` };
     return { empty: false, ok: true, reason: '' };
@@ -1469,9 +1473,9 @@
     const wk = list.filter(p => p.role === 'Wicketkeeper').length;
     const bowl = list.filter(p => p.role === 'Bowler' || p.role === 'All-rounder').length;
     return [
-      { label: `${players}/12 Players`, ok: players >= 12 && players <= 25 },
-      { label: `${wk}/1 Wicketkeeper`, ok: wk >= 1 },
-      { label: `${bowl}/6 Bowl/AR`, ok: bowl >= 6 },
+      { label: `${players}/${MIN_PLAYERS} Players`, ok: players >= MIN_PLAYERS && players <= MAX_PLAYERS },
+      { label: `${wk}/${MIN_WK} Wicketkeeper`, ok: wk >= MIN_WK },
+      { label: `${bowl}/${MIN_BOWL} Bowl/AR`, ok: bowl >= MIN_BOWL },
       { label: 'Captain', ok: !!leaders.captain },
       { label: 'WK selected', ok: !!leaders.wicketkeeper },
     ];
