@@ -103,7 +103,7 @@ class TestDraftFeature(unittest.TestCase):
                 "wicketkeeper": "P2"
             }
             resp = self.client.post('/team/create', data=data, follow_redirects=True)
-            self.assertIn(b"You must enter between 12 and 25 players", resp.data)
+            self.assertIn(b"You must enter between 11 and 25 players", resp.data)
             print("✅ Strict validation caught invalid team size")
 
     def test_successful_publish(self):

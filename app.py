@@ -58,6 +58,12 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from utils.helpers import load_config
+from utils.squad_rules import (
+    MIN_PLAYERS as SQUAD_MIN_PLAYERS,
+    MAX_PLAYERS as SQUAD_MAX_PLAYERS,
+    MIN_WICKETKEEPERS as SQUAD_MIN_WICKETKEEPERS,
+    MIN_BOWLING_OPTIONS as SQUAD_MIN_BOWLING_OPTIONS,
+)
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash, current_app, has_app_context, g
 from match_archiver import MatchArchiver, find_original_json_file, reverse_player_aggregates
 from engine.match import Match
@@ -814,6 +820,19 @@ def create_app():
     @app.context_processor
     def inject_app_version():
         return {"app_version": _get_app_version()}
+
+    @app.context_processor
+    def inject_squad_rules():
+        # Single source of truth for squad-legality thresholds, shared with
+        # routes/team_routes.py's validate_squad_composition() call sites so
+        # client-side JS (team_create.html, team_squad.html) can't drift
+        # out of sync with the backend rules again.
+        return {
+            "SQUAD_MIN_PLAYERS": SQUAD_MIN_PLAYERS,
+            "SQUAD_MAX_PLAYERS": SQUAD_MAX_PLAYERS,
+            "SQUAD_MIN_WICKETKEEPERS": SQUAD_MIN_WICKETKEEPERS,
+            "SQUAD_MIN_BOWLING_OPTIONS": SQUAD_MIN_BOWLING_OPTIONS,
+        }
 
     # --- Admin timezone filter ---
     # Wraps a UTC datetime as a <time class="utc-time"> element so client-side JS

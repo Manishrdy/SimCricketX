@@ -8,6 +8,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from utils.exception_tracker import log_exception
+from utils.squad_rules import validate_squad_composition
 
 VALID_FORMATS = ("T20", "ListA")
 SHORT_CODE_RE = re.compile(r'^[A-Z0-9]{2,5}$')
@@ -236,28 +237,14 @@ def register_team_routes(
                 return f"{fmt} profile: duplicate player name '{p['name']}'."
             seen_names[lower_name] = True
 
-        if is_draft:
-            if len(players) < 1:
-                return f"{fmt} profile: draft must have at least 1 player."
-            if len(players) > 25:
-                return f"{fmt} profile: maximum 25 players (have {len(players)})."
-            return None
-
-        if not (12 <= len(players) <= 25):
-            return f"{fmt} profile: You must enter between 12 and 25 players."
-
-        wk_count = sum(1 for p in players if p["role"] == "Wicketkeeper")
-        if wk_count < 1:
-            return f"{fmt} profile: needs at least one Wicketkeeper."
-
-        bowl_count = sum(1 for p in players if p["role"] in ("Bowler", "All-rounder"))
-        if bowl_count < 6:
-            return f"{fmt} profile: needs at least six Bowlers/All-rounders."
-
-        if not captain:
-            return f"{fmt} profile: captain must be selected."
-        if not wk_name:
-            return f"{fmt} profile: wicketkeeper must be selected."
+        error = validate_squad_composition(
+            roles=[p["role"] for p in players],
+            has_captain=bool(captain),
+            has_wicketkeeper=bool(wk_name),
+            is_draft=is_draft,
+        )
+        if error:
+            return f"{fmt} profile: {error}"
 
         return None
 
@@ -802,21 +789,14 @@ def register_team_routes(
         if not profile:
             return json.dumps({"error": "Profile not found."}), 404, {"Content-Type": "application/json"}
         players = DBPlayer.query.filter_by(profile_id=profile.id).all()
-        count = len(players)
-        if not (11 <= count <= 25):
-            return json.dumps({"error": f"Need 11-25 players, have {count}."}), 400, {"Content-Type": "application/json"}
-        wk_count = sum(1 for p in players if p.role == "Wicketkeeper")
-        if wk_count < 1:
-            return json.dumps({"error": "Need at least 1 Wicketkeeper."}), 400, {"Content-Type": "application/json"}
-        bowl_count = sum(1 for p in players if p.role in ("Bowler", "All-rounder"))
-        if bowl_count < 5:
-            return json.dumps({"error": "Need at least 5 Bowlers/All-rounders."}), 400, {"Content-Type": "application/json"}
-        captain = [p for p in players if p.is_captain]
-        if not captain:
-            return json.dumps({"error": "Select a captain."}), 400, {"Content-Type": "application/json"}
-        wk_designated = [p for p in players if p.is_wicketkeeper]
-        if not wk_designated:
-            return json.dumps({"error": "Designate a wicketkeeper."}), 400, {"Content-Type": "application/json"}
+        error = validate_squad_composition(
+            roles=[p.role for p in players],
+            has_captain=any(p.is_captain for p in players),
+            has_wicketkeeper=any(p.is_wicketkeeper for p in players),
+            is_draft=False,
+        )
+        if error:
+            return json.dumps({"error": error}), 400, {"Content-Type": "application/json"}
         team.is_draft = False
         db.session.commit()
         return json.dumps({"ok": True}), 200, {"Content-Type": "application/json"}
@@ -888,23 +868,14 @@ def register_team_routes(
                 p["bowling_hand"] = ""
             resolved.append(p)
 
-        n = len(resolved)
-        if is_draft:
-            if n > 25:
-                return json.dumps({"error": f"Maximum 25 players, have {n}."}), 400, {"Content-Type": "application/json"}
-        if not is_draft:
-            if not (11 <= n <= 25):
-                return json.dumps({"error": f"Need 11-25 players, have {n}."}), 400, {"Content-Type": "application/json"}
-            wk_count = sum(1 for p in resolved if p["role"] == "Wicketkeeper")
-            if wk_count < 1:
-                return json.dumps({"error": "Need at least 1 Wicketkeeper."}), 400, {"Content-Type": "application/json"}
-            bowl_count = sum(1 for p in resolved if p["role"] in ("Bowler", "All-rounder"))
-            if bowl_count < 5:
-                return json.dumps({"error": "Need at least 5 Bowlers/All-rounders."}), 400, {"Content-Type": "application/json"}
-            if not captain_name:
-                return json.dumps({"error": "Select a captain."}), 400, {"Content-Type": "application/json"}
-            if not wk_name:
-                return json.dumps({"error": "Designate a wicketkeeper."}), 400, {"Content-Type": "application/json"}
+        error = validate_squad_composition(
+            roles=[p["role"] for p in resolved],
+            has_captain=bool(captain_name),
+            has_wicketkeeper=bool(wk_name),
+            is_draft=is_draft,
+        )
+        if error:
+            return json.dumps({"error": error}), 400, {"Content-Type": "application/json"}
 
         profile = DBTeamProfile.query.filter_by(team_id=team_id, format_type=fmt).first()
         if not profile:

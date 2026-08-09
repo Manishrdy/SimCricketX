@@ -737,7 +737,7 @@
     </div>
 
     <p class="sb-subtitle">
-        Build your {{ fmt }} unit from the player pool. Keep 11-25 players with 1+ wicketkeeper, 5+ bowling options, and set captain plus wicketkeeper before publishing.
+        Build your {{ fmt }} unit from the player pool. Keep {{ SQUAD_MIN_PLAYERS }}-{{ SQUAD_MAX_PLAYERS }} players with {{ SQUAD_MIN_WICKETKEEPERS }}+ wicketkeeper, {{ SQUAD_MIN_BOWLING_OPTIONS }}+ bowling options, and set captain plus wicketkeeper before publishing.
     </p>
 
     <div class="sb-tabs-wrap">
@@ -860,7 +860,7 @@
     var FMT      = '{{ fmt }}';
     var CSRF     = '{{ csrf_token() }}';
     var DRAFT_KEY = 'simcx_squad_' + TEAM_ID + '_' + FMT;
-    var MIN_PLAYERS = 11, MAX_PLAYERS = 25, MIN_BOWL = 5;
+    var MIN_PLAYERS = {{ SQUAD_MIN_PLAYERS }}, MAX_PLAYERS = {{ SQUAD_MAX_PLAYERS }}, MIN_BOWL = {{ SQUAD_MIN_BOWLING_OPTIONS }}, MIN_WK = {{ SQUAD_MIN_WICKETKEEPERS }};
 
     // Squad state — source of truth before publish
     var draft = { players: [], captain_name: '', wk_name: '' };
@@ -1329,7 +1329,7 @@
 
         if (n < MIN_PLAYERS) issues.push('Need ' + (MIN_PLAYERS - n) + ' more player' + ((MIN_PLAYERS - n) > 1 ? 's' : '') + ' (min ' + MIN_PLAYERS + ')');
         if (n > MAX_PLAYERS) issues.push('Too many players (max ' + MAX_PLAYERS + ')');
-        if (wkCount < 1) issues.push('Need at least 1 Wicketkeeper');
+        if (wkCount < MIN_WK) issues.push('Need at least ' + MIN_WK + ' Wicketkeeper');
         if (bowlCount < MIN_BOWL) issues.push('Need ' + (MIN_BOWL - bowlCount) + ' more Bowler/All-rounder' + ((MIN_BOWL - bowlCount) > 1 ? 's' : '') + ' (min ' + MIN_BOWL + ')');
         if (!draft.captain_name) issues.push('Select a captain');
         if (!draft.wk_name) issues.push('Designate a wicketkeeper');
