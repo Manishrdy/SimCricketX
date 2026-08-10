@@ -974,16 +974,20 @@
                             <span class="condition-tag">Story</span>
                         </div>
                         <label class="form-label" for="story-select">Story Mode</label>
-                        <select id="story-select">
-                            <option value="">None — no story arc</option>
+                        {# Disabled for now. The preselect is deliberately dropped as well:
+                           a disabled <select> still reports a selected value, so
+                           /match/setup?story=<id> would otherwise post a story_id and
+                           start a story match anyway. Restore `selected` with the
+                           `disabled` attribute to re-enable. #}
+                        <select id="story-select" disabled>
+                            <option value="" selected>Unavailable — stories are switched off</option>
                             {% for sp in story_packs %}
-                            <option value="{{ sp.id }}" data-format="{{ sp.format }}"
-                                    {% if preselect_story == sp.id %}selected{% endif %}>
+                            <option value="{{ sp.id }}" data-format="{{ sp.format }}">
                                 {{ sp.title }} ({{ sp.format }})
                             </option>
                             {% endfor %}
                         </select>
-                        <p class="helper-text"><span id="story-help">Steer this match through a legendary arc — your teams, an open ending.</span></p>
+                        <p class="helper-text"><span id="story-help">Story Mode is temporarily unavailable — this match will play out normally.</span></p>
                     </div>
 
                     <div class="form-group">
@@ -1526,6 +1530,10 @@
         const storyHelp = document.getElementById('story-help');
         const interestingToggle = document.getElementById('interesting-match-toggle');
         if (!storySelect) return;
+        // Story Mode is switched off: leave the disabled control and its
+        // "unavailable" helper text exactly as rendered. Dropping the
+        // `disabled` attribute re-enables all of the behaviour below.
+        if (storySelect.disabled) return;
 
         // Stories are format-specific: hide options that don't match the
         // current format and clear the selection if it became invalid.

@@ -757,14 +757,17 @@
             <i class="fa-solid fa-arrow-right menu-arrow"></i>
         </a>
 
-        <a class="menu-item" href="/scenarios">
+        {# Story Mode is disabled for now — rendered as a non-link so it cannot be
+           clicked or reached by keyboard. Restore the <a href="/scenarios"> wrapper
+           to re-enable. #}
+        <span class="menu-item is-disabled" aria-disabled="true">
             <div class="menu-icon"><i class="fa-solid fa-landmark"></i></div>
             <div>
-                <h3 class="menu-title">Story Mode</h3>
+                <h3 class="menu-title">Story Mode<span class="menu-lock-badge"><i class="fa-solid fa-lock"></i> Coming soon</span></h3>
                 <p class="menu-desc">Steer your own teams through legendary match arcs — same pressure, a different ending every time.</p>
             </div>
             <i class="fa-solid fa-arrow-right menu-arrow"></i>
-        </a>
+        </span>
 
         <a class="menu-item" href="/statistics">
             <div class="menu-icon"><i class="fa-solid fa-chart-line"></i></div>
