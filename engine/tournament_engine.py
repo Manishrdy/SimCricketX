@@ -1271,7 +1271,17 @@ class TournamentEngine:
         return True
 
     def _is_no_result(self, match) -> bool:
-        """Determine if a match is a No Result (as opposed to a Tie)."""
+        """Determine if a match is a No Result (as opposed to a Tie).
+
+        Prefers the structured match_status the engine sets directly
+        (Match._set_outcome); only falls back to keyword-sniffing
+        result_description for matches archived before that column existed
+        (it's never backfilled, so this fallback is permanent, not transitional).
+        """
+        if match.match_status is not None:
+            return match.match_status == 'no_result'
+
+        # --- Legacy fallback (match_status is NULL, pre-dates this column) ---
         if match.winner_team_id:
             return False
 

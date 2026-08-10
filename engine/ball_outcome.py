@@ -84,6 +84,7 @@ PITCH_WICKET_FACTOR = {
         "Fast":         1.40,   # fastest bowlers excel on Green
         "Fast-medium":  1.20,
         "Medium-fast":  1.15,
+        "Medium":       1.05,   # still seam-friendly, just short of Medium-fast
         "default":      0.55    # spinners/pacers that don’t fit above
     },
     "Dry": {
@@ -97,6 +98,7 @@ PITCH_WICKET_FACTOR = {
         "Fast":         1.10,   # pace gets decent bounce & seam, but still batsmen can score
         "Fast-medium":  1.05,
         "Medium-fast":  1.00,
+        "Medium":       0.95,
         "default":      0.90    # spin/other styles on a true track
     },
     "Flat": {
@@ -108,6 +110,7 @@ PITCH_WICKET_FACTOR = {
         "Fast":         0.60,
         "Fast-medium":  0.60,
         "Medium-fast":  0.60,
+        "Medium":       0.60,
         "Off spin":     0.60,
         "Leg spin":     0.60,
         "Finger spin":  0.60,
@@ -723,6 +726,53 @@ def _get_wicket_type_by_bowling(bowling_type: str):
     return types, weights
 
 # -----------------------------------------------------------------------------
+# 4c) Fielder selection — picked BEFORE the catch/misfield is resolved, so the
+# chosen fielder's own rating (not the team average) drives the drop/misfield
+# odds. Mirrors the role/position weighting that used to live in
+# Match._select_fielder_for_wicket(), which ran only after the fact to name a
+# fielder for commentary.
+# -----------------------------------------------------------------------------
+def _select_fielder(fielding_team, wicket_type: str = None, exclude_name: str = None):
+    """Weighted-pick a fielder from the bowling XI.
+
+    Returns (name, fielding_rating) or (None, None) if fielding_team is empty.
+    """
+    if not fielding_team:
+        return None, None
+
+    if wicket_type == "Stumped":
+        keeper = next((p for p in fielding_team if p.get("role") == "Wicketkeeper"), None)
+        if keeper:
+            return keeper["name"], keeper.get("fielding_rating", 60)
+        # No keeper in the XI: a stumping is physically impossible, but we still
+        # need someone to attribute the chance to. Log loudly, same as the old
+        # match.py fallback did.
+        logger.warning("Stumped chance with no Wicketkeeper in bowling XI; falling back to a non-bowler fielder.")
+        fallback = [p for p in fielding_team if p.get("name") != exclude_name] or list(fielding_team)
+        chosen = random.choice(fallback)
+        return chosen["name"], chosen.get("fielding_rating", 60)
+
+    candidates = []
+    weights = []
+    for player in fielding_team:
+        if exclude_name and player.get("name") == exclude_name:
+            continue
+        candidates.append(player)
+        weight = player.get("fielding_rating", 60)
+        if wicket_type == "Caught" and player.get("role") == "Wicketkeeper":
+            weight *= 1.5
+        if player.get("role") == "All-rounder" and player.get("fielding_rating", 0) > 70:
+            weight *= 1.2
+        weights.append(weight)
+
+    if not candidates:
+        candidates = list(fielding_team)
+        weights = [p.get("fielding_rating", 60) for p in candidates]
+
+    chosen = random.choices(candidates, weights=weights)[0]
+    return chosen["name"], chosen.get("fielding_rating", 60)
+
+# -----------------------------------------------------------------------------
 # 5) Main outcome selection function: calculate_outcome
 # -----------------------------------------------------------------------------
 def calculate_outcome(
@@ -742,6 +792,7 @@ def calculate_outcome(
     batting_position: int = 5,
     game_mode_override: str = None,
     fielding_quality: float = None,
+    fielding_team: list = None,
     ground_config_override: dict = None,
     format_config: Optional[FormatConfig] = None,
     is_day_night: bool = False,
@@ -762,6 +813,13 @@ def calculate_outcome(
       • Hard     : moderate boundary boost
       • Green/Dry: minimal boundary boost (max ~1 boundary/over)
       • Wicket   : slight boost in all cases
+
+    fielding_team, if given, is the bowling XI (list of player dicts with
+    name/role/fielding_rating). On a Caught/Stumped chance or a misfield, a
+    specific fielder is picked first and THEIR rating (not the team average)
+    drives the drop/misfield odds; the pick is returned as result["fielder_name"].
+    fielding_quality is a fallback team-average used only when fielding_team
+    isn't supplied.
     """
     # print("\n==================== New Delivery ====================")
     # print(f"Ball context -> Over: {over_number + 1}, BatterRunsSoFar: {batter_runs}")
@@ -1102,20 +1160,40 @@ def calculate_outcome(
             result["runs"] = 1
 
         # FIELDING: Catch-drop check for Caught and Stumped dismissals.
-        # High fielding team rarely drops; poor fielding team drops more often.
+        # The fielder is picked FIRST, then their own rating (not the team
+        # average) drives the drop odds — a gun fielder holds on far more
+        # often than a part-timer, and hiding a poor fielder now matters.
         # fielding=90 → ~3% drop  |  fielding=60 → ~10% drop  |  fielding=30 → ~19% drop
-        if wicket_choice in ("Caught", "Stumped") and fielding_quality is not None:
-            drop_prob = max(0.02, 0.22 - (fielding_quality / 100.0) * 0.19)
-            if random.random() < drop_prob:
-                # Dropped! Convert wicket into runs
-                result["batter_out"] = False
-                result["wicket_type"] = None
-                result["type"] = "run"
-                result["runs"] = random.choices([1, 2, 4], weights=[35, 35, 30])[0]
-                result["dropped_catch"] = True
-                result["description"] = "DROPPED! The chance goes begging — a costly miss in the field!"
-                logger.debug("[Fielding] Catch dropped (quality=%.1f, drop_prob=%.3f)", fielding_quality, drop_prob)
-                return result
+        if wicket_choice in ("Caught", "Stumped"):
+            fielder_name = None
+            fielder_rating = None
+            if fielding_team:
+                exclude = bowler.get("name") if wicket_choice == "Caught" else None
+                fielder_name, fielder_rating = _select_fielder(
+                    fielding_team, wicket_type=wicket_choice, exclude_name=exclude
+                )
+                if fielder_name:
+                    result["fielder_name"] = fielder_name
+
+            drop_quality = fielder_rating if fielder_rating is not None else fielding_quality
+            if drop_quality is not None:
+                drop_prob = max(0.02, 0.22 - (drop_quality / 100.0) * 0.19)
+                if random.random() < drop_prob:
+                    # Dropped! Convert wicket into runs
+                    result["batter_out"] = False
+                    result["wicket_type"] = None
+                    result["type"] = "run"
+                    result["runs"] = random.choices([1, 2, 4], weights=[35, 35, 30])[0]
+                    result["dropped_catch"] = True
+                    if fielder_name:
+                        result["description"] = f"DROPPED! {fielder_name} spills a sitter — a costly miss in the field!"
+                    else:
+                        result["description"] = "DROPPED! The chance goes begging — a costly miss in the field!"
+                    logger.debug(
+                        "[Fielding] Catch dropped by %s (rating=%.1f, drop_prob=%.3f)",
+                        fielder_name or "?", drop_quality, drop_prob,
+                    )
+                    return result
 
         # Use guaranteed wicket commentary templates
         wicket_descriptions = [
@@ -1196,16 +1274,29 @@ def calculate_outcome(
         template = random.choice(commentary_templates[chosen])
         result["description"] = f"{template}"
 
-        # FIELDING: Misfield mechanic — poor fielding teams give away extra runs.
+        # FIELDING: Misfield mechanic — poor fielders give away extra runs.
         # Only on dot balls and singles (not boundaries or multiple-run shots).
+        # The fielder involved is picked first; THEIR rating drives the odds.
         # fielding=90 → ~1.5%  |  fielding=60 → ~5%  |  fielding=30 → ~10%
-        if result["runs"] in (0, 1) and fielding_quality is not None:
-            misfield_prob = max(0.01, 0.115 - (fielding_quality / 100.0) * 0.105)
-            if random.random() < misfield_prob:
-                result["runs"] += 1
-                result["misfield"] = True
-                result["description"] += " — misfield, they steal an extra!"
-                logger.debug("[Fielding] Misfield! extra run granted (quality=%.1f, prob=%.3f)", fielding_quality, misfield_prob)
+        if result["runs"] in (0, 1):
+            misfield_fielder, misfield_rating = (
+                _select_fielder(fielding_team) if fielding_team else (None, None)
+            )
+            misfield_quality = misfield_rating if misfield_rating is not None else fielding_quality
+            if misfield_quality is not None:
+                misfield_prob = max(0.01, 0.115 - (misfield_quality / 100.0) * 0.105)
+                if random.random() < misfield_prob:
+                    result["runs"] += 1
+                    result["misfield"] = True
+                    if misfield_fielder:
+                        result["fielder_name"] = misfield_fielder
+                        result["description"] += f" — misfield by {misfield_fielder}, they steal an extra!"
+                    else:
+                        result["description"] += " — misfield, they steal an extra!"
+                    logger.debug(
+                        "[Fielding] Misfield by %s! extra run granted (rating=%.1f, prob=%.3f)",
+                        misfield_fielder or "?", misfield_quality, misfield_prob,
+                    )
 
         # logger.debug(f"[calculate_outcome] RUN! Outcome: {chosen}, Runs: {result['runs']}, Description: {template}")
 

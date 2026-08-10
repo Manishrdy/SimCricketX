@@ -232,6 +232,7 @@ def register_match_routes(
                 }
                 for p in players:
                     d["players"].append({
+                        "id": p.id,
                         "name": p.name,
                         "role": p.role,
                         "batting_rating": p.batting_rating,
@@ -348,6 +349,19 @@ def register_match_routes(
             path = os.path.join(match_dir, fname)
 
             from engine.ground_config import get_effective_config as _get_gc
+
+            # Weather: sanitize the forecast tier and roll the hidden rain
+            # script once, here, so it persists in the match JSON and a
+            # resumed match replays identically.
+            from engine.weather import (
+                DEFAULT_FORECAST, FORECAST_TIERS, generate_weather_script,
+            )
+            from engine.format_config import get_format as _get_fmt
+            _forecast = str(data.get("weather_forecast") or DEFAULT_FORECAST)
+            if _forecast not in FORECAST_TIERS:
+                _forecast = DEFAULT_FORECAST
+            _fmt_cfg = _get_fmt(data.get("match_format", "T20"))
+
             data.update({
                 "match_id": match_id,
                 "created_by": user,
@@ -356,6 +370,10 @@ def register_match_routes(
                 "created_at": time.time(),
                 "timestamp": ts,
                 "ground_config": _get_gc(current_user.id),
+                "weather_forecast": _forecast,
+                "weather_script": generate_weather_script(
+                    _forecast, _fmt_cfg.overs, _fmt_cfg.name
+                ),
             })
             # Transient setup flag: do not persist beyond match creation.
             data.pop("make_match_interesting", None)
@@ -572,6 +590,11 @@ def register_match_routes(
             "crr": crr,
             "match_format": match.data.get("match_format", "T20"),
             "commentary_log": getattr(match, "commentary_replay_log", []),
+            "total_overs": getattr(match, "overs", None),
+            "original_overs": getattr(match, "original_overs", None),
+            "rain_affected": getattr(match, "rain_affected", False),
+            "dls_par": match._current_dls_par() if hasattr(match, "_current_dls_par") else None,
+            "rain_events": getattr(match, "rain_events_log", []),
         })
     
     @app.route("/match/<match_id>/scoreboard")
@@ -650,6 +673,8 @@ def register_match_routes(
                         "maidens": card.maidens,
                         "wides": card.wides,
                         "noballs": card.noballs,
+                        "byes": card.byes or 0,
+                        "leg_byes": card.leg_byes or 0,
                         "economy": (card.runs_conceded * 6.0 / card.balls_bowled) if card.balls_bowled else 0,
                         "position": card.position or 9999,
                     }
@@ -660,19 +685,19 @@ def register_match_routes(
             entry = innings_data[innings_number]
             entry["batting"].sort(key=lambda item: item["position"])
             entry["bowling"].sort(key=lambda item: item["position"])
-            # Compute extras breakdown from bowling stats
+            # Compute extras breakdown from bowling stats (byes/leg_byes are
+            # tracked live by the engine and persisted directly — no need to
+            # derive them as a leftover remainder from the total score).
             total_wides = sum(item.get("wides", 0) for item in entry["bowling"])
             total_noballs = sum(item.get("noballs", 0) for item in entry["bowling"])
-            batting_runs = sum(item["runs"] for item in entry["batting"])
-            # Use authoritative DBMatch score (includes byes/legbyes) instead of
-            # re-computing from MatchScorecard rows which have no byes/legbyes columns.
+            total_byes = sum(item.get("byes", 0) for item in entry["bowling"])
+            total_leg_byes = sum(item.get("leg_byes", 0) for item in entry["bowling"])
             batting_team_id = entry["batting_team_id"]
             if batting_team_id == db_match.home_team_id:
                 entry["score"] = db_match.home_team_score or 0
             else:
                 entry["score"] = db_match.away_team_score or 0
-            # Derive byes+legbyes as the remainder not accounted for by batting or known extras
-            byes_legbyes = max(0, entry["score"] - batting_runs - total_wides - total_noballs)
+            byes_legbyes = total_byes + total_leg_byes
             total_extras = total_wides + total_noballs + byes_legbyes
             entry["extras"] = {
                 "wides": total_wides,
@@ -685,12 +710,18 @@ def register_match_routes(
             entry["bowling_team_name"] = teams.get(entry["bowling_team_id"]).name if entry["bowling_team_id"] in teams else "Unknown"
             innings_list.append(entry)
 
+        _result_text = db_match.result_description or ""
         match_summary = {
             "result_description": db_match.result_description or "Match Completed",
             "team_home": teams.get(db_match.home_team_id).name if db_match.home_team_id in teams else "Home",
             "team_away": teams.get(db_match.away_team_id).name if db_match.away_team_id in teams else "Away",
             "venue": db_match.venue or "Stadium",
             "tournament_id": db_match.tournament_id,
+            "rain_affected": (
+                getattr(db_match, "match_status", None) == "no_result"
+                or "DLS method" in _result_text
+                or "abandoned due to rain" in _result_text.lower()
+            ),
         }
 
         return render_template(

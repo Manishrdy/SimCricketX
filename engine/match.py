@@ -1,13 +1,17 @@
 import builtins
 import copy
+import dataclasses
 import logging
 import math
 import os
 import random
 import sys
 import time
+from engine import dls
+from engine import weather as weather_engine
 from engine.ball_outcome import calculate_outcome
 from engine.super_over_outcome import calculate_super_over_outcome
+from engine.cricket_math import balls_to_overs_str
 from match_archiver import MatchArchiver, find_original_json_file
 from engine.pressure_engine import PressureEngine
 from engine.game_state_engine import (
@@ -32,14 +36,12 @@ _MATCH_DEBUG_PRINTS = os.getenv("SIMCRICKET_DEBUG_PRINTS", "").strip().lower() i
 # ---------------------------------------------------------------------------
 _POWERPLAY_BOWLING_MULT: dict = {
     "pace":    1.12,   # Pacers excel with new ball in powerplay
-    "swing":   1.10,
     "medium":  1.05,
     "spin":    0.88,   # Spinners less effective in first 6
     "default": 1.00,
 }
 _DEATH_BOWLING_MULT: dict = {
     "pace":    1.10,   # Pacers effective at death with yorkers/bouncers
-    "swing":   1.08,
     "medium":  1.03,
     "spin":    0.90,   # Spinners more hittable at death
     "default": 1.00,
@@ -48,7 +50,6 @@ _MIDDLE_BOWLING_MULT: dict = {
     "spin":    1.08,   # Middle overs are the spinner's playground
     "medium":  1.03,
     "pace":    0.97,
-    "swing":   0.97,
     "default": 1.00,
 }
 
@@ -135,8 +136,11 @@ class Match:
             self.home_xi, self.away_xi, innings=1,
         )
 
-        # Load format config (T20 by default for backward compatibility)
-        self.fmt = get_format(match_data.get("match_format", "T20"))
+        # Load format config (T20 by default for backward compatibility).
+        # A per-match copy is taken because rain revisions mutate overs and
+        # bowler quotas — the FORMAT_REGISTRY singletons are shared across
+        # every concurrent match and must never be modified.
+        self.fmt = dataclasses.replace(get_format(match_data.get("match_format", "T20")))
 
         # Feature 7: compute toss × conditions advantage once at match start.
         # D/N matches: dew in the 2nd innings tilts the optimal choice towards
@@ -164,16 +168,35 @@ class Match:
         self.overs = self.fmt.overs
         self.current_over = 0
         self.current_ball = 0
+
+        # ── Rain / DLS state ─────────────────────────────────────────────
+        # The weather script is rolled once (at match creation by the setup
+        # route; fallback here for older payloads and tests) and stored in
+        # match_data so a resumed match replays identically.
+        self.original_overs = self.fmt.overs
+        self.weather_forecast = match_data.get("weather_forecast", weather_engine.DEFAULT_FORECAST)
+        if match_data.get("weather_script") is None:
+            match_data["weather_script"] = weather_engine.generate_weather_script(
+                self.weather_forecast, self.fmt.overs, self.fmt.name
+            )
+        self.weather_script = match_data["weather_script"]
+        self.weather_next_event = 0          # index of next unconsumed script event
+        self.rain_affected = False
+        self.rain_events_log = []            # applied interruptions (UI + archive)
+        self._innings1_overs_bowled = None   # actual completed overs of innings 1
+        self._pending_rain_info = None       # rain info to attach to next response
+        self.dls_ledger_innings1 = dls.ResourceLedger(self.fmt.overs)
+        self.dls_ledger_innings2 = None      # created when the chase is set up
         self.batter_idx = [0, 1]
         self.score = 0
         self.wickets = 0
         self.commentary = []
 
         # Initialize comprehensive stats
-        self.batsman_stats = {p["name"]: {"runs":0,"balls":0,"fours":0,"sixes":0,"ones":0,"twos":0,"threes":0,"dots":0,"wicket_type":"","bowler_out":"","fielder_out":"","form":1.0} for p in self.batting_team}
+        self.batsman_stats = {p["name"]: self._new_batting_stats(p) for p in self.batting_team}
         self.current_over_runs = 0
         self.current_over_outcomes = []
-        self.bowler_stats = {p["name"]: {"runs":0,"fours":0,"sixes":0,"wickets":0,"overs":0,"maidens":0,"balls_bowled":0,"wides":0,"noballs":0,"byes":0,"legbyes":0} for p in self.bowling_team if p["will_bowl"]}
+        self.bowler_stats = {p["name"]: self._new_bowling_stats(p) for p in self.bowling_team if p["will_bowl"]}
 
         self.current_striker = self.batting_team[0]
         self.current_non_striker = self.batting_team[1]
@@ -229,6 +252,15 @@ class Match:
         self.first_bowling_team_name = ""  # e.g., "DC"
         
         self.result = ""  # Store final match result
+
+        # Structured outcome, captured alongside self.result at the same
+        # sites instead of being re-derived later by parsing that prose.
+        # winner_is_home: True/False/None (None = tie/no-result/not yet decided)
+        self.winner_is_home = None
+        self.match_status = None    # 'completed'|'tied'|'no_result'|'aborted'
+        self.margin_type = None     # 'runs'|'wickets'|'tie'|'boundary_count'
+        self.margin_value = None
+
         self.pending_pre_ball_commentary = []
         self._second_innings_stats_saved = False
         self._archive_created = False
@@ -277,8 +309,35 @@ class Match:
 
     @staticmethod
     def _balls_to_overs_notation(total_balls):
-        total_balls = max(0, int(total_balls or 0))
-        return f"{total_balls // 6}.{total_balls % 6}"
+        return balls_to_overs_str(total_balls)
+
+    def _set_outcome(self, *, result_text, winner_is_home, match_status, margin_type, margin_value):
+        """Set self.result plus the structured fields describing the same
+        outcome, captured at the same call site instead of being re-derived
+        later by parsing result_text. Does not compose result_text itself —
+        callers already build it differently per branch (chase vs. defend
+        vs. super over vs. boundary tiebreak)."""
+        self.result = result_text
+        self.winner_is_home = winner_is_home
+        self.match_status = match_status
+        self.margin_type = margin_type
+        self.margin_value = margin_value
+
+    @staticmethod
+    def _new_batting_stats(player=None):
+        return {
+            "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0,
+            "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": "",
+            "form": 1.0, "id": player.get("id") if player else None,
+        }
+
+    @staticmethod
+    def _new_bowling_stats(player=None):
+        return {
+            "runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0,
+            "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0,
+            "id": player.get("id") if player else None,
+        }
 
     def _balls_left_in_innings(self):
         total_balls_in_innings = self.overs * 6
@@ -344,12 +403,17 @@ class Match:
     def _is_manual_mode(self):
         return str(self.simulation_mode).lower() == "manual"
 
+    def _find_player_dict(self, player_name):
+        """Best-effort lookup of the original player dict (with its DB id,
+        if any) by name, for late-created stats entries."""
+        for p in self.home_xi + self.away_xi:
+            if p.get("name") == player_name:
+                return p
+        return None
+
     def _ensure_batsman_stats_entry(self, player_name):
         if player_name not in self.batsman_stats:
-            self.batsman_stats[player_name] = {
-                "runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0,
-                "wicket_type": "", "bowler_out": "", "fielder_out": "", "form": 1.0
-            }
+            self.batsman_stats[player_name] = self._new_batting_stats(self._find_player_dict(player_name))
 
     def _ensure_current_bowler_stats_entry(self):
         if not self.current_bowler:
@@ -358,10 +422,7 @@ class Match:
         if not bowler_name:
             return
         if bowler_name not in self.bowler_stats:
-            self.bowler_stats[bowler_name] = {
-                "runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0,
-                "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0
-            }
+            self.bowler_stats[bowler_name] = self._new_bowling_stats(self.current_bowler)
             logger.warning("Created missing bowler_stats entry for '%s'", bowler_name)
 
     def _build_decision_required_response(self, decision, commentary="", ball_data=None):
@@ -1496,12 +1557,8 @@ class Match:
 
         # Initialize bowler stats if needed
         if selected_bowler["name"] not in self.bowler_stats:
-            self.bowler_stats[selected_bowler["name"]] = {
-                "runs": 0, "fours": 0, "sixes": 0, "wickets": 0, 
-                "overs": 0, "maidens": 0, "balls_bowled": 0,
-                "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0
-            }
-        
+            self.bowler_stats[selected_bowler["name"]] = self._new_bowling_stats(selected_bowler)
+
         print(f"🏁 === DEATH OVERS SELECTION COMPLETE ===\n")
         return selected_bowler
 
@@ -1971,11 +2028,7 @@ class Match:
         
         # Initialize/update bowler stats
         if selected_bowler["name"] not in self.bowler_stats:
-            self.bowler_stats[selected_bowler["name"]] = {
-                "runs": 0, "fours": 0, "sixes": 0, "wickets": 0, 
-                "overs": 0, "maidens": 0, "balls_bowled": 0,
-                "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0
-            }
+            self.bowler_stats[selected_bowler["name"]] = self._new_bowling_stats(selected_bowler)
             print(f"    Initialized stats for {selected_bowler['name']}")
         
         # Restore any temporary rating modifications
@@ -2152,12 +2205,10 @@ class Match:
         # Map bowling_type to the phase-mult key
         if bowling_type in ("Fast", "Fast-medium"):
             phase_key = "pace"
-        elif bowling_type == "Medium-fast":
+        elif bowling_type in ("Medium-fast", "Medium"):
             phase_key = "medium"
         elif bowling_type in ("Off spin", "Leg spin", "Finger spin", "Wrist spin"):
             phase_key = "spin"
-        elif bowling_type == "Swing":
-            phase_key = "swing"
         else:
             phase_key = "default"
 
@@ -2449,7 +2500,10 @@ class Match:
         self.batsman_stats[dismissed_name]["bowler_out"] = self.current_bowler["name"]
 
         if wicket_type in ("Caught", "Stumped"):
-            fielder_name = self._select_fielder_for_wicket(wicket_type)
+            # calculate_outcome() already picked the fielder (before rolling
+            # the catch-drop odds off that fielder's own rating) and attached
+            # it to the outcome. Only re-select here as a defensive fallback.
+            fielder_name = outcome.get("fielder_name") or self._select_fielder_for_wicket(wicket_type)
             self.batsman_stats[dismissed_name]["fielder_out"] = fielder_name
 
         commentary_line += self._generate_wicket_commentary(outcome, fielder_name)
@@ -3689,6 +3743,349 @@ class Match:
         
         return f"<em>{commentary}</em>" if commentary else None
 
+    # ── RAIN & DLS ─────────────────────────────────────────────────────────────
+    # Rain events come from the pre-rolled weather script (see engine/weather.py)
+    # and are consumed at over boundaries. Target revision uses the Standard
+    # Edition DLS resource table (engine/dls.py).
+
+    def _set_innings_overs(self, revised_overs):
+        """Apply a revised allocation to the innings in progress. Mutating the
+        per-match fmt copy propagates the new overs + bowler quota to every
+        consumer (BowlerManager, GSME, pressure engine, UI payloads)."""
+        self.overs = revised_overs
+        self.fmt.overs = revised_overs
+        self.fmt.max_bowler_overs = weather_engine.revised_max_bowler_overs(revised_overs)
+
+    def _dls_suffix(self):
+        return " (DLS method)" if getattr(self, "rain_affected", False) else ""
+
+    def _dls_g50(self):
+        """Expected 100%-resource innings total for the R2 > R1 branch of the
+        DLS target formula, derived from the sim's own pitch-adjusted par."""
+        expected = self.fmt.target_scores.get(self.pitch)
+        if expected is None:
+            expected = 245.0 if self.fmt.name == "ListA" else 165.0
+        return dls.g50_from_expected_total(float(expected), self.original_overs)
+
+    def _global_overs_completed(self):
+        """Completed overs across the whole match — the weather script's clock."""
+        if self.innings == 1:
+            return self.current_over
+        base = self._innings1_overs_bowled
+        if base is None:
+            base = self.original_overs
+        return base + self.current_over
+
+    def _compute_innings2_target(self):
+        """Target for the chase at the innings break. Plain S+1 in dry
+        matches; DLS whenever rain has touched the match."""
+        if not self.rain_affected:
+            return self.score + 1
+        if self.dls_ledger_innings2 is None:
+            self.dls_ledger_innings2 = dls.ResourceLedger(self.overs)
+        return dls.compute_target(
+            self.score,
+            self.dls_ledger_innings1.available(),
+            self.dls_ledger_innings2.available(),
+            self._dls_g50(),
+        )
+
+    def _recompute_dls_target(self):
+        """Re-derive the chase target after an innings-2 interruption."""
+        self.target = dls.compute_target(
+            self.first_innings_score,
+            self.dls_ledger_innings1.available(),
+            self.dls_ledger_innings2.available(),
+            self._dls_g50(),
+        )
+        return self.target
+
+    def _current_dls_par(self):
+        """Live DLS par score for the chase (None when not applicable). The
+        chasing side wins a washed-out match if it is ahead of this number."""
+        if (self.innings != 2 or not self.rain_affected
+                or self.first_innings_score is None):
+            return None
+        if self.dls_ledger_innings2 is None:
+            self.dls_ledger_innings2 = dls.ResourceLedger(self.overs)
+        return dls.par_score(
+            self.first_innings_score,
+            self.dls_ledger_innings1.available(),
+            self.dls_ledger_innings2.available(),
+            dls.overs_from_balls(self._balls_left_in_innings()),
+            self.wickets,
+        )
+
+    def _rain_commentary(self, kind, **ctx):
+        """Dedicated rain commentary pools. Returns a list of HTML lines."""
+        if kind == "foreshadow":
+            return [random.choice([
+                "<em>Dark clouds are rolling in over the ground... the umpires exchange a glance.</em>",
+                "<em>The floodlights have taken effect early — there's weather about.</em>",
+                "<em>Spectators reaching for their raincoats. Something's brewing up there.</em>",
+                "<em>A rumble in the distance. The ground staff edge towards the covers.</em>",
+            ])]
+        if kind == "covers_on":
+            return [
+                random.choice([
+                    "🌧️ <strong>RAIN STOPS PLAY!</strong> The heavens open and the umpires whip the bails off. Covers coming on at a sprint!",
+                    "🌧️ <strong>RAIN STOPS PLAY!</strong> A grey curtain sweeps across the ground. The players dash for the pavilion.",
+                    "🌧️ <strong>THE RAIN ARRIVES!</strong> Umpires confer for barely a second — everyone off. The square is covered in moments.",
+                ]),
+                f"<em>The delay costs the match {ctx['overs_lost']} over(s).</em>",
+            ]
+        if kind == "resume_innings1":
+            return [
+                f"☂️ <strong>Play resumes.</strong> The match is reduced to <strong>{ctx['revised_overs']} overs a side</strong>. "
+                f"Bowlers are limited to {ctx['max_bowler_overs']} overs each.",
+            ]
+        if kind == "innings1_cut":
+            return [
+                f"☂️ <strong>The innings is over.</strong> Rain has ended the first innings at {ctx['score']}/{ctx['wickets']} — "
+                f"the chase will be revised by the DLS method.",
+            ]
+        if kind == "resume_chase":
+            return [
+                f"☂️ <strong>Play resumes.</strong> The chase is now <strong>{ctx['target']} from {ctx['revised_overs']} overs</strong> (DLS method). "
+                f"Bowlers are limited to {ctx['max_bowler_overs']} overs each.",
+            ]
+        if kind == "chase_reduced_before_start":
+            return [
+                f"☂️ <strong>Revised chase:</strong> rain at the innings break cuts the chase to "
+                f"<strong>{ctx['target']} from {ctx['revised_overs']} overs</strong> (DLS method).",
+            ]
+        return []
+
+    def _maybe_foreshadow_rain(self):
+        """One atmospheric line when a scripted rain event is 1-2 overs away."""
+        events = (self.weather_script or {}).get("events") or []
+        if self.innings not in (1, 2) or self.weather_next_event >= len(events):
+            return None
+        gap = events[self.weather_next_event]["at_global_over"] - self._global_overs_completed()
+        if 1 <= gap <= 2:
+            return self._rain_commentary("foreshadow")[0]
+        return None
+
+    def _check_rain_events(self):
+        """Consume any due weather-script events at an over boundary.
+
+        Returns None when nothing happens, otherwise:
+          {"final": <match-over payload>}          — rain ended the match
+          {"lines": [...], "info": {...}}          — play continues, revised
+        """
+        if self.innings not in (1, 2):
+            return None
+        events = (self.weather_script or {}).get("events") or []
+        lines, info = [], None
+        while self.weather_next_event < len(events):
+            # Innings 1 is complete but the transition hasn't run yet: defer
+            # so the event lands on the chase as a pre-start reduction.
+            if self.innings == 1 and self.current_over >= self.overs:
+                break
+            ev = events[self.weather_next_event]
+            if ev["at_global_over"] > self._global_overs_completed():
+                break
+            self.weather_next_event += 1
+            outcome = self._apply_rain_event(ev)
+            if outcome.get("final") is not None:
+                return {"final": outcome["final"]}
+            lines.extend(outcome.get("lines", []))
+            info = outcome.get("info") or info
+        if not lines and info is None:
+            return None
+        return {"lines": lines, "info": info}
+
+    def _apply_rain_event(self, ev):
+        """Apply one scripted rain event to the current game situation."""
+        overs_lost = ev["overs_lost"]
+        overs_completed = self.current_over
+        resolution = weather_engine.resolve_interruption(
+            self.innings, overs_completed, self.overs, overs_lost, self.fmt.name
+        )
+        rtype = resolution["type"]
+        revised = resolution["revised_overs"]
+
+        self.rain_affected = True
+        self.data["rain_affected"] = True
+        self.rain_events_log.append({
+            "innings": self.innings,
+            "at_over": overs_completed,
+            "overs_lost": overs_lost,
+            "outcome": rtype,
+            "revised_overs": revised,
+        })
+        lines = self._rain_commentary("covers_on", overs_lost=overs_lost)
+
+        if rtype == weather_engine.NO_RESULT:
+            return {"final": self._finalize_no_result(lines)}
+
+        if self.innings == 1:
+            prev_allocation = self.overs
+            if rtype == weather_engine.INNINGS_TERMINATED:
+                self.dls_ledger_innings1.record_termination(
+                    prev_allocation - overs_completed, self.wickets
+                )
+                self._set_innings_overs(overs_completed)
+                lines += self._rain_commentary(
+                    "innings1_cut", score=self.score, wickets=self.wickets
+                )
+            else:  # RESUME
+                self.dls_ledger_innings1.record_interruption(
+                    prev_allocation - overs_completed, self.wickets,
+                    revised - overs_completed,
+                )
+                self._set_innings_overs(revised)
+                lines += self._rain_commentary(
+                    "resume_innings1", revised_overs=revised,
+                    max_bowler_overs=self.fmt.max_bowler_overs,
+                )
+            info = {
+                "innings": 1,
+                "at_over": overs_completed,
+                "overs_lost": overs_lost,
+                "revised_overs": self.overs,
+                "max_bowler_overs": self.fmt.max_bowler_overs,
+                "outcome": rtype,
+            }
+            return {"lines": lines, "info": info}
+
+        # ── Innings 2: the chase ────────────────────────────────────────
+        if self.dls_ledger_innings2 is None:
+            self.dls_ledger_innings2 = dls.ResourceLedger(self.overs)
+        prev_allocation = self.overs
+
+        if rtype == weather_engine.CHASE_TERMINATED:
+            self.dls_ledger_innings2.record_termination(
+                prev_allocation - overs_completed, self.wickets
+            )
+            self._recompute_dls_target()
+            return {"final": self._finalize_chase_terminated(lines)}
+
+        # RESUME
+        self.dls_ledger_innings2.record_interruption(
+            prev_allocation - overs_completed, self.wickets,
+            revised - overs_completed,
+        )
+        self._set_innings_overs(revised)
+        self._recompute_dls_target()
+        kind = "chase_reduced_before_start" if overs_completed == 0 else "resume_chase"
+        lines += self._rain_commentary(
+            kind, target=self.target, revised_overs=revised,
+            max_bowler_overs=self.fmt.max_bowler_overs,
+        )
+        if self.score >= self.target:
+            # The revision leaves the chasers already past the new target.
+            return {"final": self._finalize_rain_chase_won(lines)}
+        info = {
+            "innings": 2,
+            "at_over": overs_completed,
+            "overs_lost": overs_lost,
+            "revised_overs": self.overs,
+            "target": self.target,
+            "max_bowler_overs": self.fmt.max_bowler_overs,
+            "outcome": rtype,
+        }
+        return {"lines": lines, "info": info}
+
+    def _rain_final_payload(self, scorecard_data, lines):
+        """Common shape for a rain-decided match-over response."""
+        lines = list(lines)
+        lines.append(f"<strong>Match Over!</strong> {self.result}")
+        return {
+            "match_over": True,
+            "scorecard_data": scorecard_data,
+            "final_score": self.score,
+            "wickets": self.wickets,
+            "result": self.result,
+            "commentary": "<br>".join(lines),
+            "rain_affected": True,
+        }
+
+    def _finalize_no_result(self, lines):
+        """Rain has washed the match out before a result was possible."""
+        washed_out_in_first_innings = (self.innings == 1)
+        if self.wickets < 10 and self.current_partnership_balls > 0:
+            self._save_partnership("not_out")
+        if washed_out_in_first_innings:
+            self._save_first_innings_stats()
+            # Prevent the innings-3 guard from copying first-innings stats
+            # into the (never played) second innings.
+            self._second_innings_stats_saved = True
+        else:
+            self._save_second_innings_stats()
+        scorecard_data = self._generate_detailed_scorecard()
+        scorecard_data["target_info"] = "Match abandoned due to rain — No Result"
+        self._set_outcome(
+            result_text="Match abandoned due to rain. No result.",
+            winner_is_home=None, match_status='no_result',
+            margin_type=None, margin_value=None,
+        )
+        self.innings = 3
+        self._create_match_archive()
+        if washed_out_in_first_innings:
+            # The completion handlers read the live stats dicts as "second
+            # innings" data — clear them so an innings-1 washout does not
+            # duplicate the first innings onto the side that never batted.
+            self.batsman_stats = {}
+            self.bowler_stats = {}
+        return self._rain_final_payload(scorecard_data, lines)
+
+    def _finalize_chase_terminated(self, lines):
+        """Rain has ended the chase after the minimum overs: DLS par decides."""
+        par = self.target - 1
+        if self.wickets < 10 and self.current_partnership_balls > 0:
+            self._save_partnership("not_out")
+        chasing_code = self._get_team_name(self.batting_team)
+        defending_code = self._get_team_name(self.bowling_team)
+        lines.append(
+            f"<em>No further play possible. DLS par score at the stoppage: "
+            f"<strong>{par}</strong> — {chasing_code} are {self.score}/{self.wickets}.</em>"
+        )
+        if self.score > par:
+            margin = self.score - par
+            self._set_outcome(
+                result_text=f"{chasing_code} won by {margin} run(s) (DLS method).",
+                winner_is_home=(self.batting_team is self.home_xi),
+                match_status='completed', margin_type='runs', margin_value=margin,
+            )
+        elif self.score == par:
+            self._set_outcome(
+                result_text="Match Tied (DLS method).",
+                winner_is_home=None, match_status='tied',
+                margin_type='tie', margin_value=0,
+            )
+        else:
+            margin = par - self.score
+            self._set_outcome(
+                result_text=f"{defending_code} won by {margin} run(s) (DLS method).",
+                winner_is_home=(self.bowling_team is self.home_xi),
+                match_status='completed', margin_type='runs', margin_value=margin,
+            )
+        scorecard_data = self._generate_detailed_scorecard()
+        scorecard_data["target_info"] = self.result
+        self.innings = 3
+        self._save_second_innings_stats()
+        self._create_match_archive()
+        return self._rain_final_payload(scorecard_data, lines)
+
+    def _finalize_rain_chase_won(self, lines):
+        """A target revision leaves the chasing side already home."""
+        if self.wickets < 10 and self.current_partnership_balls > 0:
+            self._save_partnership("not_out")
+        winner_code = self._get_team_name(self.batting_team)
+        wkts_left = 10 - self.wickets
+        self._set_outcome(
+            result_text=f"{winner_code} won by {wkts_left} wicket(s) (DLS method).",
+            winner_is_home=(self.batting_team is self.home_xi),
+            match_status='completed', margin_type='wickets', margin_value=wkts_left,
+        )
+        scorecard_data = self._generate_detailed_scorecard()
+        scorecard_data["target_info"] = self.result
+        self.innings = 3
+        self._save_second_innings_stats()
+        self._create_match_archive()
+        return self._rain_final_payload(scorecard_data, lines)
+
     def next_ball(self):
         # Super Over guard: once a tie pushes the match into super-over state
         # (innings 4 = super over pending/in progress, 5 = decided), the normal
@@ -3730,6 +4127,16 @@ class Match:
             if status_code != 200:
                 return {"error": apply_result.get("error", "Failed to auto-resolve pending decision")}
 
+        # Rain check at the start of a fresh over — this is where deferred
+        # innings-break events land (a chase reduced before it begins).
+        if self.current_ball == 0:
+            _rain_outcome = self._check_rain_events()
+            if _rain_outcome:
+                if _rain_outcome.get("final") is not None:
+                    return _rain_outcome["final"]
+                self.pending_pre_ball_commentary.extend(_rain_outcome.get("lines", []))
+                self._pending_rain_info = _rain_outcome.get("info")
+
         self._ensure_current_bowler_stats_entry()
 
 
@@ -3750,11 +4157,14 @@ class Match:
 
                 scorecard_data = self._generate_detailed_scorecard()
                 self.first_innings_score = self.score
-                self.target = self.score + 1
+                self.target = self._compute_innings2_target()
                 required_rr = self.target / self.overs
                 chasing_team_code = self.data["team_away"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_home"].split("_")[0]
-                scorecard_data["target_info"] = f"{chasing_team_code} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
-                
+                _target_info = f"{chasing_team_code} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
+                if self.rain_affected:
+                    _target_info += " (DLS method)"
+                scorecard_data["target_info"] = _target_info
+
                 self._save_first_innings_stats()
                 self.first_innings_scorecard = scorecard_data
 
@@ -3780,6 +4190,9 @@ class Match:
 
                 innings_complete_summary = self._format_innings_complete_summary("End of innings")
 
+                # Weather clock: actual completed overs of innings 1
+                self._innings1_overs_bowled = self.current_over
+
                 # Reset all innings-specific state
                 self.score = 0
                 self.wickets = 0
@@ -3793,9 +4206,9 @@ class Match:
                 for i, player in enumerate(self.batting_team):
                     print(f"   {i+1}. {player['name']}")
 
-                self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": "", "form": 1.0} for p in self.batting_team}
+                self.batsman_stats = {p["name"]: self._new_batting_stats(p) for p in self.batting_team}
                 # bowler_history reset is handled inside _reset_innings_state() via BowlerManager
-                self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p.get("will_bowl")}
+                self.bowler_stats = {p["name"]: self._new_bowling_stats(p) for p in self.bowling_team if p.get("will_bowl")}
                 self._reset_innings_state()
 
                 # Notify scenario engine of innings transition
@@ -3841,12 +4254,16 @@ class Match:
                         "overs_left": overs_left
                     }))
 
-                    self.result = f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} overs remaining."
+                    self._set_outcome(
+                        result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} overs remaining.{self._dls_suffix()}",
+                        winner_is_home=(self.batting_team is self.home_xi),
+                        match_status='completed', margin_type='wickets', margin_value=wkts_left,
+                    )
                 else:
                     # Check for tie
                     if self.score == self.target - 1:
                         self.result = "Match Tied"
-                        
+
                         # 🤝 SAVE UNFINISHED PARTNERSHIP (Match Tied)
                         if self.wickets < 10:
                             self._save_partnership("not_out")
@@ -3861,7 +4278,11 @@ class Match:
                     else:
                         winner_code = self.data["team_home"].split("_")[0] if self.bowling_team is self.home_xi else self.data["team_away"].split("_")[0]
                         run_diff = self.target - self.score - 1
-                        self.result = f"{winner_code} won by {run_diff} run(s)."
+                        self._set_outcome(
+                            result_text=f"{winner_code} won by {run_diff} run(s).{self._dls_suffix()}",
+                            winner_is_home=(self.bowling_team is self.home_xi),
+                            match_status='completed', margin_type='runs', margin_value=run_diff,
+                        )
 
                 striker_stats = self.batsman_stats[self.current_striker["name"]]
                 non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
@@ -3930,6 +4351,7 @@ class Match:
 
                     eligible = [p for p in self.bowling_team if p.get("will_bowl", False)]
                     if not eligible:
+                        self.match_status = 'aborted'
                         return {
                             "error": "Bowler selection failed and no eligible bowlers are available.",
                             "match_over": True,
@@ -3945,6 +4367,7 @@ class Match:
                     non_consecutive = [b for b in eligible if b["name"] != previous_name]
                     fallback_pool = quota_non_consecutive or non_consecutive
                     if not fallback_pool:
+                        self.match_status = 'aborted'
                         return {
                             "error": "Bowler selection failed and no non-consecutive bowler is available.",
                             "match_over": True,
@@ -4146,8 +4569,9 @@ class Match:
             _game_mode_override = self._get_dynamic_game_mode()
             logger.debug("[DynMode] over=%d wickets=%d mode=%s", self.current_over, self.wickets, _game_mode_override)
 
-            # Fielding quality: team average fielding of the bowling team.
-            # Used by ball_outcome for catch-drop and misfield mechanics.
+            # Fielding quality fallback: team average, only used by ball_outcome
+            # if fielding_team (passed below) is empty. Normally the specific
+            # fielder's own rating drives catch-drop/misfield odds instead.
             _bowling_team_fielding = [
                 p.get("fielding_rating", 60) for p in self.bowling_team
             ]
@@ -4189,6 +4613,7 @@ class Match:
                 batting_position=_batting_position,
                 game_mode_override=_game_mode_override,
                 fielding_quality=_team_fielding_avg,
+                fielding_team=self.bowling_team,
                 ground_config_override=self.ground_config,
                 format_config=self.fmt,
                 is_day_night=self.data.get("is_day_night", False),
@@ -4412,10 +4837,13 @@ class Match:
                 if self.innings == 1:
                     # ✅ FIRST INNINGS ALL OUT - Transition to second innings
                     self.first_innings_score = self.score
-                    self.target = self.score + 1
+                    self.target = self._compute_innings2_target()
                     required_rr = self.target / self.overs
                     chasing_team = self.data["team_away"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_home"].split("_")[0]
-                    scorecard_data["target_info"] = f"{chasing_team} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
+                    _target_info = f"{chasing_team} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
+                    if self.rain_affected:
+                        _target_info += " (DLS method)"
+                    scorecard_data["target_info"] = _target_info
                     
                     # Save first innings stats
                     self._save_first_innings_stats()
@@ -4436,6 +4864,8 @@ class Match:
                         self.home_xi, self.away_xi, innings=2,
                     )
                     innings_complete_summary = self._format_innings_complete_summary("End of innings")
+                    # Weather clock: completed overs of innings 1 (all out mid-over)
+                    self._innings1_overs_bowled = self.current_over
                     self.score = 0
                     self.wickets = 0
                     self.current_over = 0
@@ -4443,9 +4873,9 @@ class Match:
                     self.batter_idx = [0, 1]
                     self.current_striker = self.batting_team[0]
                     self.current_non_striker = self.batting_team[1]
-                    self.batsman_stats = {p["name"]: {"runs": 0, "balls": 0, "fours": 0, "sixes": 0, "ones": 0, "twos": 0, "threes": 0, "dots": 0, "wicket_type": "", "bowler_out": "", "fielder_out": "", "form": 1.0} for p in self.batting_team}
+                    self.batsman_stats = {p["name"]: self._new_batting_stats(p) for p in self.batting_team}
                     # bowler_history reset is handled inside _reset_innings_state() via BowlerManager
-                    self.bowler_stats = {p["name"]: {"runs": 0, "fours": 0, "sixes": 0, "wickets": 0, "overs": 0, "maidens": 0, "balls_bowled": 0, "wides": 0, "noballs": 0, "byes": 0, "legbyes": 0} for p in self.bowling_team if p["will_bowl"]}
+                    self.bowler_stats = {p["name"]: self._new_bowling_stats(p) for p in self.bowling_team if p["will_bowl"]}
                     self._reset_innings_state()
 
                     # Notify scenario engine of innings transition
@@ -4497,7 +4927,11 @@ class Match:
                     # Determine winner (Bowling team won)
                     winner_code = self.data["team_home"].split("_")[0] if self.bowling_team is self.home_xi else self.data["team_away"].split("_")[0]
                     run_diff = self.target - self.score - 1
-                    self.result = f"{winner_code} won by {run_diff} run(s)."
+                    self._set_outcome(
+                        result_text=f"{winner_code} won by {run_diff} run(s).{self._dls_suffix()}",
+                        winner_is_home=(self.bowling_team is self.home_xi),
+                        match_status='completed', margin_type='runs', margin_value=run_diff,
+                    )
 
                     self._save_second_innings_stats()
                     self._create_match_archive()
@@ -4825,8 +5259,12 @@ class Match:
                         "overs_left": overs_left
                     }))
                 
-                self.result = f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} overs remaining."
-                
+                self._set_outcome(
+                    result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} overs remaining.{self._dls_suffix()}",
+                    winner_is_home=(self.batting_team is self.home_xi),
+                    match_status='completed', margin_type='wickets', margin_value=wkts_left,
+                )
+
                 striker_stats = self.batsman_stats[self.current_striker["name"]]
                 non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
                 bowler_stats = self.bowler_stats[self.current_bowler["name"]]
@@ -4983,6 +5421,23 @@ class Match:
             self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
             self.batter_idx.reverse()
 
+            # ── Rain check at the over boundary ──────────────────────────
+            _rain_outcome = self._check_rain_events()
+            if _rain_outcome:
+                if _rain_outcome.get("final") is not None:
+                    _final = _rain_outcome["final"]
+                    # Keep the last delivery + over summary ahead of the rain.
+                    _final["commentary"] = "<br>".join(
+                        all_commentary + [_final["commentary"]]
+                    )
+                    return _final
+                all_commentary.extend(_rain_outcome.get("lines", []))
+                self._pending_rain_info = _rain_outcome.get("info")
+            else:
+                _foreshadow = self._maybe_foreshadow_rain()
+                if _foreshadow:
+                    all_commentary.append(_foreshadow)
+
         ball_data_payload = {
             "runs": self.score - _bd_score_before,
             "batter_out": wicket,
@@ -5027,6 +5482,9 @@ class Match:
         _bw_stats = self.bowler_stats.get(_bowler_name, {})
         _bw_overs_display = _bw_stats.get("overs", 0) + (_bw_stats.get("balls_bowled", 0) % 6) / 10
 
+        _rain_info = self._pending_rain_info
+        self._pending_rain_info = None
+
         return {
             "match_over": False,
             "score": self.score,
@@ -5054,6 +5512,9 @@ class Match:
             "partnership_runs": self.current_partnership_runs,
             "partnership_balls": self.current_partnership_balls,
             "win_probability": _win_prob,
+            "rain_affected": self.rain_affected,
+            "dls_par": self._current_dls_par(),
+            "rain_interruption": _rain_info,
             "ball_data": ball_data_payload
         }
 
@@ -5826,7 +6287,10 @@ class Match:
                     margin = away_score - home_score
 
                 result = f"{winner} won by Super Over"
-                self.result = result
+                self._set_outcome(
+                    result_text=result, winner_is_home=(winner == home_name),
+                    match_status='completed', margin_type='runs', margin_value=margin,
+                )
                 self.innings = 5
                 self.super_over_phase = "complete"
 
@@ -5863,10 +6327,18 @@ class Match:
                         result = (f"{bound_winner} won on boundary count-back after "
                                   f"{self.super_over_round} Super Overs "
                                   f"({max(home_b, away_b)}-{min(home_b, away_b)})")
+                        self._set_outcome(
+                            result_text=result, winner_is_home=(bound_winner == home_name),
+                            match_status='completed', margin_type='boundary_count',
+                            margin_value=abs(home_b - away_b),
+                        )
                     else:
                         result = (f"Match Drawn after {self.super_over_round} Super Overs "
                                   f"— scores and boundaries level")
-                    self.result = result
+                        self._set_outcome(
+                            result_text=result, winner_is_home=None,
+                            match_status='tied', margin_type='tie', margin_value=None,
+                        )
                     self.innings = 5
                     self.super_over_phase = "complete"
 

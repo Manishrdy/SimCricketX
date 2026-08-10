@@ -15,6 +15,7 @@ import io
 from tabulate import tabulate
 
 from utils.exception_tracker import log_exception
+from engine.cricket_math import balls_to_overs_float
 
 
 class StatsService:
@@ -322,7 +323,7 @@ class StatsService:
 
             if card.record_type == "bowling":
                 balls = card.balls_bowled or 0
-                if balls > 0 or (card.overs or 0) > 0:
+                if balls > 0:
                     entry["wickets"] += card.wickets or 0
                     bowling_forms.setdefault(pid, {
                         "player": player.name,
@@ -444,6 +445,8 @@ class StatsService:
             'bowl_dots': 0,
             'bowl_wides': 0,
             'bowl_noballs': 0,
+            'bowl_byes': 0,
+            'bowl_leg_byes': 0,
             'bowl_wickets_bowled': 0,
             'bowl_wickets_lbw': 0,
             'bowl_best': (0, 9999),  # (wickets, runs)
@@ -491,9 +494,9 @@ class StatsService:
             # Bowling stats
             if card.record_type == 'bowling':
                 balls = card.balls_bowled or 0
-                if balls > 0 or (card.overs or 0) > 0:
+                if balls > 0:
                     player_data[pid]['bowl_innings'] += 1
-                
+
                 player_data[pid]['bowl_balls'] += balls
                 player_data[pid]['bowl_runs'] += card.runs_conceded or 0
                 player_data[pid]['bowl_wickets'] += card.wickets or 0
@@ -501,6 +504,8 @@ class StatsService:
                 player_data[pid]['bowl_dots'] += card.dot_balls_bowled or 0
                 player_data[pid]['bowl_wides'] += card.wides or 0
                 player_data[pid]['bowl_noballs'] += card.noballs or 0
+                player_data[pid]['bowl_byes'] += card.byes or 0
+                player_data[pid]['bowl_leg_byes'] += card.leg_byes or 0
                 player_data[pid]['bowl_wickets_bowled'] += card.wickets_bowled or 0
                 player_data[pid]['bowl_wickets_lbw'] += card.wickets_lbw or 0
                 best_w, best_r = player_data[pid]['bowl_best']
@@ -597,8 +602,8 @@ class StatsService:
             wickets = data['bowl_wickets']
             
             # Calculate overs (proper cricket format: 3.2 means 3 overs and 2 balls)
-            overs = (balls // 6) + (balls % 6) / 10.0
-            
+            overs = balls_to_overs_float(balls)
+
             # Calculate economy rate
             economy = runs / (balls / 6) if balls > 0 else 0
             
@@ -622,8 +627,8 @@ class StatsService:
                 'dots': data['bowl_dots'],
                 'bowled': data['bowl_wickets_bowled'],
                 'lbw': data['bowl_wickets_lbw'],
-                'byes': 0,  # Not tracked in current schema
-                'leg_byes': 0,  # Not tracked in current schema
+                'byes': data['bowl_byes'],
+                'leg_byes': data['bowl_leg_byes'],
                 'wides': data['bowl_wides'],
                 'no_balls': data['bowl_noballs']
             })
@@ -878,7 +883,7 @@ class StatsService:
                     'figures': f"{card.wickets}/{card.runs_conceded}",
                     'wickets': card.wickets,
                     'runs': card.runs_conceded,
-                    'overs': round(card.overs, 1) if card.overs else 0.0,
+                    'overs': balls_to_overs_float(card.balls_bowled or 0),
                     'economy': round(economy, 2),
                     'maidens': card.maidens or 0,
                     'match_id': match.id,

@@ -25,6 +25,7 @@ pitch_profiles:
       Fast: 1.40
       Fast-medium: 1.20
       Medium-fast: 1.15
+      Medium: 1.05
       default: 0.55
 
   Dry:
@@ -62,6 +63,7 @@ pitch_profiles:
       Fast: 1.10
       Fast-medium: 1.05
       Medium-fast: 1.00
+      Medium: 0.95
       default: 0.90
 
   Flat:
@@ -95,6 +97,7 @@ pitch_profiles:
       Fast: 0.60
       Fast-medium: 0.60
       Medium-fast: 0.60
+      Medium: 0.60
       Off spin: 0.60
       Leg spin: 0.60
       Finger spin: 0.60
