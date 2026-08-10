@@ -461,11 +461,15 @@ class TestStoryMatchSmoke:
         """Beat steering pushes hard on boundary and wicket probabilities, so
         every seed must still land on a legal, resolved match — not a stalled
         innings or an impossible scoreline."""
-        m, _ = _simulate_story_match(pack, seed=seed)
+        m, outcome = _simulate_story_match(pack, seed=seed)
 
         assert m.result, f"seed {seed} produced no result"
-        # innings 3 = finished; innings 4 = tied and parked in the super over.
-        assert m.innings in (3, 4), f"seed {seed} did not resolve (innings={m.innings})"
+        # "Resolved" is the engine reporting match_over, or a tie parked in the
+        # super over (innings 4), which reports no match_over of its own. Don't
+        # assert on `innings` alone: not every completion path advances it, so
+        # it isn't a reliable finished-marker.
+        resolved = bool(outcome and outcome.get("match_over")) or m.innings == 4
+        assert resolved, f"seed {seed} did not resolve (innings={m.innings})"
         assert m.first_innings_score is not None and m.first_innings_score >= 0
         assert m.score >= 0
         assert m.wickets <= 10
