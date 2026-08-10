@@ -372,6 +372,11 @@ Match Scorecard - SimCricketX
     <div class="result-banner">
         <div class="trophy-icon">🏆</div>
         <h1>{{ match.result_description or "Match Completed" }}</h1>
+        {% if match.rain_affected %}
+        <div style="display:inline-block;margin:0.35rem 0 0.2rem;padding:0.2rem 0.75rem;border-radius:999px;background:rgba(96,165,250,0.18);border:1px solid rgba(96,165,250,0.45);color:#93c5fd;font-size:0.78rem;font-weight:700;letter-spacing:0.03em;">
+            🌧 Rain affected — DLS
+        </div>
+        {% endif %}
         <div class="match-info">
             {{ match.team_home }} vs {{ match.team_away }} • {{ match.venue }}
         </div>

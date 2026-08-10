@@ -36,7 +36,8 @@ from sqlalchemy import func as sa_func
 
 from database import db
 from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, MatchPartnership
-from utils.exception_tracker import log_exception
+from utils.exception_tracker import log_exception, log_data_anomaly
+from engine.cricket_math import balls_to_overs_str
 
 # ─── Define PROJECT_ROOT so that we can write to /<project_root>/data/… ─────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -359,36 +360,6 @@ class MatchArchiver:
             log_exception(e)
             raise MatchArchiverError(f"Failed to create archive directory: {e}")
 
-    def _calculate_margin_of_victory(self) -> tuple:
-        """
-        Calculate margin of victory from match result.
-        
-        Returns:
-            tuple: (margin_type, margin_value)
-                   margin_type: 'runs', 'wickets', or 'tie'
-                   margin_value: integer value or None for tie
-        """
-        if not self.match.result:
-            return None, None
-        
-        result_lower = self.match.result.lower()
-        
-        # Check for tie
-        if 'tie' in result_lower or 'tied' in result_lower:
-            return 'tie', 0
-        
-        # Extract runs margin: "Team won by X runs"
-        runs_match = re.search(r'(\d+)\s+runs?', result_lower)
-        if runs_match:
-            return 'runs', int(runs_match.group(1))
-        
-        # Extract wickets margin: "Team won by X wickets"
-        wickets_match = re.search(r'(\d+)\s+wickets?', result_lower)
-        if wickets_match:
-            return 'wickets', int(wickets_match.group(1))
-        
-        return None, None
-    
     def _resolve_toss_winner_id(self, home_team, away_team) -> int:
         """
         Resolve toss winner team ID from match data.
@@ -578,20 +549,20 @@ class MatchArchiver:
                 self.logger.error(f"Could not resolve teams for DB save. Match ID: {self.match_id}")
                 return False
 
-            # Determine Winner — match result format is "{short_code} won by ..."
+            # Winner/margin/status are structured outputs set directly by the
+            # engine at the moment the outcome was decided (see Match._set_outcome)
+            # instead of being re-parsed here from the result prose.
+            winner_is_home = getattr(self.match, 'winner_is_home', None)
             winner_team = None
-            if self.match.result:
-                result_lower = self.match.result.lower()
-                home_code = home_team.short_code.lower()
-                away_code = away_team.short_code.lower()
-                if result_lower.startswith(home_code + ' won'):
-                    winner_team = home_team
-                elif result_lower.startswith(away_code + ' won'):
-                    winner_team = away_team
-            
-            # Calculate margin of victory
-            margin_type, margin_value = self._calculate_margin_of_victory()
-            
+            if winner_is_home is True:
+                winner_team = home_team
+            elif winner_is_home is False:
+                winner_team = away_team
+
+            margin_type = getattr(self.match, 'margin_type', None)
+            margin_value = getattr(self.match, 'margin_value', None)
+            match_status = getattr(self.match, 'match_status', None)
+
             # Resolve toss winner
             toss_winner_id = self._resolve_toss_winner_id(home_team, away_team)
 
@@ -614,7 +585,8 @@ class MatchArchiver:
                 # NEW: Margin of victory
                 db_match.margin_type = margin_type
                 db_match.margin_value = margin_value
-                
+                db_match.match_status = match_status
+
                 # NEW: Toss information
                 db_match.toss_winner_team_id = toss_winner_id
                 db_match.toss_decision = self.match_data.get('toss_decision')
@@ -662,6 +634,7 @@ class MatchArchiver:
                     # NEW: Margin of victory
                     margin_type=margin_type,
                     margin_value=margin_value,
+                    match_status=match_status,
                     # NEW: Toss information
                     toss_winner_team_id=toss_winner_id,
                     toss_decision=self.match_data.get('toss_decision'),
@@ -717,7 +690,7 @@ class MatchArchiver:
                     except Exception:
                         pass
                     legal_balls = ops_cap * 6
-                return f"{legal_balls // 6}.{legal_balls % 6}"
+                return balls_to_overs_str(legal_balls)
 
             if first_bat_name == self.match.match_data["team_home"].split('_')[0]:
                 db_match.home_team_score = self.match.first_innings_score
@@ -770,14 +743,26 @@ class MatchArchiver:
             # 4. Save Scorecards
             _match_format = self.match_data.get('match_format', 'T20')
 
-            def _lookup_player(p_name, team_id):
-                """Resolve player via format profile; only fall back to team-wide
-                lookup for genuinely legacy (profile_id IS NULL) rows.
-
-                Post-migration, every player belongs to a profile. Falling back
-                to any team-wide match would risk attaching this match's stats
-                to a player row in a *different* format profile.
+            def _lookup_player(p_name, team_id, player_id=None):
+                """Resolve player, preferring the id carried through the engine's
+                player dicts (set at match-setup time from DBPlayer.id) when
+                present, since it can't collide the way a name can. Falls back
+                to the name/profile lookup for older matches or hand-built
+                fixtures that never had an id attached.
                 """
+                if player_id:
+                    player = DBPlayer.query.get(player_id)
+                    if player and player.team_id == team_id:
+                        return player
+                    # id present but stale/mismatched (e.g. player moved teams,
+                    # or a spoofed/garbage value) — fall through to name lookup.
+
+                # Resolve player via format profile; only fall back to team-wide
+                # lookup for genuinely legacy (profile_id IS NULL) rows.
+                #
+                # Post-migration, every player belongs to a profile. Falling back
+                # to any team-wide match would risk attaching this match's stats
+                # to a player row in a *different* format profile.
                 profile = DBTeamProfile.query.filter_by(
                     team_id=team_id, format_type=_match_format
                 ).first()
@@ -796,18 +781,29 @@ class MatchArchiver:
                 if not stats_dict:
                     return
                 for position, (p_name, s) in enumerate(stats_dict.items(), start=1):
-                    # Find player ID (profile-aware)
-                    player = _lookup_player(p_name, team_id)
+                    # Find player ID (id-preferred, profile-aware name fallback)
+                    player = _lookup_player(p_name, team_id, player_id=s.get("id"))
                     if not player:
                         self.logger.warning(
-                            "Scorecard skipped: player '%s' not found for team_id=%s "
+                            "Scorecard skipped: player '%s' (id=%s) not found for team_id=%s "
                             "(match_id=%s, format=%s, innings=%s, record_type=%s). "
                             "Stats for this player will not be archived.",
-                            p_name, team_id, self.match_id, _match_format,
+                            p_name, s.get("id"), team_id, self.match_id, _match_format,
                             innings_number, record_type,
                         )
+                        log_data_anomaly(
+                            "ScorecardPlayerLookupMiss",
+                            f"Scorecard skipped: player '{p_name}' (id={s.get('id')}) not found "
+                            f"for team_id={team_id}",
+                            payload={
+                                "match_id": self.match_id, "player_name": p_name,
+                                "player_id": s.get("id"), "team_id": team_id,
+                                "innings_number": innings_number, "record_type": record_type,
+                            },
+                        )
+                        self._stats_incomplete = True
                         continue
-                    
+
                     card = MatchScorecard.query.filter_by(
                         match_id=self.match_id,
                         player_id=player.id,
@@ -848,14 +844,17 @@ class MatchArchiver:
                         card.strike_rate = (s['runs'] * 100.0 / s['balls']) if s.get('balls', 0) > 0 else 0.0
                         card.batting_position = position
                     else:
-                        card.overs = s.get('overs', 0)
                         card.balls_bowled = s.get('balls_bowled', 0)
+                        card.overs = balls_to_overs_str(card.balls_bowled)
                         card.runs_conceded = s.get('runs', 0)
                         card.wickets = s.get('wickets', 0)
                         card.maidens = s.get('maidens', 0)
                         card.wides = s.get('wides', 0)
                         card.noballs = s.get('noballs', 0)
-                        
+                        card.byes = s.get('byes', 0)
+                        card.leg_byes = s.get('legbyes', 0)
+
+
                         # NEW: Detailed bowling stats
                         card.dot_balls_bowled = s.get('dots', 0)
                         
@@ -1038,6 +1037,8 @@ class MatchArchiver:
                 self.logger.warning(f"Milestone detection failed (non-fatal): {ms_err}")
             self._milestones = all_milestones
 
+            db_match.stats_incomplete = getattr(self, '_stats_incomplete', False)
+
             db.session.commit()
             return True
             
@@ -1162,6 +1163,11 @@ class MatchArchiver:
             log_exception(e)
             raise MatchArchiverError(f"Failed to create text file: {e}")
 
+    def _weather_label(self) -> str:
+        """Human label for the forecast chosen at setup."""
+        from engine.weather import forecast_label
+        return forecast_label(self.match_data.get('weather_forecast', 'clear'))
+
     def _generate_text_header(self) -> str:
         """Generate formatted header for text file"""
         header_lines = [
@@ -1174,11 +1180,15 @@ class MatchArchiver:
             f"Created by: {self.username}",
             f"Stadium: {self.match_data.get('stadium', 'N/A')}",
             f"Pitch: {self.match_data.get('pitch', 'N/A')}",
-            f"Rain Probability: {(self.match_data.get('rain_probability', 0) * 100):.1f}%",
+            f"Weather: {self._weather_label()}",
+        ]
+        if getattr(self.match, 'rain_affected', False):
+            header_lines.append("RAIN AFFECTED - Duckworth-Lewis-Stern method applied")
+        header_lines.extend([
             f"Archive Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             "=" * 80,
             ""
-        ]
+        ])
         return "\n".join(header_lines)
 
     def _format_playing_xi(self) -> str:
@@ -1361,8 +1371,8 @@ class MatchArchiver:
         
         for bowler_name, stats in bowling_stats.items():
             if stats.get('balls_bowled', 0) > 0:
-                total_balls = stats['overs'] * 6 + (stats['balls_bowled'] % 6)
-                overs_display = f"{stats['overs']}.{stats['balls_bowled'] % 6}" if stats['balls_bowled'] % 6 > 0 else str(stats['overs'])
+                total_balls = stats['balls_bowled']
+                overs_display = balls_to_overs_str(total_balls)
                 economy = f"{(stats['runs'] * 6 / total_balls):.2f}" if total_balls > 0 else "0.00"
                 
                 rows.append([
@@ -1400,15 +1410,30 @@ class MatchArchiver:
             ])
             
             # Add match conditions
-            if self.match_data.get('rain_probability', 0) > 0:
-                lines.append(f"Rain Probability: {(self.match_data['rain_probability'] * 100):.1f}%")
-            
-            # Add any rain delays if occurred
+            lines.append(f"Weather forecast: {self._weather_label()}")
+
+            # Add rain interruption details if any occurred
             if hasattr(self.match, 'rain_affected') and self.match.rain_affected:
                 lines.extend([
-                    "Match affected by rain - DLS method applied",
-                    ""
+                    "",
+                    "MATCH AFFECTED BY RAIN - DLS method applied",
                 ])
+                for ev in getattr(self.match, 'rain_events_log', []):
+                    innings_label = "1st innings" if ev.get('innings') == 1 else "2nd innings"
+                    outcome = ev.get('outcome', '')
+                    if outcome == 'no_result':
+                        detail = "match abandoned"
+                    elif outcome == 'chase_terminated':
+                        detail = "no further play possible - decided on DLS par"
+                    elif outcome == 'innings_terminated':
+                        detail = f"innings closed at {ev.get('at_over')} overs"
+                    else:
+                        detail = f"revised to {ev.get('revised_overs')} overs"
+                    lines.append(
+                        f"  Rain after {ev.get('at_over')} overs ({innings_label}), "
+                        f"{ev.get('overs_lost')} over(s) lost - {detail}"
+                    )
+                lines.append("")
             
             lines.extend([
                 f"Archive created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -1565,8 +1590,8 @@ class MatchArchiver:
                 # Write bowler data
                 for bowler_name, bowler_stats in stats.items():
                     if bowler_stats.get('balls_bowled', 0) > 0:
-                        total_balls = bowler_stats['overs'] * 6 + (bowler_stats['balls_bowled'] % 6)
-                        overs_display = f"{bowler_stats['overs']}.{bowler_stats['balls_bowled'] % 6}" if bowler_stats['balls_bowled'] % 6 > 0 else str(bowler_stats['overs'])
+                        total_balls = bowler_stats['balls_bowled']
+                        overs_display = balls_to_overs_str(total_balls)
                         economy = f"{(bowler_stats['runs'] * 6 / total_balls):.2f}" if total_balls > 0 else "0.00"
                         
                         writer.writerow([
@@ -1645,7 +1670,10 @@ class MatchArchiver:
         else:
             toss_line = 'N/A'
 
-        rain_pct = f"{(self.match_data.get('rain_probability', 0) * 100):.0f}%"
+        weather_text = self._weather_label()
+        if getattr(self.match, 'rain_affected', False):
+            weather_text += " (rain affected - DLS)"
+        weather  = html_mod.escape(weather_text)
         stadium  = html_mod.escape(self.match_data.get('stadium', 'N/A'))
         pitch    = html_mod.escape(self.match_data.get('pitch', 'N/A'))
 
@@ -1808,7 +1836,7 @@ class MatchArchiver:
   <div class="meta-grid">
     <div class="meta-item">Stadium: <span>{stadium}</span></div>
     <div class="meta-item">Pitch: <span>{pitch}</span></div>
-    <div class="meta-item">Rain: <span>{rain_pct}</span></div>
+    <div class="meta-item">Weather: <span>{weather}</span></div>
     <div class="meta-item">Toss: <span>{html_mod.escape(toss_line)}</span></div>
     <div class="meta-item">Date: <span>{html_mod.escape(self.timestamp)}</span></div>
     <div class="meta-item">Simulated by: <span>{html_mod.escape(self.username)}</span></div>

@@ -888,6 +888,39 @@ function updateWinProbBanner(data) {
     }
 }
 
+// ── RAIN / DLS STATUS ─────────────────────────────────────────────────────
+// Persistent strip in the score banner: shows the revised match situation
+// after a rain interruption and, during a rain-affected chase, the live DLS
+// par score (the chasing side wins a washout if they are ahead of par).
+let rainRevisionText = '';
+
+function updateRainStatus(data) {
+    const rainEl = document.getElementById('sb-rain');
+    if (!rainEl) return;
+
+    if (data.rain_interruption) {
+        const info = data.rain_interruption;
+        if (info.innings === 2 && info.target) {
+            rainRevisionText = `🌧 DLS: ${info.target} off ${info.revised_overs} overs`;
+        } else {
+            rainRevisionText = `🌧 Rain: revised to ${info.revised_overs} overs a side`;
+        }
+    }
+
+    let text = rainRevisionText;
+    if (data.rain_affected && data.innings_number === 2 &&
+        data.dls_par !== undefined && data.dls_par !== null && !data.match_over) {
+        const diff = data.score - data.dls_par;
+        const sign = diff >= 0 ? '+' : '';
+        text += `${text ? ' · ' : '🌧 '}Par ${data.dls_par} (${sign}${diff})`;
+    }
+
+    if (text) {
+        rainEl.textContent = text;
+        rainEl.style.display = '';
+    }
+}
+
 function updateScoreBanner(data) {
     // Main score
     const scoreEl = document.getElementById('sb-score');
@@ -1115,6 +1148,9 @@ function _processBallResult(data) {
 
     // Win probability meter (2nd innings only)
     updateWinProbBanner(data);
+
+    // Rain / DLS status strip
+    updateRainStatus(data);
 
     // Dashboard: process ball_data for every ball (runs in background regardless of view)
     if (data.ball_data) {
@@ -2026,7 +2062,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ball: state.current_ball,
                 innings_number: state.innings,
                 target: state.target,
-                total_overs: matchData.overs || 20,
+                total_overs: state.total_overs || matchData.overs || 20,
                 striker: state.striker.name ? {
                     name: state.striker.name,
                     runs: state.striker.runs,
@@ -2051,6 +2087,23 @@ document.addEventListener('DOMContentLoaded', () => {
             // Set batting team name in banner
             const batNameEl = document.getElementById('sb-bat-name');
             if (batNameEl && state.batting_team_name) batNameEl.textContent = state.batting_team_name;
+
+            // Restore the rain / DLS strip after a refresh
+            if (state.rain_affected) {
+                if (state.total_overs && state.original_overs &&
+                    state.total_overs !== state.original_overs) {
+                    rainRevisionText = state.innings === 2 && state.target
+                        ? `🌧 DLS: ${state.target} off ${state.total_overs} overs`
+                        : `🌧 Rain: revised to ${state.total_overs} overs a side`;
+                }
+                updateRainStatus({
+                    rain_affected: true,
+                    innings_number: state.innings,
+                    dls_par: state.dls_par,
+                    score: state.score,
+                    match_over: false,
+                });
+            }
 
             // Show current over outcomes in the strip
             if (state.current_over_outcomes && state.current_over_outcomes.length) {
