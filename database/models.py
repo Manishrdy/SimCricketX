@@ -151,6 +151,16 @@ class Player(db.Model):
     bowling_type = db.Column(db.String(50))
     bowling_hand = db.Column(db.String(20))
 
+    # Playing style — how a player bats/bowls, as opposed to how good they are.
+    # Rating carries quality; style carries intent. Two batters of equal rating
+    # should look different at the crease depending on these.
+    # Inert until the style axis ships; every existing row is the neutral value.
+    # NULL means "never assigned" — readers must treat it as neutral, since
+    # match snapshots taken before migrations/add_player_styles.py ran have no
+    # style keys at all.
+    batting_style = db.Column(db.String(20), default='Accumulator')   # Anchor|Accumulator|Power
+    bowling_style = db.Column(db.String(20), default='Balanced')      # Economist|Balanced|Strike
+
     # Identity flags
     is_captain = db.Column(db.Boolean, default=False)
     is_wicketkeeper = db.Column(db.Boolean, default=False)
@@ -634,9 +644,19 @@ class Match(db.Model):
     away_team_overs = db.Column(db.String(10))
     
     # Margin of Victory
-    margin_type = db.Column(db.String(10))  # 'runs', 'wickets', or 'tie'
-    margin_value = db.Column(db.Integer)    # Number of runs/wickets
-    
+    margin_type = db.Column(db.String(10))  # 'runs', 'wickets', 'tie', or 'boundary_count'
+    margin_value = db.Column(db.Integer)    # Number of runs/wickets/boundaries
+
+    # Structured outcome, set directly by the engine at decision time instead
+    # of being re-inferred later from result_description text. NULL on rows
+    # written before this column existed — treat NULL as "unknown, fall back
+    # to legacy inference from result_description".
+    match_status = db.Column(db.String(20), nullable=True)  # 'completed'|'tied'|'no_result'|'aborted'
+    # True when the archiver had to skip at least one scorecard row because
+    # the player could not be resolved (by id or name) — surfaces partial
+    # data loss instead of leaving it silent.
+    stats_incomplete = db.Column(db.Boolean, default=False)
+
     # Toss Information
     toss_winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='SET NULL'), nullable=True)
     toss_decision = db.Column(db.String(10))  # 'Bat' or 'Bowl'
@@ -687,7 +707,11 @@ class MatchScorecard(db.Model):
     maidens = db.Column(db.Integer, default=0)
     wides = db.Column(db.Integer, default=0)
     noballs = db.Column(db.Integer, default=0)
-    
+    # Tracked live by the engine per bowler (self.bowler_stats[...]["byes"/"legbyes"])
+    # but previously had no column to persist to.
+    byes = db.Column(db.Integer, default=0)
+    leg_byes = db.Column(db.Integer, default=0)
+
     # Fielding
     catches = db.Column(db.Integer, default=0)
     run_outs = db.Column(db.Integer, default=0)

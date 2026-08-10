@@ -42,7 +42,10 @@
       "Bash(rm -rf /tmp/lp_preview /tmp/lp_serve.py /tmp/lpvenv)",
       "Bash(claude mcp *)",
       "Bash(cd /Users/manish/Documents/SimCricketX *)",
-      "Bash(/tmp/lpvenv/bin/pip install *)"
+      "Bash(/tmp/lpvenv/bin/pip install *)",
+      "Bash(cd /private/tmp/claude-501/-Users-manish-Documents-SimCricketX/7f8bce77-c554-49ee-a777-54639c551203/scratchpad *)",
+      "Bash(rm -f mig_test.db)",
+      "Bash(cp /Users/manish/Documents/SimCricketX/prod_backup.db mig_test.db)"
     ]
   }
 }

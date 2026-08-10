@@ -68,6 +68,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, s
 from match_archiver import MatchArchiver, find_original_json_file, reverse_player_aggregates
 from engine.match import Match
 from engine.toss import home_bats_first
+from engine.cricket_math import balls_to_overs_str
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -1876,7 +1877,7 @@ def create_app():
                         except Exception:
                             pass
                         balls_total = ops * 6
-                    overs = f"{balls_total // 6}.{balls_total % 6}"
+                    overs = balls_to_overs_str(balls_total)
                     return runs, wickets, overs
                 
                 # First innings stats
@@ -1915,59 +1916,24 @@ def create_app():
                     f"({db_match.away_team_overs})"
                 )
                 
-                # Step 7: Resolve winner team ID
-                def _extract_winner_from_text(result_text):
-                    if not result_text:
-                        return None
-                    lower = result_text.lower()
-                    if "match tied" in lower or "match drawn" in lower or "no result" in lower or "abandoned" in lower:
-                        return None
-                    match_obj = re.search(r"\b([A-Za-z0-9 _-]+?)\s+won\b", result_text, re.IGNORECASE)
-                    if match_obj:
-                        return match_obj.group(1).strip()
-                    return None
-
-                def _team_hit(candidate, team_name, team_code):
-                    if not candidate:
-                        return False
-                    if team_name and team_name == candidate:
-                        return True
-                    if team_code and team_code == candidate:
-                        return True
-                    if team_name and re.search(rf"\b{re.escape(team_name)}\b", candidate):
-                        return True
-                    if team_code and re.search(rf"\b{re.escape(team_code)}\b", candidate):
-                        return True
-                    return False
-
-                winner_name = getattr(match, 'winner', None) or outcome.get("winner")
-                if not winner_name:
-                    winner_name = _extract_winner_from_text(final_result)
-
-                if winner_name:
-                    normalized = _extract_winner_from_text(winner_name) or winner_name
-                    winner_name_lower = normalized.lower().strip()
-                    home_name = (fixture.home_team.name or '').lower().strip()
-                    home_code = (fixture.home_team.short_code or '').lower().strip()
-                    away_name = (fixture.away_team.name or '').lower().strip()
-                    away_code = (fixture.away_team.short_code or '').lower().strip()
-
-                    home_hit = _team_hit(winner_name_lower, home_name, home_code)
-                    away_hit = _team_hit(winner_name_lower, away_name, away_code)
-
-                    if home_hit and not away_hit:
-                        db_match.winner_team_id = fixture.home_team_id
-                        logger.info(f"[Tournament] Winner: {fixture.home_team.name} (Home)")
-                    elif away_hit and not home_hit:
-                        db_match.winner_team_id = fixture.away_team_id
-                        logger.info(f"[Tournament] Winner: {fixture.away_team.name} (Away)")
-                    else:
-                        logger.warning(
-                            f"[Tournament] Could not match winner '{winner_name}' to teams. "
-                            f"Home: {home_name}/{home_code}, Away: {away_name}/{away_code}"
-                        )
+                # Step 7: Resolve winner team ID — read the structured outcome the
+                # engine set directly (Match._set_outcome) instead of parsing the
+                # result prose. This also fixes a prior bug where this resolution
+                # and match_archiver.py's (Step 13, below) could independently
+                # disagree, since the archiver would silently overwrite whatever
+                # was set here — both now derive from the same match.winner_is_home.
+                winner_is_home = getattr(match, 'winner_is_home', None)
+                if winner_is_home is True:
+                    db_match.winner_team_id = fixture.home_team_id
+                    logger.info(f"[Tournament] Winner: {fixture.home_team.name} (Home)")
+                elif winner_is_home is False:
+                    db_match.winner_team_id = fixture.away_team_id
+                    logger.info(f"[Tournament] Winner: {fixture.away_team.name} (Away)")
                 else:
                     logger.info(f"[Tournament] Match ended without clear winner (tie/no result)")
+                db_match.margin_type = getattr(match, 'margin_type', None)
+                db_match.margin_value = getattr(match, 'margin_value', None)
+                db_match.match_status = getattr(match, 'match_status', None)
                 
                 # Step 8: Add match to session
                 db.session.add(db_match)
@@ -2151,7 +2117,7 @@ def create_app():
 
             if card.record_type == "bowling":
                 balls = card.balls_bowled or 0
-                if balls > 0 or (card.overs or 0) > 0:
+                if balls > 0:
                     agg[pid]["bowl_innings"] += 1
                 agg[pid]["bowl_balls"] += balls
                 agg[pid]["bowl_runs"] += card.runs_conceded or 0
@@ -2343,6 +2309,7 @@ def create_app():
             for t in db_teams:
                 def _player_dict(p):
                     return {
+                        "id": p.id,
                         "name": p.name,
                         "role": p.role,
                         "batting_rating": p.batting_rating,

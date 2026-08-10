@@ -71,6 +71,39 @@ class TestOversConversion:
         assert result == 19 * 6 + 5  # clamped to .5
 
 
+class TestIsNoResult:
+    """_is_no_result must prefer the structured match_status column, falling
+    back to keyword-sniffing result_description only for legacy rows written
+    before that column existed (permanent fallback — never backfilled)."""
+
+    def test_structured_status_no_result_fast_path(self, engine):
+        match = DBMatch(match_status="no_result", winner_team_id=None,
+                         result_description=None, home_team_overs="12.3", away_team_overs="0.0")
+        assert engine._is_no_result(match) is True
+
+    def test_structured_status_completed_short_circuits_legacy_parsing(self, engine):
+        # Even if result_description looks NR-ish, an explicit 'completed'
+        # status must win — no keyword re-parsing once match_status is set.
+        match = DBMatch(match_status="completed", winner_team_id=1,
+                         result_description="abandoned", home_team_overs="20.0", away_team_overs="18.2")
+        assert engine._is_no_result(match) is False
+
+    def test_legacy_keyword_fallback_when_status_is_null(self, engine):
+        match = DBMatch(match_status=None, winner_team_id=None,
+                         result_description="Match abandoned due to rain",
+                         home_team_overs="5.2", away_team_overs="0.0")
+        assert engine._is_no_result(match) is True
+
+    def test_legacy_non_keyword_tie_remains_a_tie_not_no_result(self, engine):
+        """A legacy row with no winner, no NR keyword, and balls bowled is a
+        tie — must NOT be misclassified as no_result just because
+        match_status is NULL (this is permanent behavior, never backfilled)."""
+        match = DBMatch(match_status=None, winner_team_id=None,
+                         result_description="Match Tied",
+                         home_team_overs="20.0", away_team_overs="20.0")
+        assert engine._is_no_result(match) is False
+
+
 class TestNRRCalculation:
     """Test NRR calculation precision and edge cases."""
 

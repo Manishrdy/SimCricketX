@@ -98,6 +98,10 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # Explicit discriminator for super-over career-stat scorecard rows
     # (previously only distinguishable by the magic innings_number=3).
     ("add_super_over_flag",      _loader("migrations.add_super_over_flag")),
+    # Structured match outcome (match_status/stats_incomplete) + byes/leg_byes
+    # columns so downstream code stops parsing prose or subtracting a
+    # remainder to recover facts the engine already knows.
+    ("add_structured_match_outcome", _loader("migrations.add_structured_match_outcome")),
 ]
 
 

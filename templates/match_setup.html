@@ -1039,6 +1039,21 @@
                         <input type="hidden" id="day-night-value" value="false">
                         <p class="helper-text"><span id="day-night-help">Day match — no dew effect.</span></p>
                     </div>
+
+                    <div class="form-group">
+                        <div class="condition-header">
+                            <div class="condition-icon"><i class="fas fa-cloud-showers-heavy"></i></div>
+                            <span class="condition-tag">Weather</span>
+                        </div>
+                        <label class="form-label" for="weather-forecast-select">Weather Forecast</label>
+                        <select id="weather-forecast-select">
+                            <option value="clear" selected>Clear skies</option>
+                            <option value="passing_showers">Passing showers</option>
+                            <option value="rain_around">Rain around</option>
+                            <option value="storm_warning">Storm warning</option>
+                        </select>
+                        <p class="helper-text"><span id="weather-help">No rain. Every over will be bowled.</span></p>
+                    </div>
                 </div>
 
                 <aside class="conditions-summary" aria-label="Match Summary">
@@ -1071,6 +1086,10 @@
                     <div class="summary-row">
                         <span class="summary-label">D/N</span>
                         <span class="summary-value" id="summary-day-night">Day</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Weather</span>
+                        <span class="summary-value" id="summary-weather">Clear skies</span>
                     </div>
                 </aside>
             </div>
@@ -1515,6 +1534,13 @@
                 updateConditionsSummary();
             };
         }
+        const weatherSelect = document.getElementById('weather-forecast-select');
+        if (weatherSelect) {
+            weatherSelect.onchange = () => {
+                syncWeatherControl();
+                updateConditionsSummary();
+            };
+        }
 
         syncSimulationModeControl();
         syncInterestingMatchControl();
@@ -1522,6 +1548,7 @@
         syncFormatControl();
         syncStoryControl();
         syncDayNightControl();
+        syncWeatherControl();
         updateConditionsSummary();
     }
 
@@ -1638,6 +1665,26 @@
         }
     }
 
+    const WEATHER_LABELS = {
+        'clear': 'Clear skies',
+        'passing_showers': 'Passing showers',
+        'rain_around': 'Rain around',
+        'storm_warning': 'Storm warning',
+    };
+
+    function syncWeatherControl() {
+        const weatherSelect = document.getElementById('weather-forecast-select');
+        const weatherHelp = document.getElementById('weather-help');
+        if (!weatherSelect || !weatherHelp) return;
+        const helpText = {
+            'clear': 'No rain. Every over will be bowled.',
+            'passing_showers': '~25% chance of a short interruption. DLS revises targets if rain arrives.',
+            'rain_around': '~50% chance of rain. Overs may be lost and targets revised by DLS.',
+            'storm_warning': '~75% chance of heavy rain. Abandonment is a real possibility.',
+        };
+        weatherHelp.textContent = helpText[weatherSelect.value] || helpText['clear'];
+    }
+
     function updateConditionsSummary() {
         const venue = document.getElementById('venue-display')?.value || '-';
         const pitch = document.getElementById('pitch-select')?.value || '-';
@@ -1667,6 +1714,8 @@
         const formatLabels = { 'T20': 'T20', 'ListA': 'List A (50-ov)' };
         setText('summary-format', formatLabels[format] || format);
         setText('summary-day-night', isDayNight ? 'Day/Night' : 'Day');
+        const weatherValue = document.getElementById('weather-forecast-select')?.value || 'clear';
+        setText('summary-weather', WEATHER_LABELS[weatherValue] || 'Clear skies');
     }
 
     // --- STEP 3: SQUADS ---
@@ -2164,6 +2213,7 @@
                 story_id: document.getElementById('story-select')?.value || null,
                 match_format: currentFormat,
                 is_day_night: document.getElementById('day-night-value').value === 'true',
+                weather_forecast: document.getElementById('weather-forecast-select')?.value || 'clear',
                 playing_xi: {
                     home: homeXI,
                     away: awayXI

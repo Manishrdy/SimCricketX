@@ -89,8 +89,20 @@ def calc_nrr(runs_scored, overs_faced, runs_conceded, overs_bowled):
     return round(rrf - rra, 6)
 
 
+def _column_exists(conn, table, column):
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(row[1] == column for row in rows)
+
+
 def is_no_result(match):
-    """Mirror engine._is_no_result: winner=None + (NR keyword OR no balls)."""
+    """Mirror engine._is_no_result: prefer the structured match_status the
+    engine sets directly; fall back to keyword-sniffing result_description
+    (winner=None + (NR keyword OR no balls)) for matches archived before
+    that column existed — permanent fallback, this is never backfilled."""
+    match_status = match.get("match_status")
+    if match_status is not None:
+        return match_status == "no_result"
+
     if match["winner_team_id"]:
         return False
     desc = (match["result_description"] or "").lower()
@@ -210,14 +222,18 @@ def rebuild_tournament(conn, tournament, *, quiet=False):
         }
         tt_id_by_team[r["team_id"]] = r["tt_id"]
 
-    # League fixtures with linked completed matches
+    # League fixtures with linked completed matches.
+    # match_status may not exist on an older DB copy that predates the
+    # add_structured_match_outcome migration — this script talks to sqlite3
+    # directly and doesn't run the app's migration precheck, so check first.
+    match_status_col = ", m.match_status" if _column_exists(conn, "matches", "match_status") else ""
     matches = conn.execute(
-        """
+        f"""
         SELECT m.id, m.home_team_id, m.away_team_id, m.winner_team_id,
                m.home_team_score, m.home_team_wickets, m.home_team_overs,
                m.away_team_score, m.away_team_wickets, m.away_team_overs,
                COALESCE(m.overs_per_side, 20) AS overs_per_side,
-               m.result_description, m.date
+               m.result_description, m.date{match_status_col}
         FROM tournament_fixtures tf
         JOIN matches m ON m.id = tf.match_id
         WHERE tf.tournament_id = ? AND tf.stage = ?
