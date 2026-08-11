@@ -1143,6 +1143,9 @@ def register_team_routes(
                     team.pitch_preference = request.form["pitch_preference"]
                     team.team_color = request.form["team_color"]
 
+                    if not (team.name and new_short_code and team.home_ground and team.pitch_preference):
+                        return _edit_error("All team fields are required.")
+
                     if not SHORT_CODE_RE.match(new_short_code):
                         return _edit_error(
                             "Short code must be 2-5 uppercase alphanumeric characters."

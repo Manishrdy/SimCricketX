@@ -1487,7 +1487,6 @@ class TournamentEngine:
     def _update_player_stats_cache(self, match):
         """
         Rebuild tournament player stats cache rows for players involved in this match.
-        Uses DB-level aggregation across all scorecards in the tournament for accuracy.
         """
         tournament_id = match.tournament_id
         if not tournament_id:
@@ -1504,7 +1503,31 @@ class TournamentEngine:
         if not player_ids:
             return
 
-        # Get all match IDs in this tournament
+        self.rebuild_player_stats_cache(tournament_id, player_ids)
+
+    def rebuild_player_stats_cache(self, tournament_id, player_ids):
+        """
+        Rebuild TournamentPlayerStatsCache rows for the given players from
+        scratch, using DB-level aggregation across the tournament's
+        currently-linked matches for accuracy.
+
+        Public (not `_`-prefixed) because it's also called after reversing
+        a match — resimulate or tournament delete — where the affected
+        players' cached tournament stats would otherwise stay stale (still
+        including the just-deleted match) until, if ever, they happen to
+        play another match in the same tournament.
+
+        Deliberately does NOT bail out early when the tournament has zero
+        remaining linked matches (e.g. the reversed match was the only one
+        played so far): that's exactly the case where the cache needs to
+        be zeroed out, not left showing the deleted match's numbers.
+        `MatchScorecard.match_id.in_(set())` below correctly yields zero
+        rows, so every aggregate naturally resolves to its coalesced
+        default (0 / None) instead of skipping the player entirely.
+        """
+        if not player_ids:
+            return
+
         tournament_match_ids = {
             row[0]
             for row in db.session.query(TournamentFixture.match_id)
@@ -1514,8 +1537,6 @@ class TournamentEngine:
             )
             .all()
         }
-        if not tournament_match_ids:
-            return
 
         for player_id in player_ids:
             player = db.session.get(Player, player_id)
@@ -1690,7 +1711,7 @@ class TournamentEngine:
             cache.matches_played = matches_played
 
         logger.info(
-            f"[PlayerStatsCache] Updated cache for {len(player_ids)} players "
+            f"[PlayerStatsCache] Rebuilt cache for {len(player_ids)} players "
             f"in tournament {tournament_id}"
         )
 
@@ -1776,7 +1797,7 @@ class TournamentEngine:
     def _cleanup_fixture_match_data(self, fixture):
         """
         Delete the DBMatch, scorecards, partnerships, and reverse player
-        career stats for a fixture that is being reset.
+        career + tournament-cached stats for a fixture that is being reset.
 
         Must be called BEFORE the fixture's match_id is cleared.
         """
@@ -1792,12 +1813,20 @@ class TournamentEngine:
         from match_archiver import reverse_player_aggregates
 
         scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
+        player_ids = {c.player_id for c in scorecards}
         if scorecards:
             reverse_player_aggregates(scorecards, logger=logger)
 
         MatchPartnership.query.filter_by(match_id=match_id).delete(synchronize_session=False)
         MatchScorecard.query.filter_by(match_id=match_id).delete(synchronize_session=False)
         db.session.delete(db_match)
+
+        # Without this, these players' TournamentPlayerStatsCache rows keep
+        # showing the just-deleted match's runs/wickets until they happen
+        # to play another match in this tournament (see
+        # rebuild_player_stats_cache's docstring).
+        if player_ids and db_match.tournament_id:
+            self.rebuild_player_stats_cache(db_match.tournament_id, player_ids)
         logger.info(f"Cleaned up match data for fixture {fixture.id} (match {match_id})")
 
     def _ipl_downstream_stages(self, from_stage: str) -> set:

@@ -51,19 +51,22 @@ def register_tournament_routes(
 ):
     # ── Shared helper ─────────────────────────────────────────────────────
 
-    def _cleanup_match_artifacts(match, *, reverse_stats=True):
+    def _cleanup_match_artifacts(match, *, reverse_stats=True, rebuild_player_cache=True):
         """
         Delete all artifacts for a single DBMatch: reverse career aggregates,
-        remove scorecards/partnerships, delete JSON file, purge memory cache.
+        remove scorecards/partnerships, delete JSON file, purge memory cache,
+        and rebuild the affected players' tournament stats cache so it stops
+        showing this (now-deleted) match's runs/wickets.
         Caller is responsible for deleting the DBMatch itself and committing.
         """
         match_id = match.id
 
+        scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
+        player_ids = {c.player_id for c in scorecards}
+
         # 1. Reverse player career stats
-        if reverse_stats:
-            scorecards = MatchScorecard.query.filter_by(match_id=match_id).all()
-            if scorecards:
-                reverse_player_aggregates(scorecards, logger=app.logger)
+        if reverse_stats and scorecards:
+            reverse_player_aggregates(scorecards, logger=app.logger)
 
         # 2. Delete dependent records
         db.session.query(MatchPartnership).filter_by(match_id=match_id).delete(
@@ -79,6 +82,12 @@ def register_tournament_routes(
         # 4. Purge from in-memory cache
         with MATCH_INSTANCES_LOCK:
             MATCH_INSTANCES.pop(match_id, None)
+
+        # 5. Rebuild the affected players' tournament stats cache. Skipped
+        # when the whole tournament (and its cache rows) is being deleted
+        # right after — rebuilding first would just be discarded work.
+        if rebuild_player_cache and player_ids and match.tournament_id:
+            tournament_engine.rebuild_player_stats_cache(match.tournament_id, player_ids)
 
     def _delete_match_json(match):
         """Remove match JSON file from disk using stored path or fallback scan."""
@@ -444,7 +453,10 @@ def register_tournament_routes(
                 ).update({TournamentFixture.match_id: None}, synchronize_session=False)
 
             for m in tournament_matches:
-                _cleanup_match_artifacts(m)
+                # The whole tournament (and its TournamentPlayerStatsCache
+                # rows) is deleted right after this loop, so rebuilding the
+                # per-match player cache here would just be discarded work.
+                _cleanup_match_artifacts(m, rebuild_player_cache=False)
                 db.session.delete(m)
 
             # Tournament cascades to TournamentTeam, TournamentFixture, and
