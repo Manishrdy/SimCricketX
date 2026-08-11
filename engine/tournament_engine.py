@@ -59,6 +59,20 @@ class TournamentEngine:
     STAGE_KNOCKOUT_QF = 'knockout_qf'
     STAGE_KNOCKOUT_SF = 'knockout_sf'
 
+    # IPL-style playoff dependency graph (direct edges only — transitive
+    # closure is computed at use time). Unlike a knockout bracket, this
+    # is NOT a binary tree: Q1 has two direct downstream dependents
+    # (Q2 as its loser, Final as its winner), so it can't be modeled by
+    # halving bracket_position the way _get_downstream_positions does for
+    # actual elimination brackets. Mirrors the rules documented in
+    # _generate_ipl_playoff_placeholders.
+    IPL_PLAYOFF_EDGES = {
+        STAGE_QUALIFIER_1: {STAGE_QUALIFIER_2, STAGE_FINAL},  # loser -> Q2, winner -> Final
+        STAGE_ELIMINATOR: {STAGE_QUALIFIER_2},                # winner -> Q2
+        STAGE_QUALIFIER_2: {STAGE_FINAL},                     # winner -> Final
+        STAGE_FINAL: set(),
+    }
+
     # Minimum teams required for each mode
     MIN_TEAMS = {
         MODE_ROUND_ROBIN: 2,
@@ -175,9 +189,20 @@ class TournamentEngine:
         Raises:
             ValueError: If validation fails
         """
+        # Reject unknown modes outright — MIN_TEAMS.get(mode, 2) would
+        # otherwise silently default an unrecognized mode to "2 teams
+        # required," and _generate_fixtures_for_mode's if/elif chain
+        # would then match nothing, committing a tournament with teams
+        # attached but zero fixtures ever generated. This is the
+        # authoritative guard for any caller that bypasses the route
+        # (scripts, admin tools, tests); the route validates the same
+        # way for a friendlier redirect+flash on the normal path.
+        if mode not in self.MIN_TEAMS:
+            raise ValueError(f"Unknown tournament mode: {mode!r}")
+
         # Validate and deduplicate team IDs (preserve order)
         team_ids = list(dict.fromkeys(team_ids))
-        min_teams = self.MIN_TEAMS.get(mode, 2)
+        min_teams = self.MIN_TEAMS[mode]
 
         if len(team_ids) < min_teams:
             raise ValueError(f"At least {min_teams} unique teams are required for {mode} mode.")
@@ -1192,14 +1217,37 @@ class TournamentEngine:
                 )
                 return False
             
-            # Update fixture status - this is critical for UI display
-            fixture.status = 'Completed'
-            fixture.winner_team_id = match.winner_team_id
-            fixture.standings_applied = True
-            logger.info(
-                f"[Standings] Updated fixture {fixture.id}: status='Completed', "
-                f"winner_team_id={match.winner_team_id}, standings_applied=True"
+            # A knockout/playoff fixture that ended with no winner (an
+            # abandoned/no-result match a super over couldn't resolve) must
+            # stay 'Scheduled' rather than 'Completed', so the dashboard
+            # offers "Play Now" again directly instead of showing it as
+            # decided and forcing an extra "Re-simulate" step first.
+            # League-stage no-results are unaffected — they're a
+            # legitimate final result and still count toward standings via
+            # the is_no_result handling below. This is the single
+            # authoritative place for that rule: it must hold regardless
+            # of caller (live match completion via app.py, or the standalone
+            # orphaned-match repair script), so it belongs here rather than
+            # being decided upstream and handed in.
+            unresolved_knockout = (
+                fixture.stage != self.STAGE_LEAGUE and match.winner_team_id is None
             )
+            if unresolved_knockout:
+                fixture.status = 'Scheduled'
+                fixture.winner_team_id = None
+                fixture.standings_applied = False
+                logger.warning(
+                    f"[Standings] Fixture {fixture.id} (stage={fixture.stage}) has no "
+                    "winner; keeping 'Scheduled' for re-simulation instead of marking Completed."
+                )
+            else:
+                fixture.status = 'Completed'
+                fixture.winner_team_id = match.winner_team_id
+                fixture.standings_applied = True
+                logger.info(
+                    f"[Standings] Updated fixture {fixture.id}: status='Completed', "
+                    f"winner_team_id={match.winner_team_id}, standings_applied=True"
+                )
 
         # Get team stats records
         home_team_stats = self._ensure_team_stats(match.tournament_id, match.home_team_id)
@@ -1752,24 +1800,64 @@ class TournamentEngine:
         db.session.delete(db_match)
         logger.info(f"Cleaned up match data for fixture {fixture.id} (match {match_id})")
 
+    def _ipl_downstream_stages(self, from_stage: str) -> set:
+        """
+        Transitive closure of IPL_PLAYOFF_EDGES starting from from_stage.
+
+        IPL-style playoffs are a fixed 4-node dependency graph, not a
+        binary tree (Q1 feeds both Q2 and Final directly), so this walks
+        the explicit edge map rather than inferring structure from
+        bracket_position arithmetic.
+        """
+        downstream = set()
+        frontier = [from_stage]
+        while frontier:
+            stage = frontier.pop()
+            for nxt in self.IPL_PLAYOFF_EDGES.get(stage, ()):
+                if nxt not in downstream:
+                    downstream.add(nxt)
+                    frontier.append(nxt)
+        return downstream
+
     def _reset_knockout_bracket(self, tournament_id: int, from_bracket_position: int):
         """
-        Reset downstream knockout fixtures when a completed fixture is re-simulated.
+        Reset downstream fixtures when a completed playoff/knockout fixture
+        is re-simulated. Also cleans up any associated match/scorecard/
+        career data.
 
-        Only resets fixtures that are actual descendants in the bracket tree,
-        not unrelated branches at higher bracket positions.
-        Also cleans up any associated match/scorecard/career data.
+        IPL-style playoffs are resolved via their explicit stage
+        dependency graph (IPL_PLAYOFF_EDGES) rather than bracket-position
+        tree math: their Q1/Eliminator/Q2/Final shape isn't a binary tree
+        (Q1 has two direct downstream dependents), so _get_downstream_positions'
+        round-halving inference can't represent it and silently under-resets.
+        Pure knockout brackets and the SF1/SF2/Final shape (round_robin_knockout,
+        double_round_robin_knockout) genuinely are binary trees of varying
+        depth, so they keep using the generic bracket-position walk.
         """
+        tournament = db.session.get(Tournament, tournament_id)
         tbd_id = self._get_placeholder_team_id(tournament_id, "TBD")
-        descendant_positions = self._get_downstream_positions(tournament_id, from_bracket_position)
 
-        if not descendant_positions:
-            return
-
-        downstream = TournamentFixture.query.filter(
-            TournamentFixture.tournament_id == tournament_id,
-            TournamentFixture.bracket_position.in_(descendant_positions)
-        ).all()
+        if tournament and tournament.mode == self.MODE_IPL_STYLE:
+            from_fixture = TournamentFixture.query.filter_by(
+                tournament_id=tournament_id, bracket_position=from_bracket_position
+            ).first()
+            if not from_fixture:
+                return
+            downstream_stages = self._ipl_downstream_stages(from_fixture.stage)
+            if not downstream_stages:
+                return
+            downstream = TournamentFixture.query.filter(
+                TournamentFixture.tournament_id == tournament_id,
+                TournamentFixture.stage.in_(downstream_stages),
+            ).all()
+        else:
+            descendant_positions = self._get_downstream_positions(tournament_id, from_bracket_position)
+            if not descendant_positions:
+                return
+            downstream = TournamentFixture.query.filter(
+                TournamentFixture.tournament_id == tournament_id,
+                TournamentFixture.bracket_position.in_(descendant_positions)
+            ).all()
 
         for fixture in downstream:
             self._cleanup_fixture_match_data(fixture)

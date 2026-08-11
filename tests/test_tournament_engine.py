@@ -816,6 +816,108 @@ class TestKnockoutHistoricalCorruptionSelfHeals:
         assert final.match_id == real_match.id
 
 
+class TestUpdateStandingsUnresolvedKnockout:
+    """
+    Regression tests: update_standings must not blindly overwrite a
+    knockout/playoff fixture to 'Completed' when its linked match has no
+    winner (an abandoned/no-result match a super over couldn't resolve).
+    It used to unconditionally set status='Completed' the moment a fixture
+    was linked, silently discarding the caller's intent (app.py's own
+    "keep it Scheduled so the user can re-simulate directly" decision) —
+    and since update_standings is also called directly by the standalone
+    orphaned-match repair script, that caller had the exact same exposure.
+    """
+
+    def _link_and_update(self, engine, regular_user, tournament_id, fixture, winner_id, match_status):
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=regular_user.id,
+            tournament_id=tournament_id,
+            home_team_id=fixture.home_team_id,
+            away_team_id=fixture.away_team_id,
+            winner_team_id=winner_id,
+            match_format="T20",
+            match_status=match_status,
+        )
+        db.session.add(match)
+        db.session.flush()
+        fixture.match_id = match.id
+        db.session.commit()
+        return engine.update_standings(match, commit=True)
+
+    def test_knockout_fixture_with_no_winner_stays_scheduled(
+        self, app, engine, regular_user, four_teams
+    ):
+        t = engine.create_tournament(
+            name="4Team KO NoResult", user_id=regular_user.id,
+            team_ids=[tm.id for tm in four_teams], mode="knockout",
+        )
+        fixture = TournamentFixture.query.filter_by(
+            tournament_id=t.id, round_number=1
+        ).first()
+
+        result = self._link_and_update(
+            engine, regular_user, t.id, fixture, winner_id=None, match_status="no_result"
+        )
+
+        db.session.refresh(fixture)
+        assert result is True
+        assert fixture.status == "Scheduled", (
+            "a winner-less knockout-stage match must not be silently "
+            "flipped to Completed"
+        )
+        assert fixture.winner_team_id is None
+        assert fixture.standings_applied is False
+
+    def test_league_fixture_with_no_winner_still_completes(
+        self, app, engine, regular_user, four_teams
+    ):
+        """Contrast case: a league-stage no-result is a legitimate final
+        result (it counts toward standings via no-result bookkeeping) and
+        must still be marked Completed — only knockout/playoff stages get
+        the "stay Scheduled" treatment.
+        """
+        t = engine.create_tournament(
+            name="4Team RR NoResult", user_id=regular_user.id,
+            team_ids=[tm.id for tm in four_teams], mode="round_robin",
+        )
+        fixture = TournamentFixture.query.filter_by(tournament_id=t.id).first()
+
+        result = self._link_and_update(
+            engine, regular_user, t.id, fixture, winner_id=None, match_status="no_result"
+        )
+
+        db.session.refresh(fixture)
+        assert result is True
+        assert fixture.status == "Completed"
+        assert fixture.standings_applied is True
+
+    def test_knockout_fixture_with_a_winner_still_completes(
+        self, app, engine, regular_user, four_teams
+    ):
+        """Regression guard: a genuinely decided knockout match must still
+        be marked Completed exactly as before.
+        """
+        t = engine.create_tournament(
+            name="4Team KO Decided", user_id=regular_user.id,
+            team_ids=[tm.id for tm in four_teams], mode="knockout",
+        )
+        fixture = TournamentFixture.query.filter_by(
+            tournament_id=t.id, round_number=1
+        ).first()
+
+        result = self._link_and_update(
+            engine, regular_user, t.id, fixture,
+            winner_id=fixture.home_team_id, match_status="completed",
+        )
+
+        db.session.refresh(fixture)
+        assert result is True
+        assert fixture.status == "Completed"
+        assert fixture.winner_team_id == fixture.home_team_id
+        assert fixture.standings_applied is True
+
+
 class TestIPLStyleGeneration:
     """Test IPL-style tournament generation."""
 
@@ -831,6 +933,193 @@ class TestIPLStyleGeneration:
         playoff = [f for f in all_fixtures if f.stage != "league"]
         assert len(league) == 12  # 4-team DRR
         assert len(playoff) == 4  # Q1, Elim, Q2, Final
+
+
+class TestIPLPlayoffResimulation:
+    """
+    Regression tests for IPL-style playoff re-simulation. The Q1/Eliminator/
+    Q2/Final structure isn't a binary tree — Q1 feeds both Q2 (as its loser)
+    and Final (as its winner) directly — so resetting downstream fixtures
+    can't use the same bracket-position halving that works for a real
+    knockout bracket. Hand-builds just the playoff stage (skipping league
+    play, which is orthogonal) so each test can play a known path through
+    Q1 -> Eliminator -> Q2 -> Final and then re-simulate one leg of it.
+    """
+
+    def _play(self, engine, fixture, winner_id, user_id=None):
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            tournament_id=fixture.tournament_id,
+            home_team_id=fixture.home_team_id,
+            away_team_id=fixture.away_team_id,
+            winner_team_id=winner_id,
+            match_format="T20",
+            match_status="completed",
+        )
+        db.session.add(match)
+        db.session.flush()
+        fixture.match_id = match.id
+        db.session.commit()
+        engine.update_standings(match, commit=True)
+        return match
+
+    def _build_and_play_to_final(self, engine, regular_user, four_teams):
+        """Hand-build the IPL playoff stage and play it out completely:
+        Q1: team_a beats team_b (team_b is the Q1 "loser" who gets a
+            second life in Q2).
+        Eliminator: team_c beats team_d (team_d is eliminated).
+        Q2 (auto-populated: team_b vs team_c): team_b beats team_c.
+        Final (auto-populated: team_a vs team_b): team_a beats team_b.
+
+        Returns (tournament, fixtures, matches) — fixtures/matches are
+        dicts keyed by 'q1'/'elim'/'q2'/'final'.
+        """
+        team_a, team_b, team_c, team_d = four_teams
+
+        t = Tournament(
+            name="IPL Playoff Resim", user_id=regular_user.id, mode="ipl_style",
+            current_stage=engine.STAGE_QUALIFIER_1,
+        )
+        db.session.add(t)
+        db.session.flush()
+
+        for team in four_teams:
+            db.session.add(TournamentTeam(tournament_id=t.id, team_id=team.id))
+
+        q1 = TournamentFixture(
+            tournament_id=t.id, home_team_id=team_a.id, away_team_id=team_b.id,
+            round_number=1, stage=engine.STAGE_QUALIFIER_1, bracket_position=1,
+            status="Scheduled",
+        )
+        elim = TournamentFixture(
+            tournament_id=t.id, home_team_id=team_c.id, away_team_id=team_d.id,
+            round_number=1, stage=engine.STAGE_ELIMINATOR, bracket_position=2,
+            status="Scheduled",
+        )
+        q2 = TournamentFixture(
+            tournament_id=t.id, home_team_id=None, away_team_id=None,
+            round_number=2, stage=engine.STAGE_QUALIFIER_2, bracket_position=3,
+            status="Locked",
+        )
+        final = TournamentFixture(
+            tournament_id=t.id, home_team_id=None, away_team_id=None,
+            round_number=3, stage=engine.STAGE_FINAL, bracket_position=4,
+            status="Locked",
+        )
+        for f in (q1, elim, q2, final):
+            db.session.add(f)
+        db.session.commit()
+
+        matches = {}
+        matches['q1'] = self._play(engine, q1, winner_id=team_a.id, user_id=regular_user.id)
+        matches['elim'] = self._play(engine, elim, winner_id=team_c.id, user_id=regular_user.id)
+
+        db.session.refresh(t)
+        assert t.current_stage == engine.STAGE_QUALIFIER_2
+        db.session.refresh(q2)
+        assert q2.status == "Scheduled"
+        assert {q2.home_team_id, q2.away_team_id} == {team_b.id, team_c.id}  # Q1 loser vs Elim winner
+
+        matches['q2'] = self._play(engine, q2, winner_id=team_b.id, user_id=regular_user.id)
+
+        db.session.refresh(t)
+        assert t.current_stage == engine.STAGE_FINAL
+        db.session.refresh(final)
+        assert final.status == "Scheduled"
+        assert {final.home_team_id, final.away_team_id} == {team_a.id, team_b.id}  # Q1 winner vs Q2 winner
+
+        matches['final'] = self._play(engine, final, winner_id=team_a.id, user_id=regular_user.id)
+
+        fixtures = {'q1': q1, 'elim': elim, 'q2': q2, 'final': final}
+        return t, fixtures, matches
+
+    def test_resimulating_q1_resets_q2_and_final(
+        self, app, engine, regular_user, four_teams
+    ):
+        """Q1 has two direct downstream dependents (Q2 as loser, Final as
+        winner) — the exact two-hop case the old bracket-position math
+        couldn't represent at all.
+        """
+        t, fixtures, matches = self._build_and_play_to_final(engine, regular_user, four_teams)
+
+        engine.reverse_standings(matches['q1'], commit=True)
+
+        db.session.refresh(fixtures['q2'])
+        db.session.refresh(fixtures['final'])
+        db.session.refresh(fixtures['elim'])
+
+        for f in (fixtures['q2'], fixtures['final']):
+            assert f.status == "Locked"
+            assert f.winner_team_id is None
+            assert f.match_id is None
+
+        # Eliminator is upstream of Q1, not downstream — must be untouched.
+        assert fixtures['elim'].status == "Completed"
+        assert fixtures['elim'].winner_team_id == four_teams[2].id
+
+    def test_resimulating_eliminator_resets_q2_and_final(
+        self, app, engine, regular_user, four_teams
+    ):
+        """Eliminator only feeds Q2 directly, but Q2 feeds Final — resetting
+        Eliminator must transitively reach Final too, not stop at Q2.
+        """
+        t, fixtures, matches = self._build_and_play_to_final(engine, regular_user, four_teams)
+
+        engine.reverse_standings(matches['elim'], commit=True)
+
+        db.session.refresh(fixtures['q2'])
+        db.session.refresh(fixtures['final'])
+        db.session.refresh(fixtures['q1'])
+
+        for f in (fixtures['q2'], fixtures['final']):
+            assert f.status == "Locked"
+            assert f.winner_team_id is None
+            assert f.match_id is None
+
+        # Q1 is not downstream of Eliminator — must be untouched.
+        assert fixtures['q1'].status == "Completed"
+        assert fixtures['q1'].winner_team_id == four_teams[0].id
+
+    def test_resimulating_q2_resets_only_final(
+        self, app, engine, regular_user, four_teams
+    ):
+        """Q2 feeds only the Final — Q1 and Eliminator are upstream and
+        must be left alone.
+        """
+        t, fixtures, matches = self._build_and_play_to_final(engine, regular_user, four_teams)
+
+        engine.reverse_standings(matches['q2'], commit=True)
+
+        db.session.refresh(fixtures['final'])
+        assert fixtures['final'].status == "Locked"
+        assert fixtures['final'].winner_team_id is None
+        assert fixtures['final'].match_id is None
+
+        db.session.refresh(fixtures['q1'])
+        db.session.refresh(fixtures['elim'])
+        assert fixtures['q1'].status == "Completed"
+        assert fixtures['q1'].winner_team_id == four_teams[0].id
+        assert fixtures['elim'].status == "Completed"
+        assert fixtures['elim'].winner_team_id == four_teams[2].id
+
+    def test_resimulating_final_resets_nothing_downstream(
+        self, app, engine, regular_user, four_teams
+    ):
+        """The Final has nothing downstream — a sanity check that this
+        doesn't error and doesn't touch Q1/Eliminator/Q2.
+        """
+        t, fixtures, matches = self._build_and_play_to_final(engine, regular_user, four_teams)
+
+        engine.reverse_standings(matches['final'], commit=True)
+
+        db.session.refresh(fixtures['final'])
+        assert fixtures['final'].status == "Scheduled"
+        assert fixtures['final'].winner_team_id is None
+
+        for key in ('q1', 'elim', 'q2'):
+            db.session.refresh(fixtures[key])
+            assert fixtures[key].status == "Completed"
 
 
 class TestCustomSeries:
@@ -899,6 +1188,22 @@ class TestMinTeamValidation:
                 team_ids=[four_teams[0].id, four_teams[1].id, four_teams[2].id],
                 mode="ipl_style",
             )
+
+    def test_unknown_mode_rejected(self, app, engine, regular_user, four_teams):
+        """An unrecognized mode must never silently commit a tournament
+        with teams attached but zero fixtures generated — MIN_TEAMS.get(mode, 2)
+        would otherwise let it slide through with a default of 2 teams
+        required, and _generate_fixtures_for_mode's if/elif chain would
+        match nothing.
+        """
+        with pytest.raises(ValueError, match="Unknown tournament mode"):
+            engine.create_tournament(
+                name="Bogus", user_id=regular_user.id,
+                team_ids=[t.id for t in four_teams],
+                mode="not_a_real_mode",
+            )
+
+        assert Tournament.query.filter_by(name="Bogus").first() is None
 
 
 class TestAvailableModes:
