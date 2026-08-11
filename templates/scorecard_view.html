@@ -380,6 +380,13 @@ Match Scorecard - SimCricketX
         <div class="match-info">
             {{ match.team_home }} vs {{ match.team_away }} • {{ match.venue }}
         </div>
+        {% if match.motm_player_name %}
+        <div class="motm-badge" style="display:inline-flex;align-items:center;gap:0.5rem;margin:0.6rem 0 0.2rem;padding:0.4rem 1rem;border-radius:999px;background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.45);color:#fbbf24;font-size:0.85rem;font-weight:700;">
+            <span>🎙️ Man of the Match:</span>
+            <span>{{ match.motm_player_name }}{% if match.motm_team_name %} ({{ match.motm_team_name }}){% endif %}</span>
+            {% if match.motm_stat_line %}<span style="opacity:0.85;font-weight:600;">— {{ match.motm_stat_line }}</span>{% endif %}
+        </div>
+        {% endif %}
         <div class="save-button-wrapper">
             <button id="saveScorecard" class="btn-save" title="Save scorecard as PNG">
                 <i class="fas fa-download"></i> Save as PNG

@@ -627,6 +627,10 @@ class Match(db.Model):
 
     winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='SET NULL'), nullable=True, index=True)
     tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    # Man of the Match — set once, at archive time, by engine/motm_service.py.
+    # NULL for pre-existing matches and for no_result/aborted matches.
+    motm_player_id = db.Column(db.Integer, db.ForeignKey('players.id', ondelete='SET NULL'), nullable=True, index=True)
     
     # Match Details
     venue = db.Column(db.String(100))

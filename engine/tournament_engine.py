@@ -879,12 +879,81 @@ class TournamentEngine:
 
         return False
 
+    def _resolve_round_pair(self, m1, m2, next_fixture):
+        """
+        Resolve one next-round fixture from its two feeder fixtures.
+
+        Callers must only invoke this once BOTH m1 and m2 are actually
+        'Completed' — a feeder that's still 'Scheduled' is a real match
+        awaiting play, not a bye, and must never be fed through here.
+
+        Handles all three outcomes uniformly so "no winner" cascades
+        correctly instead of stalling bracket progression:
+          - both feeders produced a real winner -> unlock next_fixture
+          - both feeders were Phantom (no winner) -> next_fixture becomes
+            a Phantom too
+          - exactly one feeder produced a winner -> next_fixture is a Bye,
+            auto-completed so that winner advances without being played
+
+        Only refuses to touch next_fixture when it already has a real,
+        played match linked (match_id set) or is already queued as a real
+        match ('Scheduled') — either means real match data exists and must
+        never be silently overwritten. A fixture that's merely 'Locked', or
+        'Completed' with no match_id, is safe to (re)resolve: the latter
+        case only arises from a stale/incorrect prior resolution (this
+        function never produces a 'Completed'-no-match_id result unless
+        that was the genuinely correct outcome), so recomputing it from
+        the feeders' current state is always safe and self-healing.
+        """
+        if not next_fixture or next_fixture.match_id or next_fixture.status == 'Scheduled':
+            return
+
+        w1, w2 = m1.winner_team_id, m2.winner_team_id
+        next_fixture.home_team_id = w1
+        next_fixture.away_team_id = w2
+        # Clear any stale winner from a prior (possibly incorrect)
+        # resolution — each branch below sets the correct value, but the
+        # 'Scheduled' branch (a real match, not yet played) must land on
+        # None rather than silently keep whatever was there before.
+        next_fixture.winner_team_id = None
+
+        if w1 is not None and w2 is not None:
+            home = db.session.get(Team, w1)
+            away = db.session.get(Team, w2)
+            if (home and not home.is_placeholder and
+                    away and not away.is_placeholder):
+                next_fixture.status = 'Scheduled'
+        elif w1 is None and w2 is None:
+            next_fixture.status = 'Completed'
+            next_fixture.winner_team_id = None
+            next_fixture.stage_description = "Phantom Match"
+        else:
+            real_id = w1 if w1 is not None else w2
+            team = db.session.get(Team, real_id)
+            if team and not team.is_placeholder:
+                next_fixture.status = 'Completed'
+                next_fixture.winner_team_id = real_id
+                next_fixture.stage_description = "Bye - Advances to next round"
+
     def _check_knockout_progression(self, tournament: Tournament) -> bool:
         """
         Progress a pure knockout tournament based on completed matches.
+
+        Loops rather than advancing a single round: a round can resolve
+        entirely through byes/phantoms with no real match left to trigger
+        this check again, so it must keep cascading into subsequent rounds
+        within the same pass or the bracket stalls with nothing left to
+        unstick it.
         """
+        progressed = False
+        while self._advance_knockout_round(tournament):
+            progressed = True
+        return progressed
+
+    def _advance_knockout_round(self, tournament: Tournament) -> bool:
+        """Advance the tournament's current knockout round by one step, if ready."""
         current_stage = tournament.current_stage
-        
+
         # Check if all matches in current stage are completed
         pending = TournamentFixture.query.filter(
             TournamentFixture.tournament_id == tournament.id,
@@ -894,7 +963,7 @@ class TournamentEngine:
 
         if pending > 0:
             return False
-            
+
         # All matches in current stage done. Advance winners.
         # Logic: winner of bracket_position X and X+1 move to next round's bracket_position Y
         # where Y = offset + (X // 2)
@@ -902,89 +971,86 @@ class TournamentEngine:
             tournament_id=tournament.id,
             stage=current_stage
         ).order_by(TournamentFixture.bracket_position).all()
-        
+
         if not matches:
             return False
-            
+
         # If this was the final, we are done
         if current_stage == self.STAGE_FINAL:
             return False # _check_tournament_completion will handle status
-            
+
         # Identify next round fixtures
         num_teams = len(tournament.participating_teams)
         next_power = self._next_power_of_two(num_teams)
-        
+
         # Find the first match of the next round
         # Bracket positions for round R (starting R=1):
         # R1: 0 to (N/2 - 1)
         # R2: N/2 to (N/2 + N/4 - 1)
         # ... and so on
-        
-        total_slots = next_power - 1
-        current_round_start = 0
-        matches_per_round = next_power // 2
-        
-        # Determine current round number and round start/count
-        r = 1
+
+        # Determine current round's start position and size by walking
+        # round boundaries until we reach the round containing this match.
         temp_start = 0
         temp_mpr = next_power // 2
         while temp_start < matches[0].bracket_position:
             temp_start += temp_mpr
             temp_mpr //= 2
-            r += 1
-        
+
         current_round_start = temp_start
         matches_per_round = temp_mpr
         next_round_start = current_round_start + matches_per_round
-        
-        # Advance winners (ensure winners are present)
-        if any(match.winner_team_id is None for match in matches):
+
+        # Block only on a genuine anomaly: a real match (both slots were
+        # actual, non-placeholder teams) that completed without recording a
+        # winner. A Phantom match (home_team_id and away_team_id both None —
+        # a bye-vs-bye dead branch of the bracket) is *supposed* to have no
+        # winner and must be allowed to cascade forward instead of wedging
+        # the whole round open forever.
+        unresolved = [
+            m for m in matches
+            if m.winner_team_id is None
+            and not (m.home_team_id is None and m.away_team_id is None)
+        ]
+        if unresolved:
             logger.warning(
-                "Tournament %s knockout progression blocked: missing winners in stage %s",
+                "Tournament %s knockout progression blocked: missing winner(s) "
+                "in stage %s for fixture id(s) %s",
                 tournament.id,
-                current_stage
+                current_stage,
+                [m.id for m in unresolved],
             )
             return False
 
-        # Advance winners
+        # Advance winners into the next round, resolving any byes/phantoms
+        # created by this advance the same way _advance_bye_winners does.
         for i in range(0, len(matches), 2):
             if i + 1 >= len(matches):
                 # Should not happen in a power-of-2 tree unless it's the final
                 break
-                
+
             m1 = matches[i]
-            m2 = matches[i+1]
-            
+            m2 = matches[i + 1]
+
             next_bp = next_round_start + (i // 2)
             next_fixture = TournamentFixture.query.filter_by(
                 tournament_id=tournament.id,
                 bracket_position=next_bp
             ).first()
-            
-            if next_fixture:
-                next_fixture.home_team_id = m1.winner_team_id
-                next_fixture.away_team_id = m2.winner_team_id
+            self._resolve_round_pair(m1, m2, next_fixture)
 
-                # Unlock only if both teams are real (not TBD/BYE placeholders)
-                if next_fixture.home_team_id and next_fixture.away_team_id:
-                    home = db.session.get(Team, next_fixture.home_team_id)
-                    away = db.session.get(Team, next_fixture.away_team_id)
-                    if (home and not home.is_placeholder and
-                            away and not away.is_placeholder):
-                        next_fixture.status = 'Scheduled'
-                    
         # Update tournament current stage
         next_round_fixture = TournamentFixture.query.filter_by(
             tournament_id=tournament.id,
             bracket_position=next_round_start
         ).first()
-        
+
         if next_round_fixture:
             tournament.current_stage = next_round_fixture.stage
             db.session.flush()
             logger.info(f"Tournament {tournament.id} progressed to {tournament.current_stage}")
             return True
-            
+
         return False
 
     def _advance_bye_winners(self, tournament_id: int):
@@ -993,6 +1059,13 @@ class TournamentEngine:
         knockout bracket.  Processes round-by-round so cascading byes
         (e.g. two adjacent phantoms feeding the same next-round slot)
         are resolved iteratively rather than deadlocking.
+
+        Resolves a next-round slot only once BOTH of its feeder matches are
+        actually 'Completed'. At tournament-creation time (the only time
+        this runs) a feeder that's still 'Scheduled' is a real match
+        awaiting play, not a bye — inferring bye/phantom state from
+        accumulated None-ness instead of checking feeder status directly
+        would misjudge that slot before the real match is even simulated.
         """
         tournament = db.session.get(Tournament, tournament_id)
         if not tournament:
@@ -1015,16 +1088,19 @@ class TournamentEngine:
             r_start, r_count = rounds[r_idx]
             nr_start, _ = rounds[r_idx + 1]
 
-            # Step 1: Copy winners from completed fixtures into the next round
-            for i in range(r_count):
-                bp = r_start + i
-                fixture = TournamentFixture.query.filter_by(
-                    tournament_id=tournament_id,
-                    bracket_position=bp,
-                    status='Completed'
+            for i in range(0, r_count, 2):
+                m1 = TournamentFixture.query.filter_by(
+                    tournament_id=tournament_id, bracket_position=r_start + i
                 ).first()
+                m2 = TournamentFixture.query.filter_by(
+                    tournament_id=tournament_id, bracket_position=r_start + i + 1
+                ).first()
+                if not m1 or not m2:
+                    continue
 
-                if not fixture:
+                # Both feeders must be decided (bye/phantom, resolved at
+                # creation) before this slot can be resolved.
+                if m1.status != 'Completed' or m2.status != 'Completed':
                     continue
 
                 next_bp = nr_start + (i // 2)
@@ -1032,51 +1108,7 @@ class TournamentEngine:
                     tournament_id=tournament_id,
                     bracket_position=next_bp
                 ).first()
-
-                if not next_fixture or next_fixture.status not in ('Locked',):
-                    continue
-
-                if i % 2 == 0:
-                    next_fixture.home_team_id = fixture.winner_team_id
-                else:
-                    next_fixture.away_team_id = fixture.winner_team_id
-
-            # Step 2: Auto-resolve next-round fixtures that are byes or phantoms
-            nr_start, nr_count = rounds[r_idx + 1]
-            for i in range(nr_count):
-                bp = nr_start + i
-                nf = TournamentFixture.query.filter_by(
-                    tournament_id=tournament_id,
-                    bracket_position=bp,
-                    status='Locked'
-                ).first()
-
-                if not nf:
-                    continue
-
-                h, a = nf.home_team_id, nf.away_team_id
-
-                if h is not None and a is not None:
-                    # Both slots filled — check if they are real teams
-                    home_team = db.session.get(Team, h)
-                    away_team = db.session.get(Team, a)
-                    if (home_team and not home_team.is_placeholder and
-                            away_team and not away_team.is_placeholder):
-                        nf.status = 'Scheduled'
-                elif h is None and a is None:
-                    # Both phantom — auto-complete with no winner
-                    nf.status = 'Completed'
-                    nf.winner_team_id = None
-                    nf.stage_description = "Phantom Match"
-                else:
-                    # One real team, one None — bye, auto-advance the real team
-                    real_id = h if h is not None else a
-                    if real_id:
-                        team = db.session.get(Team, real_id)
-                        if team and not team.is_placeholder:
-                            nf.status = 'Completed'
-                            nf.winner_team_id = real_id
-                            nf.stage_description = "Bye - Advances to next round"
+                self._resolve_round_pair(m1, m2, next_fixture)
 
         db.session.flush()
 
@@ -1238,24 +1270,32 @@ class TournamentEngine:
             log_exception(psc_err)
             logger.warning(f"[Standings] Failed to update player stats cache: {psc_err}")
 
-        # Check tournament completion — non-fatal so a failure here does not
-        # roll back the standings we just applied.
-        try:
-            logger.info(f"[Standings] Checking tournament completion for tournament {match.tournament_id}")
-            self._check_tournament_completion(match.tournament_id)
-        except Exception as completion_err:
-            logger.warning(
-                f"[Standings] Tournament completion check failed (non-fatal): {completion_err}",
-                exc_info=True,
-            )
-
-        # Check if we need to progress to next stage — non-fatal for the same reason.
+        # Check if we need to progress to next stage — non-fatal so a
+        # failure here does not roll back the standings we just applied.
+        # Must run BEFORE the completion check below: progression is what
+        # cascades/corrects knockout fixtures and advances current_stage
+        # from the fixture tree's true state, and _check_tournament_completion
+        # overwrites current_stage to the literal 'completed' the moment
+        # every fixture status reads Completed — including a stale/corrupted
+        # Completed left over from a bug. Checking completion first would
+        # freeze current_stage on that placeholder before progression ever
+        # got a chance to run (or self-heal) against the real stage.
         try:
             logger.info(f"[Standings] Checking tournament progression for tournament {match.tournament_id}")
             self.check_and_progress_tournament(match.tournament_id)
         except Exception as prog_err:
             logger.warning(
                 f"[Standings] Tournament progression check failed (non-fatal): {prog_err}",
+                exc_info=True,
+            )
+
+        # Check tournament completion — non-fatal for the same reason.
+        try:
+            logger.info(f"[Standings] Checking tournament completion for tournament {match.tournament_id}")
+            self._check_tournament_completion(match.tournament_id)
+        except Exception as completion_err:
+            logger.warning(
+                f"[Standings] Tournament completion check failed (non-fatal): {completion_err}",
                 exc_info=True,
             )
 

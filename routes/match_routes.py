@@ -710,6 +710,31 @@ def register_match_routes(
             entry["bowling_team_name"] = teams.get(entry["bowling_team_id"]).name if entry["bowling_team_id"] in teams else "Unknown"
             innings_list.append(entry)
 
+        motm_player_name = motm_team_name = motm_stat_line = None
+        if db_match.motm_player_id:
+            motm_cards = [
+                c for c in scorecards
+                if c.player_id == db_match.motm_player_id and not c.is_super_over
+            ]
+            if motm_cards:
+                motm_player_name = motm_cards[0].player_ref.name if motm_cards[0].player_ref else None
+                motm_team = teams.get(motm_cards[0].team_id)
+                motm_team_name = motm_team.name if motm_team else None
+                m_runs = sum(c.runs or 0 for c in motm_cards if c.record_type == "batting")
+                m_wkts = sum(c.wickets or 0 for c in motm_cards if c.record_type == "bowling")
+                m_catches = sum(c.catches or 0 for c in motm_cards)
+                m_run_outs = sum(c.run_outs or 0 for c in motm_cards)
+                parts = []
+                if m_runs:
+                    parts.append(f"{m_runs} runs")
+                if m_wkts:
+                    parts.append(f"{m_wkts} wicket{'s' if m_wkts != 1 else ''}")
+                if m_catches:
+                    parts.append(f"{m_catches} catch{'es' if m_catches != 1 else ''}")
+                if m_run_outs:
+                    parts.append(f"{m_run_outs} run out{'s' if m_run_outs != 1 else ''}")
+                motm_stat_line = ", ".join(parts) if parts else None
+
         _result_text = db_match.result_description or ""
         match_summary = {
             "result_description": db_match.result_description or "Match Completed",
@@ -722,6 +747,9 @@ def register_match_routes(
                 or "DLS method" in _result_text
                 or "abandoned due to rain" in _result_text.lower()
             ),
+            "motm_player_name": motm_player_name,
+            "motm_team_name": motm_team_name,
+            "motm_stat_line": motm_stat_line,
         }
 
         return render_template(

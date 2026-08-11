@@ -126,6 +126,17 @@ BALL_HISTORY_WINDOW = 18
 MULT_MIN = 0.35
 MULT_MAX = 3.00
 
+# ---------------------------------------------------------------------------
+# Super Over calibration — deliberately NOT pitch-varying and NOT
+# per-innings: product decision (2026-08-09) is a single neutral RPO judged
+# identically for the side setting the target and the side chasing it, so
+# neither team gets a friendlier baseline. 12 RPO (2 runs/ball) is a
+# first-pass estimate for "a brisk but unremarkable" Super Over rate — like
+# the rest of this module's tuning constants, expect this to move after
+# playtesting/calibration data comes in.
+# ---------------------------------------------------------------------------
+SUPER_OVER_NEUTRAL_RPO = 12.0
+
 
 # ---------------------------------------------------------------------------
 # Private helpers
@@ -226,6 +237,32 @@ def _count_in_window(history: list, labels: set,
 
 def _clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
+
+
+def _apply_momentum_multipliers(mults: dict, momentum: float) -> None:
+    """
+    Mutates `mults` in place with the momentum layer. Shared by the
+    full-innings GSME (apply_game_state_to_probs) and the Super Over
+    micro-GSME (apply_super_over_momentum) — momentum-from-recent-balls is
+    scale-independent, unlike par curves / resource_index / partnership
+    tiers which are calibrated to a full 120/300-ball innings.
+    """
+    mom = momentum / 100.0       # [-1.0, +1.0]
+
+    if mom > 0:
+        # Batting in flow: more runs flow freely, wicket risk eases slightly
+        mults["Four"]   *= 1.0 + mom * 0.25      # up to +25 %
+        mults["Six"]    *= 1.0 + mom * 0.32      # sixes amplify a touch more
+        mults["Double"] *= 1.0 + mom * 0.12
+        mults["Single"] *= 1.0 + mom * 0.06
+        mults["Wicket"] *= 1.0 - mom * 0.10      # up to -10 %
+        mults["Dot"]    *= 1.0 - mom * 0.14      # up to -14 %
+    else:
+        # Batting out of rhythm: dots accumulate, wicket danger rises
+        mults["Four"]   *= 1.0 + mom * 0.22      # mom<0 → reduction
+        mults["Six"]    *= 1.0 + mom * 0.22
+        mults["Wicket"] *= 1.0 - mom * 0.20      # mom<0 → increase
+        mults["Dot"]    *= 1.0 - mom * 0.16      # mom<0 → increase
 
 
 # ---------------------------------------------------------------------------
@@ -408,22 +445,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     _is_lista             = state.get("_is_lista",             False)
 
     # ── A. MOMENTUM ──────────────────────────────────────────────────────────
-    mom = momentum / 100.0       # [-1.0, +1.0]
-
-    if mom > 0:
-        # Batting in flow: more runs flow freely, wicket risk eases slightly
-        mults["Four"]   *= 1.0 + mom * 0.25      # up to +25 %
-        mults["Six"]    *= 1.0 + mom * 0.32      # sixes amplify a touch more
-        mults["Double"] *= 1.0 + mom * 0.12
-        mults["Single"] *= 1.0 + mom * 0.06
-        mults["Wicket"] *= 1.0 - mom * 0.10      # up to -10 %
-        mults["Dot"]    *= 1.0 - mom * 0.14      # up to -14 %
-    else:
-        # Batting out of rhythm: dots accumulate, wicket danger rises
-        mults["Four"]   *= 1.0 + mom * 0.22      # mom<0 → reduction
-        mults["Six"]    *= 1.0 + mom * 0.22
-        mults["Wicket"] *= 1.0 - mom * 0.20      # mom<0 → increase
-        mults["Dot"]    *= 1.0 - mom * 0.16      # mom<0 → increase
+    _apply_momentum_multipliers(mults, momentum)
 
     # ── B. COLLAPSE RISK ─────────────────────────────────────────────────────
     # During scenario convergence (overs 15–17), cap the collapse multiplier so
@@ -689,6 +711,108 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         "6=%.3f  W=%.3f  X=%.3f",
         mults["Dot"], mults["Single"], mults["Double"], mults["Three"],
         mults["Four"], mults["Six"], mults["Wicket"], mults["Extras"],
+    )
+
+    return adjusted
+
+
+# ---------------------------------------------------------------------------
+# Public: Super Over micro-GSME
+# ---------------------------------------------------------------------------
+
+def apply_super_over_momentum(raw_weights: dict, so_state: dict) -> dict:
+    """
+    Super Over analog of apply_game_state_to_probs(): same shape (momentum,
+    wicket-scarcity risk, required-aggression) and the same clamp/floor
+    discipline, but every constant is rebuilt for a 6-ball / 2-wicket
+    contest instead of a full 120/300-ball innings.
+
+    Do NOT feed Super Over state into apply_game_state_to_probs() directly —
+    its resource_index (divides by a full innings' ball count), partnership
+    tiers (25-100+ runs), and 18-ball momentum window all misfire at n=6:
+    e.g. resource_index would read ~0.05 on ball 1 of a Super Over and
+    trigger full-innings "protect the tail" conservatism, backwards for a
+    shootout that hasn't lost a wicket yet.
+
+    so_state keys
+    -------------
+    history         : list[dict] — this Super Over's own deliveries so far
+                      (make_ball_event() output), NOT the main innings' —
+                      the whole point is a fresh, small window.
+    wickets_down    : int, 0 or 1 (the over ends at 2).
+    so_innings      : 1 (setting) or 2 (chasing).
+    balls_remaining : int, 1-6.
+    runs_needed     : int | None — innings 2 only.
+    score_so_far    : int — this Super Over innings' score so far.
+    """
+    OUTCOMES = ("Dot", "Single", "Double", "Three", "Four", "Six",
+                "Wicket", "Extras")
+    mults: dict = {o: 1.0 for o in OUTCOMES}
+
+    # ── A. MOMENTUM ── reuse the shared, scale-independent momentum shape.
+    momentum = _compute_momentum(so_state.get("history", []))
+    _apply_momentum_multipliers(mults, momentum)
+
+    # ── B. WICKET SCARCITY ── losing 1 of only 2 wickets is far more costly
+    # than losing 1 of 10 in a full innings — no gentle multi-tier table
+    # needed, there are only two states.
+    if so_state.get("wickets_down", 0) >= 1:
+        mults["Wicket"] *= 1.45
+        mults["Dot"]    *= 1.15
+        mults["Four"]   *= 0.90
+        mults["Six"]    *= 0.86
+
+    # ── C/D. RATE vs NEUTRAL BASELINE ── same SUPER_OVER_NEUTRAL_RPO for
+    # both sides (product decision) — the chasing side is judged on required
+    # rate, the setting side on its rate-so-far, against the identical
+    # neutral number.
+    balls_remaining = max(1, so_state.get("balls_remaining", 6))
+    so_innings = so_state.get("so_innings", 1)
+
+    if so_innings == 2 and so_state.get("runs_needed") is not None:
+        runs_needed = max(0, so_state["runs_needed"])
+        required_rr = runs_needed / (balls_remaining / 6.0)
+        ratio = required_rr / SUPER_OVER_NEUTRAL_RPO
+
+        if ratio >= 2.2:
+            mults["Six"] *= 1.55; mults["Four"] *= 1.30
+            mults["Wicket"] *= 1.30; mults["Dot"] *= 0.65
+        elif ratio >= 1.5:
+            mults["Six"] *= 1.30; mults["Four"] *= 1.16
+            mults["Wicket"] *= 1.16; mults["Dot"] *= 0.80
+        elif ratio >= 1.1:
+            mults["Six"] *= 1.12; mults["Four"] *= 1.06
+            mults["Wicket"] *= 1.06; mults["Dot"] *= 0.92
+        elif ratio <= 0.5:
+            # Chase is essentially already won — ease off the throttle.
+            mults["Wicket"] *= 0.85; mults["Six"] *= 0.90
+            mults["Single"] *= 1.10
+        elif ratio <= 0.8:
+            mults["Wicket"] *= 0.93; mults["Single"] *= 1.05
+
+    elif so_innings == 1:
+        balls_bowled = 6 - balls_remaining
+        if balls_bowled >= 2:   # give it a couple of balls before judging pace
+            score_so_far = so_state.get("score_so_far", 0)
+            current_rr = score_so_far / (balls_bowled / 6.0)
+            ratio = current_rr / SUPER_OVER_NEUTRAL_RPO
+            if ratio < 0.6:
+                mults["Six"] *= 1.15; mults["Four"] *= 1.08; mults["Dot"] *= 0.90
+            elif ratio > 1.6:
+                mults["Wicket"] *= 1.08; mults["Dot"] *= 1.06
+
+    # ── SAFETY: hard-clamp every multiplier ───────────────────────────────
+    for key in mults:
+        mults[key] = _clamp(mults[key], MULT_MIN, MULT_MAX)
+
+    adjusted: dict = {}
+    for outcome, weight in raw_weights.items():
+        mult = mults.get(outcome, 1.0)
+        adjusted[outcome] = max(weight * mult, 1e-9)
+
+    logger.debug(
+        "[SuperOverGSME] mom=%.1f wkts_down=%d so_innings=%d mults=%s",
+        momentum, so_state.get("wickets_down", 0), so_innings, mults,
     )
 
     return adjusted

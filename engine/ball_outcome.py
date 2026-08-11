@@ -703,6 +703,117 @@ def compute_weighted_prob(
     return max(raw_weight, 0.0)
 
 # -----------------------------------------------------------------------------
+# 4a2) Bowling matchup modifier — shared by calculate_outcome() and the
+# Super Over engine so the two never drift (see squad_rules.py for the same
+# "single source of truth" lesson applied to a different subsystem).
+# -----------------------------------------------------------------------------
+def compute_matchup_boost(bowling_type: str, bowling_hand: str, batting_hand: str,
+                           batting: float, pitch: str) -> tuple:
+    """
+    Returns (matchup_boost, boundary_suppression) for a bowling-type vs
+    batting-hand/pitch contest. matchup_boost multiplies Wicket weight;
+    boundary_suppression (<=1.0) multiplies Four/Six weight when the bowler
+    has a favorable matchup.
+    """
+    matchup_boost = 1.0
+
+    # 1. Spin turning away from bat — classic cricket advantage
+    if bowling_type in ("Off spin", "Finger spin") and batting_hand == "Left":
+        matchup_boost *= 1.15  # Turning away from left-hander
+    if bowling_type in ("Leg spin", "Wrist spin") and batting_hand == "Right":
+        matchup_boost *= 1.15  # Turning away from right-hander
+
+    # 2. Pace vs tail-enders — raw pace terrifies lower order
+    if bowling_type in ("Fast", "Fast-medium", "Medium-fast") and batting < 30:
+        matchup_boost *= 1.25
+
+    # 3. Left-arm pace angle vs right-handers (all pitches)
+    if (bowling_hand == "Left" and batting_hand == "Right"
+            and bowling_type in ("Fast", "Fast-medium", "Medium-fast")):
+        matchup_boost *= 1.10
+        if pitch == "Green":
+            matchup_boost *= 1.08  # Extra seam movement on Green
+
+    # 4. Spin vs lower-order on turning tracks
+    if (bowling_type in ("Off spin", "Leg spin", "Finger spin", "Wrist spin")
+            and pitch == "Dry" and batting < 50):
+        matchup_boost *= 1.10
+
+    # Boundary suppression when bowler has matchup advantage
+    boundary_suppression = 1.0
+    if matchup_boost > 1.0:
+        boundary_suppression = 1.0 / (matchup_boost ** 0.5)  # Mild inverse
+
+    return matchup_boost, boundary_suppression
+
+
+# -----------------------------------------------------------------------------
+# 4a3) Pressure-effects application — shared by calculate_outcome() and the
+# Super Over engine. Mutates a copy of raw_weights per PressureEngine's
+# get_pressure_effects() output; does not touch Extras (bowler-error only).
+# -----------------------------------------------------------------------------
+def apply_pressure_effects_to_weights(raw_weights: dict, pressure_effects: dict,
+                                       total_weight: float = None) -> tuple:
+    """
+    Returns (new_raw_weights, new_total_weight) with pressure_effects applied.
+    raw_weights is not mutated in place.
+    """
+    weights = dict(raw_weights)
+    if total_weight is None:
+        total_weight = sum(weights.values())
+
+    if not pressure_effects:
+        return weights, total_weight
+
+    logger.debug(f"  [PRESSURE] Applying pressure effects: {pressure_effects}")
+
+    if "Dot" in weights:
+        original_dot = weights["Dot"]
+        dot_bonus = pressure_effects.get('dot_bonus', 0.0)
+        weights["Dot"] += dot_bonus * total_weight
+        logger.debug(f"  [PRESSURE] Dot: {original_dot:.6f} -> {weights['Dot']:.6f}")
+
+    boundary_modifier = pressure_effects.get('boundary_modifier', 1.0)
+    for boundary_type in ["Four", "Six"]:
+        if boundary_type in weights:
+            original_boundary = weights[boundary_type]
+            weights[boundary_type] *= boundary_modifier
+            logger.debug(f"  [PRESSURE] {boundary_type}: {original_boundary:.6f} -> {weights[boundary_type]:.6f}")
+
+    if "Wicket" in weights:
+        original_wicket = weights["Wicket"]
+        weights["Wicket"] *= pressure_effects.get('wicket_modifier', 1.0)
+        logger.debug(f"  [PRESSURE] Wicket: {original_wicket:.6f} -> {weights['Wicket']:.6f}")
+
+    if "Single" in weights:
+        original_single = weights["Single"]
+
+        if 'single_boost' in pressure_effects:
+            weights["Single"] *= pressure_effects['single_boost']
+            logger.debug(f"  [PRESSURE] Single BOOST: {original_single:.6f} -> {weights['Single']:.6f}")
+
+        elif 'strike_rotation_penalty' in pressure_effects:
+            penalty = pressure_effects['strike_rotation_penalty']
+            single_floor = pressure_effects.get('single_floor', 0.0)
+
+            new_single_weight = original_single * (1 - penalty)
+            floor_weight = single_floor * total_weight
+
+            weights["Single"] = max(new_single_weight, floor_weight)
+            logger.debug(f"  [PRESSURE] Single PENALTY: {original_single:.6f} -> {weights['Single']:.6f} (floor: {floor_weight:.6f})")
+
+    if "Three" in weights:
+        strike_rotation_penalty = pressure_effects.get('strike_rotation_penalty', 0.0)
+        if strike_rotation_penalty > 0:
+            original_three = weights["Three"]
+            weights["Three"] *= (1 - strike_rotation_penalty)
+            logger.debug(f"  [PRESSURE] Three: {original_three:.6f} -> {weights['Three']:.6f}")
+
+    total_weight = sum(weights.values())
+    return weights, total_weight
+
+
+# -----------------------------------------------------------------------------
 # 4b) Wicket type selection based on bowling style
 # -----------------------------------------------------------------------------
 def _get_wicket_type_by_bowling(bowling_type: str):
@@ -771,6 +882,44 @@ def _select_fielder(fielding_team, wicket_type: str = None, exclude_name: str = 
 
     chosen = random.choices(candidates, weights=weights)[0]
     return chosen["name"], chosen.get("fielding_rating", 60)
+
+
+# -----------------------------------------------------------------------------
+# 4d) Catch/stumping drop resolution — shared by calculate_outcome() and the
+# Super Over engine. The fielder is picked first (via _select_fielder above)
+# so THEIR rating, not a team average, drives the drop odds.
+# -----------------------------------------------------------------------------
+def resolve_fielding_chance(fielding_team, bowler_name: str, wicket_choice: str,
+                             fielding_quality: float = None) -> tuple:
+    """
+    For a Caught/Stumped dismissal chance, pick the fielder and roll for a
+    drop. Returns (dropped: bool, fielder_name: str | None, drop_runs: int).
+    drop_runs is only meaningful when dropped is True.
+
+    fielding=90 -> ~3% drop | fielding=60 -> ~10% drop | fielding=30 -> ~19% drop
+    """
+    fielder_name = None
+    fielder_rating = None
+    if fielding_team:
+        exclude = bowler_name if wicket_choice == "Caught" else None
+        fielder_name, fielder_rating = _select_fielder(
+            fielding_team, wicket_type=wicket_choice, exclude_name=exclude
+        )
+
+    drop_quality = fielder_rating if fielder_rating is not None else fielding_quality
+    if drop_quality is None:
+        return False, fielder_name, 0
+
+    drop_prob = max(0.02, 0.22 - (drop_quality / 100.0) * 0.19)
+    if random.random() < drop_prob:
+        drop_runs = random.choices([1, 2, 4], weights=[35, 35, 30])[0]
+        logger.debug(
+            "[Fielding] Catch dropped by %s (rating=%.1f, drop_prob=%.3f)",
+            fielder_name or "?", drop_quality, drop_prob,
+        )
+        return True, fielder_name, drop_runs
+
+    return False, fielder_name, 0
 
 # -----------------------------------------------------------------------------
 # 5) Main outcome selection function: calculate_outcome
@@ -878,6 +1027,11 @@ def calculate_outcome(
         pitch_matrix = (_gc_scoring_matrix(pitch, mode_override=game_mode_override, config=_gc)
                         or PITCH_SCORING_MATRIX.get(pitch, DEFAULT_SCORING_MATRIX))
 
+    # --- Bowling matchup modifier (computed once, applied to wickets + boundaries) ---
+    matchup_boost, boundary_suppression = compute_matchup_boost(
+        bowling_type, bowling_hand, batting_hand, batting, pitch
+    )
+
     raw_weights = {}
     for outcome in pitch_matrix:
         base = pitch_matrix[outcome]
@@ -886,37 +1040,6 @@ def calculate_outcome(
         if outcome == "Extras" and not allow_extras:
             raw_weights[outcome] = 0.0
             continue
-
-        # Compute base weight via 60/40 blending
-        # --- Bowling matchup modifier (computed once, applied to wickets + boundaries) ---
-        matchup_boost = 1.0
-
-        # 1. Spin turning away from bat — classic cricket advantage
-        if bowling_type in ("Off spin", "Finger spin") and batting_hand == "Left":
-            matchup_boost *= 1.15  # Turning away from left-hander
-        if bowling_type in ("Leg spin", "Wrist spin") and batting_hand == "Right":
-            matchup_boost *= 1.15  # Turning away from right-hander
-
-        # 2. Pace vs tail-enders — raw pace terrifies lower order
-        if bowling_type in ("Fast", "Fast-medium", "Medium-fast") and batting < 30:
-            matchup_boost *= 1.25
-
-        # 3. Left-arm pace angle vs right-handers (all pitches)
-        if (bowling_hand == "Left" and batting_hand == "Right"
-                and bowling_type in ("Fast", "Fast-medium", "Medium-fast")):
-            matchup_boost *= 1.10
-            if pitch == "Green":
-                matchup_boost *= 1.08  # Extra seam movement on Green
-
-        # 4. Spin vs lower-order on turning tracks
-        if (bowling_type in ("Off spin", "Leg spin", "Finger spin", "Wrist spin")
-                and pitch == "Dry" and batting < 50):
-            matchup_boost *= 1.10
-
-        # Boundary suppression when bowler has matchup advantage
-        boundary_suppression = 1.0
-        if matchup_boost > 1.0:
-            boundary_suppression = 1.0 / (matchup_boost ** 0.5)  # Mild inverse
 
         if outcome in ("Dot", "Single", "Double", "Three", "Four", "Six"):
             weight = compute_weighted_prob(
@@ -1058,60 +1181,9 @@ def calculate_outcome(
 
     # 3.7) Apply pressure effects if provided
     if pressure_effects:
-        logger.debug(f"  [PRESSURE] Applying pressure effects: {pressure_effects}")
-        
-        # Increase dot ball probability
-        if "Dot" in raw_weights:
-            original_dot = raw_weights["Dot"]
-            dot_bonus = pressure_effects.get('dot_bonus', 0.0)
-            raw_weights["Dot"] += dot_bonus * total_weight
-            logger.debug(f"  [PRESSURE] Dot: {original_dot:.6f} -> {raw_weights['Dot']:.6f}")
-        
-        # Modify boundary probabilities
-        boundary_modifier = pressure_effects.get('boundary_modifier', 1.0)
-        for boundary_type in ["Four", "Six"]:
-            if boundary_type in raw_weights:
-                original_boundary = raw_weights[boundary_type]
-                raw_weights[boundary_type] *= boundary_modifier
-                logger.debug(f"  [PRESSURE] {boundary_type}: {original_boundary:.6f} -> {raw_weights[boundary_type]:.6f}")
-        
-        # Modify wicket probability
-        if "Wicket" in raw_weights:
-            original_wicket = raw_weights["Wicket"]
-            raw_weights["Wicket"] *= pressure_effects.get('wicket_modifier', 1.0)
-            logger.debug(f"  [PRESSURE] Wicket: {original_wicket:.6f} -> {raw_weights['Wicket']:.6f}")
-        
-        # 🔧 NEW: Handle singles (boost or penalty with floor)
-        if "Single" in raw_weights:
-            original_single = raw_weights["Single"]
-            
-            # Apply single boost (defensive mode)
-            if 'single_boost' in pressure_effects:
-                raw_weights["Single"] *= pressure_effects['single_boost']
-                logger.debug(f"  [PRESSURE] Single BOOST: {original_single:.6f} -> {raw_weights['Single']:.6f}")
-            
-            # Apply single penalty with floor (aggressive mode)
-            elif 'strike_rotation_penalty' in pressure_effects:
-                penalty = pressure_effects['strike_rotation_penalty']
-                single_floor = pressure_effects.get('single_floor', 0.0)
-                
-                # Apply penalty but enforce minimum floor
-                new_single_weight = original_single * (1 - penalty)
-                floor_weight = single_floor * total_weight
-                raw_weights["Single"] = max(new_single_weight, floor_weight)
-
-                logger.debug(f"  [PRESSURE] Single PENALTY: {original_single:.6f} -> {raw_weights['Single']:.6f} (floor: {floor_weight:.6f})")
-        
-        # Reduce strike rotation for threes
-        if "Three" in raw_weights:
-            strike_rotation_penalty = pressure_effects.get('strike_rotation_penalty', 0.0)
-            if strike_rotation_penalty > 0:
-                original_three = raw_weights["Three"]
-                raw_weights["Three"] *= (1 - strike_rotation_penalty)
-                logger.debug(f"  [PRESSURE] Three: {original_three:.6f} -> {raw_weights['Three']:.6f}")
-        
-        # Recalculate total weight after pressure modifications
-        total_weight = sum(raw_weights.values())
+        raw_weights, total_weight = apply_pressure_effects_to_weights(
+            raw_weights, pressure_effects, total_weight
+        )
     
     # 4) Free hit: slight boundary boost (+10%) for both Four and Six.
     if free_hit and "Four" in raw_weights and "Six" in raw_weights:
@@ -1165,35 +1237,24 @@ def calculate_outcome(
         # often than a part-timer, and hiding a poor fielder now matters.
         # fielding=90 → ~3% drop  |  fielding=60 → ~10% drop  |  fielding=30 → ~19% drop
         if wicket_choice in ("Caught", "Stumped"):
-            fielder_name = None
-            fielder_rating = None
-            if fielding_team:
-                exclude = bowler.get("name") if wicket_choice == "Caught" else None
-                fielder_name, fielder_rating = _select_fielder(
-                    fielding_team, wicket_type=wicket_choice, exclude_name=exclude
-                )
-                if fielder_name:
-                    result["fielder_name"] = fielder_name
+            dropped, fielder_name, drop_runs = resolve_fielding_chance(
+                fielding_team, bowler.get("name"), wicket_choice, fielding_quality
+            )
+            if fielder_name:
+                result["fielder_name"] = fielder_name
 
-            drop_quality = fielder_rating if fielder_rating is not None else fielding_quality
-            if drop_quality is not None:
-                drop_prob = max(0.02, 0.22 - (drop_quality / 100.0) * 0.19)
-                if random.random() < drop_prob:
-                    # Dropped! Convert wicket into runs
-                    result["batter_out"] = False
-                    result["wicket_type"] = None
-                    result["type"] = "run"
-                    result["runs"] = random.choices([1, 2, 4], weights=[35, 35, 30])[0]
-                    result["dropped_catch"] = True
-                    if fielder_name:
-                        result["description"] = f"DROPPED! {fielder_name} spills a sitter — a costly miss in the field!"
-                    else:
-                        result["description"] = "DROPPED! The chance goes begging — a costly miss in the field!"
-                    logger.debug(
-                        "[Fielding] Catch dropped by %s (rating=%.1f, drop_prob=%.3f)",
-                        fielder_name or "?", drop_quality, drop_prob,
-                    )
-                    return result
+            if dropped:
+                # Dropped! Convert wicket into runs
+                result["batter_out"] = False
+                result["wicket_type"] = None
+                result["type"] = "run"
+                result["runs"] = drop_runs
+                result["dropped_catch"] = True
+                if fielder_name:
+                    result["description"] = f"DROPPED! {fielder_name} spills a sitter — a costly miss in the field!"
+                else:
+                    result["description"] = "DROPPED! The chance goes begging — a costly miss in the field!"
+                return result
 
         # Use guaranteed wicket commentary templates
         wicket_descriptions = [
