@@ -594,6 +594,184 @@ class TestFixtureResimulationRoute:
         assert response.status_code == 404
 
 
+class TestResimulateStatsReversal:
+    """
+    End-to-end regression tests: resimulating a completed match must
+    reverse EVERY stats surface it affected, not just some of them:
+      - player career stats (Player.total_runs/total_wickets/matches_played
+        via reverse_player_aggregates)
+      - the tournament-scoped TournamentPlayerStatsCache (used by the
+        Statistics page's tournament filter)
+      - the dashboard's live "Most Runs"/"Most Wickets"/MOM widgets, which
+        self-heal automatically once the underlying MatchScorecard/Match
+        rows are deleted
+    and replaying the same fixture afterward must produce clean, correctly
+    isolated stats with no contamination left over from the reversed match.
+
+    Before this fix, TournamentPlayerStatsCache was never touched on
+    reversal (_update_player_stats_cache is only called from the forward
+    update_standings() path), so a resimulated match's runs/wickets stayed
+    stuck in a player's cached tournament stats indefinitely -- until, if
+    ever, that exact player played another match in the same tournament.
+    """
+
+    def test_resimulate_reverses_career_and_cache_then_replay_is_clean(
+        self, authenticated_client, regular_user, test_team, test_team_2
+    ):
+        engine = TournamentEngine()
+        tournament = engine.create_tournament(
+            name="Resim Stats Check", user_id=regular_user.id,
+            team_ids=[test_team.id, test_team_2.id], mode="round_robin",
+        )
+        fixture = TournamentFixture.query.filter_by(tournament_id=tournament.id).first()
+        assert fixture is not None
+
+        batter = DBPlayer.query.filter_by(team_id=test_team.id).order_by(DBPlayer.id).first()
+        bowler = DBPlayer.query.filter_by(team_id=test_team_2.id).order_by(DBPlayer.id).first()
+
+        # Simulate these players having played 2 prior matches elsewhere in
+        # their career, so decrementing by exactly this match's contribution
+        # is unambiguous (not just "back to zero").
+        batter.matches_played = 2
+        batter.total_runs = 80
+        bowler.matches_played = 2
+        bowler.total_wickets = 3
+        db.session.commit()
+
+        match_id = str(uuid.uuid4())
+        match = DBMatch(
+            id=match_id, user_id=regular_user.id, tournament_id=tournament.id,
+            home_team_id=test_team.id, away_team_id=test_team_2.id,
+            winner_team_id=test_team.id, match_format="T20",
+            motm_player_id=batter.id,
+        )
+        db.session.add(match)
+        db.session.flush()
+        db.session.add_all([
+            MatchScorecard(
+                match_id=match_id, player_id=batter.id, team_id=test_team.id,
+                innings_number=1, record_type="batting", runs=60, balls=40, is_out=True,
+            ),
+            MatchScorecard(
+                match_id=match_id, player_id=bowler.id, team_id=test_team_2.id,
+                innings_number=2, record_type="bowling", wickets=2, runs_conceded=18, balls_bowled=24,
+            ),
+        ])
+        fixture.match_id = match_id
+        fixture.status = "Completed"
+        db.session.commit()
+
+        # This match is the only one either player has played *in this
+        # tournament*, so their cache should read exactly this match's
+        # contribution -- mirrors what the forward update_standings() path
+        # would have produced.
+        engine.rebuild_player_stats_cache(tournament.id, {batter.id, bowler.id})
+        db.session.commit()
+
+        batter_cache = TournamentPlayerStatsCache.query.filter_by(
+            tournament_id=tournament.id, player_id=batter.id
+        ).first()
+        bowler_cache = TournamentPlayerStatsCache.query.filter_by(
+            tournament_id=tournament.id, player_id=bowler.id
+        ).first()
+        assert batter_cache.runs_scored == 60
+        assert bowler_cache.wickets_taken == 2
+
+        # Sanity check: the dashboard's live leaderboards show this match
+        # before it's touched.
+        response = authenticated_client.get(f"/tournaments/{tournament.id}")
+        body = response.data.decode()
+        assert batter.name in body
+        assert bowler.name in body
+
+        # --- Resimulate ---
+        response = authenticated_client.post(
+            f"/fixture/{fixture.id}/resimulate", follow_redirects=True
+        )
+        assert response.status_code == 200
+
+        db.session.expire_all()
+
+        # Career stats reversed by exactly this match's contribution.
+        refreshed_batter = db.session.get(DBPlayer, batter.id)
+        refreshed_bowler = db.session.get(DBPlayer, bowler.id)
+        assert refreshed_batter.matches_played == 1
+        assert refreshed_batter.total_runs == 20
+        assert refreshed_bowler.matches_played == 1
+        assert refreshed_bowler.total_wickets == 1
+
+        # Tournament-cached stats rebuilt to zero -- not left showing the
+        # deleted match's numbers.
+        batter_cache = TournamentPlayerStatsCache.query.filter_by(
+            tournament_id=tournament.id, player_id=batter.id
+        ).first()
+        bowler_cache = TournamentPlayerStatsCache.query.filter_by(
+            tournament_id=tournament.id, player_id=bowler.id
+        ).first()
+        assert batter_cache.runs_scored == 0
+        assert batter_cache.matches_played == 0
+        assert bowler_cache.wickets_taken == 0
+        assert bowler_cache.matches_played == 0
+
+        # The match and its scorecards are gone entirely.
+        assert db.session.get(DBMatch, match_id) is None
+        assert MatchScorecard.query.filter_by(match_id=match_id).count() == 0
+
+        # Dashboard leaderboards self-heal: the reversed match's stats no
+        # longer appear anywhere.
+        response = authenticated_client.get(f"/tournaments/{tournament.id}")
+        body = response.data.decode()
+        assert "No data yet" in body
+
+        # --- Replay the same fixture ---
+        db.session.refresh(fixture)
+        assert fixture.status == "Scheduled"
+        assert fixture.match_id is None
+
+        new_match_id = str(uuid.uuid4())
+        new_match = DBMatch(
+            id=new_match_id, user_id=regular_user.id, tournament_id=tournament.id,
+            home_team_id=test_team.id, away_team_id=test_team_2.id,
+            winner_team_id=test_team_2.id, match_format="T20",
+            motm_player_id=bowler.id,
+        )
+        db.session.add(new_match)
+        db.session.flush()
+        db.session.add_all([
+            MatchScorecard(
+                match_id=new_match_id, player_id=batter.id, team_id=test_team.id,
+                innings_number=1, record_type="batting", runs=25, balls=20, is_out=True,
+            ),
+            MatchScorecard(
+                match_id=new_match_id, player_id=bowler.id, team_id=test_team_2.id,
+                innings_number=2, record_type="bowling", wickets=3, runs_conceded=15, balls_bowled=24,
+            ),
+        ])
+        fixture.match_id = new_match_id
+        db.session.commit()
+
+        result = engine.update_standings(new_match, commit=True)
+        assert result is True
+
+        # Cache reflects ONLY the new match — no leftover contamination
+        # from the reversed one (would read 85/85 or similar if it leaked).
+        batter_cache = TournamentPlayerStatsCache.query.filter_by(
+            tournament_id=tournament.id, player_id=batter.id
+        ).first()
+        bowler_cache = TournamentPlayerStatsCache.query.filter_by(
+            tournament_id=tournament.id, player_id=bowler.id
+        ).first()
+        assert batter_cache.runs_scored == 25
+        assert batter_cache.matches_played == 1
+        assert bowler_cache.wickets_taken == 3
+        assert bowler_cache.matches_played == 1
+
+        response = authenticated_client.get(f"/tournaments/{tournament.id}")
+        body = response.data.decode()
+        assert "25" in body
+        assert bowler.name in body
+
+
 class TestTournamentModes:
     """Tests for different tournament modes."""
 

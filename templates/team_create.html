@@ -1430,24 +1430,29 @@
   function bindIdentity() {
     nameInput.addEventListener('input', () => {
       state.identity.team_name = nameInput.value;
+      updateValidation();
       scheduleAutoSave();
     });
     shortInput.addEventListener('input', () => {
       shortInput.value = shortInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
       state.identity.short_code = shortInput.value;
+      updateValidation();
       scheduleAutoSave();
     });
     groundInput.addEventListener('input', () => {
       state.identity.home_ground = groundInput.value;
+      updateValidation();
       scheduleAutoSave();
     });
     pitchSelect.addEventListener('change', () => {
       state.identity.pitch_preference = pitchSelect.value;
+      updateValidation();
       scheduleAutoSave();
     });
     colorInput.addEventListener('input', () => {
       state.identity.team_color = colorInput.value;
       colorSwatch.style.background = colorInput.value;
+      updateValidation();
       scheduleAutoSave();
     });
   }
