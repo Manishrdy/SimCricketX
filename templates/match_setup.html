@@ -4,172 +4,244 @@
 
 {% block extra_css %}
 <style>
-    /* Wizard Progress Bar */
-    .wizard-progress {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 2rem;
-        position: relative;
-        max-width: 600px;
-        margin: 0 auto 2rem;
-        padding: 0 1rem;
+    @media (prefers-reduced-motion: reduce) {
+        * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
     }
 
-    .wizard-progress::before {
-        content: '';
-        position: absolute;
-        top: 14px;
-        left: 20px;
-        right: 20px;
-        height: 2px;
-        background: var(--card-border);
-        z-index: 0;
+    .ms-shell {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 0 1rem 3rem;
+    }
+
+    /* ─── Header: title + stepper ────────────────────────────── */
+    .ms-top {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 1.75rem;
+        padding-top: 1.75rem;
+    }
+
+    .ms-eyebrow {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--brand-primary, var(--accent));
+        margin-bottom: 0.35rem;
+    }
+
+    .ms-title {
+        font-size: 1.9rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--fg);
+    }
+
+    .ms-stepper {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-full, 999px);
+        padding: 0.4rem;
+        box-shadow: var(--shadow-xs, 0 1px 2px var(--shadow));
     }
 
     .step-item {
-        position: relative;
-        z-index: 1;
-        background: var(--bg);
         display: flex;
-        flex-direction: column;
         align-items: center;
-        width: 80px;
+        gap: 0.5rem;
+        padding: 0.4rem 0.9rem 0.4rem 0.4rem;
+        border-radius: var(--radius-full, 999px);
+        transition: var(--transition);
     }
 
     .step-circle {
-        width: 30px;
-        height: 30px;
+        width: 26px;
+        height: 26px;
         border-radius: 50%;
-        background: var(--card-border);
+        background: var(--bg);
+        border: 1px solid var(--card-border);
         color: var(--fg-secondary);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: 600;
-        font-size: 0.9rem;
-        margin-bottom: 0.5rem;
+        font-weight: 700;
+        font-size: 0.8rem;
+        flex-shrink: 0;
         transition: var(--transition);
-        border: 2px solid var(--bg);
-    }
-
-    .step-item.active .step-circle {
-        background: var(--accent);
-        color: white;
-        box-shadow: 0 0 0 4px var(--accent-light);
-    }
-
-    .step-item.completed .step-circle {
-        background: var(--success, #10b981);
-        color: white;
     }
 
     .step-label {
-        font-size: 0.8rem;
+        font-size: 0.82rem;
         color: var(--fg-secondary);
-        font-weight: 500;
-    }
-
-    .step-item.active .step-label {
-        color: var(--fg);
         font-weight: 600;
     }
 
-    /* Wizard Steps */
-    .wizard-step {
-        display: none;
-        animation: fadeIn 0.4s ease;
+    .step-item.active {
+        background: var(--brand-gradient, var(--gradient));
     }
 
-    .wizard-step.active {
-        display: block;
+    .step-item.active .step-circle {
+        background: var(--bg-raised, var(--card-bg));
+        border-color: transparent;
+        color: var(--brand-primary, var(--accent));
     }
+
+    .step-item.active .step-label {
+        color: var(--text-on-accent, #fff);
+    }
+
+    .step-item.completed .step-circle {
+        background: var(--success);
+        border-color: transparent;
+        color: #fff;
+    }
+
+    .step-item.completed .step-label {
+        color: var(--fg);
+    }
+
+    @media (max-width: 640px) {
+        .ms-top { flex-direction: column; align-items: stretch; }
+        .ms-stepper { justify-content: space-between; }
+        .step-label { display: none; }
+        .step-item.active .step-label { display: inline; }
+    }
+
+    /* ─── Body grid: main content + persistent match ticket ────── */
+    .ms-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    @media (max-width: 1100px) {
+        .ms-body { grid-template-columns: 1fr; }
+        .ms-ticket { position: static; }
+    }
+
+    .ms-main {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-lg, 16px);
+        padding: 1.75rem 2rem 2rem;
+        box-shadow: var(--shadow-sm, 0 10px 20px -12px rgba(15, 23, 42, 0.4));
+        min-width: 0;
+    }
+
+    @media (max-width: 640px) {
+        .ms-main { padding: 1.25rem 1.1rem 1.5rem; }
+    }
+
+    .ms-step-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .ms-step-header h2 {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--fg);
+        margin-bottom: 0.3rem;
+    }
+
+    .ms-step-sub {
+        color: var(--fg-secondary);
+        font-size: 0.9rem;
+        line-height: 1.5;
+        max-width: 62ch;
+    }
+
+    .wizard-step { display: none; }
+    .wizard-step.active { display: block; animation: fadeIn 0.35s var(--ease-elastic, ease); }
 
     @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Teams Grid (Reused & Tweaked) */
-    /* Teams Grid - Modern Card Layout */
+    /* ─── Step 1: Teams ──────────────────────────────────────── */
     .teams-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1rem;
-        margin-bottom: 2rem;
-        max-height: 60vh;
+        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 0.9rem;
+        max-height: 58vh;
         overflow-y: auto;
-        padding: 0.5rem;
+        padding: 0.25rem 0.25rem 0.5rem;
     }
 
     .team-card {
-        background: var(--card-bg);
+        background: var(--bg-surface, var(--bg-secondary));
         border: 2px solid var(--card-border);
-        border-radius: 16px;
-        padding: 1.25rem 1.5rem;
+        border-radius: var(--radius-md, 12px);
+        padding: 1.1rem 1.25rem;
         cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: transform 0.2s var(--ease-elastic, ease), box-shadow 0.2s ease, border-color 0.2s ease;
         position: relative;
         display: flex;
         align-items: center;
-        gap: 1rem;
+        gap: 0.9rem;
         overflow: hidden;
     }
 
     .team-card::before {
         content: '';
         position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 6px;
+        left: 0; top: 0; bottom: 0;
+        width: 4px;
         background: var(--team-color, var(--card-border));
-        transition: width 0.3s ease;
+        transition: width 0.2s ease;
     }
 
-    .team-card:hover {
-        border-color: var(--accent);
-        transform: translateY(-4px);
-        box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
-    }
+    .team-card:hover { border-color: var(--brand-primary, var(--accent)); transform: translateY(-3px); box-shadow: var(--shadow-md, 0 14px 28px -18px rgba(15,23,42,.4)); }
+    .team-card:hover::before { width: 6px; }
 
-    .team-card:hover::before {
-        width: 8px;
+    .team-card:focus-visible {
+        outline: 2px solid var(--brand-primary, var(--accent));
+        outline-offset: 2px;
     }
 
     .team-card.selected {
-        border-color: var(--accent);
-        background: linear-gradient(135deg, var(--accent-light) 0%, var(--card-bg) 100%);
-        box-shadow: 0 0 0 3px var(--accent-light), 0 8px 20px -4px rgba(59, 130, 246, 0.25);
+        border-color: var(--brand-primary, var(--accent));
+        box-shadow: 0 0 0 3px var(--accent-light), var(--shadow-glow, none);
     }
 
-    .team-card.selected::before {
-        width: 8px;
-        background: var(--accent);
-    }
+    .team-card.selected::before { width: 6px; background: var(--brand-primary, var(--accent)); }
 
     .team-card.selected::after {
-        content: '✓';
+        font-family: "Font Awesome 6 Free";
+        font-weight: 900;
+        content: "\f00c";
         position: absolute;
-        top: 12px;
-        right: 14px;
-        width: 24px;
-        height: 24px;
-        background: var(--accent);
-        color: white;
+        top: 10px; right: 12px;
+        width: 22px; height: 22px;
+        background: var(--brand-gradient, var(--accent));
+        color: var(--text-on-accent, #fff);
         border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.8rem;
-        font-weight: bold;
-        box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.65rem;
+    }
+
+    .team-role-tag {
+        position: absolute;
+        top: 10px; left: 12px;
+        background: var(--brand-gradient, var(--accent));
+        color: var(--text-on-accent, #fff);
+        font-family: var(--font-mono);
+        font-size: 0.6rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        padding: 2px 8px;
+        border-radius: var(--radius-full, 999px);
+        z-index: 1;
     }
 
     .team-info {
@@ -177,210 +249,229 @@
         flex-direction: column;
         gap: 0.25rem;
         flex: 1;
-        padding-left: 0.5rem;
+        min-width: 0;
     }
 
     .team-info h3 {
-        font-size: 1.1rem;
+        font-size: 1.02rem;
         font-weight: 700;
         color: var(--fg);
-        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .team-meta {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         color: var(--fg-secondary);
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.4rem;
     }
 
-    .team-meta i {
-        font-size: 0.75rem;
-        color: var(--accent);
-    }
+    .team-meta i { font-size: 0.7rem; color: var(--fg-secondary); opacity: 0.8; }
 
     .color-dot {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
+        width: 46px;
+        height: 46px;
+        border-radius: var(--radius-md, 10px);
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.5rem;
-        color: white;
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-        box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #fff;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.35);
+        box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 2px 8px rgba(0,0,0,0.15);
     }
 
-    /* Conditions Form */
-    .conditions-layout {
-        display: grid;
-        grid-template-columns: 1.35fr 0.9fr;
-        gap: 1.25rem;
-        position: relative;
-        z-index: 1;
+    .team-format-badges {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        margin-top: 3px;
     }
 
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 1rem;
+    .fmt-badge {
+        font-size: 0.6rem;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        opacity: 0.65;
+        transition: opacity 0.2s;
     }
 
-    .conditions-panel {
-        max-width: 1020px;
-        margin: 0 auto;
-        background: var(--bg-secondary);
-        border: 1px solid var(--card-border);
-        border-radius: 18px;
-        padding: 2rem 2.25rem;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
-        position: relative;
-        overflow: hidden;
-    }
+    .fmt-badge.fmt-t20        { background: rgba(16, 185, 129, 0.18); color: #10b981; }
+    .fmt-badge.fmt-lista      { background: rgba(59, 130, 246, 0.18); color: #3b82f6; }
+    .fmt-badge.fmt-firstclass { background: rgba(139, 92, 246, 0.18); color: #8b5cf6; }
+    .fmt-badge.fmt-active     { opacity: 1; box-shadow: 0 0 0 1px currentColor; }
 
-    .conditions-panel::before {
-        content: "";
-        position: absolute;
-        inset: -40% auto auto -10%;
-        width: 320px;
-        height: 320px;
-        background: radial-gradient(circle, rgba(15, 118, 110, 0.18), transparent 70%);
-        opacity: 0.6;
+    .team-card.no-squad-for-format {
+        opacity: 0.4;
+        cursor: not-allowed;
         pointer-events: none;
     }
 
-    .conditions-header {
+    .team-card.no-squad-for-format::after {
+        font-family: var(--font-sans);
+        content: 'No ' attr(data-no-squad-label) ' squad';
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(220, 38, 38, 0.9);
+        color: #fff;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: var(--radius-full, 999px);
+        white-space: nowrap;
+    }
+
+    .ms-empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--fg-secondary);
+    }
+
+    .ms-empty-state i { font-size: 2rem; margin-bottom: 0.75rem; opacity: 0.6; }
+    .ms-empty-state p { margin-bottom: 1rem; }
+
+    /* ─── Step 2: Conditions — grouped settings rows ────────────── */
+    .ms-settings-group + .ms-settings-group { margin-top: 1.75rem; }
+
+    .ms-group-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--brand-primary, var(--accent));
+        margin-bottom: 0.6rem;
+        padding-bottom: 0.6rem;
+        border-bottom: 1px solid var(--card-border);
+    }
+
+    .ms-group-title i { font-size: 0.85rem; }
+
+    .ms-setting-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 1rem;
-        margin-bottom: 1.75rem;
-        position: relative;
-        z-index: 1;
+        gap: 1.5rem;
+        padding: 0.9rem 0.25rem;
+        border-bottom: 1px dashed var(--card-border);
     }
 
-    .conditions-title {
-        font-size: 1.6rem;
-        font-weight: 700;
-        color: var(--fg);
-        letter-spacing: -0.02em;
-    }
+    .ms-setting-row:last-child { border-bottom: none; }
 
-    .conditions-subtitle {
-        color: var(--fg-secondary);
-        font-size: 0.95rem;
-    }
-
-    .matchup-ribbon {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.6rem;
-        margin-top: 0.6rem;
-        padding: 0.35rem 0.7rem;
-        background: rgba(15, 118, 110, 0.1);
-        border: 1px solid rgba(15, 118, 110, 0.25);
-        border-radius: 999px;
-        font-size: 0.8rem;
-        font-weight: 700;
-        color: var(--fg);
-    }
-
-    .matchup-ribbon i {
-        color: var(--accent);
-        font-size: 0.75rem;
-    }
-
-    .form-group {
-        background: var(--card-bg);
-        padding: 1.4rem 1.5rem 1.5rem;
-        border-radius: var(--border-radius);
-        border: 1px solid var(--card-border);
+    .ms-setting-copy {
         display: flex;
         flex-direction: column;
-        justify-content: flex-start;
-        height: 100%;
-        position: relative;
-        box-shadow: 0 12px 20px rgba(0, 0, 0, 0.06);
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        gap: 0.2rem;
+        min-width: 0;
+        flex: 1;
     }
 
-    .form-group:hover {
-        transform: translateY(-2px);
-        border-color: rgba(15, 118, 110, 0.3);
-        box-shadow: 0 16px 26px rgba(0, 0, 0, 0.08);
-    }
-
-    .condition-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 0.75rem;
-    }
-
-    .condition-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-        display: grid;
-        place-items: center;
-        background: rgba(15, 118, 110, 0.12);
-        color: var(--accent);
-        font-size: 1.1rem;
-    }
-
-    .condition-tag {
-        background: rgba(245, 158, 11, 0.12);
-        color: #b45309;
-        font-weight: 600;
-        font-size: 0.75rem;
-        padding: 0.25rem 0.6rem;
-        border-radius: 999px;
-    }
-
-    .form-label {
-        display: block;
-        margin-bottom: 0.5rem;
+    .ms-setting-label {
         font-weight: 600;
         color: var(--fg);
+        font-size: 0.92rem;
     }
 
-    .helper-text {
-        font-size: 0.85rem;
+    .ms-setting-hint {
+        font-size: 0.78rem;
         color: var(--fg-secondary);
-        margin-top: 0.6rem;
+        line-height: 1.4;
     }
 
-    .mode-toggle-row {
+    .ms-mode-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin-top: 0.3rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--brand-primary, var(--accent));
+        opacity: 0.85;
+        text-decoration: none;
+        transition: opacity 0.2s;
+        width: fit-content;
+    }
+
+    .ms-mode-link:hover { opacity: 1; }
+    .ms-mode-link i:last-child { font-size: 0.55rem; }
+
+    .ms-setting-control {
+        flex-shrink: 0;
+        width: 220px;
+        max-width: 46%;
+        padding: 0.6rem 0.75rem;
+        border-radius: var(--radius-sm, 8px);
+        border: 1px solid var(--card-border);
+        background: var(--bg);
+        color: var(--fg);
+        font-size: 0.85rem;
+    }
+
+    .ms-setting-control.ms-readonly { opacity: 0.75; cursor: default; }
+
+    @media (max-width: 640px) {
+        .ms-setting-row { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+        .ms-setting-control { width: 100%; max-width: none; }
+    }
+
+    select, input[type="text"] {
+        font-family: inherit;
+    }
+
+    /* Toss radios */
+    .radio-group { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+    .radio-label {
+        cursor: pointer;
+        padding: 0.55rem 0.9rem;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-sm, 8px);
+        text-align: center;
+        transition: var(--transition);
+        background: var(--bg);
         display: flex;
         align-items: center;
-        justify-content: center;
-        gap: 0.75rem;
-        margin-top: 0.2rem;
+        gap: 0.4rem;
+        font-weight: 600;
+        font-size: 0.82rem;
+        white-space: nowrap;
     }
 
-    .mode-pill {
-        font-size: 0.8rem;
-        font-weight: 700;
-        color: var(--fg-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+    .radio-label:hover { border-color: var(--brand-primary, var(--accent)); }
+
+    input[type="radio"] { display: none; }
+
+    input[type="radio"]:checked + .radio-label {
+        background: var(--brand-gradient, var(--gradient));
+        color: var(--text-on-accent, #fff);
+        border-color: transparent;
+        box-shadow: var(--shadow-glow, none);
     }
 
+    /* Mode toggle switch */
     .mode-toggle-switch {
         position: relative;
-        width: 52px;
-        height: 28px;
+        width: 46px;
+        height: 26px;
+        flex-shrink: 0;
         display: inline-block;
     }
 
-    .mode-toggle-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
+    .mode-toggle-switch input { opacity: 0; width: 0; height: 0; }
 
     .mode-toggle-slider {
         position: absolute;
@@ -395,368 +486,270 @@
     .mode-toggle-slider::before {
         content: "";
         position: absolute;
-        width: 22px;
-        height: 22px;
-        left: 2px;
-        top: 2px;
+        width: 18px; height: 18px;
+        left: 3px; top: 3px;
         border-radius: 50%;
-        background: var(--accent);
+        background: var(--fg-secondary);
         transition: 0.2s ease;
     }
 
     .mode-toggle-switch input:checked + .mode-toggle-slider {
-        background: rgba(15, 118, 110, 0.15);
-        border-color: rgba(15, 118, 110, 0.4);
+        background: var(--brand-gradient, var(--accent));
+        border-color: transparent;
     }
 
     .mode-toggle-switch input:checked + .mode-toggle-slider::before {
-        transform: translateX(24px);
+        transform: translateX(20px);
+        background: var(--text-on-accent, #fff);
     }
 
-    /* Team card format availability badges */
-    .team-format-badges {
-        display: flex;
-        gap: 4px;
-        flex-wrap: wrap;
-        margin-top: 5px;
+    .mode-toggle-switch input:focus-visible + .mode-toggle-slider {
+        outline: 2px solid var(--brand-primary, var(--accent));
+        outline-offset: 2px;
     }
 
-    .fmt-badge {
-        font-size: 0.62rem;
-        font-weight: 700;
-        padding: 1px 6px;
-        border-radius: 4px;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        opacity: 0.7;
-        transition: opacity 0.2s;
-    }
-
-    .fmt-badge.fmt-t20        { background: rgba(16, 185, 129, 0.18); color: #10b981; }
-    .fmt-badge.fmt-lista      { background: rgba(59, 130, 246, 0.18); color: #3b82f6; }
-    .fmt-badge.fmt-firstclass { background: rgba(139, 92, 246, 0.18); color: #8b5cf6; }
-
-    /* Highlight the badge for the currently selected format */
-    .fmt-badge.fmt-active { opacity: 1; box-shadow: 0 0 0 1px currentColor; }
-
-    /* Disabled team card — has no squad for the selected format */
-    .team-card.no-squad-for-format {
-        opacity: 0.45;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-
-    .team-card.no-squad-for-format::after {
-        content: 'No ' attr(data-no-squad-label) ' squad';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(239, 68, 68, 0.88);
-        color: #fff;
-        font-size: 0.72rem;
-        font-weight: 700;
-        padding: 4px 12px;
-        border-radius: 20px;
-        white-space: nowrap;
-        pointer-events: none;
-        z-index: 2;
-    }
-
-    /* Locked format display for tournament matches */
-    .format-locked-display {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.38rem 0.75rem;
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: 8px;
-        margin: 0.4rem 0 0.2rem;
-        font-size: 0.78rem;
-    }
-
-    .format-locked-display i {
-        color: var(--fg-secondary);
-        font-size: 0.7rem;
-    }
-
-    .format-locked-name {
-        font-weight: 700;
-        color: var(--accent);
-    }
-
-    .format-locked-hint {
-        color: var(--fg-secondary);
-        font-size: 0.72rem;
-    }
-
-    /* Match format segmented control */
+    /* Format selector (segmented control) */
     .format-selector {
         display: flex;
         border: 1px solid var(--card-border);
-        border-radius: 8px;
+        border-radius: var(--radius-sm, 8px);
         overflow: hidden;
-        margin: 0.4rem 0 0.2rem;
+        flex-shrink: 0;
     }
 
-    .format-option {
-        flex: 1;
-        cursor: pointer;
-        margin: 0;
-    }
+    .format-option { cursor: pointer; margin: 0; }
 
-    .format-option input[type="radio"] {
-        position: absolute;
-        opacity: 0;
-        width: 0;
-        height: 0;
-        pointer-events: none;
-    }
+    .format-option input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
 
     .format-option span {
         display: block;
-        padding: 0.38rem 0.4rem;
+        padding: 0.5rem 0.9rem;
         text-align: center;
-        font-size: 0.78rem;
-        font-weight: 600;
+        font-size: 0.8rem;
+        font-weight: 700;
         color: var(--fg-secondary);
-        background: var(--card-bg);
+        background: var(--bg);
         border-right: 1px solid var(--card-border);
         transition: background 0.18s, color 0.18s;
         white-space: nowrap;
         user-select: none;
     }
 
-    .format-option:last-child span {
-        border-right: none;
-    }
+    .format-option:last-child span { border-right: none; }
 
     .format-option input[type="radio"]:checked + span {
-        background: var(--accent);
-        color: #fff;
+        background: var(--brand-gradient, var(--accent));
+        color: var(--text-on-accent, #fff);
     }
 
     .format-option input[type="radio"]:disabled + span {
-        opacity: 0.45;
+        opacity: 0.4;
         cursor: not-allowed;
-        background: var(--bg-secondary);
-        color: var(--fg-secondary);
     }
 
-    .format-option:hover span {
-        background: var(--accent-light);
-        color: var(--accent);
-    }
+    .format-option:hover span { color: var(--brand-primary, var(--accent)); }
 
-    .format-option input[type="radio"]:disabled + span:hover {
-        background: var(--bg-secondary);
-        color: var(--fg-secondary);
-    }
-
-    .conditions-summary {
-        background: linear-gradient(155deg, rgba(15, 118, 110, 0.13), rgba(15, 118, 110, 0.02) 55%);
-        border: 1px solid rgba(15, 118, 110, 0.25);
-        border-radius: var(--border-radius);
-        padding: 1.2rem 1.2rem;
-        box-shadow: 0 12px 22px rgba(0, 0, 0, 0.06);
-    }
-
-    .summary-title {
-        margin: 0;
-        font-size: 0.95rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--accent);
-        font-weight: 700;
-    }
-
-    .summary-meta {
-        margin-top: 0.35rem;
-        margin-bottom: 1rem;
-        color: var(--fg-secondary);
-        font-size: 0.82rem;
-    }
-
-    .summary-row {
-        display: flex;
-        justify-content: space-between;
+    .format-locked-display {
+        display: inline-flex;
         align-items: center;
-        gap: 0.75rem;
-        border-bottom: 1px dashed rgba(15, 118, 110, 0.3);
-        padding: 0.5rem 0;
-    }
-
-    .summary-row:last-child {
-        border-bottom: none;
-    }
-
-    .summary-label {
-        font-size: 0.78rem;
-        color: var(--fg-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        font-weight: 600;
-    }
-
-    .summary-value {
-        font-size: 0.88rem;
-        color: var(--fg);
-        font-weight: 700;
-        text-align: right;
-    }
-
-    select,
-    input[type="range"] {
-        width: 100%;
-        padding: 0.65rem 0.75rem;
-        border-radius: 10px;
-        border: 1px solid var(--card-border);
-        background: var(--bg);
-        color: var(--fg);
-    }
-
-    /* Custom Radio Buttons for Toss */
-    .radio-group {
-        display: flex;
-        gap: 1rem;
-    }
-
-    .radio-label {
-        flex: 1;
-        cursor: pointer;
-        padding: 0.85rem;
-        border: 1px solid transparent;
-        border-radius: 12px;
-        text-align: center;
-        transition: var(--transition);
-        background: var(--bg-secondary);
-        display: flex;
-        align-items: center;
-        justify-content: center;
         gap: 0.5rem;
-        font-weight: 600;
+        padding: 0.45rem 0.85rem;
+        background: var(--bg);
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-sm, 8px);
+        font-size: 0.78rem;
+        flex-shrink: 0;
     }
 
-    .radio-label:hover {
-        background: rgba(15, 118, 110, 0.12);
-        border-color: rgba(15, 118, 110, 0.35);
-    }
+    .format-locked-display i { color: var(--fg-secondary); font-size: 0.7rem; }
+    .format-locked-name { font-weight: 700; color: var(--brand-primary, var(--accent)); }
+    .format-locked-hint { color: var(--fg-secondary); font-size: 0.7rem; }
 
-    input[type="radio"]:checked+.radio-label {
-        background: var(--brand-gradient);
-        color: var(--text-on-accent);
-        border-color: transparent;
-        box-shadow: var(--shadow-glow);
-    }
-
-    input[type="radio"] {
-        display: none;
-    }
-
-    @media (max-width: 1050px) {
-        .conditions-layout {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    @media (max-width: 768px) {
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    /* Squad Section */
+    /* ─── Step 3: Squads ─────────────────────────────────────── */
     .squad-layout {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 1.5rem;
-        height: 600px;
+        gap: 1.25rem;
+    }
+
+    @media (max-width: 900px) {
+        .squad-layout { grid-template-columns: 1fr; }
     }
 
     .team-pane {
-        background: var(--card-bg);
+        background: var(--bg-surface, var(--bg-secondary));
         border: 1px solid var(--card-border);
-        border-radius: var(--border-radius);
+        border-radius: var(--radius-md, 12px);
         display: flex;
         flex-direction: column;
         overflow: hidden;
     }
 
     .team-pane-header {
-        padding: 1rem;
+        padding: 0.85rem 1rem;
         background: var(--bg);
         border-bottom: 1px solid var(--card-border);
-        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .team-pane-name {
         font-weight: 700;
-        color: var(--accent);
+        color: var(--fg);
+        font-size: 0.92rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .team-pane-counts { display: flex; gap: 0.4rem; flex-shrink: 0; }
+
+    .ms-count-chip {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: var(--radius-full, 999px);
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        color: var(--fg-secondary);
     }
 
     .drop-zones {
-        flex: 1;
-        overflow-y: auto;
-        padding: 1rem;
+        padding: 0.9rem;
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.9rem;
+        max-height: 560px;
+        overflow-y: auto;
     }
 
     .zone-header {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.06em;
+        font-weight: 700;
         color: var(--fg-secondary);
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.4rem;
         display: flex;
-        justify-content: space-between;
+        align-items: center;
+        gap: 0.4rem;
     }
 
+    .zone-header i { font-size: 0.68rem; opacity: 0.8; }
+
     .drop-zone {
-        background: var(--bg);
+        background: var(--card-bg);
         border: 2px dashed var(--card-border);
-        border-radius: 8px;
-        padding: 0.5rem;
-        min-height: 100px;
+        border-radius: var(--radius-sm, 8px);
+        padding: 0.4rem;
+        min-height: 64px;
         transition: var(--transition);
     }
 
+    .drop-zone.reserve-zone { opacity: 0.65; }
+
     .drop-zone.active {
-        border-color: var(--accent);
+        border-color: var(--brand-primary, var(--accent));
         background: var(--accent-light);
+        border-style: solid;
     }
 
+    #home-selected, #away-selected { counter-reset: xi-slot; }
+
     .player-pill {
-        background: var(--card-bg);
+        background: var(--bg-surface, var(--bg-secondary));
         border: 1px solid var(--card-border);
-        padding: 0.5rem 0.75rem;
-        margin-bottom: 0.5rem;
-        border-radius: 6px;
+        padding: 0.5rem 0.7rem;
+        margin-bottom: 0.4rem;
+        border-radius: var(--radius-sm, 8px);
         font-size: 0.85rem;
         cursor: grab;
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        gap: 0.55rem;
         box-shadow: 0 1px 2px var(--shadow);
+        position: relative;
     }
 
-    .player-pill:active {
-        cursor: grabbing;
-        box-shadow: none;
+    .player-pill:last-child { margin-bottom: 0; }
+    .player-pill:active { cursor: grabbing; }
+    .player-pill.dragging { opacity: 0.4; }
+
+    .player-pill:focus-visible {
+        outline: 2px solid var(--brand-primary, var(--accent));
+        outline-offset: 1px;
     }
 
-    .player-pill.dragging {
-        opacity: 0.5;
-    }
+    #home-selected .player-pill, #away-selected .player-pill { padding-left: 2.1rem; }
 
-    .role-icon {
-        width: 20px;
-        text-align: center;
-        display: inline-block;
-        margin-right: 5px;
+    #home-selected .player-pill::before, #away-selected .player-pill::before {
+        counter-increment: xi-slot;
+        content: counter(xi-slot);
+        position: absolute;
+        left: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-family: var(--font-mono);
+        font-size: 0.65rem;
+        font-weight: 700;
         color: var(--fg-secondary);
+        width: 1.2rem;
+        height: 1.2rem;
+        border-radius: 50%;
+        background: var(--bg);
+        border: 1px solid var(--card-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
     }
 
-    /* Controls */
+    .role-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        padding: 2px 5px;
+        border-radius: 5px;
+        font-family: var(--font-mono);
+        font-size: 0.6rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        flex-shrink: 0;
+    }
+
+    .role-chip.role-bat  { background: rgba(245, 158, 11, 0.16); color: #f59e0b; }
+    .role-chip.role-bowl { background: rgba(15, 118, 110, 0.18); color: var(--brand-primary, #0f766e); }
+    .role-chip.role-ar   { background: rgba(139, 92, 246, 0.16); color: #8b5cf6; }
+    .role-chip.role-wk   { background: rgba(236, 72, 153, 0.16); color: #ec4899; }
+
+    .player-pill-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .bowl-toggle {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.7rem;
+        color: var(--fg-secondary);
+        cursor: pointer;
+        flex-shrink: 0;
+        user-select: none;
+    }
+
+    .bowl-check { accent-color: var(--brand-primary, var(--accent)); width: 14px; height: 14px; cursor: pointer; }
+
+    .role-icon { display: none; }
+
+    /* ─── Controls ───────────────────────────────────────────── */
     .wizard-controls {
         display: flex;
         justify-content: space-between;
@@ -766,236 +759,336 @@
     }
 
     .btn {
-        padding: 0.75rem 1.5rem;
-        border-radius: 8px;
-        font-weight: 600;
+        padding: 0.7rem 1.4rem;
+        border-radius: var(--radius-sm, 8px);
+        font-weight: 700;
+        font-size: 0.88rem;
         border: none;
+        cursor: pointer;
         transition: var(--transition);
         display: flex;
         align-items: center;
         gap: 0.5rem;
     }
 
+    .btn:focus-visible { outline: 2px solid var(--brand-primary, var(--accent)); outline-offset: 2px; }
+
     .btn-secondary {
-        background: var(--bg-secondary);
+        background: var(--bg);
         color: var(--fg);
         border: 1px solid var(--card-border);
     }
 
-    .btn-secondary:hover {
-        background: var(--card-border);
-    }
+    .btn-secondary:hover:not(:disabled) { background: var(--card-border); }
+    .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .btn-primary {
-        background: var(--accent);
-        color: white;
+        background: var(--brand-gradient, var(--accent));
+        color: var(--text-on-accent, #fff);
+        box-shadow: var(--shadow-glow, none);
     }
 
-    .btn-primary:hover {
-        background: var(--accent-hover);
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; transform: none; }
+
+    /* ─── Persistent Match Ticket sidebar ───────────────────────── */
+    .ms-ticket {
+        position: sticky;
+        top: calc(var(--nav-height, 72px) + 1rem);
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-lg, 16px);
+        padding: 1.4rem 1.4rem 1.6rem;
+        box-shadow: var(--shadow-sm, 0 10px 20px -12px rgba(15,23,42,.4));
+        overflow: hidden;
     }
 
-    .btn-primary:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+    .ms-ticket-eyebrow {
+        font-family: var(--font-mono);
+        font-size: 0.66rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--fg-secondary);
+        margin-bottom: 0.9rem;
     }
 
-    @media (max-width: 900px) {
-        .squad-layout {
-            grid-template-columns: 1fr;
-            height: auto;
-        }
+    .ms-ticket-teams {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 1rem;
+    }
 
-        .drop-zones {
-            max-height: 400px;
-        }
+    .ms-ticket-team {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .ms-ticket-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        font-weight: 800;
+        color: #fff;
+        background: var(--card-border);
+        text-transform: uppercase;
+    }
+
+    .ms-ticket-team-info { display: flex; flex-direction: column; min-width: 0; }
+
+    .ms-ticket-team-label {
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--fg-secondary);
+    }
+
+    .ms-ticket-team-name {
+        font-size: 0.83rem;
+        font-weight: 700;
+        color: var(--fg);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .ms-ticket-vs {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--fg-secondary);
+        flex-shrink: 0;
+    }
+
+    .ms-ticket-divider {
+        height: 1px;
+        background: var(--card-border);
+        margin: 1rem 0;
+        border: none;
+    }
+
+    .ms-ticket-rows { display: flex; flex-direction: column; }
+
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.75rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px dashed var(--card-border);
+    }
+
+    .summary-row:last-child { border-bottom: none; }
+
+    .summary-label {
+        font-size: 0.72rem;
+        color: var(--fg-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    .summary-value {
+        font-size: 0.82rem;
+        color: var(--fg);
+        font-weight: 700;
+        text-align: right;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ms-ticket-subtitle {
+        font-size: 0.66rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--fg-secondary);
+        margin-bottom: 0.7rem;
+    }
+
+    .ms-ticket-progress-row {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.7rem;
+    }
+
+    .ms-ticket-progress-row:last-child { margin-bottom: 0; }
+
+    .ms-ticket-progress-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--fg-secondary);
+        width: 62px;
+        flex-shrink: 0;
+    }
+
+    .ms-ticket-progress-track {
+        flex: 1;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--bg);
+        border: 1px solid var(--card-border);
+        overflow: hidden;
+    }
+
+    .ms-ticket-progress-fill {
+        height: 100%;
+        width: 0%;
+        background: var(--brand-gradient, var(--accent));
+        border-radius: 999px;
+        transition: width 0.25s var(--ease-elastic, ease);
+    }
+
+    .ms-ticket-progress-text {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--fg);
+        width: 36px;
+        text-align: right;
+        flex-shrink: 0;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="wizard-container">
-    <div class="wizard-progress">
-        <div class="step-item active" id="step-ind-1">
-            <div class="step-circle">1</div>
-            <div class="step-label">Teams</div>
+<div class="ms-shell">
+    <div class="ms-top">
+        <div class="ms-heading">
+            <span class="ms-eyebrow">Match Console</span>
+            <h1 class="ms-title">Set Up a New Match</h1>
         </div>
-        <div class="step-item" id="step-ind-2">
-            <div class="step-circle">2</div>
-            <div class="step-label">Match</div>
-        </div>
-        <div class="step-item" id="step-ind-3">
-            <div class="step-circle">3</div>
-            <div class="step-label">Squads</div>
+        <div class="ms-stepper" role="tablist" aria-label="Setup steps">
+            <div class="step-item active" id="step-ind-1">
+                <span class="step-circle">1</span>
+                <span class="step-label">Teams</span>
+            </div>
+            <div class="step-item" id="step-ind-2">
+                <span class="step-circle">2</span>
+                <span class="step-label">Match</span>
+            </div>
+            <div class="step-item" id="step-ind-3">
+                <span class="step-circle">3</span>
+                <span class="step-label">Squads</span>
+            </div>
         </div>
     </div>
 
-    <!-- STEP 1: TEAMS -->
-    <div class="wizard-step active" id="step-1">
-        <h2 style="text-align:center; margin-bottom: 2rem;">Select Teams</h2>
-        <div class="teams-grid">
-            {% for team in teams %}
-            <div class="team-card" data-team-color="{{ team.team_color }}" data-index="{{ loop.index0 }}">
-                <span class="color-dot" data-bg="{{ team.team_color }}">🏏</span>
-                <div class="team-info">
-                    <h3>{{ team.team_name }}</h3>
-                    <div class="team-meta">
-                        <i class="fas fa-map-marker-alt"></i>
-                        {{ team.home_ground }}
+    <div class="ms-body">
+        <div class="ms-main">
+            <!-- STEP 1: TEAMS -->
+            <div class="wizard-step active" id="step-1">
+                <div class="ms-step-header">
+                    <h2>Select Teams</h2>
+                    <p class="ms-step-sub">Pick two teams to face off. The first team you select bats/fields as Home.</p>
+                </div>
+
+                {% if not teams %}
+                <div class="ms-empty-state">
+                    <i class="fa-solid fa-people-group"></i>
+                    <p>You don't have any teams yet.</p>
+                    <a href="{{ url_for('create_team') }}" class="btn btn-primary" style="display:inline-flex;">
+                        <i class="fa-solid fa-plus"></i> Create a team
+                    </a>
+                </div>
+                {% else %}
+                <div class="teams-grid">
+                    {% for team in teams %}
+                    <div class="team-card" data-team-color="{{ team.team_color }}" data-index="{{ loop.index0 }}" tabindex="0" role="button" aria-pressed="false" aria-label="Select {{ team.team_name }}">
+                        <span class="color-dot" data-bg="{{ team.team_color }}">{{ team.short_code }}</span>
+                        <div class="team-info">
+                            <h3>{{ team.team_name }}</h3>
+                            <div class="team-meta">
+                                <i class="fa-solid fa-location-dot"></i>
+                                {{ team.home_ground }}
+                            </div>
+                            <div class="team-format-badges">
+                                {% for fmt in team.available_formats %}
+                                <span class="fmt-badge fmt-{{ fmt | lower }}" data-fmt="{{ fmt }}">
+                                    {%- if fmt == 'ListA' -%}List A
+                                    {%- else -%}{{ fmt }}
+                                    {%- endif -%}
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
-                    <div class="team-format-badges">
-                        {% for fmt in team.available_formats %}
-                        <span class="fmt-badge fmt-{{ fmt | lower }}" data-fmt="{{ fmt }}">
-                            {%- if fmt == 'ListA' -%}List A
-                            {%- else -%}{{ fmt }}
-                            {%- endif -%}
-                        </span>
-                        {% endfor %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- STEP 2: CONDITIONS -->
+            <div class="wizard-step" id="step-2">
+                <div class="ms-step-header">
+                    <h2>Match Conditions</h2>
+                    <p class="ms-step-sub">Dial in the venue, pitch, and rules before you build the XIs.</p>
+                </div>
+
+                <div class="ms-settings-group">
+                    <h3 class="ms-group-title"><i class="fa-solid fa-map-location-dot"></i> Venue &amp; Pitch</h3>
+
+                    <div class="ms-setting-row">
+                        <div class="ms-setting-copy">
+                            <label class="ms-setting-label" for="venue-display">Host Venue</label>
+                            <span class="ms-setting-hint">Auto-filled from the selected home team.</span>
+                        </div>
+                        <input type="text" id="venue-display" readonly class="ms-setting-control ms-readonly">
+                    </div>
+
+                    <div class="ms-setting-row">
+                        <div class="ms-setting-copy">
+                            <label class="ms-setting-label" for="pitch-select">Pitch Condition</label>
+                            <span class="ms-setting-hint">Team balance and outcomes adapt to the surface profile.</span>
+                            <a href="/ground-conditions" target="_blank" class="ms-mode-link">
+                                <i class="fa-solid fa-gamepad"></i>
+                                <span id="gameModeLabel">Mode: {{ active_game_mode_label | default('Natural Game') }}</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </a>
+                        </div>
+                        <select id="pitch-select" class="ms-setting-control"></select>
                     </div>
                 </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
 
-    <!-- STEP 2: CONDITIONS -->
-    <div class="wizard-step" id="step-2">
-        <div class="conditions-panel">
-            <div class="conditions-header">
-                <div>
-                    <h2 class="conditions-title">Match Conditions</h2>
-                    <p class="conditions-subtitle">Finalize the venue atmosphere and the toss setup.</p>
-                    <div class="matchup-ribbon">
-                        <span id="summary-home-team">Home</span>
-                        <i class="fas fa-bolt"></i>
-                        <span id="summary-away-team">Away</span>
-                    </div>
-                </div>
-                <div class="condition-tag">Step 2 of 3</div>
-            </div>
+                <div class="ms-settings-group">
+                    <h3 class="ms-group-title"><i class="fa-solid fa-coins"></i> Toss &amp; Format</h3>
 
-            <div class="conditions-layout">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <div class="condition-header">
-                            <div class="condition-icon"><i class="fas fa-location-dot"></i></div>
-                            <span class="condition-tag">Auto-set</span>
+                    <div class="ms-setting-row">
+                        <div class="ms-setting-copy">
+                            <span class="ms-setting-label">Toss Winner Choice</span>
+                            <span class="ms-setting-hint" id="toss-context">Away Team calls the toss</span>
                         </div>
-                        <label class="form-label">Host Venue</label>
-                        <input type="text" id="venue-display" readonly style="opacity: 0.8;">
-                        <p class="helper-text">Auto-filled from the selected home team.</p>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="condition-header">
-                            <div class="condition-icon"><i class="fas fa-mountain-sun"></i></div>
-                            <span class="condition-tag">Strategy</span>
-                        </div>
-                        <label class="form-label">Pitch Condition</label>
-                        <select id="pitch-select">
-                            <!-- Populated via JS -->
-                        </select>
-                        <p class="helper-text">Team balance and outcomes adapt to surface profile.</p>
-                        <a href="/ground-conditions" target="_blank"
-                           style="display:inline-flex;align-items:center;gap:0.35rem;margin-top:0.4rem;
-                                  font-size:0.72rem;font-weight:600;color:var(--accent);opacity:0.8;
-                                  text-decoration:none;transition:opacity 0.2s;"
-                           onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
-                            <i class="fa-solid fa-gamepad" style="font-size:0.65rem;"></i>
-                            <span id="gameModeLabel">Mode: {{ active_game_mode_label | default('Natural Game') }}</span>
-                            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.55rem;"></i>
-                        </a>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="condition-header">
-                            <div class="condition-icon"><i class="fas fa-coins"></i></div>
-                            <span class="condition-tag">Call</span>
-                        </div>
-                        <label class="form-label">Toss Winner Choice</label>
                         <div class="radio-group">
                             <label>
                                 <input type="radio" name="toss" value="Heads" checked>
-                                <div class="radio-label">
-                                    <i class="fas fa-coins"></i> Heads
-                                </div>
+                                <div class="radio-label"><i class="fa-solid fa-coins"></i> Heads</div>
                             </label>
                             <label>
                                 <input type="radio" name="toss" value="Tails">
-                                <div class="radio-label">
-                                    <i class="fas fa-coins"></i> Tails
-                                </div>
+                                <div class="radio-label"><i class="fa-solid fa-coins"></i> Tails</div>
                             </label>
                         </div>
-                        <p id="toss-context" class="helper-text" style="text-align:center; color:var(--accent);">
-                            Away Team calls the toss
-                        </p>
                     </div>
 
-                    <div class="form-group">
-                        <div class="condition-header">
-                            <div class="condition-icon"><i class="fas fa-sliders"></i></div>
-                            <span class="condition-tag">Simulation</span>
+                    <div class="ms-setting-row">
+                        <div class="ms-setting-copy">
+                            <span class="ms-setting-label">Match Format</span>
+                            <span class="ms-setting-hint"><span id="format-help">20 overs per side. Max 4 overs per bowler.</span></span>
                         </div>
-                        <label class="form-label">Simulation Mode</label>
-                        <div class="mode-toggle-row">
-                            <span class="mode-pill">Auto</span>
-                            <label class="mode-toggle-switch" title="Toggle simulation mode">
-                                <input type="checkbox" id="simulation-mode-toggle">
-                                <span class="mode-toggle-slider"></span>
-                            </label>
-                            <span class="mode-pill">Manual</span>
-                        </div>
-                        <input type="hidden" id="simulation-mode-select" value="auto">
-                        <p class="helper-text"><span id="simulation-mode-help">Auto sim runs continuously.</span></p>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="condition-header">
-                            <div class="condition-icon"><i class="fas fa-film"></i></div>
-                            <span class="condition-tag">Drama</span>
-                        </div>
-                        <label class="form-label">Make Match Interesting</label>
-                        <div class="mode-toggle-row">
-                            <span class="mode-pill">Off</span>
-                            <label class="mode-toggle-switch" title="Toggle interesting match mode">
-                                <input type="checkbox" id="interesting-match-toggle">
-                                <span class="mode-toggle-slider"></span>
-                            </label>
-                            <span class="mode-pill">On</span>
-                        </div>
-                        <input type="hidden" id="interesting-match-flag" value="false">
-                        <p class="helper-text"><span id="interesting-match-help">Regular match flow.</span></p>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="condition-header">
-                            <div class="condition-icon"><i class="fas fa-landmark"></i></div>
-                            <span class="condition-tag">Story</span>
-                        </div>
-                        <label class="form-label" for="story-select">Story Mode</label>
-                        {# Disabled for now. The preselect is deliberately dropped as well:
-                           a disabled <select> still reports a selected value, so
-                           /match/setup?story=<id> would otherwise post a story_id and
-                           start a story match anyway. Restore `selected` with the
-                           `disabled` attribute to re-enable. #}
-                        <select id="story-select" disabled>
-                            <option value="" selected>Unavailable — stories are switched off</option>
-                            {% for sp in story_packs %}
-                            <option value="{{ sp.id }}" data-format="{{ sp.format }}">
-                                {{ sp.title }} ({{ sp.format }})
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <p class="helper-text"><span id="story-help">Story Mode is temporarily unavailable — this match will play out normally.</span></p>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="condition-header">
-                            <div class="condition-icon"><i class="fas fa-cricket-bat-ball"></i></div>
-                            <span class="condition-tag">Format</span>
-                        </div>
-                        <label class="form-label">Match Format</label>
                         {% if tournament_format %}
                         {# Format is locked to the tournament's setting — cannot be changed #}
                         <div class="format-locked-display">
@@ -1019,152 +1112,231 @@
                         </div>
                         <input type="hidden" id="match-format-value" value="T20">
                         {% endif %}
-                        <p class="helper-text"><span id="format-help">20 overs per side. Max 4 overs per bowler.</span></p>
+                    </div>
+                </div>
+
+                <div class="ms-settings-group">
+                    <h3 class="ms-group-title"><i class="fa-solid fa-sliders"></i> Simulation &amp; Extras</h3>
+
+                    <div class="ms-setting-row">
+                        <div class="ms-setting-copy">
+                            <label class="ms-setting-label" for="simulation-mode-toggle">Simulation Mode</label>
+                            <span class="ms-setting-hint"><span id="simulation-mode-help">Auto sim runs continuously.</span></span>
+                        </div>
+                        <label class="mode-toggle-switch" title="Toggle simulation mode">
+                            <input type="checkbox" id="simulation-mode-toggle">
+                            <span class="mode-toggle-slider"></span>
+                        </label>
+                        <input type="hidden" id="simulation-mode-select" value="auto">
                     </div>
 
-                    <div class="form-group">
-                        <div class="condition-header">
-                            <div class="condition-icon"><i class="fas fa-moon"></i></div>
-                            <span class="condition-tag">D/N</span>
+                    <div class="ms-setting-row">
+                        <div class="ms-setting-copy">
+                            <label class="ms-setting-label" for="interesting-match-toggle">Make Match Interesting</label>
+                            <span class="ms-setting-hint"><span id="interesting-match-help">Regular match flow.</span></span>
                         </div>
-                        <label class="form-label">Day / Night Match</label>
-                        <div class="mode-toggle-row">
-                            <span class="mode-pill">Day</span>
-                            <label class="mode-toggle-switch" title="Toggle day/night">
-                                <input type="checkbox" id="day-night-toggle">
-                                <span class="mode-toggle-slider"></span>
-                            </label>
-                            <span class="mode-pill">D/N</span>
+                        <label class="mode-toggle-switch" title="Toggle interesting match mode">
+                            <input type="checkbox" id="interesting-match-toggle">
+                            <span class="mode-toggle-slider"></span>
+                        </label>
+                        <input type="hidden" id="interesting-match-flag" value="false">
+                    </div>
+
+                    <div class="ms-setting-row">
+                        <div class="ms-setting-copy">
+                            <label class="ms-setting-label" for="story-select">Story Mode</label>
+                            <span class="ms-setting-hint"><span id="story-help">Story Mode is temporarily unavailable — this match will play out normally.</span></span>
                         </div>
+                        {# Disabled for now. The preselect is deliberately dropped as well:
+                           a disabled <select> still reports a selected value, so
+                           /match/setup?story=<id> would otherwise post a story_id and
+                           start a story match anyway. Restore `selected` with the
+                           `disabled` attribute to re-enable. #}
+                        <select id="story-select" disabled class="ms-setting-control">
+                            <option value="" selected>Unavailable — stories are switched off</option>
+                            {% for sp in story_packs %}
+                            <option value="{{ sp.id }}" data-format="{{ sp.format }}">
+                                {{ sp.title }} ({{ sp.format }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="ms-setting-row">
+                        <div class="ms-setting-copy">
+                            <label class="ms-setting-label" for="day-night-toggle">Day / Night Match</label>
+                            <span class="ms-setting-hint"><span id="day-night-help">Day match — no dew effect.</span></span>
+                        </div>
+                        <label class="mode-toggle-switch" title="Toggle day/night">
+                            <input type="checkbox" id="day-night-toggle">
+                            <span class="mode-toggle-slider"></span>
+                        </label>
                         <input type="hidden" id="day-night-value" value="false">
-                        <p class="helper-text"><span id="day-night-help">Day match — no dew effect.</span></p>
                     </div>
 
-                    <div class="form-group">
-                        <div class="condition-header">
-                            <div class="condition-icon"><i class="fas fa-cloud-showers-heavy"></i></div>
-                            <span class="condition-tag">Weather</span>
+                    <div class="ms-setting-row">
+                        <div class="ms-setting-copy">
+                            <label class="ms-setting-label" for="weather-forecast-select">Weather Forecast</label>
+                            <span class="ms-setting-hint"><span id="weather-help">No rain. Every over will be bowled.</span></span>
                         </div>
-                        <label class="form-label" for="weather-forecast-select">Weather Forecast</label>
-                        <select id="weather-forecast-select">
+                        <select id="weather-forecast-select" class="ms-setting-control">
                             <option value="clear" selected>Clear skies</option>
                             <option value="passing_showers">Passing showers</option>
                             <option value="rain_around">Rain around</option>
                             <option value="storm_warning">Storm warning</option>
                         </select>
-                        <p class="helper-text"><span id="weather-help">No rain. Every over will be bowled.</span></p>
                     </div>
                 </div>
+            </div>
 
-                <aside class="conditions-summary" aria-label="Match Summary">
-                    <h3 class="summary-title">Quick Summary</h3>
-                    <p class="summary-meta">Review before moving to squad selection.</p>
-                    <div class="summary-row">
-                        <span class="summary-label">Venue</span>
-                        <span class="summary-value" id="summary-venue">-</span>
+            <!-- STEP 3: SQUADS -->
+            <div class="wizard-step" id="step-3">
+                <div class="ms-step-header">
+                    <h2>Finalize Playing XIs</h2>
+                    <p class="ms-step-sub">
+                        Drag players to organize the lineup, double-click to add to Playing XI, double right-click to send to Bench, or press Enter to cycle zones. Ensure 5 bowlers + 1 Keeper per side.
+                    </p>
+                </div>
+
+                <div class="squad-layout" role="region" aria-label="Squad selection">
+                    <!-- HOME TEAM -->
+                    <div class="team-pane" id="home-pane" role="group" aria-label="Home team squad">
+                        <div class="team-pane-header">
+                            <span class="team-pane-name" id="home-name">Home Team</span>
+                            <div class="team-pane-counts">
+                                <span class="ms-count-chip" id="home-xi-count">0/11</span>
+                                <span class="ms-count-chip" id="home-sub-count">0/5</span>
+                            </div>
+                        </div>
+                        <div class="drop-zones">
+                            <div>
+                                <div class="zone-header"><i class="fa-solid fa-list-ol"></i> Playing XI</div>
+                                <div class="drop-zone" id="home-selected" role="listbox" aria-label="Home Playing XI"></div>
+                            </div>
+                            <div>
+                                <div class="zone-header"><i class="fa-solid fa-user-clock"></i> Bench</div>
+                                <div class="drop-zone" id="home-substitutes" role="listbox" aria-label="Home Bench"></div>
+                            </div>
+                            <div>
+                                <div class="zone-header"><i class="fa-solid fa-boxes-stacked"></i> Reserve</div>
+                                <div class="drop-zone reserve-zone" id="home-available" role="listbox" aria-label="Home Reserve"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Pitch</span>
-                        <span class="summary-value" id="summary-pitch">-</span>
+
+                    <!-- AWAY TEAM -->
+                    <div class="team-pane" id="away-pane" role="group" aria-label="Away team squad">
+                        <div class="team-pane-header">
+                            <span class="team-pane-name" id="away-name">Away Team</span>
+                            <div class="team-pane-counts">
+                                <span class="ms-count-chip" id="away-xi-count">0/11</span>
+                                <span class="ms-count-chip" id="away-sub-count">0/5</span>
+                            </div>
+                        </div>
+                        <div class="drop-zones">
+                            <div>
+                                <div class="zone-header"><i class="fa-solid fa-list-ol"></i> Playing XI</div>
+                                <div class="drop-zone" id="away-selected" role="listbox" aria-label="Away Playing XI"></div>
+                            </div>
+                            <div>
+                                <div class="zone-header"><i class="fa-solid fa-user-clock"></i> Bench</div>
+                                <div class="drop-zone" id="away-substitutes" role="listbox" aria-label="Away Bench"></div>
+                            </div>
+                            <div>
+                                <div class="zone-header"><i class="fa-solid fa-boxes-stacked"></i> Reserve</div>
+                                <div class="drop-zone reserve-zone" id="away-available" role="listbox" aria-label="Away Reserve"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Toss Call</span>
-                        <span class="summary-value" id="summary-toss">-</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Mode</span>
-                        <span class="summary-value" id="summary-mode">Auto</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Scenario</span>
-                        <span class="summary-value" id="summary-scenario">Disabled</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Format</span>
-                        <span class="summary-value" id="summary-format">T20</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">D/N</span>
-                        <span class="summary-value" id="summary-day-night">Day</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Weather</span>
-                        <span class="summary-value" id="summary-weather">Clear skies</span>
-                    </div>
-                </aside>
+                </div>
+                <div aria-live="polite" id="squad-announce" class="sr-only"></div>
+            </div>
+
+            <!-- CONTROLS -->
+            <div class="wizard-controls">
+                <button class="btn btn-secondary" id="back-btn" onclick="prevStep()">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
+                <button class="btn btn-primary" id="next-btn" onclick="nextStep()" disabled>
+                    Next <i class="fas fa-arrow-right"></i>
+                </button>
             </div>
         </div>
-    </div>
 
-    <!-- STEP 3: SQUADS -->
-    <div class="wizard-step" id="step-3">
-        <h2 style="text-align:center; margin-bottom: 0.5rem;">Finalize Playing XIs</h2>
-        <p style="text-align:center; color:var(--fg-secondary); margin-bottom:1.5rem;">
-            Drag players to organize the lineup, double-click to add to Playing XI, double right-click to send to Bench, or press Enter to cycle zones. Ensure 5 bowlers + 1 Keeper per side.
-        </p>
+        <!-- PERSISTENT MATCH TICKET -->
+        <aside class="ms-ticket" aria-label="Match preview">
+            <div class="ms-ticket-eyebrow">Match Ticket</div>
 
-        <div class="squad-layout" role="region" aria-label="Squad selection">
-            <!-- HOME TEAM -->
-            <div class="team-pane" id="home-pane" role="group" aria-label="Home team squad">
-                <div class="team-pane-header" id="home-name">Home Team</div>
-                <div class="drop-zones">
-                    <div>
-                        <div class="zone-header">
-                            <span>Playing XI</span>
-                            <span id="home-xi-count">0/11</span>
-                        </div>
-                        <div class="drop-zone" id="home-selected" role="listbox" aria-label="Home Playing XI"></div>
+            <div class="ms-ticket-teams">
+                <div class="ms-ticket-team">
+                    <span class="ms-ticket-avatar" id="ticket-home-avatar">H</span>
+                    <div class="ms-ticket-team-info">
+                        <span class="ms-ticket-team-label">Home</span>
+                        <span class="ms-ticket-team-name" id="summary-home-team">Select a team</span>
                     </div>
-                    <div>
-                        <div class="zone-header">
-                            <span>Bench</span>
-                            <span id="home-sub-count">0/5</span>
-                        </div>
-                        <div class="drop-zone" id="home-substitutes" role="listbox" aria-label="Home Bench"></div>
-                    </div>
-                    <div>
-                        <div class="zone-header">Reserve</div>
-                        <div class="drop-zone" id="home-available" role="listbox" aria-label="Home Reserve" style="opacity:0.6;"></div>
+                </div>
+                <span class="ms-ticket-vs">VS</span>
+                <div class="ms-ticket-team">
+                    <span class="ms-ticket-avatar" id="ticket-away-avatar">A</span>
+                    <div class="ms-ticket-team-info">
+                        <span class="ms-ticket-team-label">Away</span>
+                        <span class="ms-ticket-team-name" id="summary-away-team">Select a team</span>
                     </div>
                 </div>
             </div>
 
-            <!-- AWAY TEAM -->
-            <div class="team-pane" id="away-pane" role="group" aria-label="Away team squad">
-                <div class="team-pane-header" id="away-name">Away Team</div>
-                <div class="drop-zones">
-                    <div>
-                        <div class="zone-header">
-                            <span>Playing XI</span>
-                            <span id="away-xi-count">0/11</span>
-                        </div>
-                        <div class="drop-zone" id="away-selected" role="listbox" aria-label="Away Playing XI"></div>
-                    </div>
-                    <div>
-                        <div class="zone-header">
-                            <span>Bench</span>
-                            <span id="away-sub-count">0/5</span>
-                        </div>
-                        <div class="drop-zone" id="away-substitutes" role="listbox" aria-label="Away Bench"></div>
-                    </div>
-                    <div>
-                        <div class="zone-header">Reserve</div>
-                        <div class="drop-zone" id="away-available" role="listbox" aria-label="Away Reserve" style="opacity:0.6;"></div>
-                    </div>
+            <hr class="ms-ticket-divider">
+
+            <div class="ms-ticket-rows">
+                <div class="summary-row">
+                    <span class="summary-label">Venue</span>
+                    <span class="summary-value" id="summary-venue">-</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Pitch</span>
+                    <span class="summary-value" id="summary-pitch">-</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Toss Call</span>
+                    <span class="summary-value" id="summary-toss">-</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Mode</span>
+                    <span class="summary-value" id="summary-mode">Auto</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Scenario</span>
+                    <span class="summary-value" id="summary-scenario">Disabled</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Format</span>
+                    <span class="summary-value" id="summary-format">T20</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">D/N</span>
+                    <span class="summary-value" id="summary-day-night">Day</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Weather</span>
+                    <span class="summary-value" id="summary-weather">Clear skies</span>
                 </div>
             </div>
-        </div>
-        <div aria-live="polite" id="squad-announce" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);"></div>
-    </div>
 
-    <!-- CONTROLS -->
-    <div class="wizard-controls">
-        <button class="btn btn-secondary" id="back-btn" onclick="prevStep()">
-            <i class="fas fa-arrow-left"></i> Back
-        </button>
-        <button class="btn btn-primary" id="next-btn" onclick="nextStep()" disabled>
-            Next <i class="fas fa-arrow-right"></i>
-        </button>
+            <div id="ms-ticket-squads" hidden>
+                <hr class="ms-ticket-divider">
+                <div class="ms-ticket-subtitle">Squad Readiness</div>
+                <div class="ms-ticket-progress-row">
+                    <span class="ms-ticket-progress-label">Home XI</span>
+                    <div class="ms-ticket-progress-track"><div class="ms-ticket-progress-fill" id="ticket-home-xi-fill"></div></div>
+                    <span class="ms-ticket-progress-text" id="ticket-home-xi-text">0/11</span>
+                </div>
+                <div class="ms-ticket-progress-row">
+                    <span class="ms-ticket-progress-label">Away XI</span>
+                    <div class="ms-ticket-progress-track"><div class="ms-ticket-progress-fill" id="ticket-away-xi-fill"></div></div>
+                    <span class="ms-ticket-progress-text" id="ticket-away-xi-text">0/11</span>
+                </div>
+            </div>
+        </aside>
     </div>
 </div>
 {% endblock %}
@@ -1214,9 +1386,15 @@
             const dot = card.querySelector('.color-dot');
             if (dot) dot.style.background = dot.dataset.bg;
 
-            // Add click listener
+            // Add click + keyboard listeners
             card.addEventListener('click', function () {
                 toggleTeam(index, this);
+            });
+            card.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleTeam(index, this);
+                }
             });
         });
 
@@ -1244,6 +1422,7 @@
                     selectedTeamIndices.push(awayIdx);
                     cards[awayIdx].classList.add('selected');
                 }
+                refreshTeamSelectionTags();
 
                 // Enable next button
                 const nextBtn = document.getElementById('next-btn');
@@ -1283,6 +1462,9 @@
             nextBtn.innerHTML = '<i class="fas fa-rocket"></i> Simulate';
             nextBtn.onclick = simulateMatch;
             validateSquads(); // Re-validate to set button state
+
+            const ticketSquads = document.getElementById('ms-ticket-squads');
+            if (ticketSquads) ticketSquads.hidden = false;
         } else {
             nextBtn.innerHTML = 'Next <i class="fas fa-arrow-right"></i>';
             nextBtn.onclick = nextStep;
@@ -1368,19 +1550,41 @@
         if (selectedTeamIndices.includes(index)) {
             selectedTeamIndices = selectedTeamIndices.filter(i => i !== index);
             cardEl.classList.remove('selected');
+            cardEl.setAttribute('aria-pressed', 'false');
         } else {
             if (selectedTeamIndices.length >= 2) {
                 // Remove first selected to maintain max 2 (Queue behavior for smoother UX)
                 const first = selectedTeamIndices.shift();
-                document.querySelectorAll('.team-card')[first].classList.remove('selected');
+                const firstCard = document.querySelectorAll('.team-card')[first];
+                firstCard.classList.remove('selected');
+                firstCard.setAttribute('aria-pressed', 'false');
             }
             selectedTeamIndices.push(index);
             cardEl.classList.add('selected');
+            cardEl.setAttribute('aria-pressed', 'true');
         }
 
         const nextBtn = document.getElementById('next-btn');
         nextBtn.disabled = selectedTeamIndices.length !== 2;
         refreshMatchFormatOptions();
+        refreshTeamSelectionTags();
+    }
+
+    /**
+     * Show a HOME/AWAY tag on selected team cards, matching the order used
+     * everywhere else (selectedTeamIndices[0] = home, [1] = away).
+     */
+    function refreshTeamSelectionTags() {
+        document.querySelectorAll('.team-role-tag').forEach(t => t.remove());
+        const cards = document.querySelectorAll('.team-card');
+        selectedTeamIndices.forEach((idx, order) => {
+            const card = cards[idx];
+            if (!card) return;
+            const tag = document.createElement('span');
+            tag.className = 'team-role-tag';
+            tag.textContent = order === 0 ? 'HOME' : 'AWAY';
+            card.appendChild(tag);
+        });
     }
 
     /**
@@ -1411,8 +1615,10 @@
                 if (selectedTeamIndices.includes(idx)) {
                     selectedTeamIndices = selectedTeamIndices.filter(i => i !== idx);
                     card.classList.remove('selected');
+                    card.setAttribute('aria-pressed', 'false');
                     const nextBtn = document.getElementById('next-btn');
                     if (nextBtn) nextBtn.disabled = selectedTeamIndices.length !== 2;
+                    refreshTeamSelectionTags();
                     Toast.show(
                         `${team.team_name} was deselected — no ${label} squad configured.`,
                         "warning"
@@ -1475,6 +1681,8 @@
         document.getElementById('toss-context').textContent = `${away.team_name} Calls the Toss`;
         document.getElementById('summary-home-team').textContent = home.team_name;
         document.getElementById('summary-away-team').textContent = away.team_name;
+        updateTicketAvatar('home', home);
+        updateTicketAvatar('away', away);
 
         // Populate pitch
         const pSel = document.getElementById('pitch-select');
@@ -1550,6 +1758,16 @@
         syncDayNightControl();
         syncWeatherControl();
         updateConditionsSummary();
+    }
+
+    /**
+     * Fill a Match Ticket avatar chip (initials + team color) for the given side.
+     */
+    function updateTicketAvatar(side, team) {
+        const avatar = document.getElementById(`ticket-${side}-avatar`);
+        if (!avatar || !team) return;
+        avatar.textContent = (team.short_code || team.team_name || '?').slice(0, 3).toUpperCase();
+        avatar.style.background = team.team_color || 'var(--brand-primary, #0f766e)';
     }
 
     function syncStoryControl() {
@@ -1826,6 +2044,13 @@
         });
     }
 
+    const ROLE_META = {
+        'Batsman':      { abbr: 'BAT',  cls: 'role-bat' },
+        'Bowler':       { abbr: 'BOWL', cls: 'role-bowl' },
+        'All-rounder':  { abbr: 'AR',   cls: 'role-ar' },
+        'Wicketkeeper': { abbr: 'WK',   cls: 'role-wk' },
+    };
+
     function createPlayerPill(player, side, willBowl = null) {
         const div = document.createElement('div');
         div.className = 'player-pill';
@@ -1837,17 +2062,18 @@
         div.dataset.role = player.role;
         div.dataset.side = side;
 
-        const iconMap = { 'Batsman': '🏏', 'Bowler': '🎳', 'Wicketkeeper': '🧤', 'All-rounder': '🏏' };
+        const meta = ROLE_META[player.role] || { abbr: '—', cls: '' };
 
         // Checkbox for bowlers
         const isBowler = ['Bowler', 'All-rounder'].includes(player.role);
         const bowlCheck = isBowler ?
-            `<label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-size:0.75rem;">
-        <input type="checkbox" class="bowl-check" ${willBowl === false ? '' : 'checked'} aria-label="Include ${player.name} as bowler"> Bowl
+            `<label class="bowl-toggle" title="Include ${player.name} in the bowling attack">
+        <input type="checkbox" class="bowl-check" ${willBowl === false ? '' : 'checked'} aria-label="Include ${player.name} as bowler"> Bowls
     </label>` : '';
 
         div.innerHTML = `
-    <span><span class="role-icon">${iconMap[player.role]}</span>${player.name}</span>
+    <span class="role-chip ${meta.cls}">${meta.abbr}</span>
+    <span class="player-pill-name">${player.name}</span>
     ${bowlCheck}
     `;
 
@@ -2056,6 +2282,21 @@
 
         const xiHeader = document.getElementById(`${side}-xi-count`);
         xiHeader.style.color = xi === 11 ? 'var(--success)' : 'var(--danger)';
+
+        syncTicketSquadProgress(side, xi);
+    }
+
+    /**
+     * Mirror a side's Playing XI count into the persistent Match Ticket
+     * sidebar's readiness bars.
+     */
+    function syncTicketSquadProgress(side, xiCount) {
+        const fill = document.getElementById(`ticket-${side}-xi-fill`);
+        const text = document.getElementById(`ticket-${side}-xi-text`);
+        if (!fill && !text) return;
+        const pct = Math.min(100, Math.max(0, (xiCount / 11) * 100));
+        if (fill) fill.style.width = `${pct}%`;
+        if (text) text.textContent = `${xiCount}/11`;
     }
 
     function validateSquads() {

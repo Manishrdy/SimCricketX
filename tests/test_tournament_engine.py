@@ -14,8 +14,11 @@ from database.models import (
     Tournament,
     TournamentTeam,
     TournamentFixture,
+    TournamentPlayerStatsCache,
     Team as DBTeam,
     Match as DBMatch,
+    MatchScorecard,
+    Player as DBPlayer,
 )
 from engine.tournament_engine import TournamentEngine
 
@@ -916,6 +919,61 @@ class TestUpdateStandingsUnresolvedKnockout:
         assert fixture.status == "Completed"
         assert fixture.winner_team_id == fixture.home_team_id
         assert fixture.standings_applied is True
+
+
+class TestCleanupFixtureMatchDataCacheRebuild:
+    """
+    Regression test for the OTHER cleanup path: downstream knockout/IPL
+    bracket resets go through _cleanup_fixture_match_data (not the route's
+    _cleanup_match_artifacts), which has its own separate wiring for
+    rebuilding TournamentPlayerStatsCache after reversal. Verified
+    directly since it's easy for the two cleanup paths to drift.
+    """
+
+    def test_cleanup_fixture_match_data_rebuilds_player_cache(
+        self, app, engine, regular_user, four_teams
+    ):
+        t = engine.create_tournament(
+            name="Cache Rebuild Check", user_id=regular_user.id,
+            team_ids=[tm.id for tm in four_teams], mode="knockout",
+        )
+        fixture = TournamentFixture.query.filter_by(
+            tournament_id=t.id, round_number=1
+        ).first()
+
+        batter = DBPlayer(team_id=fixture.home_team_id, name="Cache Test Batter", role="Batsman")
+        db.session.add(batter)
+        db.session.flush()
+
+        match_id = str(uuid.uuid4())
+        match = DBMatch(
+            id=match_id, user_id=regular_user.id, tournament_id=t.id,
+            home_team_id=fixture.home_team_id, away_team_id=fixture.away_team_id,
+            match_format="T20",
+        )
+        db.session.add(match)
+        db.session.flush()
+        db.session.add(MatchScorecard(
+            match_id=match_id, player_id=batter.id, team_id=fixture.home_team_id,
+            innings_number=1, record_type="batting", runs=42, balls=30, is_out=True,
+        ))
+        fixture.match_id = match_id
+        db.session.commit()
+
+        engine.rebuild_player_stats_cache(t.id, {batter.id})
+        db.session.commit()
+        cache = TournamentPlayerStatsCache.query.filter_by(
+            tournament_id=t.id, player_id=batter.id
+        ).first()
+        assert cache.runs_scored == 42
+
+        engine._cleanup_fixture_match_data(fixture)
+        db.session.commit()
+
+        db.session.refresh(cache)
+        assert cache.runs_scored == 0
+        assert cache.matches_played == 0
+        assert db.session.get(DBMatch, match_id) is None
 
 
 class TestIPLStyleGeneration:
