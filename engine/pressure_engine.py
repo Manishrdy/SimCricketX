@@ -2,8 +2,14 @@ import random
 import logging
 
 from engine.format_config import get_format
+from engine.game_state_engine import SUPER_OVER_NEUTRAL_RPO
 
 logger = logging.getLogger(__name__)
+
+# Drama floor for a Super Over pressure score (0-100 scale) — a Super Over
+# ball starts meaningfully more tense than an average mid-innings ball even
+# before wickets/rate are factored in; see calculate_super_over_pressure().
+SUPER_OVER_PRESSURE_FLOOR = 45.0
 
 class PressureEngine:
     def __init__(self, format_config=None):
@@ -288,7 +294,55 @@ class PressureEngine:
             return self._calculate_first_innings_pressure(match_state)
         else:
             return self._calculate_second_innings_pressure(match_state)
-    
+
+    def calculate_super_over_pressure(self, so_state: dict) -> float:
+        """
+        Pressure score (0-100) for a single Super Over delivery.
+
+        Deliberately NOT calculate_pressure() with fudged inputs: that method
+        keys off format phases (powerplay/death overs), par-score tables, and
+        an RRR baseline all calibrated for a full 120/300-ball innings — at
+        over_number=0 the death-overs boost would simply never fire, and the
+        required-run-rate comparison would misjudge a naturally-hot 6-ball
+        rate as an "impossible chase". A Super Over needs its own formula:
+        a high floor (this is the highest-drama moment in the game by
+        design) plus wickets-down (out of only 2) and, for the chasing
+        side, required rate against the SAME neutral baseline the setting
+        side is judged against (SUPER_OVER_NEUTRAL_RPO — product decision:
+        no pitch variation, no side gets an easier baseline than the other).
+
+        The resulting score feeds the existing, rating-aware
+        get_pressure_effects(pressure_score, batter_rating, bowler_rating,
+        pitch) unchanged — a 95-rated batter still shrugs off pressure that
+        would rattle a 60-rated one.
+
+        so_state keys: wickets_down, so_innings (1|2), balls_remaining,
+        runs_needed (innings 2 only), consecutive_dots.
+        """
+        pressure = SUPER_OVER_PRESSURE_FLOOR
+
+        wickets_down = so_state.get('wickets_down', 0)
+        pressure += wickets_down * 20  # 0 or 1 → +0 or +20
+
+        if so_state.get('so_innings', 1) == 2 and so_state.get('runs_needed') is not None:
+            runs_needed = max(0, so_state['runs_needed'])
+            balls_remaining = max(1, so_state.get('balls_remaining', 6))
+            required_rr = runs_needed / (balls_remaining / 6.0)
+            rrr_ratio = required_rr / SUPER_OVER_NEUTRAL_RPO
+
+            if rrr_ratio > 1.0:
+                pressure += min(35, (rrr_ratio - 1.0) * 40)
+            elif rrr_ratio < 0.6:
+                # Chase is all but sealed — pressure eases off.
+                pressure -= 15
+
+        consecutive_dots = so_state.get('consecutive_dots', 0)
+        if consecutive_dots >= 2:
+            pressure += min(15, consecutive_dots * 5)
+
+        return max(0.0, min(100.0, pressure))
+
+
     def _calculate_first_innings_pressure(self, state):
         """Calculate first innings pressure"""
         pressure = 0

@@ -266,6 +266,45 @@
             </div>
         </div>
 
+        {% if motm_leaderboard %}
+        <div class="section-card">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fas fa-trophy"></i> Player of the Tournament
+                </h2>
+                <div class="section-subtitle">Most Man of the Match awards</div>
+            </div>
+            <div class="leaderboards-grid">
+                <div class="leaderboard-widget">
+                    <div class="widget-header">
+                        <i class="fas fa-microphone"></i>
+                        <h3>Man of the Match Awards</h3>
+                    </div>
+                    <div class="widget-body">
+                        <table class="leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th>Player</th>
+                                    <th>Team</th>
+                                    <th>Awards</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in motm_leaderboard %}
+                                <tr>
+                                    <td class="player-name">{{ row.player_name }}</td>
+                                    <td>{{ row.team_name }}</td>
+                                    <td class="stat-highlight">{{ row.awards }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
     </div>
 
 

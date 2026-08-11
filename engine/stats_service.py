@@ -334,11 +334,8 @@ class StatsService:
         # Impact Index
         impact_list = []
         for data in impact.values():
-            impact_score = (
-                (data["runs"] or 0)
-                + (data["wickets"] or 0) * 20
-                + (data["catches"] or 0) * 8
-                + (data["run_outs"] or 0) * 10
+            impact_score = self._impact_index(
+                data["runs"], data["wickets"], data["catches"], data["run_outs"]
             )
             impact_list.append({
                 "player": data["player"],
@@ -396,7 +393,63 @@ class StatsService:
         insights["form"]["bowling"] = _top_form(bowling_forms, "wickets", limit=3)
 
         return insights
-    
+
+    @staticmethod
+    def _impact_index(runs, wickets, catches, run_outs):
+        """The single Impact Index formula, shared by the career leaderboard
+        (get_insights) and single-match MOTM selection (compute_match_impact_scores)."""
+        return (
+            (runs or 0)
+            + (wickets or 0) * 20
+            + (catches or 0) * 8
+            + (run_outs or 0) * 10
+        )
+
+    def compute_match_impact_scores(self, match_id):
+        """Impact Index per player for a single match — same formula and the
+        same MatchScorecard aggregation as get_insights(), scoped to one
+        match instead of a user's full history. Used by engine/motm_service.py
+        to select Man of the Match. Returns a list of dicts sorted by impact
+        descending; each entry also carries team_id/team_name so callers can
+        apply winning-side weighting."""
+        record_query = (
+            db.session.query(MatchScorecard, Player, Team)
+            .join(Player, MatchScorecard.player_id == Player.id)
+            .join(Team, MatchScorecard.team_id == Team.id)
+            .filter(MatchScorecard.match_id == match_id)
+            .filter(MatchScorecard.is_super_over.isnot(True))
+        )
+
+        impact = {}
+        for card, player, team in record_query.all():
+            pid = player.id
+            entry = impact.setdefault(pid, {
+                "player_id": pid,
+                "player_name": player.name,
+                "team_id": team.id,
+                "team_name": team.name,
+                "runs": 0,
+                "wickets": 0,
+                "catches": 0,
+                "run_outs": 0,
+            })
+            entry["catches"] += card.catches or 0
+            entry["run_outs"] += card.run_outs or 0
+            if card.record_type == "batting":
+                entry["runs"] += card.runs or 0
+            if card.record_type == "bowling":
+                entry["wickets"] += card.wickets or 0
+
+        results = []
+        for data in impact.values():
+            impact_score = self._impact_index(
+                data["runs"], data["wickets"], data["catches"], data["run_outs"]
+            )
+            results.append({**data, "impact_score": impact_score})
+
+        results.sort(key=lambda x: x["impact_score"], reverse=True)
+        return results
+
     def _empty_stats(self):
         """Return empty statistics structure"""
         return {
@@ -1546,10 +1599,13 @@ class StatsService:
             bowling_innings = []
             catches = run_outs = stumpings = 0
             match_set = set()
+            motm_matches = set()
             match_log = {}
 
             for card, match in records:
                 match_set.add(match.id)
+                if match.motm_player_id == player_id:
+                    motm_matches.add(match.id)
                 ml = match_log.setdefault(match.id, {
                     "match_id": match.id,
                     "date": match.date.strftime("%Y-%m-%d") if match.date else "",
@@ -1559,6 +1615,7 @@ class StatsService:
                     "bat_runs": None, "bat_balls": None, "bat_out": None,
                     "bowl_wkts": None, "bowl_runs": None, "bowl_overs": None,
                     "catches": 0, "run_outs": 0, "stumpings": 0,
+                    "is_motm": match.motm_player_id == player_id,
                 })
                 ml["catches"] += card.catches or 0
                 ml["run_outs"] += card.run_outs or 0
@@ -1599,6 +1656,8 @@ class StatsService:
                 milestones.append(f"{bowling['wickets']} career wickets")
             if batting.get("runs", 0) >= 500:
                 milestones.append(f"{batting['runs']} career runs")
+            if len(motm_matches) > 0:
+                milestones.append(f"{len(motm_matches)} Man of the Match award{'s' if len(motm_matches) != 1 else ''}")
 
             return {
                 "player_id": player.id,
@@ -1614,6 +1673,7 @@ class StatsService:
                 "batting": batting,
                 "bowling": bowling,
                 "fielding": {"catches": catches, "run_outs": run_outs, "stumpings": stumpings, "total": catches + run_outs + stumpings},
+                "motm_awards": len(motm_matches),
                 "milestones": milestones,
                 "match_log": sorted(match_log.values(), key=lambda x: x["date"], reverse=True),
             }

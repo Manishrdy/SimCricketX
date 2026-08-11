@@ -66,6 +66,7 @@ from utils.squad_rules import (
 )
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_from_directory, send_file, flash, current_app, has_app_context, g
 from match_archiver import MatchArchiver, find_original_json_file, reverse_player_aggregates
+from engine import motm_service
 from engine.match import Match
 from engine.toss import home_bats_first
 from engine.cricket_math import balls_to_overs_str
@@ -1201,7 +1202,7 @@ def create_app():
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)
     app.config["REMEMBER_COOKIE_REFRESH_EACH_REQUEST"] = True
-    app.config["SESSION_INACTIVITY_MINUTES"] = 120  # 2-hour inactivity timeout
+    app.config["SESSION_INACTIVITY_MINUTES"] = 60 * 48  # 48-hour inactivity timeout
 
     # --- CSRF Protection ---
     csrf = CSRFProtect(app)
@@ -1749,6 +1750,33 @@ def create_app():
         reason = getattr(err, 'description', None)
         return render_template('404.html', reason=reason), 404
 
+    def _assign_motm(db_match, outcome, logger):
+        """Select Man of the Match for a just-archived match and append its
+        "MOTM speaks" commentary block to outcome['commentary'] in place, so
+        the same ball_result payload the frontend is about to receive/emit
+        carries it. Best-effort: no MatchScorecard rows yet (e.g. the
+        non-fatal scorecard save above failed) just means no MOTM this time,
+        not a crash."""
+        try:
+            result = motm_service.select_match_motm(
+                db_match.id, db_match.winner_team_id, db_match.match_status
+            )
+            if not result:
+                return
+            db_match.motm_player_id = result["player_id"]
+            db.session.commit()
+            outcome["commentary"] = (
+                outcome.get("commentary", "") + motm_service.build_motm_commentary(result, db_match)
+            )
+            logger.info(f"[MOTM] {result['player_name']} awarded Man of the Match for {db_match.id}")
+        except Exception as motm_err:
+            log_exception(motm_err)
+            logger.error(f"[MOTM] Selection failed (non-fatal) for {db_match.id}: {motm_err}", exc_info=True)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
     # --- Tournament Match Completion Handler ---
     def _handle_tournament_match_completion(match, match_id, outcome, logger):
         """
@@ -1992,13 +2020,14 @@ def create_app():
                         archiver = MatchArchiver(match.data, match)
                         archiver._save_to_database()
                         logger.info(f"[Tournament] Scorecard saved successfully for {match_id}")
+                        _assign_motm(db_match, outcome, logger)
                     except Exception as scorecard_err:
                         log_exception(scorecard_err)
                         logger.error(
                             f"[Tournament] Scorecard save failed (non-fatal): {scorecard_err}",
                             exc_info=True,
                         )
-                
+
             except ValueError as ve:
                 log_exception(ve)
                 # Validation errors - log and rollback
@@ -2044,6 +2073,10 @@ def create_app():
             archiver = MatchArchiver(match.data, match)
             archiver._save_to_database()
             logger.info(f"[MatchHistory] Persisted non-tournament match {match_id}")
+
+            db_match = db.session.get(DBMatch, match_id)
+            if db_match:
+                _assign_motm(db_match, outcome, logger)
         except Exception as e:
             log_exception(e)
             logger.error(f"[MatchHistory] Failed to persist match {match_id}: {e}", exc_info=True)
