@@ -5,6 +5,9 @@ Covers: overs conversion, NRR calculation, round-robin fixture generation,
 knockout bye handling, custom series validation, and standings updates.
 """
 
+import random
+import uuid
+
 import pytest
 from app import db
 from database.models import (
@@ -29,6 +32,63 @@ def four_teams(app, regular_user):
     for i, (name, code) in enumerate([
         ("Alpha", "ALP"), ("Bravo", "BRV"),
         ("Charlie", "CHL"), ("Delta", "DLT"),
+    ]):
+        t = DBTeam(
+            name=name, short_code=code,
+            user_id=regular_user.id, is_placeholder=False,
+        )
+        db.session.add(t)
+        db.session.flush()
+        teams.append(t)
+    db.session.commit()
+    return teams
+
+
+@pytest.fixture
+def six_teams(app, regular_user):
+    """Create 6 teams — enough to force 2 byes in an 8-slot knockout bracket."""
+    teams = []
+    for i, (name, code) in enumerate([
+        ("Alpha", "ALP"), ("Bravo", "BRV"), ("Charlie", "CHL"),
+        ("Delta", "DLT"), ("Echo", "ECH"), ("Foxtrot", "FOX"),
+    ]):
+        t = DBTeam(
+            name=name, short_code=code,
+            user_id=regular_user.id, is_placeholder=False,
+        )
+        db.session.add(t)
+        db.session.flush()
+        teams.append(t)
+    db.session.commit()
+    return teams
+
+
+@pytest.fixture
+def seven_teams(app, regular_user):
+    """Create 7 teams — exactly 1 bye in an 8-slot knockout bracket."""
+    teams = []
+    for i, (name, code) in enumerate([
+        ("Alpha", "ALP"), ("Bravo", "BRV"), ("Charlie", "CHL"), ("Delta", "DLT"),
+        ("Echo", "ECH"), ("Foxtrot", "FOX"), ("Golf", "GLF"),
+    ]):
+        t = DBTeam(
+            name=name, short_code=code,
+            user_id=regular_user.id, is_placeholder=False,
+        )
+        db.session.add(t)
+        db.session.flush()
+        teams.append(t)
+    db.session.commit()
+    return teams
+
+
+@pytest.fixture
+def eight_teams(app, regular_user):
+    """Create 8 teams — an exact power of 2, so the bracket has zero byes."""
+    teams = []
+    for i, (name, code) in enumerate([
+        ("Alpha", "ALP"), ("Bravo", "BRV"), ("Charlie", "CHL"), ("Delta", "DLT"),
+        ("Echo", "ECH"), ("Foxtrot", "FOX"), ("Golf", "GLF"), ("Hotel", "HTL"),
     ]):
         t = DBTeam(
             name=name, short_code=code,
@@ -279,6 +339,481 @@ class TestKnockoutGeneration:
         # At least one bye match should be auto-completed
         completed_byes = [f for f in all_fixtures if f.status == "Completed"]
         assert len(completed_byes) >= 1
+
+
+class TestKnockoutPhantomCascade:
+    """
+    Regression tests for the Round-1 "Phantom Match" soft-lock: a knockout
+    bracket with 2+ byes can shuffle both byes into the same Round-1 match,
+    producing a fixture with no teams and a permanently-None winner_team_id.
+    The live progression checker must not treat that by-design winner-less
+    fixture as "still pending" forever, must still block on a genuine
+    no-winner anomaly (a real match that somehow completed without a
+    winner), and must keep cascading through rounds that resolve purely via
+    byes/phantoms with no real match left to trigger the next check.
+    """
+
+    def _play(self, engine, fixture, winner_id, user_id=None):
+        """Simulate playing a Scheduled fixture through the real completion
+        path: create + link a DBMatch, then run update_standings exactly as
+        app.py does after a live match archives.
+        """
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            tournament_id=fixture.tournament_id,
+            home_team_id=fixture.home_team_id,
+            away_team_id=fixture.away_team_id,
+            winner_team_id=winner_id,
+            match_format="T20",
+            match_status="completed",
+        )
+        db.session.add(match)
+        db.session.flush()
+        fixture.match_id = match.id
+        db.session.commit()
+        engine.update_standings(match, commit=True)
+        return match
+
+    def test_phantom_in_round1_does_not_stall_progression(
+        self, app, engine, regular_user, six_teams, monkeypatch
+    ):
+        """6 teams -> 8-slot bracket, 2 byes. With shuffling disabled the two
+        byes land in the same (last) Round-1 slot, producing a Phantom
+        Match. Before the fix, playing out the 3 real Round-1 matches left
+        the tournament stuck forever: Round 2 fixtures never unlocked
+        because the Phantom's permanent winner_team_id=None tripped the
+        "any winner missing" guard on every subsequent check.
+        """
+        monkeypatch.setattr(random, "shuffle", lambda seq: None)
+
+        t = engine.create_tournament(
+            name="6Team KO Phantom", user_id=regular_user.id,
+            team_ids=[tm.id for tm in six_teams], mode="knockout",
+        )
+
+        round1 = (
+            TournamentFixture.query
+            .filter_by(tournament_id=t.id, round_number=1)
+            .order_by(TournamentFixture.bracket_position)
+            .all()
+        )
+        phantom = [f for f in round1 if f.home_team_id is None and f.away_team_id is None]
+        real_matches = [f for f in round1 if f.status == "Scheduled"]
+
+        assert len(phantom) == 1
+        assert phantom[0].status == "Completed"
+        assert phantom[0].winner_team_id is None
+        assert len(real_matches) == 3
+
+        for f in real_matches:
+            self._play(engine, f, winner_id=f.home_team_id, user_id=regular_user.id)
+
+        round1_stage = round1[0].stage
+        db.session.refresh(t)
+        assert t.current_stage != round1_stage, (
+            "tournament stalled in Round 1 — the Phantom match's permanent "
+            "winner_team_id=None blocked progression"
+        )
+
+        round2 = (
+            TournamentFixture.query
+            .filter_by(tournament_id=t.id, round_number=2)
+            .order_by(TournamentFixture.bracket_position)
+            .all()
+        )
+        assert round2, "Round 2 fixtures should exist"
+        assert all(f.status != "Locked" for f in round2), (
+            "Round 2 fixtures never got unlocked/resolved"
+        )
+
+    def test_real_no_winner_anomaly_still_blocks_progression(
+        self, app, engine, regular_user, four_teams
+    ):
+        """A genuine anomaly — a match between two real teams that
+        completed without a recorded winner — must still block
+        progression. This guards against over-relaxing the fix: only
+        Phantom fixtures (home_team_id and away_team_id both None) are
+        exempt from the "missing winner" check.
+        """
+        t = engine.create_tournament(
+            name="4Team KO Anomaly", user_id=regular_user.id,
+            team_ids=[tm.id for tm in four_teams], mode="knockout",
+        )
+        round1 = (
+            TournamentFixture.query
+            .filter_by(tournament_id=t.id, round_number=1)
+            .order_by(TournamentFixture.bracket_position)
+            .all()
+        )
+        assert len(round1) == 2
+
+        # First semifinal plays out normally.
+        self._play(engine, round1[0], winner_id=round1[0].home_team_id, user_id=regular_user.id)
+
+        # Second semifinal: simulate a data anomaly — completed between two
+        # real (non-placeholder) teams but with no winner recorded, e.g. an
+        # unresolved rain-abandoned knockout tie.
+        round1[1].status = "Completed"
+        db.session.commit()
+
+        result = engine._check_knockout_progression(t)
+        assert result is False
+
+        db.session.refresh(t)
+        assert t.current_stage == round1[0].stage, "must not advance past a real no-winner anomaly"
+
+    def test_round_resolved_entirely_by_byes_cascades_in_one_pass(
+        self, app, engine, regular_user, six_teams
+    ):
+        """Hand-build an 8-slot bracket where, after the sole real Round-1
+        match is played, BOTH Round-2 slots resolve via byes/phantoms (no
+        real Round-2 match exists to ever trigger another check). Before
+        the fix, progression stopped the moment Round 1 advanced to Round 2
+        and never re-checked whether Round 2 was itself already decided —
+        the Final would stay Locked forever with nothing left to unstick
+        it. The corrected checker must loop and cascade all the way to the
+        Final in the same pass.
+        """
+        team_a, team_b, team_c = six_teams[0], six_teams[1], six_teams[2]
+
+        t = Tournament(
+            name="Hand-built KO", user_id=regular_user.id, mode="knockout",
+            current_stage=engine.STAGE_KNOCKOUT_QF,
+        )
+        db.session.add(t)
+        db.session.flush()
+
+        # 5 registered teams -> next_power_of_two(5) == 8, matching the
+        # 4 QF / 2 SF / 1 Final tree built below.
+        for team in six_teams[:5]:
+            db.session.add(TournamentTeam(tournament_id=t.id, team_id=team.id))
+
+        qf0 = TournamentFixture(
+            tournament_id=t.id, home_team_id=team_a.id, away_team_id=team_b.id,
+            round_number=1, stage=engine.STAGE_KNOCKOUT_QF, bracket_position=0,
+            status="Scheduled",
+        )
+        qf1 = TournamentFixture(
+            tournament_id=t.id, home_team_id=None, away_team_id=None,
+            round_number=1, stage=engine.STAGE_KNOCKOUT_QF, bracket_position=1,
+            status="Completed", winner_team_id=None, stage_description="Phantom Match",
+        )
+        qf2 = TournamentFixture(
+            tournament_id=t.id, home_team_id=team_c.id, away_team_id=None,
+            round_number=1, stage=engine.STAGE_KNOCKOUT_QF, bracket_position=2,
+            status="Completed", winner_team_id=team_c.id,
+            stage_description="Bye - Advances to next round",
+        )
+        qf3 = TournamentFixture(
+            tournament_id=t.id, home_team_id=None, away_team_id=None,
+            round_number=1, stage=engine.STAGE_KNOCKOUT_QF, bracket_position=3,
+            status="Completed", winner_team_id=None, stage_description="Phantom Match",
+        )
+        sf0 = TournamentFixture(
+            tournament_id=t.id, home_team_id=None, away_team_id=None,
+            round_number=2, stage=engine.STAGE_KNOCKOUT_SF, bracket_position=4,
+            status="Locked",
+        )
+        sf1 = TournamentFixture(
+            tournament_id=t.id, home_team_id=None, away_team_id=None,
+            round_number=2, stage=engine.STAGE_KNOCKOUT_SF, bracket_position=5,
+            status="Locked",
+        )
+        final = TournamentFixture(
+            tournament_id=t.id, home_team_id=None, away_team_id=None,
+            round_number=3, stage=engine.STAGE_FINAL, bracket_position=6,
+            status="Locked",
+        )
+        for f in (qf0, qf1, qf2, qf3, sf0, sf1, final):
+            db.session.add(f)
+        db.session.commit()
+
+        # Play the ONLY real match in the whole bracket. Its pairing with
+        # Phantom qf1 makes sf0 a bye (team_a advances); qf2+qf3 already
+        # made sf1 a bye (team_c advances) once qf0 completes the round —
+        # so Round 2 resolves with zero real matches, and the Final must be
+        # reached in this same call.
+        self._play(engine, qf0, winner_id=team_a.id, user_id=regular_user.id)
+
+        db.session.refresh(t)
+        final = db.session.get(TournamentFixture, final.id)
+
+        assert t.current_stage == engine.STAGE_FINAL
+        assert final.status == "Scheduled", (
+            "Round 2 resolved entirely via byes but progression stopped "
+            "there instead of cascading straight to the Final"
+        )
+        assert {final.home_team_id, final.away_team_id} == {team_a.id, team_c.id}
+
+    def test_zero_byes_multi_round_does_not_prematurely_complete(
+        self, app, engine, regular_user, eight_teams
+    ):
+        """8 teams -> exact power of 2, zero byes at all. Before the fix,
+        _advance_bye_winners's Step 2 judged a next-round fixture's fate
+        purely from whatever partial state Step 1 had written into it,
+        without ever checking its actual two feeders. For a bracket with
+        NO byes, Step 1 never touches SF/Final at creation time (nothing is
+        'Completed' yet), so they're still sitting at their normal initial
+        home=None/away=None — and Step 2 misread that completely ordinary
+        "not decided yet" state as "both feeders were phantom," marking SF
+        AND (cascading from there) the Final 'Completed' with no winner
+        immediately at tournament creation, before a single match was
+        played. This exact pattern (SF + Final both Phantom, all 4 QFs
+        genuinely played) was found in two live production tournaments.
+        """
+        t = engine.create_tournament(
+            name="8Team KO Clean", user_id=regular_user.id,
+            team_ids=[tm.id for tm in eight_teams], mode="knockout",
+        )
+
+        non_round1 = TournamentFixture.query.filter(
+            TournamentFixture.tournament_id == t.id,
+            TournamentFixture.round_number > 1,
+        ).all()
+        assert non_round1, "expected SF + Final fixtures"
+        assert all(f.status == "Locked" for f in non_round1), (
+            "SF/Final fixtures were prematurely resolved at creation time "
+            "despite there being zero byes"
+        )
+        assert all(
+            f.home_team_id is None and f.away_team_id is None for f in non_round1
+        )
+
+        round1 = (
+            TournamentFixture.query
+            .filter_by(tournament_id=t.id, round_number=1)
+            .order_by(TournamentFixture.bracket_position)
+            .all()
+        )
+        assert len(round1) == 4
+        assert all(f.status == "Scheduled" for f in round1)
+
+        for f in round1:
+            self._play(engine, f, winner_id=f.home_team_id, user_id=regular_user.id)
+
+        db.session.refresh(t)
+        sf = TournamentFixture.query.filter_by(tournament_id=t.id, round_number=2).all()
+        assert all(f.status == "Scheduled" for f in sf)
+        assert all(f.home_team_id is not None and f.away_team_id is not None for f in sf)
+        assert t.current_stage == sf[0].stage
+
+    def test_bye_paired_with_pending_real_match_stays_locked_at_creation(
+        self, app, engine, regular_user, seven_teams, monkeypatch
+    ):
+        """7 teams -> 8-slot bracket, exactly 1 bye. With shuffling disabled
+        the bye lands in the last Round-1 slot (paired with a real team),
+        sharing its Round-2 feeder pairing with an adjacent REAL,
+        still-unplayed match.
+
+        Before the fix, the old two-step _advance_bye_winners could only
+        see that Round-2 slot's accumulated home/away fields — both still
+        None, since the real sibling hadn't produced a winner yet — and
+        would misjudge it: the bye's genuine winner would get prematurely
+        auto-advanced as the slot's outright winner (or the slot would get
+        marked a false Phantom), in both cases before the real sibling
+        match was ever played. This is the exact "one bye/phantom feeder +
+        one still-Scheduled real feeder" ambiguity described as a second,
+        related bug alongside the Round-1 Phantom stall. The corrected
+        code must leave this slot completely untouched (still 'Locked')
+        until BOTH its feeders are genuinely decided.
+        """
+        monkeypatch.setattr(random, "shuffle", lambda seq: None)
+
+        t = engine.create_tournament(
+            name="7Team KO Mixed Bye", user_id=regular_user.id,
+            team_ids=[tm.id for tm in seven_teams], mode="knockout",
+        )
+
+        round1 = (
+            TournamentFixture.query
+            .filter_by(tournament_id=t.id, round_number=1)
+            .order_by(TournamentFixture.bracket_position)
+            .all()
+        )
+        byes = [f for f in round1 if f.status == "Completed"]
+        real_matches = [f for f in round1 if f.status == "Scheduled"]
+        assert len(round1) == 4
+        assert len(byes) == 1, "7 teams in an 8-slot bracket should produce exactly 1 bye"
+        assert len(real_matches) == 3
+
+        bye_fixture = round1[3]
+        pending_sibling = round1[2]
+        assert bye_fixture.status == "Completed"
+        assert bye_fixture.winner_team_id is not None
+        assert pending_sibling.status == "Scheduled", (
+            "expected the bye's Round-2 sibling to be a real, unplayed match"
+        )
+
+        round2 = (
+            TournamentFixture.query
+            .filter_by(tournament_id=t.id, round_number=2)
+            .order_by(TournamentFixture.bracket_position)
+            .all()
+        )
+        fed_slot = round2[1]  # fed by round1[2] (pending real) + round1[3] (bye)
+
+        assert fed_slot.status == "Locked", (
+            "the Round-2 slot fed by a genuine bye + a still-unplayed real "
+            "match was prematurely resolved at creation time"
+        )
+        assert fed_slot.home_team_id is None and fed_slot.away_team_id is None
+        assert fed_slot.winner_team_id is None
+
+        # _advance_knockout_round gates on the WHOLE round being Completed,
+        # not per-pair, so every other still-Scheduled Round-1 match has to
+        # be played too before anything advances — including the pair that
+        # doesn't involve the bye at all.
+        bye_winner = bye_fixture.winner_team_id
+        sibling_winner = pending_sibling.home_team_id
+        for f in real_matches:
+            self._play(engine, f, winner_id=f.home_team_id, user_id=regular_user.id)
+
+        # Both feeders of fed_slot (bye winner + sibling winner) are real,
+        # non-placeholder teams, so it must unlock as a genuine 'Scheduled'
+        # match to be played — not resolve itself as if one side were
+        # still a walkover.
+        db.session.refresh(fed_slot)
+        assert fed_slot.status == "Scheduled"
+        assert fed_slot.winner_team_id is None
+        assert {fed_slot.home_team_id, fed_slot.away_team_id} == {bye_winner, sibling_winner}
+
+
+class TestKnockoutHistoricalCorruptionSelfHeals:
+    """
+    Regression tests for a second bug found while investigating the Phantom
+    stall: fixtures already corrupted by the old _advance_bye_winners
+    (marked 'Completed' with a bogus single-sided winner, no match ever
+    played) must be able to self-correct once their real sibling match is
+    actually played. An earlier version of the fix's guard was
+    `status != 'Locked'`, which — meant to stop a resolved fixture from
+    being re-clobbered — also blocked correcting fixtures that were already
+    wrongly 'Completed', so they would stay wrong forever and the
+    tournament could complete with a bogus winner instead of the real one.
+    The guard must protect only fixtures with real match data: a linked
+    match_id, or already 'Scheduled' for a real match.
+    """
+
+    def _play(self, engine, fixture, winner_id, user_id=None):
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            tournament_id=fixture.tournament_id,
+            home_team_id=fixture.home_team_id,
+            away_team_id=fixture.away_team_id,
+            winner_team_id=winner_id,
+            match_format="T20",
+            match_status="completed",
+        )
+        db.session.add(match)
+        db.session.flush()
+        fixture.match_id = match.id
+        db.session.commit()
+        engine.update_standings(match, commit=True)
+        return match
+
+    def test_prematurely_completed_final_self_heals_once_real_sf_is_played(
+        self, app, engine, regular_user, four_teams
+    ):
+        """Directly mimics the historical bug's exact output on a Final —
+        'Completed', one real winner, other side null, no match_id — while
+        its real sibling semifinal is still unplayed. Playing that
+        semifinal for real must correct the Final instead of leaving it
+        stuck on the bogus winner.
+        """
+        t = engine.create_tournament(
+            name="4Team KO Corrupted", user_id=regular_user.id,
+            team_ids=[tm.id for tm in four_teams], mode="knockout",
+        )
+        round1 = (
+            TournamentFixture.query
+            .filter_by(tournament_id=t.id, round_number=1)
+            .order_by(TournamentFixture.bracket_position)
+            .all()
+        )
+        final = TournamentFixture.query.filter_by(tournament_id=t.id, round_number=2).first()
+        assert len(round1) == 2 and final is not None
+
+        # Simulate the historical corruption artifact directly on the Final.
+        winner1 = round1[0].home_team_id
+        round1[0].status = "Completed"
+        round1[0].winner_team_id = winner1
+        final.status = "Completed"
+        final.home_team_id = winner1
+        final.away_team_id = None
+        final.winner_team_id = winner1
+        final.match_id = None
+        db.session.commit()
+
+        # SF2 is a genuine, still-unplayed real match.
+        assert round1[1].status == "Scheduled"
+        winner2 = round1[1].home_team_id
+        self._play(engine, round1[1], winner_id=winner2, user_id=regular_user.id)
+
+        db.session.refresh(final)
+        assert final.status == "Scheduled", (
+            "a Final corrupted by the historical bug must self-heal once "
+            "its real semifinal is actually played"
+        )
+        assert {final.home_team_id, final.away_team_id} == {winner1, winner2}
+        assert final.winner_team_id is None, (
+            "the bogus winner from the historical corruption must be cleared, "
+            "not left stale on a fixture that hasn't actually been played"
+        )
+
+    def test_resolve_round_pair_never_overwrites_a_played_fixture(
+        self, app, engine, regular_user, four_teams
+    ):
+        """Guard against over-relaxing: a fixture with a real match already
+        linked must never be touched again, even if its feeders are
+        re-processed with a different outcome.
+        """
+        t = Tournament(
+            name="Guard Test", user_id=regular_user.id, mode="knockout",
+            current_stage="final",
+        )
+        db.session.add(t)
+        db.session.flush()
+
+        team_a, team_b, team_c, team_d = four_teams
+
+        m1 = TournamentFixture(
+            tournament_id=t.id, home_team_id=team_a.id, away_team_id=team_b.id,
+            round_number=1, stage="knockout_sf", bracket_position=0,
+            status="Completed", winner_team_id=team_a.id,
+        )
+        m2 = TournamentFixture(
+            tournament_id=t.id, home_team_id=team_c.id, away_team_id=team_d.id,
+            round_number=1, stage="knockout_sf", bracket_position=1,
+            status="Completed", winner_team_id=team_c.id,
+        )
+        real_match = DBMatch(
+            id=str(uuid.uuid4()), user_id=regular_user.id, tournament_id=t.id,
+            home_team_id=team_a.id, away_team_id=team_c.id, winner_team_id=team_a.id,
+            match_format="T20", match_status="completed",
+        )
+        db.session.add(real_match)
+        db.session.flush()
+
+        final = TournamentFixture(
+            tournament_id=t.id, home_team_id=team_a.id, away_team_id=team_c.id,
+            round_number=2, stage="final", bracket_position=2,
+            status="Completed", winner_team_id=team_a.id, match_id=real_match.id,
+        )
+        db.session.add_all([m1, m2, final])
+        db.session.commit()
+
+        # Re-process the same pair with a different (hypothetical) outcome
+        # — must be a complete no-op since the Final already has a real
+        # match linked.
+        m2.winner_team_id = team_d.id
+        engine._resolve_round_pair(m1, m2, final)
+
+        db.session.refresh(final)
+        assert final.home_team_id == team_a.id
+        assert final.away_team_id == team_c.id
+        assert final.winner_team_id == team_a.id
+        assert final.match_id == real_match.id
 
 
 class TestIPLStyleGeneration:

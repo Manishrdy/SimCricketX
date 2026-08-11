@@ -277,6 +277,10 @@ class Match:
         self.super_over_team_boundaries = {"home": 0, "away": 0}
         self.super_over_career_batting = {"home": {}, "away": {}}
         self.super_over_career_bowling = {"home": {}, "away": {}}
+        # This round's own ball-by-ball history (micro-GSME momentum input)
+        # and the pitch wear frozen from the main match at tie time.
+        self.super_over_ball_history = []
+        self.super_over_pitch_wear = 0.0
         self.constraint_violations = []  # Constraint violation log for post-match analysis
 
         # Initialize pressure engine (format_config wires phase thresholds + RRs)
@@ -5679,6 +5683,19 @@ class Match:
     def _setup_super_over(self):
         """Setup super over after a tie — returns team rosters for player selection"""
         self.super_over_phase = "awaiting_innings1_selection"
+
+        # Freeze pitch wear from the main match — the pitch has physically
+        # been through a full innings (or two); it doesn't reset just
+        # because a new contest starts. Also ensure innings-2 batting/
+        # bowling figures are saved (idempotent) so the fatigue/form
+        # carry-over helpers below can read them regardless of which code
+        # path reached this tie.
+        self._save_second_innings_stats()
+        _so_total_balls = self.fmt.overs * 6
+        self.super_over_pitch_wear = (
+            min(1.0, self.innings_balls_bowled / _so_total_balls) if _so_total_balls else 0.0
+        )
+
         scorecard_data = self._generate_detailed_scorecard()
         scorecard_data["target_info"] = "Match Tied - Super Over Required!"
 
@@ -5854,6 +5871,11 @@ class Match:
     def _init_super_over_innings_state(self):
         """Initialize/reset super over innings state"""
         self.super_over_ball = 0
+        # This Super Over innings' own delivery-by-delivery history — feeds
+        # the micro-GSME momentum layer. Deliberately NOT the main match's
+        # ball_history: momentum should reflect this shootout, not the
+        # innings that just ended.
+        self.super_over_ball_history = []
         self.super_over_current_striker = self.super_over_batsmen[0]
         self.super_over_current_non_striker = self.super_over_batsmen[1]
         # First two are at the crease; index 2 is the next batter in.
@@ -5939,6 +5961,57 @@ class Match:
             return max(team, key=lambda p: p.get("bowling_rating", 0))
         raise ValueError("Cannot select super over bowler from an empty team")
 
+    def _get_super_over_effective_bowler(self, bowler_dict: dict) -> dict:
+        """
+        Bowler fatigue carried into the Super Over from whichever innings
+        they actually bowled in — any bowler is selectable for the Super
+        Over regardless of how much they've already bowled, so a strike
+        bowler who sent down a full spell (including the last over) should
+        show up more tired than someone rested.
+
+        Deliberately reads the frozen first/second_innings_bowling_stats
+        snapshots rather than the live self.bowler_manager: bowler_manager
+        only tracks the CURRENT innings (it's rebuilt via .reset() at the
+        innings-2 transition, discarding innings-1 data) and isn't part of
+        the Super Over resume snapshot, so it can't be trusted for either
+        side by Super Over time — the frozen stats dicts are.
+
+        Phase and previous-over-feedback multipliers (used for regular
+        deliveries via _get_effective_bowler_dict) are intentionally not
+        applied here — self.current_over is stale by Super Over time, and
+        there's no "previous over" or "phase" concept within a single over.
+        """
+        name = bowler_dict.get("name", "")
+        eff = dict(bowler_dict)
+
+        fig = (self.first_innings_bowling_stats or {}).get(name) \
+            or (self.second_innings_bowling_stats or {}).get(name)
+        overs_bowled = fig.get("overs", 0) if fig else 0
+
+        fatigue = BowlerManager._FATIGUE_TABLE.get(
+            min(overs_bowled, self.fmt.max_bowler_overs),
+            BowlerManager._FATIGUE_TABLE[self.fmt.max_bowler_overs],
+        )
+        eff["bowling_rating"] = eff["bowling_rating"] * fatigue
+        logger.debug(
+            "[SuperOver][Fatigue] %s overs_bowled=%d fatigue=%.3f -> rating=%.1f",
+            name, overs_bowled, fatigue, eff["bowling_rating"],
+        )
+        return eff
+
+    def _get_super_over_effective_batter(self, batter_dict: dict) -> dict:
+        """Batter form carried into the Super Over from whichever main-innings
+        stats snapshot they appear in (first or second innings — either team's
+        batter can be selected). Defaults to neutral form (1.0) for a batter
+        who never got to the crease in the main match."""
+        name = batter_dict.get("name", "")
+        stats = (self.first_innings_batting_stats or {}).get(name) \
+            or (self.second_innings_batting_stats or {}).get(name)
+        form = stats.get("form", 1.0) if stats else 1.0
+        eff = dict(batter_dict)
+        eff["batting_rating"] = eff["batting_rating"] * form
+        return eff
+
     def next_super_over_ball(self):
         """Process next ball in super over — returns rich data for modal UI"""
         # Re-entry guard: between innings the phase is "awaiting_*_selection"
@@ -5955,30 +6028,49 @@ class Match:
             }
 
         team_key = "home" if self.super_over_batting_team is self.home_xi else "away"
+        other_key = "away" if team_key == "home" else "home"
 
         if self.super_over_ball >= 6 or self.super_over_wickets[team_key] >= 2:
             return self._end_super_over_innings()
 
         # Innings 2: end immediately if target was already reached on a previous ball
+        runs_needed = None
         if self.super_over_innings == 2:
-            other_key = "away" if team_key == "home" else "home"
-            if self.super_over_scores[team_key] >= self.super_over_scores[other_key] + 1:
+            target = self.super_over_scores[other_key] + 1
+            runs_needed = max(0, target - self.super_over_scores[team_key])
+            if runs_needed <= 0:
                 return self._end_super_over_innings()
 
-        # Calculate outcome.
-        # Thread the striker's running boundary count into `streak` so the
-        # pressure dynamics in super_over_outcome.py actually fire (≥3 boundaries
-        # dampens further boundaries ×0.9; ≥2 boundaries raises wicket chance
-        # ×1.4). Previously an empty dict was passed, making that logic dead code.
+        # Calculate outcome on the same rating/matchup/pressure/momentum
+        # stack as a regular delivery, recalibrated for a 6-ball/2-wicket
+        # contest — see engine/super_over_outcome.py.
+        #
+        # Thread the striker's running boundary count into `streak` (drives
+        # compute_weighted_prob's own ≥2-boundary streak penalty/boost) and
+        # this over's own ball-by-ball history (drives the micro-GSME
+        # momentum layer — NOT the main innings' ball_history).
         striker_so_stats = self.super_over_batsman_stats[self.super_over_current_striker["name"]]
+        effective_batter = self._get_super_over_effective_batter(self.super_over_current_striker)
+        effective_bowler = self._get_super_over_effective_bowler(self.super_over_bowler)
         outcome = calculate_super_over_outcome(
-            batter=self.super_over_current_striker,
-            bowler=self.super_over_bowler,
+            batter=effective_batter,
+            bowler=effective_bowler,
             pitch=self.pitch,
             streak={"boundaries": striker_so_stats["fours"] + striker_so_stats["sixes"]},
-            over_number=0,
-            batter_runs=striker_so_stats["runs"]
+            batter_runs=striker_so_stats["runs"],
+            balls_faced=striker_so_stats["balls"],
+            so_innings=self.super_over_innings,
+            wickets_down=self.super_over_wickets[team_key],
+            balls_remaining=6 - self.super_over_ball,
+            runs_needed=runs_needed,
+            score_so_far=self.super_over_scores[team_key],
+            history=self.super_over_ball_history,
+            pitch_wear=getattr(self, "super_over_pitch_wear", 0.0),
+            fielding_team=self.super_over_bowling_team,
+            pressure_engine=self.pressure_engine,
+            ground_config_override=self.ground_config,
         )
+        self.super_over_ball_history.append(make_ball_event(outcome))
 
         runs, wicket, extra = outcome["runs"], outcome["batter_out"], outcome["is_extra"]
         extra_type = outcome.get("extra_type", "")
@@ -6519,6 +6611,11 @@ class Match:
                 "bowler_stats": self.bowler_stats,
                 "first_innings_batting_stats": self.first_innings_batting_stats,
                 "first_innings_bowling_stats": self.first_innings_bowling_stats,
+                # Needed for Super Over batter-form/bowler-fatigue carry-over
+                # (_get_super_over_effective_batter/_bowler) to survive a
+                # process restart mid-super-over.
+                "second_innings_batting_stats": getattr(self, "second_innings_batting_stats", {}),
+                "second_innings_bowling_stats": getattr(self, "second_innings_bowling_stats", {}),
                 "first_innings_partnerships": self.first_innings_partnerships,
                 "second_innings_partnerships": self.second_innings_partnerships,
                 "first_batting_team_name": self.first_batting_team_name,
@@ -6542,6 +6639,10 @@ class Match:
                 "career_batting": self.super_over_career_batting,
                 "career_bowling": self.super_over_career_bowling,
                 "innings1_scorecard": getattr(self, "super_over_innings1_scorecard", None),
+                # This round's own ball-by-ball history (micro-GSME momentum
+                # input) and the pitch wear frozen from the main match.
+                "ball_history": getattr(self, "super_over_ball_history", []),
+                "pitch_wear": getattr(self, "super_over_pitch_wear", 0.0),
             },
         }
 
@@ -6596,6 +6697,8 @@ class Match:
         self.bowler_stats = main.get("bowler_stats") or {}
         self.first_innings_batting_stats = main.get("first_innings_batting_stats") or {}
         self.first_innings_bowling_stats = main.get("first_innings_bowling_stats") or {}
+        self.second_innings_batting_stats = main.get("second_innings_batting_stats") or {}
+        self.second_innings_bowling_stats = main.get("second_innings_bowling_stats") or {}
         self.first_innings_partnerships = main.get("first_innings_partnerships") or []
         self.second_innings_partnerships = main.get("second_innings_partnerships") or []
         self.first_batting_team_name = main.get("first_batting_team_name", "")
@@ -6627,6 +6730,8 @@ class Match:
         self.super_over_team_boundaries = so.get("team_boundaries") or {"home": 0, "away": 0}
         self.super_over_career_batting = so.get("career_batting") or {"home": {}, "away": {}}
         self.super_over_career_bowling = so.get("career_bowling") or {"home": {}, "away": {}}
+        self.super_over_ball_history = so.get("ball_history") or []
+        self.super_over_pitch_wear = so.get("pitch_wear", 0.0)
         if so.get("innings1_scorecard") is not None:
             self.super_over_innings1_scorecard = so["innings1_scorecard"]
 

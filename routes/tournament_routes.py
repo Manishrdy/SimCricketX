@@ -5,6 +5,7 @@ import os
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import func as sa_func
 from utils.exception_tracker import log_exception
 
 
@@ -237,12 +238,52 @@ def register_tournament_routes(
                 next_fixture_id = f.id
                 break
 
+        # Player of the Tournament — live count of MOTM awards within this
+        # tournament's matches, top 5. Computed directly rather than via
+        # TournamentPlayerStatsCache (that cache is fully rebuilt per match
+        # and has a one-match write-order lag; this is cheap enough to just
+        # query live).
+        motm_rows = (
+            db.session.query(DBMatch.motm_player_id, sa_func.count(DBMatch.id))
+            .filter(
+                DBMatch.tournament_id == tournament_id,
+                DBMatch.motm_player_id.isnot(None),
+            )
+            .group_by(DBMatch.motm_player_id)
+            .order_by(sa_func.count(DBMatch.id).desc())
+            .limit(5)
+            .all()
+        )
+        motm_leaderboard = []
+        if motm_rows:
+            players = {
+                p.id: p for p in DBPlayer.query.filter(
+                    DBPlayer.id.in_([pid for pid, _ in motm_rows])
+                ).all()
+            }
+            teams = {
+                t2.id: t2 for t2 in DBTeam.query.filter(
+                    DBTeam.id.in_([p.team_id for p in players.values() if p.team_id])
+                ).all()
+            }
+            for player_id, count in motm_rows:
+                player = players.get(player_id)
+                if not player:
+                    continue
+                team = teams.get(player.team_id)
+                motm_leaderboard.append({
+                    "player_name": player.name,
+                    "team_name": team.name if team else "",
+                    "awards": count,
+                })
+
         return render_template(
             "tournaments/dashboard.html",
             tournament=t,
             standings=standings,
             fixtures=fixtures,
             next_fixture_id=next_fixture_id,
+            motm_leaderboard=motm_leaderboard,
         )
 
     @app.route("/tournaments/<int:tournament_id>/rename", methods=["POST"])

@@ -102,6 +102,8 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # columns so downstream code stops parsing prose or subtracting a
     # remainder to recover facts the engine already knows.
     ("add_structured_match_outcome", _loader("migrations.add_structured_match_outcome")),
+    # Man of the Match — matches.motm_player_id, set once at archive time.
+    ("add_motm_column",           _loader("migrations.add_motm_column")),
 ]
 
 

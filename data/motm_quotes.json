@@ -1,0 +1,73 @@
+{
+  "archetype": {
+    "batting_hero": [
+      "{runs} runs today — but honestly, that's just about backing my defence early and taking my chances once the bowlers dropped short.",
+      "When the ball's coming out that clean off the bat, you just ride the feeling. {runs} felt inevitable once I got in.",
+      "Every innings starts at zero. I just tried to bat time and let {runs} take care of itself.",
+      "Not gonna lie — I knew after the first boundary that it was going to be a big one for me.",
+      "Credit to the team for setting it up so I could just focus on batting. {runs} runs, but it's a squad performance.",
+      "I've worked on that shot for months. Seeing it come off at the perfect time — that's why you put in the hours."
+    ],
+    "bowling_hero": [
+      "{wickets} today, but wickets are a team effort — the fielders were unbelievable, the pressure from the other end did half my job.",
+      "I just backed my plans and trusted the ball to do the talking. That kind of spell feels great, not going to lie.",
+      "You dream about spells like that. Everything just clicked — the wrist, the pace, the field placements.",
+      "Wickets in a hurry change games. I knew if I could strike early, the rest would follow.",
+      "Bowling is about patience — you wait for your moment, and tonight it came at exactly the right time.",
+      "Honestly? That's as good as I've bowled in a while. {wickets} wickets and I still think I left a couple out there."
+    ],
+    "all_rounder": [
+      "Contributing with both bat and ball is what I train for every single day — {runs} runs and {wickets} wickets, that's the dream night.",
+      "I don't think about it as batting or bowling separately anymore — I just try to win the team moments wherever I can.",
+      "When you get it right with both disciplines in one game, it's hard to put into words. Just proud I could show up for the team twice over.",
+      "Some days the bat talks, some days the ball does. Tonight, thankfully, both did.",
+      "That's the role I signed up for — chip in everywhere, whatever the team needs. Tonight it needed a lot.",
+      "Honestly I was just trying to stay switched on for four hours straight. Glad it paid off with both bat and ball."
+    ],
+    "fielding_hero": [
+      "People forget fielding wins matches too. I just backed myself to complete the chances that came my way.",
+      "That's hours of drills right there. You don't think, you just react — and thankfully my hands did the rest.",
+      "Bowlers do the hard work; a catch like that is just the finishing touch. Happy to play my part.",
+      "I live for moments like that in the field — you feel like you can single-handedly flip a game.",
+      "Honestly, I'll take a match-turning catch over a fifty any day. That's just who I am as a cricketer.",
+      "Direct hits, sharp catches — that's the stuff that doesn't always show up on the scoreboard but wins you games."
+    ]
+  },
+  "context": {
+    "chase_won": [
+      "Chasing is all about staying calm when the required rate climbs. We back ourselves to get there.",
+      "Knew the target was gettable if we just kept ticking the board over. Proud of how {team} held their nerve.",
+      "There's no better feeling than getting the job done with the bat in a run chase.",
+      "We talked about it in the huddle — trust the process, don't panic, and the total will come to us.",
+      "Chasing down a total like that says a lot about the belief in this {team} dressing room."
+    ],
+    "defended": [
+      "Putting a total on the board and then defending it with skill and discipline — that's the complete performance.",
+      "We knew our total was competitive if we executed the plans, and {team} did exactly that.",
+      "Defending totals is about discipline in the field for every single over. Proud of how everyone stuck to the plan.",
+      "There's a real art to defending a score — pressure, patience, and trusting your bowlers. {team} nailed all three tonight.",
+      "You set a target and then you have to go out and earn it all over again with the ball. That's what tonight was."
+    ],
+    "close_finish": [
+      "Games like that take years off your life, honestly. Glad we came out on the right side of it.",
+      "Right down to the wire — that's cricket at its best, even if my heart couldn't take much more of it.",
+      "When it's that tight, small moments decide everything. Fortunate they fell our way tonight.",
+      "Nights like this are why you play the sport. Nerve-wracking, but unforgettable.",
+      "A finish like that doesn't leave much room for mistakes. Just relieved we held our composure."
+    ],
+    "comfortable_win": [
+      "We took control early and never really let go of it. Good, clean performance from {team} all round.",
+      "When you get on top like that, you just try to keep the foot down and not give anything away.",
+      "That's about as complete a performance as we could've asked for from {team} tonight.",
+      "Everything clicked early, and once it does, you just ride the momentum.",
+      "A performance like that is built in training — we just had to go out and execute it."
+    ],
+    "tied": [
+      "A tie feels strange — not quite a win, not quite a loss. But I'm proud of what I put in for {team} out there.",
+      "Cricket doesn't get much crazier than a tie. Just glad I could contribute to a game like that.",
+      "No winner tonight, but that was as good a contest as you'll see. Honoured to be part of it.",
+      "You can't script a tie. All you can do is give everything, and I think both sides did exactly that.",
+      "A result like that belongs to the game itself, more than either team. Special night to be out there."
+    ]
+  }
+}

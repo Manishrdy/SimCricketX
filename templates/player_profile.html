@@ -96,6 +96,10 @@
             <div class="pp-big-num">{{ profile.fielding.total }}</div>
             <div class="pp-big-label">Dismissals</div>
         </div>
+        <div class="pp-card pp-big-stat">
+            <div class="pp-big-num">{{ profile.motm_awards|default(0) }}</div>
+            <div class="pp-big-label">MOTM Awards</div>
+        </div>
     </div>
 
     <!-- Batting & Bowling Detail Cards -->
@@ -169,7 +173,7 @@
                         <td>{{ m.bowl_overs if m.bowl_overs is not none else '-' }}</td>
                         <td>{{ m.catches }}</td>
                         <td>{{ m.run_outs }}</td>
-                        <td>{{ m.result[:40] if m.result else '-' }}</td>
+                        <td>{% if m.is_motm %}<span title="Man of the Match">🏆</span> {% endif %}{{ m.result[:40] if m.result else '-' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
