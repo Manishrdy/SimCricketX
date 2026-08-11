@@ -52,9 +52,9 @@
                 <a href="{{ url_for('tournaments') }}" class="back-btn">
                     <i class="fas fa-arrow-left"></i> Back
                 </a>
-                {% if tournament.status == 'Active' or tournament.status == 'open' %}
+                {% if tournament.status in ('Active', 'open', 'Completed') %}
                 <form action="{{ url_for('delete_tournament', tournament_id=tournament.id) }}" method="POST"
-                    onsubmit="return confirm('Are you sure you want to delete this tournament?');">
+                    onsubmit="return confirm('{% if tournament.status == 'Completed' %}Delete \'{{ tournament.name }}\'? This permanently removes all matches, scorecards, and stats for this tournament. This cannot be undone.{% else %}Are you sure you want to delete this tournament? All progress will be lost.{% endif %}');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="delete-btn">
                         <i class="fas fa-trash"></i> Delete
@@ -84,6 +84,7 @@
                     <div class="stat-label">Remaining</div>
                 </div>
             </div>
+            {% if has_league_standings %}
             <div class="stat-card">
                 <div class="stat-icon leader"><i class="fas fa-chart-line"></i></div>
                 <div class="stat-content">
@@ -91,12 +92,22 @@
                     <div class="stat-label">Leader Points</div>
                 </div>
             </div>
+            {% else %}
+            <div class="stat-card">
+                <div class="stat-icon leader"><i class="fas fa-sitemap"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value" style="font-size:1.1rem;">{{ current_round_label }}</div>
+                    <div class="stat-label">Current Round</div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 
     <!-- Main Content Grid -->
-    <div class="dashboard-content">
+    <div class="dashboard-content{% if not has_league_standings %} single-column{% endif %}">
 
+        {% if has_league_standings %}
         <!-- Standings Section -->
         <div class="section-card standings-section">
             <div class="section-header">
@@ -143,6 +154,7 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
 
         <!-- Fixtures Section -->
         <div class="section-card fixtures-section">
@@ -266,13 +278,12 @@
             </div>
         </div>
 
-        {% if motm_leaderboard %}
-        <div class="section-card">
+        <div class="section-card leaders-section">
             <div class="section-header">
                 <h2 class="section-title">
-                    <i class="fas fa-trophy"></i> Player of the Tournament
+                    <i class="fas fa-trophy"></i> Tournament Leaders
                 </h2>
-                <div class="section-subtitle">Most Man of the Match awards</div>
+                <div class="section-subtitle">Top performers this tournament</div>
             </div>
             <div class="leaderboards-grid">
                 <div class="leaderboard-widget">
@@ -281,6 +292,7 @@
                         <h3>Man of the Match Awards</h3>
                     </div>
                     <div class="widget-body">
+                        {% if motm_leaderboard %}
                         <table class="leaderboard-table">
                             <thead>
                                 <tr>
@@ -299,11 +311,79 @@
                                 {% endfor %}
                             </tbody>
                         </table>
+                        {% else %}
+                        <div class="empty-widget">No data yet</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="leaderboard-widget">
+                    <div class="widget-header">
+                        <i class="fas fa-fire"></i>
+                        <h3>Most Runs</h3>
+                    </div>
+                    <div class="widget-body">
+                        {% if top_run_scorers %}
+                        <table class="leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th>Player</th>
+                                    <th>Team</th>
+                                    <th>Runs</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in top_run_scorers %}
+                                <tr>
+                                    <td class="player-name">
+                                        <a href="{{ url_for('player_profile_page', player_id=row.player_id, match_format=tournament.format_type) }}">{{ row.player_name }}</a>
+                                    </td>
+                                    <td>{{ row.team_name }}</td>
+                                    <td class="stat-highlight">{{ row.runs }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="empty-widget">No data yet</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="leaderboard-widget">
+                    <div class="widget-header">
+                        <i class="fas fa-crosshairs"></i>
+                        <h3>Most Wickets</h3>
+                    </div>
+                    <div class="widget-body">
+                        {% if top_wicket_takers %}
+                        <table class="leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th>Player</th>
+                                    <th>Team</th>
+                                    <th>Wickets</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in top_wicket_takers %}
+                                <tr>
+                                    <td class="player-name">
+                                        <a href="{{ url_for('player_profile_page', player_id=row.player_id, match_format=tournament.format_type) }}">{{ row.player_name }}</a>
+                                    </td>
+                                    <td>{{ row.team_name }}</td>
+                                    <td class="stat-highlight">{{ row.wickets }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="empty-widget">No data yet</div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
-        {% endif %}
 
     </div>
 
@@ -320,16 +400,16 @@
         }
 
         .leaderboard-widget {
-            background: #2c323c;
+            background: var(--bg);
             border-radius: 12px;
             padding: 1.25rem;
-            border: 1px solid #3e4451;
+            border: 1px solid var(--card-border);
             transition: all 0.3s ease;
         }
 
         .leaderboard-widget:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 8px 16px var(--shadow);
         }
 
         .widget-header {
@@ -338,19 +418,19 @@
             gap: 0.75rem;
             margin-bottom: 1rem;
             padding-bottom: 0.75rem;
-            border-bottom: 2px solid #3e4451;
+            border-bottom: 2px solid var(--card-border);
         }
 
         .widget-header i {
             font-size: 1.25rem;
-            color: #61afef;
+            color: var(--accent);
         }
 
         .widget-header h3 {
             margin: 0;
             font-size: 1rem;
             font-weight: 600;
-            color: #abb2bf;
+            color: var(--fg);
         }
 
         .widget-body {
@@ -363,7 +443,7 @@
         }
 
         .leaderboard-table thead {
-            border-bottom: 1px solid #3e4451;
+            border-bottom: 1px solid var(--card-border);
         }
 
         .leaderboard-table th {
@@ -371,14 +451,14 @@
             padding: 0.5rem;
             font-size: 0.75rem;
             font-weight: 600;
-            color: #5c6370;
+            color: var(--fg-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .leaderboard-table td {
             padding: 0.75rem 0.5rem;
-            border-bottom: 1px solid #3e4451;
+            border-bottom: 1px solid var(--card-border);
             font-size: 0.9rem;
         }
 
@@ -387,18 +467,28 @@
         }
 
         .player-name {
-            color: #abb2bf;
+            color: var(--fg);
             font-weight: 500;
         }
 
+        .player-name a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .player-name a:hover {
+            color: var(--accent);
+            text-decoration: underline;
+        }
+
         .stat-highlight {
-            color: #98c379;
+            color: var(--success);
             font-weight: 700;
             font-size: 1rem;
         }
 
         .opponent-name {
-            color: #5c6370;
+            color: var(--fg-secondary);
             font-size: 0.85rem;
         }
 
@@ -407,7 +497,7 @@
             align-items: center;
             justify-content: center;
             height: 200px;
-            color: #5c6370;
+            color: var(--fg-secondary);
             font-size: 0.9rem;
         }
 
@@ -416,7 +506,7 @@
             align-items: center;
             justify-content: center;
             height: 200px;
-            color: #5c6370;
+            color: var(--fg-secondary);
             font-size: 0.9rem;
             font-style: italic;
         }
@@ -453,6 +543,17 @@
             display: grid;
             grid-template-columns: 380px 1fr;
             gap: 1.5rem;
+        }
+
+        .dashboard-content.single-column {
+            grid-template-columns: 1fr;
+        }
+
+        /* Always spans the full row regardless of 1- or 2-column layout —
+           without this a 3rd auto-placed grid item lands in just the
+           380px sidebar column instead of using the page width. */
+        .leaders-section {
+            grid-column: 1 / -1;
         }
 
         @media (max-width: 1024px) {

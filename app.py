@@ -1968,29 +1968,20 @@ def create_app():
                 db.session.flush()  # Ensure match is persisted before scorecard
                 logger.info(f"[Tournament] DBMatch added to session for {match_id}")
                 
-                # Step 9: Update fixture status and link to match
+                # Step 9: Link the match to its fixture. The terminal status
+                # (Completed, or Scheduled if this ended with no winner on a
+                # knockout/playoff fixture — a tie/no-result a super over
+                # couldn't resolve) is decided by update_standings below,
+                # the single authoritative place for that rule since it's
+                # also called directly by the standalone orphaned-match
+                # repair script without going through this path.
                 fixture.match_id = match_id
                 fixture.winner_team_id = db_match.winner_team_id
-
-                # Knockout/playoff fixtures MUST have a winner to progress.
-                # If the match ended as a tie/no-result in a non-league stage,
-                # keep the fixture as 'Scheduled' so the user can re-simulate.
-                is_knockout_stage = fixture.stage and fixture.stage != 'league'
-                if is_knockout_stage and not db_match.winner_team_id:
-                    fixture.status = 'Scheduled'
-                    fixture.standings_applied = False
-                    logger.warning(
-                        f"[Tournament] Knockout fixture {fixture_id} has no winner "
-                        f"(stage={fixture.stage}). Fixture kept as Scheduled for re-simulation."
-                    )
-                else:
-                    fixture.status = 'Completed'
-
-                logger.info(f"[Tournament] Fixture {fixture_id} status set to {fixture.status}")
 
                 # Step 10: Update tournament standings (critical operation)
                 logger.info(f"[Tournament] Updating standings for tournament {tournament_id}")
                 standings_updated = tournament_engine.update_standings(db_match, commit=False)
+                logger.info(f"[Tournament] Fixture {fixture_id} status is now {fixture.status}")
 
                 if standings_updated:
                     logger.info(f"[Tournament] Standings updated successfully for tournament {tournament_id}")

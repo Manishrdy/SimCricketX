@@ -9,6 +9,27 @@ from sqlalchemy import func as sa_func
 from utils.exception_tracker import log_exception
 
 
+_KNOCKOUT_STAGE_LABELS = {
+    "final": "Final",
+    "knockout_sf": "Semi Final",
+    "knockout_qf": "Quarter Final",
+    "knockout_r2": "Round of 16",
+    "knockout_r1": "Round 1",
+    "completed": "Completed",
+}
+
+
+def _format_knockout_stage(stage):
+    """Human-readable label for a Tournament.current_stage value in
+    Knockout mode. Named stages get a proper cricket-tournament label;
+    the generic 'round_N' fallback (used for brackets larger than 16
+    teams) just gets title-cased.
+    """
+    if not stage:
+        return "—"
+    return _KNOCKOUT_STAGE_LABELS.get(stage, stage.replace("_", " ").title())
+
+
 def register_tournament_routes(
     app,
     *,
@@ -131,6 +152,10 @@ def register_tournament_routes(
                 flash("Invalid match format selected.", "error")
                 return redirect(url_for("create_tournament_route"))
 
+            if mode not in tournament_engine.MIN_TEAMS:
+                flash("Invalid tournament format selected.", "error")
+                return redirect(url_for("create_tournament_route"))
+
             if not name or len(team_ids) < 2:
                 flash("Please provide a tournament name and select at least 2 teams.", "error")
                 return redirect(url_for("create_tournament_route"))
@@ -238,11 +263,14 @@ def register_tournament_routes(
                 next_fixture_id = f.id
                 break
 
-        # Player of the Tournament — live count of MOTM awards within this
-        # tournament's matches, top 5. Computed directly rather than via
-        # TournamentPlayerStatsCache (that cache is fully rebuilt per match
-        # and has a one-match write-order lag; this is cheap enough to just
-        # query live).
+        # Tournament Leaders — live aggregates within this tournament's
+        # matches, top 5 each. Computed directly over DBMatch/MatchScorecard
+        # rather than via TournamentPlayerStatsCache: that cache is only
+        # rebuilt once per match, but update_standings() (which triggers
+        # the rebuild) runs before that same match's MatchScorecard rows
+        # are persisted (Step 10 vs Step 13 in the match-completion flow in
+        # app.py), so the cache always lags one match behind for whoever
+        # just played. Querying live avoids that lag.
         motm_rows = (
             db.session.query(DBMatch.motm_player_id, sa_func.count(DBMatch.id))
             .filter(
@@ -254,28 +282,109 @@ def register_tournament_routes(
             .limit(5)
             .all()
         )
-        motm_leaderboard = []
-        if motm_rows:
+
+        top_scorer_rows = (
+            db.session.query(MatchScorecard.player_id, sa_func.sum(MatchScorecard.runs))
+            .join(DBMatch, MatchScorecard.match_id == DBMatch.id)
+            .filter(
+                DBMatch.tournament_id == tournament_id,
+                MatchScorecard.record_type == "batting",
+                MatchScorecard.is_super_over.isnot(True),
+            )
+            .group_by(MatchScorecard.player_id)
+            .order_by(sa_func.sum(MatchScorecard.runs).desc())
+            .limit(5)
+            .all()
+        )
+
+        top_wicket_rows = (
+            db.session.query(
+                MatchScorecard.player_id,
+                sa_func.sum(MatchScorecard.wickets),
+                sa_func.sum(MatchScorecard.runs_conceded),
+            )
+            .join(DBMatch, MatchScorecard.match_id == DBMatch.id)
+            .filter(
+                DBMatch.tournament_id == tournament_id,
+                MatchScorecard.record_type == "bowling",
+                MatchScorecard.is_super_over.isnot(True),
+            )
+            .group_by(MatchScorecard.player_id)
+            .order_by(
+                sa_func.sum(MatchScorecard.wickets).desc(),
+                sa_func.sum(MatchScorecard.runs_conceded).asc(),
+            )
+            .limit(5)
+            .all()
+        )
+
+        # Resolve players/teams for all three leaderboards in one pair of
+        # queries instead of three.
+        all_player_ids = (
+            {pid for pid, _ in motm_rows}
+            | {pid for pid, _ in top_scorer_rows}
+            | {pid for pid, _, _ in top_wicket_rows}
+        )
+        players = {}
+        teams = {}
+        if all_player_ids:
             players = {
-                p.id: p for p in DBPlayer.query.filter(
-                    DBPlayer.id.in_([pid for pid, _ in motm_rows])
-                ).all()
+                p.id: p for p in DBPlayer.query.filter(DBPlayer.id.in_(all_player_ids)).all()
             }
             teams = {
                 t2.id: t2 for t2 in DBTeam.query.filter(
                     DBTeam.id.in_([p.team_id for p in players.values() if p.team_id])
                 ).all()
             }
-            for player_id, count in motm_rows:
-                player = players.get(player_id)
-                if not player:
-                    continue
-                team = teams.get(player.team_id)
-                motm_leaderboard.append({
-                    "player_name": player.name,
-                    "team_name": team.name if team else "",
-                    "awards": count,
-                })
+
+        motm_leaderboard = []
+        for player_id, count in motm_rows:
+            player = players.get(player_id)
+            if not player:
+                continue
+            team = teams.get(player.team_id)
+            motm_leaderboard.append({
+                "player_name": player.name,
+                "team_name": team.name if team else "",
+                "awards": count,
+            })
+
+        top_run_scorers = []
+        for player_id, runs in top_scorer_rows:
+            player = players.get(player_id)
+            if not player:
+                continue
+            team = teams.get(player.team_id)
+            top_run_scorers.append({
+                "player_id": player_id,
+                "player_name": player.name,
+                "team_name": team.name if team else "",
+                "runs": runs,
+            })
+
+        top_wicket_takers = []
+        for player_id, wickets, _conceded in top_wicket_rows:
+            player = players.get(player_id)
+            if not player:
+                continue
+            team = teams.get(player.team_id)
+            top_wicket_takers.append({
+                "player_id": player_id,
+                "player_name": player.name,
+                "team_name": team.name if team else "",
+                "wickets": wickets,
+            })
+
+        # Pure Knockout is the only mode whose fixtures are never staged
+        # 'league' (see TournamentEngine.update_standings), so its
+        # TournamentTeam rows never accumulate real W/L/points/NRR — a
+        # Points Table for it would always read all-zero with arbitrary
+        # ordering. Every other mode (round robin, the league+playoffs
+        # modes, and custom series) has a genuine league stage.
+        has_league_standings = t.mode != tournament_engine.MODE_KNOCKOUT
+        current_round_label = (
+            _format_knockout_stage(t.current_stage) if not has_league_standings else None
+        )
 
         return render_template(
             "tournaments/dashboard.html",
@@ -284,6 +393,10 @@ def register_tournament_routes(
             fixtures=fixtures,
             next_fixture_id=next_fixture_id,
             motm_leaderboard=motm_leaderboard,
+            top_run_scorers=top_run_scorers,
+            top_wicket_takers=top_wicket_takers,
+            has_league_standings=has_league_standings,
+            current_round_label=current_round_label,
         )
 
     @app.route("/tournaments/<int:tournament_id>/rename", methods=["POST"])
@@ -355,6 +468,10 @@ def register_tournament_routes(
     @limiter.limit("10 per minute")
     def resimulate_fixture(fixture_id):
         """Reset a fixture to Scheduled and clear old simulation artifacts."""
+        # Bound up front so the except handler's `fixture if fixture else 0`
+        # can never raise UnboundLocalError if the very first lookup below
+        # is what fails.
+        fixture = None
         try:
             fixture = db.session.get(TournamentFixture, fixture_id)
             if not fixture:
