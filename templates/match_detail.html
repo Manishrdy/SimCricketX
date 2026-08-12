@@ -10,45 +10,62 @@
 {% endblock %}
 
 {% block content %}
+{% set role_abbr = {'Batsman': 'BAT', 'Bowler': 'BOWL', 'All-rounder': 'AR', 'Wicketkeeper': 'WK'} %}
 <div class="match-layout">
     <!-- Sidebar: Match Info & Toss -->
     <div class="info-card">
         <div class="match-meta-grid">
-            <div class="meta-item"><i class="fa fa-fingerprint"></i> ID: {{ match.match_id }}</div>
-            <div class="meta-item"><i class="fa fa-calendar-alt"></i>
-                {% if match.timestamp and match.timestamp|length >= 8 %}
-                {{ match.timestamp[4:6] }}-{{ match.timestamp[6:8] }}-{{ match.timestamp[0:4] }}
-                {% else %}
-                {{ match.timestamp }}
-                {% endif %}
+            <div class="meta-item" title="{{ match.match_id }}">
+                <span class="meta-icon"><i class="fa fa-fingerprint"></i></span>
+                <span class="meta-value meta-mono">{{ match.match_id[:8] }}&hellip;</span>
             </div>
-            <div class="meta-item">🏟️ {{ match.stadium }}</div>
-            <div class="meta-item"><i class="fa fa-paint-roller"></i> {{ match.pitch }}</div>
+            <div class="meta-item">
+                <span class="meta-icon"><i class="fa fa-calendar-alt"></i></span>
+                <span class="meta-value">
+                    {% if match.timestamp and match.timestamp|length >= 8 %}
+                    {{ match.timestamp[4:6] }}-{{ match.timestamp[6:8] }}-{{ match.timestamp[0:4] }}
+                    {% else %}
+                    {{ match.timestamp }}
+                    {% endif %}
+                </span>
+            </div>
+            <div class="meta-item" title="{{ match.stadium }}">
+                <span class="meta-icon"><i class="fa-solid fa-map-location-dot"></i></span>
+                <span class="meta-value">{{ match.stadium }}</span>
+            </div>
+            <div class="meta-item" title="{{ match.pitch }}">
+                <span class="meta-icon"><i class="fa fa-paint-roller"></i></span>
+                <span class="meta-value">{{ match.pitch }}</span>
+            </div>
         </div>
 
         <div class="toss-section">
-            <h3 style="margin-bottom: 1rem;">Toss</h3>
+            <h3><i class="fa-solid fa-coins" aria-hidden="true"></i> Toss</h3>
             <button id="spin-toss" class="impact-btn primary toss-btn">Spin Coin</button>
-            <div id="toss-result">Pending...</div>
+            <div id="toss-result">Pending&hellip;</div>
         </div>
 
         <div class="team-list-container">
-            <div class="team-list-header" style="border-color: #3b82f6;">{{ match.team_home.split('_')[0] }} XI</div>
+            <div class="team-list-header" style="--team-accent:#3b82f6;">
+                <span class="team-dot"></span>{{ match.team_home.split('_')[0] }} XI
+            </div>
             <ul class="xi-list" id="home-xi-display">
                 {% for p in match.playing_xi.home %}
-                <li>
-                    <span>{{ p.name }}</span>
-                    <span class="xi-role">{{ p.role }}</span>
+                <li data-role="{{ p.role }}">
+                    <span class="xi-role">{{ role_abbr.get(p.role, p.role) }}</span>
+                    <span class="xi-name">{{ p.name }}{% if p.is_captain %} <span class="xi-captain" title="Captain">C</span>{% endif %}</span>
                 </li>
                 {% endfor %}
             </ul>
 
-            <div class="team-list-header" style="border-color: #ef4444;">{{ match.team_away.split('_')[0] }} XI</div>
+            <div class="team-list-header" style="--team-accent:#ef4444;">
+                <span class="team-dot"></span>{{ match.team_away.split('_')[0] }} XI
+            </div>
             <ul class="xi-list" id="away-xi-display">
                 {% for p in match.playing_xi.away %}
-                <li>
-                    <span>{{ p.name }}</span>
-                    <span class="xi-role">{{ p.role }}</span>
+                <li data-role="{{ p.role }}">
+                    <span class="xi-role">{{ role_abbr.get(p.role, p.role) }}</span>
+                    <span class="xi-name">{{ p.name }}{% if p.is_captain %} <span class="xi-captain" title="Captain">C</span>{% endif %}</span>
                 </li>
                 {% endfor %}
             </ul>
