@@ -211,7 +211,10 @@ function getMatchFormat() {
 }
 
 function isImpactPlayerEnabled() {
-    return getMatchFormat() === 'T20';
+    // Impact Player UI removed (backend swap route/logic untouched — see
+    // impact_player_swap in routes/match_routes.py). Restore
+    // `getMatchFormat() === 'T20'` to re-enable the mid-innings modal.
+    return false;
 }
 
 function showImpactPlayerModal() {

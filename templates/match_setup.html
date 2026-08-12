@@ -1142,25 +1142,8 @@
                         <input type="hidden" id="interesting-match-flag" value="false">
                     </div>
 
-                    <div class="ms-setting-row">
-                        <div class="ms-setting-copy">
-                            <label class="ms-setting-label" for="story-select">Story Mode</label>
-                            <span class="ms-setting-hint"><span id="story-help">Story Mode is temporarily unavailable — this match will play out normally.</span></span>
-                        </div>
-                        {# Disabled for now. The preselect is deliberately dropped as well:
-                           a disabled <select> still reports a selected value, so
-                           /match/setup?story=<id> would otherwise post a story_id and
-                           start a story match anyway. Restore `selected` with the
-                           `disabled` attribute to re-enable. #}
-                        <select id="story-select" disabled class="ms-setting-control">
-                            <option value="" selected>Unavailable — stories are switched off</option>
-                            {% for sp in story_packs %}
-                            <option value="{{ sp.id }}" data-format="{{ sp.format }}">
-                                {{ sp.title }} ({{ sp.format }})
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
+                    {# Story Mode UI removed (backend/routes/story_packs context untouched)
+                       — restore the ms-setting-row with #story-select here to re-enable. #}
 
                     <div class="ms-setting-row">
                         <div class="ms-setting-copy">
@@ -1194,7 +1177,7 @@
                 <div class="ms-step-header">
                     <h2>Finalize Playing XIs</h2>
                     <p class="ms-step-sub">
-                        Drag players to organize the lineup, double-click to add to Playing XI, double right-click to send to Bench, or press Enter to cycle zones. Ensure 5 bowlers + 1 Keeper per side.
+                        Drag players to organize the lineup, double-click to add to Playing XI, or press Enter to cycle zones. Ensure 5 bowlers + 1 Keeper per side.
                     </p>
                 </div>
 
@@ -1205,7 +1188,11 @@
                             <span class="team-pane-name" id="home-name">Home Team</span>
                             <div class="team-pane-counts">
                                 <span class="ms-count-chip" id="home-xi-count">0/11</span>
-                                <span class="ms-count-chip" id="home-sub-count">0/5</span>
+                                <!-- Bench UI removed (backend/substitutes data flow untouched) — the
+                                     hidden zone below keeps #home-substitutes and #home-sub-count in
+                                     the DOM so existing JS (getPlayers, updateCounts, saved-lineup
+                                     restore) keeps working unmodified. -->
+                                <span class="ms-count-chip" id="home-sub-count" style="display:none" aria-hidden="true">0/5</span>
                             </div>
                         </div>
                         <div class="drop-zones">
@@ -1213,7 +1200,7 @@
                                 <div class="zone-header"><i class="fa-solid fa-list-ol"></i> Playing XI</div>
                                 <div class="drop-zone" id="home-selected" role="listbox" aria-label="Home Playing XI"></div>
                             </div>
-                            <div>
+                            <div style="display:none" aria-hidden="true">
                                 <div class="zone-header"><i class="fa-solid fa-user-clock"></i> Bench</div>
                                 <div class="drop-zone" id="home-substitutes" role="listbox" aria-label="Home Bench"></div>
                             </div>
@@ -1230,7 +1217,7 @@
                             <span class="team-pane-name" id="away-name">Away Team</span>
                             <div class="team-pane-counts">
                                 <span class="ms-count-chip" id="away-xi-count">0/11</span>
-                                <span class="ms-count-chip" id="away-sub-count">0/5</span>
+                                <span class="ms-count-chip" id="away-sub-count" style="display:none" aria-hidden="true">0/5</span>
                             </div>
                         </div>
                         <div class="drop-zones">
@@ -1238,7 +1225,7 @@
                                 <div class="zone-header"><i class="fa-solid fa-list-ol"></i> Playing XI</div>
                                 <div class="drop-zone" id="away-selected" role="listbox" aria-label="Away Playing XI"></div>
                             </div>
-                            <div>
+                            <div style="display:none" aria-hidden="true">
                                 <div class="zone-header"><i class="fa-solid fa-user-clock"></i> Bench</div>
                                 <div class="drop-zone" id="away-substitutes" role="listbox" aria-label="Away Bench"></div>
                             </div>
@@ -1364,8 +1351,6 @@
     // v2: lineups are keyed per-format — T20 lineups never bleed into ListA slots.
     const LINEUP_STORAGE_VERSION = 2;
     const MATCH_FORMATS = ['T20', 'ListA'];
-    const RIGHT_CLICK_DOUBLE_MS = 350;
-    let lastRightClick = { pill: null, at: 0 };
     const _setupConfig = JSON.parse(document.getElementById('setup-config').textContent);
     const tournamentId = _setupConfig.tournamentId;
     const fixtureId = _setupConfig.fixtureId;
@@ -1774,10 +1759,9 @@
         const storySelect = document.getElementById('story-select');
         const storyHelp = document.getElementById('story-help');
         const interestingToggle = document.getElementById('interesting-match-toggle');
+        // The story picker's markup is removed from the UI; this whole
+        // function is a no-op until it's restored.
         if (!storySelect) return;
-        // Story Mode is switched off: leave the disabled control and its
-        // "unavailable" helper text exactly as rendered. Dropping the
-        // `disabled` attribute re-enables all of the behaviour below.
         if (storySelect.disabled) return;
 
         // Stories are format-specific: hide options that don't match the
@@ -2099,19 +2083,6 @@
             if (e.target.closest('.bowl-check')) return;
             movePlayerToZone(div, side, 'selected', 'Playing XI');
         };
-        div.oncontextmenu = e => {
-            e.preventDefault();
-            if (e.target.closest('.bowl-check')) return;
-
-            const now = Date.now();
-            const isDoubleRightClick = lastRightClick.pill === div && (now - lastRightClick.at) <= RIGHT_CLICK_DOUBLE_MS;
-            lastRightClick = { pill: div, at: now };
-
-            if (isDoubleRightClick) {
-                movePlayerToZone(div, side, 'substitutes', 'Bench');
-            }
-        };
-
         return div;
     }
 
@@ -2204,8 +2175,10 @@
     }
 
     function cyclePlayerZone(pill, side) {
-        const zones = ['selected', 'substitutes', 'available'];
-        const zoneLabels = ['Playing XI', 'Bench', 'Reserve'];
+        // Bench UI removed — cycle only between Playing XI and Reserve so
+        // keyboard users can never land a player in the hidden Bench zone.
+        const zones = ['selected', 'available'];
+        const zoneLabels = ['Playing XI', 'Reserve'];
         const currentZone = pill.parentElement;
         const currentId = currentZone ? currentZone.id : '';
 
