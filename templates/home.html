@@ -4,243 +4,195 @@
 
 {% block extra_css %}
 <style>
-    /* --- Premium Cricket Theme --- */
+    /* --- Command Center Theme (teal/amber identity, evolved from landing) --- */
+    :root {
+        --font-sans: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+        --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
 
-    /* Animations - Smoother & More Subtle */
-    @keyframes floating {
+        --bg: #f9fffe;
+        --bg-secondary: #f0faf9;
+        --fg: #1a2e2c;
+        --fg-secondary: #52726e;
+        --card-bg: #ffffff;
+        --card-border: #cfe8e6;
 
-        0%,
-        100% {
+        --accent: #0f766e;
+        --accent-hover: #0d6860;
+        --accent-light: rgba(15, 118, 110, 0.10);
+        --amber: #f59e0b;
+        --amber-dark: #d97706;
+        --gradient: linear-gradient(135deg, #0f766e 0%, #f59e0b 100%);
+    }
+
+    [data-theme="dark"] {
+        --bg: #0d1416;
+        --bg-secondary: #111b1e;
+        --fg: #e6edf0;
+        --fg-secondary: #9aa5b1;
+        --card-bg: #111b1e;
+        --card-border: #1f3035;
+
+        --accent: #3fb6a8;
+        --accent-hover: #35a89a;
+        --accent-light: rgba(63, 182, 168, 0.15);
+        --amber: #f1b84b;
+        --amber-dark: #d9a240;
+        --gradient: linear-gradient(135deg, #3fb6a8 0%, #f1b84b 100%);
+    }
+
+    body {
+        font-family: var(--font-sans);
+    }
+
+    @keyframes tileIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
             transform: translateY(0);
         }
-
-        50% {
-            transform: translateY(-10px);
-        }
     }
 
-    @keyframes pulse-glow {
-
-        0%,
-        100% {
-            opacity: 0.5;
-            transform: scale(1);
-        }
-
-        50% {
-            opacity: 0.8;
-            transform: scale(1.05);
-        }
-    }
-
-    @keyframes stitch-scroll {
-        0% {
-            background-position: 0 0;
-        }
-
-        100% {
-            background-position: 20px 20px;
-        }
-    }
-
-    /* Hero Section - Immersive & Clean */
-    .hero-section {
+    /* ── Command Bar (compact header, replaces the old marketing hero) ── */
+    .cmd-bar {
         position: relative;
-        text-align: center;
-        padding: 8rem 2rem 6rem;
-        margin-bottom: 4rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        padding: 1.75rem 2rem;
+        margin-bottom: 2rem;
+        border-radius: 22px;
+        background: color-mix(in srgb, var(--bg-secondary), transparent 0%);
+        border: 1px solid var(--card-border);
         overflow: hidden;
-        /* Subtle deep gradient */
-        background: radial-gradient(circle at center top, rgba(34, 197, 94, 0.08) 0%, transparent 60%);
     }
 
-    /* Abstract Cricket Field Pattern */
-    .hero-section::before {
+    .cmd-bar::before {
         content: '';
         position: absolute;
-        inset: 0;
-        background-image:
-            linear-gradient(rgba(34, 197, 94, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(34, 197, 94, 0.03) 1px, transparent 1px);
-        background-size: 80px 80px;
-        mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
-        -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
-        z-index: 0;
+        top: -40%;
+        right: -10%;
+        width: 320px;
+        height: 320px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--amber) 0%, transparent 70%);
+        opacity: 0.14;
+        filter: blur(10px);
         pointer-events: none;
     }
 
-    /* Abstract Decorative Elements */
-    .hero-decor {
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(60px);
-        opacity: 0.4;
-        z-index: 0;
-        animation: floating 8s ease-in-out infinite;
+    .cmd-greeting {
+        position: relative;
+        z-index: 1;
+        min-width: 240px;
     }
 
-    .decor-ball {
-        top: 10%;
-        right: 15%;
-        width: 150px;
-        height: 150px;
-        background: radial-gradient(circle, var(--one-dark-red, #e06c75) 0%, transparent 70%);
-        animation-delay: 1s;
-    }
-
-    .decor-field {
-        bottom: 10%;
-        left: 15%;
-        width: 200px;
-        height: 200px;
-        background: radial-gradient(circle, var(--one-dark-green, #98c379) 0%, transparent 70%);
-        animation-delay: -2s;
-    }
-
-    /* Typography */
-    .hero-pretitle {
+    .cmd-eyebrow {
         display: inline-flex;
         align-items: center;
-        gap: 0.75rem;
-        padding: 0.5rem 1rem;
-        background: rgba(34, 197, 94, 0.1);
-        border: 1px solid rgba(34, 197, 94, 0.2);
-        border-radius: 100px;
-        color: var(--one-dark-green, #16a34a);
-        font-size: 0.85rem;
-        font-weight: 600;
+        gap: 0.5rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 2rem;
-        position: relative;
-        z-index: 2;
-        backdrop-filter: blur(4px);
+        color: var(--accent);
+        margin-bottom: 0.5rem;
     }
 
-    .hero-title {
-        font-size: clamp(3rem, 6vw, 5rem);
-        font-weight: 800;
-        /* Extra bold but not black */
-        line-height: 1.1;
-        letter-spacing: -0.03em;
-        margin-bottom: 1.5rem;
-        position: relative;
-        z-index: 2;
-        background: linear-gradient(135deg, var(--fg) 20%, var(--fg-secondary) 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+    .cmd-title {
+        font-size: clamp(1.5rem, 3vw, 2.1rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--fg);
+        margin-bottom: 0.35rem;
+        line-height: 1.2;
     }
 
-    .hero-subtitle {
-        font-size: 1.25rem;
+    .cmd-subtitle {
+        font-size: 0.94rem;
         color: var(--fg-secondary);
-        max-width: 600px;
-        /* Tighter width for better reading */
-        margin: 0 auto 4rem;
-        line-height: 1.6;
-        position: relative;
-        z-index: 2;
-        font-weight: 500;
+        max-width: 480px;
+        line-height: 1.5;
     }
 
-    /* premium Glass Stats Board */
-    .hero-stats {
+    .cmd-stats {
         position: relative;
-        z-index: 2;
-        display: inline-flex;
+        z-index: 1;
+        display: flex;
         flex-wrap: wrap;
-        justify-content: center;
-        align-items: center;
-        gap: 1.5rem;
-        /* Gap handled by padding/borders now */
-        background: var(--card-bg);
-        /* Fallback */
-        /* Glass Effect */
-        background: color-mix(in srgb, var(--card-bg), transparent 20%);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        padding: 0.75rem;
-        border-radius: 24px;
-        border: 1px solid var(--card-border);
-        box-shadow:
-            0 20px 40px -10px rgba(0, 0, 0, 0.1),
-            0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+        gap: 0.6rem;
     }
 
-    .hero-stat-item {
+    .cmd-stat {
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 1.5rem 3rem;
-        position: relative;
+        justify-content: center;
+        min-width: 92px;
+        padding: 0.7rem 1rem;
+        border-radius: 14px;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
     }
 
-    .hero-stat-item:not(:last-child)::after {
-        content: '';
-        position: absolute;
-        right: 0;
-        top: 20%;
-        height: 60%;
-        width: 1px;
-        background: linear-gradient(to bottom, transparent, var(--card-border), transparent);
-    }
-
-    .stat-number {
-        font-size: 2.5rem;
+    .cmd-stat-num {
+        font-size: 1.35rem;
         font-weight: 700;
         color: var(--fg);
-        line-height: 1.2;
-        font-feature-settings: "tnum";
         font-variant-numeric: tabular-nums;
-        letter-spacing: -0.05em;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
     }
 
-    .stat-number.is-online {
+    .cmd-stat-num.is-online {
         color: #10b981;
-        text-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+        text-shadow: 0 0 16px rgba(16, 185, 129, 0.35);
     }
 
-    .stat-label {
-        font-size: 0.75rem;
+    .cmd-stat-label {
+        font-size: 0.68rem;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.08em;
         font-weight: 600;
         color: var(--fg-secondary);
-        margin-top: 0.25rem;
+        margin-top: 0.15rem;
     }
 
-    /* Compact Menu Layout */
-    .menu-section {
-        margin-bottom: 5rem;
-        position: relative;
-        z-index: 2;
+    /* ── Bento command grid ── */
+    .bento-section {
+        margin-bottom: 3rem;
     }
 
-    .menu-toolbar {
+    .bento-toolbar {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 1rem;
-        margin-bottom: 1.2rem;
+        margin-bottom: 1.1rem;
     }
 
-    .menu-eyebrow {
+    .bento-eyebrow {
         font-size: 0.72rem;
         letter-spacing: 0.12em;
         text-transform: uppercase;
         color: var(--fg-secondary);
-        margin-bottom: 0.4rem;
+        margin-bottom: 0.35rem;
     }
 
-    .menu-heading {
-        font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+    .bento-heading {
+        font-size: clamp(1.4rem, 2.4vw, 1.9rem);
         color: var(--fg);
         letter-spacing: -0.02em;
+        font-weight: 700;
     }
 
-    .menu-count {
-        font-size: 0.8rem;
+    .bento-count {
+        font-size: 0.78rem;
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
@@ -249,48 +201,77 @@
         border: 1px solid var(--card-border);
         border-radius: 999px;
         padding: 0.35rem 0.75rem;
+        flex-shrink: 0;
     }
 
-    .menu-grid {
+    .bento-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-        gap: 0.9rem;
+        grid-template-columns: repeat(4, 1fr);
+        grid-auto-rows: 150px;
+        grid-auto-flow: dense;
+        gap: 1rem;
     }
 
-    .menu-item {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
-        align-items: center;
-        gap: 0.85rem;
-        background: color-mix(in srgb, var(--card-bg), transparent 12%);
+    .bento-tile {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        border-radius: 20px;
         border: 1px solid var(--card-border);
-        border-radius: 16px;
-        padding: 0.9rem 1rem;
+        background: var(--card-bg);
+        padding: 1.25rem;
         text-decoration: none;
-        transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+        overflow: hidden;
+        opacity: 0;
+        animation: tileIn 0.4s ease forwards;
+        transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
     }
 
-    .menu-item.is-disabled {
-        cursor: not-allowed;
-        opacity: 0.55;
-        filter: grayscale(0.25);
+    .bento-grid .bento-tile:nth-child(1) {
+        animation-delay: 0ms;
     }
 
-    .menu-item:hover {
+    .bento-grid .bento-tile:nth-child(2) {
+        animation-delay: 40ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(3) {
+        animation-delay: 80ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(4) {
+        animation-delay: 120ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(5) {
+        animation-delay: 160ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(6) {
+        animation-delay: 200ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(7) {
+        animation-delay: 240ms;
+    }
+
+    .bento-grid .bento-tile:nth-child(8) {
+        animation-delay: 280ms;
+    }
+
+    .bento-tile:hover {
         transform: translateY(-3px);
-        border-color: var(--accent-light);
-        background: color-mix(in srgb, var(--card-bg), var(--accent-light) 16%);
-        box-shadow: 0 14px 26px -18px rgba(0, 0, 0, 0.45);
+        border-color: var(--accent);
+        box-shadow: 0 16px 32px -20px rgba(0, 0, 0, 0.4);
     }
 
-    .menu-item.is-disabled:hover {
-        transform: none;
-        border-color: var(--card-border);
-        background: color-mix(in srgb, var(--card-bg), transparent 12%);
-        box-shadow: none;
+    .bento-tile:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
     }
 
-    .menu-icon {
+    .tile-icon {
         width: 42px;
         height: 42px;
         border-radius: 12px;
@@ -300,70 +281,170 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1rem;
-        transition: transform 0.25s ease, color 0.25s ease, background 0.25s ease;
+        font-size: 1.05rem;
+        flex-shrink: 0;
+        transition: transform 0.22s ease, background 0.22s ease, color 0.22s ease;
     }
 
-    .menu-item:hover .menu-icon {
-        transform: rotate(-6deg) scale(1.07);
+    .bento-tile:hover .tile-icon {
+        transform: rotate(-6deg) scale(1.06);
         background: var(--accent);
         color: #fff;
     }
 
-    .menu-item.is-disabled:hover .menu-icon {
-        transform: none;
-        background: var(--bg-secondary);
-        color: var(--accent);
-    }
-
-    .menu-title {
+    .tile-title {
         font-size: 1rem;
         font-weight: 650;
         color: var(--fg);
-        margin-bottom: 0.2rem;
+        margin: 0.7rem 0 0.25rem;
         line-height: 1.3;
     }
 
-    .menu-desc {
+    .tile-desc {
         font-size: 0.84rem;
         color: var(--fg-secondary);
-        line-height: 1.35;
+        line-height: 1.4;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
 
-    .menu-arrow {
+    .tile-arrow {
+        align-self: flex-end;
         color: var(--fg-secondary);
         font-size: 0.86rem;
-        transition: transform 0.25s ease, color 0.25s ease;
+        transition: transform 0.22s ease, color 0.22s ease;
     }
 
-    .menu-item:hover .menu-arrow {
+    .bento-tile:hover .tile-arrow {
         transform: translateX(3px);
         color: var(--accent);
     }
 
-    .menu-item.is-disabled:hover .menu-arrow {
-        transform: none;
-        color: var(--fg-secondary);
+    /* Featured "Simulate Match" tile — the primary action */
+    .tile-hero {
+        grid-column: span 2;
+        grid-row: span 2;
+        background: linear-gradient(160deg, var(--accent) 0%, var(--accent-hover) 55%, #0a2e2b 100%);
+        border-color: transparent;
+        color: #f3fffb;
     }
 
-    .menu-lock-badge {
+    [data-theme="dark"] .tile-hero {
+        background: linear-gradient(160deg, var(--accent) 0%, #0f2a27 65%, #081d1b 100%);
+    }
+
+    .tile-hero::before {
+        content: '';
+        position: absolute;
+        top: -20%;
+        right: -15%;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--amber) 0%, transparent 70%);
+        opacity: 0.4;
+        filter: blur(6px);
+        pointer-events: none;
+    }
+
+    .tile-hero:hover {
+        border-color: transparent;
+        box-shadow: 0 20px 44px -20px rgba(15, 118, 110, 0.55);
+    }
+
+    .tile-hero .tile-icon {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.22);
+        color: #fff;
+        width: 52px;
+        height: 52px;
+        font-size: 1.3rem;
+    }
+
+    .tile-hero:hover .tile-icon {
+        background: rgba(255, 255, 255, 0.24);
+        color: #fff;
+    }
+
+    .tile-kicker {
+        position: relative;
+        z-index: 1;
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.75);
+        margin-top: 0.8rem;
+    }
+
+    .tile-hero .tile-title {
+        position: relative;
+        z-index: 1;
+        font-size: 1.35rem;
+        color: #fff;
+        margin-top: 0.3rem;
+    }
+
+    .tile-hero .tile-desc {
+        position: relative;
+        z-index: 1;
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 0.9rem;
+        -webkit-line-clamp: 3;
+        max-width: 380px;
+    }
+
+    .tile-cta {
+        position: relative;
+        z-index: 1;
+        align-self: flex-start;
         display: inline-flex;
         align-items: center;
-        gap: 0.3rem;
-        font-size: 0.7rem;
-        font-weight: 600;
-        padding: 0.15rem 0.5rem;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        padding: 0.55rem 1rem;
         border-radius: 999px;
-        border: 1px solid var(--card-border);
-        background: var(--bg-secondary);
-        color: var(--fg-secondary);
-        margin-left: 0.5rem;
-        vertical-align: middle;
-        letter-spacing: 0.02em;
+        background: var(--amber);
+        color: #0a2e2b;
+        font-size: 0.85rem;
+        font-weight: 700;
+        transition: transform 0.22s ease, gap 0.22s ease;
+    }
+
+    .tile-hero:hover .tile-cta {
+        transform: translateX(2px);
+    }
+
+    /* Wide tile — Create Team */
+    .tile-wide {
+        grid-column: span 2;
+    }
+
+    .tile-wide .tile-title {
+        font-size: 1.1rem;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+        .bento-tile,
+        .tile-icon,
+        .tile-arrow,
+        .tile-cta {
+            animation: none !important;
+            opacity: 1 !important;
+            transition: none !important;
+        }
+
+        .bento-tile:hover {
+            transform: none;
+        }
+
+        .bento-tile:hover .tile-icon {
+            transform: none;
+        }
     }
 
     .global-announcement-banner {
@@ -416,6 +497,7 @@
             opacity: 0;
             transform: translateX(-50%) translateY(8px);
         }
+
         to {
             opacity: 1;
             transform: translateX(-50%) translateY(0);
@@ -600,40 +682,38 @@
     }
 
     /* Media Queries */
+    @media (max-width: 1023px) {
+        .bento-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
     @media (max-width: 768px) {
-        .hero-section {
-            padding: 6rem 1rem 4rem;
+        .cmd-bar {
+            padding: 1.4rem;
         }
 
-        .hero-title {
-            font-size: 2.5rem;
+        .cmd-stats {
+            width: 100%;
         }
 
-        .hero-stats {
-            flex-direction: column;
-            align-items: stretch;
-            padding: 1rem;
-            gap: 0;
+        .cmd-stat {
+            flex: 1;
+            min-width: 0;
         }
 
-        .hero-stat-item {
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--card-border);
-        }
-
-        .hero-stat-item:last-child {
-            border-bottom: none;
-        }
-
-        .hero-stat-item::after {
-            display: none;
-        }
-
-        .menu-grid {
+        .bento-grid {
             grid-template-columns: 1fr;
+            grid-auto-rows: auto;
         }
 
-        .menu-toolbar {
+        .tile-hero,
+        .tile-wide {
+            grid-column: span 1;
+            grid-row: span 1;
+        }
+
+        .bento-toolbar {
             align-items: flex-start;
             flex-direction: column;
         }
@@ -685,135 +765,117 @@
 {% endblock %}
 
 {% block content %}
-<!-- Hero Section with Premium Theme -->
-<section class="hero-section">
-    <!-- Abstract Decorative Elements -->
-    <div class="hero-decor decor-ball"></div>
-    <div class="hero-decor decor-field"></div>
+<!-- Command Bar -->
+<section class="cmd-bar">
+    <div class="cmd-greeting">
+        <span class="cmd-eyebrow"><i class="fa-solid fa-crown"></i> Welcome back</span>
+        <h1 class="cmd-title">{{ user.display_name or user.id.split('@')[0] }}</h1>
+        <p class="cmd-subtitle">Your cricket command center — build squads, run simulations, and track every stat.</p>
+    </div>
 
-    <span class="hero-pretitle">
-        <i class="fa-solid fa-crown"></i> Welcome Back
-    </span>
-    <h1 class="hero-title">SimCricketX Dashboard</h1>
-    <p class="hero-subtitle">Experience the thrill of cricket management. Build dream teams, simulate epic battles, and
-        dominate the pitch with strategic excellence.</p>
-
-    <!-- Glass Stats Board -->
-    <div class="hero-stats">
-        <div class="hero-stat-item">
-            <span class="stat-number">∞</span>
-            <span class="stat-label">Teams</span>
+    <div class="cmd-stats">
+        <div class="cmd-stat">
+            <span class="cmd-stat-num">∞</span>
+            <span class="cmd-stat-label">Teams</span>
         </div>
-        <div class="hero-stat-item">
-            <span class="stat-number">{{ matches_simulated }}</span>
-            <span class="stat-label">Matches</span>
+        <div class="cmd-stat">
+            <span class="cmd-stat-num">{{ matches_simulated }}</span>
+            <span class="cmd-stat-label">Matches</span>
         </div>
-        <div class="hero-stat-item">
-            <span class="stat-number">{{ total_visits }}</span>
-            <span class="stat-label">Fans</span>
+        <div class="cmd-stat">
+            <span class="cmd-stat-num">{{ total_visits }}</span>
+            <span class="cmd-stat-label">Fans</span>
         </div>
-        <div class="hero-stat-item">
-            <span class="stat-number{% if active_users > 0 %} is-online{% endif %}">{{ active_users }}</span>
-            <span class="stat-label">Online Now</span>
+        <div class="cmd-stat">
+            <span class="cmd-stat-num{% if active_users > 0 %} is-online{% endif %}">{{ active_users }}</span>
+            <span class="cmd-stat-label">Online</span>
         </div>
     </div>
 </section>
 
-<!-- Compact Module Menu -->
-<section class="menu-section">
-    <div class="menu-toolbar">
+<!-- Bento Command Grid -->
+<section class="bento-section">
+    <div class="bento-toolbar">
         <div>
-            <p class="menu-eyebrow">Command Center</p>
-            <h2 class="menu-heading">Pick Your Next Move</h2>
+            <p class="bento-eyebrow">Command Center</p>
+            <h2 class="bento-heading">Pick Your Next Move</h2>
         </div>
-        <span class="menu-count">10 Modules</span>
+        <span class="bento-count">8 Modules</span>
     </div>
 
-    <div class="menu-grid">
-        <a class="menu-item" href="/team/create">
-            <div class="menu-icon"><i class="fa-solid fa-users"></i></div>
+    <div class="bento-grid">
+        <a class="bento-tile tile-hero" href="/match/setup">
+            <div class="tile-icon"><i class="fa-solid fa-circle-play"></i></div>
             <div>
-                <h3 class="menu-title">Create Team</h3>
-                <p class="menu-desc">Draft your championship squad with custom roles and balanced lineups.</p>
+                <span class="tile-kicker">Core Action</span>
+                <h3 class="tile-title">Simulate Match</h3>
+                <p class="tile-desc">Set up conditions and launch a full ball-by-ball simulation between any two of your teams.</p>
             </div>
-            <i class="fa-solid fa-arrow-right menu-arrow"></i>
+            <span class="tile-cta">Start a match <i class="fa-solid fa-arrow-right"></i></span>
         </a>
 
-        <a class="menu-item" href="/teams/manage">
-            <div class="menu-icon"><i class="fa-solid fa-clipboard-list"></i></div>
+        <a class="bento-tile tile-wide" href="/team/create">
+            <div class="tile-icon"><i class="fa-solid fa-users"></i></div>
             <div>
-                <h3 class="menu-title">Manage Teams</h3>
-                <p class="menu-desc">Tune tactics, update squads, and keep every team match-ready.</p>
+                <h3 class="tile-title">Create Team</h3>
+                <p class="tile-desc">Draft your championship squad with custom roles and balanced lineups.</p>
             </div>
-            <i class="fa-solid fa-arrow-right menu-arrow"></i>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
         </a>
 
-        <a class="menu-item" href="/match/setup">
-            <div class="menu-icon"><i class="fa-solid fa-circle-play"></i></div>
+        <a class="bento-tile" href="/teams/manage">
+            <div class="tile-icon"><i class="fa-solid fa-clipboard-list"></i></div>
             <div>
-                <h3 class="menu-title">Simulate Match</h3>
-                <p class="menu-desc">Set up conditions and launch full ball-by-ball match simulations.</p>
+                <h3 class="tile-title">Manage Teams</h3>
+                <p class="tile-desc">Tune tactics and keep every squad match-ready.</p>
             </div>
-            <i class="fa-solid fa-arrow-right menu-arrow"></i>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
         </a>
 
-        {# Story Mode is disabled for now — rendered as a non-link so it cannot be
-           clicked or reached by keyboard. Restore the <a href="/scenarios"> wrapper
-           to re-enable. #}
-        <span class="menu-item is-disabled" aria-disabled="true">
-            <div class="menu-icon"><i class="fa-solid fa-landmark"></i></div>
+        <a class="bento-tile" href="/statistics">
+            <div class="tile-icon"><i class="fa-solid fa-chart-line"></i></div>
             <div>
-                <h3 class="menu-title">Story Mode<span class="menu-lock-badge"><i class="fa-solid fa-lock"></i> Coming soon</span></h3>
-                <p class="menu-desc">Steer your own teams through legendary match arcs — same pressure, a different ending every time.</p>
+                <h3 class="tile-title">Statistics Hub</h3>
+                <p class="tile-desc">Explore performance trends and leaderboards.</p>
             </div>
-            <i class="fa-solid fa-arrow-right menu-arrow"></i>
-        </span>
-
-        <a class="menu-item" href="/statistics">
-            <div class="menu-icon"><i class="fa-solid fa-chart-line"></i></div>
-            <div>
-                <h3 class="menu-title">Statistics Hub</h3>
-                <p class="menu-desc">Explore performance trends, leaderboards, and deep analytics.</p>
-            </div>
-            <i class="fa-solid fa-arrow-right menu-arrow"></i>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
         </a>
 
-        <a class="menu-item" href="/tournaments">
-            <div class="menu-icon"><i class="fa-solid fa-trophy"></i></div>
+        <a class="bento-tile" href="/tournaments">
+            <div class="tile-icon"><i class="fa-solid fa-trophy"></i></div>
             <div>
-                <h3 class="menu-title">Tournaments</h3>
-                <p class="menu-desc">Run leagues with fixtures, points tables, and playoff structure.</p>
+                <h3 class="tile-title">Tournaments</h3>
+                <p class="tile-desc">Run leagues with fixtures and playoff structure.</p>
             </div>
-            <i class="fa-solid fa-arrow-right menu-arrow"></i>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
         </a>
 
-        <a class="menu-item" href="/my-matches">
-            <div class="menu-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+        <a class="bento-tile" href="/my-matches">
+            <div class="tile-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
             <div>
-                <h3 class="menu-title">Match Archives</h3>
-                <p class="menu-desc">Review completed games and revisit key moments from past clashes.</p>
+                <h3 class="tile-title">Match Archives</h3>
+                <p class="tile-desc">Revisit completed games and key moments.</p>
             </div>
-            <i class="fa-solid fa-arrow-right menu-arrow"></i>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
         </a>
 
-        <a class="menu-item" href="/ground-conditions">
-            <div class="menu-icon"><i class="fa-solid fa-mountain-sun"></i></div>
+        <a class="bento-tile" href="/ground-conditions">
+            <div class="tile-icon"><i class="fa-solid fa-mountain-sun"></i></div>
             <div>
-                <h3 class="menu-title">Ground Conditions</h3>
-                <p class="menu-desc">Adjust pitch and weather profiles to shape simulation behavior.</p>
+                <h3 class="tile-title">Ground Conditions</h3>
+                <p class="tile-desc">Adjust pitch and weather profiles.</p>
             </div>
-            <i class="fa-solid fa-arrow-right menu-arrow"></i>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
         </a>
 
-        <a class="menu-item" href="/player-pool">
-            <div class="menu-icon"><i class="fa-solid fa-people-group"></i></div>
+        <a class="bento-tile" href="/player-pool">
+            <div class="tile-icon"><i class="fa-solid fa-people-group"></i></div>
             <div>
-                <h3 class="menu-title">Player Pool</h3>
-                <p class="menu-desc">Maintain your central player catalog with imports and rating updates.</p>
+                <h3 class="tile-title">Player Pool</h3>
+                <p class="tile-desc">Maintain your central player catalog.</p>
             </div>
-            <i class="fa-solid fa-arrow-right menu-arrow"></i>
+            <i class="fa-solid fa-arrow-right tile-arrow"></i>
         </a>
-
     </div>
 </section>
 

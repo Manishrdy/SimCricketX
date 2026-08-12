@@ -16,7 +16,6 @@ Covers:
 import io
 import json
 import os
-import re
 import sys
 import contextlib
 import random
@@ -302,37 +301,25 @@ class TestStoryRoutes:
         assert b"The Kohli Chase" in resp.data
         assert f"/match/setup?story={PACK_ID}".encode() in resp.data
 
-    def test_setup_page_story_picker_is_disabled(self, authenticated_client):
-        """Story Mode is switched off in the UI for now. The picker still
-        renders, but disabled, so no one can start a story match by accident."""
+    def test_setup_page_story_picker_removed_from_ui(self, authenticated_client):
+        """Story Mode UI is removed from the setup page (backend/routes
+        untouched — see test_setup_with_story_wires_scenario below)."""
         resp = authenticated_client.get("/match/setup")
         assert resp.status_code == 200
-        assert b'<select id="story-select" disabled>' in resp.data
+        assert b'id="story-select"' not in resp.data
+        assert b"Story Mode" not in resp.data
 
-    def test_disabled_picker_ignores_story_query_param(self, authenticated_client):
-        """A disabled <select> still reports whatever option is marked selected,
-        so /match/setup?story=<id> must not preselect one — otherwise the page
-        would post a story_id and start a story match while the control looks
-        switched off."""
+    def test_setup_page_ignores_story_query_param(self, authenticated_client):
+        """With the picker removed, /match/setup?story=<id> must not leak
+        the story id into the page (no element to preselect it into)."""
         resp = authenticated_client.get(f"/match/setup?story={PACK_ID}")
         assert resp.status_code == 200
-        block = re.search(
-            r'<select id="story-select" disabled>(.*?)</select>',
-            resp.data.decode(), re.DOTALL,
-        )
-        assert block, "story picker missing or no longer disabled"
-        options = block.group(1)
-        assert f'value="{PACK_ID}"' in options, "flagship story option not rendered"
-        # The empty "unavailable" option is the only preselected one.
-        assert options.count("selected") == 1
-        assert '<option value="" selected>' in options
+        assert b'id="story-select"' not in resp.data
 
-    def test_home_story_mode_tile_is_disabled(self, authenticated_client):
+    def test_home_story_mode_tile_removed_from_ui(self, authenticated_client):
         resp = authenticated_client.get("/")
         assert resp.status_code == 200
-        assert b"Story Mode" in resp.data
-        assert b'class="menu-item is-disabled"' in resp.data
-        # Not a link any more — unclickable and unreachable by keyboard.
+        assert b"Story Mode" not in resp.data
         assert b'href="/scenarios"' not in resp.data
 
     def test_setup_with_null_story_id_is_a_normal_match(self, authenticated_client,
