@@ -34,17 +34,18 @@
 /* Sidebar - Scrollable if needed */
 .info-card {
     background: var(--card-bg);
-    border-radius: var(--border-radius);
+    border-radius: var(--radius-lg, var(--border-radius));
     border: 1px solid var(--card-border);
-    padding: 1rem;
+    padding: 1.1rem;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.1rem;
     min-height: 0;
+    position: relative;
 }
 
-/* Meta Items - Compact */
+/* Meta Items — icon-chip tiles */
 .match-meta-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -55,87 +56,190 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.8rem;
-    padding: 0.5rem;
+    padding: 0.5rem 0.55rem;
     background: var(--bg);
-    border-radius: 6px;
+    border-radius: var(--radius-sm, 8px);
     border: 1px solid var(--card-border);
+    min-width: 0;
 }
 
-.meta-item i {
+.meta-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    background: var(--accent-light);
     color: var(--accent);
-    font-size: 0.85rem;
+    font-size: 0.72rem;
 }
 
-/* Toss Section - Compact */
+.meta-value {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.meta-value.meta-mono {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    color: var(--fg-secondary);
+    letter-spacing: -0.01em;
+}
+
+/* Toss Section */
 .toss-section {
     text-align: center;
-    padding: 0.75rem 0;
+    padding: 0.9rem 0;
     border-top: 1px solid var(--card-border);
     border-bottom: 1px solid var(--card-border);
 }
 
 .toss-section h3 {
-    font-size: 0.85rem;
-    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-bottom: 0.7rem;
     text-transform: uppercase;
+    letter-spacing: 0.1em;
     color: var(--fg-secondary);
+}
+
+.toss-section h3 i {
+    color: var(--brand-secondary, var(--accent));
 }
 
 .toss-btn {
     width: 100%;
-    margin-bottom: 0.5rem;
-    padding: 0.5rem 1rem;
+    margin-bottom: 0.6rem;
+    padding: 0.65rem 1rem;
+    background: var(--brand-gradient, var(--gradient));
+    border: none;
+    color: var(--text-on-accent, #fff);
+    border-radius: var(--radius-full, 999px);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.25s ease, transform 0.15s ease;
+}
+
+.toss-btn:hover {
+    box-shadow: var(--shadow-glow, var(--shadow-sm));
+    transform: translateY(-1px);
 }
 
 #toss-result {
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 600;
     color: var(--accent);
 }
 
-/* Team Lists - Compact */
+/* Team Lists — roster cards */
 .team-list-container {
     flex: 1;
     overflow-y: auto;
 }
 
 .team-list-header {
-    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin: 0.75rem 0 0.5rem 0;
+    letter-spacing: 0.06em;
+    margin: 0.9rem 0 0.5rem 0;
     color: var(--fg-secondary);
-    border-left: 3px solid var(--accent);
-    padding-left: 0.5rem;
+    padding: 0.3rem 0.55rem;
+    border-radius: var(--radius-sm, 8px);
+    background: color-mix(in srgb, var(--team-accent, var(--accent)), transparent 92%);
+}
+
+.team-list-header:first-child {
+    margin-top: 0;
+}
+
+.team-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--team-accent, var(--accent));
+    flex-shrink: 0;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--team-accent, var(--accent)), transparent 75%);
 }
 
 .xi-list {
     list-style: none;
     padding: 0;
     margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
 }
 
 .xi-list li {
-    padding: 0.35rem 0.5rem;
+    padding: 0.4rem 0.5rem;
     font-size: 0.8rem;
     display: flex;
-    justify-content: space-between;
-    border-bottom: 1px solid var(--card-border);
+    align-items: center;
+    gap: 0.55rem;
+    border-radius: 7px;
+    transition: background 0.15s ease;
 }
 
-.xi-list li:last-child {
-    border-bottom: none;
+.xi-list li:hover {
+    background: var(--bg);
+}
+
+.xi-name {
+    color: var(--fg);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.xi-captain {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--brand-secondary, #f59e0b);
+    color: var(--text-on-accent, #1a1a1a);
+    font-size: 0.55rem;
+    font-weight: 800;
+    vertical-align: middle;
 }
 
 .xi-role {
-    font-size: 0.7rem;
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
     color: var(--fg-secondary);
     background: var(--bg);
-    padding: 1px 4px;
-    border-radius: 3px;
+    border: 1px solid var(--card-border);
+    padding: 2px 6px;
+    border-radius: 5px;
+    min-width: 30px;
+    text-align: center;
 }
+
+.xi-list li[data-role="Batsman"] .xi-role { background: rgba(245, 158, 11, 0.14); color: #f59e0b; border-color: transparent; }
+.xi-list li[data-role="Bowler"] .xi-role { background: rgba(15, 118, 110, 0.16); color: var(--brand-primary, #0f766e); border-color: transparent; }
+.xi-list li[data-role="All-rounder"] .xi-role { background: rgba(139, 92, 246, 0.14); color: #8b5cf6; border-color: transparent; }
+.xi-list li[data-role="Wicketkeeper"] .xi-role { background: rgba(236, 72, 153, 0.14); color: #ec4899; border-color: transparent; }
 
 /* Main Panel - Fixed Height */
 .main-panel {
@@ -557,9 +661,9 @@
 }
 
 .ctrl-btn:hover {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
+    background: var(--brand-gradient, var(--accent));
+    color: var(--text-on-accent, white);
+    border-color: transparent;
 }
 
 .ctrl-btn i {
@@ -608,8 +712,9 @@
 }
 
 .ctrl-pill.active {
-    background: var(--accent);
-    color: white;
+    background: var(--brand-gradient, var(--accent));
+    color: var(--text-on-accent, white);
+    box-shadow: var(--shadow-xs);
 }
 
 .ctrl-pill:hover:not(.active) {
