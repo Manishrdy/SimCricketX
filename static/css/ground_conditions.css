@@ -1454,3 +1454,335 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ============================================================
+   Format tabs + List A editor
+   Ground conditions are stored per (user, match format); these
+   tabs switch which format's profile is being edited.
+   ============================================================ */
+
+.gc-format-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem;
+    flex-wrap: wrap;
+}
+
+.gc-format-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.15rem;
+    border-radius: 999px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--fg-secondary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.gc-format-tab:hover {
+    color: var(--fg);
+    border-color: var(--accent);
+}
+
+.gc-format-tab.active {
+    background: var(--gradient);
+    border-color: transparent;
+    color: #fff;
+}
+
+.gc-format-tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.gc-format-note {
+    color: var(--fg-secondary);
+    font-size: 0.88rem;
+    margin: 0 0 1.5rem;
+    line-height: 1.5;
+}
+
+.gc-la-matrix-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.gc-la-matrix-card,
+.gc-la-pitch-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1.1rem 1.2rem;
+    box-shadow: var(--shadow);
+}
+
+.gc-la-matrix-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.9rem;
+    flex-wrap: wrap;
+}
+
+.gc-la-phase-name {
+    font-weight: 700;
+    color: var(--fg);
+}
+
+.gc-la-phase-overs {
+    font-size: 0.78rem;
+    color: var(--fg-secondary);
+    margin-right: auto;
+}
+
+.gc-la-matrix-rows,
+.gc-la-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 0.6rem;
+}
+
+.gc-la-row,
+.gc-la-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.gc-la-row label,
+.gc-la-field label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--fg-secondary);
+}
+
+.gc-la-row input,
+.gc-la-field input {
+    width: 100%;
+    padding: 0.45rem 0.55rem;
+    border-radius: 8px;
+    border: 1px solid var(--card-border);
+    background: var(--bg-secondary);
+    color: var(--fg);
+    font-size: 0.9rem;
+}
+
+.gc-la-row input:focus,
+.gc-la-field input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.gc-la-pitch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.gc-la-pitch-head {
+    margin-bottom: 0.9rem;
+}
+
+.gc-la-pitch-name {
+    display: block;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--fg);
+}
+
+.gc-la-pitch-desc {
+    font-size: 0.8rem;
+    color: var(--fg-secondary);
+    line-height: 1.4;
+}
+
+.gc-la-subhead {
+    margin: 1.1rem 0 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--fg);
+}
+
+.gc-la-subhead span {
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--fg-secondary);
+}
+
+.gc-total-display.invalid {
+    color: #e5484d;
+}
+
+@media (max-width: 600px) {
+
+    .gc-la-matrix-grid,
+    .gc-la-pitch-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================================
+   Intent sliders + estimate readout
+   The simple view: three plain-language sliders that drive the
+   raw inputs now tucked into the Advanced disclosure.
+   ============================================================ */
+
+.gc-simple {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+}
+
+.gc-intent-row {
+    display: grid;
+    grid-template-columns: 6.5rem auto 1fr auto;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.gc-intent-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--fg);
+}
+
+.gc-intent-end {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--fg-secondary);
+    white-space: nowrap;
+}
+
+.gc-intent {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+    height: 1.5rem;
+}
+
+.gc-intent:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+.gc-estimate {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--card-border);
+    margin-top: 0.25rem;
+}
+
+.gc-est-figure {
+    font-size: 0.92rem;
+    color: var(--fg-secondary);
+}
+
+.gc-est-figure strong {
+    font-size: 1.15rem;
+    color: var(--accent-light);
+    font-variant-numeric: tabular-nums;
+}
+
+.gc-est-sep {
+    color: var(--card-border);
+}
+
+.gc-est-note {
+    flex-basis: 100%;
+    font-size: 0.72rem;
+    color: var(--fg-secondary);
+    opacity: 0.75;
+}
+
+/* ── Advanced disclosure ── */
+
+.gc-advanced {
+    border-top: 1px solid var(--card-border);
+    padding-top: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.gc-advanced-summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--fg-secondary);
+    padding: 0.3rem 0;
+    transition: color 0.15s ease;
+}
+
+.gc-advanced-summary:hover {
+    color: var(--accent);
+}
+
+.gc-advanced-summary::-webkit-details-marker {
+    display: none;
+}
+
+.gc-advanced-summary::after {
+    content: "\f078";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    font-size: 0.7rem;
+    margin-left: auto;
+    transition: transform 0.2s ease;
+}
+
+.gc-advanced[open]>.gc-advanced-summary::after {
+    transform: rotate(180deg);
+}
+
+.gc-advanced-summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.gc-advanced-body {
+    padding-top: 0.9rem;
+}
+
+/* The probability sum sits inline on the List A summary row. */
+.gc-advanced-summary .gc-total-display {
+    margin-left: auto;
+}
+
+.gc-advanced-summary .gc-total-display+::after {
+    margin-left: 0.5rem;
+}
+
+@media (max-width: 600px) {
+    .gc-intent-row {
+        grid-template-columns: 1fr;
+        gap: 0.3rem;
+    }
+
+    .gc-intent-end {
+        display: none;
+    }
+}

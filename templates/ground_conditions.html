@@ -13,13 +13,42 @@
     <p class="gc-subtitle">Configure pitch profiles, game modes, and simulation engine parameters</p>
 </div>
 
-<!-- Game Mode Selector -->
+<!-- Format Tabs — each format keeps its own independent config -->
+<div class="gc-format-tabs" role="tablist" aria-label="Match format">
+    {% for fmt in valid_formats %}
+    <a class="gc-format-tab{% if fmt == match_format %} active{% endif %}"
+        href="{{ url_for('ground_conditions', format=fmt) }}" role="tab"
+        aria-selected="{{ 'true' if fmt == match_format else 'false' }}">
+        <i class="fa-solid {{ 'fa-bolt' if fmt == 'T20' else 'fa-clock' }}"></i>
+        {{ 'T20' if fmt == 'T20' else 'List A (50 over)' }}
+    </a>
+    {% endfor %}
+</div>
+<p class="gc-format-note">
+    Editing the <strong>{{ 'T20' if match_format == 'T20' else 'List A' }}</strong> profile.
+    Each format is configured separately and only affects matches of that format.
+</p>
+
+{% if match_format == 'T20' %}
+<!-- Game Mode Selector (T20 only — List A uses its own phase model) -->
 <section class="gc-modes">
     <div class="gc-modes-label"><i class="fa-solid fa-gamepad"></i> Game Mode</div>
     <div class="gc-modes-row" id="gcModesRow">
+        {% set active_mode = config.get('active_game_mode', 'auto') %}
+        <div class="gc-mode-card{% if active_mode == 'auto' %} active{% endif %}" data-mode="auto"
+            onclick="setGameMode('auto')">
+            <div class="gc-mode-glow"></div>
+            <div class="gc-mode-check"><i class="fa-solid fa-check"></i></div>
+            <div class="gc-mode-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            <div class="gc-mode-name">Auto</div>
+            <div class="gc-mode-desc">The engine picks a mode each ball from pitch, wickets and run rate</div>
+            <div class="gc-mode-badge">
+                <span class="gc-badge-tag">Recommended</span>
+            </div>
+        </div>
         {% for key, mode in (config.get('game_modes') or {}).items() %}
-        <div class="gc-mode-card{% if key == config.get('active_game_mode', 'natural_game') %} active{% endif %}"
-            data-mode="{{ key }}" onclick="setGameMode('{{ key }}')">
+        <div class="gc-mode-card{% if key == active_mode %} active{% endif %}" data-mode="{{ key }}"
+            onclick="setGameMode('{{ key }}')">
             <div class="gc-mode-glow"></div>
             <div class="gc-mode-check"><i class="fa-solid fa-check"></i></div>
             <div class="gc-mode-icon"><i class="fa-solid {{ mode.get('icon', 'fa-circle') }}"></i></div>
@@ -46,7 +75,9 @@
         {% endfor %}
     </div>
 </section>
+{% endif %}
 
+{% if match_format == 'T20' %}
 <!-- Pitch Profile Tiles -->
 <section>
     <div class="gc-section-header">
@@ -103,6 +134,51 @@
             <!-- Hidden edit body (moved into modal via JS) -->
             <div class="gc-pitch-body" style="display:none;">
                 <div class="gc-editor-container">
+
+                    <!-- ── Simple controls ──
+                         These drive the raw inputs in the Advanced section below;
+                         the raw inputs remain the single source of truth that
+                         buildConfig() reads. Touching nothing therefore saves
+                         exactly what was loaded. -->
+                    <div class="gc-simple" data-pitch="{{ pitch_name }}">
+                        <div class="gc-intent-row">
+                            <label class="gc-intent-label">Scoring</label>
+                            <span class="gc-intent-end">Low</span>
+                            <input type="range" class="gc-intent" min="0" max="100" step="1"
+                                data-pitch="{{ pitch_name }}" data-intent="scoring"
+                                oninput="onIntentChange(this)">
+                            <span class="gc-intent-end">High</span>
+                        </div>
+                        <div class="gc-intent-row">
+                            <label class="gc-intent-label">Bowler Help</label>
+                            <span class="gc-intent-end">Few</span>
+                            <input type="range" class="gc-intent" min="0" max="100" step="1"
+                                data-pitch="{{ pitch_name }}" data-intent="bowler_help"
+                                oninput="onIntentChange(this)">
+                            <span class="gc-intent-end">Many</span>
+                        </div>
+                        <div class="gc-intent-row">
+                            <label class="gc-intent-label">Favours</label>
+                            <span class="gc-intent-end">Pace</span>
+                            <input type="range" class="gc-intent" min="0" max="100" step="1"
+                                data-pitch="{{ pitch_name }}" data-intent="favours"
+                                oninput="onIntentChange(this)">
+                            <span class="gc-intent-end">Spin</span>
+                        </div>
+
+                        <div class="gc-estimate" id="est-{{ pitch_name }}">
+                            <span class="gc-est-figure"><strong class="gc-est-runs">—</strong> runs</span>
+                            <span class="gc-est-sep">·</span>
+                            <span class="gc-est-figure"><strong class="gc-est-wkts">—</strong> wickets</span>
+                            <span class="gc-est-note">typical first innings, average teams</span>
+                        </div>
+                    </div>
+
+                    <details class="gc-advanced">
+                        <summary class="gc-advanced-summary">
+                            <i class="fa-solid fa-sliders"></i> Advanced — exact probabilities
+                        </summary>
+                        <div class="gc-advanced-body">
 
                     <!-- ── Top Row: Run Factor & Totals ── -->
                     <div class="gc-editor-header-row">
@@ -165,7 +241,7 @@
                     <!-- ── Wicket Factors ── -->
                     <div class="gc-editor-section">
                         <div class="gc-section-label">Wicket Multipliers (Risk)</div>
-                        <div class="gc-wf-grid-modern">
+                        <div class="gc-wf-grid-modern" data-pitch="{{ pitch_name }}">
                             {% for style, wf_val in (profile.get('wicket_factors') or {}).items() %}
                             <div class="gc-wf-tile">
                                 <div class="gc-wf-icon">
@@ -186,6 +262,8 @@
                             {% endfor %}
                         </div>
                     </div>
+                        </div>
+                    </details>
                 </div>
             </div>
         </div>
@@ -212,7 +290,7 @@
 </div>
 
 <!-- Phase Boosts (Collapsible) -->
-<section class="gc-phase-section">
+<section class="gc-phase-section" id="gcT20PhaseSection">
     <button class="gc-phase-toggle" onclick="togglePhase(this)" aria-expanded="false">
         <span><i class="fa-solid fa-bolt" style="color:var(--accent);margin-right:0.5rem;"></i> Phase Boosts</span>
         <i class="fa-solid fa-chevron-down chevron"></i>
@@ -229,7 +307,7 @@
             <div class="gc-phase-item">
                 <label>Boundary Multiplier</label>
                 <input type="number" step="0.05" min="0" max="5" value="{{ pp.get('boundary_multiplier', 1.25) }}"
-                    id="pp-boundary">
+                    id="pp-boundary" oninput="refreshAllEstimates()">
             </div>
         </div>
 
@@ -239,17 +317,17 @@
             <div class="gc-phase-item">
                 <label>Boundary Boost (Batting Pitch)</label>
                 <input type="number" step="0.1" min="0" max="5"
-                    value="{{ death.get('boundary_boost_batting_pitch', 2.2) }}" id="death-bat-boundary">
+                    value="{{ death.get('boundary_boost_batting_pitch', 2.2) }}" id="death-bat-boundary" oninput="refreshAllEstimates()">
             </div>
             <div class="gc-phase-item">
                 <label>Boundary Boost (Bowling Pitch)</label>
                 <input type="number" step="0.1" min="0" max="5"
-                    value="{{ death.get('boundary_boost_bowling_pitch', 1.8) }}" id="death-bowl-boundary">
+                    value="{{ death.get('boundary_boost_bowling_pitch', 1.8) }}" id="death-bowl-boundary" oninput="refreshAllEstimates()">
             </div>
             <div class="gc-phase-item">
                 <label>Wicket Boost</label>
                 <input type="number" step="0.1" min="0" max="5" value="{{ death.get('wicket_boost', 1.6) }}"
-                    id="death-wicket">
+                    id="death-wicket" oninput="refreshAllEstimates()">
             </div>
         </div>
 
@@ -258,16 +336,234 @@
             <div class="gc-phase-item">
                 <label>Scoring Boost</label>
                 <input type="number" step="0.05" min="0" max="5" value="{{ inn2.get('scoring_boost', 1.15) }}"
-                    id="inn2-scoring">
+                    id="inn2-scoring" oninput="refreshAllEstimates()">
             </div>
             <div class="gc-phase-item">
                 <label>Wicket Boost</label>
                 <input type="number" step="0.05" min="0" max="5" value="{{ inn2.get('wicket_boost', 1.1) }}"
-                    id="inn2-wicket">
+                    id="inn2-wicket" oninput="refreshAllEstimates()">
             </div>
         </div>
     </div>
 </section>
+{% endif %}
+
+{% if match_format == 'ListA' %}
+{% set la_profiles = config.get('pitch_profiles') or {} %}
+{% set la_matrices = config.get('scoring_matrices') or {} %}
+
+<!-- List A Phase Matrices -->
+<section>
+    <div class="gc-section-header">
+        <i class="fa-solid fa-layer-group"></i>
+        <span class="gc-section-title">Phase Scoring Matrices</span>
+    </div>
+    <p class="gc-format-note">
+        List A innings are driven by three phase matrices rather than one per-pitch matrix.
+        Set the scoring pace for each phase; the pitch profiles below then scale them.
+    </p>
+    <div class="gc-la-matrix-grid">
+        {% for phase, label, overs in [('pp1', 'Powerplay', 'Overs 1-10'), ('middle', 'Middle', 'Overs 11-40'),
+        ('death', 'Death', 'Overs 41-50')] %}
+        {% set mat = la_matrices.get(phase) or {} %}
+        <div class="gc-la-matrix-card" data-phase="{{ phase }}">
+            <div class="gc-la-matrix-head">
+                <span class="gc-la-phase-name">{{ label }}</span>
+                <span class="gc-la-phase-overs">{{ overs }}</span>
+            </div>
+
+            <div class="gc-intent-row">
+                <label class="gc-intent-label">Scoring</label>
+                <span class="gc-intent-end">Low</span>
+                <input type="range" class="gc-intent" min="0" max="100" step="1" data-phase="{{ phase }}"
+                    data-intent="scoring" oninput="onListAPhaseIntent(this)">
+                <span class="gc-intent-end">High</span>
+            </div>
+            <div class="gc-intent-row">
+                <label class="gc-intent-label">Wickets</label>
+                <span class="gc-intent-end">Few</span>
+                <input type="range" class="gc-intent" min="0" max="100" step="1" data-phase="{{ phase }}"
+                    data-intent="bowler_help" oninput="onListAPhaseIntent(this)">
+                <span class="gc-intent-end">Many</span>
+            </div>
+
+            <details class="gc-advanced">
+                <summary class="gc-advanced-summary">
+                    <i class="fa-solid fa-sliders"></i> Advanced
+                    <span class="gc-total-display valid" id="la-total-{{ phase }}"><span
+                            class="val">1.000</span></span>
+                </summary>
+                <div class="gc-la-matrix-rows">
+                    {% for outcome in ['Dot', 'Single', 'Double', 'Three', 'Four', 'Six', 'Wicket', 'Extras'] %}
+                    <div class="gc-la-row">
+                        <label>{{ outcome }}</label>
+                        <input type="number" class="gc-la-matrix-input" step="0.001" min="0" max="1"
+                            value="{{ mat.get(outcome, 0) }}" data-phase="{{ phase }}" data-outcome="{{ outcome }}"
+                            oninput="onListAMatrixChange(this)">
+                    </div>
+                    {% endfor %}
+                </div>
+            </details>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- List A Pitch Profiles -->
+<section>
+    <div class="gc-section-header">
+        <i class="fa-solid fa-mountain-sun"></i>
+        <span class="gc-section-title">Pitch Profiles</span>
+    </div>
+    <div class="gc-la-pitch-grid">
+        {% for pitch_name, profile in la_profiles.items() %}
+        {% set ds = profile.get('dot_single') or {} %}
+        {% set ft = profile.get('fine_tune') or {} %}
+        <div class="gc-la-pitch-card" data-pitch="{{ pitch_name }}">
+            <div class="gc-la-pitch-head">
+                <span class="gc-la-pitch-name">{{ pitch_name }}</span>
+                <span class="gc-la-pitch-desc">{{ profile.get('description', '') }}</span>
+            </div>
+
+            <div class="gc-simple gc-simple-la" data-pitch="{{ pitch_name }}">
+                <div class="gc-intent-row">
+                    <label class="gc-intent-label">Scoring</label>
+                    <span class="gc-intent-end">Low</span>
+                    <input type="range" class="gc-intent" min="0" max="100" step="1" data-pitch="{{ pitch_name }}"
+                        data-intent="la_scoring" oninput="onListAPitchIntent(this)">
+                    <span class="gc-intent-end">High</span>
+                </div>
+                <div class="gc-intent-row">
+                    <label class="gc-intent-label">Bowler Help</label>
+                    <span class="gc-intent-end">Few</span>
+                    <input type="range" class="gc-intent" min="0" max="100" step="1" data-pitch="{{ pitch_name }}"
+                        data-intent="la_bowler_help" oninput="onListAPitchIntent(this)">
+                    <span class="gc-intent-end">Many</span>
+                </div>
+                <div class="gc-estimate" id="est-{{ pitch_name }}">
+                    <span class="gc-est-figure"><strong class="gc-est-runs">—</strong> runs</span>
+                    <span class="gc-est-sep">·</span>
+                    <span class="gc-est-figure"><strong class="gc-est-wkts">—</strong> wickets</span>
+                    <span class="gc-est-note">typical first innings, average teams</span>
+                </div>
+            </div>
+
+            <details class="gc-advanced">
+                <summary class="gc-advanced-summary">
+                    <i class="fa-solid fa-sliders"></i> Advanced — exact multipliers
+                </summary>
+                <div class="gc-advanced-body">
+                    <div class="gc-la-fields">
+                        <div class="gc-la-field">
+                            <label>Run Factor</label>
+                            <input type="number" step="0.01" min="0" max="3"
+                                value="{{ profile.get('run_factor', 1.0) }}" data-pitch="{{ pitch_name }}"
+                                data-la-field="run_factor" oninput="onListAAdvancedChange(this)">
+                        </div>
+                        <div class="gc-la-field">
+                            <label>Wicket Multiplier</label>
+                            <input type="number" step="0.01" min="0" max="3"
+                                value="{{ profile.get('wicket_mult', 1.0) }}" data-pitch="{{ pitch_name }}"
+                                data-la-field="wicket_mult" oninput="onListAAdvancedChange(this)">
+                        </div>
+                        <div class="gc-la-field">
+                            <label>Dot Nudge</label>
+                            <input type="number" step="0.01" min="0" max="3" value="{{ ds.get('Dot', 1.0) }}"
+                                data-pitch="{{ pitch_name }}" data-la-ds="Dot" oninput="onListAAdvancedChange(this)">
+                        </div>
+                        <div class="gc-la-field">
+                            <label>Single Nudge</label>
+                            <input type="number" step="0.01" min="0" max="3" value="{{ ds.get('Single', 1.0) }}"
+                                data-pitch="{{ pitch_name }}" data-la-ds="Single" oninput="onListAAdvancedChange(this)">
+                        </div>
+                    </div>
+                    <div class="gc-la-subhead">Fine Tuning <span>applied after wear &amp; dew</span></div>
+                    <div class="gc-la-fields">
+                        {% for outcome in ['Dot', 'Single', 'Four', 'Six', 'Wicket'] %}
+                        <div class="gc-la-field">
+                            <label>{{ outcome }}</label>
+                            <input type="number" step="0.01" min="0" max="3" value="{{ ft.get(outcome, 1.0) }}"
+                                data-pitch="{{ pitch_name }}" data-la-ft="{{ outcome }}"
+                                oninput="onListAAdvancedChange(this)">
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </details>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- List A Phase Boosts (Collapsible) -->
+{% set lapb = config.get('phase_boosts') or {} %}
+<section class="gc-phase-section">
+    <button class="gc-phase-toggle" onclick="togglePhase(this)" aria-expanded="false">
+        <span><i class="fa-solid fa-bolt" style="color:var(--accent);margin-right:0.5rem;"></i> Phase Boosts</span>
+        <i class="fa-solid fa-chevron-down chevron"></i>
+    </button>
+    <div class="gc-phase-body">
+        {% for phase, label in [('pp1', 'Powerplay'), ('middle', 'Middle'), ('death', 'Death')] %}
+        {% set boosts = lapb.get(phase) or {} %}
+        <div class="gc-factor-label" style="margin-bottom:0.75rem;">{{ label }}</div>
+        <div class="gc-phase-grid" style="margin-bottom:1.5rem;">
+            {% for outcome in ['Dot', 'Four', 'Six', 'Wicket'] %}
+            <div class="gc-phase-item">
+                <label>{{ outcome }} (all pitches)</label>
+                <input type="number" step="0.01" min="0" max="5"
+                    value="{{ (boosts.get('all') or {}).get(outcome, 1.0) }}" data-la-pb="{{ phase }}"
+                    data-la-pb-scope="all" data-la-pb-outcome="{{ outcome }}">
+            </div>
+            {% endfor %}
+            {% if phase == 'death' %}
+            {% for outcome in ['Dot', 'Wicket'] %}
+            <div class="gc-phase-item">
+                <label>{{ outcome }} (2nd innings)</label>
+                <input type="number" step="0.01" min="0" max="5"
+                    value="{{ (boosts.get('second_innings') or {}).get(outcome, 1.0) }}" data-la-pb="{{ phase }}"
+                    data-la-pb-scope="second_innings" data-la-pb-outcome="{{ outcome }}">
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- List A Dew (Day/Night) -->
+{% set dew = config.get('dew') or {} %}
+<section class="gc-phase-section">
+    <button class="gc-phase-toggle" onclick="togglePhase(this)" aria-expanded="false">
+        <span><i class="fa-solid fa-droplet" style="color:var(--accent);margin-right:0.5rem;"></i> Dew (Day/Night
+            matches)</span>
+        <i class="fa-solid fa-chevron-down chevron"></i>
+    </button>
+    <div class="gc-phase-body">
+        <p class="gc-format-note">
+            Applies only to the 2nd innings of a Day/Night match, ramping from the start over to full effect at the
+            peak over.
+        </p>
+        <div class="gc-phase-grid">
+            <div class="gc-phase-item">
+                <label>Start Over</label>
+                <input type="number" step="1" min="0" max="49" value="{{ dew.get('start_over', 24) }}"
+                    id="la-dew-start">
+            </div>
+            <div class="gc-phase-item">
+                <label>Peak Over</label>
+                <input type="number" step="1" min="0" max="49" value="{{ dew.get('peak_over', 44) }}" id="la-dew-peak">
+            </div>
+            {% for outcome in ['Extras', 'Wicket', 'Four'] %}
+            <div class="gc-phase-item">
+                <label>{{ outcome }} shift</label>
+                <input type="number" step="0.01" min="-1" max="2"
+                    value="{{ (dew.get('factors') or {}).get(outcome, 0.0) }}" data-la-dew="{{ outcome }}">
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
 
 <!-- Blending Weights -->
 <section class="gc-blending">
@@ -334,6 +630,204 @@
     (function () {
         // ── State ──
         const CONFIG = JSON.parse(document.getElementById('gc-config-data').textContent);
+        // Which format's profile this page is editing. Every write carries it
+        // so a List A save can never overwrite the T20 row, or vice versa.
+        const MATCH_FORMAT = {{ match_format | tojson | safe }};
+        const IS_LISTA = MATCH_FORMAT === 'ListA';
+
+        /* ────────────────────────────────────────────────────────────────
+           Pitch character model
+
+           Translates three plain-language sliders into the probability
+           matrix the engine actually consumes, and back again so an
+           existing config positions the sliders sensibly.
+
+           The sliders WRITE INTO the raw inputs in the Advanced section —
+           those inputs stay the single source of truth that buildConfig()
+           reads. Nothing is written on load, so opening a pitch and saving
+           without touching anything stores exactly what was loaded.
+           ──────────────────────────────────────────────────────────────── */
+        const PITCH = (function () {
+            // Anchors for the Scoring axis: a bowler's paradise at 0, a road at 1.
+            const LOW = { Dot: 0.395, Single: 0.375, Double: 0.075, Three: 0.004, Four: 0.055, Six: 0.016, Extras: 0.040 };
+            const HIGH = { Dot: 0.165, Single: 0.310, Double: 0.150, Three: 0.008, Four: 0.195, Six: 0.115, Extras: 0.030 };
+            const W_LO = 0.025, W_HI = 0.085;          // Wicket probability range
+            const RUN_VALUE = { Dot: 0, Single: 1, Double: 2, Three: 3, Four: 4, Six: 6, Extras: 1.2 };
+            const RUN_KEYS = ['Dot', 'Single', 'Double', 'Three', 'Four', 'Six'];
+            const PACE = ['Fast', 'Fast-medium', 'Medium-fast', 'Medium'];
+            const SPIN = ['Off spin', 'Leg spin', 'Finger spin', 'Wrist spin'];
+
+            const clamp01 = v => Math.max(0, Math.min(1, v));
+            const lerp = (a, b, t) => a + (b - a) * t;
+
+            function rpb(m) {
+                return Object.keys(RUN_VALUE).reduce((s, k) => s + (m[k] || 0) * RUN_VALUE[k], 0);
+            }
+            function normalise(m) {
+                const t = Object.values(m).reduce((a, b) => a + b, 0) || 1;
+                const out = {}; for (const k in m) out[k] = m[k] / t; return out;
+            }
+
+            // Scoring/bowler-help → full 8-outcome matrix. Always sums to 1.0,
+            // which is why the simple view needs no Normalize button.
+            function deriveMatrix(scoring, bowlerHelp) {
+                const run = {}; let total = 0;
+                for (const k in LOW) { run[k] = lerp(LOW[k], HIGH[k], scoring); total += run[k]; }
+                const wicket = lerp(W_LO, W_HI, bowlerHelp);
+                const scale = (1 - wicket) / total;
+                const m = {}; for (const k in run) m[k] = run[k] * scale;
+                m.Wicket = wicket;
+                return m;
+            }
+
+            // Favours + bowler help → per-style wicket multipliers.
+            function deriveWicketFactors(bowlerHelp, favours) {
+                const peak = lerp(1.05, 1.5, bowlerHelp);
+                const base = lerp(0.9, 0.6, Math.abs(favours - 0.5) * 2);
+                const spinBias = (favours - 0.5) * 2;          // -1 pace … +1 spin
+                const out = {};
+                // The favoured group is graded so the archetypal bowler of that
+                // style benefits most (Fast on a green top, Off spin on a dust bowl).
+                const shape = [1.0, 0.88, 0.83, 0.76];
+                PACE.forEach((s, i) => { out[s] = spinBias <= 0 ? peak * shape[i] : base; });
+                SPIN.forEach((s, i) => { out[s] = spinBias >= 0 ? peak * shape[i] : base; });
+                // Blend toward neutral as the slider approaches the centre.
+                const strength = Math.abs(spinBias);
+                for (const k in out) out[k] = lerp(1.0, out[k], strength);
+                out.default = lerp(0.9, base, strength);
+                for (const k in out) out[k] = Math.round(out[k] * 100) / 100;
+                return out;
+            }
+
+            const RPB_LO = rpb(normalise(LOW)) * (1 - 0.055);
+            const RPB_HI = rpb(normalise(HIGH)) * (1 - 0.055);
+
+            function inferScoring(matrix) {
+                return clamp01((rpb(normalise(matrix)) - RPB_LO) / (RPB_HI - RPB_LO));
+            }
+            function inferBowlerHelp(matrix) {
+                const w = normalise(matrix).Wicket || W_LO;
+                return clamp01((w - W_LO) / (W_HI - W_LO));
+            }
+            // A table naming only pace styles does NOT mean "fully pace" — it
+            // means the unnamed styles fall through to `default`. Comparing each
+            // group against `default` is what keeps a balanced pitch reading as
+            // balanced instead of pinning the slider to one end.
+            function inferFavours(factors) {
+                if (!factors) return 0.5;
+                const fallback = typeof factors.default === 'number' ? factors.default : 1.0;
+                const mean = keys => {
+                    const vals = keys.map(k => factors[k]).filter(v => typeof v === 'number');
+                    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : fallback;
+                };
+                const p = mean(PACE), s = mean(SPIN);
+                if (p + s === 0) return 0.5;
+                return clamp01(0.5 + (s - p) / (s + p));
+            }
+
+            /* Expected first-innings score.
+
+               Walks the innings ball by ball applying the same layers the
+               engine does — pitch/skill blending, powerplay and death boosts —
+               and stops when 10 wickets are gone. A final correction absorbs
+               what it deliberately does not model (batting order, momentum,
+               fatigue); it was fitted against full simulations of all five
+               shipped pitches and lands within ~8%. It is a guide, not a
+               promise, which is why the readout is prefixed with "≈". */
+            const CAL_A = 0.7922, CAL_B = 0.4319;         // T20 runs
+            const WCAL_A = 1.0514, WCAL_B = -0.7048;      // T20 wickets
+            const LA_CAL_A = 0.3272, LA_CAL_B = 0.6695;   // List A runs
+
+            function estimateT20(profile, phaseBoosts, blending, pitch) {
+                const m0 = profile.scoring_matrix || {};
+                if (!Object.keys(m0).length) return null;
+                let base = normalise(m0);
+
+                const alpha = (blending && blending.pitch_weight) || 0.6;
+                const beta = (blending && blending.skill_weight) || 0.4;
+                const rf = profile.run_factor != null ? profile.run_factor : 1.0;
+                const wfVals = Object.values(profile.wicket_factors || { default: 1.0 });
+                const wfMean = wfVals.length ? wfVals.reduce((a, b) => a + b, 0) / wfVals.length : 1.0;
+                const runMult = alpha * rf + beta * 0.5;
+                const wktMult = alpha * wfMean + beta * 0.5;
+
+                const adj = {};
+                for (const k in base) {
+                    adj[k] = base[k] * (RUN_KEYS.includes(k) ? runMult : (k === 'Wicket' ? wktMult : 1));
+                }
+                base = normalise(adj);
+
+                const pp = (phaseBoosts && phaseBoosts.powerplay) || {};
+                const death = (phaseBoosts && phaseBoosts.death_overs) || {};
+                const ppEnd = pp.overs_end != null ? pp.overs_end : 5;
+                const dStart = death.overs_start != null ? death.overs_start : 16;
+                const dEnd = death.overs_end != null ? death.overs_end : 19;
+                const batting = ['Flat', 'Dead', 'Hard'].includes(pitch);
+                const dBnd = batting
+                    ? (death.boundary_boost_batting_pitch || 2.2)
+                    : (death.boundary_boost_bowling_pitch || 1.8);
+
+                let runs = 0, wkts = 0;
+                for (let ball = 0; ball < 120 && wkts < 10; ball++) {
+                    const over = Math.floor(ball / 6);
+                    let m = Object.assign({}, base);
+                    if (over <= ppEnd) {
+                        const b = pp.boundary_multiplier || 1.25;
+                        m.Four *= b; m.Six *= b;
+                    } else if (over >= dStart && over <= dEnd) {
+                        m.Four *= dBnd; m.Six *= dBnd;
+                        m.Wicket = (m.Wicket || 0) * (death.wicket_boost || 1.6);
+                    }
+                    m = normalise(m);
+                    runs += rpb(m);
+                    wkts += m.Wicket || 0;
+                }
+                const scoring = inferScoring(m0);
+                return {
+                    runs: runs * (CAL_A + CAL_B * scoring),
+                    wickets: Math.min(10, Math.max(0, wkts * (WCAL_A + WCAL_B * scoring))),
+                };
+            }
+
+            // List A: three phase matrices over 300 balls, scaled per pitch.
+            function estimateListA(cfg, pitch) {
+                const mats = cfg.scoring_matrices || {};
+                const prof = (cfg.pitch_profiles || {})[pitch] || {};
+                const rf = prof.run_factor != null ? prof.run_factor : 1.0;
+                const wm = prof.wicket_mult != null ? prof.wicket_mult : 1.0;
+                const fine = prof.fine_tune || {};
+                const phases = [['pp1', 60], ['middle', 180], ['death', 60]];
+                let runs = 0, wkts = 0, used = 0;
+                for (const [name, balls] of phases) {
+                    const src = mats[name];
+                    if (!src) continue;
+                    const m = {};
+                    for (const k in src) {
+                        m[k] = src[k] * (RUN_KEYS.includes(k) ? rf : 1) * (fine[k] || 1);
+                    }
+                    m.Wicket = (m.Wicket || 0) * wm;
+                    const n = normalise(m);
+                    for (let b = 0; b < balls && wkts < 10; b++) {
+                        runs += rpb(n); wkts += n.Wicket || 0; used++;
+                    }
+                }
+                if (!used) return null;
+                // Same idea as the T20 correction, fitted against full List A
+                // simulations of all five pitches (within ~4%). Keyed off the
+                // run factor because that is List A's pitch-character axis.
+                return {
+                    runs: runs * (LA_CAL_A + LA_CAL_B * rf),
+                    wickets: Math.min(10, wkts),
+                };
+            }
+
+            return {
+                deriveMatrix, deriveWicketFactors,
+                inferScoring, inferBowlerHelp, inferFavours,
+                estimateT20, estimateListA,
+                PACE, SPIN, RUN_KEYS,
+            };
+        })();
 
         // ── Toast ──
         function showToast(msg, type) {
@@ -349,7 +843,7 @@
                 const resp = await fetch('/ground-conditions/mode', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode })
+                    body: JSON.stringify({ mode, match_format: MATCH_FORMAT })
                 });
                 const data = await resp.json();
                 if (resp.ok) {
@@ -421,10 +915,14 @@
             activePitchCard = null;
         };
 
-        // Close modal on backdrop click
-        document.getElementById('gcPitchEditorModal').addEventListener('click', function (e) {
-            if (e.target === this) closePitchEditor();
-        });
+        // Close modal on backdrop click. The pitch editor only exists on the
+        // T20 tab, so every reference to it has to tolerate its absence.
+        const pitchModal = document.getElementById('gcPitchEditorModal');
+        if (pitchModal) {
+            pitchModal.addEventListener('click', function (e) {
+                if (e.target === this) closePitchEditor();
+            });
+        }
 
         // ── Matrix Input Change ──
         window.onMatrixChange = function (input) {
@@ -443,7 +941,12 @@
                 const range = tile.querySelector('.gc-matrix-range');
                 if (range) range.value = input.value;
             }
-            updateTotal(input.dataset.pitch);
+            // Keep the simple sliders honest about what the raw numbers say.
+            const pitch = input.dataset.pitch;
+            const matrix = readProfileFromDom(pitch).scoring_matrix;
+            setIntent(pitch, 'scoring', PITCH.inferScoring(matrix));
+            setIntent(pitch, 'bowler_help', PITCH.inferBowlerHelp(matrix));
+            updateTotal(pitch);
         };
 
         function updateTotal(pitch) {
@@ -457,8 +960,276 @@
                 if (valSpan) valSpan.textContent = total.toFixed(3);
                 else el.textContent = 'Total: ' + total.toFixed(3);
 
-                el.className = 'gc-total-display ' + (Math.abs(total - 1.0) < 0.005 ? 'valid' : 'invalid');
+                // Match the server's tolerance (_validate_config allows ±0.02).
+                // A tighter check here flagged the shipped defaults as invalid —
+                // several of them legitimately sum to 0.993.
+                el.className = 'gc-total-display ' + (Math.abs(total - 1.0) <= 0.02 ? 'valid' : 'invalid');
             }
+            refreshEstimate(pitch);
+        }
+
+        /* ── Intent sliders ────────────────────────────────────────────────
+           The sliders are a driver for the Advanced inputs, never a parallel
+           store. Everything below reads from and writes to those inputs. */
+
+        function readProfileFromDom(pitch) {
+            const matrix = {};
+            document.querySelectorAll(`.gc-matrix-input[data-pitch="${pitch}"]`).forEach(inp => {
+                matrix[inp.dataset.outcome] = parseFloat(inp.value) || 0;
+            });
+            const factors = {};
+            document.querySelectorAll(`.gc-wf-input[data-pitch="${pitch}"]`).forEach(inp => {
+                factors[inp.dataset.wf] = parseFloat(inp.value) || 1.0;
+            });
+            const rfInp = document.querySelector(
+                `.gc-factor-input[data-pitch="${pitch}"][data-field="run_factor"]`);
+            return {
+                scoring_matrix: matrix,
+                wicket_factors: factors,
+                run_factor: rfInp ? (parseFloat(rfInp.value) || 1.0) : 1.0,
+            };
+        }
+
+        function writeMatrixToDom(pitch, matrix) {
+            document.querySelectorAll(`.gc-matrix-input[data-pitch="${pitch}"]`).forEach(inp => {
+                const val = matrix[inp.dataset.outcome];
+                if (val == null) return;
+                inp.value = val.toFixed(4);
+                const tile = inp.closest('.gc-matrix-tile');
+                if (!tile) return;
+                const wrapper = tile.querySelector('.gc-slider-wrapper');
+                if (wrapper) wrapper.style.setProperty('--val', (val * 100) + '%');
+                const range = tile.querySelector('.gc-matrix-range');
+                if (range) range.value = val;
+                const disp = tile.querySelector('.gc-outcome-val');
+                if (disp) disp.textContent = (val * 100).toFixed(1) + '%';
+            });
+        }
+
+        // Writing wicket factors may need styles the stored config never had
+        // (a pitch with only `default` cannot express a pace/spin bias), so
+        // missing tiles are created on demand — but only when the user
+        // actually moves the Favours slider.
+        function writeWicketFactorsToDom(pitch, factors) {
+            const grid = document.querySelector(`.gc-wf-grid-modern[data-pitch="${pitch}"]`);
+            for (const style in factors) {
+                let input = document.querySelector(
+                    `.gc-wf-input[data-pitch="${pitch}"][data-wf="${CSS.escape(style)}"]`);
+                if (!input && grid) {
+                    const tile = document.createElement('div');
+                    tile.className = 'gc-wf-tile';
+                    tile.innerHTML =
+                        '<div class="gc-wf-icon"><i class="fa-solid fa-bullseye"></i></div>' +
+                        '<div class="gc-wf-info"><div class="gc-wf-name"></div>' +
+                        '<div class="gc-stepper">' +
+                        '<button class="gc-step-btn" onclick="adjustWF(this, -0.05)">-</button>' +
+                        '<input type="number" class="gc-wf-input" step="0.05" min="0" max="3">' +
+                        '<button class="gc-step-btn" onclick="adjustWF(this, 0.05)">+</button>' +
+                        '</div></div>';
+                    tile.querySelector('.gc-wf-name').textContent = style;
+                    input = tile.querySelector('.gc-wf-input');
+                    input.dataset.pitch = pitch;
+                    input.dataset.wf = style;
+                    grid.appendChild(tile);
+                }
+                if (input) input.value = factors[style].toFixed(2);
+            }
+        }
+
+        function setIntent(pitch, intent, value01) {
+            const el = document.querySelector(
+                `.gc-intent[data-pitch="${pitch}"][data-intent="${intent}"]`);
+            if (el) el.value = Math.round(value01 * 100);
+        }
+        function getIntent(pitch, intent) {
+            const el = document.querySelector(
+                `.gc-intent[data-pitch="${pitch}"][data-intent="${intent}"]`);
+            return el ? (parseFloat(el.value) || 0) / 100 : 0.5;
+        }
+
+        window.onIntentChange = function (input) {
+            const pitch = input.dataset.pitch;
+            const scoring = getIntent(pitch, 'scoring');
+            const bowlerHelp = getIntent(pitch, 'bowler_help');
+
+            if (input.dataset.intent === 'favours') {
+                writeWicketFactorsToDom(pitch,
+                    PITCH.deriveWicketFactors(bowlerHelp, getIntent(pitch, 'favours')));
+            } else {
+                writeMatrixToDom(pitch, PITCH.deriveMatrix(scoring, bowlerHelp));
+                // Run factor tracks the scoring axis so the pitch multiplier
+                // and the matrix stay telling the same story.
+                const rf = 0.80 + 0.55 * scoring;
+                const rfInp = document.querySelector(
+                    `.gc-factor-input[data-pitch="${pitch}"][data-field="run_factor"]`);
+                if (rfInp) {
+                    rfInp.value = rf.toFixed(2);
+                    const widget = rfInp.closest('.gc-rf-control');
+                    if (widget) {
+                        const range = widget.querySelector('.gc-rf-range');
+                        const out = widget.querySelector('output');
+                        if (range) range.value = rf;
+                        if (out) out.value = rf.toFixed(2);
+                    }
+                }
+                if (input.dataset.intent === 'bowler_help') {
+                    writeWicketFactorsToDom(pitch,
+                        PITCH.deriveWicketFactors(bowlerHelp, getIntent(pitch, 'favours')));
+                }
+            }
+            updateTotal(pitch);
+        };
+
+        // Phase boosts live outside the pitch modal, so read them from the DOM
+        // rather than CONFIG — otherwise editing them leaves every pitch
+        // estimate showing a stale number.
+        function readPhaseBoostsFromDom() {
+            const num = (id, fallback) => {
+                const el = document.getElementById(id);
+                const v = el ? parseFloat(el.value) : NaN;
+                return isNaN(v) ? fallback : v;
+            };
+            const stored = CONFIG.phase_boosts || {};
+            return {
+                powerplay: Object.assign({}, stored.powerplay, {
+                    boundary_multiplier: num('pp-boundary', 1.25),
+                }),
+                death_overs: Object.assign({}, stored.death_overs, {
+                    boundary_boost_batting_pitch: num('death-bat-boundary', 2.2),
+                    boundary_boost_bowling_pitch: num('death-bowl-boundary', 1.8),
+                    wicket_boost: num('death-wicket', 1.6),
+                }),
+            };
+        }
+
+        function refreshEstimate(pitch) {
+            const box = document.getElementById('est-' + pitch);
+            if (!box) return;
+            const blendEl = document.getElementById('blendPitch');
+            const pitchW = blendEl ? (parseInt(blendEl.value) || 60) / 100 : 0.6;
+            const est = IS_LISTA
+                ? PITCH.estimateListA(buildListAConfig(), pitch)
+                : PITCH.estimateT20(readProfileFromDom(pitch), readPhaseBoostsFromDom(),
+                                    { pitch_weight: pitchW, skill_weight: 1 - pitchW }, pitch);
+            const runsEl = box.querySelector('.gc-est-runs');
+            const wktsEl = box.querySelector('.gc-est-wkts');
+            if (!est) { if (runsEl) runsEl.textContent = '—'; return; }
+            // Rounded to the nearest 5 — the estimate is good to roughly ±8%,
+            // and a precise-looking number would overstate that.
+            if (runsEl) runsEl.textContent = '≈ ' + (Math.round(est.runs / 5) * 5);
+            if (wktsEl) wktsEl.textContent = est.wickets.toFixed(1);
+        }
+
+        /* ── List A intent sliders ─────────────────────────────────────── */
+
+        function readListAPhaseMatrix(phase) {
+            const m = {};
+            document.querySelectorAll(`.gc-la-matrix-input[data-phase="${phase}"]`).forEach(inp => {
+                m[inp.dataset.outcome] = parseFloat(inp.value) || 0;
+            });
+            return m;
+        }
+
+        function writeListAPhaseMatrix(phase, matrix) {
+            document.querySelectorAll(`.gc-la-matrix-input[data-phase="${phase}"]`).forEach(inp => {
+                const val = matrix[inp.dataset.outcome];
+                if (val != null) inp.value = val.toFixed(4);
+            });
+        }
+
+        window.onListAPhaseIntent = function (input) {
+            const phase = input.dataset.phase;
+            const get = intent => {
+                const el = document.querySelector(
+                    `.gc-intent[data-phase="${phase}"][data-intent="${intent}"]`);
+                return el ? (parseFloat(el.value) || 0) / 100 : 0.5;
+            };
+            writeListAPhaseMatrix(phase, PITCH.deriveMatrix(get('scoring'), get('bowler_help')));
+            updateListATotal(phase);
+            refreshAllListAEstimates();
+        };
+
+        window.onListAPitchIntent = function (input) {
+            const pitch = input.dataset.pitch;
+            const scoring = getIntent(pitch, 'la_scoring');
+            const help = getIntent(pitch, 'la_bowler_help');
+
+            // Scoring drives the per-pitch fine-tuning (the knob that really
+            // shifts List A run rate); Bowler Help drives the wicket multiplier.
+            // run_factor is deliberately left alone — in List A it suppresses
+            // wickets rather than lifting scoring, so it belongs to Bowler Help
+            // conceptually and would double-count if both wrote to it.
+            const set = (sel, val) => {
+                const el = document.querySelector(sel);
+                if (el) el.value = val.toFixed(2);
+            };
+            const boundary = 0.75 + 0.6 * scoring;   // 0.75 … 1.35
+            const dot = 1.15 - 0.35 * scoring;       // 1.15 … 0.80
+            set(`input[data-pitch="${pitch}"][data-la-ft="Four"]`, boundary);
+            set(`input[data-pitch="${pitch}"][data-la-ft="Six"]`, boundary);
+            set(`input[data-pitch="${pitch}"][data-la-ft="Dot"]`, dot);
+            set(`input[data-pitch="${pitch}"][data-la-field="wicket_mult"]`, 0.55 + 0.9 * help);
+
+            refreshEstimate(pitch);
+        };
+
+        window.onListAAdvancedChange = function (input) {
+            const pitch = input.dataset.pitch;
+            if (pitch) {
+                syncListAPitchSliders(pitch);
+                refreshEstimate(pitch);
+            }
+        };
+
+        function syncListAPitchSliders(pitch) {
+            const num = sel => {
+                const el = document.querySelector(sel);
+                return el ? (parseFloat(el.value) || 0) : null;
+            };
+            const four = num(`input[data-pitch="${pitch}"][data-la-ft="Four"]`);
+            if (four != null) {
+                setIntent(pitch, 'la_scoring', Math.max(0, Math.min(1, (four - 0.75) / 0.6)));
+            }
+            const wm = num(`input[data-pitch="${pitch}"][data-la-field="wicket_mult"]`);
+            if (wm != null) {
+                setIntent(pitch, 'la_bowler_help', Math.max(0, Math.min(1, (wm - 0.55) / 0.9)));
+            }
+        }
+
+        function refreshAllListAEstimates() {
+            document.querySelectorAll('.gc-simple-la[data-pitch]').forEach(
+                box => refreshEstimate(box.dataset.pitch));
+        }
+
+        // Position the sliders from whatever is already stored, WITHOUT
+        // writing back — this is what keeps "open a pitch, save, nothing
+        // changed" true.
+        function initIntentSliders() {
+            document.querySelectorAll('.gc-simple[data-pitch]:not(.gc-simple-la)').forEach(box => {
+                const pitch = box.dataset.pitch;
+                const prof = readProfileFromDom(pitch);
+                setIntent(pitch, 'scoring', PITCH.inferScoring(prof.scoring_matrix));
+                setIntent(pitch, 'bowler_help', PITCH.inferBowlerHelp(prof.scoring_matrix));
+                setIntent(pitch, 'favours', PITCH.inferFavours(prof.wicket_factors));
+                refreshEstimate(pitch);
+            });
+
+            document.querySelectorAll('.gc-la-matrix-card[data-phase]').forEach(card => {
+                const phase = card.dataset.phase;
+                const m = readListAPhaseMatrix(phase);
+                const set = (intent, v) => {
+                    const el = document.querySelector(
+                        `.gc-intent[data-phase="${phase}"][data-intent="${intent}"]`);
+                    if (el) el.value = Math.round(v * 100);
+                };
+                set('scoring', PITCH.inferScoring(m));
+                set('bowler_help', PITCH.inferBowlerHelp(m));
+            });
+
+            document.querySelectorAll('.gc-simple-la[data-pitch]').forEach(box => {
+                syncListAPitchSliders(box.dataset.pitch);
+                refreshEstimate(box.dataset.pitch);
+            });
         }
 
         // ── Wicket Factor Adjust ──
@@ -467,6 +1238,13 @@
             let val = parseFloat(input.value) || 0;
             val = Math.max(0, Math.min(3, val + delta));
             input.value = val.toFixed(2);
+            // Editing a raw factor moves the Favours slider back in step.
+            const pitch = input.dataset.pitch;
+            if (pitch) {
+                setIntent(pitch, 'favours',
+                          PITCH.inferFavours(readProfileFromDom(pitch).wicket_factors));
+                refreshEstimate(pitch);
+            }
         };
 
         // ── Normalize ──
@@ -513,6 +1291,16 @@
 
             document.getElementById('blendPitchVal').textContent = pitchVal + '%';
             document.getElementById('blendSkillVal').textContent = skillVal + '%';
+            refreshAllEstimates();
+        };
+
+        // Phase boosts and blending are page-level, so a change there affects
+        // every pitch's projection at once. Exported on `window` because the
+        // phase-boost inputs call it from inline oninput attributes, which
+        // resolve against global scope rather than this IIFE.
+        window.refreshAllEstimates = function () {
+            document.querySelectorAll('.gc-estimate[id^="est-"]').forEach(
+                box => refreshEstimate(box.id.replace('est-', '')));
         };
 
         // ── Phase Toggle ──
@@ -523,8 +1311,100 @@
             body.classList.toggle('open');
         };
 
+        // ── List A matrix totals ──
+        window.onListAMatrixChange = function (input) {
+            updateListATotal(input.dataset.phase);
+        };
+
+        function updateListATotal(phase) {
+            const el = document.getElementById('la-total-' + phase);
+            if (!el) return;
+            let total = 0;
+            document.querySelectorAll(`.gc-la-matrix-input[data-phase="${phase}"]`)
+                .forEach(inp => total += parseFloat(inp.value) || 0);
+            const valSpan = el.querySelector('.val');
+            if (valSpan) valSpan.textContent = total.toFixed(3);
+            el.classList.toggle('valid', Math.abs(total - 1.0) <= 0.02);
+            el.classList.toggle('invalid', Math.abs(total - 1.0) > 0.02);
+        }
+
         // ── Build config from UI ──
         function buildConfig() {
+            return IS_LISTA ? buildListAConfig() : buildT20Config();
+        }
+
+        function buildListAConfig() {
+            const cfg = JSON.parse(JSON.stringify(CONFIG));
+
+            // Phase matrices
+            cfg.scoring_matrices = cfg.scoring_matrices || {};
+            document.querySelectorAll('.gc-la-matrix-card').forEach(card => {
+                const phase = card.dataset.phase;
+                const matrix = {};
+                document.querySelectorAll(`.gc-la-matrix-input[data-phase="${phase}"]`).forEach(inp => {
+                    matrix[inp.dataset.outcome] = parseFloat(inp.value) || 0;
+                });
+                cfg.scoring_matrices[phase] = matrix;
+            });
+
+            // Pitch profiles — run factor, wicket multiplier, rotation, fine tuning
+            cfg.pitch_profiles = cfg.pitch_profiles || {};
+            document.querySelectorAll('.gc-la-pitch-card').forEach(card => {
+                const pitch = card.dataset.pitch;
+                const profile = cfg.pitch_profiles[pitch] || (cfg.pitch_profiles[pitch] = {});
+
+                document.querySelectorAll(`input[data-pitch="${pitch}"][data-la-field]`).forEach(inp => {
+                    profile[inp.dataset.laField] = parseFloat(inp.value) || 0;
+                });
+
+                profile.dot_single = {};
+                document.querySelectorAll(`input[data-pitch="${pitch}"][data-la-ds]`).forEach(inp => {
+                    profile.dot_single[inp.dataset.laDs] = parseFloat(inp.value) || 1.0;
+                });
+
+                // Identity multipliers are dropped so the stored blob stays a
+                // genuine diff rather than a full copy of the defaults.
+                profile.fine_tune = {};
+                document.querySelectorAll(`input[data-pitch="${pitch}"][data-la-ft]`).forEach(inp => {
+                    const val = parseFloat(inp.value);
+                    if (!isNaN(val) && val !== 1.0) profile.fine_tune[inp.dataset.laFt] = val;
+                });
+            });
+
+            // Phase boosts
+            cfg.phase_boosts = cfg.phase_boosts || {};
+            document.querySelectorAll('input[data-la-pb]').forEach(inp => {
+                const phase = inp.dataset.laPb;
+                const scope = inp.dataset.laPbScope;
+                const outcome = inp.dataset.laPbOutcome;
+                const val = parseFloat(inp.value);
+                if (isNaN(val)) return;
+                const phaseCfg = cfg.phase_boosts[phase] || (cfg.phase_boosts[phase] = {});
+                const scopeCfg = phaseCfg[scope] || (phaseCfg[scope] = {});
+                if (val === 1.0) delete scopeCfg[outcome];
+                else scopeCfg[outcome] = val;
+            });
+
+            // Dew
+            cfg.dew = cfg.dew || {};
+            cfg.dew.start_over = parseInt(document.getElementById('la-dew-start').value) || 0;
+            cfg.dew.peak_over = parseInt(document.getElementById('la-dew-peak').value) || 0;
+            cfg.dew.factors = {};
+            document.querySelectorAll('input[data-la-dew]').forEach(inp => {
+                const val = parseFloat(inp.value);
+                if (!isNaN(val)) cfg.dew.factors[inp.dataset.laDew] = val;
+            });
+
+            applyBlending(cfg);
+            return cfg;
+        }
+
+        function applyBlending(cfg) {
+            const pitchW = parseInt(document.getElementById('blendPitch').value) / 100;
+            cfg.blending = { pitch_weight: pitchW, skill_weight: 1 - pitchW };
+        }
+
+        function buildT20Config() {
             const cfg = JSON.parse(JSON.stringify(CONFIG));
 
             // Pitch profiles — query globally by data-pitch since inputs
@@ -569,10 +1449,7 @@
             cfg.phase_boosts.second_innings_death.scoring_boost = parseFloat(document.getElementById('inn2-scoring').value) || 1.15;
             cfg.phase_boosts.second_innings_death.wicket_boost = parseFloat(document.getElementById('inn2-wicket').value) || 1.1;
 
-            // Blending
-            const pitchW = parseInt(document.getElementById('blendPitch').value) / 100;
-            cfg.blending = { pitch_weight: pitchW, skill_weight: 1 - pitchW };
-
+            applyBlending(cfg);
             return cfg;
         }
 
@@ -584,6 +1461,7 @@
 
             try {
                 const cfg = buildConfig();
+                cfg.match_format = MATCH_FORMAT;
                 const resp = await fetch('/ground-conditions/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -615,7 +1493,8 @@
             try {
                 const resp = await fetch('/ground-conditions/reset', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ match_format: MATCH_FORMAT })
                 });
                 const data = await resp.json();
                 if (resp.ok) {
@@ -635,7 +1514,7 @@
         });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
-                if (document.getElementById('gcPitchEditorModal').classList.contains('show')) {
+                if (pitchModal && pitchModal.classList.contains('show')) {
                     closePitchEditor();
                 } else {
                     closeResetModal();
@@ -650,6 +1529,10 @@
         document.querySelectorAll('.gc-pitch-card').forEach(card => {
             updateTotal(card.dataset.pitch);
         });
+        document.querySelectorAll('.gc-la-matrix-card').forEach(card => {
+            updateListATotal(card.dataset.phase);
+        });
+        initIntentSliders();
     })();
 </script>
 {% endblock %}

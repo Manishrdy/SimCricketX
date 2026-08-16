@@ -282,6 +282,7 @@ def compute_game_state_vector(
     partnership_runs:  int = 0,
     scenario_phase:   str  = "inactive",
     format_config            = None,   # FormatConfig | None — defaults to T20
+    ground_config:    dict = None,     # per-match ground config snapshot
 ) -> dict:
     """
     Compute the full game-state descriptor for the CURRENT delivery.
@@ -314,11 +315,15 @@ def compute_game_state_vector(
         # Feature 15: pitch-aware RRR baseline — different pitches have
         # different "neutral" run rates, so we scale the aggression index
         # relative to what's achievable on that surface.
-        # FormatConfig.rrr_baseline is the authoritative source; the module-level
+        # FormatConfig.rrr_baseline is the authoritative source, adjusted for a
+        # user's custom run factor so a re-tuned pitch is judged against its own
+        # scoring level rather than the stock one. The module-level
         # _PITCH_RRR_BASELINE is a T20-only fallback for legacy / no-format paths.
+        rrr_baseline = None
         if _fmt is not None and hasattr(_fmt, "rrr_baseline"):
-            rrr_baseline = _fmt.rrr_baseline.get(pitch, 9.0)
-        else:
+            from engine.ground_config import get_rrr_baseline as _gc_rrr_baseline
+            rrr_baseline = _gc_rrr_baseline(pitch, _fmt, config=ground_config)
+        if not rrr_baseline:
             rrr_baseline = _PITCH_RRR_BASELINE.get(pitch, 9.0)
         required_aggression = rrr / rrr_baseline
     else:

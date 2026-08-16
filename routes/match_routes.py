@@ -369,7 +369,7 @@ def register_match_routes(
                 "fixture_id": req_fixture_id,
                 "created_at": time.time(),
                 "timestamp": ts,
-                "ground_config": _get_gc(current_user.id),
+                "ground_config": _get_gc(current_user.id, _fmt_cfg.name),
                 "weather_forecast": _forecast,
                 "weather_script": generate_weather_script(
                     _forecast, _fmt_cfg.overs, _fmt_cfg.name
