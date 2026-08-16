@@ -104,6 +104,16 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("add_structured_match_outcome", _loader("migrations.add_structured_match_outcome")),
     # Man of the Match — matches.motm_player_id, set once at archive time.
     ("add_motm_column",           _loader("migrations.add_motm_column")),
+    # Per-format ground configs: (user_id, match_format) keying plus a v2
+    # normalisation of stored blobs. Ground conditions used to be one T20-only
+    # blob per user that ListA matches ignored.
+    ("add_ground_config_formats", _loader("migrations.add_ground_config_formats")),
+    # 2026-08-16 T20 pitch recalibration: stored blobs deep-merge OVER the
+    # defaults, and the mode picker used to snapshot the whole effective config,
+    # so users carry involuntary copies of the old (much higher scoring) pitch
+    # matrices. Strip the copies that match the old shipped values verbatim.
+    ("reset_stale_t20_pitch_tuning",
+     _loader("migrations.reset_stale_t20_pitch_tuning")),
 ]
 
 

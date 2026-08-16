@@ -1050,19 +1050,30 @@ class IPWhitelistEntry(db.Model):
 
 
 class UserGroundConfig(db.Model):
-    """Per-user ground conditions configuration.
+    """Per-user, per-format ground conditions configuration.
 
-    One row per user. When absent, the engine falls back to the factory
-    defaults in config/ground_conditions_defaults.yaml.
+    One row per (user, match_format). When a row is absent the engine uses the
+    factory defaults in config/ground_conditions_defaults.yaml; when present,
+    the stored blob is deep-merged OVER those defaults, so later additions to
+    the defaults file still reach users who saved earlier.
+
+    config_json holds the flat format block (pitch_profiles, phase_boosts, …)
+    — not the whole document — since the row is already keyed by format.
     """
     __tablename__ = 'user_ground_configs'
 
     id         = db.Column(db.Integer, primary_key=True)
     user_id    = db.Column(db.String(120), db.ForeignKey('users.id'),
-                           unique=True, nullable=False, index=True)
+                           nullable=False, index=True)
+    match_format = db.Column(db.String(10), nullable=False, default='T20')
     config_json = db.Column(db.JSON, nullable=False)
     updated_at  = db.Column(db.DateTime, default=datetime.utcnow,
                             onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'match_format',
+                            name='uq_ground_config_user_format'),
+    )
 
     user = relationship('User', backref=db.backref(
         'ground_config', uselist=False, cascade='all, delete-orphan'))

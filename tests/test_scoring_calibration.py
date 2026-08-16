@@ -39,22 +39,37 @@ So tier SR is reported (test_report_calibration_table) but never asserted.
 The assertions live on the isolated probe.
 
 
-KNOWN_CALIBRATION_DRIFT
------------------------
-Measured against the targets documented in engine/ball_outcome.py:31-36,
-using a squad built from real production rating distributions. Every T20
-pitch is out of its documented band TODAY, before any shape work:
+T20 PITCH RECALIBRATION (2026-08-16)
+-----------------------------------
+The drift recorded here previously (Flat 227.9 mean, median 234, p75 257 —
+routine 260s) has been closed. T20 pitch profiles were retuned to the bands
+in engine/ball_outcome.py, and every T20 pitch now sits inside its band:
 
-    pitch   documented    measured   drift
-    Green   120-150        115.4      -4%   (under)
-    Dry     120-150         91.8     -24%   (under, ~9.6 wkts most seeds)
-    Hard    150-180        197.0      +9%   (over)
-    Flat    180-200        227.9     +14%   (over)
-    Dead    200-240        279.2     +16%   (over)
+    pitch   band                  measured (16 seeds)
+    Green   110-150 / 7-10 wkts   123.3 / 8.3
+    Dry     110-150 / 7-10 wkts   133.2 / 7.9
+    Hard    180-220 / 5-7  wkts   184.9 / 5.0
+    Flat    200-230 / 3-5  wkts   212.5 / 3.5
+    Dead    230+    / 1-2  wkts   249.1 / 1.8
 
-This is pre-existing and out of scope for the shape work. It is recorded
-here so Phase 2 recalibration has an explicit target to move toward instead
-of silently cementing the current numbers.
+Three levers moved, all in config/ground_conditions_defaults.yaml:
+  1. Per-pitch scoring_matrix — the base shape, and the dominant lever.
+     Note run_factor is NOT a run-rate control in T20: it multiplies all six
+     run outcomes equally, so after normalisation it only trades run-mass
+     against Wicket/Extras. It is a wicket suppressor. (Same trap as ListA —
+     see the ListA run_factor note.)
+  2. phase_boosts.death_overs.boundary_boost_batting_pitch 2.2 -> 1.90.
+  3. game_modes.flat_track_bully four/six/dot multipliers softened. This mode
+     is auto-pinned on Flat/Dead while `wickets < 3 and over < 10`, so its
+     wicket suppression feeds its own trigger; at 1.22/1.35 the loop was
+     self-sustaining for the entire first 10 overs.
+
+Verified against 120 independent seeds (medians): Green 138, Dry 143,
+Hard 186, Flat 218, Dead 253 — all in band, with Flat's p90 down from
+265 to 243.
+
+ListA was deliberately left untouched; its bands are ODI-scale and were
+not part of this recalibration.
 
 REPIN NOTE (2026-08-09): T20_BASELINE/LISTA_BASELINE below were re-measured
 after the fielding-mechanic change (individual fielder rating now drives
@@ -101,13 +116,15 @@ SQUAD = [
 ]
 
 # Pinned to engine behaviour at Phase 0, re-pinned after the fielder-first
-# catch-drop/misfield change (see REPIN NOTE above). (mean_runs, mean_wickets, dot_pct, bdry_per_100)
+# catch-drop/misfield change (see REPIN NOTE above), and again after the
+# 2026-08-16 T20 pitch recalibration (see T20 PITCH RECALIBRATION above).
+# (mean_runs, mean_wickets, dot_pct, bdry_per_100)
 T20_BASELINE = {
-    "Green": (115.4, 8.6, 43.3, 11.2),
-    "Dry":   ( 91.8, 9.6, 45.9, 10.6),
-    "Hard":  (197.0, 4.2, 33.4, 22.0),
-    "Flat":  (227.9, 4.4, 27.1, 27.0),
-    "Dead":  (279.2, 1.1, 19.4, 35.8),
+    "Green": (123.3, 8.3, 41.7, 11.9),
+    "Dry":   (133.2, 7.9, 41.4, 14.4),
+    "Hard":  (184.9, 5.0, 34.0, 20.1),
+    "Flat":  (212.5, 3.5, 28.6, 23.8),
+    "Dead":  (249.1, 1.8, 25.1, 30.8),
 }
 
 LISTA_BASELINE = {
@@ -256,6 +273,41 @@ def test_lista_par_regression_band(pitch):
     )
     assert abs(got["bdry_per_100"] - exp_bdry) <= BDRY_TOLERANCE, (
         f"ListA/{pitch} boundaries/100b moved: {got['bdry_per_100']:.1f} vs pinned {exp_bdry}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 1b. Target bands — the pitch spec, as an executable assertion
+# ---------------------------------------------------------------------------
+# Unlike T20_BASELINE (which pins whatever the engine does today so drift is
+# loud), these are the bands the engine is SUPPOSED to hit. They are wider and
+# survive re-pinning: a future tuning pass may move the baseline, but moving
+# outside these bands means the pitch no longer means what it says it means.
+#
+# (runs_lo, runs_hi, wkts_lo, wkts_hi). runs_hi is None for an open-ended band.
+T20_TARGET_BANDS = {
+    "Green": (110, 150, 7.0, 10.0),
+    "Dry":   (110, 150, 7.0, 10.0),
+    "Hard":  (180, 220, 5.0, 7.0),
+    "Flat":  (200, 230, 3.0, 5.0),
+    "Dead":  (230, None, 1.0, 2.5),
+}
+
+
+@pytest.mark.parametrize("pitch", PITCHES)
+def test_t20_pitch_sits_in_its_target_band(pitch):
+    lo, hi, wlo, whi = T20_TARGET_BANDS[pitch]
+    got = _aggregate("T20", pitch)
+
+    assert got["runs"] >= lo, (
+        f"T20/{pitch}: mean {got['runs']:.1f} is below the band floor {lo}"
+    )
+    if hi is not None:
+        assert got["runs"] <= hi, (
+            f"T20/{pitch}: mean {got['runs']:.1f} is above the band ceiling {hi}"
+        )
+    assert wlo <= got["wkts"] <= whi, (
+        f"T20/{pitch}: mean wickets {got['wkts']:.1f} outside {wlo}-{whi}"
     )
 
 
