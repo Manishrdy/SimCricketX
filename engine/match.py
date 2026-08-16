@@ -2249,12 +2249,32 @@ class Match:
     # ------------------------------------------------------------------
     # Feature 13: dynamic game mode selection
     # ------------------------------------------------------------------
+    def _resolve_game_mode(self) -> str:
+        """
+        Return the game mode to apply to this delivery.
+
+        The user's ground config may pin a specific mode, in which case it wins
+        for every ball of the match; the default "auto" hands the choice to
+        _get_dynamic_game_mode(). The pin is read from the per-match snapshot
+        (not live config) so a resumed match replays identically.
+
+        Before this existed the dynamic selector ran unconditionally and the
+        configured mode was silently ignored — the picker in the Ground
+        Conditions UI did nothing at all.
+        """
+        from engine.ground_config import AUTO_GAME_MODE, get_active_game_mode_name
+
+        configured = get_active_game_mode_name(config=self.ground_config)
+        if configured and configured != AUTO_GAME_MODE:
+            return configured
+        return self._get_dynamic_game_mode()
+
     def _get_dynamic_game_mode(self) -> str:
         """
         Dynamically select the most appropriate game mode for the current
         delivery based on match state (pitch, innings, overs, wickets, RRR).
 
-        Returns a game mode name present in ground_conditions.yaml:
+        Returns a game mode name present in the T20 ground config:
           natural_game | aggressive | defensive | bowlers_day | flat_track_bully
         """
         pitch   = self.pitch
@@ -4497,7 +4517,7 @@ class Match:
                 break
         _total_balls = self.fmt.overs * 6
         _pitch_wear = min(1.0, self.innings_balls_bowled / _total_balls)
-        _game_mode_override = self._get_dynamic_game_mode()
+        _game_mode_override = self._resolve_game_mode()
         # Historical scenario engines steer both innings; classic scripted
         # scenarios only ever act on the 2nd innings.
         _scenario_steers_now = bool(self.scenario_engine) and (
@@ -4520,6 +4540,7 @@ class Match:
             partnership_runs=_partnership_runs,
             scenario_phase=_scenario_phase,
             format_config=self.fmt,
+            ground_config=self.ground_config,
         )
 
         # ===== SCENARIO ENGINE HOOK =====
@@ -4569,8 +4590,8 @@ class Match:
             _total_balls = self.fmt.overs * 6
             _pitch_wear = min(1.0, self.innings_balls_bowled / _total_balls)
 
-            # Feature 13: dynamic game mode selection
-            _game_mode_override = self._get_dynamic_game_mode()
+            # Feature 13: game mode selection (pinned by config, else dynamic)
+            _game_mode_override = self._resolve_game_mode()
             logger.debug("[DynMode] over=%d wickets=%d mode=%s", self.current_over, self.wickets, _game_mode_override)
 
             # Fielding quality fallback: team average, only used by ball_outcome

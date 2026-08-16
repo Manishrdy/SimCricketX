@@ -128,12 +128,30 @@ def register_core_routes(
 
     # ───── Ground Conditions ─────
 
+    def _requested_format(payload=None):
+        """Resolve the target match format from the query string or JSON body.
+
+        Unknown values fall back to the default rather than erroring — a bad
+        ?format= should show the T20 editor, not a 400.
+        """
+        from engine.ground_config import normalise_format
+        raw = request.args.get("format")
+        if raw is None and payload is not None:
+            raw = payload.get("match_format")
+        return normalise_format(raw)
+
     @app.route("/ground-conditions")
     @login_required
     def ground_conditions():
-        from engine.ground_config import get_effective_config
-        config = get_effective_config(current_user.id)
-        return render_template("ground_conditions.html", config=config)
+        from engine.ground_config import (
+            VALID_FORMATS, get_effective_config,
+        )
+        match_format = _requested_format()
+        config = get_effective_config(current_user.id, match_format)
+        return render_template("ground_conditions.html",
+                               config=config,
+                               match_format=match_format,
+                               valid_formats=VALID_FORMATS)
 
     @app.route("/ground-conditions/save", methods=["POST"])
     @login_required
@@ -142,19 +160,30 @@ def register_core_routes(
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
-        ok, err = save_user_config(current_user.id, data)
+        match_format = _requested_format(data)
+        # The format marker is routing metadata, not part of the config block.
+        config = {k: v for k, v in data.items() if k != "match_format"}
+        ok, err = save_user_config(current_user.id, config, match_format)
         if ok:
-            return jsonify({"message": "Ground conditions saved successfully"}), 200
+            return jsonify({"message": f"{match_format} ground conditions saved successfully"}), 200
         return jsonify({"error": err}), 400
 
     @app.route("/ground-conditions/mode", methods=["POST"])
     @login_required
     def ground_conditions_set_mode():
-        from engine.ground_config import get_effective_config, save_user_config
-        mode = (request.get_json(silent=True) or {}).get("mode", "natural_game")
-        cfg = get_effective_config(current_user.id)
+        from engine.ground_config import (
+            AUTO_GAME_MODE, get_effective_config, get_game_modes, save_user_config,
+        )
+        payload = request.get_json(silent=True) or {}
+        match_format = _requested_format(payload)
+        mode = payload.get("mode", AUTO_GAME_MODE)
+
+        cfg = get_effective_config(current_user.id, match_format)
+        if mode != AUTO_GAME_MODE and mode not in get_game_modes(config=cfg):
+            return jsonify({"error": f"Unknown game mode '{mode}'"}), 400
+
         cfg["active_game_mode"] = mode
-        ok, err = save_user_config(current_user.id, cfg)
+        ok, err = save_user_config(current_user.id, cfg, match_format)
         if ok:
             return jsonify({"message": f"Game mode set to {mode}"}), 200
         return jsonify({"error": err}), 500
@@ -163,9 +192,11 @@ def register_core_routes(
     @login_required
     def ground_conditions_reset():
         from engine.ground_config import reset_user_config
-        ok, err = reset_user_config(current_user.id)
+        payload = request.get_json(silent=True) or {}
+        match_format = _requested_format(payload)
+        ok, err = reset_user_config(current_user.id, match_format)
         if ok:
-            return jsonify({"message": "Reset to defaults"}), 200
+            return jsonify({"message": f"{match_format} conditions reset to defaults"}), 200
         return jsonify({"error": err}), 500
 
     @app.route("/ground-conditions/guide")

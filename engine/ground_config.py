@@ -1,34 +1,42 @@
 """
 Ground Conditions Configuration Loader
 
-Centralizes all pitch/wicket/scoring factors into a YAML-based config.
-Provides getter functions for ball_outcome.py and other engine modules.
-Falls back gracefully if YAML is missing — engine uses hardcoded constants.
+Single source of truth for the pitch model. Every pitch/wicket/scoring number
+the engine uses lives in config/ground_conditions_defaults.yaml; the engine
+modules read them through here rather than holding their own copies. (Four
+diverging copies of these numbers is exactly the bug this module was rewritten
+to kill — see utils/squad_rules.py for the same lesson applied elsewhere.)
 
-Per-user isolation: each user can store an independent config in the
-UserGroundConfig DB table. Use get_effective_config(user_id) to retrieve
-a user's config (or factory defaults if they haven't customised yet).
-Match creation snapshots the config into the match JSON so simulation is
-deterministic regardless of later changes.
+Per-user, per-format isolation: each user can store an independent config per
+match format in the UserGroundConfig table. A stored config is deep-merged OVER
+the current factory defaults at read time, so numbers added to the defaults
+file after a user saved still reach them.
+
+Match creation snapshots the merged config into the match JSON, so simulation
+is deterministic regardless of later edits.
 """
 
-import os
-from datetime import datetime
-from pathlib import Path
-import yaml
-import logging
 import copy
+import logging
+from pathlib import Path
+
+import yaml
 
 from utils.exception_tracker import log_exception
 
 logger = logging.getLogger(__name__)
 
-_CONFIG_PATH = os.path.join(
-    os.path.abspath(os.path.dirname(__file__)), "..", "config", "ground_conditions.yaml"
-)
 _DEFAULTS_PATH = Path(__file__).parent.parent / "config" / "ground_conditions_defaults.yaml"
-_cached_config = None
-_loaded = False
+
+# Formats that have a ground-conditions profile. Mirrors MATCH_SETUP_FORMATS
+# in routes/match_routes.py and VALID_FORMATS in routes/team_routes.py.
+VALID_FORMATS = ("T20", "ListA")
+DEFAULT_FORMAT = "T20"
+
+# Game mode value meaning "let the engine pick per delivery from match state".
+AUTO_GAME_MODE = "auto"
+
+_defaults_cache = None
 
 OUTCOME_MODIFIER_MAP = {
     "Dot": "dot_mult",
@@ -42,108 +50,270 @@ OUTCOME_MODIFIER_MAP = {
 }
 
 
-def _load():
-    """Load config from YAML file."""
-    global _cached_config, _loaded
-    _loaded = True
-    if not os.path.exists(_CONFIG_PATH):
-        logger.warning("ground_conditions.yaml not found, engine will use hardcoded defaults")
-        _cached_config = None
-        return
+# ──────────────────────────── Defaults loading ─────────────────────────────
+
+def _load_defaults():
+    """Parse and cache the defaults YAML.
+
+    Raises on a missing or malformed file. This is deliberate: the file ships
+    with the application, and the previous silent fallback to hardcoded
+    constants is what allowed the engine's numbers to drift away from the
+    config without anyone noticing.
+    """
+    global _defaults_cache
+    if _defaults_cache is not None:
+        return _defaults_cache
+
+    with open(_DEFAULTS_PATH, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    formats = data.get("formats")
+    if not isinstance(formats, dict) or not formats:
+        raise ValueError(
+            f"{_DEFAULTS_PATH} has no 'formats' mapping — expected a v2 config"
+        )
+    missing = [f for f in VALID_FORMATS if f not in formats]
+    if missing:
+        raise ValueError(f"{_DEFAULTS_PATH} is missing format block(s): {missing}")
+
+    _defaults_cache = data
+    _warn_on_bad_matrices(data)
+    logger.info("Ground conditions defaults loaded (version %s)", data.get("version"))
+    return _defaults_cache
+
+
+def reload_defaults():
+    """Drop the cache so the next read re-parses the YAML (tests / hot edits)."""
+    global _defaults_cache
+    _defaults_cache = None
+
+
+def _warn_on_bad_matrices(data):
+    """Log a warning for any shipped matrix that doesn't sum to ~1.0."""
+    for fmt in VALID_FORMATS:
+        block = data.get("formats", {}).get(fmt, {})
+        for name, matrix in _iter_matrices(block, fmt):
+            total = sum(matrix.values())
+            if abs(total - 1.0) > 0.02:
+                logger.warning("%s %s matrix sums to %.4f, expected ~1.0", fmt, name, total)
+
+
+def _iter_matrices(block, match_format):
+    """Yield (label, matrix) for every scoring matrix in a format block."""
+    if match_format == "ListA":
+        for phase, matrix in (block.get("scoring_matrices") or {}).items():
+            if isinstance(matrix, dict):
+                yield phase, matrix
+    else:
+        for pitch, profile in (block.get("pitch_profiles") or {}).items():
+            matrix = (profile or {}).get("scoring_matrix")
+            if isinstance(matrix, dict):
+                yield pitch, matrix
+
+
+def normalise_format(match_format):
+    """Coerce an arbitrary input to a supported format name."""
+    if match_format in VALID_FORMATS:
+        return match_format
+    return DEFAULT_FORMAT
+
+
+def get_defaults(match_format=DEFAULT_FORMAT, mutable=False):
+    """Return the factory defaults block for *match_format*.
+
+    The cached dict is returned directly for read-only callers (the per-ball
+    hot path); pass mutable=True for a deep copy the caller may modify.
+    """
+    fmt = normalise_format(match_format)
+    block = _load_defaults()["formats"][fmt]
+    return copy.deepcopy(block) if mutable else block
+
+
+# ──────────────────────────────── Merging ──────────────────────────────────
+
+def _deep_merge(base, override):
+    """Recursively merge *override* onto *base*, returning a new dict.
+
+    Values in *override* win. Keys present only in *base* are preserved — this
+    is what lets a defaults-file addition reach a user who saved their config
+    before that key existed.
+    """
+    merged = copy.deepcopy(base)
+    for key, value in (override or {}).items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = copy.deepcopy(value)
+    return merged
+
+
+def _normalise_stored(stored, match_format):
+    """Coerce a stored config blob into a flat format block.
+
+    Tolerates three shapes:
+      • flat v2 block (what save_user_config writes)
+      • {"formats": {...}} wrapper, in case a whole document was stored
+      • flat v1 (pre-format) blob, which is T20-shaped by definition
+    """
+    if not isinstance(stored, dict):
+        return {}
+    if "formats" in stored and isinstance(stored["formats"], dict):
+        fmt = normalise_format(match_format)
+        return stored["formats"].get(fmt) or {}
+    return stored
+
+
+# ─────────────────────── Per-user config persistence ───────────────────────
+
+def get_user_config(user_id, match_format=DEFAULT_FORMAT):
+    """Return the user's stored config block, or None if they have none."""
+    fmt = normalise_format(match_format)
     try:
-        with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
-            _cached_config = yaml.safe_load(f) or {}
-        _validate_matrices()
-        logger.info("Ground conditions config loaded")
+        from database import db
+        from database.models import UserGroundConfig
+        row = (db.session.query(UserGroundConfig)
+               .filter_by(user_id=user_id, match_format=fmt).first())
+        return _normalise_stored(row.config_json, fmt) if row else None
     except Exception as e:
         log_exception(e)
-        logger.error(f"Failed to load ground_conditions.yaml: {e}")
-        _cached_config = None
+        logger.error("get_user_config(%s, %s): %s", user_id, fmt, e)
+        return None
 
 
-def reload():
-    """Force reload from disk (called after admin saves changes)."""
-    global _loaded
-    _loaded = False
-    _load()
+def get_effective_config(user_id, match_format=DEFAULT_FORMAT):
+    """Return the user's config for *match_format*, merged over factory defaults.
+
+    Always returns a fresh dict the caller may mutate. Callers with no stored
+    config get the defaults verbatim.
+    """
+    fmt = normalise_format(match_format)
+    defaults = get_defaults(fmt, mutable=True)
+    stored = get_user_config(user_id, fmt)
+    if not stored:
+        return defaults
+    return _deep_merge(defaults, stored)
 
 
-def _validate_matrices():
-    """Warn if any scoring matrix doesn't sum to ~1.0."""
-    if not _cached_config:
-        return
-    for pitch, profile in _cached_config.get("pitch_profiles", {}).items():
-        matrix = profile.get("scoring_matrix", {})
-        total = sum(matrix.values())
+def save_user_config(user_id, config_dict, match_format=DEFAULT_FORMAT):
+    """Validate and persist a user's config for one format.
+
+    Returns (True, None) on success or (False, error_str) on failure.
+    """
+    fmt = normalise_format(match_format)
+    ok, err = _validate_config(config_dict, fmt)
+    if not ok:
+        return False, err
+    try:
+        from datetime import datetime
+        from database import db
+        from database.models import UserGroundConfig
+        row = (db.session.query(UserGroundConfig)
+               .filter_by(user_id=user_id, match_format=fmt).first())
+        if row:
+            row.config_json = config_dict
+            row.updated_at = datetime.utcnow()
+        else:
+            row = UserGroundConfig(user_id=user_id, match_format=fmt,
+                                   config_json=config_dict)
+            db.session.add(row)
+        db.session.commit()
+        return True, None
+    except Exception as e:
+        log_exception(e)
+        logger.error("save_user_config(%s, %s): %s", user_id, fmt, e)
+        try:
+            from database import db
+            db.session.rollback()
+        except Exception:
+            pass
+        return False, str(e)
+
+
+def reset_user_config(user_id, match_format=DEFAULT_FORMAT):
+    """Delete the user's stored config, reverting them to factory defaults.
+
+    Pass match_format=None to clear every format for that user.
+    Returns (True, None) on success or (False, error_str) on failure.
+    """
+    try:
+        from database import db
+        from database.models import UserGroundConfig
+        query = db.session.query(UserGroundConfig).filter_by(user_id=user_id)
+        if match_format is not None:
+            query = query.filter_by(match_format=normalise_format(match_format))
+        for row in query.all():
+            db.session.delete(row)
+        db.session.commit()
+        return True, None
+    except Exception as e:
+        log_exception(e)
+        logger.error("reset_user_config(%s, %s): %s", user_id, match_format, e)
+        try:
+            from database import db
+            db.session.rollback()
+        except Exception:
+            pass
+        return False, str(e)
+
+
+def _validate_config(config_dict, match_format=DEFAULT_FORMAT):
+    """Validate every scoring matrix in *config_dict* sums to ~1.0.
+
+    Returns (True, None) on success or (False, error_str) on failure.
+    """
+    fmt = normalise_format(match_format)
+    if not isinstance(config_dict, dict):
+        return False, "Config must be an object"
+    for label, matrix in _iter_matrices(config_dict, fmt):
+        try:
+            total = sum(matrix.values())
+        except TypeError:
+            return False, f"{label} scoring matrix contains a non-numeric value"
         if abs(total - 1.0) > 0.02:
-            logger.warning(f"Pitch '{pitch}' scoring matrix sums to {total:.4f}, expected ~1.0")
+            return False, f"{label} scoring matrix sums to {total:.4f}, must be ~1.0"
+    return True, None
 
 
-def get_config():
-    """Return the full config dict (for UI rendering)."""
-    if not _loaded:
-        _load()
-    return _cached_config
+# ───────────────────────── Shared (T20) accessors ──────────────────────────
+# Every accessor takes an optional *config* — a user's merged snapshot. When
+# omitted the factory defaults are used, which is the path legacy matches,
+# direct engine calls and tests take.
+
+def _block(config, match_format):
+    return config if config is not None else get_defaults(match_format)
 
 
 def get_pitch_profile(pitch_type, config=None):
-    """Return the full profile dict for a pitch type.
+    """Return the T20 profile dict for a pitch type, or None."""
+    return (_block(config, "T20").get("pitch_profiles") or {}).get(pitch_type)
 
-    If *config* is supplied (e.g. a user's personal config snapshot) it is
-    used directly; otherwise the global cached config is queried.
+
+def get_active_game_mode_name(config=None):
+    """Return the configured game mode, or "auto" to let the engine choose."""
+    return _block(config, "T20").get("active_game_mode", AUTO_GAME_MODE)
+
+
+def get_scoring_matrix(pitch_type, mode_override=None, config=None):
     """
-    cfg = config or get_config()
-    if cfg:
-        return cfg.get("pitch_profiles", {}).get(pitch_type)
-    return None
+    Return the T20 scoring matrix for a pitch with game-mode modifiers applied,
+    re-normalized to sum to 1.0. Returns None when the pitch is unknown.
 
-
-def get_active_game_mode_name():
-    """Return the name of the active game mode."""
-    cfg = get_config()
-    if cfg:
-        return cfg.get("active_game_mode", "natural_game")
-    return "natural_game"
-
-
-def get_active_game_mode():
-    """Return the full game mode dict for the active mode."""
-    cfg = get_config()
-    if cfg:
-        mode_name = cfg.get("active_game_mode", "natural_game")
-        return cfg.get("game_modes", {}).get(mode_name)
-    return None
-
-
-def get_scoring_matrix(pitch_type, mode_override: str = None, config=None):
-    """
-    Return the scoring matrix for a pitch type with game mode modifiers applied.
-    Probabilities are re-normalized to sum to 1.0.
-    Returns None if config unavailable (caller should use hardcoded fallback).
-
-    Parameters
-    ----------
-    pitch_type    : str  – e.g. 'Green', 'Flat', 'Hard', 'Dry', 'Dead'
-    mode_override : str  – optional; if provided, uses this game mode instead
-                          of the active_game_mode in the config.
-                          Supports Feature 13 (Dynamic Game Mode).
-    config        : dict – optional; user-specific config snapshot. When
-                          provided, the global cache is not consulted.
+    mode_override names the game mode to apply; when omitted the config's own
+    active_game_mode is used. "auto" applies no modifiers — the caller
+    (Match._resolve_game_mode) is responsible for turning "auto" into a
+    concrete mode per delivery.
     """
     profile = get_pitch_profile(pitch_type, config=config)
     if not profile or "scoring_matrix" not in profile:
         return None
 
     base_matrix = dict(profile["scoring_matrix"])
-    cfg = config or get_config()
+    block = _block(config, "T20")
 
-    if mode_override and cfg:
-        mode = cfg.get("game_modes", {}).get(mode_override)
-    elif cfg:
-        mode_name = cfg.get("active_game_mode", "natural_game")
-        mode = cfg.get("game_modes", {}).get(mode_name)
-    else:
-        mode = get_active_game_mode()
+    mode_name = mode_override or block.get("active_game_mode", AUTO_GAME_MODE)
+    mode = None
+    if mode_name and mode_name != AUTO_GAME_MODE:
+        mode = (block.get("game_modes") or {}).get(mode_name)
 
     if mode:
         modifiers = mode.get("modifiers", {})
@@ -151,7 +321,6 @@ def get_scoring_matrix(pitch_type, mode_override: str = None, config=None):
             if outcome in base_matrix:
                 base_matrix[outcome] *= modifiers.get(mod_key, 1.0)
 
-    # Re-normalize to 1.0
     total = sum(base_matrix.values())
     if total > 0:
         base_matrix = {k: v / total for k, v in base_matrix.items()}
@@ -159,175 +328,110 @@ def get_scoring_matrix(pitch_type, mode_override: str = None, config=None):
     return base_matrix
 
 
+def get_game_modes(config=None):
+    """Return the T20 game modes dict (for UI rendering and mode pinning)."""
+    return _block(config, "T20").get("game_modes") or {}
+
+
 def get_run_factor(pitch_type, config=None):
-    """Return the run factor multiplier for a pitch type. None if unavailable."""
+    """Return the T20 run-factor multiplier for a pitch. None if unknown."""
     profile = get_pitch_profile(pitch_type, config=config)
-    if profile:
-        return profile.get("run_factor")
-    return None
+    return profile.get("run_factor") if profile else None
 
 
 def get_wicket_factors(pitch_type, config=None):
-    """Return bowling-style-keyed wicket factors dict. None if unavailable."""
+    """Return the T20 bowling-style-keyed wicket factors. None if unknown."""
     profile = get_pitch_profile(pitch_type, config=config)
-    if profile:
-        return profile.get("wicket_factors")
-    return None
+    return profile.get("wicket_factors") if profile else None
 
 
 def get_phase_boosts(config=None):
-    """Return the phase boosts config dict. None if unavailable."""
-    cfg = config or get_config()
-    if cfg:
-        return cfg.get("phase_boosts")
+    """Return the T20 phase boosts dict. None if absent."""
+    return _block(config, "T20").get("phase_boosts")
+
+
+def get_blending_weights(config=None, match_format=DEFAULT_FORMAT):
+    """Return (pitch_weight, skill_weight), or None if absent."""
+    blending = _block(config, match_format).get("blending")
+    if blending:
+        return blending.get("pitch_weight", 0.6), blending.get("skill_weight", 0.4)
     return None
 
 
-def get_blending_weights(config=None):
-    """Return (pitch_weight, skill_weight) tuple. None if unavailable."""
-    cfg = config or get_config()
-    if cfg:
-        blending = cfg.get("blending")
-        if blending:
-            return blending.get("pitch_weight", 0.6), blending.get("skill_weight", 0.4)
-    return None
+# ─────────────────────────── ListA accessors ───────────────────────────────
+
+def get_lista_matrix(phase, config=None):
+    """Return the ListA base scoring matrix for a phase (pp1/middle/death)."""
+    matrices = _block(config, "ListA").get("scoring_matrices") or {}
+    return matrices.get(phase)
 
 
-def get_game_modes():
-    """Return all game modes dict (for UI rendering)."""
-    cfg = get_config()
-    if cfg:
-        return cfg.get("game_modes", {})
-    return {}
+def get_lista_pitch_profile(pitch_type, config=None):
+    """Return the ListA profile dict for a pitch type, or {}."""
+    return (_block(config, "ListA").get("pitch_profiles") or {}).get(pitch_type) or {}
 
 
-def _validate_config(config_dict):
-    """Validate scoring matrices in *config_dict* sum to ~1.0.
+def get_lista_run_factor(pitch_type, config=None):
+    """Return the ListA per-pitch run factor (default 1.0)."""
+    return get_lista_pitch_profile(pitch_type, config=config).get("run_factor", 1.0)
 
-    Returns (True, None) on success or (False, error_str) on failure.
-    Shared by save_config() and save_user_config().
+
+def get_lista_wicket_mult(pitch_type, config=None):
+    """Return the ListA per-pitch wicket multiplier (default 1.0)."""
+    return get_lista_pitch_profile(pitch_type, config=config).get("wicket_mult", 1.0)
+
+
+def get_lista_dot_single(pitch_type, config=None):
+    """Return the ListA per-pitch dot/single rotation nudges, or {}."""
+    return get_lista_pitch_profile(pitch_type, config=config).get("dot_single") or {}
+
+
+def get_lista_fine_tune(pitch_type, config=None):
+    """Return the ListA per-pitch post-wear fine-tuning multipliers, or {}."""
+    return get_lista_pitch_profile(pitch_type, config=config).get("fine_tune") or {}
+
+
+def get_lista_phase_boosts(config=None):
+    """Return the ListA phase boost table, or {}."""
+    return _block(config, "ListA").get("phase_boosts") or {}
+
+
+def get_lista_pitch_wear(config=None):
+    """Return the ListA per-pitch wear spec table, or {}."""
+    return _block(config, "ListA").get("pitch_wear") or {}
+
+
+def get_lista_dew(config=None):
+    """Return the ListA dew spec, or {}."""
+    return _block(config, "ListA").get("dew") or {}
+
+
+# ───────────────────────── GSME baseline coupling ──────────────────────────
+
+def get_rrr_baseline(pitch, fmt, config=None):
+    """Return the "neutral" run rate for *pitch*, adjusted for a custom config.
+
+    GSME divides the required run rate by this baseline to get a normalised
+    aggression index. The baseline lives in FormatConfig as a fixed per-pitch
+    table, so a user who makes a pitch more run-friendly used to shift actual
+    scoring while GSME kept judging them against the stock number — the
+    momentum engine then misread how hard the chase really was.
+
+    Scaling the baseline by (user run factor / default run factor) keeps the
+    index meaningful. A user on stock settings gets exactly the stock value.
     """
-    for pitch, profile in config_dict.get("pitch_profiles", {}).items():
-        matrix = profile.get("scoring_matrix", {})
-        total = sum(matrix.values())
-        if abs(total - 1.0) > 0.02:
-            return False, f"{pitch} scoring matrix sums to {total:.4f}, must be ~1.0"
-    return True, None
-
-
-# ─────────────────────── Per-user config helpers ───────────────────────────
-
-def get_user_config(user_id):
-    """Return the user's custom config dict, or None if they haven't saved one."""
-    try:
-        from database import db
-        from database.models import UserGroundConfig
-        row = db.session.query(UserGroundConfig).filter_by(user_id=user_id).first()
-        return row.config_json if row else None
-    except Exception as e:
-        log_exception(e)
-        logger.error(f"get_user_config({user_id}): {e}")
+    baseline = getattr(fmt, "rrr_baseline", {}).get(pitch) if fmt is not None else None
+    if baseline is None:
         return None
 
+    fmt_name = normalise_format(getattr(fmt, "name", DEFAULT_FORMAT))
+    if fmt_name == "ListA":
+        user_factor = get_lista_run_factor(pitch, config=config)
+        default_factor = get_lista_run_factor(pitch)
+    else:
+        user_factor = get_run_factor(pitch, config=config)
+        default_factor = get_run_factor(pitch)
 
-def get_effective_config(user_id):
-    """Return the user's config, falling back to factory defaults if not set."""
-    cfg = get_user_config(user_id)
-    if cfg:
-        return cfg
-    try:
-        with open(_DEFAULTS_PATH, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    except Exception as e:
-        log_exception(e)
-        logger.error(f"get_effective_config — could not read defaults: {e}")
-        return get_config() or {}
-
-
-def save_user_config(user_id, config_dict):
-    """Validate and persist a user's ground config to the DB.
-
-    Returns (True, None) on success or (False, error_str) on failure.
-    """
-    ok, err = _validate_config(config_dict)
-    if not ok:
-        return False, err
-    try:
-        from database import db
-        from database.models import UserGroundConfig
-        row = db.session.query(UserGroundConfig).filter_by(user_id=user_id).first()
-        if row:
-            row.config_json = config_dict
-            row.updated_at = datetime.utcnow()
-        else:
-            row = UserGroundConfig(user_id=user_id, config_json=config_dict)
-            db.session.add(row)
-        db.session.commit()
-        return True, None
-    except Exception as e:
-        log_exception(e)
-        logger.error(f"save_user_config({user_id}): {e}")
-        return False, str(e)
-
-
-def reset_user_config(user_id):
-    """Delete the user's custom config row, reverting them to factory defaults.
-
-    Returns (True, None) on success or (False, error_str) on failure.
-    """
-    try:
-        from database import db
-        from database.models import UserGroundConfig
-        row = db.session.query(UserGroundConfig).filter_by(user_id=user_id).first()
-        if row:
-            db.session.delete(row)
-            db.session.commit()
-        return True, None
-    except Exception as e:
-        log_exception(e)
-        logger.error(f"reset_user_config({user_id}): {e}")
-        return False, str(e)
-
-
-# ───────────────────── Global (admin / legacy) helpers ─────────────────────
-
-def save_config(config_dict):
-    """
-    Write the full config dict to the shared YAML and reload.
-    Returns (success: bool, error_msg: str or None).
-    """
-    ok, err = _validate_config(config_dict)
-    if not ok:
-        return False, err
-
-    try:
-        with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
-            yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        reload()
-        return True, None
-    except Exception as e:
-        log_exception(e)
-        logger.error(f"Failed to save ground_conditions.yaml: {e}")
-        return False, str(e)
-
-
-def reset_to_defaults():
-    """Copy defaults YAML over the active config and reload."""
-    import shutil
-    defaults_path = os.path.join(
-        os.path.abspath(os.path.dirname(__file__)), "..", "config", "ground_conditions_defaults.yaml"
-    )
-    if not os.path.exists(defaults_path):
-        return False, "Defaults file not found"
-    try:
-        shutil.copy2(defaults_path, _CONFIG_PATH)
-        reload()
-        return True, None
-    except Exception as e:
-        log_exception(e)
-        logger.error(f"Failed to reset ground conditions: {e}")
-        return False, str(e)
-
-
-# Auto-load on import
-_load()
+    if not user_factor or not default_factor:
+        return baseline
+    return baseline * (user_factor / default_factor)
