@@ -630,8 +630,14 @@
                     shape, edit the phase matrices or the fine-tuning multipliers.
                 </li>
                 <li>
-                    <strong>Wicket Multiplier</strong> is a single per-pitch number, not a
-                    per-bowling-style table as in T20.
+                    <strong>Wicket Multiplier</strong> is a single per-pitch number that scales
+                    wickets for every bowler, and it is multiplied by the
+                    <strong>Wicket Factors</strong> table &mdash; the same per-bowling-style
+                    schema as T20. Green weights pace, Dry weights spin; a style not listed falls
+                    back to <code>default</code>. Note the phase boosts sit in the powerplay and
+                    death overs, which pace usually bowls, so roughly half of any style edge is
+                    diluted before it reaches the scorecard &mdash; set these wider than the
+                    effect you want.
                 </li>
                 <li>
                     <strong>Fine tuning</strong> applies after pitch wear and dew, and is the
@@ -649,6 +655,25 @@
             <p>
                 Pitch wear is also more pronounced than in T20: Dry surfaces become genuinely
                 difficult after roughly 30 overs, while Green pitches ease off as the ball softens.
+            </p>
+            <h3>Expected List A scores</h3>
+            <p>
+                The same five pitches, at 50-over scale &mdash; these are first-innings targets
+                the engine is tuned to hit, not just descriptions:
+            </p>
+            <ul>
+                <li><strong>Green</strong> &mdash; 200-240 runs, 7-10 wickets. Pace takes ~82%.</li>
+                <li><strong>Dry</strong> &mdash; 200-240 runs, 7-10 wickets. Spin takes ~58%, off
+                    only ~35% of the overs.</li>
+                <li><strong>Hard</strong> &mdash; 280-320 runs, 6-8 wickets. The baseline track.</li>
+                <li><strong>Flat</strong> &mdash; 320-360 runs, 4-6 wickets.</li>
+                <li><strong>Dead</strong> &mdash; 360+ runs, 2-4 wickets.</li>
+            </ul>
+            <p>
+                One thing to expect when tuning: over 300 balls, totals are driven far more by how
+                long a side <em>survives</em> than by its boundary count. Cutting Fours and Sixes on
+                Green moves the median by only a couple of runs. Reach for Wicket Multiplier and
+                Wicket Factors when you want to move a List A total.
             </p>
         </div>
     </div>

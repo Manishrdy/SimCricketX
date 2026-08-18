@@ -68,8 +68,46 @@ Verified against 120 independent seeds (medians): Green 138, Dry 143,
 Hard 186, Flat 218, Dead 253 — all in band, with Flat's p90 down from
 265 to 243.
 
-ListA was deliberately left untouched; its bands are ODI-scale and were
-not part of this recalibration.
+
+LISTA PITCH RECALIBRATION (2026-08-16)
+-------------------------------------
+Recalibrated to ODI-scale bands in the same pass. Two structural problems, not
+just drift:
+
+  1. Green and Dry were the same pitch as far as WHO took wickets went. ListA
+     had no per-bowling-style wicket factors — only the scalar wicket_mult — so
+     both surfaces returned ~67% pace, which is merely the share of overs pace
+     bowled. engine/ground_config.get_lista_wicket_factors() and the style term
+     in calculate_outcome's ListA branch are new; Green is now ~82% pace and
+     Dry ~58% spin off ~35% of the overs. Guarded by
+     test_green_is_a_seamers_pitch_and_dry_is_a_spinners.
+  2. Dead landed within 6 runs of Flat (347.4 vs 341.6) on an identical 4.6
+     wickets — two differently-named roads that played the same. Guarded by
+     test_dead_is_clearly_distinct_from_flat.
+
+    pitch   band                  measured (16 seeds)
+    Green   200-240 / 7-10 wkts   235.2 / 9.2
+    Dry     200-240 / 7-10 wkts   210.5 / 10.0
+    Hard    280-320 / 6-8  wkts   296.1 / 7.9
+    Flat    320-360 / 4-6  wkts   341.6 / 4.6
+    Dead    360+    / 2-4  wkts   362.4 / 3.4
+
+ListA `run_factor` has the same trap as T20's: it scales all six run outcomes
+equally, so it only trades run-mass against Wicket/Extras. And over 300 balls
+run accumulation is single-driven — cutting Four/Six on Green/Dry moved the
+median by ~2 runs, because innings LENGTH (how long the side survives)
+dominates. Reach for wicket_mult/wicket_factors to move ListA totals.
+
+Two things to know before touching ListA wicket_factors:
+  • They REDISTRIBUTE wickets by style; they must not cut the total. Because
+    most attacks are pace-heavy (commonly 5 seamers to 2 spinners), a punitive
+    Dry `default` suppresses most of the ATTACK rather than shifting wickets,
+    and sides then bat out all 300 balls on a turner. Size wicket_mult so
+    wicket_mult x the weighted-average factor stays near the pre-split rate.
+  • Totals become genuinely squad-sensitive, which is intended: a 5-seam attack
+    concedes ~266 on Dry while a balanced one concedes ~210. test_lista_format
+    exercises the pace-heavy squad and carries deliberately coarse bands; the
+    bands here are the authoritative ones.
 
 REPIN NOTE (2026-08-09): T20_BASELINE/LISTA_BASELINE below were re-measured
 after the fielding-mechanic change (individual fielder rating now drives
@@ -121,18 +159,20 @@ SQUAD = [
 # (mean_runs, mean_wickets, dot_pct, bdry_per_100)
 T20_BASELINE = {
     "Green": (123.3, 8.3, 41.7, 11.9),
-    "Dry":   (133.2, 7.9, 41.4, 14.4),
+    "Dry":   (130.6, 8.2, 42.1, 13.2),
     "Hard":  (184.9, 5.0, 34.0, 20.1),
     "Flat":  (212.5, 3.5, 28.6, 23.8),
     "Dead":  (249.1, 1.8, 25.1, 30.8),
 }
 
+# Re-pinned after the 2026-08-16 ListA recalibration (see LISTA PITCH
+# RECALIBRATION below).
 LISTA_BASELINE = {
-    "Green": (220.4, 10.0, 44.7, 4.5),
-    "Dry":   (203.4, 10.0, 46.2, 4.2),
-    "Hard":  (293.6, 8.2, 38.7, 7.1),
+    "Green": (235.2, 9.2, 46.1, 4.3),
+    "Dry":   (210.5, 10.0, 45.5, 4.7),
+    "Hard":  (296.1, 7.9, 38.5, 6.9),
     "Flat":  (341.6, 4.6, 35.2, 9.4),
-    "Dead":  (347.4, 4.6, 34.2, 9.5),
+    "Dead":  (362.4, 3.4, 32.4, 10.3),
 }
 
 RUN_TOLERANCE = 0.05      # +/-5% on mean runs
@@ -293,21 +333,117 @@ T20_TARGET_BANDS = {
     "Dead":  (230, None, 1.0, 2.5),
 }
 
+# ListA bands are ODI-scale: the same pitch character over 300 balls, not a
+# scaled copy of the T20 numbers.
+LISTA_TARGET_BANDS = {
+    "Green": (200, 240, 7.0, 10.0),
+    "Dry":   (200, 240, 7.0, 10.0),
+    "Hard":  (280, 320, 6.0, 8.0),
+    "Flat":  (320, 360, 4.0, 6.0),
+    "Dead":  (360, None, 2.0, 4.0),
+}
 
+TARGET_BANDS = {"T20": T20_TARGET_BANDS, "ListA": LISTA_TARGET_BANDS}
+
+
+@pytest.mark.parametrize("fmt", ("T20", "ListA"))
 @pytest.mark.parametrize("pitch", PITCHES)
-def test_t20_pitch_sits_in_its_target_band(pitch):
-    lo, hi, wlo, whi = T20_TARGET_BANDS[pitch]
-    got = _aggregate("T20", pitch)
+def test_pitch_sits_in_its_target_band(fmt, pitch):
+    lo, hi, wlo, whi = TARGET_BANDS[fmt][pitch]
+    got = _aggregate(fmt, pitch)
 
     assert got["runs"] >= lo, (
-        f"T20/{pitch}: mean {got['runs']:.1f} is below the band floor {lo}"
+        f"{fmt}/{pitch}: mean {got['runs']:.1f} is below the band floor {lo}"
     )
     if hi is not None:
         assert got["runs"] <= hi, (
-            f"T20/{pitch}: mean {got['runs']:.1f} is above the band ceiling {hi}"
+            f"{fmt}/{pitch}: mean {got['runs']:.1f} is above the band ceiling {hi}"
         )
     assert wlo <= got["wkts"] <= whi, (
-        f"T20/{pitch}: mean wickets {got['wkts']:.1f} outside {wlo}-{whi}"
+        f"{fmt}/{pitch}: mean wickets {got['wkts']:.1f} outside {wlo}-{whi}"
+    )
+
+
+def test_dead_is_clearly_distinct_from_flat():
+    """The two roads must not collapse into the same pitch.
+
+    ListA Dead used to land within 6 runs of Flat (347.4 vs 341.6) on an
+    identical 4.6 wickets — two differently-named surfaces that played the same.
+    """
+    for fmt, margin in (("T20", 15), ("ListA", 12)):
+        flat, dead = _aggregate(fmt, "Flat"), _aggregate(fmt, "Dead")
+        assert dead["runs"] - flat["runs"] >= margin, (
+            f"{fmt}: Dead ({dead['runs']:.1f}) must outscore Flat "
+            f"({flat['runs']:.1f}) by at least {margin}"
+        )
+        assert flat["wkts"] - dead["wkts"] >= 0.5, (
+            f"{fmt}: Dead ({dead['wkts']:.1f} wkts) must yield clearly fewer "
+            f"wickets than Flat ({flat['wkts']:.1f})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 1c. Pitch character shows up in WHO takes the wickets
+# ---------------------------------------------------------------------------
+
+_PACE = ("Fast", "Fast-medium", "Medium-fast", "Medium")
+_SPIN = ("Off spin", "Leg spin", "Finger spin", "Wrist spin")
+
+
+def _strike_rates(fmt, pitch):
+    """(pace, spin) wickets per 100 balls bowled by that style, over all SEEDS.
+
+    Raw wicket SHARE is the wrong measure here: the calibration squad carries
+    only two spinners against four seamers, so share mostly reports who bowled
+    the overs. Wickets per ball is what "this pitch suits spin" actually means.
+    """
+    import engine.match as match_module
+
+    wkts = {"pace": 0, "spin": 0}
+    balls = {"pace": 0, "spin": 0}
+    for seed in SEEDS:
+        data = _match_data(fmt, pitch, seed)
+        type_of = {p["name"]: p["bowling_type"]
+                   for side in data["playing_xi"].values() for p in side}
+        match = match_module.Match(data)
+        for _ in range(6000):
+            resp = match.next_ball()
+            bd = resp.get("ball_data") or {}
+            bt = type_of.get(bd.get("bowler"), "")
+            key = "pace" if bt in _PACE else "spin" if bt in _SPIN else None
+            if key:
+                balls[key] += 1
+                wt = bd.get("wicket_type")
+                if wt and wt != "Run Out":
+                    wkts[key] += 1
+            if resp.get("innings_end") and resp.get("innings_number") == 1:
+                break
+    return (100 * wkts["pace"] / max(balls["pace"], 1),
+            100 * wkts["spin"] / max(balls["spin"], 1))
+
+
+@pytest.mark.parametrize("fmt", ("T20", "ListA"))
+def test_green_is_a_seamers_pitch_and_dry_is_a_spinners(fmt):
+    """Pitch type must decide WHO takes wickets, not just how many.
+
+    ListA had no per-style wicket factors before 2026-08-16 — only a scalar
+    wicket_mult — so Green and Dry both returned ~67% of wickets to pace,
+    purely reflecting how many overs each attack bowled. The surface had no say
+    at all in who profited from it.
+    """
+    green_pace, green_spin = _strike_rates(fmt, "Green")
+    dry_pace, dry_spin = _strike_rates(fmt, "Dry")
+
+    # Measured ratios when pinned: T20 Green 2.75, T20 Dry 1.80,
+    # ListA Green 1.91, ListA Dry 2.82. 1.5 leaves room without being vacuous —
+    # a neutral Flat track sits at 1.27, so this genuinely separates them.
+    assert green_pace > green_spin * 1.5, (
+        f"{fmt}/Green: seamers must strike far more often than spinners — got "
+        f"{green_pace:.2f} vs {green_spin:.2f} wickets/100 balls"
+    )
+    assert dry_spin > dry_pace * 1.5, (
+        f"{fmt}/Dry: spinners must strike far more often than seamers — got "
+        f"{dry_spin:.2f} vs {dry_pace:.2f} wickets/100 balls"
     )
 
 
