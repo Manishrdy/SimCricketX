@@ -55,12 +55,15 @@ formats:
           Wicket: 0.046
           Extras: 0.045
         run_factor: 0.85
+        # Pace bowls the powerplay and the death, where the phase wicket_boost
+        # lives, so a Dry spin edge is diluted by ~half before it reaches the
+        # scorecard. These factors are deliberately wider than they look.
         wicket_factors:
-          Leg spin: 1.50
-          Wrist spin: 1.45
-          Off spin: 1.40
-          Finger spin: 1.30
-          default: 0.46
+          Leg spin: 1.62
+          Wrist spin: 1.56
+          Off spin: 1.50
+          Finger spin: 1.38
+          default: 0.34
 
       # Target band: 180-220 runs, 5-7 wickets.
       Hard:
@@ -254,28 +257,64 @@ formats:
         Wicket: 0.069
         Extras: 0.048
     pitch_profiles:
+      # Target band: 200-240 runs, 7-10 wickets. Pace takes ~82% of the wickets.
+      # wicket_factors is what makes that true — see the Dry note below.
       Green:
         description: Seam-friendly ODI surface — new ball talks, then batting eases
           as the shine goes
         run_factor: 0.68
-        wicket_mult: 1.18
+        wicket_mult: 0.88
+        wicket_factors:
+          Fast: 1.45
+          Fast-medium: 1.25
+          Medium-fast: 1.18
+          Medium: 1.05
+          default: 0.55
         dot_single:
-          Dot: 1.22
+          Dot: 1.32
           Single: 1.06
-        fine_tune: {}
+        fine_tune:
+          Four: 0.80
+          Six: 0.75
+      # Target band: 200-240 runs, 7-10 wickets. Spin takes ~58% of the wickets
+      # off ~35% of the overs.
+      #
+      # wicket_factors did not exist for ListA before 2026-08-16 — there was only
+      # the scalar wicket_mult, so Green and Dry handed out wickets in whatever
+      # ratio the two attacks happened to bowl their overs. Both surfaces showed
+      # ~67% pace, i.e. the pitch had no say in WHO took wickets, only how many.
       Dry:
         description: Spin-friendly ODI surface — grip and turn escalate sharply after
           30 overs
         run_factor: 0.72
-        wicket_mult: 1.12
+        # Sized so wicket_mult x the weighted-average wicket_factor lands near
+        # the pre-split rate (~1.1). wicket_factors REDISTRIBUTE wickets by
+        # style; they must not quietly cut how many fall in total, or a
+        # pace-heavy attack simply stops taking wickets on a turner.
+        wicket_mult: 1.00
+        # `default` is deliberately not as harsh as Green's mirror image would
+        # suggest. Most attacks are pace-heavy (often 5 seamers to 2 spinners),
+        # so a punitive default here suppresses most of the ATTACK rather than
+        # redistributing wickets — sides then bat out all 300 balls on a
+        # turner. Keep the spin:pace ratio meaningful while the weighted
+        # average stays near 1.0, so total wickets hold across squad shapes.
+        wicket_factors:
+          Leg spin: 1.50
+          Wrist spin: 1.45
+          Off spin: 1.40
+          Finger spin: 1.30
+          default: 0.62
         dot_single:
-          Dot: 1.2
-          Single: 1.08
-        fine_tune: {}
+          Dot: 1.19
+          Single: 1.06
+        fine_tune:
+          Four: 0.95
+          Six: 0.91
+      # Target band: 280-320 runs, 6-8 wickets.
       Hard:
         description: True ODI track — the 280-320 baseline band
         run_factor: 0.98
-        wicket_mult: 1.0
+        wicket_mult: 0.80
         dot_single:
           Dot: 1.0
           Single: 1.0
@@ -283,10 +322,11 @@ formats:
           Single: 1.03
           Four: 1.03
           Six: 1.03
+      # Target band: 320-360 runs, 4-6 wickets.
       Flat:
         description: Batting surface — 320-360 territory
         run_factor: 1.21
-        wicket_mult: 0.7
+        wicket_mult: 0.70
         dot_single:
           Dot: 1.0
           Single: 1.0
@@ -295,17 +335,20 @@ formats:
           Dot: 0.94
           Four: 1.06
           Six: 1.1
+      # Target band: 360+ runs, 2-4 wickets. Dead used to land within 6 runs of
+      # Flat (347 vs 342) on the same wicket count, so the two roads were
+      # effectively the same pitch; it now sits clearly above.
       Dead:
         description: Batting festival — flat, true, and unrelenting
         run_factor: 1.18
-        wicket_mult: 0.58
+        wicket_mult: 0.40
         dot_single:
           Dot: 1.0
           Single: 1.0
         fine_tune:
-          Dot: 0.88
-          Four: 1.08
-          Six: 1.12
+          Dot: 0.84
+          Four: 1.16
+          Six: 1.22
     phase_boosts:
       death:
         all:

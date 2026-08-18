@@ -381,6 +381,26 @@ def get_lista_wicket_mult(pitch_type, config=None):
     return get_lista_pitch_profile(pitch_type, config=config).get("wicket_mult", 1.0)
 
 
+def get_lista_wicket_factors(pitch_type, config=None):
+    """Return the ListA bowling-style-keyed wicket factors for a pitch, or {}.
+
+    Same schema as the T20 `wicket_factors` block: keys are bowling_type names
+    with a `default` fallback. ListA had no per-style factors at all until
+    2026-08-16 — only the scalar `wicket_mult` — so a green top and a turner
+    distributed wickets identically and pitch character was invisible in who
+    took them.
+    """
+    return get_lista_pitch_profile(pitch_type, config=config).get("wicket_factors") or {}
+
+
+def get_lista_wicket_factor_for(pitch_type, bowling_type, config=None):
+    """Resolve one bowling style's ListA wicket factor (1.0 when unconfigured)."""
+    factors = get_lista_wicket_factors(pitch_type, config=config)
+    if not factors:
+        return 1.0
+    return factors.get(bowling_type, factors.get("default", 1.0))
+
+
 def get_lista_dot_single(pitch_type, config=None):
     """Return the ListA per-pitch dot/single rotation nudges, or {}."""
     return get_lista_pitch_profile(pitch_type, config=config).get("dot_single") or {}

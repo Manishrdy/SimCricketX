@@ -118,6 +118,57 @@ def test_blob_with_no_stale_values_is_untouched():
     assert cfg == before
 
 
+def _full_old_lista_snapshot():
+    return {
+        "version": 2,
+        "active_game_mode": "auto",
+        "pitch_profiles": {
+            "Green": {"wicket_mult": 1.18,
+                      "dot_single": {"Dot": 1.22, "Single": 1.06},
+                      "fine_tune": {}},
+            "Dry": {"wicket_mult": 1.12,
+                    "dot_single": {"Dot": 1.2, "Single": 1.08},
+                    "fine_tune": {}},
+            "Hard": {"wicket_mult": 1.0},
+            "Dead": {"wicket_mult": 0.58,
+                     "fine_tune": {"Dot": 0.88, "Four": 1.08, "Six": 1.12}},
+        },
+    }
+
+
+def test_lista_snapshot_is_stripped():
+    cfg = _full_old_lista_snapshot()
+
+    stripped = _strip_stale(cfg, "ListA")
+
+    assert "pitch_profiles" not in cfg, cfg.get("pitch_profiles")
+    assert len(stripped) == 9, stripped
+    assert cfg["active_game_mode"] == "auto"
+
+
+def test_lista_customisation_survives():
+    cfg = _full_old_lista_snapshot()
+    cfg["pitch_profiles"]["Dead"]["wicket_mult"] = 0.25  # deliberate
+
+    _strip_stale(cfg, "ListA")
+
+    assert cfg["pitch_profiles"]["Dead"]["wicket_mult"] == 0.25
+    assert "Green" not in cfg["pitch_profiles"]
+
+
+def test_formats_do_not_strip_each_others_keys():
+    """A ListA row must not be judged against the T20 legacy table, or vice versa."""
+    lista = _full_old_lista_snapshot()
+    assert _strip_stale(lista, "T20") == [], (
+        "T20 paths must not match ListA-shaped values"
+    )
+
+    t20 = _full_old_snapshot()
+    assert _strip_stale(t20, "ListA") == [], (
+        "ListA paths must not match T20-shaped values"
+    )
+
+
 def test_stripped_snapshot_inherits_the_recalibrated_defaults():
     """The point of the whole exercise: after stripping, the user gets the new YAML."""
     from engine.ground_config import _deep_merge
