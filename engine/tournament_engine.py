@@ -904,6 +904,90 @@ class TournamentEngine:
 
         return False
 
+    # ------------------------------------------------------------------
+    # Bracket geometry — single source of truth
+    # ------------------------------------------------------------------
+
+    def bracket_rounds(self, next_power: int):
+        """[(start_bracket_pos, match_count), ...] describing a knockout bracket.
+
+        The canonical description of the bracket's shape. Anything that needs
+        to know which fixtures feed which — _advance_bye_winners, the repair
+        migration — derives it from here so the geometry cannot drift between
+        copies.
+        """
+        rounds = []
+        start = 0
+        count = next_power // 2
+        while count >= 1:
+            rounds.append((start, count))
+            start += count
+            count //= 2
+        return rounds
+
+    def get_feeder_fixtures(self, tournament, fixture):
+        """The two fixtures whose winners feed `fixture`, else (None, None).
+
+        (None, None) means the question doesn't apply: `fixture` is in the
+        first round, isn't in a bracket, or belongs to a mode whose
+        bracket_positions aren't a knockout tree. Only MODE_KNOCKOUT lays
+        its positions out as the power-of-two tree this math assumes — the
+        playoff placeholder modes reuse positions 1/2/3 for a completely
+        different shape, so reading them through this geometry would return
+        confident nonsense.
+        """
+        if fixture is None or fixture.bracket_position is None:
+            return None, None
+        if not tournament or tournament.mode != self.MODE_KNOCKOUT:
+            return None, None
+
+        next_power = self._next_power_of_two(len(tournament.participating_teams))
+        rounds = self.bracket_rounds(next_power)
+
+        for r_idx in range(1, len(rounds)):
+            nr_start, nr_count = rounds[r_idx]
+            if not (nr_start <= fixture.bracket_position < nr_start + nr_count):
+                continue
+            prev_start, _ = rounds[r_idx - 1]
+            i = (fixture.bracket_position - nr_start) * 2
+            wanted = [prev_start + i, prev_start + i + 1]
+            found = {
+                f.bracket_position: f
+                for f in TournamentFixture.query.filter(
+                    TournamentFixture.tournament_id == tournament.id,
+                    TournamentFixture.bracket_position.in_(wanted),
+                ).all()
+            }
+            return found.get(wanted[0]), found.get(wanted[1])
+
+        return None, None
+
+    def feeders_decided(self, tournament, fixture) -> bool:
+        """Whether `fixture`'s current pairing was legitimately earned.
+
+        A round-2+ knockout fixture's teams can only ever be written by
+        _resolve_round_pair, which callers must invoke only once both feeders
+        are 'Completed'. So feeders that are *not* both Completed prove the
+        pairing was never earned by play.
+
+        This is a structural check, not a corruption detector: it trusts a
+        feeder's 'Completed' status at face value, so it does not by itself
+        catch a pairing built on a *bogus* completion. Diagnosing those is
+        repair_knockout_bracket_corruption.py's job. What this does catch is
+        a fixture whose feeders are visibly not done — including a
+        fabricated pairing left over after that repair resets its feeders,
+        which would otherwise still be playable and cement teams that never
+        qualified into a real result.
+
+        Fails open (returns True) whenever the question doesn't apply, so a
+        first-round fixture, a non-knockout mode, or a bracket shape this
+        math can't read is never wrongly blocked.
+        """
+        m1, m2 = self.get_feeder_fixtures(tournament, fixture)
+        if m1 is None or m2 is None:
+            return True
+        return m1.status == 'Completed' and m2.status == 'Completed'
+
     def _resolve_round_pair(self, m1, m2, next_fixture):
         """
         Resolve one next-round fixture from its two feeder fixtures.
@@ -1099,14 +1183,7 @@ class TournamentEngine:
         num_teams = len(tournament.participating_teams)
         next_power = self._next_power_of_two(num_teams)
 
-        # Build round structure: [(start_bracket_pos, match_count), ...]
-        rounds = []
-        round_start = 0
-        matches_in_round = next_power // 2
-        while matches_in_round >= 1:
-            rounds.append((round_start, matches_in_round))
-            round_start += matches_in_round
-            matches_in_round //= 2
+        rounds = self.bracket_rounds(next_power)
 
         # Process each round except the last (final is resolved, not advanced)
         for r_idx in range(len(rounds) - 1):

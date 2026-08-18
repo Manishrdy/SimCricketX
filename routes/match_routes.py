@@ -72,6 +72,19 @@ def register_match_routes(
                     flash("This match is already completed.", "info")
                     return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament.id))
 
+                # 'Scheduled' is not on its own proof the pairing was earned:
+                # a historical bracket bug could fabricate one, and playing it
+                # would cement teams that never qualified into a real result.
+                # Verify against the fixture's own feeders before allowing it.
+                from engine.tournament_engine import TournamentEngine
+                if not TournamentEngine().feeders_decided(fixture.tournament, fixture):
+                    flash(
+                        "This fixture's teams haven't been decided by the previous "
+                        "round yet. Play the earlier rounds first.",
+                        "error",
+                    )
+                    return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament.id))
+
                 preselect_home = fixture.home_team_id
                 preselect_away = fixture.away_team_id
                 tournament_id = fixture.tournament_id
