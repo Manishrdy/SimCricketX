@@ -11,6 +11,7 @@ from engine.ground_config import (
     get_lista_matrix as _gc_lista_matrix,
     get_lista_run_factor as _gc_lista_run_factor,
     get_lista_wicket_mult as _gc_lista_wicket_mult,
+    get_lista_wicket_factor_for as _gc_lista_wicket_factor_for,
     get_lista_dot_single as _gc_lista_dot_single,
     get_lista_fine_tune as _gc_lista_fine_tune,
     get_lista_phase_boosts as _gc_lista_phase_boosts,
@@ -963,8 +964,15 @@ def calculate_outcome(
         # rotation profile, then wicket scaling. Order is significant.
         _scale_outcomes(raw_weights, _gc_lista_fine_tune(pitch, config=_gc))
         _scale_outcomes(raw_weights, _gc_lista_dot_single(pitch, config=_gc))
-        _scale_outcomes(raw_weights,
-                        {"Wicket": _gc_lista_wicket_mult(pitch, config=_gc)})
+        # Wicket scaling is the pitch-wide multiplier times this bowler's style
+        # affinity for the surface. The style term is what makes a Green top a
+        # seamer's pitch and a Dry one a spinner's; before it existed ListA had
+        # only the pitch-wide scalar, so both surfaces handed out wickets in
+        # whatever ratio the two attacks happened to bowl their overs.
+        _scale_outcomes(raw_weights, {"Wicket": (
+            _gc_lista_wicket_mult(pitch, config=_gc)
+            * _gc_lista_wicket_factor_for(pitch, bowling_type, config=_gc)
+        )})
     else:
         # T20 / legacy path — existing pitch wear model unchanged
         if pitch_wear > 0.0:

@@ -116,7 +116,14 @@ def _mute_match_print(monkeypatch):
         # Dead is a batting paradise; it must score above Hard, not below Green.
         ("Dead", 300, 380, 270),
         ("Green", 150, 250, 230),
-        ("Dry", 150, 250, 230),
+        # Dry's ceiling was raised from 250 on 2026-08-16, when ListA gained
+        # per-bowling-style wicket_factors. This squad fields 5 seamers to 2
+        # spinners, so it is badly suited to a turner and concedes accordingly
+        # (~266) — that interaction between pitch and attack composition is the
+        # point of the split, not drift. This stays a coarse smoke band; the
+        # authoritative one is LISTA_TARGET_BANDS in test_scoring_calibration,
+        # measured on a balanced attack, where Dry sits at ~210.
+        ("Dry", 150, 280, 230),
     ],
 )
 def test_lista_pitch_scoring_bands_and_innings_depth(pitch, run_low, run_high, min_avg_balls):
