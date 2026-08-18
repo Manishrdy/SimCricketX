@@ -1,6 +1,14 @@
 # SimCricketX
 
-A full-stack cricket simulation platform built with Flask, featuring a probabilistic ball-outcome engine, real-time WebSocket updates, role-based access control, and a multi-format tournament system. The project spans ~21,700 lines of Python across a modular monolith architecture with 126 tested API routes and production-grade deployment configuration.
+**Probabilistic ball-by-ball cricket simulation — run a full match, a series, or a whole tournament in your browser.**
+
+[![CI/CD Pipeline](https://github.com/ManishYelam/SimCricketX/actions/workflows/ci.yml/badge.svg)](https://github.com/ManishYelam/SimCricketX/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+
+### ▶ [Try it live at simcricketx.app](https://simcricketx.app/)
+
+![SimCricketX demo](docs/demo.gif)
 
 **Live match simulation | Tournament management | Admin panel | REST-style API | Full test suite**
 
@@ -8,7 +16,23 @@ A full-stack cricket simulation platform built with Flask, featuring a probabili
 
 ## Why This Project
 
-SimCricketX was built to demonstrate end-to-end software engineering capability across the full stack — from database schema design and concurrency-safe state management to probabilistic simulation engines and security-hardened admin systems. It is not a toy project: it handles real concurrent users, persists structured match data, enforces authentication and authorization at multiple layers, and ships with CI/CD configuration and a Docker deployment setup.
+SimCricketX demonstrates end-to-end engineering across the full stack — probabilistic simulation, concurrency-safe state management, relational schema design, and a security-hardened admin system. It is not a toy: it serves real concurrent users, persists structured match data, enforces authentication and authorization at multiple layers, and ships with CI/CD and Docker deployment configuration.
+
+---
+
+## Contributing
+
+Contributions are welcome — start with the [Contributing Guide](CONTRIBUTING.md) for setup, test, and code-style instructions, then pick up a [good first issue](https://github.com/ManishYelam/SimCricketX/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+
+The `engine/`, `routes/`, and `tests/` directories are the most self-contained places to start.
+
+---
+
+# Technical Deep-Dive
+
+The rest of this README documents the internals: how the simulation works, how the app is structured, and how to run it yourself.
+
+A full-stack cricket simulation platform built with Flask, featuring a probabilistic ball-outcome engine, real-time WebSocket updates, role-based access control, and a multi-format tournament system. The project spans ~21,700 lines of Python across a modular monolith architecture with 126 tested API routes and production-grade deployment configuration.
 
 ---
 
@@ -27,16 +51,6 @@ SimCricketX was built to demonstrate end-to-end software engineering capability 
 | **Code Quality** | flake8, black, isort, bandit, safety |
 | **Deployment** | Docker (Python 3.9-slim), Gunicorn (1 worker, 4 threads), Waitress |
 | **CI/CD** | GitHub Actions (Ubuntu + Windows, Python 3.9–3.11) |
-
----
-
-## Local Sanity Check
-
-Run the focused route suite before shipping small Flask changes:
-
-```bash
-pytest tests/test_core_routes.py tests/test_auth_routes.py tests/test_team_routes.py
-```
 
 ---
 
@@ -117,7 +131,9 @@ Final outcome
 
 **Scenario engine** (`scenario_engine.py`) — Supports scripted dramatic templates: last-ball-six, win-by-1-run thriller, and super-over climax. These are applied as probability overrides when conditions match.
 
-### Tournament Engine
+---
+
+## Tournament Engine
 
 Supports 7+ tournament formats:
 
@@ -279,6 +295,14 @@ pytest --cov=. --cov-report=html
 # Run by marker
 pytest -m admin
 pytest -m "auth or security"
+```
+
+### Local Sanity Check
+
+Run the focused route suite before shipping small Flask changes:
+
+```bash
+pytest tests/test_core_routes.py tests/test_auth_routes.py tests/test_team_routes.py
 ```
 
 ---
