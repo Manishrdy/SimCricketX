@@ -5,23 +5,98 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- ── SEO ─────────────────────────────────────────────────── -->
-    <title>SimCricketX — Cricket Match Simulator | T20 &amp; List A Simulation</title>
-    <meta name="description" content="Build custom squads, tune pitch conditions, and simulate every ball. SimCricketX is a free probabilistic cricket match simulator for T20 and List A formats — ball-by-ball engine, player analytics, and full tournament brackets.">
-    <meta name="keywords" content="cricket simulator, cricket match simulation, T20 simulator, List A cricket, cricket game, ball by ball cricket, cricket statistics">
+    <title>SimCricketX — Text-Based Cricket Simulator | T20 &amp; List A</title>
+    <meta name="description" content="SimCricketX is a free text-based cricket simulator — no graphics, just a real ball-by-ball probabilistic engine. Build custom squads, tune pitch conditions, and simulate full T20 and List A matches with career stats and tournament brackets.">
+    <meta name="keywords" content="text based cricket simulator, text cricket game, text cricket sim, cricket simulator, cricket match simulation, T20 simulator, List A cricket, browser cricket game, ball by ball cricket, cricket statistics simulator">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://simcricketx.app/">
 
     <!-- ── Open Graph ──────────────────────────────────────────── -->
     <meta property="og:type"        content="website">
     <meta property="og:url"         content="https://simcricketx.app/">
-    <meta property="og:title"       content="SimCricketX — Cricket Match Simulator">
-    <meta property="og:description" content="Build squads, tune the pitch, and simulate every ball. A probabilistic cricket simulation engine for T20 and List A matches — free to use.">
+    <meta property="og:title"       content="SimCricketX — Text-Based Cricket Simulator">
+    <meta property="og:description" content="A free text-based cricket simulator — build squads, tune the pitch, and simulate every ball with a real probabilistic engine. T20 and List A, no graphics required.">
     <meta property="og:site_name"   content="SimCricketX">
 
     <!-- ── Twitter Card ───────────────────────────────────────── -->
     <meta name="twitter:card"        content="summary">
-    <meta name="twitter:title"       content="SimCricketX — Cricket Match Simulator">
-    <meta name="twitter:description" content="Probabilistic cricket simulation — T20 &amp; List A. Ball-by-ball engine, player stats, tournaments. Free.">
+    <meta name="twitter:title"       content="SimCricketX — Text-Based Cricket Simulator">
+    <meta name="twitter:description" content="Free text-based cricket simulation — T20 &amp; List A. Ball-by-ball engine, player stats, tournaments.">
+
+    <!-- ── Structured Data ────────────────────────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "SimCricketX",
+      "alternateName": "SimCricketX Text-Based Cricket Simulator",
+      "url": "https://simcricketx.app/",
+      "description": "SimCricketX is a free text-based cricket simulator. A probabilistic ball-by-ball engine simulates full T20 and List A matches from custom squads and ground conditions, with career stats and tournament brackets — no graphics, just the numbers.",
+      "applicationCategory": "GameApplication",
+      "operatingSystem": "Any (runs in browser)",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is SimCricketX really free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes — completely free, with no credit card required. Create an account with your email and start building squads and simulating matches right away."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which match formats are supported?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Both T20 and List A (50-over). Each team keeps separate, format-specific squads, so your 50-over specialists are never forced into a T20 line-up."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does the simulation actually work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A probabilistic engine resolves every delivery using batting and bowling matchups, the pitch profile you choose, and over-phase dynamics — producing authentic, varied outcomes rather than fixed or purely random results."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I need to install anything?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No installation and no config files. SimCricketX runs entirely in your browser as a text-based simulator — sign up and you're simulating within a couple of minutes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I run full tournaments?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Set up round-robin or knockout tournaments with automatic standings, point tables, and bracket progression across both formats."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is my data exportable?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Absolutely — your full match history, scorecards, and player statistics can be downloaded as structured data whenever you need them."
+          }
+        }
+      ]
+    }
+    </script>
 
     <!-- ── Fonts ──────────────────────────────────────────────── -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -92,7 +167,7 @@
 
             <div class="lp-hero-badge">
                 <span class="lp-badge-dot" aria-hidden="true"></span>
-                Cricket Simulation Engine
+                Text-Based Cricket Simulator
             </div>
 
             <h1 class="lp-hero-title" id="hero-title">
@@ -101,9 +176,10 @@
             </h1>
 
             <p class="lp-hero-sub">
-                Build custom squads, tune pitch conditions, and let a probabilistic engine
-                resolve every delivery — T20 or List A. Full scorecards, career stats,
-                and tournament brackets, all in your browser.
+                SimCricketX is a free, text-based cricket simulator — no graphics,
+                just a real probabilistic engine. Build custom squads, tune pitch
+                conditions, and let it resolve every delivery — T20 or List A. Full
+                scorecards, career stats, and tournament brackets, all in your browser.
             </p>
 
             <div class="lp-hero-cta">
@@ -244,7 +320,7 @@
         </h2>
         <p class="lp-section-sub">
             From squad management to full tournament brackets — built for cricket fans
-            who want results that feel authentic, not random.
+            who want a text-based simulator with results that feel authentic, not random.
         </p>
 
         <div class="lp-features-grid">
