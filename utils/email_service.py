@@ -19,7 +19,7 @@ from pathlib import Path
 import resend
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from utils.exception_tracker import log_exception
+from utils.exception_tracker import log_exception, log_data_anomaly
 
 log = logging.getLogger(__name__)
 
@@ -90,7 +90,21 @@ def send_email(to: str, subject: str, html: str) -> bool:
         log.info("[Email] '%s' sent to %s", subject, to)
         return True
     except Exception as exc:
-        log_exception(exc)
+        # Resend rejects recipients on known-undeliverable domains (RFC 2606
+        # reserved domains like example.com, or its own denylist) with this
+        # "Invalid `to` field" message. That's a garbage/placeholder address
+        # the sender was never going to reach, not a bug in this app — file it
+        # as a data anomaly like other bad-upstream-data cases instead of an
+        # actionable GitHub issue, which otherwise floods the tracker every
+        # time someone types a fake email into the registration form.
+        if "Invalid `to` field" in str(exc):
+            log_data_anomaly(
+                "undeliverable_email_recipient",
+                str(exc),
+                payload={"to": to, "subject": subject},
+            )
+        else:
+            log_exception(exc)
         log.error("[Email] Failed to send '%s' to %s: %s", subject, to, exc)
         return False
 
