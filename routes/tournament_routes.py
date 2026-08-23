@@ -51,13 +51,19 @@ def register_tournament_routes(
 ):
     # ── Shared helper ─────────────────────────────────────────────────────
 
-    def _cleanup_match_artifacts(match, *, reverse_stats=True, rebuild_player_cache=True):
+    def _cleanup_match_artifacts(
+        match, *, reverse_stats=True, rebuild_player_cache=True, delete_json=True
+    ):
         """
         Delete all artifacts for a single DBMatch: reverse career aggregates,
-        remove scorecards/partnerships, delete JSON file, purge memory cache,
-        and rebuild the affected players' tournament stats cache so it stops
-        showing this (now-deleted) match's runs/wickets.
+        remove scorecards/partnerships, optionally delete the JSON file, purge
+        memory cache, and rebuild the affected players' tournament stats cache
+        so it stops showing this (now-deleted) match's runs/wickets.
         Caller is responsible for deleting the DBMatch itself and committing.
+
+        JSON deletion is not transactional. Callers that can roll back the
+        DB work (resimulate, tournament delete) should pass delete_json=False
+        and call _delete_match_json only after commit succeeds.
         """
         match_id = match.id
 
@@ -77,7 +83,8 @@ def register_tournament_routes(
         )
 
         # 3. Delete JSON file — O(1) via stored path, O(N) fallback
-        _delete_match_json(match)
+        if delete_json:
+            _delete_match_json(match)
 
         # 4. Purge from in-memory cache
         with MATCH_INSTANCES_LOCK:
@@ -456,13 +463,18 @@ def register_tournament_routes(
                 # The whole tournament (and its TournamentPlayerStatsCache
                 # rows) is deleted right after this loop, so rebuilding the
                 # per-match player cache here would just be discarded work.
-                _cleanup_match_artifacts(m, rebuild_player_cache=False)
+                # JSON is removed after commit — disk deletes cannot roll back.
+                _cleanup_match_artifacts(
+                    m, rebuild_player_cache=False, delete_json=False
+                )
                 db.session.delete(m)
 
             # Tournament cascades to TournamentTeam, TournamentFixture, and
             # TournamentPlayerStatsCache via relationship cascade on the model.
             db.session.delete(t)
             db.session.commit()
+            for m in tournament_matches:
+                _delete_match_json(m)
             flash("Tournament deleted successfully.", "success")
         except Exception as e:
             log_exception(e)
@@ -509,7 +521,7 @@ def register_tournament_routes(
                     fixture.match_id = None
                     fixture.standings_applied = False
 
-                _cleanup_match_artifacts(db_match)
+                _cleanup_match_artifacts(db_match, delete_json=False)
                 db.session.delete(db_match)
             else:
                 fixture.status = "Scheduled"
@@ -518,6 +530,8 @@ def register_tournament_routes(
                 fixture.standings_applied = False
 
             db.session.commit()
+            if db_match:
+                _delete_match_json(db_match)
             flash("Match reset successfully. You can now re-simulate.", "success")
             return redirect(
                 url_for("match_setup", fixture_id=fixture.id, tournament_id=fixture.tournament_id)
