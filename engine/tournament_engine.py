@@ -1615,21 +1615,48 @@ class TournamentEngine:
             .all()
         }
 
+        # Load players + existing cache rows BEFORE adding any pending
+        # objects. A later query would otherwise autoflush a brand-new
+        # TournamentPlayerStatsCache INSERT mid-loop (and on drifted
+        # schemas that INSERT was the IntegrityError that aborted resim).
+        players_by_id = {
+            p.id: p
+            for p in db.session.query(Player)
+            .filter(Player.id.in_(player_ids))
+            .all()
+        }
+        caches_by_player = {
+            row.player_id: row
+            for row in TournamentPlayerStatsCache.query.filter(
+                TournamentPlayerStatsCache.tournament_id == tournament_id,
+                TournamentPlayerStatsCache.player_id.in_(player_ids),
+            ).all()
+        }
+
         for player_id in player_ids:
-            player = db.session.get(Player, player_id)
+            player = players_by_id.get(player_id)
             if not player:
                 continue
-
-            cache = TournamentPlayerStatsCache.query.filter_by(
-                tournament_id=tournament_id, player_id=player_id
-            ).first()
-            if not cache:
+            if player_id not in caches_by_player:
                 cache = TournamentPlayerStatsCache(
                     tournament_id=tournament_id,
                     player_id=player_id,
                     team_id=player.team_id,
                 )
                 db.session.add(cache)
+                caches_by_player[player_id] = cache
+
+        # Pending new cache rows must not flush until their fields are
+        # populated. Query-triggered autoflush was the IntegrityError
+        # vector on drifted schemas (INSERT omitted leftover NOT NULL
+        # columns the ORM no longer maps).
+        _autoflush_was = db.session.autoflush
+        db.session.autoflush = False
+        try:
+          for player_id in player_ids:
+            cache = caches_by_player.get(player_id)
+            if not cache:
+                continue
 
             # Batting aggregation. The "valid innings" filter (balls > 0 OR
             # runs > 0 OR is_out) matches what `get_player_profile` uses, so
@@ -1786,6 +1813,8 @@ class TournamentEngine:
                 MatchScorecard.match_id.in_(tournament_match_ids),
             ).scalar() or 0
             cache.matches_played = matches_played
+        finally:
+            db.session.autoflush = _autoflush_was
 
         logger.info(
             f"[PlayerStatsCache] Rebuilt cache for {len(player_ids)} players "
