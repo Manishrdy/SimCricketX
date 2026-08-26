@@ -608,10 +608,12 @@
 }
 
 .support-admin-composer textarea {
+    display: block;
     width: 100%;
     resize: none;
     min-height: 38px;
-    max-height: 140px;
+    max-height: 260px;
+    overflow-y: auto;
     border: 0;
     padding: 8px 4px;
     background: transparent;
@@ -620,6 +622,13 @@
     font-size: 0.88rem;
     line-height: 1.4;
     outline: none;
+    transition: height 0.1s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .support-admin-composer textarea {
+        transition: none;
+    }
 }
 
 .support-admin-composer textarea::placeholder {
@@ -795,19 +804,20 @@
     padding: 6px 8px;
     border-radius: var(--a-r-sm, 6px);
     background: var(--bg-secondary, #f8f9fa);
+    align-items: baseline;
 }
 
 .support-context-list span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     color: var(--fg, #111);
     font-weight: 600;
+    cursor: default;
 }
 
 .support-context-list time {
     color: var(--fg-secondary, #6b7280);
     font-size: 0.7rem;
+    white-space: nowrap;
 }
 
 /* Empty states */
