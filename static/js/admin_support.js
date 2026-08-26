@@ -184,6 +184,7 @@
             var nameEl = document.createElement('span');
             nameEl.className = 'support-conversation__user';
             nameEl.textContent = conv.user_label || conv.user_id || '—';
+            nameEl.title = nameEl.textContent;
             var timeEl = document.createElement('span');
             timeEl.className = 'support-conversation__time';
             timeEl.textContent = fmtRelative(conv.last_message_at || conv.created_at);
@@ -195,6 +196,7 @@
             var preview = document.createElement('span');
             preview.className = 'support-conversation__preview';
             preview.textContent = conv.last_message ? conv.last_message.body : 'No messages yet';
+            preview.title = preview.textContent;
 
             var trail = document.createElement('span');
             trail.style.display = 'inline-flex';
@@ -243,6 +245,7 @@
         if (conv.source_page_url) sub += ' · ' + conv.source_page_url;
         else if (conv.last_message_at) sub += ' · last message ' + fmt(conv.last_message_at);
         subtitleEl.textContent = sub;
+        subtitleEl.title = sub;
 
         closeBtn.disabled = conv.status === 'closed';
         reopenBtn.disabled = conv.status !== 'closed';
@@ -417,6 +420,7 @@
                 var item = document.createElement('div');
                 var label = document.createElement('span');
                 label.textContent = row.type || 'Exception';
+                label.title = label.textContent;
                 var t = document.createElement('time');
                 t.textContent = fmt(row.timestamp);
                 item.appendChild(label);
@@ -517,10 +521,12 @@
         return loadConversations();
     }
 
+    var COMPOSER_MAX_HEIGHT = 260;
+
     function autosize() {
         if (!input) return;
         input.style.height = 'auto';
-        input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+        input.style.height = Math.min(input.scrollHeight, COMPOSER_MAX_HEIGHT) + 'px';
     }
 
     function notificationsSupported() {
