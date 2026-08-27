@@ -291,7 +291,6 @@ def register_auth_routes(
                         duration=app.config.get("REMEMBER_COOKIE_DURATION") if remember_me else None,
                     )
                     session.permanent = remember_me
-                    session["show_github_star_prompt"] = True
 
                     try:
                         # ── Enforce 1 active session: revoke all previous ──────
@@ -330,7 +329,6 @@ def register_auth_routes(
                         # Fail the login attempt honestly here instead of letting
                         # it look like a success that unravels one click later.
                         logout_user()
-                        session.pop("show_github_star_prompt", None)
                         session.permanent = False
                         return render_template(
                             "login.html",

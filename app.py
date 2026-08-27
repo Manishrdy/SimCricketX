@@ -1070,7 +1070,7 @@ def create_app():
         and Flask-WTF's CSRF token (causing CSRF errors on subsequent form submissions).
         """
         for key in ('session_token', 'force_password_reset', 'pending_verify_email',
-                    'visit_counted', 'show_github_star_prompt'):
+                    'visit_counted'):
             session.pop(key, None)
 
     @app.before_request
