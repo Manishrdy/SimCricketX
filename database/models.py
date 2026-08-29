@@ -105,7 +105,7 @@ class Team(db.Model):
 
 
 class TeamProfile(db.Model):
-    """Format-specific squad profile for a team (T20, ListA)."""
+    """Format-specific squad profile for a team (T20, ListA, FC)."""
     __tablename__ = 'team_profiles'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -115,7 +115,7 @@ class TeamProfile(db.Model):
         nullable=False,
         index=True,
     )
-    format_type = db.Column(db.String(20), nullable=False)  # 'T20', 'ListA'
+    format_type = db.Column(db.String(20), nullable=False)  # 'T20', 'ListA', 'FC'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     __table_args__ = (
@@ -160,6 +160,13 @@ class Player(db.Model):
     # style keys at all.
     batting_style = db.Column(db.String(20), default='Accumulator')   # Anchor|Accumulator|Power
     bowling_style = db.Column(db.String(20), default='Balanced')      # Economist|Balanced|Strike
+
+    # First-Class (FC) rating axes — additive, scoped per-profile like every
+    # other rating above. Inert (default 0, unread) for T20/ListA profiles;
+    # only meaningful on a player's FC-format profile row.
+    technique_rating = db.Column(db.Integer, default=0)     # long-innings survival / defensive technique
+    temperament_rating = db.Column(db.Integer, default=0)   # resistance to session-long pressure
+    stamina_rating = db.Column(db.Integer, default=0)       # bowling workload capacity, feeds FC fatigue slope
 
     # Identity flags
     is_captain = db.Column(db.Boolean, default=False)
@@ -648,14 +655,14 @@ class Match(db.Model):
     away_team_overs = db.Column(db.String(10))
     
     # Margin of Victory
-    margin_type = db.Column(db.String(10))  # 'runs', 'wickets', 'tie', or 'boundary_count'
+    margin_type = db.Column(db.String(10))  # 'runs', 'wickets', 'tie', 'boundary_count', or 'innings' (FC only)
     margin_value = db.Column(db.Integer)    # Number of runs/wickets/boundaries
 
     # Structured outcome, set directly by the engine at decision time instead
     # of being re-inferred later from result_description text. NULL on rows
     # written before this column existed — treat NULL as "unknown, fall back
     # to legacy inference from result_description".
-    match_status = db.Column(db.String(20), nullable=True)  # 'completed'|'tied'|'no_result'|'aborted'
+    match_status = db.Column(db.String(20), nullable=True)  # 'completed'|'tied'|'no_result'|'aborted'|'drawn' (FC only)
     # True when the archiver had to skip at least one scorecard row because
     # the player could not be resolved (by id or name) — surfaces partial
     # data loss instead of leaving it silent.
@@ -669,7 +676,21 @@ class Match(db.Model):
     match_format = db.Column(db.String(20), default='T20')
     overs_per_side = db.Column(db.Integer, default=20)
     is_day_night = db.Column(db.Boolean, default=False)
-    
+
+    # First-Class (FC) fields — NULL for T20/ListA matches. FC allows up to
+    # 2 innings per side, so the existing home/away_team_score/*_overs
+    # columns above are reused as "innings 1 for that side"; these columns
+    # hold a side's second innings when one occurs (innings-and-N wins and
+    # draws before the 4th innings starts leave them NULL).
+    days = db.Column(db.Integer, nullable=True)  # 4 or 5
+    follow_on_enforced = db.Column(db.Boolean, nullable=True)
+    home_team_score_innings2 = db.Column(db.Integer, nullable=True)
+    home_team_wickets_innings2 = db.Column(db.Integer, nullable=True)
+    home_team_overs_innings2 = db.Column(db.String(10), nullable=True)
+    away_team_score_innings2 = db.Column(db.Integer, nullable=True)
+    away_team_wickets_innings2 = db.Column(db.Integer, nullable=True)
+    away_team_overs_innings2 = db.Column(db.String(10), nullable=True)
+
     # Technical
     match_json_path = db.Column(db.String(255)) # Path to legacy full JSON
     

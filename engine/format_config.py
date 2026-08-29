@@ -21,8 +21,9 @@ Usage
     fmt.get_phase(over)  # Phase object
 """
 
-from dataclasses import dataclass
-from typing import Dict, List, Optional
+import dataclasses
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Union
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +85,13 @@ class FormatConfig:
     # T20:   Hard pitch neutral ≈ 8.5 RPO (IPL / international averages)
     # ListA: Hard pitch neutral ≈ 6.0 RPO (ODI first-innings scoring rate)
     rrr_baseline: Dict[str, float]
+
+    # Format family tag. "limited_overs" (the default) covers every field
+    # above — fixed overs, bowler quota, fielding-circle phases, a single
+    # target. "multi_day" (see MultiDayFormatConfig below) is a genuinely
+    # different shape and does not populate this dataclass at all; engine
+    # code should branch on this tag rather than on `match_format` strings.
+    format_family: str = "limited_overs"
 
     # ------------------------------------------------------------------ #
     # Phase helpers                                                        #
@@ -362,3 +370,113 @@ def get_format(match_format: Optional[str]) -> FormatConfig:
     Defaults to T20 for None or unrecognised values (backward compat).
     """
     return FORMAT_REGISTRY.get(match_format or "T20", FORMAT_REGISTRY["T20"])
+
+
+# ---------------------------------------------------------------------------
+# MultiDayFormatConfig — First-Class (FC): 4/5-day, up to 2 innings per side
+# ---------------------------------------------------------------------------
+#
+# This is a deliberately SEPARATE dataclass from FormatConfig, not more
+# fields bolted onto it. Every FormatConfig field above is shaped around one
+# fixed-length innings with a bowler-over quota and fielding-circle phases —
+# none of that maps onto FC (no fielding circles at all, no fixed innings
+# length, no single target — FC has a lead/deficit dynamic across up to 4
+# innings instead). Engine code should branch on `fmt.format_family`
+# ("limited_overs" vs "multi_day"), never on `match_format == "FC"` strings
+# scattered through call sites.
+
+@dataclass
+class MultiDayFormatConfig:
+    """
+    Parameterisation of a multi-day (First-Class) cricket format.
+
+    Attributes
+    ----------
+    name                 : canonical format name ("FC")
+    format_family        : always "multi_day" for this class
+    days                 : match length in days (4 or 5), set per-match
+    overs_per_day        : scheduled overs/day (Phase 1: fixed constant, 90)
+    new_ball_overs       : overs before the 2nd new ball is available
+                            (Phase 2 — ball-condition modeling; not
+                            load-bearing in Phase 1)
+    follow_on_margin     : runs behind required for the follow-on to be
+                            enforceable; set per-match (150 for 4-day
+                            matches, 200 for 5-day, per MCC Law 14.1)
+    min_overs_last_hour  : minimum overs in the last hour of a day
+                            (Phase 2 — over-rate enforcement)
+    allow_consecutive_overs : MCC Law 17.2 — universal, not a limited-overs
+                            convention, so it carries over (always False)
+    pitch_par_factors    : per-pitch-type multiplier used to scale the
+                            declaration run-thresholds (see fc_declaration.py)
+                            so "a good total" means something different on a
+                            Green seamer than a Dead belter
+    correct_toss_choice  : {pitch_type: "bat"|"bowl"} optimal toss decision
+    correct_toss_choice_dn : D/N override (FC day/night matches are rare;
+                            defaults to None, falling back to
+                            correct_toss_choice)
+    """
+    name: str = "FC"
+    format_family: str = "multi_day"
+    days: int = 4
+    overs_per_day: int = 90
+    new_ball_overs: int = 80
+    follow_on_margin: int = 150
+    min_overs_last_hour: int = 15
+    allow_consecutive_overs: bool = False
+    pitch_par_factors: Dict[str, float] = field(default_factory=lambda: {
+        "Green": 0.85,
+        "Dry":   0.90,
+        "Hard":  1.00,
+        "Flat":  1.15,
+        "Dead":  1.30,
+    })
+    correct_toss_choice: Dict[str, str] = field(default_factory=lambda: {
+        "Green": "bowl",  # Seam/swing on a fresh pitch → bowl first
+        "Dry":   "bat",   # Wears toward spin over 4-5 days → bat first
+        "Hard":  "bat",   # True surface, minimal wear → bat first
+        "Flat":  "bat",   # Batting paradise, sets a big total → bat first
+        "Dead":  "bat",   # Same, even more so
+    })
+    correct_toss_choice_dn: Optional[Dict[str, str]] = None
+
+
+_FC_BASE = MultiDayFormatConfig()
+
+MULTIDAY_FORMAT_REGISTRY: Dict[str, MultiDayFormatConfig] = {
+    "FC": _FC_BASE,
+}
+
+
+def get_any_format(match_format: Optional[str], **overrides) -> Union[FormatConfig, MultiDayFormatConfig]:
+    """
+    Single dispatcher across both format families. Every other call site
+    should branch on the returned object's `.format_family`, never on the
+    `match_format` string itself.
+
+    Parameters
+    ----------
+    match_format : "T20" | "ListA" | "FC" | None
+    overrides    : family-specific per-match overrides, for "FC":
+                   `days` (int, 4 or 5) and `overs_per_day` (int, Phase 2 —
+                   defaults to the format's standard 90 if omitted).
+
+    Returns a fresh per-instance copy (dataclasses.replace) so per-match
+    mutation (e.g. rain revisions, per-match `days`) never touches the
+    shared registry singleton — the same discipline `get_format()` already
+    relies on for T20/ListA.
+    """
+    if match_format in FORMAT_REGISTRY:
+        return dataclasses.replace(FORMAT_REGISTRY[match_format])
+
+    if match_format in MULTIDAY_FORMAT_REGISTRY:
+        base = MULTIDAY_FORMAT_REGISTRY[match_format]
+        days = overrides.get("days") or base.days
+        overs_per_day = overrides.get("overs_per_day") or base.overs_per_day
+        return dataclasses.replace(
+            base,
+            days=days,
+            overs_per_day=overs_per_day,
+            follow_on_margin=200 if days >= 5 else 150,
+        )
+
+    return dataclasses.replace(FORMAT_REGISTRY["T20"])

@@ -118,6 +118,12 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # matrices. Strip the copies that match the old shipped values verbatim.
     ("reset_stale_t20_pitch_tuning",
      _loader("migrations.reset_stale_t20_pitch_tuning")),
+    # First-Class format: matches.days/follow_on_enforced/*_innings2 columns
+    # for up-to-2-innings-per-side matches.
+    ("add_fc_match_columns",     _loader("migrations.add_fc_match_columns")),
+    # First-Class format: players.technique_rating/temperament_rating/
+    # stamina_rating, scoped per-profile like every other rating.
+    ("add_fc_player_ratings",    _loader("migrations.add_fc_player_ratings")),
 ]
 
 

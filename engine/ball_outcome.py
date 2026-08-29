@@ -17,6 +17,12 @@ from engine.ground_config import (
     get_lista_phase_boosts as _gc_lista_phase_boosts,
     get_lista_pitch_wear as _gc_lista_pitch_wear,
     get_lista_dew as _gc_lista_dew,
+    get_fc_scoring_matrix as _gc_fc_scoring_matrix,
+    get_fc_run_factor as _gc_fc_run_factor,
+    get_fc_wicket_factor_for as _gc_fc_wicket_factor_for,
+    get_fc_pitch_wear as _gc_fc_pitch_wear,
+    get_fc_ball_condition_factor as _gc_fc_ball_condition_factor,
+    get_fc_rough_targeting_factor as _gc_fc_rough_targeting_factor,
 )
 from engine.game_state_engine import apply_game_state_to_probs
 from engine.format_config import FormatConfig
@@ -294,6 +300,43 @@ def _apply_lista_pitch_wear(weights: dict, pitch: str,
     return _renormalise_to(weights, w)
 
 
+def _apply_fc_pitch_wear(weights: dict, pitch: str,
+                          pitch_wear: float, config=None) -> dict:
+    """
+    General (bowling-style-agnostic) pitch wear for First-Class matches,
+    applied against the CONTINUOUS match-long wear scalar (0=fresh,
+    1=fully worn after `days * overs_per_day` overs — see
+    Match.match_balls_bowled), not a per-innings one. Mirrors
+    _apply_lista_pitch_wear's mode/threshold/factors shape exactly, reading
+    from the FC pitch_wear YAML block instead of ListA's.
+
+    This is necessary but not sufficient on its own — the wear-interpolated
+    bowling-style wicket factor (_gc_fc_wicket_factor_for, applied
+    separately as a Wicket-only scale in calculate_outcome) is what actually
+    makes the pitch favor different bowler types as it wears; this function
+    only handles the overall Dot/Four/Wicket drift.
+    """
+    if pitch_wear <= 0.0:
+        return weights
+
+    w = dict(weights)
+    pw = pitch_wear
+
+    spec = _gc_fc_pitch_wear(config=config).get(pitch)
+    if spec:
+        if spec.get("mode") == "late":
+            threshold = spec.get("threshold", 0.0)
+            ramp = ((pw - threshold) / (1.0 - threshold)) if pw > threshold else 0.0
+        else:
+            ramp = pw
+
+        if ramp:
+            _scale_outcomes(w, {outcome: 1.0 + coef * ramp
+                                for outcome, coef in spec.get("factors", {}).items()})
+
+    return _renormalise_to(weights, w)
+
+
 def _apply_dew_factor(weights: dict, innings: int, over: int,
                       is_day_night: bool, fmt, config=None) -> dict:
     """
@@ -406,6 +449,7 @@ def compute_weighted_prob(
     balls_faced: int = 0,
     format_name: Optional[str] = None,
     config=None,
+    technique_rating: Optional[int] = None,
 ) -> float:
     """
     Returns a raw weight for one outcome (Dot/Single/Double/Three/Four/Six/Wicket/Extras),
@@ -463,8 +507,16 @@ def compute_weighted_prob(
         # Wicket taking: bowling vs batting contest only.
         # Fielding is handled separately in calculate_outcome() via the
         # catch-drop mechanic — it must NOT reduce chance-creation probability here.
-        if (effective_batting + bowling) > 0:
-            contest_frac = bowling / (effective_batting + bowling)
+        # FC (Phase 2): blend in defensive technique — distinct from
+        # batting_rating's general scoring skill — specifically for the
+        # dismissal contest, not the run-scoring skill_frac above. A
+        # technically correct batter is harder to dismiss even at the same
+        # batting_rating as a more free-scoring one.
+        _defensive_batting = effective_batting
+        if format_name == "FC" and technique_rating is not None:
+            _defensive_batting = effective_batting * 0.7 + technique_rating * 0.3
+        if (_defensive_batting + bowling) > 0:
+            contest_frac = bowling / (_defensive_batting + bowling)
             skill_frac = contest_frac
 
             # Hard pitch: wickets harder to come by but not impossible
@@ -475,9 +527,14 @@ def compute_weighted_prob(
 
     # 2) Pitch-influence fraction
     pitch_frac = 1.0
-    if _is_lista:
-        # ListA has its own phase matrix + run/wicket scaling layers.
-        # Avoid reusing T20 pitch multipliers here (prevents double-counting).
+    if _is_lista or format_name == "FC":
+        # ListA/FC each have their own phase/wear-scaling layers applied
+        # outside this function (calculate_outcome's "3.25" stage; FC's is
+        # the wear-interpolated bowling-style wicket factor). Reusing T20's
+        # static pitch multipliers here would double-count — and for FC,
+        # get_pitch_wicket_multiplier() always reads the T20 pitch block
+        # regardless of the pitch name passed, which would silently apply
+        # T20's wicket_factors instead of FC's wear-interpolated ones.
         pitch_frac = 1.0
     else:
         if outcome_type in ("Dot", "Single", "Double", "Three", "Four", "Six"):
@@ -768,6 +825,8 @@ def calculate_outcome(
     ground_config_override: dict = None,
     format_config: Optional[FormatConfig] = None,
     is_day_night: bool = False,
+    ball_overs_bowled: int = 0,
+    new_ball_overs: int = 80,
 ) -> dict:
     """
     Determines the outcome of a single delivery.
@@ -823,6 +882,7 @@ def calculate_outcome(
     #    T20 / legacy: ground_conditions.yaml → hardcoded matrix (existing path).
     _gc = ground_config_override  # shorthand; None → global config cache
     _is_lista = (format_config is not None and format_config.name == "ListA")
+    _is_fc = (format_config is not None and getattr(format_config, "format_family", None) == "multi_day")
 
     if _is_lista:
         # Pick the phase matrix then scale every outcome by the pitch run factor.
@@ -845,6 +905,25 @@ def calculate_outcome(
             pitch_matrix = {k: v / _pm_total for k, v in pitch_matrix.items()}
         logger.debug("[ListA] phase=%s pitch=%s run_factor=%.2f",
                      format_config.get_phase(over_number).name, pitch, _run_factor)
+    elif _is_fc:
+        # FC: a single base matrix per pitch (no phase concept — FC has no
+        # fielding-circle/powerplay phases), scaled by the FC run factor.
+        # We do NOT apply game_mode_override here — FC has no game_modes
+        # YAML section (Phase 1 scope; see engine/match.py's
+        # _get_dynamic_game_mode, which is skipped entirely for FC).
+        _base_matrix = _gc_fc_scoring_matrix(pitch, config=_gc) or DEFAULT_SCORING_MATRIX
+        _run_factor = _gc_fc_run_factor(pitch, config=_gc)
+        _RUN_OUTCOMES = {"Dot", "Single", "Double", "Three", "Four", "Six"}
+        pitch_matrix = {}
+        for _k, _v in _base_matrix.items():
+            if _k in _RUN_OUTCOMES:
+                pitch_matrix[_k] = _v * _run_factor
+            else:
+                pitch_matrix[_k] = _v
+        _pm_total = sum(pitch_matrix.values())
+        if _pm_total > 0:
+            pitch_matrix = {k: v / _pm_total for k, v in pitch_matrix.items()}
+        logger.debug("[FC] pitch=%s run_factor=%.2f", pitch, _run_factor)
     else:
         # Existing T20 / legacy path
         pitch_matrix = (_gc_scoring_matrix(pitch, mode_override=game_mode_override, config=_gc)
@@ -883,6 +962,7 @@ def calculate_outcome(
                 pitch, bowling_type, streak, batter_runs, balls_faced,
                 format_name=(format_config.name if format_config is not None else None),
                 config=_gc,
+                technique_rating=batter.get("technique_rating"),
             ) * matchup_boost
         else:  # "Extras"
             weight = compute_weighted_prob(
@@ -893,8 +973,12 @@ def calculate_outcome(
                 config=_gc,
             )
 
-        # --- T20 phase boosts (skipped for ListA — handled via _apply_lista_phase_boosts) ---
-        if not _is_lista:
+        # --- T20 phase boosts (skipped for ListA — handled via
+        # _apply_lista_phase_boosts; skipped for FC — no fielding-circle
+        # phases exist in FC at all, and these hardcoded over-ranges
+        # (powerplay 0-5, death 16-19) are T20-over-numbering-specific and
+        # would misfire on every FC over if applied) ---
+        if not _is_lista and not _is_fc:
             # Load configurable phase boosts with hardcoded fallbacks
             _phase = _gc_phase_boosts(config=_gc) or {}
             _pp_cfg = _phase.get("powerplay", {})
@@ -973,6 +1057,34 @@ def calculate_outcome(
             _gc_lista_wicket_mult(pitch, config=_gc)
             * _gc_lista_wicket_factor_for(pitch, bowling_type, config=_gc)
         )})
+    elif _is_fc:
+        # FC general wear (continuous match-long scalar, not per-innings —
+        # pitch_wear is computed by Match against days*overs_per_day*6, see
+        # engine/match.py).
+        if pitch_wear > 0.0:
+            raw_weights = _apply_fc_pitch_wear(raw_weights, pitch, pitch_wear, config=_gc)
+            logger.debug("[FC PitchWear=%.3f] Applied FC wear model.", pitch_wear)
+        # Wear-interpolated bowling-style wicket factor — the mechanism that
+        # actually makes the pitch favor different bowler types as it wears
+        # (a static per-pitch table, unlike T20/ListA's, would not do this).
+        _scale_outcomes(raw_weights, {"Wicket":
+            _gc_fc_wicket_factor_for(pitch, bowling_type, pitch_wear, config=_gc)
+        })
+        # Ball-condition (Phase 2): independent of pitch wear/type — a new
+        # ball swings for genuine pace, that fades, then an old ball can
+        # reverse-swing for genuinely fast bowlers just before the next new
+        # ball is due (fmt.new_ball_overs).
+        _scale_outcomes(raw_weights, {"Wicket":
+            _gc_fc_ball_condition_factor(bowling_type, ball_overs_bowled, new_ball_overs, config=_gc)
+        })
+        # Handedness-specific rough-targeting: footmark rough only exists
+        # where days of the same bowling angle have worn the same patch —
+        # a wear-*and*-matchup effect distinct from both the bowling-style-
+        # only wear factor above and compute_matchup_boost's static (no
+        # wear scaling) handedness bonus applied to every format below.
+        _scale_outcomes(raw_weights, {"Wicket":
+            _gc_fc_rough_targeting_factor(bowling_type, batting_hand, pitch_wear, pitch, config=_gc)
+        })
     else:
         # T20 / legacy path — existing pitch wear model unchanged
         if pitch_wear > 0.0:

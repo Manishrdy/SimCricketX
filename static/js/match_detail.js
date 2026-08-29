@@ -210,6 +210,19 @@ function getMatchFormat() {
     return String(matchData?.match_format || 'T20').trim().toUpperCase();
 }
 
+// Resolve which side is currently batting from a player name, by XI
+// membership rather than blindly toggling home/away. Needed because FC
+// innings don't strictly alternate batting side — a follow-on means the
+// same side bats twice in a row (innings 2 -> 3), so a naive toggle would
+// show the wrong team name in the score banner after that transition.
+function getBattingTeamShortName(strikerName) {
+    const homeTeam = matchData.team_home.split('_')[0];
+    const awayTeam = matchData.team_away.split('_')[0];
+    const homeXI = matchData.playing_xi?.home || [];
+    if (strikerName && homeXI.some(p => p.name === strikerName)) return homeTeam;
+    return awayTeam;
+}
+
 function isImpactPlayerEnabled() {
     // Impact Player UI removed (backend swap route/logic untouched — see
     // impact_player_swap in routes/match_routes.py). Restore
@@ -696,9 +709,23 @@ function showDecisionModal(data) {
     const ctx = data.decision_context || {};
     const options = Array.isArray(data.decision_options) ? data.decision_options : [];
 
+    // FC declare/follow-on are fixed yes/no choices (index 1/0), not
+    // player picks — a simpler card (just the label) than next_bowler/
+    // next_batter's name+meta layout.
+    const isFcChoice = type === 'fc_declare' || type === 'fc_follow_on';
+
     if (type === 'next_batter') {
         title.textContent = 'Select Next Batter';
         context.textContent = `${ctx.dismissed_batter || 'Batter'} is out at ${data.score}/${data.wickets}.`;
+    } else if (type === 'fc_declare') {
+        title.textContent = 'Declare the Innings?';
+        const leadText = ctx.lead !== null && ctx.lead !== undefined ? `, lead ${ctx.lead}` : '';
+        context.textContent = `${ctx.batting_team_name || 'Batting side'} ${data.score}/${data.wickets}` +
+            `${leadText} after ${ctx.over || 0} overs. ${ctx.days_remaining || 0} day(s) left.`;
+    } else if (type === 'fc_follow_on') {
+        title.textContent = 'Enforce the Follow-on?';
+        context.textContent = `${ctx.trailing_team_name || 'The trailing side'} finished ${ctx.deficit || 0} run(s) behind ` +
+            `(follow-on margin ${ctx.follow_on_margin || 0}). ${ctx.days_remaining || 0} day(s) left.`;
     } else {
         title.textContent = 'Select Next Bowler';
         context.textContent = `Choose bowler for over ${ctx.upcoming_over || ((data.over || 0) + 1)}.`;
@@ -709,13 +736,21 @@ function showDecisionModal(data) {
         const card = document.createElement('button');
         card.type = 'button';
         card.className = 'decision-option';
-        const meta = type === 'next_bowler'
-            ? `${opt.bowling_type || ''} | ${opt.overs_bowled || 0} ov done | ${opt.overs_remaining || 0} ov left`
-            : `${opt.role || ''} | Bat ${opt.batting_rating || 0}`;
-        card.innerHTML = `
-            <span><strong>${escapeHtml(opt.name)}</strong></span>
-            <span class="decision-meta">${escapeHtml(meta)}</span>
-        `;
+        if (isFcChoice) {
+            card.innerHTML = `<span><strong>${escapeHtml(opt.label)}</strong></span>`;
+        } else {
+            // FC has no bowler-overs cap, so the engine omits overs_remaining
+            // entirely for FC options — showing "0 ov left" there would
+            // wrongly read as "this bowler is out of overs."
+            const meta = type === 'next_bowler'
+                ? `${opt.bowling_type || ''} | ${opt.overs_bowled || 0} ov done` +
+                  (opt.overs_remaining !== undefined ? ` | ${opt.overs_remaining} ov left` : '')
+                : `${opt.role || ''} | Bat ${opt.batting_rating || 0}`;
+            card.innerHTML = `
+                <span><strong>${escapeHtml(opt.name)}</strong></span>
+                <span class="decision-meta">${escapeHtml(meta)}</span>
+            `;
+        }
         card.addEventListener('click', () => {
             optionsWrap.querySelectorAll('.decision-option').forEach(n => n.classList.remove('selected'));
             card.classList.add('selected');
@@ -749,10 +784,27 @@ async function submitManualDecision() {
             throw new Error(data.error || 'Failed to submit decision');
         }
 
-        appendLog(`[MANUAL] ${data.applied.type === 'next_bowler' ? 'Bowler' : 'Batter'} selected: ${data.applied.name}`, 'comment');
+        const appliedType = data.applied.type;
         hideDecisionModal();
         clearPendingDecisionState();
-        startMatch();
+
+        if (appliedType === 'fc_declare') {
+            appendLog(`[MANUAL] ${data.applied.declared ? 'Declared the innings.' : 'Continuing to bat.'}`, 'comment');
+            startMatch();
+        } else if (appliedType === 'fc_follow_on') {
+            appendLog(`[MANUAL] ${data.applied.enforce_fo ? 'Follow-on enforced.' : 'Batting again — follow-on declined.'}`, 'comment');
+            // Unlike next_bowler/next_batter, this decision itself completes
+            // the innings-2 -> 3 transition (see engine/match.py's
+            // _fc_apply_follow_on_decision) — data.transition is a full
+            // ball-result-shaped payload (innings_end, scorecard_data,
+            // commentary), so route it through the normal dispatcher
+            // instead of calling startMatch(), which would try to bowl a
+            // fresh ball instead of showing the innings-end scorecard.
+            if (data.transition) _processBallResult(data.transition);
+        } else {
+            appendLog(`[MANUAL] ${appliedType === 'next_bowler' ? 'Bowler' : 'Batter'} selected: ${data.applied.name}`, 'comment');
+            startMatch();
+        }
     } catch (err) {
         appendLog(`[ERROR] ${err.message || err}`, 'error');
         if (btn) btn.disabled = false;
@@ -1185,8 +1237,39 @@ function _processBallResult(data) {
         return;
     }
 
-    // End of First Innings
-    if (data.innings_end && data.innings_number === 1) {
+    // FC: stumps for the day — not an innings boundary, just a pause.
+    // Reuses the scorecard modal to show the state of play so far, with a
+    // custom title/footer, and resumes the simulation loop on close (same
+    // pause/resume pattern as an innings-ending scorecard below).
+    if (data.day_break) {
+        if (data.commentary) appendLog(data.commentary, 'comment');
+        if (data.scorecard_data) {
+            showScorecard(data.scorecard_data, data);
+            const titleEl = document.getElementById('scorecard-title');
+            if (titleEl) titleEl.textContent = `STUMPS — DAY ${data.day_number}`;
+            const targetInfo = document.getElementById('target-info');
+            if (targetInfo) {
+                targetInfo.style.display = 'block';
+                targetInfo.textContent = data.weather_note
+                    ? `${data.weather_note} Play resumes Day ${(data.day_number || 0) + 1}.`
+                    : `Play resumes Day ${(data.day_number || 0) + 1}.`;
+            }
+            const closeBtn = document.querySelector('.close-scorecard');
+            closeBtn.onclick = () => {
+                document.getElementById('scorecard-overlay').style.display = 'none';
+                scheduleNextBall(delay);
+            };
+            return; // pause simulation until the user acknowledges stumps
+        }
+        scheduleNextBall(delay);
+        return;
+    }
+
+    // End of an innings that isn't the match's last (T20/ListA: innings 1
+    // only; FC: innings 1, 2, or 3 — never 4, which always ends via
+    // match_over below since the chase either reaches its target or the
+    // side batting last runs out of wickets/days).
+    if (data.innings_end && !data.match_over) {
         // Dashboard: save 1st innings data and reset for 2nd
         innings1Data = { ballHistory: [...ballHistory], overRuns: [...overRuns] };
         ballHistory = [];
@@ -1202,12 +1285,14 @@ function _processBallResult(data) {
             resetMatchAnimationForNewInnings();
         }
 
-        // Swap batting team name in banner for 2nd innings
+        // Swap batting team name in banner for the new innings. Derived from
+        // who's actually at the crease (data.striker, already updated to the
+        // new innings' opener by the time this response is built) rather
+        // than blindly toggling — an FC follow-on means the same side bats
+        // two innings in a row, which a toggle would get wrong.
         const batNameEl = document.getElementById('sb-bat-name');
         if (batNameEl) {
-            const homeTeam = matchData.team_home.split('_')[0];
-            const awayTeam = matchData.team_away.split('_')[0];
-            batNameEl.textContent = batNameEl.textContent === homeTeam ? awayTeam : homeTeam;
+            batNameEl.textContent = getBattingTeamShortName(data.striker);
         }
         // Reset score display
         // Reset banner displays for 2nd innings
@@ -2066,6 +2151,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 innings_number: state.innings,
                 target: state.target,
                 total_overs: state.total_overs || matchData.overs || 20,
+                // FC has no fielding-circle phases — mirrors the null the
+                // server sends on every live ball (see engine/match.py's
+                // "phase_name": None if self.is_fc else ...). Without this,
+                // updateScoreBanner()'s phase_name === undefined fallback
+                // would misread FC's raw over count as T20 powerplay/death.
+                phase_name: getMatchFormat() === 'FC' ? null : undefined,
                 striker: state.striker.name ? {
                     name: state.striker.name,
                     runs: state.striker.runs,
@@ -2125,7 +2216,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // ── Resume notice in commentary log ──────────────────────────
             const overLabel = `${state.current_over}.${state.current_ball}`;
-            const inningsLabel = state.innings === 1 ? '1st' : '2nd';
+            const inningsLabel = ({1: '1st', 2: '2nd', 3: '3rd', 4: '4th'})[state.innings] || `${state.innings}th`;
             appendLog(
                 `<span style="color:#10b981;font-weight:700;">▶ RESUMED</span> — ` +
                 `${inningsLabel} innings, Over ${overLabel} | ` +

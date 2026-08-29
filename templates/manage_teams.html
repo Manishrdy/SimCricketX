@@ -757,7 +757,10 @@
                                 <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(59,130,246,0.12);color:#2563eb;border:1px solid rgba(59,130,246,0.3);">
                                     <i class="fa-solid fa-cricket-bat-ball" style="font-size:0.65rem;"></i> List A &middot; {{ prof.player_count }}
                                 </span>
-
+                            {% elif prof.format_type == 'FC' %}
+                                <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(217,119,6,0.12);color:#b45309;border:1px solid rgba(217,119,6,0.3);">
+                                    <i class="fa-solid fa-hourglass-half" style="font-size:0.65rem;"></i> First-Class &middot; {{ prof.player_count }}
+                                </span>
                             {% endif %}
                         {% endfor %}
                         {% if not t.profiles %}
