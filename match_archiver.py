@@ -514,6 +514,81 @@ class MatchArchiver:
                 db.session.add(fielding_card)
                 self.logger.debug(f"Created fielding record for {fielder_name}: {contributions}")
 
+    def _build_innings_plan(self, home_team=None, away_team=None) -> List[Dict[str, Any]]:
+        """
+        Chronological list of every real innings in this match, each with
+        batting/bowling team identity + stats + partnerships.
+
+        T20/ListA: always exactly 2 entries (fixed by format).
+        FC: 2-4 entries sourced from Match.fc_innings_stats/fc_innings_totals/
+        fc_innings_partnerships — a side can bat twice (follow-on or a
+        normal 2nd innings), so batting_team_id can repeat across entries.
+
+        home_team/away_team (DB Team rows) are optional: callers that only
+        need names (TXT/CSV export, which runs before the DB save resolves
+        these) can omit them and get batting_team_id/bowling_team_id as None.
+        """
+        is_fc = bool(getattr(self.match, "is_fc", False))
+        side_to_team = {"home": home_team, "away": away_team}
+        side_to_name = {"home": self.team_home, "away": self.team_away}
+
+        def _team_id(side):
+            team = side_to_team[side]
+            return team.id if team is not None else None
+
+        if is_fc:
+            fc_partnerships = getattr(self.match, "fc_innings_partnerships", {}) or {}
+            fc_totals = getattr(self.match, "fc_innings_totals", {}) or {}
+            plan = []
+            for stats_entry in self.match.fc_innings_stats:
+                n = stats_entry["innings_number"]
+                bat_side = stats_entry["batting_side"]
+                bowl_side = stats_entry["bowling_side"]
+                totals = fc_totals.get(n, {})
+                plan.append({
+                    "innings_number": n,
+                    "batting_team_id": _team_id(bat_side),
+                    "bowling_team_id": _team_id(bowl_side),
+                    "batting_team_name": side_to_name[bat_side],
+                    "bowling_team_name": side_to_name[bowl_side],
+                    "batting_stats": stats_entry["batting_stats"],
+                    "bowling_stats": stats_entry["bowling_stats"],
+                    "partnerships": fc_partnerships.get(n, []),
+                    "score": totals.get("score", 0),
+                    "wickets": totals.get("wickets", 0),
+                    "overs_str": totals.get("overs_str") or "0.0",
+                })
+            return plan
+
+        first_bat_name = self.match.first_batting_team_name
+        if first_bat_name == self.match.match_data["team_home"].split('_')[0]:
+            order = ["home", "away"]
+        else:
+            order = ["away", "home"]
+        stats_pairs = [
+            (self.match.first_innings_batting_stats, self.match.first_innings_bowling_stats,
+             self.match.first_innings_partnerships),
+            (self.match.second_innings_batting_stats, self.match.second_innings_bowling_stats,
+             self.match.second_innings_partnerships),
+        ]
+        plan = []
+        for idx, side in enumerate(order):
+            # Non-FC matches always have exactly two sides, so the bowling
+            # side for innings N is simply "whichever side isn't batting".
+            bowl_side = order[1 - idx]
+            batting_stats, bowling_stats, partnerships = stats_pairs[idx]
+            plan.append({
+                "innings_number": idx + 1,
+                "batting_team_id": _team_id(side),
+                "bowling_team_id": _team_id(bowl_side),
+                "batting_team_name": side_to_name[side],
+                "bowling_team_name": side_to_name[bowl_side],
+                "batting_stats": batting_stats,
+                "bowling_stats": bowling_stats,
+                "partnerships": partnerships,
+            })
+        return plan
+
     def _save_to_database(self) -> bool:
         """Save match results and stats to SQLite database"""
         try:
@@ -595,7 +670,12 @@ class MatchArchiver:
                 db_match.match_format = self.match_data.get('match_format', 'T20')
                 db_match.overs_per_side = self.match_data.get('overs', 20)
                 db_match.is_day_night = bool(self.match_data.get('is_day_night', False))
-                
+
+                # First-Class (FC) match length + follow-on outcome
+                if getattr(self.match, 'is_fc', False):
+                    db_match.days = getattr(self.match.fmt, 'days', None)
+                    db_match.follow_on_enforced = getattr(self.match, 'follow_on_enforced', None)
+
                 # Bug Fix B4: Reverse old aggregate stats before deletion to prevent double-counting
                 # Wrap in a savepoint so reversal + deletion is atomic — if a player
                 # was deleted between saves the partial reversal is rolled back cleanly.
@@ -641,16 +721,15 @@ class MatchArchiver:
                     # NEW: Match format
                     match_format=self.match_data.get('match_format', 'T20'),
                     overs_per_side=self.match_data.get('overs', 20),
-                    is_day_night=bool(self.match_data.get('is_day_night', False))
+                    is_day_night=bool(self.match_data.get('is_day_night', False)),
+                    # First-Class (FC) match length + follow-on outcome
+                    days=(getattr(self.match.fmt, 'days', None) if getattr(self.match, 'is_fc', False) else None),
+                    follow_on_enforced=(getattr(self.match, 'follow_on_enforced', None) if getattr(self.match, 'is_fc', False) else None),
                 )
                 db.session.add(db_match)
-            
-            # Extract scores and overs accurately
-            first_bat_name = self.match.first_batting_team_name
-            
-            home_batting_stats = {}
-            away_batting_stats = {}
-            
+
+            is_fc = bool(getattr(self.match, 'is_fc', False))
+
             # Helper to calculate overs from legal deliveries bowled in the innings.
             # Prefer bowling stats (balls_bowled) because batting balls can include
             # no-ball deliveries and inflate overs (e.g., 20.1 in a 20-over innings).
@@ -692,42 +771,47 @@ class MatchArchiver:
                     legal_balls = ops_cap * 6
                 return balls_to_overs_str(legal_balls)
 
-            if first_bat_name == self.match.match_data["team_home"].split('_')[0]:
-                db_match.home_team_score = self.match.first_innings_score
-                db_match.home_team_wickets = sum(1 for p in self.match.first_innings_batting_stats.values() if p.get('wicket_type'))
-                db_match.home_team_overs = calc_overs(
-                    self.match.first_innings_batting_stats,
-                    self.match.first_innings_bowling_stats,
-                    innings_label="1",
-                )
-                home_batting_stats = self.match.first_innings_batting_stats
-                
-                db_match.away_team_score = self.match.score
-                db_match.away_team_wickets = self.match.wickets
-                db_match.away_team_overs = calc_overs(
-                    self.match.second_innings_batting_stats,
-                    self.match.second_innings_bowling_stats,
-                    innings_label="2",
-                )
-                away_batting_stats = self.match.second_innings_batting_stats
-            else:
-                db_match.away_team_score = self.match.first_innings_score
-                db_match.away_team_wickets = sum(1 for p in self.match.first_innings_batting_stats.values() if p.get('wicket_type'))
-                db_match.away_team_overs = calc_overs(
-                    self.match.first_innings_batting_stats,
-                    self.match.first_innings_bowling_stats,
-                    innings_label="1",
-                )
-                away_batting_stats = self.match.first_innings_batting_stats
-                
-                db_match.home_team_score = self.match.score
-                db_match.home_team_wickets = self.match.wickets
-                db_match.home_team_overs = calc_overs(
-                    self.match.second_innings_batting_stats,
-                    self.match.second_innings_bowling_stats,
-                    innings_label="2",
-                )
-                home_batting_stats = self.match.second_innings_batting_stats
+            innings_plan = self._build_innings_plan(home_team, away_team)
+
+            # Each team's chronological batting occurrences map onto the DB
+            # row's fixed slots: 1st appearance -> the base score/wickets/overs
+            # columns, 2nd appearance (FC only, follow-on or a normal 2nd
+            # innings) -> the *_innings2 columns.
+            team_bat_occurrence = {}
+            for entry in innings_plan:
+                tid = entry["batting_team_id"]
+                team_bat_occurrence[tid] = team_bat_occurrence.get(tid, 0) + 1
+                occurrence = team_bat_occurrence[tid]
+
+                if is_fc:
+                    score = entry["score"]
+                    wkts = entry["wickets"]
+                    overs_str = entry["overs_str"]
+                elif entry["innings_number"] == 1:
+                    score = self.match.first_innings_score
+                    wkts = sum(1 for p in entry["batting_stats"].values() if p.get('wicket_type'))
+                    overs_str = calc_overs(entry["batting_stats"], entry["bowling_stats"], innings_label="1")
+                else:
+                    score = self.match.score
+                    wkts = self.match.wickets
+                    overs_str = calc_overs(entry["batting_stats"], entry["bowling_stats"], innings_label="2")
+
+                is_home = (tid == home_team.id)
+                if occurrence == 1:
+                    if is_home:
+                        db_match.home_team_score, db_match.home_team_wickets, db_match.home_team_overs = score, wkts, overs_str
+                    else:
+                        db_match.away_team_score, db_match.away_team_wickets, db_match.away_team_overs = score, wkts, overs_str
+                else:
+                    # occurrence == 2: FC-only, a side batting a second time.
+                    if is_home:
+                        db_match.home_team_score_innings2 = score
+                        db_match.home_team_wickets_innings2 = wkts
+                        db_match.home_team_overs_innings2 = overs_str
+                    else:
+                        db_match.away_team_score_innings2 = score
+                        db_match.away_team_wickets_innings2 = wkts
+                        db_match.away_team_overs_innings2 = overs_str
 
             db.session.flush()
 
@@ -868,23 +952,12 @@ class MatchArchiver:
                             card.wickets_run_out = wicket_counts.get('run out', 0)
                             card.wickets_hit_wicket = wicket_counts.get('hit wicket', 0)
 
-            if first_bat_name == self.match.match_data["team_home"].split('_')[0]:
-                innings_plan = [
-                    (1, home_team.id, away_team.id, self.match.first_innings_batting_stats, self.match.first_innings_bowling_stats),
-                    (2, away_team.id, home_team.id, self.match.second_innings_batting_stats, self.match.second_innings_bowling_stats),
-                ]
-            else:
-                innings_plan = [
-                    (1, away_team.id, home_team.id, self.match.first_innings_batting_stats, self.match.first_innings_bowling_stats),
-                    (2, home_team.id, away_team.id, self.match.second_innings_batting_stats, self.match.second_innings_bowling_stats),
-                ]
-
-            for innings_number, batting_team_id, bowling_team_id, batting_stats, bowling_stats in innings_plan:
-                save_stats(batting_stats, batting_team_id, innings_number, "batting")
-                save_stats(bowling_stats, bowling_team_id, innings_number, "bowling", batting_stats)
+            for entry in innings_plan:
+                save_stats(entry["batting_stats"], entry["batting_team_id"], entry["innings_number"], "batting")
+                save_stats(entry["bowling_stats"], entry["bowling_team_id"], entry["innings_number"], "bowling", entry["batting_stats"])
 
                 # NEW: Save fielding stats for the bowling/fielding team
-                self._save_fielding_stats(batting_stats, bowling_team_id, innings_number)
+                self._save_fielding_stats(entry["batting_stats"], entry["bowling_team_id"], entry["innings_number"])
 
             # Super Over stats → dedicated scorecard rows at innings_number = 3.
             # Writing them as real rows means the SAME forward aggregation (below)
@@ -1015,13 +1088,9 @@ class MatchArchiver:
                 # appear on batting/bowling/fielding-only cards.
                 d["catches"] += card.catches or 0
 
-            # Save Partnerships
-            # Determine which team batted first/second
-            first_bat_team_id = innings_plan[0][1] # batting_team_id of 1st innings
-            second_bat_team_id = innings_plan[1][1] # batting_team_id of 2nd innings
-            
-            self._save_partnerships_to_db(self.match.first_innings_partnerships, 1, first_bat_team_id)
-            self._save_partnerships_to_db(self.match.second_innings_partnerships, 2, second_bat_team_id)
+            # Save Partnerships (every real innings, not just the first two)
+            for entry in innings_plan:
+                self._save_partnerships_to_db(entry["partnerships"], entry["innings_number"], entry["batting_team_id"])
 
             # Detect career milestones after aggregate updates
             all_milestones = []
@@ -1250,29 +1319,16 @@ class MatchArchiver:
         ]
         
         try:
-            # Determine team batting order
-            team_order = self._determine_team_batting_order()
-            
-            # First innings scorecard
-            if hasattr(self.match, 'first_innings_batting_stats'):
+            # Every real innings that occurred (2 for T20/ListA; 2-4 for FC).
+            for entry in self._build_innings_plan():
                 lines.extend(self._format_innings_scorecard(
-                    innings_num=1,
-                    batting_team=team_order['first_batting'],
-                    bowling_team=team_order['first_bowling'],
-                    batting_stats=self.match.first_innings_batting_stats,
-                    bowling_stats=self.match.first_innings_bowling_stats
+                    innings_num=entry["innings_number"],
+                    batting_team=entry["batting_team_name"],
+                    bowling_team=entry["bowling_team_name"],
+                    batting_stats=entry["batting_stats"],
+                    bowling_stats=entry["bowling_stats"],
                 ))
-            
-            # Second innings scorecard
-            if hasattr(self.match, 'second_innings_batting_stats'):
-                lines.extend(self._format_innings_scorecard(
-                    innings_num=2,
-                    batting_team=team_order['second_batting'],
-                    bowling_team=team_order['second_bowling'],
-                    batting_stats=self.match.second_innings_batting_stats,
-                    bowling_stats=self.match.second_innings_bowling_stats
-                ))
-            
+
             # Match result
             if hasattr(self.match, 'result') and self.match.result:
                 lines.extend([
@@ -1289,37 +1345,27 @@ class MatchArchiver:
         
         return "\n".join(lines)
 
-    def _determine_team_batting_order(self) -> Dict[str, str]:
-        """Determine which team batted first"""
-        if hasattr(self.match, 'first_batting_team_name') and self.match.first_batting_team_name:
-            first_batting = self.match.first_batting_team_name
-            first_bowling = self.match.first_bowling_team_name
-        else:
-            # Fallback logic
-            first_batting = self.team_home
-            first_bowling = self.team_away
-        
-        return {
-            'first_batting': first_batting,
-            'first_bowling': first_bowling,
-            'second_batting': first_bowling,
-            'second_bowling': first_batting
-        }
+    @staticmethod
+    def _ordinal_suffix(n: int) -> str:
+        if 10 <= n % 100 <= 20:
+            return "TH"
+        return {1: "ST", 2: "ND", 3: "RD"}.get(n % 10, "TH")
 
-    def _format_innings_scorecard(self, innings_num: int, batting_team: str, 
-                                bowling_team: str, batting_stats: Dict, 
+    def _format_innings_scorecard(self, innings_num: int, batting_team: str,
+                                bowling_team: str, batting_stats: Dict,
                                 bowling_stats: Dict) -> List[str]:
         """Format a single innings scorecard"""
+        suffix = self._ordinal_suffix(innings_num)
         lines = [
-            f"{innings_num}{'ST' if innings_num == 1 else 'ND'} INNINGS - {batting_team} BATTING",
+            f"{innings_num}{suffix} INNINGS - {batting_team} BATTING",
             "-" * 60
         ]
-        
+
         # Batting table
         lines.append(self._create_batting_table(batting_stats))
         lines.extend([
             "",
-            f"{innings_num}{'ST' if innings_num == 1 else 'ND'} INNINGS - {bowling_team} BOWLING",
+            f"{innings_num}{suffix} INNINGS - {bowling_team} BOWLING",
             "-" * 60
         ])
         
@@ -1453,49 +1499,27 @@ class MatchArchiver:
     def _create_all_csv_files(self) -> None:
         """Create all CSV files for batting and bowling statistics"""
         try:
-            team_order = self._determine_team_batting_order()
-            
             # Get full team lineups
             home_xi = self.match_data.get('playing_xi', {}).get('home', [])
             away_xi = self.match_data.get('playing_xi', {}).get('away', [])
-            
-            # Determine which team's lineup to use for each innings
-            if team_order['first_batting'] == self.team_home:
-                first_batting_lineup = home_xi
-                second_batting_lineup = away_xi
-            else:
-                first_batting_lineup = away_xi
-                second_batting_lineup = home_xi
-            
-            if team_order['first_bowling'] == self.team_home:
-                first_bowling_lineup = home_xi
-                second_bowling_lineup = away_xi
-            else:
-                first_bowling_lineup = away_xi
-                second_bowling_lineup = home_xi
-            
-            # Create CSV files for both innings with team names and full lineups
-            csv_files = [
-                (f"{self.match_id}_{self.username}_{team_order['first_batting']}_batting.csv", 
-                getattr(self.match, 'first_innings_batting_stats', {}),
-                team_order['first_batting'], 'batting', first_batting_lineup),
-                (f"{self.match_id}_{self.username}_{team_order['first_bowling']}_bowling.csv", 
-                getattr(self.match, 'first_innings_bowling_stats', {}),
-                team_order['first_bowling'], 'bowling', first_bowling_lineup),
-                (f"{self.match_id}_{self.username}_{team_order['second_batting']}_batting.csv", 
-                getattr(self.match, 'second_innings_batting_stats', {}),
-                team_order['second_batting'], 'batting', second_batting_lineup),
-                (f"{self.match_id}_{self.username}_{team_order['second_bowling']}_bowling.csv", 
-                getattr(self.match, 'second_innings_bowling_stats', {}),
-                team_order['second_bowling'], 'bowling', second_bowling_lineup)
-            ]
-            
-            for filename, stats, team_name, file_type, lineup in csv_files:
-                if file_type == 'batting':
-                    self._create_batting_csv(filename, stats, team_name, lineup)
-                else:
-                    self._create_bowling_csv(filename, stats, team_name)
-            
+            lineup_by_name = {self.team_home: home_xi, self.team_away: away_xi}
+
+            # One batting + one bowling CSV per real innings (2 for T20/ListA,
+            # 2-4 for FC — innings number is always in the filename since an
+            # FC side can bat under the same team name twice).
+            for entry in self._build_innings_plan():
+                n = entry["innings_number"]
+                bat_name = entry["batting_team_name"]
+                bowl_name = entry["bowling_team_name"]
+                self._create_batting_csv(
+                    f"{self.match_id}_{self.username}_{bat_name}_innings{n}_batting.csv",
+                    entry["batting_stats"], bat_name, lineup_by_name.get(bat_name, []),
+                )
+                self._create_bowling_csv(
+                    f"{self.match_id}_{self.username}_{bowl_name}_innings{n}_bowling.csv",
+                    entry["bowling_stats"], bowl_name,
+                )
+
             self.logger.debug("All CSV files created successfully")
             
         except Exception as e:

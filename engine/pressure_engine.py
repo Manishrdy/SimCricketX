@@ -1,5 +1,6 @@
 import random
 import logging
+from typing import Optional
 
 from engine.format_config import get_format
 from engine.game_state_engine import SUPER_OVER_NEUTRAL_RPO
@@ -558,3 +559,152 @@ class PressureEngine:
             return 0.15  # Average
         else:
             return 0.1  # Limited ability
+
+
+# ---------------------------------------------------------------------------
+# FCPressureEngine — First-Class (FC): session-survival + lead-building
+# pressure, not run-rate-chase pressure
+# ---------------------------------------------------------------------------
+#
+# PressureEngine above is entirely RRR/death-overs-chase-shaped, referencing
+# self.fmt.is_death()/death_phase.start/self.fmt.overs — none of which exist
+# on MultiDayFormatConfig, and none of which are meaningful in 3 of FC's 4
+# innings (only innings 4 has a real target to chase). This is a genuinely
+# separate pressure axis, not a branch inside PressureEngine.
+#
+# Output contract: get_pressure_effects() returns a dict using the SAME keys
+# apply_pressure_effects_to_weights() (engine/ball_outcome.py) already reads
+# generically — dot_bonus (additive), boundary_modifier / wicket_modifier
+# (multiplicative), optional strike_rotation_penalty. No new application code
+# is needed in ball_outcome.py; FCPressureEngine only populates this dict.
+
+class FCPressureEngine:
+    def __init__(self, format_config=None):
+        self.fmt = format_config
+        self.recent_events = []
+
+    def update_recent_events(self, ball_outcome):
+        self.recent_events.append(ball_outcome)
+        if len(self.recent_events) > 18:
+            self.recent_events = self.recent_events[-18:]
+
+    def should_trigger_collapse(self, wickets: int, recent_wickets: int, temperament_rating: Optional[int] = None) -> bool:
+        """Probabilistic wicket-cluster signal, session-survival flavored —
+        FC's counterpart to PressureEngine.should_trigger_wicket_cluster().
+
+        temperament_rating (the batter currently at the crease, 0-100)
+        dampens the cluster chance — a batter who resists session-long
+        pressure well is less likely to be swept up in a collapse around
+        them. Neutral (no dampening) when omitted."""
+        if wickets >= 4 and recent_wickets >= 2:
+            cluster_chance = 0.10
+            if wickets >= 6:
+                cluster_chance = 0.14
+            if wickets >= 8:
+                cluster_chance = 0.18
+            if recent_wickets >= 3:
+                cluster_chance *= 0.4  # dampen unrealistic cascades
+            if temperament_rating is not None:
+                # 50 (neutral) -> 1.0x; 100 -> 0.6x; 0 -> 1.4x
+                cluster_chance *= 1.0 - (temperament_rating - 50) / 125.0
+            return random.random() < max(0.0, cluster_chance)
+        return False
+
+    def get_pressure_effects(self, match_state: dict) -> dict:
+        """
+        Returns a pressure_effects dict (dot_bonus/boundary_modifier/
+        wicket_modifier) for the current ball, composed from up to three
+        named situational modes plus (innings 4 only) a lightweight
+        required-rate-like signal. Multiple modes can combine (e.g. a
+        settling-in batter during a survival day both apply).
+
+        Parameters expected on match_state
+        -----------------------------------
+        fc_innings          : 1-4
+        wickets              : wickets down in the current innings
+        striker_balls_faced : balls faced by the batter on strike
+        days_remaining       : full match days left including today
+        lead                 : batting side's lead/deficit (positive = ahead)
+        deficit_to_follow_on : follow_on_margin - deficit, only meaningful
+                                pre-follow-on-decision; None otherwise
+        target               : innings-4 target, or None
+        score                : current innings score
+        recent_wickets       : wickets fallen in the last few overs
+        striker_technique    : batter's technique_rating (0-100), Phase 2 —
+                                dampens the settling-in penalty's severity
+        striker_temperament  : batter's temperament_rating (0-100), Phase 2 —
+                                dampens pressure-driven wicket increases
+                                (survival mode, collapse-cluster chance)
+        """
+        fc_innings = match_state.get("fc_innings", 1)
+        wickets = match_state.get("wickets", 0)
+        striker_balls_faced = match_state.get("striker_balls_faced", 0)
+        days_remaining = match_state.get("days_remaining", 99)
+        recent_wickets = match_state.get("recent_wickets", 0)
+        striker_technique = match_state.get("striker_technique")
+        striker_temperament = match_state.get("striker_temperament")
+
+        effects = {"dot_bonus": 0.0, "boundary_modifier": 1.0, "wicket_modifier": 1.0}
+
+        # --- Settling in: a batter early in their innings is cautious,
+        # regardless of overall match situation. Technique shortens/softens
+        # this — a technically correct batter gets through the tricky first
+        # deliveries with less visible discomfort. ---
+        if 0 < striker_balls_faced < 15:
+            settle_factor = 1.0 - (striker_balls_faced / 15.0)  # 1.0 -> 0.0
+            if striker_technique is not None:
+                # 50 (neutral) -> 1.0x; 100 -> 0.5x; 0 -> 1.5x
+                settle_factor *= 1.0 - (striker_technique - 50) / 100.0
+                settle_factor = max(0.0, settle_factor)
+            effects["dot_bonus"] += 0.10 * settle_factor
+            effects["boundary_modifier"] *= 1.0 - (0.30 * settle_factor)
+
+        # --- Survival: batting out time with little/no scoring incentive
+        # left (following on with a hopeless chase, or run out of match time
+        # to force a positive result). Temperament dampens how much extra
+        # SAFETY this buys — a batter who resists pressure well doesn't need
+        # to defend as hard to stay in, so their wicket_modifier reduction
+        # is smaller (closer to 1.0) than a low-temperament batter's. ---
+        is_survival = match_state.get("survival_mode", False) or (
+            days_remaining <= 1 and fc_innings in (2, 4)
+        )
+        if is_survival:
+            effects["dot_bonus"] += 0.18
+            effects["boundary_modifier"] *= 0.65
+            wicket_reduction = 0.20  # base: wicket_modifier *= (1 - 0.20) = 0.80
+            if striker_temperament is not None:
+                # 50 (neutral) -> unchanged; 100 -> half the reduction; 0 -> 1.5x the reduction
+                wicket_reduction *= 1.0 - (striker_temperament - 50) / 100.0
+                wicket_reduction = max(0.0, wicket_reduction)
+            effects["wicket_modifier"] *= 1.0 - wicket_reduction
+
+        # --- Declaration-push / chase-acceleration: building quickly toward
+        # a declaration, or chasing a gettable target with time to spare. ---
+        is_accelerating = match_state.get("acceleration_mode", False)
+        if is_accelerating:
+            effects["boundary_modifier"] *= 1.35
+            effects["dot_bonus"] -= 0.08
+            effects["wicket_modifier"] *= 1.10
+
+        # --- Wicket-cluster collapse boost (session-survival flavored). ---
+        if self.should_trigger_collapse(wickets, recent_wickets, temperament_rating=striker_temperament):
+            effects["wicket_modifier"] *= 1.25
+            logger.info("FC COLLAPSE: 1.25x wicket boost (%d down, %d recent)", wickets, recent_wickets)
+
+        # --- 4th-innings chase: the one FC innings with a genuine target,
+        # so it's the one place a rate-pressure signal applies — recalibrated
+        # to FC's much lower baseline run rates (RRR ~3.5 is real pressure
+        # here; it would be trivial in T20/ListA). ---
+        if fc_innings == 4:
+            required_rr = match_state.get("required_run_rate", 0.0)
+            if required_rr > 4.5:
+                rr_risk = min((required_rr - 4.5) * 0.25, 1.2)
+                effects["boundary_modifier"] *= 1.0 + rr_risk * 0.6
+                effects["wicket_modifier"] *= 1.0 + rr_risk * 0.5
+                effects["dot_bonus"] -= min(rr_risk * 0.05, 0.10)
+
+        # dot_bonus should never go negative enough to imply MORE dots from
+        # a "less cautious" signal than the base matrix already encodes.
+        effects["dot_bonus"] = max(-0.15, effects["dot_bonus"])
+
+        return effects

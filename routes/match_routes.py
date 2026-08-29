@@ -48,7 +48,7 @@ def register_match_routes(
     _is_valid_match_id,
     reverse_player_aggregates,
 ):
-    MATCH_SETUP_FORMATS = {"T20", "ListA"}
+    MATCH_SETUP_FORMATS = {"T20", "ListA", "FC"}
 
     @app.route("/match/setup", methods=["GET", "POST"])
     @login_required
@@ -114,6 +114,17 @@ def register_match_routes(
                 if _fmt not in MATCH_SETUP_FORMATS:
                     return jsonify({"error": "Invalid or unsupported match format"}), 400
                 data["match_format"] = _fmt
+
+            # First-Class (FC) match length — 4 or 5 days, defaults to 4.
+            # Every other format ignores this field entirely.
+            if data["match_format"] == "FC":
+                try:
+                    _days = int(data.get("days"))
+                except (TypeError, ValueError):
+                    _days = 4
+                data["days"] = _days if _days in (4, 5) else 4
+            else:
+                data["days"] = None
 
             # Normalise is_day_night to bool
             _dn_raw = data.get("is_day_night", False)
@@ -369,11 +380,15 @@ def register_match_routes(
             from engine.weather import (
                 DEFAULT_FORECAST, FORECAST_TIERS, generate_weather_script,
             )
-            from engine.format_config import get_format as _get_fmt
+            from engine.format_config import get_any_format as _get_fmt
             _forecast = str(data.get("weather_forecast") or DEFAULT_FORECAST)
             if _forecast not in FORECAST_TIERS:
                 _forecast = DEFAULT_FORECAST
-            _fmt_cfg = _get_fmt(data.get("match_format", "T20"))
+            # get_any_format (not get_format) — get_format only knows T20/ListA
+            # and silently falls back to T20's FormatConfig for "FC", which
+            # would mislabel the ground_config lookup and desync the rolled
+            # weather script from what the engine actually simulates.
+            _fmt_cfg = _get_fmt(data.get("match_format", "T20"), days=data.get("days"))
 
             data.update({
                 "match_id": match_id,
@@ -384,10 +399,22 @@ def register_match_routes(
                 "timestamp": ts,
                 "ground_config": _get_gc(current_user.id, _fmt_cfg.name),
                 "weather_forecast": _forecast,
-                "weather_script": generate_weather_script(
-                    _forecast, _fmt_cfg.overs, _fmt_cfg.name
-                ),
             })
+            if _fmt_cfg.format_family == "multi_day":
+                # FC's own day-scoped rain model — rolled once here (like
+                # T20/ListA's weather_script below) so a resumed match
+                # replays identically instead of re-rolling on every
+                # reconstruction. engine/match.py's __init__ only falls back
+                # to generating this itself for older payloads/tests.
+                from engine import fc_weather
+                data["fc_weather_script"] = fc_weather.generate_weather_script(
+                    _forecast, _fmt_cfg.days, _fmt_cfg.overs_per_day,
+                    min_overs_last_hour=_fmt_cfg.min_overs_last_hour,
+                )
+            else:
+                data["weather_script"] = generate_weather_script(
+                    _forecast, _fmt_cfg.overs, _fmt_cfg.name
+                )
             # Transient setup flag: do not persist beyond match creation.
             data.pop("make_match_interesting", None)
 
@@ -522,12 +549,12 @@ def register_match_routes(
             db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
             if db_match:
                 return jsonify({"status": "completed"})
-            # Not in memory — but a persisted super-over snapshot means this
-            # match is mid-super-over and CAN be rebuilt. Restore it so the
-            # frontend resumes the super over instead of offering a fresh
-            # toss (which would silently resimulate the tied match).
+            # Not in memory — but a persisted super-over OR FC snapshot means
+            # this match CAN be rebuilt. Restore it so the frontend resumes
+            # play instead of offering a fresh toss (which would silently
+            # restart the match).
             match_data, _path, _err = _load_match_file_for_user(match_id)
-            if match_data and match_data.get("super_over_snapshot"):
+            if match_data and (match_data.get("super_over_snapshot") or match_data.get("fc_snapshot")):
                 match, err = _get_or_restore_match_instance(match_id)
                 if err:
                     return jsonify({"status": "not_in_memory"})
@@ -571,7 +598,10 @@ def register_match_routes(
 
         return jsonify({
             "status": "in_progress",
-            "innings": match.innings,
+            # match.innings stays 1 for the whole match for FC by design
+            # (it's the super-over-overloaded counter) — report fc_innings
+            # instead so a reconnecting client sees the real innings number.
+            "innings": match.fc_innings if match.is_fc else match.innings,
             "score": match.score,
             "wickets": match.wickets,
             "current_over": match.current_over,
@@ -694,6 +724,7 @@ def register_match_routes(
                 )
 
         innings_list = []
+        team_bat_occurrence = {}
         for innings_number in sorted(innings_data.keys()):
             entry = innings_data[innings_number]
             entry["batting"].sort(key=lambda item: item["position"])
@@ -706,10 +737,15 @@ def register_match_routes(
             total_byes = sum(item.get("byes", 0) for item in entry["bowling"])
             total_leg_byes = sum(item.get("leg_byes", 0) for item in entry["bowling"])
             batting_team_id = entry["batting_team_id"]
+            # FC sides can bat twice (follow-on / normal 2nd innings) — the
+            # team's SECOND appearance here must read the *_innings2 columns,
+            # not the base columns again.
+            team_bat_occurrence[batting_team_id] = team_bat_occurrence.get(batting_team_id, 0) + 1
+            is_second_bat = team_bat_occurrence[batting_team_id] == 2
             if batting_team_id == db_match.home_team_id:
-                entry["score"] = db_match.home_team_score or 0
+                entry["score"] = (db_match.home_team_score_innings2 if is_second_bat else db_match.home_team_score) or 0
             else:
-                entry["score"] = db_match.away_team_score or 0
+                entry["score"] = (db_match.away_team_score_innings2 if is_second_bat else db_match.away_team_score) or 0
             byes_legbyes = total_byes + total_leg_byes
             total_extras = total_wides + total_noballs + byes_legbyes
             entry["extras"] = {
@@ -1076,12 +1112,37 @@ def register_match_routes(
             log_exception(e)
             app.logger.warning(f"[SuperOver] Snapshot persist failed for {match_id}: {e}")
 
+    def _persist_fc_snapshot(match, match_id):
+        """Write the current FC match snapshot into the match JSON so a
+        process restart or instance eviction mid-match resumes instead of
+        silently restarting the match from fc_innings=1 — the same failure
+        mode _persist_super_over_snapshot exists to prevent for tied
+        T20/ListA matches. Called after every over completes (see the
+        next_ball route: current_ball == 0 right after a ball is processed
+        means an over/innings/day boundary was just reached). Non-fatal on
+        failure — the in-memory state is still authoritative for the live
+        session."""
+        try:
+            snap = match.serialize_fc_snapshot()
+            if not snap:
+                return
+            with _get_match_file_lock(match_id):
+                match_data, match_path, err = _load_match_file_for_user(match_id)
+                if err or not match_path:
+                    return
+                match_data["fc_snapshot"] = snap
+                with open(match_path, "w", encoding="utf-8") as f:
+                    json.dump(match_data, f, indent=2)
+        except Exception as e:
+            log_exception(e)
+            app.logger.warning(f"[FC] Snapshot persist failed for {match_id}: {e}")
+
     def _get_or_restore_match_instance(match_id):
         """Fetch the in-memory match instance; if absent, rebuild it from the
-        match JSON — restoring a persisted super-over snapshot when present,
-        so a restart/eviction mid-super-over resumes instead of stranding the
-        match (or silently resimulating it). Returns (match, error_response);
-        exactly one is non-None."""
+        match JSON — restoring a persisted super-over or FC snapshot when
+        present, so a restart/eviction mid-match resumes instead of stranding
+        the match (or silently resimulating it). Returns (match,
+        error_response); exactly one is non-None."""
         with MATCH_INSTANCES_LOCK:
             match = MATCH_INSTANCES.get(match_id)
             if match is not None:
@@ -1113,6 +1174,23 @@ def register_match_routes(
                     )
                     return None, (jsonify({"error": "Super over state could not be restored"}), 500)
 
+            fc_snap = match_data.get("fc_snapshot")
+            if match.is_fc and fc_snap:
+                try:
+                    match.restore_fc_snapshot(fc_snap)
+                    app.logger.info(
+                        f"[FC] Restored match state for {match_id} "
+                        f"(fc_innings={match.fc_innings}, day={match.fc_day})"
+                    )
+                except Exception as e:
+                    # Same discipline as the super-over branch above: never
+                    # fall through to a fresh (fc_innings=1) instance.
+                    log_exception(e)
+                    app.logger.error(
+                        f"[FC] Snapshot restore failed for {match_id}: {e}", exc_info=True
+                    )
+                    return None, (jsonify({"error": "FC match state could not be restored"}), 500)
+
             match.last_accessed = time.time()
             MATCH_INSTANCES[match_id] = match
             return match, None
@@ -1138,7 +1216,7 @@ def register_match_routes(
     def next_ball(match_id):
         try:
             # Thread-safe fetch/rebuild (Bug Fix B2), now snapshot-aware: a
-            # rebuilt instance restores any persisted super-over state.
+            # rebuilt instance restores any persisted super-over or FC state.
             match, err = _get_or_restore_match_instance(match_id)
             if err:
                 return err
@@ -1159,13 +1237,34 @@ def register_match_routes(
             if outcome.get("super_over_required"):
                 _persist_super_over_snapshot(match, match_id)
 
+            # FC: persist after every over/innings/day boundary (current_ball
+            # == 0 right after a ball was just processed means one of those
+            # was just reached) so a restart/eviction resumes instead of
+            # silently restarting the match from fc_innings=1.
+            if match.is_fc and match.current_ball == 0 and not outcome.get("match_over"):
+                _persist_fc_snapshot(match, match_id)
+
             # Explicitly send final score and wickets clearly
             if outcome.get("match_over"):
                 _finalize_completed_match(match, match_id, outcome)
 
+                # FC's own next_ball() response already carries the correct
+                # innings number (fc_innings, via _fc_finalize_match) — for
+                # FC, match.innings stays 1 for the whole match by design
+                # (it's the super-over-overloaded counter), so deriving from
+                # it here would always report innings 1. Source from the
+                # engine's own outcome dict for FC; keep match.innings for
+                # T20/ListA, unchanged.
+                if match.is_fc:
+                    innings_number = outcome.get("innings_number", match.fc_innings)
+                    innings_end_flag = bool(outcome.get("innings_end"))
+                else:
+                    innings_number = match.innings
+                    innings_end_flag = match.innings == 2
+
                 return jsonify({
-                    "innings_end":     match.innings == 2, # Flag generic innings end
-                    "innings_number":  match.innings,
+                    "innings_end":     innings_end_flag,
+                    "innings_number":  innings_number,
                     "match_over":      True,
                     "commentary":      outcome.get("commentary", "<b>Match Over!</b>"),
                     "scorecard_data":  outcome.get("scorecard_data"),
@@ -1550,6 +1649,7 @@ def register_match_routes(
                 "t20": ("T20", "T20"),
                 "lista": ("ListA", "List A"),
                 "odi": ("ListA", "List A"),
+                "fc": ("FC", "First-Class"),
 
             }
             return format_map.get(normalized, ("T20", "T20"))

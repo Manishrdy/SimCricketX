@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from utils.exception_tracker import log_exception
 from utils.squad_rules import validate_squad_composition
 
-VALID_FORMATS = ("T20", "ListA")
+VALID_FORMATS = ("T20", "ListA", "FC")
 SHORT_CODE_RE = re.compile(r'^[A-Z0-9]{2,5}$')
 
 
@@ -52,10 +52,18 @@ def register_team_routes(
                 bat = int(item.get("batting_rating", 0))
                 bowl = int(item.get("bowling_rating", 0))
                 field = int(item.get("fielding_rating", 0))
+                # First-Class (FC) rating axes — inert (unread) for T20/ListA
+                # profiles, but parsed for every format so a player carries
+                # them consistently. Default 50 (neutral), like the pool's
+                # other ratings.
+                technique = int(item.get("technique_rating", 50) or 50)
+                temperament = int(item.get("temperament_rating", 50) or 50)
+                stamina = int(item.get("stamina_rating", 50) or 50)
             except (TypeError, ValueError):
                 log_exception(source="backend")
                 return None, f"Player {idx}: ratings must be valid integers."
-            if not (0 <= bat <= 100 and 0 <= bowl <= 100 and 0 <= field <= 100):
+            if not (0 <= bat <= 100 and 0 <= bowl <= 100 and 0 <= field <= 100
+                    and 0 <= technique <= 100 and 0 <= temperament <= 100 and 0 <= stamina <= 100):
                 return None, f"Player {idx}: ratings must be between 0 and 100."
             players.append({
                 "name": name,
@@ -63,6 +71,9 @@ def register_team_routes(
                 "batting_rating": bat,
                 "bowling_rating": bowl,
                 "fielding_rating": field,
+                "technique_rating": technique,
+                "temperament_rating": temperament,
+                "stamina_rating": stamina,
                 "batting_hand": batting_hand,
                 "bowling_type": bowling_type,
                 "bowling_hand": bowling_hand,
@@ -360,6 +371,9 @@ def register_team_routes(
                     batting_rating=p["batting_rating"],
                     bowling_rating=p["bowling_rating"],
                     fielding_rating=p["fielding_rating"],
+                    technique_rating=p.get("technique_rating", 50),
+                    temperament_rating=p.get("temperament_rating", 50),
+                    stamina_rating=p.get("stamina_rating", 50),
                     batting_hand=p["batting_hand"],
                     bowling_type=p["bowling_type"],
                     bowling_hand=p["bowling_hand"],
@@ -422,6 +436,9 @@ def register_team_routes(
             player.batting_rating = p.get("batting_rating")
             player.bowling_rating = p.get("bowling_rating")
             player.fielding_rating = p.get("fielding_rating")
+            player.technique_rating = p.get("technique_rating", 50)
+            player.temperament_rating = p.get("temperament_rating", 50)
+            player.stamina_rating = p.get("stamina_rating", 50)
             player.batting_hand = p.get("batting_hand")
             player.bowling_type = p.get("bowling_type")
             player.bowling_hand = p.get("bowling_hand")
@@ -1344,6 +1361,9 @@ def register_team_routes(
                         "batting_rating": p.batting_rating,
                         "bowling_rating": p.bowling_rating,
                         "fielding_rating": p.fielding_rating,
+                        "technique_rating": p.technique_rating if p.technique_rating else 50,
+                        "temperament_rating": p.temperament_rating if p.temperament_rating else 50,
+                        "stamina_rating": p.stamina_rating if p.stamina_rating else 50,
                         "batting_hand": p.batting_hand,
                         "bowling_type": p.bowling_type or "",
                         "bowling_hand": p.bowling_hand or "",

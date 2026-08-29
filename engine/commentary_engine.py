@@ -227,15 +227,19 @@ class CommentaryEngine:
 
         # --- 9. Death overs entry (format-aware death start, first ball) ---
         # Uses _fmt_death_start from match state (40 for ListA, 16 for T20).
+        # FC has no death-overs concept and no _fmt_death_start is set for
+        # it — without this guard the state.get(...) default (16) would
+        # wrongly fire this every innings at FC's over 16.
         _death_start = state.get("_fmt_death_start", 16)
-        if current_over == _death_start and current_ball == 0:
+        if not state.get("is_fc") and current_over == _death_start and current_ball == 0:
             triggers.extend(self._format_narratives("death_overs",
                                                      batter=batter, bowler=bowler,
                                                      team=batting_team,
                                                      fielding_team=bowling_team))
 
         # --- 10. Powerplay (over 0, first ball only — announce once) ---
-        if current_over == 0 and current_ball == 0:
+        # FC has no fielding-restriction powerplay at all.
+        if not state.get("is_fc") and current_over == 0 and current_ball == 0:
             triggers.extend(self._format_narratives("powerplay",
                                                      batter=batter, bowler=bowler,
                                                      team=batting_team,
