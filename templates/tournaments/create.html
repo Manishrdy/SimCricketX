@@ -61,6 +61,17 @@
                         </div>
                         <div class="match-format-check"><i class="fas fa-check-circle"></i></div>
                     </label>
+                    <label class="match-format-card" id="fmt-card-FC">
+                        <input type="radio" name="match_format_radio" value="FC">
+                        <div class="match-format-icon" style="background: rgba(217,119,6,0.15); color: #b45309;">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
+                        <div class="match-format-info">
+                            <span class="match-format-name">First-Class</span>
+                            <span class="match-format-desc">Multi-day &middot; Up to 2 innings per side</span>
+                        </div>
+                        <div class="match-format-check"><i class="fas fa-check-circle"></i></div>
+                    </label>
                 </div>
             </div>
         </div>
@@ -221,7 +232,8 @@
         selectedFormat = format;
         document.getElementById('selectedMatchFormat').value = format;
 
-        const formatLabel = format === 'T20' ? 'T20' : 'List A';
+        const FORMAT_LABELS = { T20: 'T20', ListA: 'List A', FC: 'First-Class' };
+        const formatLabel = FORMAT_LABELS[format] || format;
         const noTeamsDiv = document.getElementById('noTeamsForFormat');
         const noTeamsLabel = document.getElementById('noTeamsFormatLabel');
         if (noTeamsLabel) noTeamsLabel.textContent = formatLabel;

@@ -1122,20 +1122,27 @@
     if (list.some(p => normName(p.name) === key)) {
       return; // strict idempotency
     }
+    // Select the active format's pool ratings. The flat values are retained as
+    // a backwards-compatible T20 fallback for pre-migration API responses.
+    const formatRatings = (pool.format_ratings && pool.format_ratings[state.activeFmt]) || {
+      batting: pool.batting_rating || 0,
+      bowling: pool.bowling_rating || 0,
+      fielding: pool.fielding_rating || 0,
+      technique: 50,
+      temperament: 50,
+      stamina: 50,
+    };
     // WK rule: bowling fields cleared server-side, but mirror on client for consistency
     const isWk = pool.role === 'Wicketkeeper';
     const entry = {
       name: pool.name,
       role: pool.role,
-      batting_rating: pool.batting_rating || 0,
-      bowling_rating: isWk ? 0 : (pool.bowling_rating || 0),
-      fielding_rating: pool.fielding_rating || 0,
-      // First-Class (FC) rating axes — the pool has no notion of these, so
-      // every player starts neutral (50) and is fine-tuned inline in the FC
-      // tab's roster rows (see renderRoster()). Inert for T20/ListA.
-      technique_rating: 50,
-      temperament_rating: 50,
-      stamina_rating: 50,
+      batting_rating: formatRatings.batting ?? 50,
+      bowling_rating: isWk ? 0 : (formatRatings.bowling ?? 50),
+      fielding_rating: formatRatings.fielding ?? 50,
+      technique_rating: formatRatings.technique ?? 50,
+      temperament_rating: formatRatings.temperament ?? 50,
+      stamina_rating: formatRatings.stamina ?? 50,
       batting_hand: pool.batting_hand || '',
       bowling_type: isWk ? '' : (pool.bowling_type || ''),
       bowling_hand: isWk ? '' : (pool.bowling_hand || ''),

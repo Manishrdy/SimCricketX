@@ -615,7 +615,7 @@ def register_team_routes(
 
     # ── Squad Builder ────────────────────────────────────────────────────────
 
-    def _get_effective_pool(user_id):
+    def _get_effective_pool(user_id, fmt="T20"):
         if not DBMasterPlayer or not DBUserPlayer:
             return []
         masters = DBMasterPlayer.query.order_by(DBMasterPlayer.name).all()
@@ -630,14 +630,33 @@ def register_team_routes(
         for mp in masters:
             if mp.id in overrides:
                 up = overrides[mp.id]
-                pool.append(_pool_dict(up, "override", mp.id, up.id))
+                pool.append(_pool_dict(up, "override", mp.id, up.id, fmt))
             else:
-                pool.append(_pool_dict(mp, "master", mp.id, None))
+                pool.append(_pool_dict(mp, "master", mp.id, None, fmt))
         for cp in customs:
-            pool.append(_pool_dict(cp, "custom", None, cp.id))
+            pool.append(_pool_dict(cp, "custom", None, cp.id, fmt))
         return pool
 
-    def _pool_dict(obj, source, master_id, user_player_id):
+    def _pool_dict(obj, source, master_id, user_player_id, fmt):
+        t20_bat = obj.batting_rating if obj.batting_rating is not None else 50
+        t20_bowl = obj.bowling_rating if obj.bowling_rating is not None else 50
+        t20_field = obj.fielding_rating if obj.fielding_rating is not None else 50
+
+        def value(field, fallback):
+            current = getattr(obj, field, None)
+            return fallback if current is None else current
+
+        if fmt == "ListA":
+            batting = value("list_a_batting_rating", t20_bat)
+            bowling = value("list_a_bowling_rating", t20_bowl)
+            fielding = value("list_a_fielding_rating", t20_field)
+        elif fmt == "FC":
+            batting = value("fc_batting_rating", t20_bat)
+            bowling = value("fc_bowling_rating", t20_bowl)
+            fielding = value("fc_fielding_rating", t20_field)
+        else:
+            batting, bowling, fielding = t20_bat, t20_bowl, t20_field
+
         return {
             "id": f"{source}_{obj.id}",
             "source": source,
@@ -645,9 +664,12 @@ def register_team_routes(
             "user_player_id": user_player_id,
             "name": obj.name,
             "role": obj.role or "",
-            "batting_rating": obj.batting_rating or 0,
-            "bowling_rating": obj.bowling_rating or 0,
-            "fielding_rating": obj.fielding_rating or 0,
+            "batting_rating": batting,
+            "bowling_rating": bowling,
+            "fielding_rating": fielding,
+            "technique_rating": value("fc_technique_rating", 50) if fmt == "FC" else 50,
+            "temperament_rating": value("fc_temperament_rating", 50) if fmt == "FC" else 50,
+            "stamina_rating": value("fc_stamina_rating", 50) if fmt == "FC" else 50,
             "batting_hand": obj.batting_hand or "",
             "bowling_type": obj.bowling_type or "",
             "bowling_hand": obj.bowling_hand or "",
@@ -699,7 +721,7 @@ def register_team_routes(
             return json.dumps({"error": "Profile not found."}), 404, {"Content-Type": "application/json"}
         data = request.get_json(silent=True) or {}
         player_id = data.get("player_id", "")
-        pool = _get_effective_pool(current_user.id)
+        pool = _get_effective_pool(current_user.id, fmt)
         entry = None
         for p in pool:
             if p["id"] == player_id:
@@ -726,6 +748,9 @@ def register_team_routes(
         player.batting_rating = entry["batting_rating"]
         player.bowling_rating = entry["bowling_rating"]
         player.fielding_rating = entry["fielding_rating"]
+        player.technique_rating = entry["technique_rating"]
+        player.temperament_rating = entry["temperament_rating"]
+        player.stamina_rating = entry["stamina_rating"]
         player.batting_hand = entry["batting_hand"]
         player.bowling_type = entry["bowling_type"]
         player.bowling_hand = entry["bowling_hand"]
@@ -852,15 +877,18 @@ def register_team_routes(
             if pool_id is not None:
                 # Look up authoritative data from effective pool
                 if pool_cache is None:
-                    pool_cache, _ = _get_effective_pool(current_user.id)
+                    pool_cache = _get_effective_pool(current_user.id, fmt)
                 entry = next((p for p in pool_cache if p["id"] == pool_id and p["source"] == source), None)
                 if not entry:
                     # Fallback: match by id only
                     entry = next((p for p in pool_cache if p["id"] == pool_id), None)
                 if not entry:
                     return json.dumps({"error": f"Player with pool_id {pool_id} not found in your pool."}), 400, {"Content-Type": "application/json"}
-                p = {k: entry[k] for k in ("name", "role", "batting_rating", "bowling_rating",
-                                            "fielding_rating", "batting_hand", "bowling_type", "bowling_hand")}
+                p = {k: entry[k] for k in (
+                    "name", "role", "batting_rating", "bowling_rating", "fielding_rating",
+                    "technique_rating", "temperament_rating", "stamina_rating",
+                    "batting_hand", "bowling_type", "bowling_hand",
+                )}
             else:
                 # Legacy path: use provided data directly
                 p = {
@@ -869,6 +897,9 @@ def register_team_routes(
                     "batting_rating": int(item.get("batting_rating") or 50),
                     "bowling_rating": int(item.get("bowling_rating") or 50),
                     "fielding_rating": int(item.get("fielding_rating") or 50),
+                    "technique_rating": int(item.get("technique_rating") or 50),
+                    "temperament_rating": int(item.get("temperament_rating") or 50),
+                    "stamina_rating": int(item.get("stamina_rating") or 50),
                     "batting_hand": str(item.get("batting_hand") or ""),
                     "bowling_type": str(item.get("bowling_type") or ""),
                     "bowling_hand": str(item.get("bowling_hand") or ""),
@@ -935,7 +966,7 @@ def register_team_routes(
         if profile:
             squad_names = {p.name.lower() for p in DBPlayer.query.filter_by(profile_id=profile.id).all()}
 
-        pool = _get_effective_pool(current_user.id)
+        pool = _get_effective_pool(current_user.id, fmt)
         results = []
         for p in pool:
             if p["name"].lower() in squad_names:

@@ -1,5 +1,15 @@
 {% extends "admin/layout.html" %}
 
+{% block extra_css %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/player_rating_form.css') }}">
+<style>
+    .admin-player-rating-shell { margin: 0; }
+    .admin-player-rating-shell .a-form-group { margin-bottom: 16px; }
+    .admin-player-rating-shell .player-form-card { max-width: none; }
+</style>
+{% endblock %}
+
 {% block admin_content %}
 <div class="a-breadcrumb">
     <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
@@ -15,18 +25,18 @@
     </div>
 </div>
 
-<div class="a-card" style="max-width:640px;">
+<div class="player-rating-shell admin-player-rating-shell">
+<div class="a-card player-form-card">
     <form method="POST" class="a-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <div class="a-form-group">
-            <label class="a-label">Name <span style="color:var(--danger)">*</span></label>
-            <input type="text" name="name" id="nameInput" class="a-input" required maxlength="100"
-                   value="{{ player.name if player else '' }}" autocomplete="off">
-            <div id="nameWarn" style="font-size:.82rem;font-weight:600;margin-top:6px;min-height:1.2em;"></div>
-        </div>
-
-        <div class="a-form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="player-identity-grid">
+            <div class="a-form-group">
+                <label class="a-label">Player name <span style="color:var(--danger)">*</span></label>
+                <input type="text" name="name" id="nameInput" class="a-input" required maxlength="100"
+                       value="{{ player.name if player else '' }}" autocomplete="off" placeholder="Enter full name">
+                <div id="nameWarn" style="font-size:.82rem;font-weight:600;margin-top:6px;min-height:1.2em;"></div>
+            </div>
             <div class="a-form-group">
                 <label class="a-label">Role <span style="color:var(--danger)">*</span></label>
                 <select name="role" class="a-select" required id="roleSelect">
@@ -47,7 +57,7 @@
             </div>
         </div>
 
-        <div class="a-form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" id="bowlingFields">
+        <div class="player-bowling-grid" id="bowlingFields">
             <div class="a-form-group">
                 <label class="a-label">Bowling Type</label>
                 <select name="bowling_type" class="a-select" id="bowlingType">
@@ -68,36 +78,21 @@
             </div>
         </div>
 
-        <div class="a-form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
-            <div class="a-form-group">
-                <label class="a-label">Batting Rating (0–100)</label>
-                <input type="number" name="batting_rating" class="a-input" min="0" max="100"
-                       value="{{ player.batting_rating if player else 50 }}">
-            </div>
-            <div class="a-form-group">
-                <label class="a-label">Bowling Rating (0–100)</label>
-                <input type="number" name="bowling_rating" class="a-input" min="0" max="100"
-                       value="{{ player.bowling_rating if player else 50 }}">
-            </div>
-            <div class="a-form-group">
-                <label class="a-label">Fielding Rating (0–100)</label>
-                <input type="number" name="fielding_rating" class="a-input" min="0" max="100"
-                       value="{{ player.fielding_rating if player else 50 }}">
-            </div>
-        </div>
-
-        <div class="a-form-row" style="display:flex;gap:24px;">
-            <label class="a-checkbox-label">
+        <div class="player-designations">
+            <label class="player-designation">
                 <input type="checkbox" name="is_captain" value="true"
                        {{ 'checked' if player and player.is_captain }}>
-                Captain
+                <i class="fas fa-crown"></i> Captain
             </label>
-            <label class="a-checkbox-label">
-                <input type="checkbox" name="is_wicketkeeper" value="true"
+            <label class="player-designation" id="wicketkeeperLabel">
+                <input type="checkbox" name="is_wicketkeeper" id="wicketkeeperCheckbox" value="true"
                        {{ 'checked' if player and player.is_wicketkeeper }}>
-                Wicketkeeper
+                <i class="fas fa-mitten"></i> Wicketkeeper
             </label>
         </div>
+        <div class="wk-disabled-note" id="wkDisabledNote"><i class="fas fa-circle-info"></i> Wicketkeeper designation is unavailable for specialist bowlers.</div>
+
+        {% include "partials/player_format_rating_cards.html" %}
 
         <div style="margin-top:24px;display:flex;gap:12px;">
             <button type="submit" class="a-btn a-btn-primary" id="submitBtn">
@@ -107,11 +102,15 @@
         </div>
     </form>
 </div>
+</div>
 
 <script>
 (function(){
     var role = document.getElementById('roleSelect');
     var bowlFields = document.getElementById('bowlingFields');
+    var wkLabel = document.getElementById('wicketkeeperLabel');
+    var wkCheckbox = document.getElementById('wicketkeeperCheckbox');
+    var wkNote = document.getElementById('wkDisabledNote');
     function toggle() {
         var hide = role.value === 'Wicketkeeper';
         bowlFields.style.display = hide ? 'none' : '';
@@ -119,6 +118,11 @@
             document.getElementById('bowlingType').value = '';
             document.getElementById('bowlingHand').value = '';
         }
+        var bowler = role.value === 'Bowler';
+        wkLabel.style.display = bowler ? 'none' : '';
+        wkCheckbox.disabled = bowler;
+        if (bowler) wkCheckbox.checked = false;
+        wkNote.classList.toggle('is-visible', bowler);
     }
     role.addEventListener('change', toggle);
     toggle();

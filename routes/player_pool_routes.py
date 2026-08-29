@@ -23,6 +23,12 @@ PLAYER_FIELDS = [
     "name", "role", "batting_rating", "bowling_rating", "fielding_rating",
     "batting_hand", "bowling_type", "bowling_hand", "is_captain", "is_wicketkeeper",
 ]
+FORMAT_RATING_FIELDS = [
+    "list_a_batting_rating", "list_a_bowling_rating", "list_a_fielding_rating",
+    "fc_batting_rating", "fc_bowling_rating", "fc_fielding_rating",
+    "fc_technique_rating", "fc_temperament_rating", "fc_stamina_rating",
+]
+PERSISTED_PLAYER_FIELDS = PLAYER_FIELDS + FORMAT_RATING_FIELDS
 STRICT_BOOL_TRUE = {"true", "1", "yes"}
 STRICT_BOOL_FALSE = {"false", "0", "no"}
 
@@ -48,18 +54,35 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
         role = str(d.get("role", "")).strip()
         if role not in VALID_ROLES:
             return None, f"Row {idx}: invalid role '{role}'."
-        bat_raw = d.get("batting_rating", 50)
-        bowl_raw = d.get("bowling_rating", 50)
-        field_raw = d.get("fielding_rating", 50)
+        # The original columns are retained as T20 storage. Forms use explicit
+        # t20_* names; legacy imports continue to use batting_rating/... .
+        bat_raw = d.get("t20_batting_rating", d.get("batting_rating", 50))
+        bowl_raw = d.get("t20_bowling_rating", d.get("bowling_rating", 50))
+        field_raw = d.get("t20_fielding_rating", d.get("fielding_rating", 50))
         if strict_import and (str(bat_raw).strip() == "" or str(bowl_raw).strip() == "" or str(field_raw).strip() == ""):
             return None, f"Row {idx}: batting_rating, bowling_rating, and fielding_rating are required."
         try:
             bat = int(bat_raw)
             bowl = int(bowl_raw)
             field = int(field_raw)
+            list_a_bat = int(d.get("list_a_batting_rating", bat))
+            list_a_bowl = int(d.get("list_a_bowling_rating", bowl))
+            list_a_field = int(d.get("list_a_fielding_rating", field))
+            fc_bat = int(d.get("fc_batting_rating", bat))
+            fc_bowl = int(d.get("fc_bowling_rating", bowl))
+            fc_field = int(d.get("fc_fielding_rating", field))
+            fc_technique = int(d.get("fc_technique_rating", 50))
+            fc_temperament = int(d.get("fc_temperament_rating", 50))
+            fc_stamina = int(d.get("fc_stamina_rating", 50))
         except (TypeError, ValueError):
             return None, f"Row {idx}: ratings must be integers."
-        if not (0 <= bat <= 100 and 0 <= bowl <= 100 and 0 <= field <= 100):
+        ratings = (
+            bat, bowl, field,
+            list_a_bat, list_a_bowl, list_a_field,
+            fc_bat, fc_bowl, fc_field,
+            fc_technique, fc_temperament, fc_stamina,
+        )
+        if not all(0 <= rating <= 100 for rating in ratings):
             return None, f"Row {idx}: ratings must be between 0 and 100."
 
         batting_hand = str(d.get("batting_hand", "")).strip()
@@ -87,10 +110,23 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
         if role == "Wicketkeeper":
             bowling_type = ""
             bowling_hand = ""
+        if role == "Bowler":
+            # Enforce the same rule server-side so a forged form submission
+            # cannot designate a specialist bowler as wicketkeeper.
+            is_wk = False
 
         return {
             "name": name, "role": role,
             "batting_rating": bat, "bowling_rating": bowl, "fielding_rating": field,
+            "list_a_batting_rating": list_a_bat,
+            "list_a_bowling_rating": list_a_bowl,
+            "list_a_fielding_rating": list_a_field,
+            "fc_batting_rating": fc_bat,
+            "fc_bowling_rating": fc_bowl,
+            "fc_fielding_rating": fc_field,
+            "fc_technique_rating": fc_technique,
+            "fc_temperament_rating": fc_temperament,
+            "fc_stamina_rating": fc_stamina,
             "batting_hand": batting_hand, "bowling_type": bowling_type,
             "bowling_hand": bowling_hand,
             "is_captain": is_captain, "is_wicketkeeper": is_wk,
@@ -117,7 +153,7 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
         return False, False
 
     def _apply_fields(obj, data):
-        for f in PLAYER_FIELDS:
+        for f in PERSISTED_PLAYER_FIELDS:
             if f in data:
                 setattr(obj, f, data[f])
 
@@ -162,6 +198,28 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
         return pool, total
 
     def _to_pool_dict(obj, source, master_id, user_player_id):
+        def rating(field, fallback):
+            value = getattr(obj, field, None)
+            return fallback if value is None else value
+
+        t20 = {
+            "batting": obj.batting_rating if obj.batting_rating is not None else 50,
+            "bowling": obj.bowling_rating if obj.bowling_rating is not None else 50,
+            "fielding": obj.fielding_rating if obj.fielding_rating is not None else 50,
+        }
+        list_a = {
+            "batting": rating("list_a_batting_rating", t20["batting"]),
+            "bowling": rating("list_a_bowling_rating", t20["bowling"]),
+            "fielding": rating("list_a_fielding_rating", t20["fielding"]),
+        }
+        fc = {
+            "batting": rating("fc_batting_rating", t20["batting"]),
+            "bowling": rating("fc_bowling_rating", t20["bowling"]),
+            "fielding": rating("fc_fielding_rating", t20["fielding"]),
+            "technique": rating("fc_technique_rating", 50),
+            "temperament": rating("fc_temperament_rating", 50),
+            "stamina": rating("fc_stamina_rating", 50),
+        }
         return {
             "id": obj.id,
             "source": source,
@@ -169,9 +227,11 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
             "user_player_id": user_player_id,
             "name": obj.name,
             "role": obj.role or "",
-            "batting_rating": obj.batting_rating or 0,
-            "bowling_rating": obj.bowling_rating or 0,
-            "fielding_rating": obj.fielding_rating or 0,
+            # Flat values remain the T20 values for existing pool/list clients.
+            "batting_rating": t20["batting"],
+            "bowling_rating": t20["bowling"],
+            "fielding_rating": t20["fielding"],
+            "format_ratings": {"T20": t20, "ListA": list_a, "FC": fc},
             "batting_hand": obj.batting_hand or "",
             "bowling_type": obj.bowling_type or "",
             "bowling_hand": obj.bowling_hand or "",
