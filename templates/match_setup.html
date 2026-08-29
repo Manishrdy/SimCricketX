@@ -1093,7 +1093,7 @@
                         {# Format is locked to the tournament's setting — cannot be changed #}
                         <div class="format-locked-display">
                             <i class="fas fa-lock"></i>
-                            <span class="format-locked-name">{{ 'T20' if tournament_format == 'T20' else 'List A (50-ov)' }}</span>
+                            <span class="format-locked-name">{{ {'T20': 'T20', 'ListA': 'List A (50-ov)', 'FC': 'First-Class'}.get(tournament_format, tournament_format) }}</span>
                             <span class="format-locked-hint">Set by tournament</span>
                         </div>
                         {# Hidden radio keeps existing JS working without modification #}

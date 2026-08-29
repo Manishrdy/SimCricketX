@@ -151,6 +151,27 @@ class TestTournamentCreationRoute:
 
         assert response.status_code == 200
 
+    def test_create_fc_tournament_success(self, authenticated_client, test_team, test_team_2, app):
+        """First-Class (FC) is a valid tournament format alongside T20/ListA."""
+        response = authenticated_client.post(
+            "/tournaments/create",
+            data={
+                "name": "FC Tournament",
+                "mode": "round_robin",
+                "match_format": "FC",
+                "team_ids": [test_team.id, test_team_2.id],
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+
+        tournament = db.session.execute(
+            db.select(Tournament).filter_by(name="FC Tournament")
+        ).scalar_one_or_none()
+        assert tournament is not None
+        assert tournament.format_type == "FC"
+
     def test_create_tournament_invalid_mode_rejected(self, authenticated_client, test_team, test_team_2):
         """A mode value outside the UI's <select> options (e.g. a crafted
         direct POST) must be rejected with a flash + redirect, not silently

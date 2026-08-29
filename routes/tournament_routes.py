@@ -156,7 +156,7 @@ def register_tournament_routes(
     @login_required
     @limiter.limit("10 per minute")
     def create_tournament_route():
-        VALID_TOURNAMENT_FORMATS = {"T20", "ListA"}
+        VALID_TOURNAMENT_FORMATS = {"T20", "ListA", "FC"}
 
         if request.method == "POST":
             name = request.form.get("name")

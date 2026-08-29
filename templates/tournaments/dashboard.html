@@ -33,7 +33,7 @@
                         <span class="meta-divider">•</span>
                         <span class="format-badge-hero">
                             <i class="fas fa-bolt"></i>
-                            {{ 'T20' if tournament.format_type == 'T20' else 'List A' }}
+                            {{ {'T20': 'T20', 'ListA': 'List A', 'FC': 'First-Class'}.get(tournament.format_type, tournament.format_type) }}
                         </span>
                         <span class="meta-divider">•</span>
                         <span class="meta-detail">
@@ -128,10 +128,18 @@
                         <div class="team-stripe" style="--team-color: {{ team.team.team_color }}"></div>
                         <div class="team-details">
                             <div class="team-name-row">{{ team.team.name }}</div>
-                            <div class="team-stats-mini">{{ team.played }}P • {{ team.won }}W • {{ team.lost }}L</div>
+                            <div class="team-stats-mini">{{ team.played }}P • {{ team.won }}W • {{ team.lost }}L • {{ team.drawn }}D</div>
                         </div>
                     </div>
                     <div class="stats-section">
+                        {% if tournament.format_type == 'FC' %}
+                        <div class="stat-group">
+                            <div class="stat-label-mini">WIN%</div>
+                            <div class="stat-value-mini">
+                                {{ "%.1f"|format((team.won / team.played * 100) if team.played else 0) }}%
+                            </div>
+                        </div>
+                        {% else %}
                         <div class="stat-group">
                             <div class="stat-label-mini">NRR</div>
                             <div
@@ -139,6 +147,7 @@
                                 {{ "%+.3f"|format(team.net_run_rate) }}
                             </div>
                         </div>
+                        {% endif %}
                         <div class="stat-group">
                             <div class="stat-label-mini">PTS</div>
                             <div class="stat-value-pts">{{ team.points }}</div>

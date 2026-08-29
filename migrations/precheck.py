@@ -61,6 +61,9 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("add_exception_log_metadata", _loader("migrations.add_exception_log_metadata")),
     ("add_exception_log_dedup",  _loader("migrations.add_exception_log_dedup")),
     ("add_player_pool",          _loader("migrations.add_player_pool")),
+    # Per-format T20/ListA/FC defaults on both global and user player pools.
+    ("add_player_pool_format_ratings",
+     _loader("migrations.add_player_pool_format_ratings")),
     # Requires player-pool tables; schema-only FK/index step, safe+idempotent.
     ("link_players_to_pool",     _loader("migrations.link_players_to_pool")),
     ("add_scorecard_cascade",    _loader("migrations.add_scorecard_cascade")),
@@ -124,6 +127,9 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # First-Class format: players.technique_rating/temperament_rating/
     # stamina_rating, scoped per-profile like every other rating.
     ("add_fc_player_ratings",    _loader("migrations.add_fc_player_ratings")),
+    # FC in tournaments: tournament_teams.drawn, tracked separately from tied.
+    ("add_tournament_team_drawn_column",
+     _loader("migrations.add_tournament_team_drawn_column")),
 ]
 
 
