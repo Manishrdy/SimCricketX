@@ -140,10 +140,11 @@
         .ppf-row-2, .ppf-row-3 { grid-template-columns: 1fr; }
     }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/player_rating_form.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="ppf-container">
+<div class="ppf-container player-rating-shell">
     <a href="{{ url_for('player_pool') }}" class="ppf-back">
         <i class="fas fa-arrow-left"></i> Back to Player Pool
     </a>
@@ -171,18 +172,17 @@
     </div>
     {% endif %}
 
-    <div class="ppf-card">
+    <div class="ppf-card player-form-card">
         <form method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-            <div class="ppf-group">
-                <label class="ppf-label">Name <span style="color:var(--danger,#dc2626)">*</span></label>
-                <input type="text" name="name" id="nameInput" class="ppf-input" required maxlength="100"
-                       value="{{ player.name if player else '' }}" autocomplete="off">
-                <div class="ppf-name-warn" id="nameWarn"></div>
-            </div>
-
-            <div class="ppf-row ppf-row-2">
+            <div class="player-identity-grid">
+                <div class="ppf-group">
+                    <label class="ppf-label">Player name <span style="color:var(--danger,#dc2626)">*</span></label>
+                    <input type="text" name="name" id="nameInput" class="ppf-input" required maxlength="100"
+                           value="{{ player.name if player else '' }}" autocomplete="off" placeholder="Enter full name">
+                    <div class="ppf-name-warn" id="nameWarn"></div>
+                </div>
                 <div class="ppf-group">
                     <label class="ppf-label">Role <span style="color:var(--danger,#dc2626)">*</span></label>
                     <select name="role" class="ppf-select" required id="roleSelect">
@@ -203,7 +203,7 @@
                 </div>
             </div>
 
-            <div class="ppf-row ppf-row-2" id="bowlingFields">
+            <div class="player-bowling-grid" id="bowlingFields">
                 <div class="ppf-group">
                     <label class="ppf-label">Bowling Type</label>
                     <select name="bowling_type" class="ppf-select" id="bowlingType">
@@ -224,36 +224,21 @@
                 </div>
             </div>
 
-            <div class="ppf-row ppf-row-3">
-                <div class="ppf-group">
-                    <label class="ppf-label">Batting Rating</label>
-                    <input type="number" name="batting_rating" class="ppf-input" min="0" max="100"
-                           value="{{ player.batting_rating if player else 50 }}">
-                </div>
-                <div class="ppf-group">
-                    <label class="ppf-label">Bowling Rating</label>
-                    <input type="number" name="bowling_rating" class="ppf-input" min="0" max="100"
-                           value="{{ player.bowling_rating if player else 50 }}">
-                </div>
-                <div class="ppf-group">
-                    <label class="ppf-label">Fielding Rating</label>
-                    <input type="number" name="fielding_rating" class="ppf-input" min="0" max="100"
-                           value="{{ player.fielding_rating if player else 50 }}">
-                </div>
-            </div>
-
-            <div class="ppf-checkbox-row">
-                <label class="ppf-checkbox-label">
+            <div class="player-designations">
+                <label class="player-designation">
                     <input type="checkbox" name="is_captain" value="true"
                            {{ 'checked' if player and player.is_captain }}>
-                    Captain
+                    <i class="fas fa-crown"></i> Captain
                 </label>
-                <label class="ppf-checkbox-label">
-                    <input type="checkbox" name="is_wicketkeeper" value="true"
+                <label class="player-designation" id="wicketkeeperLabel">
+                    <input type="checkbox" name="is_wicketkeeper" id="wicketkeeperCheckbox" value="true"
                            {{ 'checked' if player and player.is_wicketkeeper }}>
-                    Wicketkeeper
+                    <i class="fas fa-mitten"></i> Wicketkeeper
                 </label>
             </div>
+            <div class="wk-disabled-note" id="wkDisabledNote"><i class="fas fa-circle-info"></i> Wicketkeeper designation is unavailable for specialist bowlers.</div>
+
+            {% include "partials/player_format_rating_cards.html" %}
 
             <div class="ppf-footer">
                 <button type="submit" class="ppf-btn ppf-btn-primary" id="submitBtn">
@@ -269,6 +254,9 @@
 (function(){
     var role = document.getElementById('roleSelect');
     var bowlFields = document.getElementById('bowlingFields');
+    var wkLabel = document.getElementById('wicketkeeperLabel');
+    var wkCheckbox = document.getElementById('wicketkeeperCheckbox');
+    var wkNote = document.getElementById('wkDisabledNote');
     function toggle() {
         var hide = role.value === 'Wicketkeeper';
         bowlFields.style.display = hide ? 'none' : '';
@@ -276,6 +264,11 @@
             document.getElementById('bowlingType').value = '';
             document.getElementById('bowlingHand').value = '';
         }
+        var bowler = role.value === 'Bowler';
+        wkLabel.style.display = bowler ? 'none' : '';
+        wkCheckbox.disabled = bowler;
+        if (bowler) wkCheckbox.checked = false;
+        wkNote.classList.toggle('is-visible', bowler);
     }
     role.addEventListener('change', toggle);
     toggle();

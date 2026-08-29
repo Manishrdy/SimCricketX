@@ -1,0 +1,64 @@
+<section class="pr-section" aria-labelledby="formatRatingsTitle">
+    <div class="pr-heading-row">
+        <div>
+            <span class="pr-kicker"><i class="fas fa-chart-line"></i> Format intelligence</span>
+            <h2 id="formatRatingsTitle">Ratings by format</h2>
+            <p>Set the match-ready attributes that will be copied into each format squad.</p>
+        </div>
+        <span class="pr-scale">0 <span></span> 100</span>
+    </div>
+
+    <div class="pr-format-grid">
+        <article class="pr-format-card pr-t20">
+            <header>
+                <span class="pr-format-icon"><i class="fas fa-bolt"></i></span>
+                <div>
+                    <span class="pr-format-tag">T20</span>
+                    <h3>Explosive impact</h3>
+                </div>
+            </header>
+            <div class="pr-rating-grid">
+                <label><span>BAT <small>Batting</small></span><input required type="number" name="t20_batting_rating" min="0" max="100" value="{{ player.batting_rating if player and player.batting_rating is not none else 50 }}"></label>
+                <label><span>BWL <small>Bowling</small></span><input required type="number" name="t20_bowling_rating" min="0" max="100" value="{{ player.bowling_rating if player and player.bowling_rating is not none else 50 }}"></label>
+                <label><span>FLD <small>Fielding</small></span><input required type="number" name="t20_fielding_rating" min="0" max="100" value="{{ player.fielding_rating if player and player.fielding_rating is not none else 50 }}"></label>
+            </div>
+        </article>
+
+        <article class="pr-format-card pr-lista">
+            <header>
+                <span class="pr-format-icon"><i class="fas fa-chart-area"></i></span>
+                <div>
+                    <span class="pr-format-tag">LIST A</span>
+                    <h3>Sustained control</h3>
+                </div>
+            </header>
+            <div class="pr-rating-grid">
+                <label><span>BAT <small>Batting</small></span><input required type="number" name="list_a_batting_rating" min="0" max="100" value="{{ player.list_a_batting_rating if player and player.list_a_batting_rating is not none else (player.batting_rating if player and player.batting_rating is not none else 50) }}"></label>
+                <label><span>BWL <small>Bowling</small></span><input required type="number" name="list_a_bowling_rating" min="0" max="100" value="{{ player.list_a_bowling_rating if player and player.list_a_bowling_rating is not none else (player.bowling_rating if player and player.bowling_rating is not none else 50) }}"></label>
+                <label><span>FLD <small>Fielding</small></span><input required type="number" name="list_a_fielding_rating" min="0" max="100" value="{{ player.list_a_fielding_rating if player and player.list_a_fielding_rating is not none else (player.fielding_rating if player and player.fielding_rating is not none else 50) }}"></label>
+            </div>
+        </article>
+
+        <article class="pr-format-card pr-fc">
+            <header>
+                <span class="pr-format-icon"><i class="fas fa-shield-halved"></i></span>
+                <div>
+                    <span class="pr-format-tag">FIRST-CLASS</span>
+                    <h3>Long-form mastery</h3>
+                </div>
+                <span class="pr-fc-badge">6 AXES</span>
+            </header>
+            <div class="pr-rating-grid">
+                <label><span>BAT <small>Batting</small></span><input required type="number" name="fc_batting_rating" min="0" max="100" value="{{ player.fc_batting_rating if player and player.fc_batting_rating is not none else (player.batting_rating if player and player.batting_rating is not none else 50) }}"></label>
+                <label><span>BWL <small>Bowling</small></span><input required type="number" name="fc_bowling_rating" min="0" max="100" value="{{ player.fc_bowling_rating if player and player.fc_bowling_rating is not none else (player.bowling_rating if player and player.bowling_rating is not none else 50) }}"></label>
+                <label><span>FLD <small>Fielding</small></span><input required type="number" name="fc_fielding_rating" min="0" max="100" value="{{ player.fc_fielding_rating if player and player.fc_fielding_rating is not none else (player.fielding_rating if player and player.fielding_rating is not none else 50) }}"></label>
+            </div>
+            <div class="pr-fc-divider"><span>FC SPECIALIST ATTRIBUTES</span></div>
+            <div class="pr-rating-grid pr-specialist-grid">
+                <label title="Defensive technique and long-innings survival"><span>TEC <small>Technique</small></span><input required type="number" name="fc_technique_rating" min="0" max="100" value="{{ player.fc_technique_rating if player and player.fc_technique_rating is not none else 50 }}"></label>
+                <label title="Resistance to session pressure and collapses"><span>TMP <small>Temperament</small></span><input required type="number" name="fc_temperament_rating" min="0" max="100" value="{{ player.fc_temperament_rating if player and player.fc_temperament_rating is not none else 50 }}"></label>
+                <label title="Bowling workload capacity across long spells"><span>STA <small>Stamina</small></span><input required type="number" name="fc_stamina_rating" min="0" max="100" value="{{ player.fc_stamina_rating if player and player.fc_stamina_rating is not none else 50 }}"></label>
+            </div>
+        </article>
+    </div>
+</section>

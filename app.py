@@ -1857,7 +1857,9 @@ def create_app():
                 match.data["result_description"] = final_result
                 # NOTE: current_state is set to "completed" only after the outer
                 # commit succeeds — see Step 12 below (Fix 2).
-                
+
+                is_fc = match.data.get("match_format") == "FC"
+
                 # Step 5: Create database match record
                 db_match = DBMatch(
                     id=match_id,
@@ -1868,82 +1870,103 @@ def create_app():
                     match_json_path="autosaved",
                     result_description=final_result,
                     date=datetime.now(),
+                    match_format=match.data.get('match_format', 'T20'),
                     overs_per_side=match.data.get('overs', 20)
                 )
-                
+
                 logger.info(f"[Tournament] Created DBMatch record for {match_id}")
-                
-                # Step 6: Calculate and assign innings statistics
-                team_home_code = match.data["team_home"].split("_")[0]
-                first_bat_is_home = home_bats_first(
-                    match.toss_winner, match.toss_decision, team_home_code
-                )
-                
-                ops = int(match.data.get('overs', 20) or 20)
 
-                def calculate_innings_stats(batting_stats, bowling_stats, innings_label="?"):
-                    """Calculate runs, wickets, and overs from stats dictionaries."""
-                    runs = sum(p.get("runs", 0) for p in batting_stats.values())
-                    wickets = sum(1 for p in batting_stats.values() if p.get("wicket_type"))
-                    balls_total = sum(b.get("balls_bowled", 0) for b in bowling_stats.values())
-                    if balls_total > ops * 6:
-                        try:
-                            from utils.exception_tracker import log_data_anomaly
-                            log_data_anomaly(
-                                "OversExceedQuota",
-                                f"innings {innings_label} reported {balls_total} legal balls "
-                                f"in a {ops}-over match (capped to {ops * 6})",
-                                payload={
-                                    "match_id": match_id,
-                                    "tournament_id": tournament_id,
-                                    "innings": innings_label,
-                                    "raw_balls": balls_total,
-                                    "overs_per_side": ops,
-                                    "writer": "app.calculate_innings_stats",
-                                },
-                            )
-                        except Exception:
-                            pass
-                        balls_total = ops * 6
-                    overs = balls_to_overs_str(balls_total)
-                    return runs, wickets, overs
-                
-                # First innings stats
-                s1_runs, s1_wickets, s1_overs = calculate_innings_stats(
-                    match.first_innings_batting_stats,
-                    match.first_innings_bowling_stats,
-                    innings_label="1",
-                )
+                # Step 6: Calculate and assign innings statistics — T20/ListA
+                # only. This hardcodes an exactly-2-innings model (first
+                # innings + "the other side's" innings from batsman_stats/
+                # bowler_stats). FC has up to 4 innings per match and never
+                # touches the *_innings2 columns here, so for FC this block
+                # would silently misattribute whichever innings happened to
+                # be live last. Skip it entirely for FC — Step 13's
+                # MatchArchiver._save_to_database() (already FC-aware via
+                # _build_innings_plan()) fills in every score/wicket/overs
+                # column, including *_innings2, moments later in this same
+                # request. update_standings (Step 10) doesn't need these
+                # columns for FC either — win/draw/loss/points there come
+                # from match_status/winner_team_id (Step 7 below), and FC
+                # drops NRR entirely, which is the only thing that would
+                # have needed them.
+                if not is_fc:
+                    team_home_code = match.data["team_home"].split("_")[0]
+                    first_bat_is_home = home_bats_first(
+                        match.toss_winner, match.toss_decision, team_home_code
+                    )
 
-                # Second innings stats
-                s2_runs, s2_wickets, s2_overs = calculate_innings_stats(
-                    match.batsman_stats,
-                    match.bowler_stats,
-                    innings_label="2",
-                )
-                
-                # Assign scores based on batting order
-                if first_bat_is_home:
-                    db_match.home_team_score = s1_runs
-                    db_match.home_team_wickets = s1_wickets
-                    db_match.home_team_overs = s1_overs
-                    db_match.away_team_score = s2_runs
-                    db_match.away_team_wickets = s2_wickets
-                    db_match.away_team_overs = s2_overs
+                    ops = int(match.data.get('overs', 20) or 20)
+
+                    def calculate_innings_stats(batting_stats, bowling_stats, innings_label="?"):
+                        """Calculate runs, wickets, and overs from stats dictionaries."""
+                        runs = sum(p.get("runs", 0) for p in batting_stats.values())
+                        wickets = sum(1 for p in batting_stats.values() if p.get("wicket_type"))
+                        balls_total = sum(b.get("balls_bowled", 0) for b in bowling_stats.values())
+                        if balls_total > ops * 6:
+                            try:
+                                from utils.exception_tracker import log_data_anomaly
+                                log_data_anomaly(
+                                    "OversExceedQuota",
+                                    f"innings {innings_label} reported {balls_total} legal balls "
+                                    f"in a {ops}-over match (capped to {ops * 6})",
+                                    payload={
+                                        "match_id": match_id,
+                                        "tournament_id": tournament_id,
+                                        "innings": innings_label,
+                                        "raw_balls": balls_total,
+                                        "overs_per_side": ops,
+                                        "writer": "app.calculate_innings_stats",
+                                    },
+                                )
+                            except Exception:
+                                pass
+                            balls_total = ops * 6
+                        overs = balls_to_overs_str(balls_total)
+                        return runs, wickets, overs
+
+                    # First innings stats
+                    s1_runs, s1_wickets, s1_overs = calculate_innings_stats(
+                        match.first_innings_batting_stats,
+                        match.first_innings_bowling_stats,
+                        innings_label="1",
+                    )
+
+                    # Second innings stats
+                    s2_runs, s2_wickets, s2_overs = calculate_innings_stats(
+                        match.batsman_stats,
+                        match.bowler_stats,
+                        innings_label="2",
+                    )
+
+                    # Assign scores based on batting order
+                    if first_bat_is_home:
+                        db_match.home_team_score = s1_runs
+                        db_match.home_team_wickets = s1_wickets
+                        db_match.home_team_overs = s1_overs
+                        db_match.away_team_score = s2_runs
+                        db_match.away_team_wickets = s2_wickets
+                        db_match.away_team_overs = s2_overs
+                    else:
+                        db_match.away_team_score = s1_runs
+                        db_match.away_team_wickets = s1_wickets
+                        db_match.away_team_overs = s1_overs
+                        db_match.home_team_score = s2_runs
+                        db_match.home_team_wickets = s2_wickets
+                        db_match.home_team_overs = s2_overs
+
+                    logger.info(
+                        f"[Tournament] Match scores - Home: {db_match.home_team_score}/{db_match.home_team_wickets} "
+                        f"({db_match.home_team_overs}), Away: {db_match.away_team_score}/{db_match.away_team_wickets} "
+                        f"({db_match.away_team_overs})"
+                    )
                 else:
-                    db_match.away_team_score = s1_runs
-                    db_match.away_team_wickets = s1_wickets
-                    db_match.away_team_overs = s1_overs
-                    db_match.home_team_score = s2_runs
-                    db_match.home_team_wickets = s2_wickets
-                    db_match.home_team_overs = s2_overs
-                
-                logger.info(
-                    f"[Tournament] Match scores - Home: {db_match.home_team_score}/{db_match.home_team_wickets} "
-                    f"({db_match.home_team_overs}), Away: {db_match.away_team_score}/{db_match.away_team_wickets} "
-                    f"({db_match.away_team_overs})"
-                )
-                
+                    logger.info(
+                        f"[Tournament] FC match {match_id}: skipping T20/ListA-only innings-stat "
+                        "calc; MatchArchiver will populate scores/innings2 in Step 13."
+                    )
+
                 # Step 7: Resolve winner team ID — read the structured outcome the
                 # engine set directly (Match._set_outcome) instead of parsing the
                 # result prose. This also fixes a prior bug where this resolution

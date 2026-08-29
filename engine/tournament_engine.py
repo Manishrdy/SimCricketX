@@ -34,6 +34,7 @@ class TournamentEngine:
     # Points system configuration
     POINTS_WIN = 2
     POINTS_TIE = 1
+    POINTS_DRAW = 1  # First-Class (FC) only
     POINTS_NO_RESULT = 1
     POINTS_LOSS = 0
 
@@ -1216,14 +1217,29 @@ class TournamentEngine:
 
     def get_standings(self, tournament_id: int) -> list:
         """
-        Get tournament standings sorted by points and NRR.
+        Get tournament standings sorted by points, then a format-appropriate
+        tiebreaker.
 
-        Returns:
-            List of TournamentTeam objects sorted by:
-            1. Points (descending)
-            2. Net Run Rate (descending)
-            3. Wins (descending)
+        T20/ListA: Points (desc) -> Net Run Rate (desc) -> Wins (desc) ->
+        runs scored (desc, deterministic).
+
+        First-Class (FC): Points (desc) -> Win % = won/played (desc) ->
+        Wins (desc) -> runs scored (desc). NRR doesn't translate to
+        variable-length Test innings/declarations, so FC never accumulates
+        NRR components (see update_standings) — sorted in Python instead of
+        SQL since tournament team counts are always small.
         """
+        tournament = db.session.get(Tournament, tournament_id)
+        if tournament and tournament.format_type == 'FC':
+            teams = TournamentTeam.query.filter_by(tournament_id=tournament_id).all()
+            teams.sort(key=lambda t: (
+                -(t.points or 0),
+                -((t.won or 0) / t.played) if t.played else 0.0,
+                -(t.won or 0),
+                -(t.runs_scored or 0),
+            ))
+            return teams
+
         return TournamentTeam.query.filter_by(
             tournament_id=tournament_id
         ).order_by(
@@ -1244,6 +1260,7 @@ class TournamentEngine:
             won=0,
             lost=0,
             tied=0,
+            drawn=0,
             no_result=0,
             points=0,
             net_run_rate=0.0,
@@ -1365,14 +1382,22 @@ class TournamentEngine:
                 away_team_stats.won += 1
                 away_team_stats.points += self.POINTS_WIN
                 home_team_stats.lost += 1
+            elif match.match_status == 'drawn':
+                home_team_stats.drawn += 1
+                away_team_stats.drawn += 1
+                home_team_stats.points += self.POINTS_DRAW
+                away_team_stats.points += self.POINTS_DRAW
             else:
                 home_team_stats.tied += 1
                 away_team_stats.tied += 1
                 home_team_stats.points += self.POINTS_TIE
                 away_team_stats.points += self.POINTS_TIE
 
-            # Update NRR components
-            if not is_no_result:
+            # Update NRR components — First-Class drops NRR entirely (a
+            # run-rate metric doesn't translate to variable-length Test
+            # innings/declarations); standings use win percentage instead,
+            # computed on the fly in get_standings without needing these.
+            if not is_no_result and match.match_format != 'FC':
                 self._update_nrr_components(home_team_stats, away_team_stats, match)
             
             logger.info(
@@ -1858,13 +1883,18 @@ class TournamentEngine:
                 away_team_stats.won = max(0, away_team_stats.won - 1)
                 away_team_stats.points = max(0, away_team_stats.points - self.POINTS_WIN)
                 home_team_stats.lost = max(0, home_team_stats.lost - 1)
+            elif match.match_status == 'drawn':
+                home_team_stats.drawn = max(0, home_team_stats.drawn - 1)
+                away_team_stats.drawn = max(0, away_team_stats.drawn - 1)
+                home_team_stats.points = max(0, home_team_stats.points - self.POINTS_DRAW)
+                away_team_stats.points = max(0, away_team_stats.points - self.POINTS_DRAW)
             else:
                 home_team_stats.tied = max(0, home_team_stats.tied - 1)
                 away_team_stats.tied = max(0, away_team_stats.tied - 1)
                 home_team_stats.points = max(0, home_team_stats.points - self.POINTS_TIE)
                 away_team_stats.points = max(0, away_team_stats.points - self.POINTS_TIE)
 
-            if not was_no_result:
+            if not was_no_result and match.match_format != 'FC':
                 self._reverse_nrr_components(home_team_stats, away_team_stats, match)
 
             self._calculate_nrr(home_team_stats)

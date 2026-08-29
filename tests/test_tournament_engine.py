@@ -1286,6 +1286,165 @@ class TestAvailableModes:
         assert modes == []
 
 
+class TestFCStandings:
+    """
+    First-Class (FC) tournament standings: a genuine 'drawn' outcome
+    (distinct from a tie), NRR skipped entirely (FC drops it in favor of
+    win percentage), and get_standings sorting FC tournaments by win%
+    instead of NRR.
+    """
+
+    def _link_and_update(self, engine, regular_user, tournament_id, fixture,
+                          winner_id, match_status, reverse=False):
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=regular_user.id,
+            tournament_id=tournament_id,
+            home_team_id=fixture.home_team_id,
+            away_team_id=fixture.away_team_id,
+            winner_team_id=winner_id,
+            match_format="FC",
+            match_status=match_status,
+        )
+        db.session.add(match)
+        db.session.flush()
+        fixture.match_id = match.id
+        db.session.commit()
+        if reverse:
+            return match, engine.reverse_standings(match, commit=True)
+        return match, engine.update_standings(match, commit=True)
+
+    def test_drawn_match_increments_drawn_not_tied(
+        self, app, engine, regular_user, four_teams
+    ):
+        t = engine.create_tournament(
+            name="FC Draw", user_id=regular_user.id,
+            team_ids=[tm.id for tm in four_teams], mode="round_robin",
+            format_type="FC",
+        )
+        fixture = TournamentFixture.query.filter_by(tournament_id=t.id).first()
+
+        match, result = self._link_and_update(
+            engine, regular_user, t.id, fixture,
+            winner_id=None, match_status="drawn",
+        )
+
+        home_stats = TournamentTeam.query.filter_by(
+            tournament_id=t.id, team_id=fixture.home_team_id
+        ).first()
+        away_stats = TournamentTeam.query.filter_by(
+            tournament_id=t.id, team_id=fixture.away_team_id
+        ).first()
+
+        assert result is True
+        assert home_stats.drawn == 1
+        assert home_stats.tied == 0
+        assert home_stats.points == engine.POINTS_DRAW
+        assert away_stats.drawn == 1
+        assert away_stats.tied == 0
+        assert away_stats.points == engine.POINTS_DRAW
+
+    def test_drawn_match_reversed_correctly(
+        self, app, engine, regular_user, four_teams
+    ):
+        t = engine.create_tournament(
+            name="FC Draw Reverse", user_id=regular_user.id,
+            team_ids=[tm.id for tm in four_teams], mode="round_robin",
+            format_type="FC",
+        )
+        fixture = TournamentFixture.query.filter_by(tournament_id=t.id).first()
+
+        match, _ = self._link_and_update(
+            engine, regular_user, t.id, fixture,
+            winner_id=None, match_status="drawn",
+        )
+        _, reversed_ok = self._link_and_update(
+            engine, regular_user, t.id, fixture,
+            winner_id=None, match_status="drawn", reverse=True,
+        )
+
+        home_stats = TournamentTeam.query.filter_by(
+            tournament_id=t.id, team_id=fixture.home_team_id
+        ).first()
+
+        assert reversed_ok is True
+        assert home_stats.drawn == 0
+        assert home_stats.points == 0
+
+    def test_fc_win_does_not_touch_nrr_components(
+        self, app, engine, regular_user, four_teams
+    ):
+        """FC matches never populate home/away_team_score (app.py skips
+        that T20/ListA-only calc entirely for FC — see
+        _handle_tournament_match_completion). update_standings must not
+        try to read those fields into NRR for FC; runs_scored/overs_faced
+        should stay at their untouched defaults.
+        """
+        t = engine.create_tournament(
+            name="FC Win NoNRR", user_id=regular_user.id,
+            team_ids=[tm.id for tm in four_teams], mode="round_robin",
+            format_type="FC",
+        )
+        fixture = TournamentFixture.query.filter_by(tournament_id=t.id).first()
+
+        match, result = self._link_and_update(
+            engine, regular_user, t.id, fixture,
+            winner_id=fixture.home_team_id, match_status="completed",
+        )
+
+        home_stats = TournamentTeam.query.filter_by(
+            tournament_id=t.id, team_id=fixture.home_team_id
+        ).first()
+
+        assert result is True
+        assert home_stats.won == 1
+        assert home_stats.points == engine.POINTS_WIN
+        assert home_stats.runs_scored == 0
+        assert home_stats.overs_faced == '0.0'
+        assert home_stats.net_run_rate == 0.0
+
+    def test_get_standings_fc_sorts_by_win_percentage(
+        self, app, engine, regular_user, four_teams
+    ):
+        """Team B has fewer wins than Team A but a higher win% (played
+        fewer matches) — FC standings must rank B above A despite A having
+        more raw wins, which a NRR- or wins-based tiebreaker would not do.
+        """
+        t = engine.create_tournament(
+            name="FC WinPct Sort", user_id=regular_user.id,
+            team_ids=[tm.id for tm in four_teams], mode="round_robin",
+            format_type="FC",
+        )
+        team_a, team_b, team_c, team_d = four_teams
+
+        stats = {
+            team_a.id: dict(played=4, won=2, points=4, runs_scored=100),  # 50%
+            team_b.id: dict(played=2, won=2, points=4, runs_scored=50),   # 100%
+            team_c.id: dict(played=3, won=0, points=0, runs_scored=0),    # 0%, 0 played guard N/A
+            team_d.id: dict(played=0, won=0, points=0, runs_scored=0),    # 0 played — no div-by-zero
+        }
+        for team_id, vals in stats.items():
+            row = TournamentTeam.query.filter_by(
+                tournament_id=t.id, team_id=team_id
+            ).first()
+            row.played = vals["played"]
+            row.won = vals["won"]
+            row.points = vals["points"]
+            row.runs_scored = vals["runs_scored"]
+        db.session.commit()
+
+        standings = engine.get_standings(t.id)
+        ordered_ids = [s.team_id for s in standings]
+
+        # B and A are tied on points (4) — win% must break the tie in B's favor.
+        assert ordered_ids.index(team_b.id) < ordered_ids.index(team_a.id)
+        # C (played=3, won=0) and D (played=0) are both on 0 points and must
+        # rank below A/B — and D's played=0 must not raise on division by zero.
+        assert set(ordered_ids[-2:]) == {team_c.id, team_d.id}
+        assert ordered_ids.index(team_a.id) < ordered_ids.index(team_c.id)
+        assert ordered_ids.index(team_a.id) < ordered_ids.index(team_d.id)
+
+
 # ── Helper ────────────────────────────────────────────────────────────────
 
 def _create_tournament(user, teams, engine):
