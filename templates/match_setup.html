@@ -1109,9 +1109,31 @@
                                 <input type="radio" name="match-format-radio" value="ListA">
                                 <span>List A</span>
                             </label>
+                            <label class="format-option">
+                                <input type="radio" name="match-format-radio" value="FC">
+                                <span>First-Class</span>
+                            </label>
                         </div>
                         <input type="hidden" id="match-format-value" value="T20">
                         {% endif %}
+                    </div>
+
+                    <div class="ms-setting-row" id="fc-days-row" hidden>
+                        <div class="ms-setting-copy">
+                            <span class="ms-setting-label">Match Length</span>
+                            <span class="ms-setting-hint">4-day matches use a 150-run follow-on margin; 5-day uses 200.</span>
+                        </div>
+                        <div class="format-selector" role="group" aria-label="Match length">
+                            <label class="format-option">
+                                <input type="radio" name="fc-days-radio" value="4" checked>
+                                <span>4 Days</span>
+                            </label>
+                            <label class="format-option">
+                                <input type="radio" name="fc-days-radio" value="5">
+                                <span>5 Days</span>
+                            </label>
+                        </div>
+                        <input type="hidden" id="fc-days-value" value="4">
                     </div>
                 </div>
 
@@ -1350,7 +1372,7 @@
     let selectedTeamIndices = [];
     // v2: lineups are keyed per-format — T20 lineups never bleed into ListA slots.
     const LINEUP_STORAGE_VERSION = 2;
-    const MATCH_FORMATS = ['T20', 'ListA'];
+    const MATCH_FORMATS = ['T20', 'ListA', 'FC'];
     const _setupConfig = JSON.parse(document.getElementById('setup-config').textContent);
     const tournamentId = _setupConfig.tournamentId;
     const fixtureId = _setupConfig.fixtureId;
@@ -1383,8 +1405,10 @@
             });
         });
 
-        // Apply initial format-availability state on team cards (default T20).
-        updateTeamCardFormats('T20');
+        // Apply initial format-availability state on team cards. Step 1 only
+        // needs to know "is this team playable at all" (null = any format);
+        // the specific match format isn't chosen until Step 2.
+        updateTeamCardFormats(null);
         refreshMatchFormatOptions();
 
         // AUTO-SELECT TEAMS FOR TOURNAMENT FIXTURES
@@ -1520,13 +1544,14 @@
 
     // --- STEP 1: SELECTION ---
     function toggleTeam(index, cardEl) {
-        // Block selection of teams that have no squad for the current format.
+        // Block selection of teams with no squad in any format at all.
+        // (Whether the two selected teams share a common format is a
+        // separate check, made when leaving Step 1 — see nextStep().)
         if (cardEl.classList.contains('no-squad-for-format')) {
-            const fmt = getCurrentFormat();
             const team = TEAMS[index];
             Toast.show(
-                `${team?.team_name || 'This team'} has no ${fmt} squad. ` +
-                `Add a ${fmt} profile in Manage Teams first.`,
+                `${team?.team_name || 'This team'} has no published squad in any format. ` +
+                `Add a squad in Manage Teams first.`,
                 "error"
             );
             return;
@@ -1580,15 +1605,23 @@
      * @param {string} format  - 'T20' | 'ListA'
      */
     function updateTeamCardFormats(format) {
-        const formatLabel = { T20: 'T20', ListA: 'List A' };
-        const label = formatLabel[format] || format;
+        const formatLabel = { T20: 'T20', ListA: 'List A', FC: 'First-Class' };
+        const label = format ? (formatLabel[format] || format) : 'playable';
 
         document.querySelectorAll('.team-card').forEach((card, idx) => {
             const team = TEAMS[idx];
             if (!team) return;
 
             const squads = team.profile_squads || {};
-            const hasSquad = squads[format] && squads[format].length > 0;
+            // Step 1 (format === null) gates on "does this team have a squad
+            // in ANY format" — the actual match format isn't chosen until
+            // Step 2, so blocking selection against one hardcoded default
+            // (T20) would make FC-only (or ListA-only) teams unselectable.
+            // getSharedSupportedFormats() at the Step 1 -> 2 transition is
+            // what actually enforces the two teams share a playable format.
+            const hasSquad = format
+                ? (squads[format] && squads[format].length > 0)
+                : getTeamSupportedFormats(team).length > 0;
 
             if (hasSquad) {
                 card.classList.remove('no-squad-for-format');
@@ -1719,6 +1752,14 @@
                 updateConditionsSummary();
             };
         });
+        // Wire up FC days radio group.
+        document.querySelectorAll('input[name="fc-days-radio"]').forEach(radio => {
+            radio.onchange = () => {
+                const daysHidden = document.getElementById('fc-days-value');
+                if (daysHidden) daysHidden.value = radio.value;
+                updateConditionsSummary();
+            };
+        });
         const dayNightToggle = document.getElementById('day-night-toggle');
         if (dayNightToggle) {
             dayNightToggle.checked = false;
@@ -1832,8 +1873,13 @@
         const helpText = {
             'T20':   '20 overs per side. Max 4 overs per bowler.',
             'ListA': '50 overs per side. Max 10 overs per bowler.',
+            'FC':    'Multi-day, up to 2 innings per side. No bowler over limit.',
         };
         if (formatHelp) formatHelp.textContent = helpText[newFormat] || helpText['T20'];
+
+        // FC-only: show the 4-day/5-day length selector.
+        const daysRow = document.getElementById('fc-days-row');
+        if (daysRow) daysRow.hidden = newFormat !== 'FC';
 
         // Swap every team's active player list to the correct format squad.
         // No fallback — if the format has no squad, players becomes [].
@@ -1913,7 +1959,8 @@
         } else {
             setText('summary-scenario', interesting ? 'Surprise drama' : 'Disabled');
         }
-        const formatLabels = { 'T20': 'T20', 'ListA': 'List A (50-ov)' };
+        const fcDays = document.getElementById('fc-days-value')?.value || '4';
+        const formatLabels = { 'T20': 'T20', 'ListA': 'List A (50-ov)', 'FC': `First-Class (${fcDays}-day)` };
         setText('summary-format', formatLabels[format] || format);
         setText('summary-day-night', isDayNight ? 'Day/Night' : 'Day');
         const weatherValue = document.getElementById('weather-forecast-select')?.value || 'clear';
@@ -2426,6 +2473,7 @@
                 make_match_interesting: document.getElementById('interesting-match-flag').value === 'true',
                 story_id: document.getElementById('story-select')?.value || null,
                 match_format: currentFormat,
+                days: currentFormat === 'FC' ? (document.getElementById('fc-days-value')?.value || '4') : undefined,
                 is_day_night: document.getElementById('day-night-value').value === 'true',
                 weather_forecast: document.getElementById('weather-forecast-select')?.value || 'clear',
                 playing_xi: {

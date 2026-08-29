@@ -30,7 +30,7 @@ _DEFAULTS_PATH = Path(__file__).parent.parent / "config" / "ground_conditions_de
 
 # Formats that have a ground-conditions profile. Mirrors MATCH_SETUP_FORMATS
 # in routes/match_routes.py and VALID_FORMATS in routes/team_routes.py.
-VALID_FORMATS = ("T20", "ListA")
+VALID_FORMATS = ("T20", "ListA", "FC")
 DEFAULT_FORMAT = "T20"
 
 # Game mode value meaning "let the engine pick per delivery from match state".
@@ -424,6 +424,149 @@ def get_lista_pitch_wear(config=None):
 def get_lista_dew(config=None):
     """Return the ListA dew spec, or {}."""
     return _block(config, "ListA").get("dew") or {}
+
+
+# ───────────────────────── First-Class (FC) accessors ──────────────────────
+# FC's pitch-support-differs-by-bowler-type dynamic (the reason FC exists as
+# a format at all) is NOT a static per-pitch table like T20's wicket_factors
+# — it interpolates between a "fresh pitch" table and a "fully worn" table
+# as the match's continuous wear scalar climbs. See
+# engine/fc_bowler_workload.py and the module docstring in the FC YAML block
+# for the "why".
+
+def get_fc_pitch_profile(pitch_type, config=None):
+    """Return the FC profile dict for a pitch type, or {}."""
+    return (_block(config, "FC").get("pitch_profiles") or {}).get(pitch_type) or {}
+
+
+def get_fc_scoring_matrix(pitch_type, config=None):
+    """Return the FC base scoring matrix for a pitch, or None if unknown."""
+    profile = get_fc_pitch_profile(pitch_type, config=config)
+    matrix = profile.get("scoring_matrix")
+    return dict(matrix) if matrix else None
+
+
+def get_fc_run_factor(pitch_type, config=None):
+    """Return the FC per-pitch run factor (default 1.0)."""
+    return get_fc_pitch_profile(pitch_type, config=config).get("run_factor", 1.0)
+
+
+def get_fc_wicket_factors_start(pitch_type, config=None):
+    """Return the FC "fresh pitch" bowling-style wicket factors, or {}."""
+    return get_fc_pitch_profile(pitch_type, config=config).get("wicket_factors_start") or {}
+
+
+def get_fc_wicket_factors_end(pitch_type, config=None):
+    """Return the FC "fully worn" bowling-style wicket factors, or {}."""
+    return get_fc_pitch_profile(pitch_type, config=config).get("wicket_factors_end") or {}
+
+
+def get_fc_wicket_factor_for(pitch_type, bowling_type, pitch_wear, config=None):
+    """
+    Resolve one bowling style's FC wicket factor at the current match wear
+    (0.0 = fresh pitch, 1.0 = fully worn), linearly interpolated between
+    wicket_factors_start and wicket_factors_end. 1.0 (neutral) when either
+    table is unconfigured for this pitch/bowling_type.
+    """
+    start = get_fc_wicket_factors_start(pitch_type, config=config)
+    end = get_fc_wicket_factors_end(pitch_type, config=config)
+    if not start and not end:
+        return 1.0
+    w = max(0.0, min(1.0, pitch_wear))
+    start_val = start.get(bowling_type, start.get("default", 1.0))
+    end_val = end.get(bowling_type, end.get("default", start_val))
+    return start_val + (end_val - start_val) * w
+
+
+def get_fc_pitch_wear(config=None):
+    """Return the FC per-pitch general wear spec table, or {}."""
+    return _block(config, "FC").get("pitch_wear") or {}
+
+
+def get_fc_ball_condition(config=None):
+    """Return the FC ball-condition spec (Phase 2 — new-ball/reverse-swing
+    modeling), or {}. Pitch-independent, unlike the wear/wicket-factor
+    tables above."""
+    return _block(config, "FC").get("ball_condition") or {}
+
+
+def get_fc_ball_condition_factor(bowling_type, ball_overs_bowled, new_ball_overs, config=None):
+    """
+    Resolve the ball-condition wicket multiplier for one delivery, given
+    how many overs the CURRENT ball has been in use (ball_overs_bowled,
+    reset at the start of every innings and whenever the new ball is taken
+    at new_ball_overs — see Match.fc_ball_overs_bowled) and how many overs
+    a ball stays in use before the next new ball is due (new_ball_overs,
+    fmt.new_ball_overs).
+
+    Three windows, resolved from this single ball-age counter:
+      - [0, new_ball_swing_overs): fresh-ball swing — boosts genuine
+        pace/swing bowlers.
+      - middle overs: flat — neutral (1.0) for everyone.
+      - [new_ball_overs - reverse_swing_window_overs, new_ball_overs):
+        old-ball reverse-swing — boosts genuinely fast bowlers only.
+
+    1.0 (neutral) when the ball_condition block is unconfigured.
+    """
+    spec = get_fc_ball_condition(config=config)
+    if not spec:
+        return 1.0
+
+    swing_overs = spec.get("new_ball_swing_overs", 10)
+    reverse_window = spec.get("reverse_swing_window_overs", 15)
+
+    if ball_overs_bowled < swing_overs:
+        factors = spec.get("new_ball_wicket_factors") or {}
+        return factors.get(bowling_type, factors.get("default", 1.0))
+
+    if ball_overs_bowled >= new_ball_overs - reverse_window:
+        factors = spec.get("reverse_swing_wicket_factors") or {}
+        return factors.get(bowling_type, factors.get("default", 1.0))
+
+    return 1.0
+
+
+def get_fc_rough_targeting(config=None):
+    """Return the FC rough-targeting spec (per-pitch max bonus at full
+    wear), or {}. Pitch-keyed like pitch_wear/wicket_factors, but a single
+    scalar per pitch rather than a bowling-style table — see
+    get_fc_rough_targeting_factor for how it's actually resolved."""
+    return _block(config, "FC").get("rough_targeting") or {}
+
+
+def get_fc_rough_targeting_factor(bowling_type, batting_hand, pitch_wear, pitch, config=None):
+    """
+    Resolve the handedness-specific rough-targeting wicket multiplier for
+    one delivery.
+
+    Footmark rough only exists where days of the same bowling angle have
+    worn the same patch of turf — it is a wear-*and*-handedness-matchup
+    effect, distinct from both the general wear-interpolated
+    get_fc_wicket_factor_for (bowling-style only, no handedness) and the
+    format-agnostic compute_matchup_boost in ball_outcome.py (handedness
+    only, static — no wear scaling, so it treats a fresh Day 1 pitch and a
+    crumbling Day 5 one identically). This layers a wear-ramped bonus on
+    top of that static matchup, active only for the two classic
+    turning-away-from-the-bat combinations:
+      - Off spin / Finger spin bowling to a Left-hand batter
+      - Leg spin / Wrist spin bowling to a Right-hand batter
+    1.0 (neutral) for every other combination, or when the pitch has no
+    rough_targeting entry configured (e.g. a pace-only matchup, or a pitch
+    type — like a true Hard track — that doesn't break up enough to matter).
+    """
+    turns_away = (
+        (bowling_type in ("Off spin", "Finger spin") and batting_hand == "Left")
+        or (bowling_type in ("Leg spin", "Wrist spin") and batting_hand == "Right")
+    )
+    if not turns_away:
+        return 1.0
+
+    bonus = get_fc_rough_targeting(config=config).get(pitch, 0.0)
+    if not bonus:
+        return 1.0
+
+    w = max(0.0, min(1.0, pitch_wear))
+    return 1.0 + bonus * w
 
 
 # ───────────────────────── GSME baseline coupling ──────────────────────────

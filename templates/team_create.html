@@ -395,6 +395,41 @@
 .tc-role-pill.wk { background: var(--role-wk-bg); color: var(--role-wk-text); }
 .tc-role-pill.none { background: var(--tc-input-bg); color: var(--fg-secondary); }
 
+.tc-fc-ratings {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+.tc-fc-rating {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+}
+.tc-fc-rating label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--fg-secondary);
+}
+.tc-fc-rating input[type="number"] {
+    width: 2.6rem;
+    padding: 0.15rem 0.25rem;
+    border: 1px solid var(--tc-panel-border);
+    border-radius: 5px;
+    background: var(--tc-input-bg);
+    color: var(--fg);
+    font-size: 0.75rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.tc-fc-rating input[type="number"]:focus {
+    outline: none;
+    border-color: var(--tc-accent);
+}
+
 .tc-empty {
     padding: 2rem 1rem;
     text-align: center;
@@ -791,6 +826,10 @@
               <span class="tc-tab-status" id="tc-tab-status-ListA" aria-hidden="true"></span>
               List A <span class="tc-tab-count" id="tc-count-ListA">0</span>
             </button>
+            <button type="button" class="tc-tab" data-fmt="FC" role="tab">
+              <span class="tc-tab-status" id="tc-tab-status-FC" aria-hidden="true"></span>
+              First-Class <span class="tc-tab-count" id="tc-count-FC">0</span>
+            </button>
           </div>
         </div>
         <div id="tc-copy-bar" class="tc-copy-bar" hidden>
@@ -845,7 +884,7 @@
 
   const LS_KEY = 'team_create_draft_v1';
   const POOL_PAGE = 50;
-  const VALID_FORMATS = ['T20', 'ListA'];
+  const VALID_FORMATS = ['T20', 'ListA', 'FC'];
   const MIN_PLAYERS = {{ SQUAD_MIN_PLAYERS }};
   const MAX_PLAYERS = {{ SQUAD_MAX_PLAYERS }};
   const MIN_WK = {{ SQUAD_MIN_WICKETKEEPERS }};
@@ -877,10 +916,11 @@
       team_color: '#4f46e5',
     },
     activeFmt: 'T20',
-    rosters: { T20: [], ListA: [] },
+    rosters: { T20: [], ListA: [], FC: [] },
     leaders: {
       T20: { captain: '', wicketkeeper: '' },
       ListA: { captain: '', wicketkeeper: '' },
+      FC: { captain: '', wicketkeeper: '' },
     },
     pool: {
       items: [],
@@ -1090,6 +1130,12 @@
       batting_rating: pool.batting_rating || 0,
       bowling_rating: isWk ? 0 : (pool.bowling_rating || 0),
       fielding_rating: pool.fielding_rating || 0,
+      // First-Class (FC) rating axes — the pool has no notion of these, so
+      // every player starts neutral (50) and is fine-tuned inline in the FC
+      // tab's roster rows (see renderRoster()). Inert for T20/ListA.
+      technique_rating: 50,
+      temperament_rating: 50,
+      stamina_rating: 50,
       batting_hand: pool.batting_hand || '',
       bowling_type: isWk ? '' : (pool.bowling_type || ''),
       bowling_hand: isWk ? '' : (pool.bowling_hand || ''),
@@ -1130,8 +1176,24 @@
       renderCounter(list);
       return;
     }
+    const isFc = state.activeFmt === 'FC';
     const rows = list.map((p, idx) => {
       const meta = playerMeta(p);
+      const fcRatings = isFc ? `
+          <div class="tc-fc-ratings" draggable="false" title="FC-only ratings — long-innings survival, session-pressure resistance, bowling workload capacity">
+            <div class="tc-fc-rating">
+              <label>TEC</label>
+              <input type="number" min="0" max="100" value="${p.technique_rating ?? 50}" data-fc-field="technique_rating" data-player-idx="${idx}">
+            </div>
+            <div class="tc-fc-rating">
+              <label>TMP</label>
+              <input type="number" min="0" max="100" value="${p.temperament_rating ?? 50}" data-fc-field="temperament_rating" data-player-idx="${idx}">
+            </div>
+            <div class="tc-fc-rating">
+              <label>STA</label>
+              <input type="number" min="0" max="100" value="${p.stamina_rating ?? 50}" data-fc-field="stamina_rating" data-player-idx="${idx}">
+            </div>
+          </div>` : '';
       return `
         <div class="tc-player" draggable="true"
              data-roster-idx="${idx}"
@@ -1143,6 +1205,7 @@
             <div class="tc-player-name">${escHtml(p.name)}</div>
             ${meta ? `<div class="tc-player-meta">${escHtml(meta)}</div>` : ''}
           </div>
+          ${fcRatings}
           <span class="tc-role-pill ${roleClass(p.role)}">${escHtml(shortRole(p.role))}</span>
         </div>`;
     }).join('');
@@ -1151,9 +1214,29 @@
   }
 
   rosterList.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.tc-fc-ratings')) return; // don't remove the player while editing FC ratings
     const row = e.target.closest('[data-roster-name]');
     if (!row) return;
     removeFromRoster(row.getAttribute('data-roster-name'));
+  });
+
+  // ── FC-only per-player rating inputs (technique/temperament/stamina) ──
+  rosterList.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.tc-fc-ratings')) e.stopPropagation(); // don't let the row's drag handle intercept
+  });
+  rosterList.addEventListener('change', (e) => {
+    const input = e.target.closest('[data-fc-field]');
+    if (!input) return;
+    const idx = parseInt(input.getAttribute('data-player-idx'), 10);
+    const field = input.getAttribute('data-fc-field');
+    const list = state.rosters[state.activeFmt];
+    if (!list[idx]) return;
+    let val = parseInt(input.value, 10);
+    if (Number.isNaN(val)) val = 50;
+    val = Math.max(0, Math.min(100, val));
+    input.value = val;
+    list[idx][field] = val;
+    scheduleAutoSave();
   });
 
   // ── Drag-to-reorder + cross-list drag-and-drop ───────────────────────
@@ -1331,8 +1414,14 @@
     });
   }
 
-  const FMT_LABEL = { T20: 'T20', ListA: 'List A' };
-  function otherFmt(fmt) { return fmt === 'T20' ? 'ListA' : 'T20'; }
+  const FMT_LABEL = { T20: 'T20', ListA: 'List A', FC: 'First-Class' };
+  function otherFmt(fmt) {
+    // Prefer a populated format other than the current one so the copy bar
+    // offers something useful; renderCopyBar() hides itself if the result
+    // (or nothing) has zero players.
+    return VALID_FORMATS.find(f => f !== fmt && state.rosters[f].length)
+      || VALID_FORMATS.find(f => f !== fmt);
+  }
 
   function renderCopyBar() {
     const src = otherFmt(state.activeFmt);
@@ -1605,22 +1694,21 @@
       team_color: id.team_color || '#4f46e5',
     };
     const profiles = EDIT_DATA.profiles || {};
-    state.rosters = {
-      T20: Array.isArray(profiles.T20 && profiles.T20.players) ? profiles.T20.players.slice() : [],
-      ListA: Array.isArray(profiles.ListA && profiles.ListA.players) ? profiles.ListA.players.slice() : [],
-    };
-    state.leaders = {
-      T20: {
-        captain: (profiles.T20 && profiles.T20.captain) || '',
-        wicketkeeper: (profiles.T20 && profiles.T20.wicketkeeper) || '',
-      },
-      ListA: {
-        captain: (profiles.ListA && profiles.ListA.captain) || '',
-        wicketkeeper: (profiles.ListA && profiles.ListA.wicketkeeper) || '',
-      },
-    };
-    // Prefer the profile that actually has players.
-    if (!state.rosters.T20.length && state.rosters.ListA.length) state.activeFmt = 'ListA';
+    state.rosters = {};
+    state.leaders = {};
+    VALID_FORMATS.forEach(fmt => {
+      const p = profiles[fmt];
+      state.rosters[fmt] = Array.isArray(p && p.players) ? p.players.slice() : [];
+      state.leaders[fmt] = {
+        captain: (p && p.captain) || '',
+        wicketkeeper: (p && p.wicketkeeper) || '',
+      };
+    });
+    // Prefer the first format (in VALID_FORMATS order) that actually has players.
+    if (!state.rosters[state.activeFmt].length) {
+      const populated = VALID_FORMATS.find(fmt => state.rosters[fmt].length);
+      if (populated) state.activeFmt = populated;
+    }
 
     nameInput.value = state.identity.team_name;
     shortInput.value = state.identity.short_code;
@@ -1645,14 +1733,12 @@
         pitch_preference: id.pitch_preference || '',
         team_color: id.team_color || '#4f46e5',
       };
-      state.rosters = {
-        T20: Array.isArray(parsed.rosters && parsed.rosters.T20) ? parsed.rosters.T20 : [],
-        ListA: Array.isArray(parsed.rosters && parsed.rosters.ListA) ? parsed.rosters.ListA : [],
-      };
-      state.leaders = {
-        T20: (parsed.leaders && parsed.leaders.T20) || { captain: '', wicketkeeper: '' },
-        ListA: (parsed.leaders && parsed.leaders.ListA) || { captain: '', wicketkeeper: '' },
-      };
+      state.rosters = {};
+      state.leaders = {};
+      VALID_FORMATS.forEach(fmt => {
+        state.rosters[fmt] = Array.isArray(parsed.rosters && parsed.rosters[fmt]) ? parsed.rosters[fmt] : [];
+        state.leaders[fmt] = (parsed.leaders && parsed.leaders[fmt]) || { captain: '', wicketkeeper: '' };
+      });
       if (VALID_FORMATS.includes(parsed.activeFmt)) state.activeFmt = parsed.activeFmt;
 
       nameInput.value = state.identity.team_name;
@@ -1681,8 +1767,11 @@
       if (!confirm('Clear your unsaved draft? This cannot be undone.')) return;
       clearDraft();
       state.identity = { team_name: '', short_code: '', home_ground: '', pitch_preference: '', team_color: '#4f46e5' };
-      state.rosters = { T20: [], ListA: [] };
-      state.leaders = { T20: { captain: '', wicketkeeper: '' }, ListA: { captain: '', wicketkeeper: '' } };
+      state.rosters = {}; state.leaders = {};
+      VALID_FORMATS.forEach(fmt => {
+        state.rosters[fmt] = [];
+        state.leaders[fmt] = { captain: '', wicketkeeper: '' };
+      });
       state.activeFmt = 'T20';
       nameInput.value = ''; shortInput.value = ''; groundInput.value = '';
       pitchSelect.value = ''; colorInput.value = '#4f46e5';

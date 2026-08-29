@@ -398,7 +398,7 @@ Match Scorecard - SimCricketX
     <div class="innings-card">
         <div class="innings-header">
             <div class="innings-title">
-                {{ innings.number }}{% if innings.number == 1 %}st{% elif innings.number == 2 %}nd{% else %}th{% endif %} Innings
+                {{ innings.number }}{% if innings.number == 1 %}st{% elif innings.number == 2 %}nd{% elif innings.number == 3 %}rd{% else %}th{% endif %} Innings
             </div>
             <div class="innings-score">{{ innings.score }}/{{ innings.wickets }}</div>
         </div>

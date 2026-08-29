@@ -13,7 +13,7 @@ from engine.ball_outcome import calculate_outcome
 from engine.super_over_outcome import calculate_super_over_outcome
 from engine.cricket_math import balls_to_overs_str
 from match_archiver import MatchArchiver, find_original_json_file
-from engine.pressure_engine import PressureEngine
+from engine.pressure_engine import PressureEngine, FCPressureEngine
 from engine.game_state_engine import (
     compute_game_state_vector,
     apply_game_state_to_probs,
@@ -21,8 +21,11 @@ from engine.game_state_engine import (
     get_par_score,
     BALL_HISTORY_WINDOW,
 )
-from engine.format_config import get_format
+from engine.format_config import get_format, get_any_format
 from engine.bowler_manager import BowlerManager
+from engine.fc_bowler_workload import FCBowlerManager
+from engine import fc_declaration
+from engine import fc_weather
 from engine.toss import innings_teams
 from utils.exception_tracker import log_exception
 
@@ -138,9 +141,16 @@ class Match:
 
         # Load format config (T20 by default for backward compatibility).
         # A per-match copy is taken because rain revisions mutate overs and
-        # bowler quotas — the FORMAT_REGISTRY singletons are shared across
-        # every concurrent match and must never be modified.
-        self.fmt = dataclasses.replace(get_format(match_data.get("match_format", "T20")))
+        # bowler quotas — the FORMAT_REGISTRY/MULTIDAY_FORMAT_REGISTRY
+        # singletons are shared across every concurrent match and must
+        # never be modified.
+        self.fmt = get_any_format(match_data.get("match_format", "T20"), days=match_data.get("days"))
+        # First-Class (multi-day) matches take an entirely separate code
+        # path through next_ball() — see the is_fc branches below and in
+        # _innings_should_end()/_transition_to_next_innings(). self.innings
+        # (1/2/3/4/5) carries overloaded super-over semantics that FC must
+        # never touch; FC's own innings counter is self.fc_innings (1-4).
+        self.is_fc = (self.fmt.format_family == "multi_day")
 
         # Feature 7: compute toss × conditions advantage once at match start.
         # D/N matches: dew in the 2nd innings tilts the optimal choice towards
@@ -160,22 +170,52 @@ class Match:
         else:
             self._toss_winner_xi = self.away_xi
 
-        # BowlerManager owns quota + consecutive-over enforcement for this format
-        self.bowler_manager = BowlerManager(self.bowling_team, self.fmt)
-        # Keep bowler_history as a live alias into BowlerManager's quota dict
-        # so existing read-only usages remain valid without a large refactor.
-        self.bowler_history = self.bowler_manager._quota
-        self.overs = self.fmt.overs
+        # BowlerManager owns quota + consecutive-over enforcement for
+        # T20/ListA; FC has no quota at all (see FCBowlerManager's
+        # docstring) so it gets a genuinely separate, simpler class rather
+        # than a branch inside BowlerManager — BowlerManager's fatigue
+        # table indexes by fmt.max_bowler_overs, which doesn't exist on
+        # MultiDayFormatConfig and would KeyError on the very first lookup.
+        if self.is_fc:
+            self.bowler_manager = FCBowlerManager(self.bowling_team, self.fmt)
+            self.bowler_history = self.bowler_manager._overs_this_innings
+            # No fixed innings-overs concept in FC; a nominal ceiling
+            # (days * overs_per_day) keeps any shared code that happens to
+            # read self.overs (arithmetic/formatting) from crashing on
+            # None. It is NOT the real innings-end gate for FC — that's
+            # self._fc_innings_should_end() (day/match exhaustion,
+            # declaration, all-out), which never reads self.overs.
+            self.overs = self.fmt.days * self.fmt.overs_per_day
+        else:
+            self.bowler_manager = BowlerManager(self.bowling_team, self.fmt)
+            # Keep bowler_history as a live alias into BowlerManager's quota
+            # dict so existing read-only usages remain valid without a
+            # large refactor.
+            self.bowler_history = self.bowler_manager._quota
+            self.overs = self.fmt.overs
         self.current_over = 0
         self.current_ball = 0
 
         # ── Rain / DLS state ─────────────────────────────────────────────
         # The weather script is rolled once (at match creation by the setup
         # route; fallback here for older payloads and tests) and stored in
-        # match_data so a resumed match replays identically.
-        self.original_overs = self.fmt.overs
+        # match_data so a resumed match replays identically. engine/weather.py's
+        # script generator is hardcoded to a 2-innings match and has no DLS
+        # equivalent for FC, so self.weather_script stays an inert placeholder
+        # for FC (no shared T20/ListA code path crashes if it happens to read
+        # it) — FC's own day-aware weather model is the separate
+        # fc_weather_script below (engine/fc_weather.py).
+        self.original_overs = self.overs
         self.weather_forecast = match_data.get("weather_forecast", weather_engine.DEFAULT_FORECAST)
-        if match_data.get("weather_script") is None:
+        if self.is_fc:
+            match_data.setdefault("weather_script", {"forecast": self.weather_forecast, "events": []})
+            if match_data.get("fc_weather_script") is None:
+                match_data["fc_weather_script"] = fc_weather.generate_weather_script(
+                    self.weather_forecast, self.fmt.days, self.fmt.overs_per_day,
+                    min_overs_last_hour=self.fmt.min_overs_last_hour,
+                )
+            self.fc_weather_script = match_data["fc_weather_script"]
+        elif match_data.get("weather_script") is None:
             match_data["weather_script"] = weather_engine.generate_weather_script(
                 self.weather_forecast, self.fmt.overs, self.fmt.name
             )
@@ -185,7 +225,7 @@ class Match:
         self.rain_events_log = []            # applied interruptions (UI + archive)
         self._innings1_overs_bowled = None   # actual completed overs of innings 1
         self._pending_rain_info = None       # rain info to attach to next response
-        self.dls_ledger_innings1 = dls.ResourceLedger(self.fmt.overs)
+        self.dls_ledger_innings1 = None if self.is_fc else dls.ResourceLedger(self.fmt.overs)
         self.dls_ledger_innings2 = None      # created when the chase is set up
         self.batter_idx = [0, 1]
         self.score = 0
@@ -228,6 +268,22 @@ class Match:
         # Feature 3: count of legal + extra deliveries bowled this innings
         # (used to compute pitch_wear = innings_balls_bowled / 120.0)
         self.innings_balls_bowled: int = 0
+
+        # FC only: count of legal + extra deliveries bowled in the WHOLE
+        # MATCH, never reset by _reset_innings_state() (unlike
+        # innings_balls_bowled above) — this is the entire point of FC
+        # pitch wear being continuous across all 4 innings instead of
+        # resetting at each innings break.
+        self.match_balls_bowled: int = 0
+
+        # FC only (Phase 2): overs bowled with the CURRENT ball this
+        # innings — independent of pitch wear/type. Resets at the start of
+        # every innings (a new ball is always issued) and whenever the
+        # bowling side takes the new ball at fmt.new_ball_overs. Drives
+        # engine/ground_config.py's get_fc_ball_condition_factor() (new-ball
+        # swing, then reverse-swing for genuine pace just before the next
+        # new ball is due) via calculate_outcome()'s ball_overs_bowled param.
+        self.fc_ball_overs_bowled: int = 0
 
         # Feature 8: runs conceded per over by each bowler (keyed by name)
         # populated at over completion; read in _get_effective_bowler_dict()
@@ -283,8 +339,39 @@ class Match:
         self.super_over_pitch_wear = 0.0
         self.constraint_violations = []  # Constraint violation log for post-match analysis
 
-        # Initialize pressure engine (format_config wires phase thresholds + RRs)
-        self.pressure_engine = PressureEngine(format_config=self.fmt)
+        # Initialize pressure engine (format_config wires phase thresholds + RRs).
+        # FCPressureEngine is a genuinely separate class (session-survival +
+        # lead-building pressure, not run-rate-chase pressure) — see
+        # engine/pressure_engine.py's module docstring for the "why".
+        self.pressure_engine = FCPressureEngine(format_config=self.fmt) if self.is_fc \
+            else PressureEngine(format_config=self.fmt)
+
+        # ── First-Class (FC) match state ─────────────────────────────────
+        # fc_innings (1-4) is completely separate from self.innings, which
+        # carries overloaded super-over semantics next_ball() must never
+        # confuse with a real 3rd/4th innings — see is_fc dispatch above.
+        self.fc_innings = 1
+        self.fc_day = 1
+        self.fc_day_overs_bowled_today = 0
+        self.fc_innings_declared = False
+        self.follow_on_enforced = None  # None until decided; then True/False
+        # User-captained mode only (see _fc_check_declaration_and_follow_on):
+        # the over the captain last declined to declare at, so the "ask
+        # again" prompt doesn't re-fire every ball for the rest of that same
+        # over boundary once answered. Reset by the over actually advancing.
+        self._fc_declined_declare_over = None
+        # Per-innings totals, keyed 1-4, populated at each innings break:
+        # {"score": int, "wickets": int, "overs_str": str, "side": "home"|"away"}
+        self.fc_innings_totals = {}
+        # Accumulator the archiver loops over (2-4 entries depending on how
+        # the match actually played out) — see match_archiver.py's
+        # generalized innings_plan for FC, which replaces the hardcoded
+        # 2-tuple T20/ListA use.
+        self.fc_innings_stats = []
+        # Partnerships keyed by fc_innings number (1-4) — see _save_partnership,
+        # which routes here instead of first_/second_innings_partnerships
+        # because self.innings stays frozen at 1 for the whole FC match.
+        self.fc_innings_partnerships = {}
 
         # Track partnership for pressure calculation AND archiving
         self.current_partnership_balls = 0
@@ -347,6 +434,20 @@ class Match:
         total_balls_in_innings = self.overs * 6
         balls_played = self.current_over * 6 + self.current_ball
         return max(0, total_balls_in_innings - balls_played)
+
+    def _compute_pitch_wear(self):
+        """
+        FC: continuous match-long wear (never resets at an innings break —
+        that's the entire point of FC pitch deterioration), normalized to
+        the match's total ball capacity (days * overs_per_day * 6).
+        T20/ListA: unchanged — per-innings wear, normalized to that
+        format's fixed innings ball count.
+        """
+        if self.is_fc:
+            _total_balls = self.fmt.days * self.fmt.overs_per_day * 6
+            return min(1.0, self.match_balls_bowled / _total_balls)
+        _total_balls = self.fmt.overs * 6
+        return min(1.0, self.innings_balls_bowled / _total_balls)
 
     def _ball_outcome_token(self, outcome, wicket, runs, extra):
         if wicket:
@@ -452,6 +553,15 @@ class Match:
     def _get_manual_bowler_candidates(self):
         all_bowlers = [(i, p) for i, p in enumerate(self.bowling_team) if p.get("will_bowl", False)]
         previous_bowler = self.current_bowler["name"] if self.current_bowler else None
+        non_consecutive = [(i, p) for i, p in all_bowlers if p["name"] != previous_bowler]
+
+        # FC has no bowler-overs quota at all (Law 17.2 — no consecutive
+        # overs — is the only eligibility rule; see engine/fc_bowler_workload.py),
+        # so self.fmt.max_bowler_overs doesn't exist on MultiDayFormatConfig.
+        # non_consecutive alone already IS the correct FC eligibility list.
+        if self.is_fc:
+            return non_consecutive
+
         strict = [
             (i, p) for i, p in all_bowlers
             if self.bowler_history.get(p["name"], 0) < self.fmt.max_bowler_overs and p["name"] != previous_bowler
@@ -459,31 +569,39 @@ class Match:
         if strict:
             return strict
 
-        non_consecutive = [(i, p) for i, p in all_bowlers if p["name"] != previous_bowler]
         if non_consecutive:
             return non_consecutive
         return []
 
     def _create_next_bowler_decision(self):
         candidates = self._get_manual_bowler_candidates()
+        # FC has no fixed overs-per-bowler cap (see _get_manual_bowler_candidates)
+        # — "overs_remaining" isn't a meaningful concept there, so sort by
+        # bowling_rating alone instead of the T20/ListA overs-remaining-first
+        # ordering, and never dereference the nonexistent max_bowler_overs.
         options = []
         for idx, bowler in candidates:
             overs_done = self.bowler_history.get(bowler["name"], 0)
-            options.append({
+            option = {
                 "index": idx,
                 "name": bowler["name"],
                 "role": bowler.get("role", ""),
                 "bowling_type": bowler.get("bowling_type", ""),
                 "bowling_rating": bowler.get("bowling_rating", 0),
                 "overs_bowled": overs_done,
-                "overs_remaining": max(0, self.fmt.max_bowler_overs - overs_done)
-            })
+            }
+            if not self.is_fc:
+                option["overs_remaining"] = max(0, self.fmt.max_bowler_overs - overs_done)
+            options.append(option)
 
-        options.sort(key=lambda b: (b["overs_remaining"], b["bowling_rating"]), reverse=True)
+        if self.is_fc:
+            options.sort(key=lambda b: b["bowling_rating"], reverse=True)
+        else:
+            options.sort(key=lambda b: (b["overs_remaining"], b["bowling_rating"]), reverse=True)
         decision = {
             "type": "next_bowler",
             "context": {
-                "innings": self.innings,
+                "innings": self.fc_innings if self.is_fc else self.innings,
                 "upcoming_over": self.current_over + 1,
                 "score": self.score,
                 "wickets": self.wickets
@@ -507,7 +625,7 @@ class Match:
         decision = {
             "type": "next_batter",
             "context": {
-                "innings": self.innings,
+                "innings": self.fc_innings if self.is_fc else self.innings,
                 "dismissed_batter": dismissed_name,
                 "provisional_index": provisional_index,
                 "provisional_batter": self.batting_team[provisional_index]["name"],
@@ -598,6 +716,26 @@ class Match:
                     "index": selected_index
                 }
             }
+        elif decision["type"] == "fc_declare":
+            declared = selected_index == 1
+            if declared:
+                self.fc_innings_declared = True
+            else:
+                # Guards _fc_check_declaration_and_follow_on from re-asking
+                # every ball for the rest of this over — see its docstring.
+                self._fc_declined_declare_over = self.current_over
+            result = {"success": True, "applied": {"type": "fc_declare", "declared": declared}}
+        elif decision["type"] == "fc_follow_on":
+            enforce_fo = selected_index == 1
+            scorecard_data = getattr(self, "_fc_pending_innings_end_scorecard", None)
+            self._fc_pending_innings_end_scorecard = None
+            self.pending_decision = None
+            transition_response = self._fc_apply_follow_on_decision(enforce_fo, scorecard_data)
+            return {
+                "success": True,
+                "applied": {"type": "fc_follow_on", "enforce_fo": enforce_fo},
+                "transition": transition_response,
+            }, 200
         else:
             return {"error": "Unsupported decision type"}, 400
 
@@ -911,7 +1049,7 @@ class Match:
             b2 = contrib['batsman2']
 
         partnership_data = {
-            "innings_number": self.innings,
+            "innings_number": self.fc_innings if self.is_fc else self.innings,
             "wicket_number": self.wickets,
             "batsman1_id": None,  # Will be resolved to player ID later
             "batsman1_name": striker_name,
@@ -927,7 +1065,9 @@ class Match:
             "end_over": self.current_over + (self.current_ball / 6),
         }
         
-        if self.innings == 1:
+        if self.is_fc:
+            self.fc_innings_partnerships.setdefault(self.fc_innings, []).append(partnership_data)
+        elif self.innings == 1:
             self.first_innings_partnerships.append(partnership_data)
         else:
             self.second_innings_partnerships.append(partnership_data)
@@ -2028,7 +2168,8 @@ class Match:
 
         # D4: bowler_history is now incremented at over completion, not at selection
         # This prevents over-counting when an innings ends mid-over
-        print(f"    {selected_bowler['name']} current quota: {self.bowler_history.get(selected_bowler['name'], 0)}/{self.fmt.max_bowler_overs}")
+        _quota_display = getattr(self.fmt, "max_bowler_overs", "unlimited")  # FC has no quota
+        print(f"    {selected_bowler['name']} current quota: {self.bowler_history.get(selected_bowler['name'], 0)}/{_quota_display}")
         
         # Initialize/update bowler stats
         if selected_bowler["name"] not in self.bowler_stats:
@@ -2144,10 +2285,14 @@ class Match:
 
         # Feature 8: reset per-over bowler feedback for new innings
         self.bowler_prev_over_runs = {}
-        # Reset BowlerManager for the new innings bowling side
+        # Reset the bowler manager for the new innings bowling side. Fatigue
+        # resets here (a bowler genuinely rests while the other side bats)
+        # even for FC, where pitch wear itself does NOT reset — see
+        # self.match_balls_bowled, deliberately untouched by this method.
         self.bowler_manager.reset(self.bowling_team)
         # Re-point alias so existing bowler_history reads remain valid
-        self.bowler_history = self.bowler_manager._quota
+        self.bowler_history = (self.bowler_manager._overs_this_innings if self.is_fc
+                                else self.bowler_manager._quota)
 
         # Reset partnership tracking
         self.current_partnership_balls = 0
@@ -2216,17 +2361,27 @@ class Match:
         else:
             phase_key = "default"
 
-        # Feature 1: select phase multiplier via format-aware phase detection
+        # Feature 1: select phase multiplier via format-aware phase detection.
+        # FC has no fielding-circle/powerplay/death phases at all — neutral.
         over = self.current_over
-        if self.fmt.is_powerplay(over):
+        if self.is_fc:
+            phase_mult = 1.00
+        elif self.fmt.is_powerplay(over):
             phase_mult = _POWERPLAY_BOWLING_MULT.get(phase_key, 1.00)
         elif self.fmt.is_death(over):
             phase_mult = _DEATH_BOWLING_MULT.get(phase_key, 1.00)
         else:
             phase_mult = _MIDDLE_BOWLING_MULT.get(phase_key, 1.00)
 
-        # Feature 2: fatigue via BowlerManager (supports up to 10-over spells)
-        fatigue = self.bowler_manager.get_fatigue_mult(bowler_name)
+        # Feature 2: fatigue. FC uses a continuous stamina-driven decay
+        # (engine/fc_bowler_workload.py) instead of BowlerManager's
+        # over-count table.
+        if self.is_fc:
+            fatigue = self.bowler_manager.get_fatigue_mult(
+                bowler_name, stamina_rating=eff.get("stamina_rating", 50)
+            )
+        else:
+            fatigue = self.bowler_manager.get_fatigue_mult(bowler_name)
 
         # Feature 8: previous over performance feedback via BowlerManager
         prev_runs = self.bowler_manager.prev_over_runs(bowler_name)
@@ -4110,6 +4265,715 @@ class Match:
         self._create_match_archive()
         return self._rain_final_payload(scorecard_data, lines)
 
+    def _innings_should_end(self):
+        if self.is_fc:
+            return self._fc_innings_should_end()
+        return self.current_over >= self.overs or self.wickets >= 10
+
+    def _transition_to_next_innings(self):
+        if self.is_fc:
+            return self._fc_transition_to_next_innings()
+        # 🤝 SAVE UNFINISHED PARTNERSHIP (if overs completed and not all out)
+        if self.wickets < 10 and self.current_partnership_balls > 0:
+             self._save_partnership("not_out")
+
+        if self.innings == 1:
+            # 🔧 USER REQUEST: Print team stats when all out
+            if self.wickets >= 10:
+                print(f"\n🛑 All Out! {self.first_batting_team_name} {self.score}/10 in {self.current_over}.{self.current_ball} overs")
+                not_out_batter = self.current_striker["name"] if not self.batsman_stats[self.current_striker["name"]]["wicket_type"] else self.current_non_striker["name"]
+                not_out_score = self.batsman_stats[not_out_batter]["runs"]
+                not_out_balls = self.batsman_stats[not_out_batter]["balls"]
+                print(f"   Not Out: {not_out_batter} {not_out_score}*({not_out_balls})")
+                print(f"   Total Score: {self.score}")
+
+            scorecard_data = self._generate_detailed_scorecard()
+            self.first_innings_score = self.score
+            self.target = self._compute_innings2_target()
+            required_rr = self.target / self.overs
+            chasing_team_code = self.data["team_away"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_home"].split("_")[0]
+            _target_info = f"{chasing_team_code} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
+            if self.rain_affected:
+                _target_info += " (DLS method)"
+            scorecard_data["target_info"] = _target_info
+
+            self._save_first_innings_stats()
+            self.first_innings_scorecard = scorecard_data
+
+            self.innings = 2
+
+            # Reload lineups from data to ensure impact player/reordering changes are applied
+            if hasattr(self, 'data') and self.data.get('impact_players_swapped'):
+                print("🔄 [Innings Change] Applying impact player and reordering changes.")
+                self.home_xi = self.data["playing_xi"]["home"]
+                self.away_xi = self.data["playing_xi"]["away"]
+
+            # --- START FIX ---
+            # Re-determine batting and bowling teams based on original toss decision and the UPDATED XIs
+            team_home_code = self.match_data["team_home"].split("_")[0]
+            self.batting_team, self.bowling_team = innings_teams(
+                self.toss_winner, self.toss_decision, team_home_code,
+                self.home_xi, self.away_xi, innings=2,
+            )
+            # --- END FIX ---
+
+            # Capture first innings wickets before reset
+            first_innings_wickets = self.wickets
+
+            innings_complete_summary = self._format_innings_complete_summary("End of innings")
+
+            # Weather clock: actual completed overs of innings 1
+            self._innings1_overs_bowled = self.current_over
+
+            # Reset all innings-specific state
+            self.score = 0
+            self.wickets = 0
+            self.current_over = 0
+            self.current_ball = 0
+            self.batter_idx = [0, 1]
+            self.current_striker = self.batting_team[0]
+            self.current_non_striker = self.batting_team[1]
+
+            print(f"🏏 Second innings batting order (Post-Fix):")
+            for i, player in enumerate(self.batting_team):
+                print(f"   {i+1}. {player['name']}")
+
+            self.batsman_stats = {p["name"]: self._new_batting_stats(p) for p in self.batting_team}
+            # bowler_history reset is handled inside _reset_innings_state() via BowlerManager
+            self.bowler_stats = {p["name"]: self._new_bowling_stats(p) for p in self.bowling_team if p.get("will_bowl")}
+            self._reset_innings_state()
+
+            # Notify scenario engine of innings transition
+            if self.scenario_engine:
+                self.scenario_engine.on_innings_transition()
+
+            return {
+                "innings_end": True,
+                "innings_number": 1,
+                "match_over": False,
+                "scorecard_data": scorecard_data,
+                "score": 0,
+                "wickets": 0,
+                "over": 0,
+                "ball": 0,
+                "commentary": (
+                    f"{self._format_innings_complete_summary('End of innings')}<br>"
+                    f"<strong>End of 1st Innings:</strong> {self.first_innings_score}/{10 if first_innings_wickets >= 10 else first_innings_wickets}. "
+                    f"Target: {self.target}"
+                ),
+                "striker": self.current_striker["name"],
+                "non_striker": self.current_non_striker["name"],
+                "bowler": ""
+            }
+
+        else:
+            scorecard_data = self._generate_detailed_scorecard()
+            if self.score >= self.target:
+                # 🤝 SAVE UNFINISHED PARTNERSHIP (Match Won)
+                if self.wickets < 10:
+                    self._save_partnership("not_out")
+
+                winner_code = self.data["team_home"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_away"].split("_")[0]
+                wkts_left = 10 - self.wickets
+
+                balls_left = self._balls_left_in_innings()
+                overs_left = self._balls_to_overs_notation(balls_left)
+
+                print("Check points: {}".format({
+                    "current_over": self.current_over,
+                    "current_ball": self.current_ball,
+                    "balls_left": balls_left,
+                    "overs_left": overs_left
+                }))
+
+                self._set_outcome(
+                    result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} overs remaining.{self._dls_suffix()}",
+                    winner_is_home=(self.batting_team is self.home_xi),
+                    match_status='completed', margin_type='wickets', margin_value=wkts_left,
+                )
+            else:
+                # Check for tie
+                if self.score == self.target - 1:
+                    self.result = "Match Tied"
+
+                    # 🤝 SAVE UNFINISHED PARTNERSHIP (Match Tied)
+                    if self.wickets < 10:
+                        self._save_partnership("not_out")
+
+                    # ✅ Store original scorecard for later display
+                    self.original_scorecard = self._generate_detailed_scorecard()
+                    self.original_scorecard["target_info"] = "Match Tied"
+
+                    # ✅ Set up super over (this won't affect main match stats)
+                    self.innings = 4
+                    return self._setup_super_over()
+                else:
+                    winner_code = self.data["team_home"].split("_")[0] if self.bowling_team is self.home_xi else self.data["team_away"].split("_")[0]
+                    run_diff = self.target - self.score - 1
+                    self._set_outcome(
+                        result_text=f"{winner_code} won by {run_diff} run(s).{self._dls_suffix()}",
+                        winner_is_home=(self.bowling_team is self.home_xi),
+                        match_status='completed', margin_type='runs', margin_value=run_diff,
+                    )
+
+            striker_stats = self.batsman_stats[self.current_striker["name"]]
+            non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
+            bowler_stats = self.bowler_stats[self.current_bowler["name"]]
+            overs_bowled = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
+
+            extras_str = ""
+            if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
+                extras_parts = []
+                if bowler_stats["wides"] > 0:
+                    extras_parts.append(f"{bowler_stats['wides']}w")
+                if bowler_stats["noballs"] > 0:
+                    extras_parts.append(f"{bowler_stats['noballs']}nb")
+                if extras_parts:
+                    extras_str = f" ({', '.join(extras_parts)})"
+
+            final_commentary = f"{self._format_innings_complete_summary()}<br><br>"
+            final_commentary += f"<strong>Match Over!</strong> {self.result}<br>"
+            final_commentary += f"<strong>Final Snapshot:</strong><br>"
+            final_commentary += f"{self.current_striker['name']} {striker_stats['runs']}({striker_stats['balls']}) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
+            final_commentary += f"{self.current_non_striker['name']} {non_striker_stats['runs']}({non_striker_stats['balls']}) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
+            final_commentary += f"{self.current_bowler['name']} {overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
+
+            first_block = self._format_scorecard_block(getattr(self, 'first_innings_scorecard', None), '1st Innings Scorecard')
+            second_block = self._format_scorecard_block(scorecard_data, '2nd Innings Scorecard')
+            if first_block and second_block:
+                final_commentary += f"<br><br><strong>Scorecards:</strong><br>{first_block}<br><br>{second_block}"
+
+            self.innings = 3
+            scorecard_data["target_info"] = self.result
+
+            self._save_second_innings_stats()
+            self._create_match_archive()
+
+            return {
+                "innings_end": True,
+                "innings_number": 2,
+                "match_over": True,
+                "scorecard_data": scorecard_data,
+                "final_score": self.score,
+                "wickets": self.wickets,
+                "result": self.result,
+                "commentary": final_commentary
+            }
+
+    def _fc_build_match_state(self):
+        """Match-state dict for FCPressureEngine.get_pressure_effects() —
+        deliberately NOT _calculate_current_match_state()'s shape, which is
+        T20/ListA innings==1/2-keyed and has no fc_innings/days_remaining/
+        lead concept at all."""
+        striker_name = self.current_striker["name"]
+        striker_balls_faced = self.batsman_stats.get(striker_name, {}).get("balls", 0)
+        days_remaining = self._fc_days_remaining()
+
+        lead = 0
+        if self.fc_innings in (2, 3):
+            a1 = self.fc_innings_totals.get(1, {}).get("score", 0)
+            lead = self.score - a1
+        elif self.fc_innings == 4:
+            lead = self.score - (self.target or 0)
+
+        # Simple Phase-1 acceleration heuristic: the batting side is in the
+        # same "time-forcing" window the declaration heuristic itself uses,
+        # and hasn't declared yet — i.e., building quickly toward one.
+        acceleration_mode = (
+            self.fc_innings in (1, 2, 3) and not self.fc_innings_declared
+            and days_remaining <= 2 and self.current_over >= 60
+        )
+
+        required_run_rate = 0.0
+        if self.fc_innings == 4 and self.target is not None:
+            required_run_rate = (self.target - self.score) / self._fc_overs_remaining_in_match()
+
+        return {
+            "fc_innings": self.fc_innings,
+            "wickets": self.wickets,
+            "striker_balls_faced": striker_balls_faced,
+            "days_remaining": days_remaining,
+            "recent_wickets": getattr(self, "recent_wickets_count", 0),
+            "lead": lead,
+            "acceleration_mode": acceleration_mode,
+            "required_run_rate": required_run_rate,
+            # Phase 2: technique dampens the settling-in penalty; temperament
+            # dampens pressure-driven wicket increases (survival mode,
+            # collapse-cluster chance). None (neutral, no dampening) when
+            # the player row predates these ratings.
+            "striker_technique": self.current_striker.get("technique_rating"),
+            "striker_temperament": self.current_striker.get("temperament_rating"),
+        }
+
+    def _fc_pick_bowler(self):
+        """
+        FC bowler selection: MCC Law 17.2 eligibility (no consecutive overs)
+        + day-stage bowling-style preference
+        (engine/fc_bowler_workload.py), then the highest bowling_rating
+        within the preferred style bucket. No quota, no death-overs plan,
+        no tier system — that's all T20/ListA-specific complexity that
+        doesn't apply to FC's uncapped spells.
+        """
+        eligible = self.bowler_manager.get_eligible_bowlers(self.current_over)
+        if not eligible:
+            # Only one eligible bowler total — Law 17.2 has no legal
+            # alternative; fall back to whoever is marked will_bowl so the
+            # match can continue rather than aborting.
+            eligible = [p for p in self.bowling_team if p.get("will_bowl", False)]
+        pitch_wear = self._compute_pitch_wear()
+        ranked = self.bowler_manager.rank_by_style_preference(eligible, pitch_wear, self.fc_day)
+        selected = ranked[0]
+        self._update_bowler_tracking(selected)
+        return selected
+
+    # ========================================================================
+    # First-Class (FC) innings state machine
+    # ========================================================================
+    # fc_innings (1-4) is entirely separate from self.innings, which stays 1
+    # for the whole match (see is_fc dispatch in __init__ and next_ball()).
+    # Rules implemented here match the design doc's rules reference: up to
+    # 2 innings per side, follow-on (MCC Law 14.1), declaration (innings 1
+    # and a follow-on-free innings 3 only), draw on day exhaustion, win by
+    # innings/runs/wickets, tie (no super over in FC).
+
+    def _fc_innings_should_end(self):
+        if self.wickets >= 10 or self.fc_innings_declared:
+            return True
+        if self.fc_innings == 4 and self.target is not None and self.score >= self.target:
+            return True
+        return False
+
+    def _fc_days_remaining(self):
+        """Full match days left INCLUDING today (today counts as 1)."""
+        return max(0, self.fmt.days - self.fc_day + 1)
+
+    def _fc_effective_overs_today(self):
+        """Today's schedulable overs after any weather loss (Phase 2) —
+        engine/fc_weather.py. Equals fmt.overs_per_day on an unaffected day."""
+        return fc_weather.effective_overs_today(
+            self.fc_weather_script, self.fc_day, self.fmt.overs_per_day
+        )
+
+    def _fc_overs_remaining_in_match(self):
+        """Rough overs-left estimate: today's remaining overs plus a flat
+        overs_per_day for every full day still to come. Deliberately doesn't
+        call the weather-aware _fc_effective_overs_today() for future days —
+        those haven't rolled their forecast outcome yet, so fmt.overs_per_day
+        is the only honest estimate available; only today's figure can be
+        weather-adjusted. Shared by the required-run-rate estimate
+        (_fc_build_match_state, for the live 4th-innings chase) and the
+        Monte Carlo declaration model (_fc_check_declaration_and_follow_on)."""
+        overs_left_today = max(0, self.fmt.overs_per_day - self.fc_day_overs_bowled_today)
+        full_days_left = max(0, self.fmt.days - self.fc_day)
+        return max(1, overs_left_today + full_days_left * self.fmt.overs_per_day)
+
+    def _fc_pre_ball_checks(self):
+        """
+        Called only at an over boundary (current_ball == 0), before the
+        shared bowler-selection/ball-processing code runs. Returns a
+        response dict to short-circuit next_ball(), or None to continue.
+        Mirrors the existing rain-check's "engine decides automatically at
+        an over boundary" precedent — no pending_decision involved (AI
+        always decides declaration/follow-on in Phase 1, per the agreed
+        scope).
+        """
+        if self.fc_day_overs_bowled_today >= self._fc_effective_overs_today():
+            if self.fc_day >= self.fmt.days:
+                return self._fc_finalize_draw()
+            return self._fc_day_break_response()
+
+        return self._fc_check_declaration_and_follow_on()
+
+    def _fc_check_declaration_and_follow_on(self):
+        """
+        Declaration check, run at every FC over boundary. AI mode decides
+        automatically via engine/fc_declaration.py's should_declare().
+        User-captained mode instead pauses with a decision once
+        declaration_window_open() says the moment is live, and leaves the
+        actual call to the human (see _create_fc_declare_decision).
+
+        Innings 1, 2, and a follow-on-free innings 3 are eligible (a side
+        already chasing a set target never declares). Follow-on itself is
+        decided inside _fc_transition_to_next_innings() at the moment
+        innings 2 ends — that's the one instant the decision is actually
+        live, not on every over boundary.
+        """
+        if self.fc_innings not in (1, 2, 3) or self.follow_on_enforced:
+            return None
+        if self.wickets >= 10 or self.fc_innings_declared:
+            # Innings already over (all out) or already decided (declared,
+            # AI or user-captained) — nothing left to ask or auto-decide.
+            # Without this, a user-captained "Declare" choice would get
+            # re-asked forever: submit_pending_decision() just sets the
+            # flag and returns, so the NEXT next_ball() call is what's
+            # actually supposed to notice fc_innings_declared and let
+            # _fc_innings_should_end() transition the innings — this check
+            # running again first would short-circuit that.
+            return None
+
+        lead = 0
+        if self.fc_innings in (2, 3):
+            a1 = self.fc_innings_totals.get(1, {}).get("score", 0)
+            lead = self.score - a1
+        days_remaining = self._fc_days_remaining()
+
+        if self._is_manual_mode():
+            if self._fc_declined_declare_over == self.current_over:
+                return None  # already asked and declined at this exact over
+            if fc_declaration.declaration_window_open(
+                fc_innings=self.fc_innings, wickets=self.wickets,
+                overs_bowled_this_innings=self.current_over,
+                days_remaining=days_remaining,
+            ):
+                return self._build_decision_required_response(
+                    self._create_fc_declare_decision(lead, days_remaining)
+                )
+            return None
+
+        pitch_factor = self.fmt.pitch_par_factors.get(self.pitch, 1.0)
+
+        # Monte Carlo inputs (innings 2/3 only — should_declare() falls back
+        # to the flat-threshold heuristic for innings 1, which never reads
+        # these). self.batting_team is OUR side (deciding whether to
+        # declare); self.bowling_team is the opposition.
+        mc_kwargs = {}
+        if self.fc_innings in (2, 3):
+            mc_kwargs = dict(
+                overs_remaining_in_match=self._fc_overs_remaining_in_match(),
+                own_bowling_strength=self._fc_avg_rating(self.batting_team, "bowling_rating"),
+                own_batting_strength=self._fc_avg_rating(self.batting_team, "batting_rating"),
+                opp_batting_strength=self._fc_avg_rating(self.bowling_team, "batting_rating"),
+                pitch_wear=self._compute_pitch_wear(),
+            )
+
+        if fc_declaration.should_declare(
+            fc_innings=self.fc_innings,
+            wickets=self.wickets,
+            overs_bowled_this_innings=self.current_over,
+            score=self.score,
+            lead=lead,
+            days_remaining=days_remaining,
+            pitch_par_factor=pitch_factor,
+            **mc_kwargs,
+        ):
+            self.fc_innings_declared = True
+        return None
+
+    def _create_fc_declare_decision(self, lead, days_remaining):
+        """Build the user-captained "declare now?" pending_decision. Options
+        are fixed (not player picks like next_bowler/next_batter), but still
+        expressed as index-keyed options so it reuses the exact same
+        submit_pending_decision(selected_index) endpoint/contract."""
+        decision = {
+            "type": "fc_declare",
+            "context": {
+                "fc_innings": self.fc_innings,
+                "score": self.score,
+                "wickets": self.wickets,
+                "over": self.current_over,
+                "lead": lead if self.fc_innings in (2, 3) else None,
+                "days_remaining": days_remaining,
+                "batting_team_name": self._get_team_name(self.batting_team),
+            },
+            "options": [
+                {"index": 1, "label": "Declare"},
+                {"index": 0, "label": "Continue Batting"},
+            ],
+        }
+        self.pending_decision = decision
+        return decision
+
+    @staticmethod
+    def _fc_avg_rating(players, rating_key):
+        """Mean of one rating field across an XI, for the Monte Carlo
+        declaration model — 50.0 (neutral) for an empty list, which should
+        never actually happen for a real XI but keeps this a total function."""
+        values = [p.get(rating_key, 0) or 0 for p in players]
+        return sum(values) / len(values) if values else 50.0
+
+    def _fc_day_break_response(self):
+        scorecard_data = self._generate_detailed_scorecard()
+        day_ended = self.fc_day
+        weather_line = fc_weather.day_summary_line(self.fc_weather_script, day_ended)
+        self.fc_day += 1
+        self.fc_day_overs_bowled_today = 0
+        return {
+            "day_break": True,
+            "day_number": day_ended,
+            "match_over": False,
+            "innings_end": False,
+            "scorecard_data": scorecard_data,
+            "score": self.score,
+            "wickets": self.wickets,
+            "over": self.current_over,
+            "ball": self.current_ball,
+            "weather_note": weather_line,
+            "commentary": (
+                f"<strong>Stumps &mdash; Day {day_ended}</strong><br>"
+                + (f"<em>{weather_line}</em><br>" if weather_line else "")
+                + f"{self._format_innings_complete_summary(f'Stumps, Day {day_ended}')}"
+            ),
+            "striker": self.current_striker["name"],
+            "non_striker": self.current_non_striker["name"],
+            "bowler": self.current_bowler["name"] if self.current_bowler else "",
+        }
+
+    def _fc_record_innings_stats(self, fc_innings_number):
+        """
+        Snapshot this innings' batting/bowling stats for the archiver's
+        generalized innings_plan (up to 4 entries, vs. T20/ListA's fixed
+        2-tuple) — see match_archiver.py.
+        """
+        self.fc_innings_stats.append({
+            "innings_number": fc_innings_number,
+            "batting_side": "home" if self.batting_team is self.home_xi else "away",
+            "bowling_side": "home" if self.bowling_team is self.home_xi else "away",
+            "batting_stats": copy.deepcopy(self.batsman_stats),
+            "bowling_stats": copy.deepcopy(self.bowler_stats),
+        })
+
+    def _fc_start_next_innings(self, next_fc_innings, new_batting, new_bowling):
+        self.batting_team = new_batting
+        self.bowling_team = new_bowling
+        self.score = 0
+        self.wickets = 0
+        self.current_over = 0
+        self.current_ball = 0
+        self.batter_idx = [0, 1]
+        self.current_striker = self.batting_team[0]
+        self.current_non_striker = self.batting_team[1]
+        self.batsman_stats = {p["name"]: self._new_batting_stats(p) for p in self.batting_team}
+        self.bowler_stats = {p["name"]: self._new_bowling_stats(p) for p in self.bowling_team if p.get("will_bowl")}
+        self._reset_innings_state()
+        self.fc_innings = next_fc_innings
+        self.fc_innings_declared = False
+        self.fc_ball_overs_bowled = 0  # a fresh new ball is always issued at the start of an innings
+        if self.scenario_engine:
+            self.scenario_engine.on_innings_transition()
+
+    def _fc_create_match_archive(self):
+        """
+        FC archiving entry point. MatchArchiver._build_innings_plan() reads
+        self.fc_innings_stats / self.fc_innings_totals / self.fc_innings_partnerships
+        directly (branching on match.is_fc) to persist every real innings
+        (2-4, depending on how the match played out) — not just a first+last
+        shim. This method only needs to seed the team-name metadata that
+        _determine_team_batting_order()'s fallback and a few log lines read.
+        """
+        if getattr(self, "_archive_created", False):
+            return True
+        if self.fc_innings_stats:
+            first = self.fc_innings_stats[0]
+            self.first_batting_team_name = (
+                self.match_data["team_home"].split("_")[0] if first["batting_side"] == "home"
+                else self.match_data["team_away"].split("_")[0]
+            )
+            self.first_bowling_team_name = (
+                self.match_data["team_home"].split("_")[0] if first["bowling_side"] == "home"
+                else self.match_data["team_away"].split("_")[0]
+            )
+        self._second_innings_stats_saved = True
+        return self._create_match_archive()
+
+    def _fc_finalize_match(self, scorecard_data):
+        self._fc_create_match_archive()
+        return {
+            "innings_end": True,
+            "innings_number": self.fc_innings,
+            "match_over": True,
+            "scorecard_data": scorecard_data,
+            "final_score": self.score,
+            "wickets": self.wickets,
+            "result": self.result,
+            "days_played": self.fc_day,
+            "commentary": f"<strong>Match Over!</strong> {self.result}",
+        }
+
+    def _fc_finalize_draw(self):
+        if self.wickets < 10 and self.current_partnership_balls > 0:
+            self._save_partnership("not_out")
+        scorecard_data = self._generate_detailed_scorecard()
+        self.fc_innings_totals[self.fc_innings] = {
+            "score": self.score, "wickets": self.wickets,
+            "overs_str": self._balls_to_overs_notation(self.current_over * 6 + self.current_ball),
+            "side": "home" if self.batting_team is self.home_xi else "away",
+        }
+        self._fc_record_innings_stats(self.fc_innings)
+        self._set_outcome(
+            result_text="Match drawn.",
+            winner_is_home=None,
+            match_status='drawn', margin_type=None, margin_value=None,
+        )
+        return self._fc_finalize_match(scorecard_data)
+
+    def _fc_transition_to_next_innings(self):
+        if self.wickets < 10 and self.current_partnership_balls > 0:
+            self._save_partnership("not_out")
+
+        ending_innings = self.fc_innings
+        scorecard_data = self._generate_detailed_scorecard()
+        self.fc_innings_totals[ending_innings] = {
+            "score": self.score, "wickets": self.wickets,
+            "overs_str": self._balls_to_overs_notation(self.current_over * 6 + self.current_ball),
+            "side": "home" if self.batting_team is self.home_xi else "away",
+        }
+        self._fc_record_innings_stats(ending_innings)
+
+        if ending_innings == 1:
+            self.first_innings_score = self.score
+            self._fc_first_batting_xi = self.batting_team
+            self._fc_first_bowling_xi = self.bowling_team
+            self._fc_start_next_innings(2, self.bowling_team, self.batting_team)
+            return {
+                "innings_end": True, "innings_number": 1, "match_over": False,
+                "scorecard_data": scorecard_data,
+                "score": 0, "wickets": 0, "over": 0, "ball": 0,
+                "commentary": (
+                    f"{self._format_innings_complete_summary('End of innings')}<br>"
+                    f"<strong>End of 1st Innings:</strong> {self.fc_innings_totals[1]['score']}/"
+                    f"{self.fc_innings_totals[1]['wickets']}."
+                ),
+                "striker": self.current_striker["name"],
+                "non_striker": self.current_non_striker["name"],
+                "bowler": "",
+            }
+
+        if ending_innings == 2:
+            a1 = self.fc_innings_totals[1]["score"]
+            b1 = self.score
+            deficit = a1 - b1
+
+            if deficit > 0 and self._is_manual_mode():
+                # A real choice exists (deficit <= 0 means follow-on was
+                # never possible — nothing to ask). Pause: the transition
+                # completes in _fc_apply_follow_on_decision, called from
+                # submit_pending_decision once the captain answers.
+                self._fc_pending_innings_end_scorecard = scorecard_data
+                return self._build_decision_required_response(
+                    self._create_fc_follow_on_decision(deficit),
+                    commentary=self._format_innings_complete_summary('End of innings'),
+                )
+
+            enforce_fo = deficit > 0 and fc_declaration.should_enforce_follow_on(
+                deficit=deficit, follow_on_margin=self.fmt.follow_on_margin,
+                days_remaining=self._fc_days_remaining(),
+            )
+            return self._fc_apply_follow_on_decision(enforce_fo, scorecard_data)
+
+        if ending_innings == 3:
+            if self.follow_on_enforced:
+                b1 = self.fc_innings_totals[2]["score"]
+                b2 = self.score
+                a1 = self.fc_innings_totals[1]["score"]
+                if (b1 + b2) < a1:
+                    margin = a1 - (b1 + b2)
+                    self._set_outcome(
+                        result_text=f"Match won by an innings and {margin} run(s).",
+                        winner_is_home=(self._fc_first_batting_xi is self.home_xi),
+                        match_status='completed', margin_type='innings', margin_value=margin,
+                    )
+                    return self._fc_finalize_match(scorecard_data)
+                self.target = (b1 + b2) - a1 + 1
+                self._fc_start_next_innings(4, self._fc_first_batting_xi, self._fc_first_bowling_xi)
+            else:
+                a1 = self.fc_innings_totals[1]["score"]
+                a2 = self.score
+                b1 = self.fc_innings_totals[2]["score"]
+                self.target = a1 + a2 - b1 + 1
+                # B chases: B was bowling during innings 3 (A's 2nd innings).
+                self._fc_start_next_innings(4, self.bowling_team, self.batting_team)
+            return {
+                "innings_end": True, "innings_number": 3, "match_over": False,
+                "scorecard_data": scorecard_data,
+                "score": 0, "wickets": 0, "over": 0, "ball": 0,
+                "target": self.target,
+                "commentary": (
+                    f"{self._format_innings_complete_summary('End of innings')}<br>"
+                    f"<strong>Target: {self.target}</strong>"
+                ),
+                "striker": self.current_striker["name"],
+                "non_striker": self.current_non_striker["name"],
+                "bowler": "",
+            }
+
+        # ending_innings == 4: the chase concludes here (all out, or target
+        # reached — the target-reached case is caught by
+        # _fc_innings_should_end() so this method is only entered for that
+        # or for all-out).
+        if self.score >= self.target:
+            wkts_left = 10 - self.wickets
+            self._set_outcome(
+                result_text=f"Match won by {wkts_left} wicket(s).",
+                winner_is_home=(self.batting_team is self.home_xi),
+                match_status='completed', margin_type='wickets', margin_value=wkts_left,
+            )
+        elif self.score == self.target - 1:
+            self._set_outcome(
+                result_text="Match Tied.",
+                winner_is_home=None,
+                match_status='tied', margin_type='tie', margin_value=0,
+            )
+        else:
+            run_diff = self.target - self.score - 1
+            self._set_outcome(
+                result_text=f"Match won by {run_diff} run(s).",
+                winner_is_home=(self.bowling_team is self.home_xi),
+                match_status='completed', margin_type='runs', margin_value=run_diff,
+            )
+        return self._fc_finalize_match(scorecard_data)
+
+    def _create_fc_follow_on_decision(self, deficit):
+        """Build the user-captained "enforce the follow-on?" pending_decision,
+        offered only when deficit > 0 (a real choice — see the ending_innings
+        == 2 branch above). Same fixed-index-options shape as
+        _create_fc_declare_decision, for the same reason: reuse
+        submit_pending_decision(selected_index) as-is."""
+        decision = {
+            "type": "fc_follow_on",
+            "context": {
+                "deficit": deficit,
+                "follow_on_margin": self.fmt.follow_on_margin,
+                "days_remaining": self._fc_days_remaining(),
+                "trailing_team_name": self._get_team_name(self.batting_team),
+            },
+            "options": [
+                {"index": 1, "label": "Enforce Follow-on"},
+                {"index": 0, "label": "Bat Again"},
+            ],
+        }
+        self.pending_decision = decision
+        return decision
+
+    def _fc_apply_follow_on_decision(self, enforce_fo, scorecard_data):
+        """Completes the innings-2 -> innings-3 transition once the
+        follow-on call is made, AI-decided or user-captained alike. Must run
+        with self.batting_team/self.bowling_team still at their innings-2
+        values (true both for the immediate AI-mode call and the delayed
+        user-captained one, since nothing else touches match state while a
+        decision is pending)."""
+        self.follow_on_enforced = enforce_fo
+        if enforce_fo:
+            # B bats again immediately — batting/bowling roles unchanged
+            # from innings 2 (B was batting, A was bowling; B bats on).
+            self._fc_start_next_innings(3, self.batting_team, self.bowling_team)
+        else:
+            # A bats their 2nd innings — swap back to A batting, B bowling.
+            self._fc_start_next_innings(3, self._fc_first_batting_xi, self._fc_first_bowling_xi)
+        return {
+            "innings_end": True, "innings_number": 2, "match_over": False,
+            "follow_on_enforced": enforce_fo,
+            "scorecard_data": scorecard_data,
+            "score": 0, "wickets": 0, "over": 0, "ball": 0,
+            "commentary": (
+                f"{self._format_innings_complete_summary('End of innings')}<br>"
+                + ("<strong>Follow-on enforced.</strong>" if enforce_fo
+                   else "<strong>End of 2nd Innings.</strong>")
+            ),
+            "striker": self.current_striker["name"],
+            "non_striker": self.current_non_striker["name"],
+            "bowler": "",
+        }
+
     def next_ball(self):
         # Super Over guard: once a tie pushes the match into super-over state
         # (innings 4 = super over pending/in progress, 5 = decided), the normal
@@ -4153,6 +5017,8 @@ class Match:
 
         # Rain check at the start of a fresh over — this is where deferred
         # innings-break events land (a chase reduced before it begins).
+        # Inert for FC (weather_script has an empty events list — no
+        # weather modeling in Phase 1), so no is_fc guard is needed here.
         if self.current_ball == 0:
             _rain_outcome = self._check_rain_events()
             if _rain_outcome:
@@ -4161,196 +5027,20 @@ class Match:
                 self.pending_pre_ball_commentary.extend(_rain_outcome.get("lines", []))
                 self._pending_rain_info = _rain_outcome.get("info")
 
+        # FC day/match-exhaustion and declaration/follow-on checks — engine
+        # decides automatically at the over boundary, same style as the
+        # rain check above (no pending_decision involved; AI always
+        # decides in Phase 1).
+        if self.current_ball == 0 and self.is_fc:
+            _fc_pre = self._fc_pre_ball_checks()
+            if _fc_pre is not None:
+                return _fc_pre
+
         self._ensure_current_bowler_stats_entry()
 
 
-        if self.current_over >= self.overs or self.wickets >= 10:
-            # 🤝 SAVE UNFINISHED PARTNERSHIP (if overs completed and not all out)
-            if self.wickets < 10 and self.current_partnership_balls > 0:
-                 self._save_partnership("not_out")
-
-            if self.innings == 1:
-                # 🔧 USER REQUEST: Print team stats when all out
-                if self.wickets >= 10:
-                    print(f"\n🛑 All Out! {self.first_batting_team_name} {self.score}/10 in {self.current_over}.{self.current_ball} overs")
-                    not_out_batter = self.current_striker["name"] if not self.batsman_stats[self.current_striker["name"]]["wicket_type"] else self.current_non_striker["name"]
-                    not_out_score = self.batsman_stats[not_out_batter]["runs"]
-                    not_out_balls = self.batsman_stats[not_out_batter]["balls"]
-                    print(f"   Not Out: {not_out_batter} {not_out_score}*({not_out_balls})")
-                    print(f"   Total Score: {self.score}")
-
-                scorecard_data = self._generate_detailed_scorecard()
-                self.first_innings_score = self.score
-                self.target = self._compute_innings2_target()
-                required_rr = self.target / self.overs
-                chasing_team_code = self.data["team_away"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_home"].split("_")[0]
-                _target_info = f"{chasing_team_code} needs {self.target} runs from {self.overs} overs at {required_rr:.2f} runs per over"
-                if self.rain_affected:
-                    _target_info += " (DLS method)"
-                scorecard_data["target_info"] = _target_info
-
-                self._save_first_innings_stats()
-                self.first_innings_scorecard = scorecard_data
-
-                self.innings = 2
-                
-                # Reload lineups from data to ensure impact player/reordering changes are applied
-                if hasattr(self, 'data') and self.data.get('impact_players_swapped'):
-                    print("🔄 [Innings Change] Applying impact player and reordering changes.")
-                    self.home_xi = self.data["playing_xi"]["home"]
-                    self.away_xi = self.data["playing_xi"]["away"]
-                    
-                # --- START FIX ---
-                # Re-determine batting and bowling teams based on original toss decision and the UPDATED XIs
-                team_home_code = self.match_data["team_home"].split("_")[0]
-                self.batting_team, self.bowling_team = innings_teams(
-                    self.toss_winner, self.toss_decision, team_home_code,
-                    self.home_xi, self.away_xi, innings=2,
-                )
-                # --- END FIX ---
-
-                # Capture first innings wickets before reset
-                first_innings_wickets = self.wickets
-
-                innings_complete_summary = self._format_innings_complete_summary("End of innings")
-
-                # Weather clock: actual completed overs of innings 1
-                self._innings1_overs_bowled = self.current_over
-
-                # Reset all innings-specific state
-                self.score = 0
-                self.wickets = 0
-                self.current_over = 0
-                self.current_ball = 0
-                self.batter_idx = [0, 1]
-                self.current_striker = self.batting_team[0]
-                self.current_non_striker = self.batting_team[1]
-
-                print(f"🏏 Second innings batting order (Post-Fix):")
-                for i, player in enumerate(self.batting_team):
-                    print(f"   {i+1}. {player['name']}")
-
-                self.batsman_stats = {p["name"]: self._new_batting_stats(p) for p in self.batting_team}
-                # bowler_history reset is handled inside _reset_innings_state() via BowlerManager
-                self.bowler_stats = {p["name"]: self._new_bowling_stats(p) for p in self.bowling_team if p.get("will_bowl")}
-                self._reset_innings_state()
-
-                # Notify scenario engine of innings transition
-                if self.scenario_engine:
-                    self.scenario_engine.on_innings_transition()
-
-                return {
-                    "innings_end": True,
-                    "innings_number": 1,
-                    "match_over": False,
-                    "scorecard_data": scorecard_data,
-                    "score": 0,
-                    "wickets": 0,
-                    "over": 0,
-                    "ball": 0,
-                    "commentary": (
-                        f"{self._format_innings_complete_summary('End of innings')}<br>"
-                        f"<strong>End of 1st Innings:</strong> {self.first_innings_score}/{10 if first_innings_wickets >= 10 else first_innings_wickets}. "
-                        f"Target: {self.target}"
-                    ),
-                    "striker": self.current_striker["name"],
-                    "non_striker": self.current_non_striker["name"],
-                    "bowler": ""
-                }
-
-            else:
-                scorecard_data = self._generate_detailed_scorecard()
-                if self.score >= self.target:
-                    # 🤝 SAVE UNFINISHED PARTNERSHIP (Match Won)
-                    if self.wickets < 10:
-                        self._save_partnership("not_out")
-
-                    winner_code = self.data["team_home"].split("_")[0] if self.batting_team is self.home_xi else self.data["team_away"].split("_")[0]
-                    wkts_left = 10 - self.wickets
-
-                    balls_left = self._balls_left_in_innings()
-                    overs_left = self._balls_to_overs_notation(balls_left)
-
-                    print("Check points: {}".format({
-                        "current_over": self.current_over,
-                        "current_ball": self.current_ball,
-                        "balls_left": balls_left,
-                        "overs_left": overs_left
-                    }))
-
-                    self._set_outcome(
-                        result_text=f"{winner_code} won by {wkts_left} wicket(s) with {overs_left} overs remaining.{self._dls_suffix()}",
-                        winner_is_home=(self.batting_team is self.home_xi),
-                        match_status='completed', margin_type='wickets', margin_value=wkts_left,
-                    )
-                else:
-                    # Check for tie
-                    if self.score == self.target - 1:
-                        self.result = "Match Tied"
-
-                        # 🤝 SAVE UNFINISHED PARTNERSHIP (Match Tied)
-                        if self.wickets < 10:
-                            self._save_partnership("not_out")
-                        
-                        # ✅ Store original scorecard for later display
-                        self.original_scorecard = self._generate_detailed_scorecard()
-                        self.original_scorecard["target_info"] = "Match Tied"
-                        
-                        # ✅ Set up super over (this won't affect main match stats)
-                        self.innings = 4
-                        return self._setup_super_over()
-                    else:
-                        winner_code = self.data["team_home"].split("_")[0] if self.bowling_team is self.home_xi else self.data["team_away"].split("_")[0]
-                        run_diff = self.target - self.score - 1
-                        self._set_outcome(
-                            result_text=f"{winner_code} won by {run_diff} run(s).{self._dls_suffix()}",
-                            winner_is_home=(self.bowling_team is self.home_xi),
-                            match_status='completed', margin_type='runs', margin_value=run_diff,
-                        )
-
-                striker_stats = self.batsman_stats[self.current_striker["name"]]
-                non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
-                bowler_stats = self.bowler_stats[self.current_bowler["name"]]
-                overs_bowled = bowler_stats["overs"] + (bowler_stats["balls_bowled"] % 6) / 10
-                
-                extras_str = ""
-                if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
-                    extras_parts = []
-                    if bowler_stats["wides"] > 0:
-                        extras_parts.append(f"{bowler_stats['wides']}w")
-                    if bowler_stats["noballs"] > 0:
-                        extras_parts.append(f"{bowler_stats['noballs']}nb")
-                    if extras_parts:
-                        extras_str = f" ({', '.join(extras_parts)})"
-                
-                final_commentary = f"{self._format_innings_complete_summary()}<br><br>"
-                final_commentary += f"<strong>Match Over!</strong> {self.result}<br>"
-                final_commentary += f"<strong>Final Snapshot:</strong><br>"
-                final_commentary += f"{self.current_striker['name']} {striker_stats['runs']}({striker_stats['balls']}) [{striker_stats['fours']}x4, {striker_stats['sixes']}x6]<br>"
-                final_commentary += f"{self.current_non_striker['name']} {non_striker_stats['runs']}({non_striker_stats['balls']}) [{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]<br>"
-                final_commentary += f"{self.current_bowler['name']} {overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
-
-                first_block = self._format_scorecard_block(getattr(self, 'first_innings_scorecard', None), '1st Innings Scorecard')
-                second_block = self._format_scorecard_block(scorecard_data, '2nd Innings Scorecard')
-                if first_block and second_block:
-                    final_commentary += f"<br><br><strong>Scorecards:</strong><br>{first_block}<br><br>{second_block}"
-
-                self.innings = 3
-                scorecard_data["target_info"] = self.result
-
-                self._save_second_innings_stats()
-                self._create_match_archive()
-
-                return {
-                    "innings_end": True,
-                    "innings_number": 2,
-                    "match_over": True,
-                    "scorecard_data": scorecard_data,
-                    "final_score": self.score,
-                    "wickets": self.wickets,
-                    "result": self.result,
-                    "commentary": final_commentary
-                }
+        if self._innings_should_end():
+            return self._transition_to_next_innings()
 
         if self.current_ball == 0:
             # Initialize partnership contributions if new partnership (moved from inner block)
@@ -4368,7 +5058,7 @@ class Match:
                         commentary=f"<em>Select bowler for over {self.current_over + 1}</em>"
                     )
                 try:
-                    self.current_bowler = self.pick_bowler()
+                    self.current_bowler = self._fc_pick_bowler() if self.is_fc else self.pick_bowler()
                 except Exception as e:
                     log_exception(e)
                     logger.exception("Bowler selection failed at over %s.%s: %s", self.current_over, self.current_ball, e)
@@ -4383,11 +5073,15 @@ class Match:
                         }
 
                     previous_name = self.current_bowler["name"] if self.current_bowler else None
-                    max_q = self.fmt.max_bowler_overs
-                    quota_non_consecutive = [
-                        b for b in eligible
-                        if b["name"] != previous_name and self.bowler_history.get(b["name"], 0) < max_q
-                    ]
+                    # FC has no bowling quota at all — every eligible (non-
+                    # consecutive) bowler is quota-safe by definition.
+                    max_q = getattr(self.fmt, "max_bowler_overs", None)
+                    quota_non_consecutive = (
+                        [b for b in eligible if b["name"] != previous_name]
+                        if max_q is None else
+                        [b for b in eligible
+                         if b["name"] != previous_name and self.bowler_history.get(b["name"], 0) < max_q]
+                    )
                     non_consecutive = [b for b in eligible if b["name"] != previous_name]
                     fallback_pool = quota_non_consecutive or non_consecutive
                     if not fallback_pool:
@@ -4424,74 +5118,86 @@ class Match:
                     ""
                 ])
 
-        # Calculate pressure and effects
-        match_state = self._calculate_current_match_state()
-        pressure_score = self.pressure_engine.calculate_pressure(match_state)
-
-        # Win probability (2nd innings only; None during 1st innings)
-        _win_prob = self._calculate_win_probability()
-
-
-        # Get base pressure effects (now fair)
-        pressure_effects = self.pressure_engine.get_pressure_effects(
-            pressure_score, 
-            self.current_striker['batting_rating'],
-            self.current_bowler['bowling_rating'],
-            self.pitch
-        )
-
-        # 🔧 ADD CHASING ADVANTAGE
-        chasing_advantage = self.pressure_engine.get_chasing_advantage(match_state)
-        if chasing_advantage:
-            pressure_effects['boundary_modifier'] *= chasing_advantage['boundary_boost']
-            pressure_effects['wicket_modifier'] *= chasing_advantage['wicket_reduction']
-            print(f"🎯 CHASING ADVANTAGE: {chasing_advantage['boundary_boost']:.2f}x boundaries, {chasing_advantage['wicket_reduction']:.2f}x wickets")
-
-        # Check for defensive mode first
-        defensive_effects = self.pressure_engine.calculate_defensive_factor(match_state)
-
-        if defensive_effects and defensive_effects['defensive_active']:
-            # Defensive mode (many wickets down)
-            pressure_effects['boundary_modifier'] *= (1 - defensive_effects['boundary_reduction'])
-            pressure_effects['wicket_modifier'] *= (1 - defensive_effects['wicket_reduction'])
-            pressure_effects['dot_bonus'] += defensive_effects['dot_increase']
-            pressure_effects['single_boost'] = defensive_effects['single_boost']
-            logger.info(f"{defensive_effects['mode']}: Playing defensively!")
-
+        # Calculate pressure and effects.
+        # FC uses an entirely separate model (session-survival + lead-
+        # building, not run-rate-chase pressure) — see FCPressureEngine's
+        # module docstring. PressureEngine's calculate_pressure/
+        # get_pressure_effects/get_chasing_advantage/calculate_defensive_factor/
+        # get_risk_based_effects chain is RRR/death-overs-chase-shaped and
+        # keys off self.innings==1/2, which is permanently 1 for FC — none
+        # of that logic transfers.
+        if self.is_fc:
+            match_state = self._fc_build_match_state()
+            _win_prob = None  # no chase-win-probability model for FC in Phase 1
+            pressure_effects = self.pressure_engine.get_pressure_effects(match_state)
         else:
-            # Apply fair risk-based effects
-            risk_effects = self.pressure_engine.get_risk_based_effects(match_state)
-            
-            if risk_effects and risk_effects['risk_active']:
-                # Wicket-cluster check for the 2nd-innings chase-collapse case
-                # only. First-innings clusters are evaluated exclusively by
-                # the "First innings collapse psychology" block below —
-                # calling should_trigger_wicket_cluster() here too would
-                # re-roll the same RNG draw for the same ball and could stack
-                # both boosts (up to 1.3 * 1.25 = 1.625x).
-                if self.innings == 2:
-                    recent_wickets = getattr(self, 'recent_wickets_count', 0)
-                    cluster_trigger = self.pressure_engine.should_trigger_wicket_cluster(
-                        match_state, recent_wickets
-                    )
+            match_state = self._calculate_current_match_state()
+            pressure_score = self.pressure_engine.calculate_pressure(match_state)
 
-                    if cluster_trigger:
-                        pressure_effects['wicket_modifier'] *= 1.3  # Reduced from 1.5
-                        logger.info(f"WICKET CLUSTER: 1.3x additional wicket boost!")
+            # Win probability (2nd innings only; None during 1st innings)
+            _win_prob = self._calculate_win_probability()
 
-                # Apply effects
-                pressure_effects['boundary_modifier'] *= risk_effects['boundary_boost']
-                pressure_effects['dot_bonus'] += risk_effects['dot_increase']
-                pressure_effects['wicket_modifier'] *= risk_effects['wicket_boost']
-                pressure_effects['strike_rotation_penalty'] = risk_effects['strike_rotation_penalty']
-                pressure_effects['single_floor'] = risk_effects['single_floor']
 
-        # First innings collapse psychology (works even outside death overs)
-        if self.innings == 1:
-            recent_wickets = getattr(self, 'recent_wickets_count', 0)
-            if self.pressure_engine.should_trigger_wicket_cluster(match_state, recent_wickets):
-                pressure_effects['wicket_modifier'] *= 1.25
-                logger.info(f"FIRST INNINGS COLLAPSE: 1.25x wicket boost! ({self.wickets} down, {recent_wickets} recent)")
+            # Get base pressure effects (now fair)
+            pressure_effects = self.pressure_engine.get_pressure_effects(
+                pressure_score,
+                self.current_striker['batting_rating'],
+                self.current_bowler['bowling_rating'],
+                self.pitch
+            )
+
+            # 🔧 ADD CHASING ADVANTAGE
+            chasing_advantage = self.pressure_engine.get_chasing_advantage(match_state)
+            if chasing_advantage:
+                pressure_effects['boundary_modifier'] *= chasing_advantage['boundary_boost']
+                pressure_effects['wicket_modifier'] *= chasing_advantage['wicket_reduction']
+                print(f"🎯 CHASING ADVANTAGE: {chasing_advantage['boundary_boost']:.2f}x boundaries, {chasing_advantage['wicket_reduction']:.2f}x wickets")
+
+            # Check for defensive mode first
+            defensive_effects = self.pressure_engine.calculate_defensive_factor(match_state)
+
+            if defensive_effects and defensive_effects['defensive_active']:
+                # Defensive mode (many wickets down)
+                pressure_effects['boundary_modifier'] *= (1 - defensive_effects['boundary_reduction'])
+                pressure_effects['wicket_modifier'] *= (1 - defensive_effects['wicket_reduction'])
+                pressure_effects['dot_bonus'] += defensive_effects['dot_increase']
+                pressure_effects['single_boost'] = defensive_effects['single_boost']
+                logger.info(f"{defensive_effects['mode']}: Playing defensively!")
+
+            else:
+                # Apply fair risk-based effects
+                risk_effects = self.pressure_engine.get_risk_based_effects(match_state)
+
+                if risk_effects and risk_effects['risk_active']:
+                    # Wicket-cluster check for the 2nd-innings chase-collapse case
+                    # only. First-innings clusters are evaluated exclusively by
+                    # the "First innings collapse psychology" block below —
+                    # calling should_trigger_wicket_cluster() here too would
+                    # re-roll the same RNG draw for the same ball and could stack
+                    # both boosts (up to 1.3 * 1.25 = 1.625x).
+                    if self.innings == 2:
+                        recent_wickets = getattr(self, 'recent_wickets_count', 0)
+                        cluster_trigger = self.pressure_engine.should_trigger_wicket_cluster(
+                            match_state, recent_wickets
+                        )
+
+                        if cluster_trigger:
+                            pressure_effects['wicket_modifier'] *= 1.3  # Reduced from 1.5
+                            logger.info(f"WICKET CLUSTER: 1.3x additional wicket boost!")
+
+                    # Apply effects
+                    pressure_effects['boundary_modifier'] *= risk_effects['boundary_boost']
+                    pressure_effects['dot_bonus'] += risk_effects['dot_increase']
+                    pressure_effects['wicket_modifier'] *= risk_effects['wicket_boost']
+                    pressure_effects['strike_rotation_penalty'] = risk_effects['strike_rotation_penalty']
+                    pressure_effects['single_floor'] = risk_effects['single_floor']
+
+            # First innings collapse psychology (works even outside death overs)
+            if self.innings == 1:
+                recent_wickets = getattr(self, 'recent_wickets_count', 0)
+                if self.pressure_engine.should_trigger_wicket_cluster(match_state, recent_wickets):
+                    pressure_effects['wicket_modifier'] *= 1.25
+                    logger.info(f"FIRST INNINGS COLLAPSE: 1.25x wicket boost! ({self.wickets} down, {recent_wickets} recent)")
 
         # Feature 7: Toss × Conditions modifier.
         # The team that made the correct toss call for the pitch conditions gets
@@ -4515,8 +5221,7 @@ class Match:
             if _player.get("name") == striker_name:
                 _batting_position = _idx + 1
                 break
-        _total_balls = self.fmt.overs * 6
-        _pitch_wear = min(1.0, self.innings_balls_bowled / _total_balls)
+        _pitch_wear = self._compute_pitch_wear()
         _game_mode_override = self._resolve_game_mode()
         # Historical scenario engines steer both innings; classic scripted
         # scenarios only ever act on the 2nd innings.
@@ -4527,7 +5232,14 @@ class Match:
         _scenario_phase = (
             self.scenario_engine.get_phase() if _scenario_steers_now else "inactive"
         )
-        _gsme_state = compute_game_state_vector(
+        # GSME (Game State Momentum Engine) is tuned entirely around T20/
+        # ListA's fixed-innings-length, single-target shape (par-score
+        # curves, RRR baselines, death-phase boosts) — none of which exists
+        # on MultiDayFormatConfig. FC's own momentum/pressure axis is
+        # FCPressureEngine (session-survival + lead-building), already
+        # folded into pressure_effects above; calculate_outcome() treats
+        # game_state=None as a clean no-op.
+        _gsme_state = None if self.is_fc else compute_game_state_vector(
             ball_history=self.ball_history,
             score=self.score,
             current_over=self.current_over,
@@ -4586,9 +5298,9 @@ class Match:
 
             # Feature 3: pitch wear from balls bowled this innings.
             # Normalised to the total ball capacity of the format
-            # (T20=120, ListA=300) so wear progresses at the right pace.
-            _total_balls = self.fmt.overs * 6
-            _pitch_wear = min(1.0, self.innings_balls_bowled / _total_balls)
+            # (T20=120, ListA=300, FC=continuous across the whole match)
+            # so wear progresses at the right pace.
+            _pitch_wear = self._compute_pitch_wear()
 
             # Feature 13: game mode selection (pinned by config, else dynamic)
             _game_mode_override = self._resolve_game_mode()
@@ -4642,6 +5354,8 @@ class Match:
                 ground_config_override=self.ground_config,
                 format_config=self.fmt,
                 is_day_night=self.data.get("is_day_night", False),
+                ball_overs_bowled=self.fc_ball_overs_bowled if self.is_fc else 0,
+                new_ball_overs=getattr(self.fmt, "new_ball_overs", 80),
             )
 
         # 🎙️ COMMENTARY REVAMP INTEGRATION
@@ -4662,9 +5376,15 @@ class Match:
             comm_state['partnership_runs'] = self.current_partnership_runs
             comm_state['current_over_runs'] = self.current_over_runs
             comm_state['current_ball'] = self.current_ball
-            # Format-aware over landmarks for commentary triggers
-            comm_state['_fmt_last_over'] = self.fmt.overs - 1       # 19 for T20, 49 for ListA
-            comm_state['_fmt_death_start'] = self.fmt.death_phase.start  # 16 for T20, 40 for ListA
+            # Format-aware over landmarks for commentary triggers — FC has
+            # no fixed innings length or death-overs phase, so these are
+            # simply omitted; commentary_engine.py's state.get(..., default)
+            # calls fall back safely (not that those T20/ListA-scaled
+            # defaults are meaningful at FC over numbers anyway).
+            comm_state['is_fc'] = self.is_fc
+            if not self.is_fc:
+                comm_state['_fmt_last_over'] = self.fmt.overs - 1       # 19 for T20, 49 for ListA
+                comm_state['_fmt_death_start'] = self.fmt.death_phase.start  # 16 for T20, 40 for ListA
 
             # Maiden over detection: last legal ball of over, no runs all over, this ball also a dot
             is_legal = not outcome.get('is_extra') or outcome.get('extra_type', '') in ('Byes', 'Leg Bye')
@@ -4699,6 +5419,8 @@ class Match:
                 ground_config_override=self.ground_config,
                 format_config=self.fmt,
                 is_day_night=self.data.get("is_day_night", False),
+                ball_overs_bowled=self.fc_ball_overs_bowled if self.is_fc else 0,
+                new_ball_overs=getattr(self.fmt, "new_ball_overs", 80),
             )
 
             bat_runs = bat_outcome.get("runs", 0)
@@ -4792,6 +5514,8 @@ class Match:
 
         # Feature 3: increment pitch wear counter for every delivery
         self.innings_balls_bowled += 1
+        # FC only: match-long counter, never reset by _reset_innings_state()
+        self.match_balls_bowled += 1
 
         self.prev_delivery_was_extra = extra
 
@@ -4826,6 +5550,16 @@ class Match:
 
             # Check if team is all out (works for both striker and non-striker dismissals)
             if not self.remaining_batter_indices:
+                if self.is_fc:
+                    # Mid-over all-out: the top-of-next_ball() _innings_should_end()
+                    # check only catches state from BEFORE this ball; the 10th
+                    # wicket falling on THIS ball needs the same transition
+                    # immediately. _fc_transition_to_next_innings() already
+                    # reads the (already-updated) self.wickets/self.score, so
+                    # it's safe to call from here too — this bypasses the
+                    # T20-specific inline innings==1/else block entirely
+                    # rather than re-implementing it a second time for FC.
+                    return self._fc_transition_to_next_innings()
                 scorecard_data = self._generate_detailed_scorecard()
 
                 # ✅ BUILD ENHANCED ALL-OUT COMMENTARY
@@ -5346,7 +6080,7 @@ class Match:
                         "striker": _bd_striker,
                         "non_striker": _bd_non_striker,
                         "bowler": _bd_bowler,
-                        "innings": self.innings,
+                        "innings": self.fc_innings if self.is_fc else self.innings,
                         "score": self.score,
                         "wickets": self.wickets,
                         "target": getattr(self, 'target', None),
@@ -5446,6 +6180,15 @@ class Match:
             self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
             self.batter_idx.reverse()
 
+            if self.is_fc:
+                self.fc_day_overs_bowled_today += 1
+                self.fc_ball_overs_bowled += 1
+                # New ball taken automatically as soon as it's due (Phase 2
+                # — no user-captained delay option yet, consistent with
+                # "AI always decides" for FC in this phase).
+                if self.fc_ball_overs_bowled >= self.fmt.new_ball_overs:
+                    self.fc_ball_overs_bowled = 0
+
             # ── Rain check at the over boundary ──────────────────────────
             _rain_outcome = self._check_rain_events()
             if _rain_outcome:
@@ -5476,7 +6219,7 @@ class Match:
             "striker": _bd_striker,
             "non_striker": _bd_non_striker,
             "bowler": _bd_bowler,
-            "innings": self.innings,
+            "innings": self.fc_innings if self.is_fc else self.innings,
             "score": self.score,
             "wickets": self.wickets,
             "target": getattr(self, 'target', None),
@@ -5527,13 +6270,16 @@ class Match:
             "bowler_wickets": _bw_stats.get("wickets", 0),
             "bowler_runs": _bw_stats.get("runs", 0),
             "bowler_overs": f"{_bw_overs_display:.1f}",
-            "innings_number": self.innings,
+            "innings_number": self.fc_innings if self.is_fc else self.innings,
             "target": getattr(self, "target", None),
             "total_overs": self.overs,
             "match_format": self.fmt.name,
-            "phase_name": self.fmt.get_phase(self.current_over).name,
+            # FC has no fielding-circle phases at all — no phase_name.
+            "phase_name": None if self.is_fc else self.fmt.get_phase(self.current_over).name,
             "bowler_overs_remaining": self.bowler_manager.overs_remaining(_bowler_name),
-            "bowler_max_overs": self.fmt.max_bowler_overs,
+            # FC has no bowling quota — no cap to report.
+            "bowler_max_overs": getattr(self.fmt, "max_bowler_overs", None),
+            "fc_day": self.fc_day if self.is_fc else None,
             "partnership_runs": self.current_partnership_runs,
             "partnership_balls": self.current_partnership_balls,
             "win_probability": _win_prob,
@@ -6792,3 +7538,184 @@ class Match:
             self.super_over_batsman_stats = prog.get("batsman_stats") or {}
             self.super_over_current_striker = striker
             self.super_over_current_non_striker = non_striker
+
+    # ========================================================================
+    # First-Class (FC) match snapshot — resume support
+    # ========================================================================
+    # Same discipline as serialize_super_over_snapshot()/restore_super_over_
+    # snapshot() above: a versioned JSON-safe dict, team identity captured as
+    # "home"/"away" tags (never object references), players re-resolved by
+    # name against the freshly-built XIs at restore time. Persisted by the
+    # routes layer after every over completes (see routes/match_routes.py's
+    # _persist_fc_snapshot) so a process restart or instance eviction
+    # mid-match resumes instead of silently restarting the match from
+    # fc_innings=1 — the same failure mode the super-over snapshot exists to
+    # prevent for tied T20/ListA matches, now closed for FC too.
+
+    def serialize_fc_snapshot(self):
+        """JSON-safe snapshot of the live FC match state. Returns None when
+        this isn't an FC match or no over has completed yet (nothing to
+        snapshot before the first natural checkpoint)."""
+        if not self.is_fc:
+            return None
+
+        def _side(team):
+            return "home" if team is self.home_xi else "away"
+
+        snap = {
+            "v": 1,
+            "fc_innings": self.fc_innings,
+            "batting_side": _side(self.batting_team),
+            "bowling_side": _side(self.bowling_team),
+            "score": self.score,
+            "wickets": self.wickets,
+            "current_over": self.current_over,
+            "current_ball": self.current_ball,
+            "batter_idx": list(self.batter_idx),
+            "remaining_batter_indices": sorted(self.remaining_batter_indices),
+            "bowler_selected_for_over": self.bowler_selected_for_over,
+            "striker": self.current_striker["name"] if self.current_striker else None,
+            "non_striker": self.current_non_striker["name"] if self.current_non_striker else None,
+            "bowler": self.current_bowler["name"] if self.current_bowler else None,
+            "batsman_stats": self.batsman_stats,
+            "bowler_stats": self.bowler_stats,
+            "over_bowler_log": self.over_bowler_log,
+            "bowler_manager": {
+                "overs_this_innings": dict(self.bowler_manager._overs_this_innings),
+                "last_bowler": self.bowler_manager._last_bowler,
+                "prev_over_runs": dict(self.bowler_manager._prev_over_runs),
+            },
+            "fc_day": self.fc_day,
+            "fc_day_overs_bowled_today": self.fc_day_overs_bowled_today,
+            "fc_ball_overs_bowled": self.fc_ball_overs_bowled,
+            "fc_innings_declared": self.fc_innings_declared,
+            "follow_on_enforced": self.follow_on_enforced,
+            "fc_innings_totals": self.fc_innings_totals,
+            "fc_innings_stats": self.fc_innings_stats,
+            "fc_innings_partnerships": self.fc_innings_partnerships,
+            "target": getattr(self, "target", None),
+            "first_innings_score": getattr(self, "first_innings_score", None),
+            "match_balls_bowled": self.match_balls_bowled,
+            "innings_balls_bowled": self.innings_balls_bowled,
+            "current_partnership_balls": self.current_partnership_balls,
+            "current_partnership_runs": self.current_partnership_runs,
+            "current_partnership_start_over": self.current_partnership_start_over,
+            "current_partnership_contributions": self.current_partnership_contributions,
+            "batter_streaks": self.batter_streaks,
+            "recent_wickets_tracker": getattr(self, "recent_wickets_tracker", []),
+            "recent_wickets_count": getattr(self, "recent_wickets_count", 0),
+            "commentary": self.commentary,
+            "commentary_replay_log": getattr(self, "commentary_replay_log", []),
+            "match_status": self.match_status,
+            "margin_type": self.margin_type,
+            "margin_value": self.margin_value,
+            "winner_is_home": self.winner_is_home,
+            "result": self.result,
+        }
+
+        first_batting_xi = getattr(self, "_fc_first_batting_xi", None)
+        if first_batting_xi is not None:
+            snap["first_batting_side"] = _side(first_batting_xi)
+
+        return snap
+
+    def restore_fc_snapshot(self, snap):
+        """Rebuild live FC match state onto a freshly constructed Match
+        (built from the same match_data). Inverse of serialize_fc_snapshot.
+        Raises ValueError on a snapshot it cannot safely restore — callers
+        must surface that rather than silently falling through to a fresh
+        (fc_innings=1) instance, which would silently restart the match."""
+        if not isinstance(snap, dict) or snap.get("v") != 1:
+            raise ValueError("Unsupported FC snapshot format")
+
+        xi = {"home": self.home_xi, "away": self.away_xi}
+        other = {"home": "away", "away": "home"}
+
+        batting_side = snap.get("batting_side")
+        bowling_side = snap.get("bowling_side")
+        if batting_side not in xi or bowling_side not in xi:
+            raise ValueError("FC snapshot missing batting/bowling side")
+        self.batting_team = xi[batting_side]
+        self.bowling_team = xi[bowling_side]
+
+        self.fc_innings = snap.get("fc_innings", 1)
+        self.score = snap.get("score", 0)
+        self.wickets = snap.get("wickets", 0)
+        self.current_over = snap.get("current_over", 0)
+        self.current_ball = snap.get("current_ball", 0)
+        self.batter_idx = list(snap.get("batter_idx", [0, 1]))
+        self.remaining_batter_indices = set(snap.get("remaining_batter_indices", []))
+        self.bowler_selected_for_over = snap.get("bowler_selected_for_over", -1)
+
+        self.batsman_stats = snap.get("batsman_stats") or {}
+        self.bowler_stats = snap.get("bowler_stats") or {}
+        # Same int-key-vs-JSON-string-key concern as fc_innings_totals above.
+        self.over_bowler_log = {
+            int(k): v for k, v in (snap.get("over_bowler_log") or {}).items()
+        }
+
+        pool = self.batting_team + self.bowling_team
+        striker = self._find_players_by_name(pool, [snap["striker"]]) if snap.get("striker") else []
+        non_striker = self._find_players_by_name(pool, [snap["non_striker"]]) if snap.get("non_striker") else []
+        bowler = self._find_players_by_name(pool, [snap["bowler"]]) if snap.get("bowler") else []
+        if not striker or not non_striker:
+            raise ValueError("FC snapshot references unknown striker/non-striker")
+        self.current_striker = striker[0]
+        self.current_non_striker = non_striker[0]
+        self.current_bowler = bowler[0] if bowler else None
+
+        bm = snap.get("bowler_manager") or {}
+        self.bowler_manager._overs_this_innings = dict(bm.get("overs_this_innings") or {})
+        self.bowler_manager._last_bowler = bm.get("last_bowler")
+        self.bowler_manager._prev_over_runs = dict(bm.get("prev_over_runs") or {})
+        self.bowler_history = self.bowler_manager._overs_this_innings
+
+        self.fc_day = snap.get("fc_day", 1)
+        self.fc_day_overs_bowled_today = snap.get("fc_day_overs_bowled_today", 0)
+        self.fc_ball_overs_bowled = snap.get("fc_ball_overs_bowled", 0)
+        self.fc_innings_declared = snap.get("fc_innings_declared", False)
+        self.follow_on_enforced = snap.get("follow_on_enforced")
+        # fc_innings_totals is keyed by innings number (int) everywhere it's
+        # read (e.g. self.fc_innings_totals.get(1, {})) — a JSON round-trip
+        # turns those into string keys, which would silently break every
+        # such lookup (falling back to {} instead of raising), corrupting
+        # follow-on/declaration decisions rather than crashing visibly.
+        self.fc_innings_totals = {
+            int(k): v for k, v in (snap.get("fc_innings_totals") or {}).items()
+        }
+        self.fc_innings_stats = snap.get("fc_innings_stats") or []
+        # Same int-key-vs-JSON-string-key concern as fc_innings_totals above.
+        self.fc_innings_partnerships = {
+            int(k): v for k, v in (snap.get("fc_innings_partnerships") or {}).items()
+        }
+        if snap.get("target") is not None:
+            self.target = snap["target"]
+        if snap.get("first_innings_score") is not None:
+            self.first_innings_score = snap["first_innings_score"]
+        self.match_balls_bowled = snap.get("match_balls_bowled", 0)
+        self.innings_balls_bowled = snap.get("innings_balls_bowled", 0)
+
+        self.current_partnership_balls = snap.get("current_partnership_balls", 0)
+        self.current_partnership_runs = snap.get("current_partnership_runs", 0)
+        self.current_partnership_start_over = snap.get("current_partnership_start_over", 0.0)
+        self.current_partnership_contributions = snap.get("current_partnership_contributions") or {
+            'batsman1': {'name': '', 'runs': 0, 'balls': 0},
+            'batsman2': {'name': '', 'runs': 0, 'balls': 0},
+        }
+        self.batter_streaks = snap.get("batter_streaks") or {}
+        self.recent_wickets_tracker = snap.get("recent_wickets_tracker") or []
+        self.recent_wickets_count = snap.get("recent_wickets_count", 0)
+
+        self.commentary = snap.get("commentary") or []
+        self.commentary_replay_log = snap.get("commentary_replay_log") or []
+
+        self.match_status = snap.get("match_status")
+        self.margin_type = snap.get("margin_type")
+        self.margin_value = snap.get("margin_value")
+        self.winner_is_home = snap.get("winner_is_home")
+        self.result = snap.get("result", "")
+
+        first_batting_side = snap.get("first_batting_side")
+        if first_batting_side in xi:
+            self._fc_first_batting_xi = xi[first_batting_side]
+            self._fc_first_bowling_xi = xi[other[first_batting_side]]
