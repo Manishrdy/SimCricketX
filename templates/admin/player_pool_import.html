@@ -126,6 +126,15 @@
         return values.map(function(v){ return v === '' ? '"" (empty)' : v; }).join(' | ');
     }
 
+    var FORMAT_RATING_NOTES = [
+        'FORMAT RATING GUIDANCE (make these differ from the T20 numbers — do not just copy them across):',
+        '- `list_a_*` ratings model 50-over/List A output. Usually close to the T20 numbers, but let them diverge for players who lean toward one white-ball format over the other.',
+        '- `fc_batting_rating` / `fc_bowling_rating` / `fc_fielding_rating` model First-Class/multi-day output and can differ noticeably from the limited-overs numbers (e.g. a T20 pinch-hitter may rate lower here; a patient Test-match batter may rate higher here than in T20).',
+        '- `fc_technique_rating` is the batter\'s defensive technique over a long innings — matters most for specialist batters/all-rounders; give tailenders and bowlers a low value.',
+        '- `fc_temperament_rating` is the batter\'s mental resilience against sustained pressure — same idea, matters most for top/middle-order batters.',
+        '- `fc_stamina_rating` is the bowler\'s workload endurance across long spells over a multi-day match — matters most for bowlers/all-rounders who bowl; give specialist batters/keepers a neutral value (around 50-65).'
+    ];
+
     function buildJsonPrompt() {
         return [
             'Generate only JSON data for cricket player import.',
@@ -138,11 +147,15 @@
             '5) Allowed `batting_hand`: ' + displayAllowed(validBattingHands),
             '6) Allowed `bowling_type`: ' + displayAllowed(validBowlingTypes),
             '7) Allowed `bowling_hand`: ' + displayAllowed(validBowlingHands),
-            '8) `batting_rating`, `bowling_rating`, `fielding_rating` must be integers in range 0-100.',
-            '9) `is_captain` and `is_wicketkeeper` must be JSON booleans true/false (not strings).',
-            '10) No extra keys. No missing keys. No null values.',
-            '11) If role is Wicketkeeper, set bowling_type and bowling_hand to empty string.',
-            '12) Do not output any explanation or text outside the code block.',
+            '8) `batting_rating`, `bowling_rating`, `fielding_rating` (T20) must be integers in range 0-100.',
+            '9) `list_a_batting_rating`, `list_a_bowling_rating`, `list_a_fielding_rating` (List A) must be integers in range 0-100.',
+            '10) `fc_batting_rating`, `fc_bowling_rating`, `fc_fielding_rating`, `fc_technique_rating`, `fc_temperament_rating`, `fc_stamina_rating` (First-Class) must be integers in range 0-100.',
+            '11) `is_captain` and `is_wicketkeeper` must be JSON booleans true/false (not strings).',
+            '12) No extra keys. No missing keys. No null values.',
+            '13) If role is Wicketkeeper, set bowling_type and bowling_hand to empty string.',
+            '14) Do not output any explanation or text outside the code block.',
+            '',
+        ].concat(FORMAT_RATING_NOTES).concat([
             '',
             'JSON schema:',
             '{',
@@ -158,6 +171,15 @@
             '      "batting_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
             '      "bowling_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
             '      "fielding_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "list_a_batting_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "list_a_bowling_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "list_a_fielding_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "fc_batting_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "fc_bowling_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "fc_fielding_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "fc_technique_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "fc_temperament_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
+            '      "fc_stamina_rating": { "type": "integer", "minimum": 0, "maximum": 100 },',
             '      "batting_hand": { "type": "string", "enum": ' + JSON.stringify(validBattingHands) + ' },',
             '      "bowling_type": { "type": "string", "enum": ' + JSON.stringify(validBowlingTypes) + ' },',
             '      "bowling_hand": { "type": "string", "enum": ' + JSON.stringify(validBowlingHands) + ' },',
@@ -166,7 +188,7 @@
             '    }',
             '  }',
             '}'
-        ].join('\n');
+        ]).join('\n');
     }
 
     function buildCsvPrompt() {
@@ -180,12 +202,15 @@
             '4) Allowed `batting_hand`: ' + displayAllowed(validBattingHands),
             '5) Allowed `bowling_type`: ' + displayAllowed(validBowlingTypes),
             '6) Allowed `bowling_hand`: ' + displayAllowed(validBowlingHands),
-            '7) `batting_rating`, `bowling_rating`, `fielding_rating` must be integers in 0-100.',
-            '8) `is_captain` and `is_wicketkeeper` must be exactly `true` or `false` (lowercase).',
-            '9) Include all columns for every row, no extra or missing columns.',
-            '10) Do not output comments, explanations, or anything outside the code block.',
-            '11) If role is Wicketkeeper, set bowling_type and bowling_hand to empty values.'
-        ].join('\n');
+            '7) `batting_rating`, `bowling_rating`, `fielding_rating` (T20) must be integers in 0-100.',
+            '8) `list_a_batting_rating`, `list_a_bowling_rating`, `list_a_fielding_rating` (List A) must be integers in 0-100.',
+            '9) `fc_batting_rating`, `fc_bowling_rating`, `fc_fielding_rating`, `fc_technique_rating`, `fc_temperament_rating`, `fc_stamina_rating` (First-Class) must be integers in 0-100.',
+            '10) `is_captain` and `is_wicketkeeper` must be exactly `true` or `false` (lowercase).',
+            '11) Include all columns for every row, no extra or missing columns.',
+            '12) Do not output comments, explanations, or anything outside the code block.',
+            '13) If role is Wicketkeeper, set bowling_type and bowling_hand to empty values.',
+            '',
+        ].concat(FORMAT_RATING_NOTES).join('\n');
     }
 
     var prompts = { json: buildJsonPrompt(), csv: buildCsvPrompt() };

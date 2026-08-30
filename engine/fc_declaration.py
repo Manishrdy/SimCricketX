@@ -60,6 +60,65 @@ _OVERS_DOWN_FLOOR = 100
 _MAX_DAYS_REMAINING_FOR_DECLARE = 2
 _MIN_DAYS_REMAINING_FOR_FOLLOW_ON = 2
 
+# ── Per-innings time budget (independent of whole-match days-remaining) ─────
+# The days_remaining <= 2 gate above only creates time-forcing pressure in
+# the match's last 2 days — on Flat/Dead pitches, where the per-ball wicket
+# probability is low enough that a side can realistically bat 150-300+
+# overs without losing its 9th wicket, that gate never engages until an
+# innings has already run away to 650-1200+ runs. This budget creates the
+# same kind of pressure much earlier, scaled to whatever's actually left in
+# the match at the moment THIS innings started — see
+# compute_innings_time_budget_overs() and Match._fc_start_next_innings()/
+# __init__, which capture it once per innings.
+
+# Fraction of the overs remaining in the whole match (at the instant this
+# innings starts) allotted to it before time-forcing pressure begins. 0.40
+# of a fresh 5-day match's 450 overs is 180 overs (~2 days) — matching how
+# long a first innings can realistically occupy before a real captain
+# declares. A later-starting innings (2/3) automatically gets a tighter
+# budget, since overs_remaining_in_match is whatever's actually left by
+# then, not a fixed constant.
+_INNINGS_TIME_BUDGET_FRACTION = 0.40
+
+# Overs past the time budget over which the flat score/lead threshold
+# linearly decays from 100% down to _INNINGS_TIME_BUDGET_DECAY_FLOOR of its
+# pitch-scaled value — a marginal total becomes "good enough" the longer an
+# innings grinds on past its budget, instead of requiring the full bar
+# forever (a hard cutoff instead would either declare too early on a side
+# fractionally short of a real total, or do nothing for a genuinely
+# stalled low-scoring innings, depending on where the line is drawn).
+_INNINGS_TIME_BUDGET_DECAY_OVERS = 60.0
+
+# Floor the decayed threshold can't fall below (fraction of the full
+# pitch-scaled threshold) — an overrun innings still needs a genuinely
+# competitive score/lead, not literally anything.
+_INNINGS_TIME_BUDGET_DECAY_FLOOR = 0.55
+
+# Once an innings has overrun its time budget by this multiple, even a
+# Monte Carlo verdict of "don't declare, no realistic time to force a
+# result" is overridden as long as there's any lead at all. Without this, a
+# genuinely bad matchup/time situation lets an innings 2/3 bat indefinitely
+# once the budget-based window opens early — the MC model is legitimately
+# telling the truth about win probability, but real captains still declare
+# eventually (over-rate/fatigue/sportsmanship) rather than batting to a
+# dead stop once forcing a win is off the table.
+_MC_OVERRUN_CEILING_MULTIPLIER = 1.5
+
+
+def compute_innings_time_budget_overs(overs_remaining_in_match) -> float:
+    """
+    The per-innings time budget in overs (see declaration_window_open's
+    innings_time_budget_overs branch and should_declare's threshold decay).
+    Callers (Match.__init__ for innings 1, Match._fc_start_next_innings()
+    for innings 2-4) compute this exactly once, at the moment the innings
+    starts, from however many overs are left in the WHOLE match at that
+    instant — so an innings that starts late (because an earlier one ran
+    long) automatically gets a correspondingly tighter budget, without any
+    extra bookkeeping here.
+    """
+    return _INNINGS_TIME_BUDGET_FRACTION * overs_remaining_in_match
+
+
 # ── Monte Carlo declaration model (innings 2/3 only — see module docstring) ─
 
 _MC_TRIALS = 400
@@ -176,7 +235,7 @@ def estimate_lead_declaration_outcome(*, lead, overs_remaining_in_match,
 
 
 def declaration_window_open(*, fc_innings, wickets, overs_bowled_this_innings,
-                             days_remaining) -> bool:
+                             days_remaining, innings_time_budget_overs=None) -> bool:
     """
     True once the STRUCTURAL conditions for even considering a declaration
     are met: minimum overs faced, and either the tail is exposed
@@ -190,12 +249,22 @@ def declaration_window_open(*, fc_innings, wickets, overs_bowled_this_innings,
     the captain about declaring right now" trigger, so the two can never
     drift out of sync about *when* a declaration becomes a live decision —
     only *who* (AI heuristic vs a human) makes the actual call once it is.
+
+    innings_time_budget_overs, when supplied, also opens the window once
+    overs_bowled_this_innings reaches it — independent of days_remaining,
+    so a runaway innings on a low-wicket-probability pitch doesn't have to
+    wait for the whole match's last 2 days before time-forcing pressure can
+    even be considered. None (the default) preserves the exact prior
+    behavior for any caller that doesn't know about this parameter.
     """
     if fc_innings not in (1, 2, 3):
         return False
     if overs_bowled_this_innings < _MIN_OVERS_BEFORE_DECLARE:
         return False
     if wickets == 9:
+        return True
+    if (innings_time_budget_overs is not None
+            and overs_bowled_this_innings >= innings_time_budget_overs):
         return True
     if overs_bowled_this_innings < _TIME_FORCING_OVERS_THRESHOLD:
         return False
@@ -204,6 +273,7 @@ def declaration_window_open(*, fc_innings, wickets, overs_bowled_this_innings,
 
 def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                     score, lead, days_remaining, pitch_par_factor=1.0,
+                    innings_time_budget_overs=None,
                     overs_remaining_in_match=None, own_bowling_strength=None,
                     own_batting_strength=None, opp_batting_strength=None,
                     pitch_wear=0.5, rng=None) -> bool:
@@ -227,6 +297,15 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                                  run thresholds so "a good total" means
                                  something different on a Green seamer
                                  than a Dead belter
+    innings_time_budget_overs : see compute_innings_time_budget_overs() /
+                                 declaration_window_open(). Opens the window
+                                 early (independent of days_remaining) once
+                                 this innings has run past its budget, and —
+                                 for the flat-threshold path below — linearly
+                                 eases the score/lead bar the further past
+                                 budget the innings runs. None (the default)
+                                 preserves the exact prior behavior for any
+                                 caller that doesn't supply it.
 
     Monte Carlo inputs (innings 2/3 only — see estimate_lead_declaration_outcome)
     ----------------------------------------------------------------------
@@ -244,16 +323,9 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
         fc_innings=fc_innings, wickets=wickets,
         overs_bowled_this_innings=overs_bowled_this_innings,
         days_remaining=days_remaining,
+        innings_time_budget_overs=innings_time_budget_overs,
     ):
         return False
-
-    # Protect the last pair — no point grinding through a tail once only
-    # one recognized partnership is left, provided there's already a score
-    # worth defending. Unconditional once the window is open for this
-    # reason specifically (unlike the time-forcing branch below, which
-    # still judges the score/lead itself).
-    if wickets == 9:
-        return True
 
     if not (wickets >= _WICKETS_DOWN_FLOOR or overs_bowled_this_innings >= _OVERS_DOWN_FLOOR):
         return False
@@ -261,6 +333,17 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
     _mc_inputs = (overs_remaining_in_match, own_bowling_strength,
                   own_batting_strength, opp_batting_strength)
     if fc_innings != 1 and all(v is not None for v in _mc_inputs):
+        # overs_remaining_in_match keeps shrinking the longer this innings
+        # overruns its budget, which LOWERS the Monte Carlo model's win
+        # probability (less time = harder to force a result) — the opposite
+        # of the pressure we want. Without this ceiling, a genuinely bad
+        # matchup/time situation would let an innings bat indefinitely once
+        # the budget-based window is open early. Cheaper than the 400-trial
+        # simulation too, so it's checked first.
+        if (innings_time_budget_overs is not None
+                and overs_bowled_this_innings >= innings_time_budget_overs * _MC_OVERRUN_CEILING_MULTIPLIER
+                and lead > 0):
+            return True
         win_prob, _draw_prob, loss_prob = estimate_lead_declaration_outcome(
             lead=lead, overs_remaining_in_match=overs_remaining_in_match,
             own_bowling_strength=own_bowling_strength,
@@ -274,6 +357,11 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
     target_metric = score if fc_innings == 1 else lead
     base_threshold = _INNINGS1_BASE_THRESHOLD if fc_innings == 1 else _LEAD_BASE_THRESHOLD
     threshold = base_threshold * pitch_par_factor
+    if innings_time_budget_overs is not None:
+        overrun = overs_bowled_this_innings - innings_time_budget_overs
+        if overrun > 0:
+            decay_frac = min(1.0, overrun / _INNINGS_TIME_BUDGET_DECAY_OVERS)
+            threshold *= 1.0 - decay_frac * (1.0 - _INNINGS_TIME_BUDGET_DECAY_FLOOR)
     return target_metric >= threshold
 
 

@@ -508,6 +508,11 @@
         outline-offset: 2px;
     }
 
+    .mode-toggle-switch input:disabled + .mode-toggle-slider {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
     /* Format selector (segmented control) */
     .format-selector {
         display: flex;
@@ -1366,6 +1371,10 @@
     }
 </script>
 
+<script id="pitch-conditions-data" type="application/json">
+    {{ pitch_conditions_by_format | tojson | safe }}
+</script>
+
 <script>
     let TEAMS = [];
     let currentStep = 1;
@@ -1380,6 +1389,15 @@
         TEAMS = JSON.parse(document.getElementById('teams-data').textContent);
     } catch (e) {
         console.error("Failed to parse teams data", e);
+    }
+    // Pitch conditions per format — sourced from the backend's ground-conditions
+    // config (single source of truth) instead of a hardcoded list here, so this
+    // dropdown can never drift out of sync with what Ground Conditions defines.
+    let PITCH_CONDITIONS = {};
+    try {
+        PITCH_CONDITIONS = JSON.parse(document.getElementById('pitch-conditions-data').textContent) || {};
+    } catch (e) {
+        console.error("Failed to parse pitch conditions data", e);
     }
 
     // Apply styles and event listeners dynamically
@@ -1690,6 +1708,41 @@
         return true;
     }
 
+    /**
+     * Fill the Pitch Condition dropdown from PITCH_CONDITIONS[format] — the
+     * backend's ground-conditions config for the home team's format. Keeps
+     * the currently-selected pitch when it's still valid for the new format,
+     * and puts the home team's preferred pitch first otherwise.
+     */
+    function populatePitchOptions(format) {
+        const pSel = document.getElementById('pitch-select');
+        if (!pSel) return;
+
+        const home = TEAMS[selectedTeamIndices[0]];
+        const pref = home ? home.pitch_preference : null;
+        const previousValue = pSel.value;
+
+        const options = PITCH_CONDITIONS[format] || [];
+        const keys = options.map(o => o.key);
+        const sorted = (pref && keys.includes(pref))
+            ? [pref, ...keys.filter(k => k !== pref)]
+            : keys;
+
+        pSel.innerHTML = "";
+        sorted.forEach(key => {
+            const profile = options.find(o => o.key === key);
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = key === pref ? `${key} Pitch (Home Preference)` : `${key} Pitch`;
+            if (profile && profile.description) opt.title = profile.description;
+            pSel.appendChild(opt);
+        });
+
+        if (previousValue && keys.includes(previousValue)) {
+            pSel.value = previousValue;
+        }
+    }
+
     // --- STEP 2: CONDITIONS ---
     function initializeStep2() {
         const home = TEAMS[selectedTeamIndices[0]];
@@ -1702,20 +1755,9 @@
         updateTicketAvatar('home', home);
         updateTicketAvatar('away', away);
 
-        // Populate pitch
+        // Pitch options are (re)populated by syncFormatControl() below, which
+        // always runs on entry to this step and on every format change.
         const pSel = document.getElementById('pitch-select');
-        pSel.innerHTML = "";
-        const opts = ['Green', 'Flat', 'Dry', 'Hard', 'Dead'];
-        // Put preference first
-        const pref = home.pitch_preference;
-        const sorted = [pref, ...opts.filter(p => p !== pref)];
-        sorted.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p;
-            opt.textContent = `${p} Pitch (Home Preference)`;
-            if (p !== pref) opt.textContent = `${p} Pitch`;
-            pSel.appendChild(opt);
-        });
 
         // Bind live summary updates.
         pSel.onchange = updateConditionsSummary;
@@ -1799,7 +1841,6 @@
     function syncStoryControl() {
         const storySelect = document.getElementById('story-select');
         const storyHelp = document.getElementById('story-help');
-        const interestingToggle = document.getElementById('interesting-match-toggle');
         // The story picker's markup is removed from the UI; this whole
         // function is a no-op until it's restored.
         if (!storySelect) return;
@@ -1820,14 +1861,10 @@
         }
 
         const hasStory = !!storySelect.value;
-        // A named story overrides random drama — make that visible.
-        if (interestingToggle) {
-            interestingToggle.disabled = hasStory;
-            if (hasStory) {
-                interestingToggle.checked = false;
-                syncInterestingMatchControl();
-            }
-        }
+        // A named story overrides random drama — make that visible. Routed
+        // through applyInterestingMatchGate() so this composes with the
+        // format-based gate (FC) instead of the two fighting over .disabled.
+        applyInterestingMatchGate();
         if (storyHelp) {
             storyHelp.textContent = hasStory
                 ? 'The match follows this story\'s pressure arc — the ending stays open.'
@@ -1856,10 +1893,41 @@
 
         if (interestingHidden) interestingHidden.value = isInteresting ? 'true' : 'false';
         if (interestingHelp) {
-            interestingHelp.textContent = isInteresting
-                ? 'A dramatic finish will be chosen randomly at runtime.'
-                : 'Regular match flow.';
+            const disabledReason = interestingToggle && interestingToggle.disabled
+                ? interestingToggle.dataset.disabledReason
+                : '';
+            interestingHelp.textContent = disabledReason
+                ? disabledReason
+                : (isInteresting
+                    ? 'A dramatic finish will be chosen randomly at runtime.'
+                    : 'Regular match flow.');
         }
+    }
+
+    /**
+     * Single place that decides whether "Make Match Interesting" can be
+     * used, so the format gate (FC) and the story gate (a picked story
+     * overrides random drama) compose instead of clobbering each other's
+     * `.disabled`. Call after either the format or the story selection
+     * changes.
+     */
+    function applyInterestingMatchGate() {
+        const interestingToggle = document.getElementById('interesting-match-toggle');
+        if (!interestingToggle) return;
+
+        const format = document.getElementById('match-format-value')?.value || 'T20';
+        const isFC = format === 'FC';
+        const storySelect = document.getElementById('story-select');
+        const hasStory = !!(storySelect && !storySelect.disabled && storySelect.value);
+
+        interestingToggle.disabled = isFC || hasStory;
+        interestingToggle.dataset.disabledReason = isFC
+            ? 'Not available for First-Class matches.'
+            : '';
+        if (interestingToggle.disabled && interestingToggle.checked) {
+            interestingToggle.checked = false;
+        }
+        syncInterestingMatchControl();
     }
 
     function syncFormatControl() {
@@ -1880,6 +1948,13 @@
         // FC-only: show the 4-day/5-day length selector.
         const daysRow = document.getElementById('fc-days-row');
         if (daysRow) daysRow.hidden = newFormat !== 'FC';
+
+        // Pitch conditions are format-specific — refresh the dropdown.
+        populatePitchOptions(newFormat);
+
+        // FC matches run over multiple days — a scripted dramatic finish
+        // doesn't fit that time scale, so gate the toggle off for FC.
+        applyInterestingMatchGate();
 
         // Swap every team's active player list to the correct format squad.
         // No fallback — if the format has no squad, players becomes [].
