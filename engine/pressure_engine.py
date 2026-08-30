@@ -588,6 +588,43 @@ class FCPressureEngine:
         if len(self.recent_events) > 18:
             self.recent_events = self.recent_events[-18:]
 
+    # --- Partnership grind -------------------------------------------------
+    # Ramped by BALLS, not runs: a watchful 60 off 200 balls demoralises an
+    # attack far more than a breezy 60 off 90. Nothing else in the FC model
+    # captures this — the confidence curve is per-batter and the spell model
+    # is per-bowler, so a long STAND had no effect on anything at all.
+    _PARTNERSHIP_SETTLED_BALLS = 120      # ~20 overs before it starts to tell
+    _PARTNERSHIP_FULL_GRIND_BALLS = 480   # ~80 overs for the full effect
+    _PARTNERSHIP_MAX_WICKET_SUPPRESSION = 0.10
+    _PARTNERSHIP_MAX_BOUNDARY_GAIN = 0.10
+
+    def partnership_grind(self, partnership_balls: int) -> float:
+        """0.0-1.0 — how far an established stand has worn the attack down."""
+        if partnership_balls <= self._PARTNERSHIP_SETTLED_BALLS:
+            return 0.0
+        span = self._PARTNERSHIP_FULL_GRIND_BALLS - self._PARTNERSHIP_SETTLED_BALLS
+        return min(1.0, (partnership_balls - self._PARTNERSHIP_SETTLED_BALLS) / span)
+
+    # --- Collapse cascade --------------------------------------------------
+    # A real collapse accelerates. The old model applied a flat 1.25x however
+    # many had just gone, so 3 for 12 looked the same as one loose shot.
+    _COLLAPSE_SEVERITY = {2: 1.18, 3: 1.30, 4: 1.42}
+    _COLLAPSE_NEW_BATTER_BONUS = 0.12     # walking in mid-collapse is the worst moment
+    _COLLAPSE_NEW_BATTER_BALLS = 8
+
+    def collapse_severity(self, recent_wickets: int, striker_balls_faced: int = 99,
+                          temperament_rating: Optional[int] = None) -> float:
+        """Wicket multiplier once a collapse has been triggered."""
+        severity = self._COLLAPSE_SEVERITY.get(
+            min(recent_wickets, 4), 1.18 if recent_wickets >= 2 else 1.0)
+        if striker_balls_faced < self._COLLAPSE_NEW_BATTER_BALLS:
+            severity += self._COLLAPSE_NEW_BATTER_BONUS
+        if temperament_rating is not None:
+            # A batter who resists pressure well takes less of the extra.
+            severity = 1.0 + (severity - 1.0) * (
+                1.0 - (temperament_rating - 50) / 150.0)
+        return max(1.0, severity)
+
     def should_trigger_collapse(self, wickets: int, recent_wickets: int, temperament_rating: Optional[int] = None) -> bool:
         """Probabilistic wicket-cluster signal, session-survival flavored —
         FC's counterpart to PressureEngine.should_trigger_wicket_cluster().
@@ -630,8 +667,11 @@ class FCPressureEngine:
         target               : innings-4 target, or None
         score                : current innings score
         recent_wickets       : wickets fallen in the last few overs
+        partnership_balls    : balls faced by the current stand — an
+                                established partnership grinds an attack down
         striker_technique    : batter's technique_rating (0-100), Phase 2 —
                                 dampens the settling-in penalty's severity
+        last_hour            : True in the closing overs of a day's play
         striker_temperament  : batter's temperament_rating (0-100), Phase 2 —
                                 dampens pressure-driven wicket increases
                                 (survival mode, collapse-cluster chance)
@@ -678,6 +718,15 @@ class FCPressureEngine:
                 wicket_reduction = max(0.0, wicket_reduction)
             effects["wicket_modifier"] *= 1.0 - wicket_reduction
 
+        # --- Last hour before stumps: nobody wants to be the man who gets
+        # out with ten minutes left. Milder than full survival mode — this
+        # is seeing out a day, not saving a match — and it is what makes the
+        # close of play a passage of play rather than just more overs. ---
+        if match_state.get("last_hour", False):
+            effects["dot_bonus"] += 0.08
+            effects["boundary_modifier"] *= 0.80
+            effects["wicket_modifier"] *= 0.92
+
         # --- Declaration-push / chase-acceleration: building quickly toward
         # a declaration, or chasing a gettable target with time to spare. ---
         is_accelerating = match_state.get("acceleration_mode", False)
@@ -686,10 +735,27 @@ class FCPressureEngine:
             effects["dot_bonus"] -= 0.08
             effects["wicket_modifier"] *= 1.10
 
-        # --- Wicket-cluster collapse boost (session-survival flavored). ---
+        # --- Partnership grind: an established stand wears an attack down.
+        # The bowlers have been at it a while, the ball is old, the captain
+        # is out of ideas and the field has spread. ---
+        grind = self.partnership_grind(match_state.get("partnership_balls", 0))
+        if grind > 0.0:
+            effects["wicket_modifier"] *= 1.0 - self._PARTNERSHIP_MAX_WICKET_SUPPRESSION * grind
+            effects["boundary_modifier"] *= 1.0 + self._PARTNERSHIP_MAX_BOUNDARY_GAIN * grind
+            effects["dot_bonus"] -= 0.03 * grind
+
+        # --- Wicket-cluster collapse, as a cascade rather than a flat bump.
+        # The more that have just gone the harder it gets, and a batter who
+        # has only just walked in is at his most vulnerable. ---
         if self.should_trigger_collapse(wickets, recent_wickets, temperament_rating=striker_temperament):
-            effects["wicket_modifier"] *= 1.25
-            logger.info("FC COLLAPSE: 1.25x wicket boost (%d down, %d recent)", wickets, recent_wickets)
+            severity = self.collapse_severity(
+                recent_wickets,
+                striker_balls_faced=striker_balls_faced,
+                temperament_rating=striker_temperament,
+            )
+            effects["wicket_modifier"] *= severity
+            logger.info("FC COLLAPSE: %.2fx wicket boost (%d down, %d recent)",
+                        severity, wickets, recent_wickets)
 
         # --- 4th-innings chase: the one FC innings with a genuine target,
         # so it's the one place a rate-pressure signal applies — recalibrated

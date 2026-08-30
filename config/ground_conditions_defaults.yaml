@@ -425,130 +425,122 @@ formats:
   # surface instead of one static bias for the whole match.
   FC:
     pitch_profiles:
-      # Seam-friendly fresh pitch; eases with wear, uneven bounce/rough by
-      # day 4-5 gives some late assistance to spin too.
+      # Seam-friendly fresh pitch, eases with wear — uneven bounce and rough-assisted spin by day 4-5
       Green:
         description: "Seam-friendly fresh pitch, eases with wear — uneven bounce and rough-assisted spin by day 4-5"
         scoring_matrix:
-          Dot: 0.570
-          Single: 0.300
-          Double: 0.033
-          Three: 0.006
-          Four: 0.050
-          Six: 0.004
-          Wicket: 0.022
-          Extras: 0.015
-        run_factor: 0.90
+          Dot: 0.70617
+          Single: 0.18074
+          Double: 0.04346
+          Three: 0.00494
+          Four: 0.03556
+          Six: 0.00198
+          Wicket: 0.01383
+          Extras: 0.01333
+        run_factor: 1.0
         wicket_factors_start:
-          Fast: 1.55
-          Fast-medium: 1.30
-          Medium-fast: 1.15
-          Medium: 1.00
+          Fast: 1.141
+          Fast-medium: 1.014
+          Medium-fast: 0.888
+          Medium: 0.76
           default: 0.55
         wicket_factors_end:
-          Fast: 1.15
-          Fast-medium: 1.05
-          Medium-fast: 1.00
-          Medium: 0.95
-          Off spin: 1.15
-          Leg spin: 1.15
-          default: 0.80
-      # Mild early; a genuine raging turner for spin by day 4-5.
+          Fast: 1.141
+          Fast-medium: 1.081
+          Medium-fast: 1.05
+          Medium: 0.97
+          Off spin: 1.198
+          Leg spin: 1.198
+          default: 0.97
+      # Mild early, a genuine raging turner for spin by day 4-5
       Dry:
         description: "Mild early, a genuine raging turner for spin by day 4-5"
         scoring_matrix:
-          Dot: 0.565
-          Single: 0.300
-          Double: 0.033
-          Three: 0.006
-          Four: 0.050
-          Six: 0.004
-          Wicket: 0.022
-          Extras: 0.020
-        run_factor: 0.92
+          Dot: 0.70054
+          Single: 0.18352
+          Double: 0.04440
+          Three: 0.00493
+          Four: 0.03749
+          Six: 0.00247
+          Wicket: 0.01381
+          Extras: 0.01283
+        run_factor: 1.0
         wicket_factors_start:
-          Leg spin: 1.20
-          Off spin: 1.15
-          Fast: 1.05
-          Medium: 0.95
-          default: 0.90
+          Leg spin: 1.037
+          Off spin: 0.993
+          Fast: 0.902
+          Medium: 0.812
+          default: 0.812
         wicket_factors_end:
-          Leg spin: 2.10
-          Off spin: 1.95
-          Finger spin: 1.80
-          Wrist spin: 1.85
-          Fast: 0.70
-          Medium: 0.65
-          default: 0.55
-      # True, neutral surface — stays close to neutral throughout, little
-      # wear to exploit either way.
+          Leg spin: 1.118
+          Off spin: 1.047
+          Finger spin: 0.978
+          Wrist spin: 1.012
+          Fast: 0.56
+          Medium: 0.523
+          default: 0.489
+      # True, neutral surface — stays close to neutral throughout the match
       Hard:
         description: "True, neutral surface — stays close to neutral throughout the match"
         scoring_matrix:
-          Dot: 0.560
-          Single: 0.310
-          Double: 0.035
-          Three: 0.006
-          Four: 0.055
-          Six: 0.005
-          Wicket: 0.019
-          Extras: 0.010
-        run_factor: 1.00
+          Dot: 0.68932
+          Single: 0.19005
+          Double: 0.04727
+          Three: 0.00591
+          Four: 0.04136
+          Six: 0.00295
+          Wicket: 0.01379
+          Extras: 0.00935
+        run_factor: 1.0
         wicket_factors_start:
-          Fast: 1.10
-          Medium: 0.95
-          default: 0.95
+          Fast: 0.986
+          Medium: 0.891
+          default: 0.891
         wicket_factors_end:
-          Fast: 1.05
-          Medium: 0.95
-          Off spin: 1.10
-          Leg spin: 1.10
-          default: 0.95
-      # Good batting surface — a patient grind rather than a run-fest, even
-      # in FC. Still much more conservative than T20/ListA's Flat.
+          Fast: 0.938
+          Medium: 0.863
+          Off spin: 1.014
+          Leg spin: 1.014
+          default: 0.891
+      # Good batting surface — a patient grind, not a run-fest
       Flat:
         description: "Good batting surface — a patient grind, not a run-fest"
         scoring_matrix:
-          Dot: 0.545
-          Single: 0.315
-          Double: 0.038
-          Three: 0.006
-          Four: 0.065
-          Six: 0.007
-          Wicket: 0.015
-          Extras: 0.009
-        run_factor: 1.08
+          Dot: 0.67813
+          Single: 0.19459
+          Double: 0.05012
+          Three: 0.00590
+          Four: 0.04521
+          Six: 0.00344
+          Wicket: 0.01376
+          Extras: 0.00885
+        run_factor: 1.0
         wicket_factors_start:
-          default: 0.85
+          Fast: 0.883
+          default: 0.838
         wicket_factors_end:
-          Off spin: 1.05
-          Leg spin: 1.05
-          default: 0.85
-      # Lifeless surface — but even a "dead" FC pitch offers spin some late
-      # assistance over 5 days, unlike T20/ListA's Dead which stays inert.
+          Off spin: 1.038
+          Leg spin: 1.038
+          default: 0.939
+      # Lifeless surface, offers spin some late assistance over 5 days
       Dead:
         description: "Lifeless surface, offers spin some late assistance over 5 days"
         scoring_matrix:
-          Dot: 0.530
-          Single: 0.320
-          Double: 0.042
-          Three: 0.006
-          Four: 0.075
-          Six: 0.009
-          Wicket: 0.010
-          Extras: 0.008
-        run_factor: 1.15
+          Dot: 0.66928
+          Single: 0.19725
+          Double: 0.05299
+          Three: 0.00589
+          Four: 0.04907
+          Six: 0.00393
+          Wicket: 0.01374
+          Extras: 0.00785
+        run_factor: 1.0
         wicket_factors_start:
-          default: 0.55
+          default: 0.873
         wicket_factors_end:
-          Off spin: 1.15
-          Leg spin: 1.15
-          default: 0.60
-    # General (bowling-style-agnostic) Dot/Four/Wicket wear curve, applied
-    # against the CONTINUOUS match-long wear scalar (not per-innings — see
-    # Match.match_balls_bowled). This is necessary but not sufficient on its
-    # own; the wicket_factors_start/_end interpolation above is what
-    # actually makes the pitch favor different bowler types as it wears.
+          Off spin: 1.067
+          Leg spin: 1.067
+          default: 0.894
     pitch_wear:
       Green:
         factors: {Dot: -0.03, Four: 0.05, Wicket: 0.05}
@@ -581,10 +573,30 @@ formats:
         Fast-medium: 1.20
         Medium-fast: 1.05
         default: 1.00
+      # A new ball does not only take wickets — it comes onto the bat and
+      # races away, and it beats bat and keeper alike. So the same window
+      # that raises the edge rate also raises boundaries and byes. Unlike
+      # the wicket factors these are NOT keyed by bowling style: the ball's
+      # hardness is what carries it to the rope, whoever is running in.
+      new_ball_scoring_factors:
+        Four: 1.25
+        Six: 1.15
+        Extras: 1.30
+        Dot: 1.02
       reverse_swing_window_overs: 15
       reverse_swing_wicket_factors:
         Fast: 1.35
+        # Fast-medium bowlers reverse it too — restricting this to genuine
+        # express pace left most attacks with no old-ball threat at all.
+        Fast-medium: 1.18
         default: 1.00
+      # An old, scuffed, reversing ball is hard work to score off: fewer
+      # boundaries, more dots, and a few more extras as it goes down leg.
+      reverse_swing_scoring_factors:
+        Four: 0.85
+        Six: 0.80
+        Extras: 1.08
+        Dot: 1.05
     # Handedness-specific rough-targeting (Phase 3): footmark rough only
     # exists where days of the same bowling angle have worn the same patch,
     # so this is a WEAR-ramped bonus (0 at a fresh pitch, full value here at
@@ -602,5 +614,5 @@ formats:
       Flat: 0.05
       Dead: 0.25
     blending:
-      pitch_weight: 0.6
-      skill_weight: 0.4
+      pitch_weight: 0.1
+      skill_weight: 0.9

@@ -299,7 +299,10 @@ def test_declaration_window_open_time_budget_branch():
 def test_mc_overrun_ceiling_overrides_unfavorable_verdict():
     import random
     kwargs = dict(
-        fc_innings=3, wickets=6, score=0, lead=50, days_remaining=3,
+        # lead must clear _MIN_LEAD_TO_DECLARE — no captain declares 50
+        # ahead however long the innings has run; this test is about the
+        # overrun ceiling, not the lead floor.
+        fc_innings=3, wickets=6, score=0, lead=180, days_remaining=3,
         overs_remaining_in_match=40,  # tight -> MC should say no
         own_bowling_strength=40, own_batting_strength=50,
         opp_batting_strength=70, pitch_wear=0.7,
@@ -462,6 +465,10 @@ def test_declared_innings_2_does_not_trigger_follow_on(app):
     m.current_over = 65
     m.current_ball = 0
     m.fc_day = m.fmt.days - 1  # -> _fc_days_remaining() == 2
+    # Declarations are taken at an interval (Lunch/Tea/stumps), so park the
+    # match on the Lunch boundary — 30 of today's 90 overs bowled.
+    m.fc_day_overs_bowled_today = 30
+    m.fc_sessions_taken_today = 0
 
     result = m.next_ball()
     assert result.get("innings_end") is True
@@ -706,13 +713,19 @@ def test_fc_scripted_washout_day_ends_immediately_with_zero_overs(app):
 
 
 def test_fc_scripted_partial_loss_reduces_todays_overs(app):
+    """Weather loss in isolation. The day's length is also moved by the
+    over-rate model (_fc_compute_day_over_rate_adjust), so that is pinned to
+    zero here to keep this a test of the weather arithmetic alone — see
+    test_fc_over_rate_adjusts_days_length for the other half."""
     script = {"forecast": "clear", "day_events": {1: {"reason": "rain", "overs_lost": 70}}}
     m = _fc_match(days=4, fc_weather_script=script)
+    m.fc_day_over_rate_adjust = 0
     assert m._fc_effective_overs_today() == 20  # 90 - 70
     r = _play_until(m, lambda mm, rr: rr.get("day_break"))
     assert r.get("day_number") == 1
     assert m.fc_day == 2
     # Day 2 has no scripted event -> back to the full 90.
+    m.fc_day_over_rate_adjust = 0
     assert m._fc_effective_overs_today() == 90
 
 
@@ -911,3 +924,529 @@ def test_rough_targeting_factor_reaches_calculate_outcome(monkeypatch):
         assert sample(1.0, n=3000, seed=seed) < sample(50.0, n=3000, seed=seed)
     finally:
         random.setstate(state)
+
+
+# ---------------------------------------------------------------------------
+# 12. Sessions, intervals and the over rate
+# ---------------------------------------------------------------------------
+
+def test_fc_day_is_played_in_three_sessions(app):
+    """Lunch and Tea fall at the thirds of the day's schedulable overs.
+
+    Weather is pinned to a clear script rather than left to the module's
+    shared RNG: the day's length is what is under test, and an unrelated
+    change upstream that shifts RNG consumption must not silently turn this
+    into a rain-shortened day."""
+    m = _fc_match(days=5, fc_weather_script={"forecast": "clear", "day_events": {}})
+    m.fc_day_over_rate_adjust = 0
+    assert m._fc_effective_overs_today() == 90
+    assert m._fc_session_boundaries() == [30, 60]
+    assert m._fc_current_session() == 1
+
+
+def test_fc_session_boundaries_track_a_shortened_day(app):
+    """A rain-shortened day still gets Lunch and Tea, in sensible places —
+    not at a fixed over 30/60 that no longer exists."""
+    script = {"forecast": "rain_around", "day_events": {1: {"reason": "rain", "overs_lost": 45}}}
+    m = _fc_match(days=5, fc_weather_script=script)
+    m.fc_day_over_rate_adjust = 0
+    assert m._fc_session_boundaries() == [15, 30]   # thirds of 45
+
+
+def test_fc_interval_emits_a_scorecard_and_session_summary(app):
+    """Lunch/Tea pause the match on a scorecard the same way stumps does —
+    following a first-class match means reading the score at the breaks."""
+    m = _fc_match(days=5)
+    r = _play_until(m, lambda mm, rr: rr.get("fc_interval"))
+    assert r["interval_name"] == "Lunch"
+    assert r["day_number"] == 1
+    assert r["session_number"] == 1
+    assert r["scorecard_data"]                      # the board itself
+    assert r["match_over"] is False and r["innings_end"] is False
+    summary = r["session_summary"]
+    assert summary["overs"] > 0
+    assert summary["runs"] == r["score"]            # first session of the match
+    # Tea follows, and the session summary covers only the new session.
+    r2 = _play_until(m, lambda mm, rr: rr.get("fc_interval"))
+    assert r2["interval_name"] == "Tea"
+    assert r2["session_number"] == 2
+    assert r2["session_summary"]["runs"] == r2["score"] - summary["runs"]
+
+
+def test_fc_stumps_reports_the_evening_session(app):
+    m = _fc_match(days=5)
+    r = _play_until(m, lambda mm, rr: rr.get("day_break"))
+    assert r["session_number"] == 3
+    assert "this session" in r["commentary"]
+
+
+def test_fc_over_rate_adjusts_days_length(app):
+    """A seam-heavy attack gets through fewer overs in a day than a
+    spin-heavy one — a first-class day is rarely exactly 90."""
+    m = _fc_match(days=5)
+    all_pace = [{"will_bowl": True, "bowling_type": "Fast"} for _ in range(4)]
+    all_spin = [{"will_bowl": True, "bowling_type": "Off spin"} for _ in range(4)]
+    m.bowling_team = all_pace
+    pace_adj = m._fc_compute_day_over_rate_adjust()
+    m.bowling_team = all_spin
+    spin_adj = m._fc_compute_day_over_rate_adjust()
+    assert pace_adj < 0 < spin_adj
+    assert pace_adj == m._FC_OVER_RATE_ALL_PACE
+    assert spin_adj == m._FC_OVER_RATE_ALL_SPIN
+
+
+def test_fc_over_rate_never_cuts_below_the_last_hour_minimum(app):
+    script = {"forecast": "rain_around", "day_events": {1: {"reason": "rain", "overs_lost": 75}}}
+    m = _fc_match(days=5, fc_weather_script=script)
+    m.fc_day_over_rate_adjust = -9
+    assert m._fc_effective_overs_today() >= m.fmt.min_overs_last_hour
+
+
+# ---------------------------------------------------------------------------
+# 13. Declaration / follow-on judgement
+# ---------------------------------------------------------------------------
+
+def test_declaration_requires_a_lead_worth_declaring_on(app):
+    """A side that hasn't got its nose in front has nothing to declare on —
+    closing the innings there hands over a lead for nothing."""
+    import random
+    kwargs = dict(fc_innings=3, wickets=8, overs_bowled_this_innings=120,
+                  score=250, days_remaining=2, overs_remaining_in_match=150,
+                  own_bowling_strength=75, own_batting_strength=70,
+                  opp_batting_strength=70, pitch_wear=0.6)
+    assert should_declare(lead=20, rng=random.Random(3), **kwargs) is False
+    assert should_declare(lead=-40, rng=random.Random(3), **kwargs) is False
+
+
+def test_follow_on_declined_by_a_spent_attack(app):
+    """The main real-world reason a captain declines: his bowlers have just
+    bowled the best part of two days."""
+    base = dict(deficit=260, follow_on_margin=200, days_remaining=3)
+    assert should_enforce_follow_on(**base) is True                 # no context: Law only
+    assert should_enforce_follow_on(attack_overs_bowled=200, **base) is False
+    # Tired but not spent, on a pitch that will be nasty to bat last on.
+    assert should_enforce_follow_on(attack_overs_bowled=150,
+                                    projected_final_wear=0.85, **base) is False
+
+
+def test_follow_on_enforced_when_rain_threatens_the_time(app):
+    """Weather about means time, not bowlers' legs, is the scarce resource."""
+    assert should_enforce_follow_on(
+        deficit=260, follow_on_margin=200, days_remaining=3,
+        attack_overs_bowled=200, rain_risk=0.5) is True
+
+
+def test_follow_on_carries_bowling_workload_into_the_next_innings(app):
+    """Enforcing must not hand the attack a free reset — with a full wipe,
+    the follow-on cost nothing at all."""
+    mgr = fc_bowler_workload.FCBowlerManager(
+        [{"name": "A", "will_bowl": True, "bowling_type": "Fast"}], fmt=None)
+    for _ in range(40):
+        mgr.record_over_completion("A", 3)
+    assert mgr.overs_bowled("A") == 40
+    mgr.reset([{"name": "A", "will_bowl": True, "bowling_type": "Fast"}],
+              carry_fraction=0.45)
+    assert mgr.overs_bowled("A") == 18          # 40 * 0.45
+    assert mgr.get_fatigue_mult("A", stamina_rating=50) < 1.0
+    # The ordinary innings change still resets to fresh.
+    mgr.reset([{"name": "A", "will_bowl": True, "bowling_type": "Fast"}])
+    assert mgr.overs_bowled("A") == 0
+
+
+# ---------------------------------------------------------------------------
+# 14. Bowling spells
+# ---------------------------------------------------------------------------
+
+def _spell_mgr(stamina=60):
+    xi = [
+        {"name": "Quick", "will_bowl": True, "bowling_type": "Fast",
+         "bowling_rating": 78, "stamina_rating": stamina},
+        {"name": "Seamer", "will_bowl": True, "bowling_type": "Fast-medium",
+         "bowling_rating": 74, "stamina_rating": stamina},
+        {"name": "Spinner", "will_bowl": True, "bowling_type": "Off spin",
+         "bowling_rating": 72, "stamina_rating": stamina},
+    ]
+    return fc_bowler_workload.FCBowlerManager(xi, fmt=None), xi
+
+
+def test_spell_length_differs_by_bowling_type(app):
+    """A quick runs in for five to eight overs; a spinner wheels away for
+    two or three times that."""
+    mgr, _ = _spell_mgr()
+    assert 5 <= mgr.max_spell_overs("Quick") <= 8
+    assert 10 <= mgr.max_spell_overs("Spinner") <= 18
+    # Stamina lengthens a spell.
+    strong, _ = _spell_mgr(stamina=100)
+    weak, _ = _spell_mgr(stamina=0)
+    assert strong.max_spell_overs("Quick") > weak.max_spell_overs("Quick")
+
+
+def test_bowler_tires_through_a_spell_and_recovers_when_rested(app):
+    """The old model decayed a bowler in a straight line from his first over
+    to his fortieth with no way back. Resting must actually restore him."""
+    mgr, _ = _spell_mgr()
+    for _ in range(6):
+        mgr.record_over_completion("Quick", 3)
+    tired = mgr.get_fatigue_mult("Quick")
+    assert tired < 1.0
+
+    # Someone else bowls while he puts his sweater on.
+    for _ in range(10):
+        mgr.record_over_completion("Spinner", 2)
+    assert mgr.get_fatigue_mult("Quick") > tired, "a rest must refresh him"
+    # ...and a long enough breather ends the spell, so he can come back.
+    assert mgr.spell_overs("Quick") == 0
+    assert mgr.is_spell_spent("Quick") is False
+
+
+def test_spent_bowler_is_rotated_out_but_never_deadlocks(app):
+    """Being spent is a soft signal: it drops a bowler down the ranking, but
+    a small attack must still always have someone to bowl."""
+    mgr, xi = _spell_mgr()
+    for _ in range(mgr.max_spell_overs("Quick")):
+        mgr.record_over_completion("Quick", 3)
+    assert mgr.is_spell_spent("Quick") is True
+
+    ranked = mgr.rank_by_style_preference(xi, pitch_wear=0.0, fc_day=1)
+    assert ranked[-1]["name"] == "Quick", "the spent bowler goes to the back"
+
+    # Even with every bowler spent, ranking still returns a full attack.
+    for name in ("Seamer", "Spinner"):
+        for _ in range(mgr.max_spell_overs(name)):
+            mgr.record_over_completion(name, 3)
+    assert len(mgr.rank_by_style_preference(xi, pitch_wear=0.9, fc_day=4)) == len(xi)
+
+
+def test_fatigue_never_falls_below_the_effectiveness_floor(app):
+    mgr, _ = _spell_mgr(stamina=0)
+    for _ in range(200):
+        mgr.record_over_completion("Quick", 4)
+    assert mgr.get_fatigue_mult("Quick") == pytest.approx(0.55, abs=1e-9)
+
+
+def test_spell_state_survives_a_resume(app):
+    """A bowler mid-spell must still be mid-spell after a save/restore —
+    otherwise resuming silently hands the captain a fresh attack."""
+    m = _fc_match(days=5)
+    # Stop as soon as somebody is carrying fatigue and BEFORE any innings
+    # ends — an innings change resets the attack, so snapshotting after one
+    # would be testing a fresh manager rather than a mid-spell one.
+    for _ in range(600):
+        r = m.next_ball()
+        if r.get("innings_end") or r.get("match_over"):
+            break
+        if any(v > 0 for v in m.bowler_manager._fatigue.values()):
+            break
+    before = (dict(m.bowler_manager._spell_overs),
+              dict(m.bowler_manager._rest_overs),
+              dict(m.bowler_manager._fatigue))
+    assert any(v > 0 for v in before[2].values()), "someone should be tired by now"
+
+    import json
+    snap = json.loads(json.dumps(m.serialize_fc_snapshot()))
+    restored = _fc_match(days=5)
+    restored.restore_fc_snapshot(snap)
+    assert dict(restored.bowler_manager._spell_overs) == before[0]
+    assert dict(restored.bowler_manager._rest_overs) == before[1]
+    assert dict(restored.bowler_manager._fatigue) == before[2]
+
+
+# ---------------------------------------------------------------------------
+# 15. The last hour, and the nightwatchman
+# ---------------------------------------------------------------------------
+
+def _park_near_stumps(m, overs_left=3):
+    """Put the match that many overs from the close of play."""
+    m.fc_day_over_rate_adjust = 0
+    m.fc_day_overs_bowled_today = m._fc_effective_overs_today() - overs_left
+
+
+def test_last_hour_is_a_real_passage_of_play(app):
+    """Nobody wants to be the man out with ten minutes left."""
+    m = _fc_match(days=5, fc_weather_script={"forecast": "clear", "day_events": {}})
+    m.fc_day_overs_bowled_today = 20
+    m.fc_day_over_rate_adjust = 0
+    assert m._fc_build_match_state()["last_hour"] is False
+
+    _park_near_stumps(m, overs_left=5)
+    assert m._fc_build_match_state()["last_hour"] is True
+
+    engine = FCPressureEngine()
+    close = engine.get_pressure_effects({"fc_innings": 1, "wickets": 3,
+                                         "striker_balls_faced": 40,
+                                         "days_remaining": 4, "last_hour": True})
+    mid = engine.get_pressure_effects({"fc_innings": 1, "wickets": 3,
+                                       "striker_balls_faced": 40,
+                                       "days_remaining": 4, "last_hour": False})
+    assert close["dot_bonus"] > mid["dot_bonus"]
+    assert close["boundary_modifier"] < mid["boundary_modifier"]
+    assert close["wicket_modifier"] < mid["wicket_modifier"]
+
+
+def test_last_hour_does_not_apply_to_a_live_chase(app):
+    """A side going for the win doesn't shut up shop at six o'clock."""
+    m = _fc_match(days=5, fc_weather_script={"forecast": "clear", "day_events": {}})
+    m.fc_innings = 4
+    m.target = m.score + 40          # gettable -> not survival
+    _park_near_stumps(m, overs_left=3)
+    assert m._fc_build_match_state()["last_hour"] is False
+
+
+def test_nightwatchman_is_sent_in_late_to_protect_a_specialist(app):
+    m = _fc_match(days=5, fc_weather_script={"forecast": "clear", "day_events": {}})
+    _park_near_stumps(m, overs_left=3)
+    m.wickets = 3
+    m.remaining_batter_indices = set(range(4, 11))
+
+    promoted = m._auto_pick_next_batter_index()
+    assert promoted != 4, "the specialist at 5 should have been protected"
+    assert m.batting_team[promoted].get("will_bowl"), "a bowler goes in"
+    assert m.fc_nightwatchman_used is True
+
+    # Only one per innings — a captain does not keep promoting bowlers.
+    m.remaining_batter_indices.discard(promoted)
+    assert m._auto_pick_next_batter_index() == min(m.remaining_batter_indices)
+
+
+def test_nightwatchman_not_used_mid_day_or_with_the_last_pair(app):
+    m = _fc_match(days=5, fc_weather_script={"forecast": "clear", "day_events": {}})
+    m.remaining_batter_indices = set(range(4, 11))
+    m.wickets = 3
+
+    m.fc_day_overs_bowled_today = 30          # middle of the day
+    m.fc_day_over_rate_adjust = 0
+    assert m._auto_pick_next_batter_index() == 4
+    assert m.fc_nightwatchman_used is False
+
+    # Late, but nine down: there is nobody left to protect.
+    _park_near_stumps(m, overs_left=2)
+    m.wickets = 8
+    assert m._auto_pick_next_batter_index() == 4
+    assert m.fc_nightwatchman_used is False
+
+
+def test_nightwatchman_not_used_for_the_lower_order(app):
+    """From seven down the next man in is already a lower-order player."""
+    m = _fc_match(days=5, fc_weather_script={"forecast": "clear", "day_events": {}})
+    _park_near_stumps(m, overs_left=2)
+    m.wickets = 6
+    m.remaining_batter_indices = set(range(7, 11))
+    assert m._auto_pick_next_batter_index() == 7
+    assert m.fc_nightwatchman_used is False
+
+
+# ---------------------------------------------------------------------------
+# 16. First-class commentary
+# ---------------------------------------------------------------------------
+
+def _fc_comm_state(**over):
+    state = {"is_fc": True, "fc_day": 3, "fc_innings": 2, "current_over": 40,
+             "current_ball": 0, "batter_runs": 20, "partnership_runs": 30,
+             "fc_ball_overs_bowled": 20, "pitch_wear": 0.2, "score": 200}
+    state.update(over)
+    return state
+
+
+def _fired(engine, context, state):
+    return engine._fc_narratives(context, state, batter="B", bowler="W",
+                                 team="T", fielding_team="F")
+
+
+def test_fc_commentary_speaks_the_long_games_language(app):
+    from engine.commentary_engine import CommentaryEngine
+    eng = CommentaryEngine()
+
+    # Second new ball: ball age back to zero, mid-innings.
+    assert _fired(eng, {"runs": 0}, _fc_comm_state(fc_ball_overs_bowled=0))
+
+    # Going past the opposition's total.
+    eng2 = CommentaryEngine()
+    assert _fired(eng2, {"runs": 2}, _fc_comm_state(fc_lead_before=-1))
+    # ...but not while still well behind.
+    assert not _fired(CommentaryEngine(), {"runs": 2},
+                      _fc_comm_state(fc_lead_before=-80))
+
+    # A wearing pitch, with a spinner on.
+    assert _fired(CommentaryEngine(), {"runs": 1, "bowling_type": "Off spin"},
+                  _fc_comm_state(pitch_wear=0.7))
+    # A seamer on the same pitch gets no such line.
+    assert not _fired(CommentaryEngine(), {"runs": 1, "bowling_type": "Fast"},
+                      _fc_comm_state(pitch_wear=0.7))
+
+
+def test_fc_ambient_commentary_is_said_once_not_every_over(app):
+    """The last hour and a turning pitch are standing conditions. Remarking
+    on them at the top of every over is noise, not commentary."""
+    from engine.commentary_engine import CommentaryEngine
+    eng = CommentaryEngine()
+    state = _fc_comm_state(last_hour=True)
+    assert _fired(eng, {"runs": 0}, state), "said the first time"
+    assert not _fired(eng, {"runs": 0}, state), "and not again that day"
+    # A new day earns it again.
+    assert _fired(eng, {"runs": 0}, _fc_comm_state(last_hour=True, fc_day=4))
+
+
+def test_fc_maidens_are_remarked_on_as_a_run_not_one_at_a_time(app):
+    """A maiden is roughly one over in eight in this format — commonplace.
+    A sequence of them is what strangles an innings."""
+    from engine.commentary_engine import CommentaryEngine
+    eng = CommentaryEngine()
+    base = dict(is_maiden_over=True)
+    assert not _fired(eng, {"runs": 0}, _fc_comm_state(fc_consecutive_maidens=1, **base))
+    assert not _fired(eng, {"runs": 0}, _fc_comm_state(fc_consecutive_maidens=2, **base))
+    assert _fired(eng, {"runs": 0}, _fc_comm_state(fc_consecutive_maidens=3, **base))
+
+
+def test_limited_overs_narratives_never_fire_in_an_fc_match(app):
+    """Powerplays, death overs, big overs and single maidens are all
+    limited-overs concepts that used to leak into first-class commentary."""
+    from engine.commentary_engine import CommentaryEngine
+    eng = CommentaryEngine()
+    for state in (
+        {"is_fc": True, "current_over": 0, "current_ball": 0},
+        {"is_fc": True, "current_over": 16, "current_ball": 0},
+        {"is_fc": True, "current_over_runs": 16, "current_ball": 5},
+        {"is_fc": True, "current_over_runs": 13, "current_ball": 5},
+        {"is_fc": True, "is_maiden_over": True, "current_ball": 5},
+    ):
+        text = eng._check_narratives({"runs": 0, "type": "run"}, state) or ""
+        for banned in ("Powerplay", "powerplay", "death overs", "maiden over"):
+            assert banned not in text, f"{banned!r} leaked into FC: {text!r}"
+
+
+def test_every_fc_narrative_template_formats_cleanly(app):
+    """A template referencing a placeholder the engine doesn't supply falls
+    back to raw text with a visible {brace} in it."""
+    from engine.commentary_engine import CommentaryEngine
+    eng = CommentaryEngine()
+    kwargs = dict(batter="B", bowler="W", team="T", fielding_team="F")
+    for key, templates in eng.narratives.items():
+        if not key.startswith("fc_"):
+            continue
+        for text in templates:
+            formatted = text.format(**kwargs)
+            assert "{" not in formatted, f"{key}: unresolved placeholder in {text!r}"
+
+
+# ---------------------------------------------------------------------------
+# 17. A captain who reads the conditions
+# ---------------------------------------------------------------------------
+
+def test_declaration_bar_moves_with_the_conditions(app):
+    """A first-innings declaration is not a number being reached. The same
+    score means different things in different conditions."""
+    from engine.fc_declaration import _conditions_threshold_multiplier as cond
+
+    assert cond() == 1.0, "no information -> the flat threshold, unchanged"
+
+    # Rain about: overs are the scarce resource, so declare sooner.
+    assert cond(rain_risk=0.6) < 1.0
+    assert cond(rain_risk=0.6) < cond(rain_risk=0.2)
+
+    # A pitch that will be unplayable by the fourth innings — declare and
+    # let THEM bat last on it.
+    assert cond(projected_final_wear=0.9) < 1.0
+    assert cond(projected_final_wear=0.3) == 1.0, "a good surface changes nothing"
+
+    # A spent attack is a reason to bat on: no point setting up a
+    # declaration your bowlers cannot enforce.
+    assert cond(attack_freshness=0.1) > 1.0
+    assert cond(attack_freshness=1.0) == 1.0
+
+    # Always clamped — this is a captain weighing what he sees, not a
+    # different heuristic.
+    assert 0.70 <= cond(rain_risk=1.0, projected_final_wear=1.0) <= 1.25
+    assert 0.70 <= cond(attack_freshness=0.0) <= 1.25
+
+
+def test_rain_makes_a_captain_declare_on_less(app):
+    """End to end through should_declare: the same score declares under a
+    threatening forecast and does not under a clear one."""
+    # days_remaining=2 so declaration_window_open()'s time-forcing gate is
+    # satisfied; this test is about the threshold, not the window.
+    kwargs = dict(fc_innings=1, wickets=7, overs_bowled_this_innings=110,
+                  lead=0, days_remaining=2, pitch_par_factor=1.0)
+    assert should_declare(score=270, **kwargs) is False
+    assert should_declare(score=270, rain_risk=0.8, **kwargs) is True
+
+
+def test_a_spent_attack_makes_a_captain_bat_on(app):
+    kwargs = dict(fc_innings=1, wickets=7, overs_bowled_this_innings=110,
+                  lead=0, days_remaining=2, pitch_par_factor=1.0)
+    assert should_declare(score=310, **kwargs) is True
+    assert should_declare(score=310, attack_freshness=0.0, **kwargs) is False
+
+
+def test_attack_freshness_is_reported_for_the_side_that_must_bowl(app):
+    """After declaring, the batting side has to bowl — so it is THEIR
+    bowlers' freshness that matters, not the side currently in the field."""
+    m = _fc_match(days=5)
+    for _ in range(300):
+        r = m.next_ball()
+        if r.get("innings_end") or r.get("match_over"):
+            break
+    fresh = m._fc_declaring_side_freshness()
+    assert fresh is None or 0.0 <= fresh <= 1.0
+    # The declaring side's bowlers have not been bowling, so they should be
+    # fresher than the attack that has been in the field all innings.
+    fielding = m._fc_attack_freshness()
+    if fresh is not None and fielding is not None:
+        assert fresh >= fielding
+
+
+# ---------------------------------------------------------------------------
+# 18. Partnerships and collapses
+# ---------------------------------------------------------------------------
+
+def test_an_established_stand_wears_the_attack_down(app):
+    """Partnership data was recorded for the archiver from the day FC was
+    built, but fed nothing — so a 200-run stand changed nothing about the
+    game. It is ramped by BALLS: a watchful 60 off 200 demoralises an attack
+    far more than a breezy 60 off 90."""
+    eng = FCPressureEngine()
+    assert eng.partnership_grind(60) == 0.0, "a new stand has told nobody anything"
+    assert eng.partnership_grind(120) == 0.0
+    assert 0.0 < eng.partnership_grind(240) < 1.0
+    assert eng.partnership_grind(480) == 1.0
+    assert eng.partnership_grind(900) == 1.0, "clamped"
+
+    base = {"fc_innings": 1, "wickets": 2, "striker_balls_faced": 40,
+            "days_remaining": 4}
+    fresh = eng.get_pressure_effects({**base, "partnership_balls": 0})
+    ground = eng.get_pressure_effects({**base, "partnership_balls": 480})
+    assert ground["wicket_modifier"] < fresh["wicket_modifier"]
+    assert ground["boundary_modifier"] > fresh["boundary_modifier"]
+
+
+def test_a_collapse_accelerates_rather_than_being_a_flat_bump(app):
+    """The old model applied 1.25x however many had just gone, so three for
+    twelve looked the same as one loose shot."""
+    eng = FCPressureEngine()
+    two = eng.collapse_severity(2)
+    three = eng.collapse_severity(3)
+    four = eng.collapse_severity(4)
+    assert 1.0 < two < three < four, "it must cascade"
+    assert eng.collapse_severity(9) == four, "and then plateau"
+
+    # Walking in mid-collapse is the most vulnerable moment there is.
+    assert eng.collapse_severity(3, striker_balls_faced=1) > \
+           eng.collapse_severity(3, striker_balls_faced=50)
+
+    # Temperament blunts it; the floor is always a no-op, never a discount.
+    calm = eng.collapse_severity(4, temperament_rating=100)
+    rattled = eng.collapse_severity(4, temperament_rating=0)
+    assert calm < rattled
+    assert eng.collapse_severity(4, temperament_rating=100) >= 1.0
+
+
+def test_partnership_balls_reach_the_pressure_engine(app):
+    """The wiring that was missing: recorded on Match, never handed over."""
+    m = _fc_match(days=5)
+    for _ in range(120):
+        r = m.next_ball()
+        if r.get("innings_end") or r.get("match_over"):
+            break
+    state = m._fc_build_match_state()
+    assert "partnership_balls" in state
+    assert state["partnership_balls"] == m.current_partnership_balls
+    assert state["partnership_runs"] == m.current_partnership_runs

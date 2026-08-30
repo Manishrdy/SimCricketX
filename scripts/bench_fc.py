@@ -11,6 +11,7 @@ and prints a per-pitch aggregate summary to stdout.
 Run from project root:  python scripts/bench_fc.py
 """
 import argparse
+import collections
 import copy
 import csv
 import logging
@@ -28,31 +29,38 @@ import engine.match as match_module
 match_module.print = lambda *a, **k: None   # silence match prints
 
 
-def _squad(prefix, pace=4, spin=2):
-    names = [f"{prefix}_P{i+1}" for i in range(11)]
-    pace_types = ["Fast", "Fast-medium", "Medium-fast", "Medium"]
-    spin_types = ["Off spin", "Leg spin", "Finger spin", "Wrist spin"]
+# A realistic first-class XI shape. A uniform-rated squad is useless as a
+# calibration instrument: with no tail, every side bats like six No. 3s and
+# totals come out far above anything a real team makes. Positions carry the
+# spread a real XI has — specialist top six, a keeper, an all-rounder, then
+# a genuine tail.
+FC_XI = [
+    # (bat, bowl, technique, temperament, stamina, role, bowling_type, will_bowl)
+    (74, 20, 76, 74, 55, "Batsman",      "Medium",      False),
+    (72, 20, 74, 72, 55, "Batsman",      "Medium",      False),
+    (78, 25, 80, 78, 55, "Batsman",      "Medium",      False),
+    (76, 30, 76, 76, 55, "Batsman",      "Off spin",    False),
+    (70, 20, 70, 70, 55, "Batsman",      "Medium",      False),
+    (64, 30, 64, 66, 55, "Wicketkeeper", "Medium",      False),
+    (58, 68, 58, 62, 68, "All-rounder",  "Fast-medium", True),
+    (40, 74, 42, 50, 72, "Bowler",       "Fast",        True),
+    (28, 76, 30, 45, 70, "Bowler",       "Fast-medium", True),
+    (20, 72, 22, 40, 74, "Bowler",       "Off spin",    True),
+    (12, 70, 14, 38, 74, "Bowler",       "Leg spin",    True),
+]
+
+
+def _squad(prefix):
     players = []
-    bowler_idx = 0
-    for i, n in enumerate(names):
-        is_pace = 5 <= i < 5 + pace
-        is_spin = 5 + pace <= i < 5 + pace + spin
-        will_bowl = is_pace or is_spin
-        if is_pace:
-            bt = pace_types[bowler_idx % len(pace_types)]
-        elif is_spin:
-            bt = spin_types[bowler_idx % len(spin_types)]
-        else:
-            bt = "Medium"
-        if will_bowl:
-            bowler_idx += 1
+    for i, (bat, bowl, tech, temp, stam, role, btype, wb) in enumerate(FC_XI):
         players.append({
-            "name": n,
-            "role": "Bowler" if will_bowl else "Batsman",
-            "batting_rating": 70, "bowling_rating": 72, "fielding_rating": 65,
-            "technique_rating": 65, "temperament_rating": 65, "stamina_rating": 60,
-            "batting_hand": "Right", "bowling_type": bt, "bowling_hand": "Right",
-            "will_bowl": will_bowl, "is_captain": i == 0, "is_wicketkeeper": i == 4,
+            "name": f"{prefix}_P{i+1}", "role": role,
+            "batting_rating": bat, "bowling_rating": bowl, "fielding_rating": 68,
+            "technique_rating": tech, "temperament_rating": temp,
+            "stamina_rating": stam,
+            "batting_hand": "Left" if i in (1, 4, 8) else "Right",
+            "bowling_type": btype, "bowling_hand": "Right" if i % 2 else "Left",
+            "will_bowl": wb, "is_captain": i == 0, "is_wicketkeeper": i == 5,
         })
     return players
 
@@ -61,7 +69,19 @@ HOME = _squad("HOM")
 AWAY = _squad("AWY")
 
 
-def _fc_match(pitch, seed, days=5):
+# Real first-class cricket is not played under permanent sunshine, and time
+# lost to weather is a major reason matches are drawn. Benchmarking every
+# game as "clear" understated the draw rate by about a third (16% vs 22%).
+# This mix is the default; --forecast pins a single tier when you want to
+# isolate the scoring model from the weather.
+FORECAST_MIX = ["clear", "clear", "passing_showers", "passing_showers", "rain_around"]
+
+
+def _forecast_for(seed, override=None):
+    return override or FORECAST_MIX[seed % len(FORECAST_MIX)]
+
+
+def _fc_match(pitch, seed, days=5, forecast=None):
     random.seed(seed)
     data = {
         "match_id": str(uuid.uuid4()), "created_by": "bench",
@@ -72,13 +92,13 @@ def _fc_match(pitch, seed, days=5):
         "match_format": "FC", "days": days, "simulation_mode": "auto",
         "playing_xi": {"home": copy.deepcopy(HOME), "away": copy.deepcopy(AWAY)},
         "substitutes": {"home": [], "away": []},
-        "weather_forecast": "clear",
+        "weather_forecast": _forecast_for(seed, forecast),
     }
     return match_module.Match(data)
 
 
-def _simulate_match(pitch, seed, days=5, limit=60000):
-    m = _fc_match(pitch, seed, days=days)
+def _simulate_match(pitch, seed, days=5, limit=60000, forecast=None):
+    m = _fc_match(pitch, seed, days=days, forecast=forecast)
 
     # Instrument the exact moment an innings is ruled over, BEFORE
     # _fc_transition_to_next_innings() resets fc_innings_declared / advances
@@ -101,10 +121,19 @@ def _simulate_match(pitch, seed, days=5, limit=60000):
     m._fc_innings_should_end = _wrapped_should_end
 
     innings = {}  # innings_number -> dict(runs, wickets, overs, declared)
+    knocks = []   # every individual innings played in the match
+    extras = collections.Counter()   # extra_type -> count, from the ball stream
+    stands = []   # runs in each partnership, recorded as it is broken
     for _ in range(limit):
+        _partnership_before = m.current_partnership_runs
         resp = m.next_ball()
         if "error" in resp:
             return None
+        _bd = resp.get("ball_data") or {}
+        if _bd.get("is_extra") and _bd.get("extra_type"):
+            extras[_bd["extra_type"]] += 1
+        if _bd.get("batter_out"):
+            stands.append(_partnership_before)
         if resp.get("innings_end"):
             n = resp.get("innings_number")
             sc = resp.get("scorecard_data", {}) or {}
@@ -114,12 +143,134 @@ def _simulate_match(pitch, seed, days=5, limit=60000):
                 "overs": sc.get("overs", ""),
                 "declared": endings.get(n, False),
             }
+            # Individual innings, for the score distribution and the
+            # dismissal mix. Batting position comes from the squad naming
+            # (`HOM_P7` -> 7) rather than the scorecard's row order, which
+            # only lists players who actually batted.
+            for row in (sc.get("players") or []):
+                name = row.get("name") or ""
+                try:
+                    pos = int(name.rsplit("_P", 1)[1])
+                except (IndexError, ValueError):
+                    pos = 0
+                knocks.append({
+                    "pos": pos,
+                    "runs": row.get("runs", 0) or 0,
+                    "balls": row.get("balls", 0) or 0,
+                    "wicket_type": (row.get("wicket_type") or "").strip(),
+                })
+
         if resp.get("match_over"):
-            return {"innings": innings, "match_status": m.match_status}
+            return {"innings": innings, "match_status": m.match_status,
+                    "knocks": knocks, "extras": extras, "stands": stands}
     return None
 
 
 PITCHES = ["Green", "Dry", "Hard", "Flat", "Dead"]
+
+
+def _overs_to_float(value):
+    """'82.3' (82 overs 3 balls) -> 82.5 overs."""
+    if not value:
+        return 0.0
+    whole, _, part = str(value).partition(".")
+    return int(whole or 0) + int(part or 0) / 6.0
+
+
+
+# Real first-class reference points, for judging the numbers rather than
+# just reading them. Sources are ordinary FC/Test aggregates.
+REAL_DISMISSAL_MIX = {
+    "Caught": 57.0, "Bowled": 21.0, "LBW": 15.0, "Run Out": 3.5, "Stumped": 2.5,
+}
+REAL_EXTRAS_MIX = {
+    "Leg Bye": 38.0, "Byes": 26.0, "Wide": 18.0, "No Ball": 18.0,
+}
+
+
+def _print_batting_profile(knocks):
+    """Hundreds, fifties and ducks per 100 innings, and where the runs come
+    from. A tail that contributes like a top order is the loudest sign the
+    skill contest has gone flat."""
+    if not knocks:
+        return
+    completed = [k for k in knocks if k["balls"] > 0 or k["wicket_type"]]
+    n = max(len(completed), 1)
+    hundreds = sum(1 for k in completed if k["runs"] >= 100)
+    fifties = sum(1 for k in completed if 50 <= k["runs"] < 100)
+    ducks = sum(1 for k in completed if k["runs"] == 0 and k["wicket_type"])
+    print(f"\nBatting profile ({len(completed)} individual innings)")
+    print(f"    per 100 innings: {hundreds / n * 100:5.1f} hundreds   "
+          f"{fifties / n * 100:5.1f} fifties   {ducks / n * 100:5.1f} ducks")
+    print(f"    real FC roughly:   3-5 hundreds    10-13 fifties    "
+          f"10-14 ducks")
+
+    top = [k for k in completed if 1 <= k["pos"] <= 6]
+    tail = [k for k in completed if 9 <= k["pos"] <= 11]
+    top_runs = sum(k["runs"] for k in top)
+    tail_runs = sum(k["runs"] for k in tail)
+    total_runs = max(sum(k["runs"] for k in completed), 1)
+    # Shares are of BATTER runs, not team runs — extras are excluded, which
+    # lifts every share by a few points against the figures usually quoted.
+    print(f"    share of runs:   top six {top_runs / total_runs * 100:.0f}%   "
+          f"nos 9-11 {tail_runs / total_runs * 100:.0f}%   "
+          f"(real FC ~72-77% / ~8-10%, of batter runs)")
+
+    print(f"\n    {'pos':>4} {'avg':>7} {'SR':>7} {'inns':>6}")
+    for pos in range(1, 12):
+        at = [k for k in completed if k["pos"] == pos]
+        if not at:
+            continue
+        outs = sum(1 for k in at if k["wicket_type"])
+        runs = sum(k["runs"] for k in at)
+        balls = max(sum(k["balls"] for k in at), 1)
+        print(f"    {pos:>4} {runs / max(outs, 1):7.1f} "
+              f"{runs / balls * 100:7.1f} {len(at):6d}")
+
+
+def _print_dismissal_mix(knocks):
+    """How batters actually got out, against how they get out in the real
+    game. A quarter of spin wickets being stumpings is the first thing a
+    cricket person spots on a scorecard."""
+    got_out = [k for k in knocks if k["wicket_type"]]
+    if not got_out:
+        return
+    counts = collections.Counter(k["wicket_type"] for k in got_out)
+    total = len(got_out)
+    print(f"\nDismissal mix ({total} wickets)")
+    print(f"    {'type':<12} {'sim':>7} {'real FC':>9}")
+    for kind in sorted(counts, key=lambda k: -counts[k]):
+        real = REAL_DISMISSAL_MIX.get(kind)
+        real_s = f"{real:.1f}%" if real is not None else "-"
+        print(f"    {kind:<12} {counts[kind] / total * 100:6.1f}% {real_s:>9}")
+
+
+def _print_partnerships(stands):
+    """How stands are distributed. A long partnership is the passage of play
+    that breaks an attack's back, so it should be visible here as well as
+    felt in the wicket odds."""
+    stands = sorted(s for s in stands if s is not None)
+    if not stands:
+        return
+    n = len(stands)
+    print(f"\nPartnerships ({n} broken)")
+    print(f"    median {stands[n // 2]}   p75 {stands[int(n * 0.75)]}   "
+          f"p90 {stands[int(n * 0.90)]}   best {stands[-1]}")
+    print(f"    reaching 50: {sum(1 for s in stands if s >= 50) / n * 100:4.1f}%   "
+          f"reaching 100: {sum(1 for s in stands if s >= 100) / n * 100:4.1f}%")
+    print(f"    real FC:      ~18-22%           ~5-7%")
+
+
+def _print_extras_mix(extras):
+    total = sum(extras.values())
+    if not total:
+        return
+    print(f"\nExtras mix ({total} extras)")
+    print(f"    {'type':<12} {'sim':>7} {'real FC':>9}")
+    for kind in sorted(extras, key=lambda k: -extras[k]):
+        real = REAL_EXTRAS_MIX.get(kind)
+        real_s = f"{real:.1f}%" if real is not None else "-"
+        print(f"    {kind:<12} {extras[kind] / total * 100:6.1f}% {real_s:>9}")
 
 
 def main():
@@ -127,6 +278,9 @@ def main():
     ap.add_argument("--per-pitch", type=int, default=100)
     ap.add_argument("--days", type=int, default=5)
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "fc_bench_results.csv"))
+    ap.add_argument("--forecast", default=None,
+                    help="pin one weather tier (clear/passing_showers/rain_around/"
+                         "storm_warning) instead of the realistic mix")
     args = ap.parse_args()
 
     fieldnames = ["pitch", "seed", "match_status"]
@@ -137,9 +291,17 @@ def main():
         fieldnames.append(f"innings{n}_overs")
 
     rows = []
+    all_knocks = []
+    all_extras = collections.Counter()
+    all_stands = []
     for pitch in PITCHES:
         for seed in range(1, args.per_pitch + 1):
-            res = _simulate_match(pitch, seed, days=args.days)
+            res = _simulate_match(pitch, seed, days=args.days,
+                                  forecast=args.forecast)
+            if res:
+                all_knocks.extend(res.get("knocks") or [])
+                all_extras.update(res.get("extras") or {})
+                all_stands.extend(res.get("stands") or [])
             row = {"pitch": pitch, "seed": seed,
                    "match_status": res["match_status"] if res else "error"}
             innings = res["innings"] if res else {}
@@ -187,6 +349,36 @@ def main():
                 decl_pct = (decl_l.count("Yes") / len(decl_l) * 100) if decl_l else 0
                 line += f"  {decl_pct:>8.0f}%"
         print(line)
+
+    # Result distribution and the whole-match economy — the numbers that say
+    # whether this reads like first-class cricket at all.
+    print()
+    status_counts = collections.Counter(r["match_status"] for r in rows)
+    total_runs = total_wkts = 0
+    total_overs = 0.0
+    for r in rows:
+        for n in (1, 2, 3, 4):
+            if r[f"innings{n}_runs"] == "":
+                continue
+            total_runs += int(r[f"innings{n}_runs"])
+            total_wkts += int(r[f"innings{n}_wickets"])
+            total_overs += _overs_to_float(r[f"innings{n}_overs"])
+    played = max(len(rows), 1)
+    print(f"Results: " + ", ".join(f"{k} {v} ({v / played * 100:.0f}%)"
+                                   for k, v in sorted(status_counts.items())))
+    for p in PITCHES:
+        prows = [r for r in rows if r["pitch"] == p]
+        drawn = sum(1 for r in prows if r["match_status"] == "drawn")
+        print(f"    {p:<7} drawn {drawn}/{len(prows)}")
+    if total_overs and total_wkts:
+        print(f"\nEconomy: {total_runs / total_overs:.2f} RPO, "
+              f"{total_runs / total_wkts:.1f} runs/wicket, "
+              f"{total_overs * 6 / total_wkts:.1f} balls/wicket")
+
+    _print_batting_profile(all_knocks)
+    _print_dismissal_mix(all_knocks)
+    _print_extras_mix(all_extras)
+    _print_partnerships(all_stands)
 
     print()
     for n in (1, 2, 3):

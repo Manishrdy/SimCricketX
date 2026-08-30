@@ -8,6 +8,7 @@ from engine.ground_config import (
     get_wicket_factors as _gc_wicket_factors,
     get_phase_boosts as _gc_phase_boosts,
     get_blending_weights as _gc_blending_weights,
+    DEFAULT_FORMAT as _GC_DEFAULT_FORMAT,
     get_lista_matrix as _gc_lista_matrix,
     get_lista_run_factor as _gc_lista_run_factor,
     get_lista_wicket_mult as _gc_lista_wicket_mult,
@@ -22,6 +23,7 @@ from engine.ground_config import (
     get_fc_wicket_factor_for as _gc_fc_wicket_factor_for,
     get_fc_pitch_wear as _gc_fc_pitch_wear,
     get_fc_ball_condition_factor as _gc_fc_ball_condition_factor,
+    get_fc_ball_condition_outcome_factors as _gc_fc_ball_condition_outcomes,
     get_fc_rough_targeting_factor as _gc_fc_rough_targeting_factor,
 )
 from engine.game_state_engine import apply_game_state_to_probs
@@ -461,6 +463,7 @@ def compute_weighted_prob(
     effective_batting = batting
 
     _is_lista = (format_name == "ListA")
+    _is_fc = (format_name == "FC")
 
     # New batter vulnerability: first 5 balls are dangerous.
     # ListA uses softer penalties than T20 to avoid middle-order wipeouts.
@@ -470,21 +473,26 @@ def compute_weighted_prob(
         effective_batting *= 0.94 if _is_lista else 0.90
 
     # Graduated confidence based on runs scored.
-    # ListA keeps this curve flatter to reduce opener snowballing.
+    # ListA keeps this curve flatter to reduce opener snowballing; FC is
+    # flatter still. A set batter IS harder to dismiss, but over a 150-over
+    # first-class innings T20's +20% compounds into a runaway: a batter who
+    # got in was never getting out, which is what turned Flat/Dead into
+    # 900-run draws. Being set here buys durability, not immunity.
+    _flat_confidence = _is_lista or _is_fc
     if batter_runs >= 50:
-        effective_batting *= 1.10 if _is_lista else 1.20
+        effective_batting *= 1.08 if _is_fc else (1.10 if _is_lista else 1.20)
     elif batter_runs >= 35:
-        effective_batting *= 1.07 if _is_lista else 1.15
+        effective_batting *= 1.06 if _is_fc else (1.07 if _is_lista else 1.15)
     elif batter_runs >= 20:
-        effective_batting *= 1.05 if _is_lista else 1.10
+        effective_batting *= 1.04 if _is_fc else (1.05 if _is_lista else 1.10)
     elif batter_runs >= 10:
-        effective_batting *= 1.02 if _is_lista else 1.05
+        effective_batting *= 1.02 if _is_fc else (1.02 if _is_lista else 1.05)
 
     # Balls-faced confidence layer (independent of runs).
     if balls_faced >= 20:
-        effective_batting *= 1.02 if _is_lista else 1.05
+        effective_batting *= 1.02 if _flat_confidence else 1.05
     elif balls_faced >= 12:
-        effective_batting *= 1.01 if _is_lista else 1.03
+        effective_batting *= 1.01 if _flat_confidence else 1.03
 
     # 1) Player-skill fraction
     skill_frac = 0.5
@@ -496,8 +504,11 @@ def compute_weighted_prob(
             skill_frac = effective_batting / (effective_batting + bowling)
             
             # Hard pitch: batting-favored but bowlers still matter
-            # 65/35 split — batters have the edge but good bowlers can compete
-            if pitch == "Hard":
+            # 65/35 split — batters have the edge but good bowlers can compete.
+            # NOT for FC: "Hard" there means a TRUE, neutral surface, and this
+            # skew (undamped once FC's blend is skill-only) turned the fairest
+            # pitch in the game into the flattest one.
+            if pitch == "Hard" and not _is_fc:
                 skill_frac = (effective_batting * 0.65) / ((effective_batting * 0.65) + (bowling * 0.35))
                 
         else:
@@ -513,21 +524,22 @@ def compute_weighted_prob(
         # technically correct batter is harder to dismiss even at the same
         # batting_rating as a more free-scoring one.
         _defensive_batting = effective_batting
-        if format_name == "FC" and technique_rating is not None:
-            _defensive_batting = effective_batting * 0.7 + technique_rating * 0.3
+        if _is_fc and technique_rating is not None:
+            _defensive_batting = effective_batting * 0.70 + technique_rating * 0.30
         if (_defensive_batting + bowling) > 0:
             contest_frac = bowling / (_defensive_batting + bowling)
             skill_frac = contest_frac
 
-            # Hard pitch: wickets harder to come by but not impossible
-            if pitch == "Hard":
+            # Hard pitch: wickets harder to come by but not impossible.
+            # FC excluded for the same reason as the run-side skew above.
+            if pitch == "Hard" and not _is_fc:
                 skill_frac *= 0.85 if _is_lista else 0.75
         else:
             skill_frac = 0.5
 
     # 2) Pitch-influence fraction
     pitch_frac = 1.0
-    if _is_lista or format_name == "FC":
+    if _is_lista or _is_fc:
         # ListA/FC each have their own phase/wear-scaling layers applied
         # outside this function (calculate_outcome's "3.25" stage; FC's is
         # the wear-interpolated bowling-style wicket factor). Reusing T20's
@@ -549,7 +561,11 @@ def compute_weighted_prob(
     # 🔧 USER REQUEST: "If flat, batsman will have advantage over bowlers"
     # Logic: Boosting the skill component if favorable to bat
 
-    _weights = _gc_blending_weights(config=config)
+    # Format-scoped: each format has its own `blending` block in the ground
+    # config. Without match_format this always read T20's, so FC/ListA could
+    # never be tuned independently (latent until the blocks diverge).
+    _weights = _gc_blending_weights(config=config,
+                                    match_format=format_name or _GC_DEFAULT_FORMAT)
     alpha = _weights[0] if _weights else 0.6  # Pitch weight
     beta = _weights[1] if _weights else 0.4   # Skill weight
 
@@ -696,12 +712,47 @@ def apply_pressure_effects_to_weights(raw_weights: dict, pressure_effects: dict,
 # -----------------------------------------------------------------------------
 # 4b) Wicket type selection based on bowling style
 # -----------------------------------------------------------------------------
-def _get_wicket_type_by_bowling(bowling_type: str):
+# First-class dismissal weights. The shared table below is shaped by T20,
+# where batters charge spinners and scramble singles: it gives spin a 25%
+# stumping rate and 12% run-outs. In first-class cricket stumpings are ~2-3%
+# of all dismissals and run-outs ~3%, while caught is over half — the edge to
+# slip or keeper is the defining mode of the long game, and nobody is running
+# a risky second in the second session of day two.
+#
+# These are SELECTION weights, not the observed mix: a Caught chance still
+# has to survive the catch-drop check in resolve_fielding_chance(), which
+# cancels roughly one in eleven, so Caught is set above its target share.
+# Caught-behind is not a separate type — _select_fielder() already weights
+# the keeper up on catches, so it reads as `c. {keeper}` on the scorecard.
+_FC_WICKET_WEIGHTS = {
+    # Pace: edges dominate; a batter is not stumped off a quick.
+    "pace":    (["Caught", "Bowled", "LBW", "Run Out", "Hit Wicket"],
+                [0.665,    0.200,    0.100,  0.025,     0.010]),
+    # Spin: more LBW and bowled, and stumpings exist but are rare.
+    "spin":    (["Caught", "LBW", "Bowled", "Stumped", "Run Out"],
+                [0.545,    0.145,  0.220,    0.065,     0.025]),
+    "default": (["Caught", "Bowled", "LBW", "Run Out", "Hit Wicket"],
+                [0.620,    0.225,    0.120,  0.025,     0.010]),
+}
+
+_PACE_TYPES = ("Fast", "Fast-medium", "Medium-fast")
+_SPIN_TYPES = ("Off spin", "Leg spin", "Finger spin", "Wrist spin")
+
+
+def _get_wicket_type_by_bowling(bowling_type: str, is_fc: bool = False):
     """Return (types, weights) for wicket dismissal based on bowling style.
 
     Includes Stumped as a dismissal mode. Spinners produce far more stumpings
-    than pace bowlers, matching real T20 cricket patterns.
+    than pace bowlers, matching real T20 cricket patterns. FC uses its own
+    table entirely — see _FC_WICKET_WEIGHTS.
     """
+    if is_fc:
+        if bowling_type in _PACE_TYPES:
+            return _FC_WICKET_WEIGHTS["pace"]
+        if bowling_type in _SPIN_TYPES:
+            return _FC_WICKET_WEIGHTS["spin"]
+        return _FC_WICKET_WEIGHTS["default"]
+
     if bowling_type in ("Fast", "Fast-medium", "Medium-fast"):
         # Pace bowlers: more bowled/LBW, very few stumpings
         types   = ["Caught", "Bowled", "LBW", "Run Out", "Stumped"]
@@ -865,11 +916,23 @@ def calculate_outcome(
         1: 1.02, 2: 1.02, 3: 1.01, 4: 1.00, 5: 1.00,
         6: 0.99, 7: 0.97, 8: 0.94, 9: 0.90, 10: 0.86, 11: 0.82,
     }
-    _pos_mult = (
-        _lista_pos_mult.get(batting_position, 1.00)
-        if (format_config is not None and format_config.name == "ListA")
-        else _POS_BATTING_MULT.get(batting_position, 1.00)
-    )
+    # FC runs a steeper curve than T20/ListA: over four innings the gap
+    # between a specialist top-six batter and a genuine No. 11 is the widest
+    # in cricket (openers average ~35, No. 11s single figures), and the flat
+    # shared curve had the tail surviving as long as the top order.
+    _fc_pos_mult = {
+        1: 1.00, 2: 1.00, 3: 1.01, 4: 1.00, 5: 0.98,
+        6: 0.96, 7: 0.94, 8: 0.92, 9: 0.90, 10: 0.87, 11: 0.84,
+    }
+    _fmt_name = format_config.name if format_config is not None else None
+    _fmt_is_fc = (format_config is not None
+                  and getattr(format_config, "format_family", None) == "multi_day")
+    if _fmt_name == "ListA":
+        _pos_mult = _lista_pos_mult.get(batting_position, 1.00)
+    elif _fmt_is_fc:
+        _pos_mult = _fc_pos_mult.get(batting_position, 1.00)
+    else:
+        _pos_mult = _POS_BATTING_MULT.get(batting_position, 1.00)
     batting = batter["batting_rating"] * _pos_mult
     bowling = bowler["bowling_rating"]
     fielding = bowler["fielding_rating"]
@@ -1070,13 +1133,15 @@ def calculate_outcome(
         _scale_outcomes(raw_weights, {"Wicket":
             _gc_fc_wicket_factor_for(pitch, bowling_type, pitch_wear, config=_gc)
         })
-        # Ball-condition (Phase 2): independent of pitch wear/type — a new
-        # ball swings for genuine pace, that fades, then an old ball can
-        # reverse-swing for genuinely fast bowlers just before the next new
-        # ball is due (fmt.new_ball_overs).
-        _scale_outcomes(raw_weights, {"Wicket":
-            _gc_fc_ball_condition_factor(bowling_type, ball_overs_bowled, new_ball_overs, config=_gc)
-        })
+        # Ball-condition: independent of pitch wear/type — a new ball swings
+        # for genuine pace, that fades, then an old ball can reverse-swing
+        # just before the next new ball is due (fmt.new_ball_overs). This
+        # scales BOTH wickets and scoring: a new ball takes more edges and
+        # also races away off the bat, and a scuffed reversing one is hard
+        # work at both ends. Applying it to wickets alone made the new ball
+        # a purely hostile event, which is not how it reads from the stands.
+        _scale_outcomes(raw_weights, _gc_fc_ball_condition_outcomes(
+            bowling_type, ball_overs_bowled, new_ball_overs, config=_gc))
         # Handedness-specific rough-targeting: footmark rough only exists
         # where days of the same bowling angle have worn the same patch —
         # a wear-*and*-matchup effect distinct from both the bowling-style-
@@ -1145,7 +1210,7 @@ def calculate_outcome(
         result["batter_out"] = True
 
         # Decide wicket type based on bowling style (A7: varies by bowling type, A6: includes Stumped)
-        types, weights_pct = _get_wicket_type_by_bowling(bowling_type)
+        types, weights_pct = _get_wicket_type_by_bowling(bowling_type, is_fc=_is_fc)
         wicket_choice = random.choices(types, weights=weights_pct)[0]
 
         result["wicket_type"] = wicket_choice
@@ -1218,9 +1283,17 @@ def calculate_outcome(
         #        wider lines; spinner drifts are common); fewer no-balls
         #        (less aggressive short-ball pace attack than T20).
         # T20:   higher no-ball rate from aggressive pace bowling.
+        # FC:    byes and leg-byes country. A first-class wide is a genuine
+        #        error rather than a policed tramline — bowlers are attacking
+        #        the stumps and the off-side channel all day, so the ball
+        #        beating the bat and running away past the keeper is far more
+        #        common than one called wide.
         if _is_lista:
             extra_types   = ["Wide", "No Ball", "Leg Bye", "Byes"]
             extra_weights = [0.52,   0.13,      0.22,      0.13]
+        elif _is_fc:
+            extra_types   = ["Wide", "No Ball", "Leg Bye", "Byes"]
+            extra_weights = [0.18,   0.18,      0.38,      0.26]
         else:
             extra_types   = ["Wide", "No Ball", "Leg Bye", "Byes"]
             extra_weights = [0.40,   0.25,      0.20,      0.15]
