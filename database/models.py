@@ -800,7 +800,7 @@ class Tournament(db.Model):
     #        'round_robin_knockout', 'double_round_robin_knockout', 'ipl_style', 'custom_series'
     mode = db.Column(db.String(50), default='round_robin', nullable=False)
 
-    # Cricket format for all matches in this tournament (T20, ListA)
+    # Cricket format for all matches in this tournament (T20, ListA, FC)
     format_type = db.Column(db.String(20), default='T20', nullable=False)
 
     # Current stage for multi-stage tournaments
@@ -873,6 +873,13 @@ class TournamentPlayerStatsCache(db.Model):
     highest_score = db.Column(db.Integer, default=0)
     fifties = db.Column(db.Integer, default=0)
     centuries = db.Column(db.Integer, default=0)
+    ducks = db.Column(db.Integer, default=0)
+    ones = db.Column(db.Integer, default=0)
+    twos = db.Column(db.Integer, default=0)
+    threes = db.Column(db.Integer, default=0)
+    thirties = db.Column(db.Integer, default=0)
+    double_centuries = db.Column(db.Integer, default=0)
+    triple_centuries = db.Column(db.Integer, default=0)
     batting_average = db.Column(db.Float, default=0.0)
     batting_strike_rate = db.Column(db.Float, default=0.0)
 
@@ -884,7 +891,17 @@ class TournamentPlayerStatsCache(db.Model):
     maidens = db.Column(db.Integer, default=0)
     best_bowling_wickets = db.Column(db.Integer, default=0)
     best_bowling_runs = db.Column(db.Integer, default=0)
+    best_match_bowling_wickets = db.Column(db.Integer, default=0)
+    best_match_bowling_runs = db.Column(db.Integer, default=0)
     five_wicket_hauls = db.Column(db.Integer, default=0)
+    ten_wicket_matches = db.Column(db.Integer, default=0)
+    dot_balls_bowled = db.Column(db.Integer, default=0)
+    wickets_bowled = db.Column(db.Integer, default=0)
+    wickets_lbw = db.Column(db.Integer, default=0)
+    wides = db.Column(db.Integer, default=0)
+    noballs = db.Column(db.Integer, default=0)
+    byes = db.Column(db.Integer, default=0)
+    leg_byes = db.Column(db.Integer, default=0)
     bowling_average = db.Column(db.Float, default=0.0)
     bowling_economy = db.Column(db.Float, default=0.0)
     bowling_strike_rate = db.Column(db.Float, default=0.0)

@@ -91,6 +91,7 @@
                 <select id="h2h-format">
                     <option value="T20" selected>T20</option>
                     <option value="ListA">List A</option>
+                    <option value="FC">First-Class</option>
                 </select>
             </div>
             <button type="button" id="h2h-compare-btn" class="h2h-btn"><i class="fas fa-search"></i> Compare</button>
@@ -173,7 +174,11 @@ function renderH2H(d) {
     setText('h2h-t1-wins', s.team1_wins || 0);
     setText('h2h-t2-wins', s.team2_wins || 0);
     setText('h2h-played', s.played || 0);
-    setText('h2h-ties', s.ties ? s.ties + ' tie(s)' : '');
+    const outcomes = [];
+    if (s.draws) outcomes.push(s.draws + ' draw(s)');
+    if (s.ties) outcomes.push(s.ties + ' tie(s)');
+    if (s.no_results) outcomes.push(s.no_results + ' no result(s)');
+    setText('h2h-ties', outcomes.join(' · '));
 
     const perfHtml = (team, perfs) => {
         let h = `<div class="perf-card"><div class="perf-card-title">${esc(team)} — Top Performers</div>`;
