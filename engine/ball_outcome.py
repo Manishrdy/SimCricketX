@@ -428,6 +428,17 @@ def _apply_pitch_wear(raw_weights: dict, pitch_type: str, pitch_wear: float) -> 
 
 # Batting position context multipliers (Feature 9)
 # Top-order batters have higher baseline impact; tail-enders are penalised.
+_FC_NEW_BATTER_EARLY = 0.82   # first 3 balls
+_FC_NEW_BATTER_LATE = 0.90    # balls 4-5
+
+# Walking out to a moving ball with a slip cordon waiting, before your eye is
+# in, is the most dangerous passage in the long game. Scaling effective
+# batting alone did not capture it — that also makes a new batter worse at
+# SCORING, which keeps him on strike longer and cancels much of the effect.
+# This raises the dismissal odds directly and leaves the run contest alone,
+# which is what actually produces first-class duck rates.
+_FC_NEW_BATTER_WICKET_BOOST = {0: 1.6, 1: 1.6, 2: 1.6, 3: 1.3, 4: 1.3, 5: 1.3}
+
 _POS_BATTING_MULT: dict = {
     1: 1.05, 2: 1.05, 3: 1.03, 4: 1.02,
     5: 1.00, 6: 0.98, 7: 0.95, 8: 0.90,
@@ -467,10 +478,14 @@ def compute_weighted_prob(
 
     # New batter vulnerability: first 5 balls are dangerous.
     # ListA uses softer penalties than T20 to avoid middle-order wipeouts.
+    # FC is the harshest of the three: walking out to a moving ball with a
+    # slip cordon waiting, before your eye is in, is the single most
+    # dangerous passage in the long game — and it is what produces a
+    # first-class duck rate of 10-14 per 100 innings.
     if balls_faced <= 2:
-        effective_batting *= 0.88 if _is_lista else 0.82
+        effective_batting *= _FC_NEW_BATTER_EARLY if _is_fc else (0.88 if _is_lista else 0.82)
     elif balls_faced <= 5:
-        effective_batting *= 0.94 if _is_lista else 0.90
+        effective_batting *= _FC_NEW_BATTER_LATE if _is_fc else (0.94 if _is_lista else 0.90)
 
     # Graduated confidence based on runs scored.
     # ListA keeps this curve flatter to reduce opener snowballing; FC is
@@ -1142,6 +1157,11 @@ def calculate_outcome(
         # a purely hostile event, which is not how it reads from the stands.
         _scale_outcomes(raw_weights, _gc_fc_ball_condition_outcomes(
             bowling_type, ball_overs_bowled, new_ball_overs, config=_gc))
+        # A batter who has just walked in is at his most vulnerable — see
+        # _FC_NEW_BATTER_WICKET_BOOST.
+        _new_batter_boost = _FC_NEW_BATTER_WICKET_BOOST.get(balls_faced)
+        if _new_batter_boost:
+            _scale_outcomes(raw_weights, {"Wicket": _new_batter_boost})
         # Handedness-specific rough-targeting: footmark rough only exists
         # where days of the same bowling angle have worn the same patch —
         # a wear-*and*-matchup effect distinct from both the bowling-style-
