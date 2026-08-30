@@ -18,7 +18,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import engine.match as match_module
 from engine.format_config import MULTIDAY_FORMAT_REGISTRY, get_any_format
-from engine.fc_declaration import should_declare, should_enforce_follow_on, estimate_lead_declaration_outcome
+from engine.fc_declaration import (
+    should_declare, should_enforce_follow_on, estimate_lead_declaration_outcome,
+    declaration_window_open, compute_innings_time_budget_overs,
+)
 from engine import fc_bowler_workload
 from engine import fc_weather
 from engine.pressure_engine import FCPressureEngine
@@ -213,13 +216,20 @@ def test_fc_bowler_fatigue_floor_and_monotonic(app):
 # ---------------------------------------------------------------------------
 
 def test_declaration_thresholds_unit():
+    # wickets == 9 only opens the declaration window — it no longer forces
+    # a yes. A 9-down side with nothing worth defending keeps batting down
+    # to the 10th wicket instead of protecting a tail with nothing to
+    # protect.
     assert should_declare(fc_innings=1, wickets=9, overs_bowled_this_innings=25,
-                           score=200, lead=0, days_remaining=4) is True
-    # Innings 2 is now declaration-eligible (lead-based, like innings 3) —
-    # the "protect the last pair" rule fires the same way it does for
-    # innings 1/3, regardless of lead.
+                           score=200, lead=0, days_remaining=4) is False
+    assert should_declare(fc_innings=1, wickets=9, overs_bowled_this_innings=25,
+                           score=320, lead=0, days_remaining=4) is True
+    # Innings 2/3 at 9 down with no lead: same principle — nothing to
+    # protect while still behind (or only level), so keep batting.
     assert should_declare(fc_innings=2, wickets=9, overs_bowled_this_innings=25,
-                           score=200, lead=0, days_remaining=4) is True
+                           score=200, lead=0, days_remaining=4) is False
+    assert should_declare(fc_innings=2, wickets=9, overs_bowled_this_innings=25,
+                           score=200, lead=260, days_remaining=4) is True
     # Innings 4 (the chase) is never eligible — nothing to declare to.
     assert should_declare(fc_innings=4, wickets=9, overs_bowled_this_innings=25,
                            score=200, lead=0, days_remaining=4) is False
@@ -236,6 +246,118 @@ def test_declaration_from_innings_2_uses_lead_not_score():
     # A healthy lead at the same stage does.
     assert should_declare(fc_innings=2, wickets=6, overs_bowled_this_innings=65,
                            score=400, lead=260, days_remaining=2) is True
+
+
+# ---------------------------------------------------------------------------
+# 6a. Per-innings time budget — replaces the old "only in the match's last
+#     2 days" time-forcing gate with pressure that scales to whatever's
+#     actually left in the match when THIS innings started. Motivated by
+#     Flat/Dead-pitch innings running away to 650-1200+ runs: on those
+#     pitches the wicket rate is low enough that days_remaining never drops
+#     to <=2 before the innings has already run unbounded.
+# ---------------------------------------------------------------------------
+
+def test_time_budget_opens_window_independent_of_days_remaining():
+    # Old behavior: days_remaining=4 (>2) keeps the window shut even at 200
+    # overs, regardless of score, since the time-forcing branch requires
+    # days_remaining <= 2.
+    assert should_declare(fc_innings=1, wickets=3, overs_bowled_this_innings=200,
+                           score=280, lead=0, days_remaining=4) is False
+    # New: a 180-over budget opens the window at over 200 independent of
+    # days_remaining, and 280 clears the decayed Hard-pitch threshold
+    # (pitch_par_factor=1.0, base 300) 20 overs past budget.
+    assert should_declare(fc_innings=1, wickets=3, overs_bowled_this_innings=200,
+                           score=280, lead=0, days_remaining=4,
+                           innings_time_budget_overs=180) is True
+
+
+def test_time_budget_decay_eases_threshold_then_floors():
+    kwargs = dict(fc_innings=1, wickets=3, days_remaining=4,
+                  innings_time_budget_overs=180, lead=0)
+    # Right at budget: undecayed threshold (300) not yet met by 280.
+    assert should_declare(overs_bowled_this_innings=180, score=280, **kwargs) is False
+    # 20 overs past budget (1/3 through the 60-over decay window): eased
+    # enough for 280 to clear it.
+    assert should_declare(overs_bowled_this_innings=200, score=280, **kwargs) is True
+    # Fully decayed (60+ overs past budget): floor is 55% of 300 = 165.
+    assert should_declare(overs_bowled_this_innings=245, score=170, **kwargs) is True
+    assert should_declare(overs_bowled_this_innings=245, score=160, **kwargs) is False
+
+
+def test_declaration_window_open_time_budget_branch():
+    assert declaration_window_open(fc_innings=1, wickets=0, overs_bowled_this_innings=50,
+                                    days_remaining=5, innings_time_budget_overs=180) is False
+    assert declaration_window_open(fc_innings=1, wickets=0, overs_bowled_this_innings=180,
+                                    days_remaining=5, innings_time_budget_overs=180) is True
+    # A budget below _TIME_FORCING_OVERS_THRESHOLD (60) — e.g. a late-
+    # starting innings 3 with little of the match left — still opens the
+    # window early rather than waiting for the 60-over floor.
+    assert declaration_window_open(fc_innings=3, wickets=0, overs_bowled_this_innings=40,
+                                    days_remaining=5, innings_time_budget_overs=40) is True
+
+
+def test_mc_overrun_ceiling_overrides_unfavorable_verdict():
+    import random
+    kwargs = dict(
+        fc_innings=3, wickets=6, score=0, lead=50, days_remaining=3,
+        overs_remaining_in_match=40,  # tight -> MC should say no
+        own_bowling_strength=40, own_batting_strength=50,
+        opp_batting_strength=70, pitch_wear=0.7,
+    )
+    # Below the 1.5x ceiling (budget=180 -> 270): the MC model's unfavorable
+    # verdict stands.
+    assert should_declare(overs_bowled_this_innings=200, innings_time_budget_overs=180,
+                           rng=random.Random(7), **kwargs) is False
+    # Past the ceiling with a positive lead: overridden to declare
+    # regardless of what the Monte Carlo model would have said.
+    assert should_declare(overs_bowled_this_innings=275, innings_time_budget_overs=180,
+                           rng=random.Random(7), **kwargs) is True
+
+
+def test_compute_innings_time_budget_overs():
+    assert compute_innings_time_budget_overs(450) == pytest.approx(180.0)
+    assert compute_innings_time_budget_overs(100) == pytest.approx(40.0)
+
+
+def test_fc_innings_1_time_budget_bounds_a_flat_pitch_innings(app):
+    """Engine-level regression test for the actual reported bug: a Flat/Dead
+    innings 1 must not run away unbounded — it should end (declared or all
+    out) at or before roughly budget (180 overs for a fresh 5-day match) +
+    the full decay window (60 overs), i.e. well under 250 overs, instead of
+    the 650-1200+ run / 300+ over innings seen before this fix. Reads the
+    ending innings' own figures from scorecard_data, generated BEFORE
+    _fc_transition_to_next_innings() resets current_over/wickets for
+    innings 2 — the top-level "over"/"wickets" response keys and m.current_over
+    reflect the NEW innings by the time next_ball() returns, not the one that
+    just ended (same gotcha scripts/bench_fc.py works around)."""
+    m = _fc_match(days=5, pitch="Flat")
+    result = _play_until(m, lambda mm, rr: rr.get("innings_end") and rr.get("innings_number") == 1)
+    sc = result.get("scorecard_data") or {}
+    overs_str = str(sc.get("overs", "0"))
+    ending_overs = float(overs_str.split(".")[0]) if overs_str else 0.0
+    ending_wickets = sc.get("wickets", 0)
+    assert ending_overs <= 250 or ending_wickets >= 10
+
+
+def test_fc_innings_time_budget_persists_across_snapshot_roundtrip(app):
+    """The frozen per-innings budget must survive a serialize/restore cycle
+    onto a freshly constructed Match — a fresh Match's __init__ always
+    computes an innings-1 budget, which would silently be wrong for a
+    resume into a later innings if this weren't persisted explicitly."""
+    m = _fc_match(days=5, toss_winner="HOM", toss_decision="Bat")
+    m._fc_first_batting_xi = m.home_xi
+    m._fc_first_bowling_xi = m.away_xi
+    m.fc_innings_totals[1] = {"score": 150, "wickets": 10, "overs_str": "60.0", "side": "home"}
+    m.fc_day = 3  # simulate meaningful match progress before innings 2 starts
+    m._fc_start_next_innings(2, m.away_xi, m.home_xi)
+
+    budget_before = m.fc_innings_time_budget_overs
+    assert budget_before != compute_innings_time_budget_overs(m.fmt.days * m.fmt.overs_per_day)
+
+    snap = m.serialize_fc_snapshot()
+    m2 = _fc_match(days=5, toss_winner="HOM", toss_decision="Bat")
+    m2.restore_fc_snapshot(snap)
+    assert m2.fc_innings_time_budget_overs == pytest.approx(budget_before)
 
 
 def test_monte_carlo_declaration_probabilities_sum_to_one():
