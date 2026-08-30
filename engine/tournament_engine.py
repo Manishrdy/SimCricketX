@@ -1701,6 +1701,9 @@ class TournamentEngine:
                 sa_func.coalesce(sa_func.sum(MatchScorecard.fours), 0),
                 sa_func.coalesce(sa_func.sum(MatchScorecard.sixes), 0),
                 sa_func.coalesce(sa_func.max(MatchScorecard.runs), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.ones), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.twos), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.threes), 0),
             ).filter(
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "batting",
@@ -1716,6 +1719,9 @@ class TournamentEngine:
                 cache.fours = bat[3]
                 cache.sixes = bat[4]
                 cache.highest_score = bat[5]
+                cache.ones = bat[6]
+                cache.twos = bat[7]
+                cache.threes = bat[8]
                 cache.batting_strike_rate = round(
                     (bat[1] / bat[2]) * 100, 2
                 ) if bat[2] > 0 else None
@@ -1752,6 +1758,38 @@ class TournamentEngine:
             ).scalar() or 0
             cache.centuries = centuries
 
+            cache.ducks = db.session.query(sa_func.count()).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "batting",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.runs == 0,
+                MatchScorecard.is_out == True,
+                MatchScorecard.is_super_over.isnot(True),
+            ).scalar() or 0
+            cache.thirties = db.session.query(sa_func.count()).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "batting",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.runs >= 30,
+                MatchScorecard.runs < 50,
+                MatchScorecard.is_super_over.isnot(True),
+            ).scalar() or 0
+            cache.double_centuries = db.session.query(sa_func.count()).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "batting",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.runs >= 200,
+                MatchScorecard.runs < 300,
+                MatchScorecard.is_super_over.isnot(True),
+            ).scalar() or 0
+            cache.triple_centuries = db.session.query(sa_func.count()).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "batting",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.runs >= 300,
+                MatchScorecard.is_super_over.isnot(True),
+            ).scalar() or 0
+
             dismissals = (cache.innings_batted or 0) - not_outs
             cache.batting_average = round(
                 cache.runs_scored / dismissals, 2
@@ -1765,11 +1803,19 @@ class TournamentEngine:
                 sa_func.coalesce(sa_func.sum(MatchScorecard.wickets), 0),
                 sa_func.coalesce(sa_func.sum(MatchScorecard.maidens), 0),
                 sa_func.coalesce(sa_func.max(MatchScorecard.wickets), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.dot_balls_bowled), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.wickets_bowled), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.wickets_lbw), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.wides), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.noballs), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.byes), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.leg_byes), 0),
             ).filter(
                 MatchScorecard.player_id == player_id,
                 MatchScorecard.record_type == "bowling",
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.is_super_over.isnot(True),
+                MatchScorecard.balls_bowled > 0,
             ).first()
 
             if bowl:
@@ -1779,6 +1825,13 @@ class TournamentEngine:
                 cache.runs_conceded = bowl[2]
                 cache.wickets_taken = bowl[3]
                 cache.maidens = bowl[4]
+                cache.dot_balls_bowled = bowl[6]
+                cache.wickets_bowled = bowl[7]
+                cache.wickets_lbw = bowl[8]
+                cache.wides = bowl[9]
+                cache.noballs = bowl[10]
+                cache.byes = bowl[11]
+                cache.leg_byes = bowl[12]
                 cache.bowling_average = round(
                     bowl[2] / bowl[3], 2
                 ) if bowl[3] > 0 else None
@@ -1804,6 +1857,9 @@ class TournamentEngine:
             if best_bowl:
                 cache.best_bowling_wickets = best_bowl.wickets or 0
                 cache.best_bowling_runs = best_bowl.runs_conceded or 0
+            else:
+                cache.best_bowling_wickets = 0
+                cache.best_bowling_runs = 0
 
             five_wkt = db.session.query(sa_func.count()).filter(
                 MatchScorecard.player_id == player_id,
@@ -1811,8 +1867,30 @@ class TournamentEngine:
                 MatchScorecard.match_id.in_(tournament_match_ids),
                 MatchScorecard.wickets >= 5,
                 MatchScorecard.is_super_over.isnot(True),
+                MatchScorecard.balls_bowled > 0,
             ).scalar() or 0
             cache.five_wicket_hauls = five_wkt
+
+            match_figures = db.session.query(
+                MatchScorecard.match_id,
+                sa_func.coalesce(sa_func.sum(MatchScorecard.wickets), 0),
+                sa_func.coalesce(sa_func.sum(MatchScorecard.runs_conceded), 0),
+            ).filter(
+                MatchScorecard.player_id == player_id,
+                MatchScorecard.record_type == "bowling",
+                MatchScorecard.match_id.in_(tournament_match_ids),
+                MatchScorecard.is_super_over.isnot(True),
+                MatchScorecard.balls_bowled > 0,
+            ).group_by(MatchScorecard.match_id).all()
+            if match_figures:
+                best_match = max(match_figures, key=lambda row: (row[1], -row[2]))
+                cache.best_match_bowling_wickets = best_match[1] or 0
+                cache.best_match_bowling_runs = best_match[2] or 0
+                cache.ten_wicket_matches = sum(1 for row in match_figures if (row[1] or 0) >= 10)
+            else:
+                cache.best_match_bowling_wickets = 0
+                cache.best_match_bowling_runs = 0
+                cache.ten_wicket_matches = 0
 
             # Fielding aggregation
             fielding = db.session.query(

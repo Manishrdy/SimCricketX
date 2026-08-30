@@ -64,6 +64,7 @@
                 <select id="pp-fmt">
                     <option value="T20" {% if match_format == 'T20' %}selected{% endif %}>T20</option>
                     <option value="ListA" {% if match_format == 'ListA' %}selected{% endif %}>List A</option>
+                    <option value="FC" {% if match_format == 'FC' %}selected{% endif %}>First-Class</option>
                 </select>
             </div>
             <a href="{{ url_for('statistics') }}" class="back-btn"><i class="fas fa-arrow-left"></i> Statistics</a>
@@ -115,6 +116,7 @@
             <div class="pp-stat-row"><span>Not Outs</span><span class="pp-stat-val">{{ profile.batting.not_outs }}</span></div>
             <div class="pp-stat-row"><span>4s / 6s</span><span class="pp-stat-val">{{ profile.batting.fours }} / {{ profile.batting.sixes }}</span></div>
             <div class="pp-stat-row"><span>50s / 100s</span><span class="pp-stat-val">{{ profile.batting.fifties }} / {{ profile.batting.hundreds }}</span></div>
+            {% if match_format == 'FC' %}<div class="pp-stat-row"><span>200s / 300s</span><span class="pp-stat-val">{{ profile.batting.double_centuries }} / {{ profile.batting.triple_centuries }}</span></div>{% endif %}
         </div>
         {% else %}
         <div class="pp-card"><div class="pp-card-title"><i class="fas fa-baseball-ball"></i> Batting</div><div style="color:var(--fg-secondary);font-size:0.8rem">No batting data</div></div>
@@ -129,6 +131,10 @@
             <div class="pp-stat-row"><span>Economy</span><span class="pp-stat-val">{{ profile.bowling.economy }}</span></div>
             <div class="pp-stat-row"><span>Strike Rate</span><span class="pp-stat-val">{{ profile.bowling.strike_rate if profile.bowling.strike_rate is not none else '-' }}</span></div>
             <div class="pp-stat-row"><span>Best Figures</span><span class="pp-stat-val">{{ profile.bowling.best_figures }}</span></div>
+            {% if match_format == 'FC' %}
+            <div class="pp-stat-row"><span>Best Match Figures</span><span class="pp-stat-val">{{ profile.bowling.best_match_figures }}</span></div>
+            <div class="pp-stat-row"><span>5WI / 10WM</span><span class="pp-stat-val">{{ profile.bowling.five_wicket_hauls }} / {{ profile.bowling.ten_wicket_matches }}</span></div>
+            {% endif %}
         </div>
         {% else %}
         <div class="pp-card"><div class="pp-card-title"><i class="fas fa-bowling-ball"></i> Bowling</div><div style="color:var(--fg-secondary);font-size:0.8rem">No bowling data</div></div>
@@ -165,12 +171,16 @@
                         <td>{{ m.date }}</td>
                         <td>{{ m.venue }}</td>
                         <td>{{ m.format }}</td>
-                        <td class="kc">{{ m.bat_runs if m.bat_runs is not none else '-' }}</td>
-                        <td>{{ m.bat_balls if m.bat_balls is not none else '-' }}</td>
-                        <td>{% if m.bat_out is not none %}{{ 'Out' if m.bat_out else 'NO' }}{% else %}-{% endif %}</td>
-                        <td class="kc">{{ m.bowl_wkts if m.bowl_wkts is not none else '-' }}</td>
-                        <td>{{ m.bowl_runs if m.bowl_runs is not none else '-' }}</td>
-                        <td>{{ m.bowl_overs if m.bowl_overs is not none else '-' }}</td>
+                        {% if match_format == 'FC' %}
+                        <td class="kc">{% for i in m.batting_innings %}<div title="Innings {{ i.innings_number }}">{{ i.runs }}</div>{% else %}-{% endfor %}</td>
+                        <td>{% for i in m.batting_innings %}<div>{{ i.balls }}</div>{% else %}-{% endfor %}</td>
+                        <td>{% for i in m.batting_innings %}<div>{{ 'Out' if i.is_out else 'NO' }}</div>{% else %}-{% endfor %}</td>
+                        <td class="kc">{% for i in m.bowling_innings %}<div title="Innings {{ i.innings_number }}">{{ i.wickets }}</div>{% else %}-{% endfor %}</td>
+                        <td>{% for i in m.bowling_innings %}<div>{{ i.runs }}</div>{% else %}-{% endfor %}</td>
+                        <td>{% for i in m.bowling_innings %}<div>{{ i.overs }}</div>{% else %}-{% endfor %}</td>
+                        {% else %}
+                        <td class="kc">{{ m.bat_runs if m.bat_runs is not none else '-' }}</td><td>{{ m.bat_balls if m.bat_balls is not none else '-' }}</td><td>{% if m.bat_out is not none %}{{ 'Out' if m.bat_out else 'NO' }}{% else %}-{% endif %}</td><td class="kc">{{ m.bowl_wkts if m.bowl_wkts is not none else '-' }}</td><td>{{ m.bowl_runs if m.bowl_runs is not none else '-' }}</td><td>{{ m.bowl_overs if m.bowl_overs is not none else '-' }}</td>
+                        {% endif %}
                         <td>{{ m.catches }}</td>
                         <td>{{ m.run_outs }}</td>
                         <td>{% if m.is_motm %}<span title="Man of the Match">🏆</span> {% endif %}{{ m.result[:40] if m.result else '-' }}</td>

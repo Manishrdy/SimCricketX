@@ -69,9 +69,11 @@ class StatsAggregator:
         hs = self.batting_df.groupby(['Player Name', 'Team Name'])['Runs'].max().reset_index(name='HS')
         fifties = self.batting_df[(self.batting_df['Runs'] >= 50) & (self.batting_df['Runs'] < 100)].groupby(['Player Name', 'Team Name']).size().reset_index(name='50s')  # A10: exclude hundreds
         hundreds = self.batting_df[self.batting_df['Runs'] >= 100].groupby(['Player Name', 'Team Name']).size().reset_index(name='100s')
+        double_hundreds = self.batting_df[(self.batting_df['Runs'] >= 200) & (self.batting_df['Runs'] < 300)].groupby(['Player Name', 'Team Name']).size().reset_index(name='200s')
+        triple_hundreds = self.batting_df[self.batting_df['Runs'] >= 300].groupby(['Player Name', 'Team Name']).size().reset_index(name='300s')
         ducks = self.batting_df[(self.batting_df['Runs'] == 0) & self.batting_df['Status'].notna() & (self.batting_df['Status'] != 'not out')].groupby(['Player Name', 'Team Name']).size().reset_index(name='Ducks')  # A11: exclude not-outs
 
-        for df in [innings, not_outs, hs, fifties, hundreds, ducks]:
+        for df in [innings, not_outs, hs, fifties, hundreds, double_hundreds, triple_hundreds, ducks]:
             player_stats = pd.merge(player_stats, df, on=['Player Name', 'Team Name'], how='left')
         
         outs = player_stats['Innings'].fillna(0) - player_stats['NOs'].fillna(0)
@@ -90,7 +92,7 @@ class StatsAggregator:
         player_stats.fillna(0, inplace=True)
         player_stats.rename(columns={'Player Name': 'Player', 'Team Name': 'Team', 'Fours': '4s', 'Sixes': '6s', 'Run out': 'RunOut', 'not out': 'NOs'}, inplace=True)
         
-        ordered_cols = ['Player', 'Team', 'Matches', 'Innings', 'Runs', 'Balls', 'Strike Rate', 'Average', 'HS', 'NOs', '50s', '100s', '1s', '2s', '3s', '4s', '6s', 'Dots', 'Bowled', 'Caught', 'LBW', 'RunOut', 'Catches', 'RunOuts_Made']
+        ordered_cols = ['Player', 'Team', 'Matches', 'Innings', 'Runs', 'Balls', 'Strike Rate', 'Average', 'HS', 'NOs', '50s', '100s', '200s', '300s', '1s', '2s', '3s', '4s', '6s', 'Dots', 'Bowled', 'Caught', 'LBW', 'RunOut', 'Catches', 'RunOuts_Made']
         for col in ordered_cols:
             if col not in player_stats.columns:
                 player_stats[col] = 0
@@ -123,6 +125,30 @@ class StatsAggregator:
         
         fours_df = self.bowling_df[self.bowling_df['Wickets'] >= 4].groupby(['Bowler Name', 'Team Name']).size().reset_index(name='4w')
         bowling_stats = pd.merge(bowling_stats, fours_df, on=['Bowler Name', 'Team Name'], how='left')
+        five_df = self.bowling_df[self.bowling_df['Wickets'] >= 5].groupby(['Bowler Name', 'Team Name']).size().reset_index(name='5w')
+        bowling_stats = pd.merge(bowling_stats, five_df, on=['Bowler Name', 'Team Name'], how='left')
+
+        match_figures = self.bowling_df.groupby(
+            ['Bowler Name', 'Team Name', 'match_id'], as_index=False
+        ).agg({'Wickets': 'sum', 'Runs': 'sum'})
+        best_match = match_figures.sort_values(
+            ['Wickets', 'Runs'], ascending=[False, True]
+        ).groupby(['Bowler Name', 'Team Name']).first().reset_index()
+        best_match['BBM'] = best_match.apply(
+            lambda row: f"{int(row['Wickets'])}/{int(row['Runs'])}", axis=1
+        )
+        ten_match = match_figures[match_figures['Wickets'] >= 10].groupby(
+            ['Bowler Name', 'Team Name']
+        ).size().reset_index(name='10wm')
+        bowling_stats = pd.merge(
+            bowling_stats,
+            best_match[['Bowler Name', 'Team Name', 'BBM']],
+            on=['Bowler Name', 'Team Name'], how='left',
+        )
+        bowling_stats = pd.merge(
+            bowling_stats, ten_match,
+            on=['Bowler Name', 'Team Name'], how='left',
+        )
 
         if not self.batting_df.empty:
             wicket_df = self.batting_df[self.batting_df['Bowler Out'].notna() & (self.batting_df['Status'].isin(['Caught', 'Bowled', 'LBW']))]
@@ -140,12 +166,12 @@ class StatsAggregator:
         bowling_stats.fillna(0, inplace=True)
         bowling_stats.rename(columns={'Bowler Name':'Player','Team Name':'Team','No Balls':'no balls','Maidens':'maidens'}, inplace=True)
         
-        ordered_cols = ['Player', 'Team', 'Matches', 'Overs', 'Runs', 'Wickets', 'maidens', 'Best', 'Average', 'Economy', 'Strike Rate', '4w', 'Wides', 'no balls', 'Byes', 'Leg Byes', 'D_Caught', 'D_Bowled', 'D_LBW']
+        ordered_cols = ['Player', 'Team', 'Matches', 'Overs', 'Runs', 'Wickets', 'maidens', 'Best', 'BBM', 'Average', 'Economy', 'Strike Rate', '4w', '5w', '10wm', 'Wides', 'no balls', 'Byes', 'Leg Byes', 'D_Caught', 'D_Bowled', 'D_LBW']
         for col in ordered_cols:
             if col not in bowling_stats.columns:
                 bowling_stats[col] = 0
         
-        int_cols = [c for c in ordered_cols if c not in ['Player', 'Team', 'Overs', 'Best', 'Average', 'Economy', 'Strike Rate']]
+        int_cols = [c for c in ordered_cols if c not in ['Player', 'Team', 'Overs', 'Best', 'BBM', 'Average', 'Economy', 'Strike Rate']]
         for col in int_cols:
             if col in bowling_stats.columns:
                 bowling_stats[col] = bowling_stats[col].astype(int)
