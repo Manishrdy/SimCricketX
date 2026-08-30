@@ -138,7 +138,13 @@ _MC_DISMISS_OVERS_STD_FRAC = 0.22        # sample stddev as a fraction of the me
 # Scoring rate (runs/over) while an opposition batter survives — FC is
 # dot/single-dominated (see format_config.py), so this stays well below
 # T20/ListA rates regardless of batting strength.
-_MC_SCORE_RATE_BASE = 1.9
+# Recalibrated against the actual ball engine: FC now produces ~3.2 RPO
+# overall (see scripts/bench_fc.py). The old 1.9 base modelled the
+# opposition scoring at ~2.1 an over while the engine was really scoring at
+# 4.5, so every declaration verdict was computed against a game that wasn't
+# being played — the captain systematically over-estimated how easily he
+# could contain a chase.
+_MC_SCORE_RATE_BASE = 3.00
 _MC_SCORE_RATE_STRENGTH_SCALE = 100.0    # +1 run/over per +100 batting_rating above 50
 _MC_SCORE_RATE_STD = 0.5
 
@@ -158,6 +164,13 @@ _MC_COLLAPSE_CHANCE_CAP = 0.6
 # or worse doesn't justify giving up batting time.
 _MC_MIN_WIN_PROB = 0.35
 _MC_MIN_WIN_EDGE_OVER_LOSS = 0.15
+
+# A declaration only means anything from in front. Closing an innings while
+# still behind hands the opposition a lead for nothing — yet the old model
+# did exactly that on seaming pitches, where the MC read every position as
+# hopeless and "declare" scored no worse than batting on. Expressed as a
+# multiple of a par-ish first-innings score so it scales with the surface.
+_MIN_LEAD_TO_DECLARE = 60
 
 
 def _mc_sample_dismiss_overs(bowling_strength, pitch_wear, rng):
@@ -276,7 +289,9 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                     innings_time_budget_overs=None,
                     overs_remaining_in_match=None, own_bowling_strength=None,
                     own_batting_strength=None, opp_batting_strength=None,
-                    pitch_wear=0.5, rng=None) -> bool:
+                    pitch_wear=0.5, rng=None,
+                    rain_risk=None, projected_final_wear=None,
+                    attack_freshness=None) -> bool:
     """
     Returns True if the AI captain should declare the current innings
     closed right now (called at an over boundary only).
@@ -297,6 +312,14 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                                  run thresholds so "a good total" means
                                  something different on a Green seamer
                                  than a Dead belter
+    rain_risk                 : 0-1 share of the remaining match the forecast
+                                 threatens. Time lost argues for declaring
+                                 sooner — you may not get the overs back.
+    projected_final_wear      : 0-1 pitch wear expected by the fourth
+                                 innings. A surface that will be unplayable
+                                 is a reason to declare and bowl on it.
+    attack_freshness          : 0-1, 1.0 = a rested attack. There is no point
+                                 declaring into a set of spent bowlers.
     innings_time_budget_overs : see compute_innings_time_budget_overs() /
                                  declaration_window_open(). Opens the window
                                  early (independent of days_remaining) once
@@ -330,6 +353,11 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
     if not (wickets >= _WICKETS_DOWN_FLOOR or overs_bowled_this_innings >= _OVERS_DOWN_FLOOR):
         return False
 
+    # Innings 2/3 only: you declare from in front. Being behind and closing
+    # the innings gives the opposition a lead for nothing.
+    if fc_innings in (2, 3) and lead < _MIN_LEAD_TO_DECLARE:
+        return False
+
     _mc_inputs = (overs_remaining_in_match, own_bowling_strength,
                   own_batting_strength, opp_batting_strength)
     if fc_innings != 1 and all(v is not None for v in _mc_inputs):
@@ -357,6 +385,19 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
     target_metric = score if fc_innings == 1 else lead
     base_threshold = _INNINGS1_BASE_THRESHOLD if fc_innings == 1 else _LEAD_BASE_THRESHOLD
     threshold = base_threshold * pitch_par_factor
+
+    # A first-innings declaration is not a number being reached. A captain
+    # declares on 250 at tea on day two if it is seaming and he fancies a
+    # bowl, and bats past 550 on a road — the same score means different
+    # things in different conditions. These read the conditions he can
+    # actually see; each is optional, and omitting them all preserves the
+    # original flat-threshold behaviour for existing callers.
+    threshold *= _conditions_threshold_multiplier(
+        rain_risk=rain_risk,
+        projected_final_wear=projected_final_wear,
+        attack_freshness=attack_freshness,
+    )
+
     if innings_time_budget_overs is not None:
         overrun = overs_bowled_this_innings - innings_time_budget_overs
         if overrun > 0:
@@ -365,19 +406,114 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
     return target_metric >= threshold
 
 
-def should_enforce_follow_on(*, deficit, follow_on_margin, days_remaining) -> bool:
+# How far the conditions can move the bar a captain declares at. Kept modest
+# and clamped: this is a captain weighing what he sees, not a different
+# heuristic.
+_COND_MIN_MULTIPLIER = 0.70
+_COND_MAX_MULTIPLIER = 1.25
+# Rain about means overs are the scarce resource — get them in NOW.
+_COND_RAIN_DISCOUNT = 0.22
+# A pitch that will be unplayable by the fourth innings is a reason to
+# declare early and let THEM bat last on it.
+_COND_WEAR_DISCOUNT = 0.15
+_COND_WEAR_THRESHOLD = 0.60
+# A spent attack is a reason to bat on: there is no point setting up a
+# declaration your bowlers cannot enforce.
+_COND_TIRED_ATTACK_PREMIUM = 0.18
+
+
+def _conditions_threshold_multiplier(*, rain_risk=None, projected_final_wear=None,
+                                      attack_freshness=None) -> float:
+    """Scale the score/lead a captain declares at, by what he can see.
+
+    rain_risk            : 0-1, share of remaining play the forecast threatens
+    projected_final_wear : 0-1 pitch wear expected by the fourth innings
+    attack_freshness     : 0-1, 1.0 = a fully rested attack
+    """
+    mult = 1.0
+    if rain_risk is not None and rain_risk > 0:
+        mult -= _COND_RAIN_DISCOUNT * min(1.0, rain_risk)
+    if projected_final_wear is not None and projected_final_wear >= _COND_WEAR_THRESHOLD:
+        # Scaled by how far past the threshold it is.
+        over = (projected_final_wear - _COND_WEAR_THRESHOLD) / (1.0 - _COND_WEAR_THRESHOLD)
+        mult -= _COND_WEAR_DISCOUNT * min(1.0, max(0.0, over))
+    if attack_freshness is not None and attack_freshness < 1.0:
+        mult += _COND_TIRED_ATTACK_PREMIUM * (1.0 - min(1.0, max(0.0, attack_freshness)))
+    return max(_COND_MIN_MULTIPLIER, min(_COND_MAX_MULTIPLIER, mult))
+
+
+# Follow-on judgement (beyond the Law's bare eligibility test).
+#
+# Overs the attack has already bowled in the match past which a captain
+# starts seriously weighing whether his bowlers can go again straight away.
+_FO_TIRED_ATTACK_OVERS = 130.0
+# ...and the point past which he'd rather bat again than ask them to.
+_FO_EXHAUSTED_ATTACK_OVERS = 190.0
+# Fourth-innings pitch wear past which batting last is genuinely unpleasant.
+# Enforcing the follow-on means YOU bat last, so a pitch that will be
+# breaking up is an argument against enforcing — the modern captain's
+# reasoning, and the reason the follow-on has become rarer.
+_FO_NASTY_LAST_INNINGS_WEAR = 0.72
+# A deficit so large the opposition is unlikely to make you bat again at
+# all; overrides the caution above.
+_FO_OVERWHELMING_DEFICIT_MULT = 2.0
+
+
+def should_enforce_follow_on(*, deficit, follow_on_margin, days_remaining,
+                              attack_overs_bowled=None, projected_final_wear=None,
+                              rain_risk=None) -> bool:
     """
     Returns True if the side that batted first should enforce the
     follow-on, given the second side's deficit after being dismissed.
 
+    The first two checks are the Law's eligibility test. Everything after
+    is the judgement a captain actually makes, and every one of those
+    inputs is optional — omitting them preserves the original
+    enforce-whenever-legal behaviour.
+
     Parameters
     ----------
-    deficit          : how many runs behind the second side finished
-                        (innings1_total - innings2_total); must be >= 0
-                        to even be considered
-    follow_on_margin : fmt.follow_on_margin (150 for 4-day, 200 for 5-day)
-    days_remaining   : full match days left including today
+    deficit              : how many runs behind the second side finished
+                            (innings1_total - innings2_total); must be >= 0
+                            to even be considered
+    follow_on_margin     : fmt.follow_on_margin (150 for 4-day, 200 for 5-day)
+    days_remaining       : full match days left including today
+    attack_overs_bowled  : overs this attack has bowled in the match so far.
+                            A tired attack is the main reason to decline.
+    projected_final_wear : pitch wear expected by the fourth innings (0-1).
+                            Enforcing means batting last on it.
+    rain_risk            : 0-1 chance of losing significant time to weather.
+                            Time lost argues FOR enforcing — you may not get
+                            another chance to bowl them out.
     """
     if deficit < follow_on_margin:
         return False
-    return days_remaining >= _MIN_DAYS_REMAINING_FOR_FOLLOW_ON
+    if days_remaining < _MIN_DAYS_REMAINING_FOR_FOLLOW_ON:
+        return False
+
+    # Crushing lead: make them follow on and be done with it.
+    if deficit >= follow_on_margin * _FO_OVERWHELMING_DEFICIT_MULT:
+        return True
+
+    # Rain about means time is the scarce resource, not bowlers' legs.
+    if rain_risk is not None and rain_risk >= 0.4:
+        return True
+
+    if attack_overs_bowled is not None:
+        if attack_overs_bowled >= _FO_EXHAUSTED_ATTACK_OVERS:
+            return False
+        if (attack_overs_bowled >= _FO_TIRED_ATTACK_OVERS
+                and projected_final_wear is not None
+                and projected_final_wear >= _FO_NASTY_LAST_INNINGS_WEAR):
+            # Tired attack AND we'd be batting last on a worn pitch — the
+            # textbook modern decline.
+            return False
+
+    if (projected_final_wear is not None
+            and projected_final_wear >= _FO_NASTY_LAST_INNINGS_WEAR
+            and days_remaining >= 3):
+        # Plenty of time left, so there's no need to take on a fourth-innings
+        # chase on a breaking pitch; bat again and bury them instead.
+        return False
+
+    return True

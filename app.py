@@ -2362,6 +2362,13 @@ def create_app():
                         "batting_rating": p.batting_rating,
                         "bowling_rating": p.bowling_rating,
                         "fielding_rating": p.fielding_rating,
+                        # FC-only axes. The engine reads these for the
+                        # defensive-technique dismissal blend, the pressure
+                        # dampeners and per-bowler fatigue; omitting them
+                        # silently neutralised all three in every real match.
+                        "technique_rating": p.technique_rating or 50,
+                        "temperament_rating": p.temperament_rating or 50,
+                        "stamina_rating": p.stamina_rating or 50,
                         "batting_hand": p.batting_hand,
                         "bowling_type": p.bowling_type,
                         "bowling_hand": p.bowling_hand,

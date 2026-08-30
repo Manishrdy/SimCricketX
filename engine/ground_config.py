@@ -544,6 +544,43 @@ def get_fc_ball_condition_factor(bowling_type, ball_overs_bowled, new_ball_overs
     return 1.0
 
 
+def get_fc_ball_condition_outcome_factors(bowling_type, ball_overs_bowled,
+                                          new_ball_overs, config=None):
+    """
+    Per-outcome multipliers for the current ball's condition — the scoring
+    counterpart to get_fc_ball_condition_factor's wicket scalar, returned
+    together so a caller applies one dict.
+
+    The wicket term stays keyed by bowling style (only genuine pace swings a
+    new ball, only pace reverses an old one). The scoring terms are NOT: a
+    hard new ball comes onto the bat and carries to the rope whoever is
+    bowling, and a scuffed old one is hard work off anybody.
+
+    Returns {} when the ball_condition block is unconfigured, so callers can
+    apply it unconditionally.
+    """
+    spec = get_fc_ball_condition(config=config)
+    if not spec:
+        return {}
+
+    swing_overs = spec.get("new_ball_swing_overs", 10)
+    reverse_window = spec.get("reverse_swing_window_overs", 15)
+
+    if ball_overs_bowled < swing_overs:
+        wicket_key, scoring_key = "new_ball_wicket_factors", "new_ball_scoring_factors"
+    elif ball_overs_bowled >= new_ball_overs - reverse_window:
+        wicket_key = "reverse_swing_wicket_factors"
+        scoring_key = "reverse_swing_scoring_factors"
+    else:
+        return {}   # middle overs: the ball is doing nothing special
+
+    factors = dict(spec.get(scoring_key) or {})
+    wicket_factors = spec.get(wicket_key) or {}
+    factors["Wicket"] = wicket_factors.get(
+        bowling_type, wicket_factors.get("default", 1.0))
+    return factors
+
+
 def get_fc_rough_targeting(config=None):
     """Return the FC rough-targeting spec (per-pitch max bonus at full
     wear), or {}. Pitch-keyed like pitch_wear/wicket_factors, but a single

@@ -19,13 +19,16 @@
     <a class="gc-format-tab{% if fmt == match_format %} active{% endif %}"
         href="{{ url_for('ground_conditions', format=fmt) }}" role="tab"
         aria-selected="{{ 'true' if fmt == match_format else 'false' }}">
-        <i class="fa-solid {{ 'fa-bolt' if fmt == 'T20' else 'fa-clock' }}"></i>
-        {{ 'T20' if fmt == 'T20' else 'List A (50 over)' }}
+        {% set _fmt_icon = {'T20': 'fa-bolt', 'ListA': 'fa-clock', 'FC': 'fa-calendar-days'} %}
+        {% set _fmt_label = {'T20': 'T20', 'ListA': 'List A (50 over)', 'FC': 'First Class'} %}
+        <i class="fa-solid {{ _fmt_icon.get(fmt, 'fa-clock') }}"></i>
+        {{ _fmt_label.get(fmt, fmt) }}
     </a>
     {% endfor %}
 </div>
 <p class="gc-format-note">
-    Editing the <strong>{{ 'T20' if match_format == 'T20' else 'List A' }}</strong> profile.
+    {% set _cur_label = {'T20': 'T20', 'ListA': 'List A', 'FC': 'First Class'} %}
+    Editing the <strong>{{ _cur_label.get(match_format, match_format) }}</strong> profile.
     Each format is configured separately and only affects matches of that format.
 </p>
 
@@ -348,6 +351,134 @@
 </section>
 {% endif %}
 
+
+{% if match_format == 'FC' %}
+{% set fc_profiles = config.get('pitch_profiles') or {} %}
+{% set fc_ball = config.get('ball_condition') or {} %}
+{% set fc_rough = config.get('rough_targeting') or {} %}
+
+<!-- First-Class Pitch Profiles -->
+<section>
+    <div class="gc-section-header">
+        <i class="fa-solid fa-mountain-sun"></i>
+        <span class="gc-section-title">Pitch Profiles</span>
+    </div>
+    <p class="gc-format-note">
+        A first-class innings uses one matrix per pitch — there are no phases.
+        The pitch's <em>character</em> lives in the wicket factors below: how much each
+        bowling type gets out of the surface on day one, and what it gives them once
+        the pitch has worn. Those two tables are interpolated as the match ages.
+    </p>
+    <div class="gc-la-matrix-grid">
+        {% for pitch_name, profile in fc_profiles.items() %}
+        {% set mat = profile.get('scoring_matrix') or {} %}
+        <div class="gc-la-matrix-card gc-fc-pitch-card" data-pitch="{{ pitch_name }}">
+            <div class="gc-la-matrix-head">
+                <span class="gc-la-phase-name">{{ pitch_name }}</span>
+                <span class="gc-la-phase-overs">{{ profile.get('description', '') }}</span>
+            </div>
+
+            <details class="gc-advanced">
+                <summary class="gc-advanced-summary">
+                    <i class="fa-solid fa-sliders"></i> Scoring matrix
+                    <span class="gc-total-display valid" id="fc-total-{{ pitch_name }}"><span
+                            class="val">1.000</span></span>
+                </summary>
+                <div class="gc-la-matrix-rows">
+                    {% for outcome in ['Dot', 'Single', 'Double', 'Three', 'Four', 'Six', 'Wicket', 'Extras'] %}
+                    <div class="gc-la-row">
+                        <label>{{ outcome }}</label>
+                        <input type="number" class="gc-fc-matrix-input" step="0.0001" min="0" max="1"
+                            value="{{ mat.get(outcome, 0) }}" data-pitch="{{ pitch_name }}"
+                            data-outcome="{{ outcome }}" oninput="onFCMatrixChange(this)">
+                    </div>
+                    {% endfor %}
+                    <div class="gc-la-row">
+                        <label>Run factor</label>
+                        <input type="number" class="gc-fc-factor-input" step="0.01" min="0.1" max="2"
+                            value="{{ profile.get('run_factor', 1.0) }}" data-pitch="{{ pitch_name }}"
+                            data-field="run_factor">
+                    </div>
+                </div>
+            </details>
+
+            {% for tbl_key, tbl_label in [('wicket_factors_start', 'Fresh pitch'),
+                                          ('wicket_factors_end', 'Fully worn')] %}
+            {% set tbl = profile.get(tbl_key) or {} %}
+            <details class="gc-advanced">
+                <summary class="gc-advanced-summary">
+                    <i class="fa-solid fa-bowling-ball"></i> Wicket factors &mdash; {{ tbl_label }}
+                </summary>
+                <div class="gc-la-matrix-rows">
+                    {% for style, val in tbl.items() %}
+                    <div class="gc-la-row">
+                        <label>{{ style }}</label>
+                        <input type="number" class="gc-fc-wf-input" step="0.01" min="0" max="3"
+                            value="{{ val }}" data-pitch="{{ pitch_name }}"
+                            data-table="{{ tbl_key }}" data-style="{{ style }}">
+                    </div>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endfor %}
+
+            <div class="gc-la-row">
+                <label>Rough targeting</label>
+                <input type="number" class="gc-fc-rough-input" step="0.01" min="0" max="1"
+                    value="{{ fc_rough.get(pitch_name, 0) }}" data-pitch="{{ pitch_name }}">
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Ball condition -->
+<section>
+    <div class="gc-section-header">
+        <i class="fa-solid fa-baseball"></i>
+        <span class="gc-section-title">Ball Condition</span>
+    </div>
+    <p class="gc-format-note">
+        Independent of the surface: a new ball swings for genuine pace, that fades
+        through the middle overs, and an old ball can reverse in the window before
+        the next new one is due.
+    </p>
+    <div class="gc-la-matrix-grid">
+        <div class="gc-la-matrix-card">
+            <div class="gc-la-matrix-head"><span class="gc-la-phase-name">Windows</span></div>
+            <div class="gc-la-matrix-rows">
+                <div class="gc-la-row">
+                    <label>New-ball overs</label>
+                    <input type="number" class="gc-fc-ball-input" step="1" min="0" max="40"
+                        value="{{ fc_ball.get('new_ball_swing_overs', 10) }}" data-field="new_ball_swing_overs">
+                </div>
+                <div class="gc-la-row">
+                    <label>Reverse window</label>
+                    <input type="number" class="gc-fc-ball-input" step="1" min="0" max="40"
+                        value="{{ fc_ball.get('reverse_swing_window_overs', 15) }}"
+                        data-field="reverse_swing_window_overs">
+                </div>
+            </div>
+        </div>
+        {% for tbl_key, tbl_label in [('new_ball_wicket_factors', 'New ball'),
+                                      ('reverse_swing_wicket_factors', 'Reverse swing')] %}
+        <div class="gc-la-matrix-card">
+            <div class="gc-la-matrix-head"><span class="gc-la-phase-name">{{ tbl_label }}</span></div>
+            <div class="gc-la-matrix-rows">
+                {% for style, val in (fc_ball.get(tbl_key) or {}).items() %}
+                <div class="gc-la-row">
+                    <label>{{ style }}</label>
+                    <input type="number" class="gc-fc-ballwf-input" step="0.01" min="0" max="3"
+                        value="{{ val }}" data-table="{{ tbl_key }}" data-style="{{ style }}">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
 {% if match_format == 'ListA' %}
 {% set la_profiles = config.get('pitch_profiles') or {} %}
 {% set la_matrices = config.get('scoring_matrices') or {} %}
@@ -634,6 +765,7 @@
         // so a List A save can never overwrite the T20 row, or vice versa.
         const MATCH_FORMAT = {{ match_format | tojson | safe }};
         const IS_LISTA = MATCH_FORMAT === 'ListA';
+        const IS_FC = MATCH_FORMAT === 'FC';
 
         /* ────────────────────────────────────────────────────────────────
            Pitch character model
@@ -1330,7 +1462,65 @@
 
         // ── Build config from UI ──
         function buildConfig() {
+            if (IS_FC) return buildFCConfig();
             return IS_LISTA ? buildListAConfig() : buildT20Config();
+        }
+
+        // ── First-Class ──────────────────────────────────────────────
+        function onFCMatrixChange(inp) {
+            const pitch = inp.dataset.pitch;
+            let total = 0;
+            document.querySelectorAll(`.gc-fc-matrix-input[data-pitch="${pitch}"]`)
+                .forEach(i => { total += parseFloat(i.value) || 0; });
+            const el = document.getElementById(`fc-total-${pitch}`);
+            if (!el) return;
+            el.querySelector('.val').textContent = total.toFixed(3);
+            el.classList.toggle('valid', Math.abs(total - 1) < 0.005);
+            el.classList.toggle('invalid', Math.abs(total - 1) >= 0.005);
+        }
+
+        function buildFCConfig() {
+            const cfg = JSON.parse(JSON.stringify(CONFIG));
+            cfg.pitch_profiles = cfg.pitch_profiles || {};
+            cfg.rough_targeting = cfg.rough_targeting || {};
+
+            document.querySelectorAll('.gc-fc-pitch-card').forEach(card => {
+                const pName = card.dataset.pitch;
+                const profile = cfg.pitch_profiles[pName] || (cfg.pitch_profiles[pName] = {});
+
+                profile.scoring_matrix = {};
+                document.querySelectorAll(`.gc-fc-matrix-input[data-pitch="${pName}"]`)
+                    .forEach(i => { profile.scoring_matrix[i.dataset.outcome] = parseFloat(i.value) || 0; });
+
+                const rf = document.querySelector(
+                    `.gc-fc-factor-input[data-pitch="${pName}"][data-field="run_factor"]`);
+                if (rf) profile.run_factor = parseFloat(rf.value) || 1.0;
+
+                ['wicket_factors_start', 'wicket_factors_end'].forEach(tbl => {
+                    const inputs = document.querySelectorAll(
+                        `.gc-fc-wf-input[data-pitch="${pName}"][data-table="${tbl}"]`);
+                    if (!inputs.length) return;
+                    profile[tbl] = {};
+                    inputs.forEach(i => { profile[tbl][i.dataset.style] = parseFloat(i.value) || 0; });
+                });
+
+                const rough = document.querySelector(`.gc-fc-rough-input[data-pitch="${pName}"]`);
+                if (rough) cfg.rough_targeting[pName] = parseFloat(rough.value) || 0;
+            });
+
+            cfg.ball_condition = cfg.ball_condition || {};
+            document.querySelectorAll('.gc-fc-ball-input').forEach(i => {
+                cfg.ball_condition[i.dataset.field] = parseInt(i.value) || 0;
+            });
+            ['new_ball_wicket_factors', 'reverse_swing_wicket_factors'].forEach(tbl => {
+                const inputs = document.querySelectorAll(`.gc-fc-ballwf-input[data-table="${tbl}"]`);
+                if (!inputs.length) return;
+                cfg.ball_condition[tbl] = {};
+                inputs.forEach(i => { cfg.ball_condition[tbl][i.dataset.style] = parseFloat(i.value) || 0; });
+            });
+
+            applyBlending(cfg);
+            return cfg;
         }
 
         function buildListAConfig() {
