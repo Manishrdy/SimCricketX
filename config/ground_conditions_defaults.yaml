@@ -439,19 +439,19 @@ formats:
           Extras: 0.01333
         run_factor: 1.0
         wicket_factors_start:
-          Fast: 1.141
-          Fast-medium: 1.014
-          Medium-fast: 0.888
-          Medium: 0.76
-          default: 0.55
+          Fast: 1.078
+          Fast-medium: 0.958
+          Medium-fast: 0.839
+          Medium: 0.718
+          default: 0.52
         wicket_factors_end:
-          Fast: 1.141
-          Fast-medium: 1.081
-          Medium-fast: 1.05
-          Medium: 0.97
-          Off spin: 1.198
-          Leg spin: 1.198
-          default: 0.97
+          Fast: 1.078
+          Fast-medium: 1.022
+          Medium-fast: 0.992
+          Medium: 0.917
+          Off spin: 1.132
+          Leg spin: 1.132
+          default: 0.917
       # Mild early, a genuine raging turner for spin by day 4-5
       Dry:
         description: "Mild early, a genuine raging turner for spin by day 4-5"
@@ -466,19 +466,19 @@ formats:
           Extras: 0.01283
         run_factor: 1.0
         wicket_factors_start:
-          Leg spin: 1.037
-          Off spin: 0.993
-          Fast: 0.902
-          Medium: 0.812
-          default: 0.812
+          Leg spin: 0.98
+          Off spin: 0.938
+          Fast: 0.852
+          Medium: 0.767
+          default: 0.767
         wicket_factors_end:
-          Leg spin: 1.118
-          Off spin: 1.047
-          Finger spin: 0.978
-          Wrist spin: 1.012
-          Fast: 0.56
-          Medium: 0.523
-          default: 0.489
+          Leg spin: 1.057
+          Off spin: 0.989
+          Finger spin: 0.924
+          Wrist spin: 0.956
+          Fast: 0.529
+          Medium: 0.494
+          default: 0.462
       # True, neutral surface — stays close to neutral throughout the match
       Hard:
         description: "True, neutral surface — stays close to neutral throughout the match"
@@ -493,15 +493,15 @@ formats:
           Extras: 0.00935
         run_factor: 1.0
         wicket_factors_start:
-          Fast: 0.986
-          Medium: 0.891
-          default: 0.891
+          Fast: 0.932
+          Medium: 0.842
+          default: 0.842
         wicket_factors_end:
-          Fast: 0.938
-          Medium: 0.863
-          Off spin: 1.014
-          Leg spin: 1.014
-          default: 0.891
+          Fast: 0.886
+          Medium: 0.816
+          Off spin: 0.958
+          Leg spin: 0.958
+          default: 0.842
       # Good batting surface — a patient grind, not a run-fest
       Flat:
         description: "Good batting surface — a patient grind, not a run-fest"
@@ -516,12 +516,12 @@ formats:
           Extras: 0.00885
         run_factor: 1.0
         wicket_factors_start:
-          Fast: 0.883
-          default: 0.838
+          Fast: 0.834
+          default: 0.792
         wicket_factors_end:
-          Off spin: 1.038
-          Leg spin: 1.038
-          default: 0.939
+          Off spin: 0.981
+          Leg spin: 0.981
+          default: 0.887
       # Lifeless surface, offers spin some late assistance over 5 days
       Dead:
         description: "Lifeless surface, offers spin some late assistance over 5 days"
@@ -536,11 +536,11 @@ formats:
           Extras: 0.00785
         run_factor: 1.0
         wicket_factors_start:
-          default: 0.873
+          default: 0.825
         wicket_factors_end:
-          Off spin: 1.067
-          Leg spin: 1.067
-          default: 0.894
+          Off spin: 1.008
+          Leg spin: 1.008
+          default: 0.845
     pitch_wear:
       Green:
         factors: {Dot: -0.03, Four: 0.05, Wicket: 0.05}

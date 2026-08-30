@@ -117,7 +117,7 @@ def _fc_innings(pitch, seed, budget=8000):
         })
         order = {p["name"]: i + 1 for i, p in enumerate(m.batting_team)}
         legal = dots = 0
-        pos_balls, pos_outs = {}, {}
+        pos_balls, pos_outs, pos_runs = {}, {}, {}
         dismissals, extras = {}, {}
         for _ in range(budget):
             r = m.next_ball()
@@ -139,6 +139,8 @@ def _fc_innings(pitch, seed, budget=8000):
                 pos = order.get(bd.get("striker"))
                 if pos:
                     pos_balls[pos] = pos_balls.get(pos, 0) + 1
+                    pos_runs[pos] = pos_runs.get(pos, 0) + (
+                        0 if is_extra else (bd.get("runs") or 0))
             if bd.get("batter_out"):
                 pos = order.get(bd.get("striker"))
                 if pos:
@@ -151,6 +153,7 @@ def _fc_innings(pitch, seed, budget=8000):
                         "balls": int(whole) * 6 + int(part or 0),
                         "legal": legal, "dots": dots,
                         "pos_balls": pos_balls, "pos_outs": pos_outs,
+                        "pos_runs": pos_runs,
                         "dismissals": dismissals, "extras": extras}
         raise AssertionError(f"FC/{pitch}/{seed}: innings did not end in {budget} balls")
     finally:
@@ -348,3 +351,35 @@ def test_fc_ball_condition_scales_scoring_not_just_wickets():
     # the rope whoever is running in.
     assert (f("Off spin", ball_overs_bowled=3, new_ball_overs=80)["Four"]
             == new_ball["Four"])
+
+
+def test_new_batters_are_vulnerable_enough_to_produce_ducks():
+    """Scaling effective batting alone under-produced ducks at every
+    position by about 40%: it also makes a new batter worse at SCORING,
+    which keeps him on strike longer and cancels much of the effect. The
+    dismissal odds are raised directly instead."""
+    from engine.ball_outcome import _FC_NEW_BATTER_WICKET_BOOST as boost
+
+    assert boost[0] > 1.0, "a batter who has just walked in must be vulnerable"
+    assert boost[0] == boost[2], "the first three balls are the dangerous ones"
+    assert boost[0] > boost[5], "and it must ease as he gets his eye in"
+    assert boost.get(6) is None, "settled in — no boost after five balls"
+
+
+def test_fc_duck_rate_is_first_class(fc_stats):
+    """Roughly one first-class innings in ten ends without a run. Each
+    position bats once per innings, so a duck is that slot being dismissed
+    with pos_runs still at zero."""
+    innings = ducks = 0
+    for pitch in fc_stats.values():
+        for row in pitch["rows"]:
+            for pos in range(1, 12):
+                out = row["pos_outs"].get(pos, 0)
+                if not (out or row["pos_balls"].get(pos, 0)):
+                    continue                      # did not bat
+                innings += 1
+                if out and not row["pos_runs"].get(pos, 0):
+                    ducks += 1
+    assert innings > 500, "not enough sample to judge"
+    rate = ducks / innings * 100
+    assert 7.5 <= rate <= 15.0, f"duck rate {rate:.1f}% outside 7.5-15%"
