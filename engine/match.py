@@ -354,6 +354,16 @@ class Match:
         self.fc_day = 1
         self.fc_day_overs_bowled_today = 0
         self.fc_innings_declared = False
+        # Per-innings time budget (overs) for time-forcing declaration
+        # pressure — see fc_declaration.declaration_window_open/
+        # should_declare. Captured once here for innings 1, since
+        # _fc_start_next_innings() (which captures it for innings 2-4) is
+        # never called for the first innings. None for non-FC matches,
+        # where fmt has no days/overs_per_day and this is never read anyway.
+        self.fc_innings_time_budget_overs = (
+            fc_declaration.compute_innings_time_budget_overs(self._fc_overs_remaining_in_match())
+            if self.is_fc else None
+        )
         self.follow_on_enforced = None  # None until decided; then True/False
         # User-captained mode only (see _fc_check_declaration_and_follow_on):
         # the over the captain last declined to declare at, so the "ask
@@ -4612,9 +4622,22 @@ class Match:
             return None
 
         lead = 0
-        if self.fc_innings in (2, 3):
+        if self.fc_innings == 2:
             a1 = self.fc_innings_totals.get(1, {}).get("score", 0)
             lead = self.score - a1
+        elif self.fc_innings == 3:
+            # Non-follow-on case only (a follow-on-enforced side never
+            # reaches this method — see the guard above). The batting
+            # side's true lead is their combined 1st+2nd innings total
+            # against the opposition's completed innings-2 total, matching
+            # the target formula used when this innings actually ends
+            # (a1 + a2 - b1 + 1 in _fc_transition_to_next_innings) — NOT
+            # just this innings' own score against their own 1st innings,
+            # which is what the shared `self.score - a1` line above used to
+            # compute here.
+            a1 = self.fc_innings_totals.get(1, {}).get("score", 0)
+            b1 = self.fc_innings_totals.get(2, {}).get("score", 0)
+            lead = a1 + self.score - b1
         days_remaining = self._fc_days_remaining()
 
         if self._is_manual_mode():
@@ -4624,6 +4647,7 @@ class Match:
                 fc_innings=self.fc_innings, wickets=self.wickets,
                 overs_bowled_this_innings=self.current_over,
                 days_remaining=days_remaining,
+                innings_time_budget_overs=self.fc_innings_time_budget_overs,
             ):
                 return self._build_decision_required_response(
                     self._create_fc_declare_decision(lead, days_remaining)
@@ -4654,6 +4678,7 @@ class Match:
             lead=lead,
             days_remaining=days_remaining,
             pitch_par_factor=pitch_factor,
+            innings_time_budget_overs=self.fc_innings_time_budget_overs,
             **mc_kwargs,
         ):
             self.fc_innings_declared = True
@@ -4747,6 +4772,13 @@ class Match:
         self._reset_innings_state()
         self.fc_innings = next_fc_innings
         self.fc_innings_declared = False
+        # Recomputed fresh — see __init__'s matching comment. Uses whatever
+        # is actually left in the match right now, so an innings that
+        # starts late (because an earlier one ran long) gets a
+        # correspondingly tighter budget automatically.
+        self.fc_innings_time_budget_overs = fc_declaration.compute_innings_time_budget_overs(
+            self._fc_overs_remaining_in_match()
+        )
         self.fc_ball_overs_bowled = 0  # a fresh new ball is always issued at the start of an innings
         if self.scenario_engine:
             self.scenario_engine.on_innings_transition()
@@ -7589,6 +7621,7 @@ class Match:
             "fc_day_overs_bowled_today": self.fc_day_overs_bowled_today,
             "fc_ball_overs_bowled": self.fc_ball_overs_bowled,
             "fc_innings_declared": self.fc_innings_declared,
+            "fc_innings_time_budget_overs": self.fc_innings_time_budget_overs,
             "follow_on_enforced": self.follow_on_enforced,
             "fc_innings_totals": self.fc_innings_totals,
             "fc_innings_stats": self.fc_innings_stats,
@@ -7674,6 +7707,17 @@ class Match:
         self.fc_day_overs_bowled_today = snap.get("fc_day_overs_bowled_today", 0)
         self.fc_ball_overs_bowled = snap.get("fc_ball_overs_bowled", 0)
         self.fc_innings_declared = snap.get("fc_innings_declared", False)
+        # Must be the exact frozen value captured when the CURRENT innings
+        # started, not recomputed from post-restore state — fc_day/
+        # fc_day_overs_bowled_today above already reflect "now", which is
+        # generally well past this innings' actual start. Falls back to a
+        # fresh computation only for snapshots taken before this field
+        # existed (pre-migration in-flight matches); the result is an
+        # approximation for those specific resumes, not the true frozen value.
+        self.fc_innings_time_budget_overs = snap.get(
+            "fc_innings_time_budget_overs",
+            fc_declaration.compute_innings_time_budget_overs(self._fc_overs_remaining_in_match()),
+        )
         self.follow_on_enforced = snap.get("follow_on_enforced")
         # fc_innings_totals is keyed by innings number (int) everywhere it's
         # read (e.g. self.fc_innings_totals.get(1, {})) — a JSON round-trip

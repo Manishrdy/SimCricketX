@@ -29,6 +29,19 @@ FORMAT_RATING_FIELDS = [
     "fc_technique_rating", "fc_temperament_rating", "fc_stamina_rating",
 ]
 PERSISTED_PLAYER_FIELDS = PLAYER_FIELDS + FORMAT_RATING_FIELDS
+# Field order for bulk CSV/JSON import (and the AI prompt/sample files built
+# from it): identity, then ratings grouped by format, then descriptive
+# attributes/flags. Same field set as PERSISTED_PLAYER_FIELDS, reordered for
+# human/AI readability.
+IMPORT_FIELDS = [
+    "name", "role",
+    "batting_rating", "bowling_rating", "fielding_rating",
+    "list_a_batting_rating", "list_a_bowling_rating", "list_a_fielding_rating",
+    "fc_batting_rating", "fc_bowling_rating", "fc_fielding_rating",
+    "fc_technique_rating", "fc_temperament_rating", "fc_stamina_rating",
+    "batting_hand", "bowling_type", "bowling_hand",
+    "is_captain", "is_wicketkeeper",
+]
 STRICT_BOOL_TRUE = {"true", "1", "yes"}
 STRICT_BOOL_FALSE = {"false", "0", "no"}
 
@@ -41,8 +54,8 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
         if strict_import:
             if not isinstance(d, dict):
                 return None, f"Row {idx}: each row must be an object."
-            missing_fields = [f for f in PLAYER_FIELDS if f not in d]
-            extra_fields = [k for k in d.keys() if k not in PLAYER_FIELDS]
+            missing_fields = [f for f in IMPORT_FIELDS if f not in d]
+            extra_fields = [k for k in d.keys() if k not in IMPORT_FIELDS]
             if missing_fields:
                 return None, f"Row {idx}: missing required field(s): {', '.join(missing_fields)}."
             if extra_fields:
@@ -274,18 +287,18 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
             return None, "CSV must include header + at least one data row."
 
         header = _normalize_csv_header(sample_rows[0])
-        if header != PLAYER_FIELDS:
+        if header != IMPORT_FIELDS:
             return None, (
                 "CSV header must match exactly: "
-                + ", ".join(PLAYER_FIELDS)
+                + ", ".join(IMPORT_FIELDS)
             )
 
         rows = []
         for line_idx, row_values in enumerate(sample_rows[1:], start=2):
-            if len(row_values) != len(PLAYER_FIELDS):
+            if len(row_values) != len(IMPORT_FIELDS):
                 return None, f"CSV row {line_idx}: column count does not match header."
             row_dict = {}
-            for col_idx, field in enumerate(PLAYER_FIELDS):
+            for col_idx, field in enumerate(IMPORT_FIELDS):
                 row_dict[field] = row_values[col_idx]
             rows.append(row_dict)
         return rows, None
@@ -509,7 +522,7 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
             return redirect(url_for("admin_player_pool"))
         return render_template(
             "admin/player_pool_import.html",
-            player_fields=PLAYER_FIELDS,
+            player_fields=IMPORT_FIELDS,
             roles=sorted(VALID_ROLES),
             batting_hands=sorted(VALID_BATTING_HANDS - {""}),
             bowling_types=sorted(VALID_BOWLING_TYPES - {""}),
@@ -727,7 +740,7 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
             batting_hands=sorted(VALID_BATTING_HANDS),
             bowling_types=sorted(VALID_BOWLING_TYPES),
             bowling_hands=sorted(VALID_BOWLING_HANDS),
-            player_fields=PLAYER_FIELDS,
+            player_fields=IMPORT_FIELDS,
         )
 
     @app.route("/player-pool/import/template/json")
@@ -740,6 +753,15 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
                 "batting_rating": 95,
                 "bowling_rating": 20,
                 "fielding_rating": 85,
+                "list_a_batting_rating": 97,
+                "list_a_bowling_rating": 22,
+                "list_a_fielding_rating": 86,
+                "fc_batting_rating": 90,
+                "fc_bowling_rating": 15,
+                "fc_fielding_rating": 82,
+                "fc_technique_rating": 92,
+                "fc_temperament_rating": 88,
+                "fc_stamina_rating": 60,
                 "batting_hand": "Right",
                 "bowling_type": "Medium",
                 "bowling_hand": "Right",
@@ -752,6 +774,15 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
                 "batting_rating": 25,
                 "bowling_rating": 97,
                 "fielding_rating": 78,
+                "list_a_batting_rating": 20,
+                "list_a_bowling_rating": 96,
+                "list_a_fielding_rating": 78,
+                "fc_batting_rating": 15,
+                "fc_bowling_rating": 94,
+                "fc_fielding_rating": 75,
+                "fc_technique_rating": 30,
+                "fc_temperament_rating": 55,
+                "fc_stamina_rating": 90,
                 "batting_hand": "Right",
                 "bowling_type": "Fast",
                 "bowling_hand": "Right",
@@ -764,6 +795,15 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
                 "batting_rating": 88,
                 "bowling_rating": 0,
                 "fielding_rating": 92,
+                "list_a_batting_rating": 90,
+                "list_a_bowling_rating": 0,
+                "list_a_fielding_rating": 93,
+                "fc_batting_rating": 75,
+                "fc_bowling_rating": 0,
+                "fc_fielding_rating": 88,
+                "fc_technique_rating": 70,
+                "fc_temperament_rating": 85,
+                "fc_stamina_rating": 65,
                 "batting_hand": "Right",
                 "bowling_type": "",
                 "bowling_hand": "",
@@ -781,10 +821,10 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
     @login_required
     def player_pool_import_template_csv():
         sample_rows = [
-            PLAYER_FIELDS,
-            ["Virat Kohli", "Batsman", "95", "20", "85", "Right", "Medium", "Right", "false", "false"],
-            ["Jasprit Bumrah", "Bowler", "25", "97", "78", "Right", "Fast", "Right", "false", "false"],
-            ["MS Dhoni", "Wicketkeeper", "88", "0", "92", "Right", "", "", "true", "true"],
+            IMPORT_FIELDS,
+            ["Virat Kohli", "Batsman", "95", "20", "85", "97", "22", "86", "90", "15", "82", "92", "88", "60", "Right", "Medium", "Right", "false", "false"],
+            ["Jasprit Bumrah", "Bowler", "25", "97", "78", "20", "96", "78", "15", "94", "75", "30", "55", "90", "Right", "Fast", "Right", "false", "false"],
+            ["MS Dhoni", "Wicketkeeper", "88", "0", "92", "90", "0", "93", "75", "0", "88", "70", "85", "65", "Right", "", "", "true", "true"],
         ]
         output = io.StringIO()
         writer = csv.writer(output)

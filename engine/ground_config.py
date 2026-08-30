@@ -129,6 +129,24 @@ def get_defaults(match_format=DEFAULT_FORMAT, mutable=False):
     return copy.deepcopy(block) if mutable else block
 
 
+def get_pitch_options(match_format, config=None):
+    """Return the ordered list of pitch conditions available for *match_format*.
+
+    Every format block carries its own `pitch_profiles` map (name -> profile
+    dict with a `description`), so this reads straight from that instead of
+    a name list duplicated in the UI — the thing that keeps drifting out of
+    sync elsewhere in this codebase. Pass a user's `get_effective_config()`
+    result to reflect their saved overrides; omit it for factory defaults.
+    """
+    fmt = normalise_format(match_format)
+    block = config if config is not None else get_defaults(fmt)
+    profiles = block.get("pitch_profiles") or {}
+    return [
+        {"key": name, "description": (profile or {}).get("description", "")}
+        for name, profile in profiles.items()
+    ]
+
+
 # ──────────────────────────────── Merging ──────────────────────────────────
 
 def _deep_merge(base, override):

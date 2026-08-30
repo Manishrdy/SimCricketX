@@ -425,10 +425,19 @@ def register_match_routes(
             return jsonify(match_id=match_id), 200
 
         from engine.ground_config import get_effective_config as _get_gc_for_setup
+        from engine.ground_config import get_pitch_options as _get_pitch_options
         _setup_cfg = _get_gc_for_setup(current_user.id)
         _mode_name = _setup_cfg.get("active_game_mode", "natural_game")
         _modes = _setup_cfg.get("game_modes", {})
         active_mode_label = _modes.get(_mode_name, {}).get("label", "Natural Game")
+
+        # Pitch conditions per format, straight from each user's effective
+        # ground-conditions config — the setup wizard's dropdown must never
+        # hardcode this list separately from what Ground Conditions defines.
+        pitch_conditions_by_format = {
+            fmt: _get_pitch_options(fmt, _get_gc_for_setup(current_user.id, fmt))
+            for fmt in MATCH_SETUP_FORMATS
+        }
 
         from engine.scenario_packs import list_scenario_packs
         story_packs = [
@@ -449,6 +458,7 @@ def register_match_routes(
                                fixture_id=fixture_id,
                                tournament_format=tournament_format,
                                active_game_mode_label=active_mode_label,
+                               pitch_conditions_by_format=pitch_conditions_by_format,
                                story_packs=story_packs,
                                preselect_story=request.args.get("story", ""))
 
