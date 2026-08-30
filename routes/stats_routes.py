@@ -3,6 +3,7 @@
 from flask import Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from markupsafe import escape
+from engine.stats_service import SUPPORTED_STATS_FORMATS
 from utils.exception_tracker import log_exception
 
 
@@ -22,6 +23,18 @@ def register_stats_routes(
     aliased,
     func,
 ):
+    def _stats_format_arg(default="T20"):
+        value = request.args.get("match_format") or default
+        return value if value in SUPPORTED_STATS_FORMATS else default
+
+    def _tournament_format(tournament_id, requested_format):
+        if not tournament_id:
+            return requested_format
+        tournament = Tournament.query.filter_by(
+            id=tournament_id, user_id=current_user.id
+        ).first()
+        return tournament.format_type if tournament else requested_format
+
     @app.route("/statistics")
     @login_required
     def statistics():
@@ -33,8 +46,10 @@ def register_stats_routes(
             tournament_id = request.args.get("tournament_id", type=int)
             # Cricket stats are always format-specific. Default to T20 when
             # the caller doesn't supply a format (e.g. bookmarked URL).
-            match_format = request.args.get("match_format") or "T20"
+            match_format = _stats_format_arg()
             tournaments = Tournament.query.filter_by(user_id=current_user.id).all()
+            if view_type == "tournament" and tournament_id:
+                match_format = _tournament_format(tournament_id, match_format)
 
             stats_data = None
             has_stats = False
@@ -92,7 +107,7 @@ def register_stats_routes(
                 "Wides",
                 "No Balls",
             ]
-            fielding_headers = ["Player", "Team", "Matches", "Catches", "Run Outs"]
+            fielding_headers = ["Player", "Team", "Matches", "Catches", "Run Outs", "Stumpings"]
 
             if stats_data is not None:
                 figures_tournament = tournament_id if view_type == "tournament" else None
@@ -149,7 +164,9 @@ def register_stats_routes(
             tournament_id = request.args.get("tournament_id", type=int)
             # Cricket stats are always format-specific. Default to T20 when
             # the caller doesn't supply a format (e.g. bookmarked URL).
-            match_format = request.args.get("match_format") or "T20"
+            match_format = _stats_format_arg()
+            if tournament_id:
+                match_format = _tournament_format(tournament_id, match_format)
 
             if view_type == "overall":
                 stats_data = stats_service.get_overall_stats(current_user.id, match_format)
@@ -171,13 +188,13 @@ def register_stats_routes(
                 return jsonify({"error": f"No {stat_type} data available"}), 404
 
             view_label = f"tournament_{tournament_id}" if view_type == "tournament" else "overall"
-            filename = f"{view_label}_{stat_type}_stats.{format_type}"
+            filename = f"{view_label}_{match_format}_{stat_type}_stats.{format_type}"
 
             if format_type == "csv":
-                content = stats_service.export_to_csv(data, stat_type)
+                content = stats_service.export_to_csv(data, stat_type, match_format)
                 mimetype = "text/csv"
             elif format_type == "txt":
-                content = stats_service.export_to_txt(data, stat_type)
+                content = stats_service.export_to_txt(data, stat_type, match_format)
                 mimetype = "text/plain"
             else:
                 return jsonify({"error": "Invalid format type"}), 400
@@ -221,7 +238,9 @@ def register_stats_routes(
             limit = request.args.get("limit", 10, type=int)
             # Cricket stats are always format-specific. Default to T20 when
             # the caller doesn't supply a format (e.g. bookmarked URL).
-            match_format = request.args.get("match_format") or "T20"
+            match_format = _stats_format_arg()
+            if tournament_id:
+                match_format = _tournament_format(tournament_id, match_format)
 
             if limit < 1 or limit > 100:
                 return jsonify({"error": "Limit must be between 1 and 100"}), 400
@@ -257,7 +276,8 @@ def register_stats_routes(
             tournament_id = request.args.get("tournament_id", type=int)
             # Cricket stats are always format-specific. Default to T20 when
             # the caller doesn't supply a format (e.g. bookmarked URL).
-            match_format = request.args.get("match_format") or "T20"
+            match_format = _stats_format_arg()
+            match_format = _tournament_format(tournament_id, match_format)
 
             if not player_ids:
                 stats_service = StatsService(app.logger)
@@ -273,6 +293,7 @@ def register_stats_routes(
                     .join(DBMatch, MatchScorecard.match_id == DBMatch.id)
                     .join(DBTeam, DBPlayer.team_id == DBTeam.id)
                     .filter(DBMatch.user_id == current_user.id)
+                    .filter(DBMatch.match_format == match_format)
                     .filter(MatchScorecard.is_super_over.isnot(True))
                     .group_by(DBPlayer.id, DBPlayer.name, DBTeam.name)
                     .all()
@@ -313,6 +334,20 @@ def register_stats_routes(
                 return jsonify({"error": "Select at least 2 players to compare"}), 400
             if len(player_ids) > 6:
                 return jsonify({"error": "Maximum 6 players can be compared at once"}), 400
+
+            if tournament_id:
+                tournament = Tournament.query.filter_by(
+                    id=tournament_id, user_id=current_user.id
+                ).first()
+                if not tournament:
+                    return jsonify({"error": "Tournament not found"}), 404
+                if tournament.format_type != match_format:
+                    return jsonify({
+                        "error": (
+                            f"{tournament.name} is a {tournament.format_type} tournament; "
+                            f"it cannot be compared as {match_format}."
+                        )
+                    }), 400
 
             stats_service = StatsService(app.logger)
             comparison = stats_service.compare_players(current_user.id, player_ids, tournament_id, match_format)
@@ -356,7 +391,9 @@ def register_stats_routes(
             # Default to the player's own profile format when omitted, so a
             # ListA player's partnerships aren't queried under T20.
             match_format = request.args.get("match_format")
-            if not match_format:
+            if match_format:
+                match_format = _stats_format_arg()
+            else:
                 _player = db.session.get(DBPlayer, player_id)
                 if _player and _player.profile:
                     match_format = _player.profile.format_type
@@ -390,7 +427,8 @@ def register_stats_routes(
             limit = request.args.get("limit", 10, type=int)
             # Cricket stats are always format-specific. Default to T20 when
             # the caller doesn't supply a format (e.g. bookmarked URL).
-            match_format = request.args.get("match_format") or "T20"
+            match_format = _stats_format_arg()
+            match_format = _tournament_format(tournament_id, match_format)
 
             if limit < 1 or limit > 50:
                 return jsonify({"error": "Limit must be between 1 and 50"}), 400
@@ -424,7 +462,7 @@ def register_stats_routes(
             limit = request.args.get("limit", 10, type=int)
             # Cricket stats are always format-specific. Default to T20 when
             # the caller doesn't supply a format (e.g. bookmarked URL).
-            match_format = request.args.get("match_format") or "T20"
+            match_format = _stats_format_arg()
             if limit < 1 or limit > 50:
                 return jsonify({"error": "Limit must be between 1 and 50"}), 400
 
@@ -496,7 +534,7 @@ def register_stats_routes(
             team2_id = request.args.get("team2_id", type=int)
             # Cricket stats are always format-specific. Default to T20 when
             # the caller doesn't supply a format (e.g. bookmarked URL).
-            match_format = request.args.get("match_format") or "T20"
+            match_format = _stats_format_arg()
             if not team1_id or not team2_id:
                 return jsonify({"error": "Select two teams"}), 400
             if team1_id == team2_id:
@@ -521,7 +559,9 @@ def register_stats_routes(
             # URL omits match_format, default to that player's own profile
             # format so a ListA-only player isn't shown an empty T20 view.
             match_format = request.args.get("match_format")
-            if not match_format:
+            if match_format:
+                match_format = _stats_format_arg()
+            else:
                 _player = db.session.get(DBPlayer, player_id)
                 if _player and _player.profile:
                     match_format = _player.profile.format_type
@@ -547,7 +587,7 @@ def register_stats_routes(
         try:
             # Cricket stats are always format-specific. Default to T20 when
             # the caller doesn't supply a format (e.g. bookmarked URL).
-            match_format = request.args.get("match_format") or "T20"
+            match_format = _stats_format_arg()
             stats_service = StatsService(app.logger)
             data = stats_service.get_team_stats(current_user.id, team_id, match_format)
             if "error" in data:
@@ -572,7 +612,9 @@ def register_stats_routes(
             tournament_id = request.args.get("tournament_id", type=int)
             # Cricket stats are always format-specific. Default to T20 when
             # the caller doesn't supply a format (e.g. bookmarked URL).
-            match_format = request.args.get("match_format") or "T20"
+            match_format = _stats_format_arg()
+            if tournament_id:
+                match_format = _tournament_format(tournament_id, match_format)
 
             if view_type == "overall":
                 stats_data = stats_service.get_overall_stats(current_user.id, match_format)
@@ -594,9 +636,9 @@ def register_stats_routes(
                 return jsonify({"error": f"No {stat_type} data available"}), 404
 
             # Build HTML for PDF
-            txt_content = stats_service.export_to_txt(data, stat_type)
+            txt_content = stats_service.export_to_txt(data, stat_type, match_format)
             view_label = f"tournament_{tournament_id}" if view_type == "tournament" else "overall"
-            title = f"{view_label} — {stat_type.title()} Statistics"
+            title = f"{view_label} — {match_format} {stat_type.title()} Statistics"
 
             html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>{escape(title)}</title>
@@ -614,7 +656,7 @@ pre {{ white-space: pre-wrap; word-wrap: break-word; }}
             try:
                 from weasyprint import HTML as WeasyHTML
                 pdf_bytes = WeasyHTML(string=html).write_pdf()
-                filename = f"{view_label}_{stat_type}_stats.pdf"
+                filename = f"{view_label}_{match_format}_{stat_type}_stats.pdf"
                 return Response(
                     pdf_bytes,
                     mimetype="application/pdf",
@@ -623,7 +665,7 @@ pre {{ white-space: pre-wrap; word-wrap: break-word; }}
             except ImportError:
                 log_exception(source="backend")
                 # Fallback: serve as downloadable HTML
-                filename = f"{view_label}_{stat_type}_stats.html"
+                filename = f"{view_label}_{match_format}_{stat_type}_stats.html"
                 return Response(
                     html,
                     mimetype="text/html",

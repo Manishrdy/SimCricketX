@@ -17,6 +17,8 @@ from tabulate import tabulate
 from utils.exception_tracker import log_exception
 from engine.cricket_math import balls_to_overs_float
 
+SUPPORTED_STATS_FORMATS = frozenset({"T20", "ListA", "FC"})
+
 
 class StatsService:
     """Service class for calculating and exporting cricket statistics"""
@@ -40,7 +42,7 @@ class StatsService:
 
         Args:
             user_id (str): User ID
-            match_format (str, optional): Filter by format — 'T20', 'ListA'
+            match_format (str, optional): Filter by format — 'T20', 'ListA', 'FC'
 
         Returns:
             dict: Statistics dictionary with batting, bowling, fielding, and leaderboards
@@ -67,7 +69,7 @@ class StatsService:
         if not records:
             return self._empty_stats()
         
-        return self._calculate_stats_from_records(records)
+        return self._calculate_stats_from_records(records, match_format=match_format)
     
     def get_tournament_stats(self, user_id, tournament_id, match_format=None):
         """
@@ -80,7 +82,7 @@ class StatsService:
         Args:
             user_id (str): User ID
             tournament_id (int): Tournament ID
-            match_format (str, optional): Filter by format — 'T20', 'ListA'
+            match_format (str, optional): Filter by format — 'T20', 'ListA', 'FC'
 
         Returns:
             dict: Statistics dictionary with batting, bowling, fielding, and leaderboards
@@ -99,7 +101,9 @@ class StatsService:
             )
             return self._empty_stats()
 
-        cached = self._try_cache_tournament_stats(tournament_id, user_id)
+        cached = self._try_cache_tournament_stats(
+            tournament_id, user_id, match_format=match_format or (tournament.format_type if tournament else None)
+        )
         if cached:
             return cached
 
@@ -123,9 +127,9 @@ class StatsService:
         if not records:
             return self._empty_stats()
 
-        return self._calculate_stats_from_records(records)
+        return self._calculate_stats_from_records(records, match_format=match_format)
 
-    def _try_cache_tournament_stats(self, tournament_id, user_id):
+    def _try_cache_tournament_stats(self, tournament_id, user_id, match_format=None):
         """Attempt to serve tournament stats from TournamentPlayerStatsCache.
 
         Returns the same dict shape as _calculate_stats_from_records() on
@@ -159,18 +163,25 @@ class StatsService:
             if innings > 0:
                 batting_stats.append({
                     'player': player.name, 'team': team.name,
+                    'role': player.role or '', 'player_id': player.id,
                     'matches': matches, 'innings': innings,
                     'runs': cache.runs_scored or 0,
                     'balls': cache.balls_faced or 0,
                     'not_outs': cache.not_outs or 0,
                     'strike_rate': cache.batting_strike_rate,
                     'average': cache.batting_average,
-                    'zeros': 0, 'ones': 0, 'twos': 0, 'threes': 0,
+                    'highest_score': cache.highest_score or 0,
+                    'zeros': cache.ducks or 0,
+                    'ones': cache.ones or 0,
+                    'twos': cache.twos or 0,
+                    'threes': cache.threes or 0,
                     'fours': cache.fours or 0,
                     'sixes': cache.sixes or 0,
-                    'thirties': 0,
+                    'thirties': cache.thirties or 0,
                     'fifties': cache.fifties or 0,
                     'hundreds': cache.centuries or 0,
+                    'double_centuries': cache.double_centuries or 0,
+                    'triple_centuries': cache.triple_centuries or 0,
                 })
 
             # Bowling
@@ -180,21 +191,35 @@ class StatsService:
                 best_r = cache.best_bowling_runs or 0
                 bowling_stats.append({
                     'team': team.name, 'player': player.name,
+                    'role': player.role or '', 'player_id': player.id,
                     'matches': matches, 'innings': bowl_innings,
                     'overs': cache.overs_bowled or '0.0',
                     'runs': cache.runs_conceded or 0,
                     'wickets': cache.wickets_taken or 0,
                     'best': f"{best_w}/{best_r}" if best_w > 0 else '-',
+                    'best_match': (
+                        f"{cache.best_match_bowling_wickets or 0}/{cache.best_match_bowling_runs or 0}"
+                        if (cache.best_match_bowling_wickets or 0) > 0 else '-'
+                    ),
                     'average': cache.bowling_average,
                     'economy': cache.bowling_economy or 0.0,
-                    'dots': 0, 'bowled': 0, 'lbw': 0,
-                    'byes': 0, 'leg_byes': 0,
-                    'wides': 0, 'no_balls': 0,
+                    'strike_rate': cache.bowling_strike_rate,
+                    'maidens': cache.maidens or 0,
+                    'five_wicket_hauls': cache.five_wicket_hauls or 0,
+                    'ten_wicket_matches': cache.ten_wicket_matches or 0,
+                    'dots': cache.dot_balls_bowled or 0,
+                    'bowled': cache.wickets_bowled or 0,
+                    'lbw': cache.wickets_lbw or 0,
+                    'byes': cache.byes or 0,
+                    'leg_byes': cache.leg_byes or 0,
+                    'wides': cache.wides or 0,
+                    'no_balls': cache.noballs or 0,
                 })
 
             # Fielding
             fielding_stats.append({
                 'player': player.name, 'team': team.name,
+                'role': player.role or '', 'player_id': player.id,
                 'matches': matches,
                 'catches': cache.catches or 0,
                 'run_outs': cache.run_outs or 0,
@@ -208,7 +233,9 @@ class StatsService:
             reverse=True
         )
 
-        leaderboards = self._calculate_leaderboards(batting_stats, bowling_stats)
+        leaderboards = self._calculate_leaderboards(
+            batting_stats, bowling_stats, match_format=match_format
+        )
         return {
             'batting': batting_stats,
             'bowling': bowling_stats,
@@ -247,8 +274,14 @@ class StatsService:
         for match in match_query.all():
             if match.home_team_score is None or match.away_team_score is None:
                 continue
-            total_runs = (match.home_team_score or 0) + (match.away_team_score or 0)
-            total_wkts = (match.home_team_wickets or 0) + (match.away_team_wickets or 0)
+            total_runs = sum(value or 0 for value in (
+                match.home_team_score, match.away_team_score,
+                match.home_team_score_innings2, match.away_team_score_innings2,
+            ))
+            total_wkts = sum(value or 0 for value in (
+                match.home_team_wickets, match.away_team_wickets,
+                match.home_team_wickets_innings2, match.away_team_wickets_innings2,
+            ))
 
             venue_key = (match.venue or "Unknown Venue").strip()
             venue_stats = venue_agg.setdefault(venue_key, {"runs": 0, "wkts": 0, "matches": 0})
@@ -319,7 +352,7 @@ class StatsService:
                         "player": player.name,
                         "team": team.name,
                         "series": []
-                    })["series"].append((match_date, card.runs or 0))
+                    })["series"].append((match_date, card.innings_number or 0, card.runs or 0))
 
             if card.record_type == "bowling":
                 balls = card.balls_bowled or 0
@@ -329,7 +362,7 @@ class StatsService:
                         "player": player.name,
                         "team": team.name,
                         "series": []
-                    })["series"].append((match_date, card.wickets or 0))
+                    })["series"].append((match_date, card.innings_number or 0, card.wickets or 0))
 
         # Impact Index
         impact_list = []
@@ -373,10 +406,12 @@ class StatsService:
             for pid, data in form_map.items():
                 if not data["series"]:
                     continue
-                total = sum(v for _, v in data["series"])
-                series_sorted = sorted(data["series"], key=lambda x: x[0], reverse=True)[:5]
+                total = sum(item[2] for item in data["series"])
+                series_sorted = sorted(
+                    data["series"], key=lambda x: (x[0], x[1]), reverse=True
+                )[:5]
                 series_sorted.reverse()
-                values = [v for _, v in series_sorted]
+                values = [item[2] for item in series_sorted]
                 trend = _calc_trend(values)
                 items.append({
                     "player": data["player"],
@@ -460,11 +495,16 @@ class StatsService:
                 'most_runs': [],
                 'most_wickets': [],
                 'highest_sr': [],
-                'best_average': []
+                'best_average': [],
+                'highest_score': [],
+                'most_double_centuries': [],
+                'most_five_wicket_hauls': [],
+                'best_match_figures': [],
+                'most_ten_wicket_matches': [],
             }
         }
     
-    def _calculate_stats_from_records(self, records):
+    def _calculate_stats_from_records(self, records, match_format=None):
         """
         Calculate statistics from scorecard records.
         
@@ -490,6 +530,7 @@ class StatsService:
             'bat_twos': 0,
             'bat_threes': 0,
             'bat_dots': 0,
+            'bat_highest': 0,
             'bowl_innings': 0,
             'bowl_balls': 0,
             'bowl_runs': 0,
@@ -503,6 +544,8 @@ class StatsService:
             'bowl_wickets_bowled': 0,
             'bowl_wickets_lbw': 0,
             'bowl_best': (0, 9999),  # (wickets, runs)
+            'bowl_five_wicket_hauls': 0,
+            'bowl_match_data': defaultdict(lambda: {'wickets': 0, 'runs': 0}),
             'catches': 0,
             'run_outs': 0,
             'stumpings': 0,
@@ -533,6 +576,9 @@ class StatsService:
                     
                     if not card.is_out:
                         player_data[pid]['bat_not_outs'] += 1
+                    player_data[pid]['bat_highest'] = max(
+                        player_data[pid]['bat_highest'], card.runs or 0
+                    )
                 
                 # Aggregate stats
                 player_data[pid]['bat_runs'] += card.runs or 0
@@ -549,6 +595,11 @@ class StatsService:
                 balls = card.balls_bowled or 0
                 if balls > 0:
                     player_data[pid]['bowl_innings'] += 1
+                    if (card.wickets or 0) >= 5:
+                        player_data[pid]['bowl_five_wicket_hauls'] += 1
+                    match_figures = player_data[pid]['bowl_match_data'][match.id]
+                    match_figures['wickets'] += card.wickets or 0
+                    match_figures['runs'] += card.runs_conceded or 0
 
                 player_data[pid]['bowl_balls'] += balls
                 player_data[pid]['bowl_runs'] += card.runs_conceded or 0
@@ -574,7 +625,9 @@ class StatsService:
         batting_stats = self._calculate_batting_stats(player_data)
         bowling_stats = self._calculate_bowling_stats(player_data)
         fielding_stats = self._calculate_fielding_stats(player_data)
-        leaderboards = self._calculate_leaderboards(batting_stats, bowling_stats)
+        leaderboards = self._calculate_leaderboards(
+            batting_stats, bowling_stats, match_format=match_format
+        )
         
         return {
             'batting': batting_stats,
@@ -612,6 +665,8 @@ class StatsService:
             thirties = sum(1 for inn in innings_data if 30 <= inn['runs'] <= 49)
             fifties = sum(1 for inn in innings_data if 50 <= inn['runs'] < 100)
             hundreds = sum(1 for inn in innings_data if inn['runs'] >= 100)
+            double_centuries = sum(1 for inn in innings_data if 200 <= inn['runs'] < 300)
+            triple_centuries = sum(1 for inn in innings_data if inn['runs'] >= 300)
             
             batting_stats.append({
                 'player': data['name'],
@@ -621,6 +676,7 @@ class StatsService:
                 'matches': matches,
                 'innings': innings,
                 'runs': runs,
+                'highest_score': data['bat_highest'],
                 'balls': balls,
                 'not_outs': not_outs,
                 'strike_rate': strike_rate,
@@ -633,7 +689,9 @@ class StatsService:
                 'sixes': data['bat_sixes'],
                 'thirties': thirties,
                 'fifties': fifties,
-                'hundreds': hundreds
+                'hundreds': hundreds,
+                'double_centuries': double_centuries,
+                'triple_centuries': triple_centuries,
             })
         
         # Sort by runs (descending)
@@ -663,6 +721,14 @@ class StatsService:
             # Calculate average — undefined when bowler has zero wickets.
             # Standard cricket convention: shown as '-', not as 0.
             average = round(runs / wickets, 2) if wickets > 0 else None
+            strike_rate = round(balls / wickets, 2) if wickets > 0 else None
+
+            match_figures = list(data['bowl_match_data'].values())
+            best_match = max(
+                match_figures,
+                key=lambda item: (item['wickets'], -item['runs']),
+                default=None,
+            )
 
             bowling_stats.append({
                 'team': data['team'],
@@ -675,8 +741,18 @@ class StatsService:
                 'runs': runs,
                 'wickets': wickets,
                 'best': f"{data['bowl_best'][0]}/{data['bowl_best'][1]}" if data['bowl_best'][0] > 0 else '-',
+                'best_match': (
+                    f"{best_match['wickets']}/{best_match['runs']}"
+                    if best_match and best_match['wickets'] > 0 else '-'
+                ),
                 'average': average,
                 'economy': round(economy, 2),
+                'strike_rate': strike_rate,
+                'maidens': data['bowl_maidens'],
+                'five_wicket_hauls': data['bowl_five_wicket_hauls'],
+                'ten_wicket_matches': sum(
+                    1 for figures in match_figures if figures['wickets'] >= 10
+                ),
                 'dots': data['bowl_dots'],
                 'bowled': data['bowl_wickets_bowled'],
                 'lbw': data['bowl_wickets_lbw'],
@@ -727,7 +803,7 @@ class StatsService:
         )
         return fielding_stats
     
-    def _calculate_leaderboards(self, batting_stats, bowling_stats):
+    def _calculate_leaderboards(self, batting_stats, bowling_stats, match_format=None):
         """Calculate leaderboard data for dashboard widgets.
 
         Qualification thresholds scale with the dataset so that small
@@ -739,7 +815,12 @@ class StatsService:
             'most_runs': [],
             'most_wickets': [],
             'highest_sr': [],
-            'best_average': []
+            'best_average': [],
+            'highest_score': [],
+            'most_double_centuries': [],
+            'most_five_wicket_hauls': [],
+            'best_match_figures': [],
+            'most_ten_wicket_matches': [],
         }
 
         # Top 5 run scorers
@@ -754,26 +835,25 @@ class StatsService:
             for b in bowling_stats[:5]
         ]
 
-        # Dynamic SR threshold
-        if batting_stats:
+        # Dynamic SR threshold. FC keeps strike rate in the detailed table,
+        # but its leaderboard is deliberately built around long-form records.
+        if batting_stats and match_format != 'FC':
             sorted_balls = sorted(b['balls'] for b in batting_stats if b['balls'] > 0)
             median_balls = sorted_balls[len(sorted_balls) // 2] if sorted_balls else 0
             min_balls = max(10, int(median_balls * 0.5))
             min_balls = min(min_balls, 50)
-        else:
+        elif match_format != 'FC':
             min_balls = 50
-
-        # 0-ball players already excluded via min_balls; the `is not None`
-        # guard is belt-and-braces and prevents TypeError on undefined SR.
-        sr_qualified = [
-            b for b in batting_stats
-            if b['balls'] >= min_balls and b['strike_rate'] is not None
-        ]
-        sr_sorted = sorted(sr_qualified, key=lambda x: x['strike_rate'], reverse=True)
-        leaderboards['highest_sr'] = [
-            {'player': b['player'], 'team': b['team'], 'sr': b['strike_rate']}
-            for b in sr_sorted[:5]
-        ]
+        if match_format != 'FC':
+            sr_qualified = [
+                b for b in batting_stats
+                if b['balls'] >= min_balls and b['strike_rate'] is not None
+            ]
+            sr_sorted = sorted(sr_qualified, key=lambda x: x['strike_rate'], reverse=True)
+            leaderboards['highest_sr'] = [
+                {'player': b['player'], 'team': b['team'], 'sr': b['strike_rate']}
+                for b in sr_sorted[:5]
+            ]
 
         # Dynamic average threshold
         num_batsmen = len(batting_stats)
@@ -793,9 +873,62 @@ class StatsService:
             for b in avg_sorted[:5]
         ]
 
+        if match_format == 'FC':
+            high_scores = sorted(
+                (b for b in batting_stats if b.get('highest_score', 0) > 0),
+                key=lambda b: b['highest_score'], reverse=True,
+            )
+            leaderboards['highest_score'] = [
+                {'player': b['player'], 'team': b['team'], 'score': b['highest_score']}
+                for b in high_scores[:5]
+            ]
+
+            doubles = sorted(
+                (b for b in batting_stats if b.get('double_centuries', 0) > 0),
+                key=lambda b: (b['double_centuries'], b['runs']), reverse=True,
+            )
+            leaderboards['most_double_centuries'] = [
+                {'player': b['player'], 'team': b['team'], 'count': b['double_centuries']}
+                for b in doubles[:5]
+            ]
+
+            five_fors = sorted(
+                (b for b in bowling_stats if b.get('five_wicket_hauls', 0) > 0),
+                key=lambda b: (b['five_wicket_hauls'], b['wickets']), reverse=True,
+            )
+            leaderboards['most_five_wicket_hauls'] = [
+                {'player': b['player'], 'team': b['team'], 'count': b['five_wicket_hauls']}
+                for b in five_fors[:5]
+            ]
+
+            def _figures_key(row, field):
+                value = row.get(field, '-')
+                if not value or value == '-' or '/' not in value:
+                    return (0, 0)
+                wickets, runs = value.split('/', 1)
+                return (int(wickets), -int(runs))
+
+            best_matches = sorted(
+                (b for b in bowling_stats if b.get('best_match') not in (None, '-')),
+                key=lambda b: _figures_key(b, 'best_match'), reverse=True,
+            )
+            leaderboards['best_match_figures'] = [
+                {'player': b['player'], 'team': b['team'], 'figures': b['best_match']}
+                for b in best_matches[:5]
+            ]
+
+            ten_fors = sorted(
+                (b for b in bowling_stats if b.get('ten_wicket_matches', 0) > 0),
+                key=lambda b: (b['ten_wicket_matches'], b['wickets']), reverse=True,
+            )
+            leaderboards['most_ten_wicket_matches'] = [
+                {'player': b['player'], 'team': b['team'], 'count': b['ten_wicket_matches']}
+                for b in ten_fors[:5]
+            ]
+
         return leaderboards
     
-    def export_to_csv(self, data, stat_type):
+    def export_to_csv(self, data, stat_type, match_format=None):
         """
         Export statistics to CSV format.
         
@@ -815,12 +948,19 @@ class StatsService:
             fieldnames = ['player', 'team', 'matches', 'innings', 'runs', 'balls', 
                          'not_outs', 'strike_rate', 'average', 'zeros', 'ones', 
                          'twos', 'threes', 'fours', 'sixes', 'thirties', 'fifties', 'hundreds']
+            if match_format == 'FC':
+                fieldnames.insert(5, 'highest_score')
+                fieldnames += ['double_centuries', 'triple_centuries']
         elif stat_type == 'bowling':
             fieldnames = ['team', 'player', 'matches', 'innings', 'overs', 'runs', 
-                         'wickets', 'best', 'average', 'economy', 'dots', 'bowled', 'lbw', 
+                         'wickets', 'best', 'average', 'economy', 'dots', 'bowled', 'lbw',
                          'byes', 'leg_byes', 'wides', 'no_balls']
+            if match_format == 'FC':
+                fieldnames.insert(7, 'maidens')
+                fieldnames.insert(12, 'strike_rate')
+                fieldnames += ['best_match', 'five_wicket_hauls', 'ten_wicket_matches']
         else:  # fielding
-            fieldnames = ['player', 'team', 'matches', 'catches', 'run_outs']
+            fieldnames = ['player', 'team', 'matches', 'catches', 'run_outs', 'stumpings']
         
         # Stats rows include extra internal keys (e.g. role/player_id). Ignore
         # unknown keys so exports remain stable across response-shape evolution.
@@ -830,7 +970,7 @@ class StatsService:
         
         return output.getvalue()
     
-    def export_to_txt(self, data, stat_type):
+    def export_to_txt(self, data, stat_type, match_format=None):
         """
         Export statistics to formatted text table.
         
@@ -845,32 +985,46 @@ class StatsService:
             return "No data available"
         
         if stat_type == 'batting':
-            headers = ['Player', 'Team', 'Mat', 'Inn', 'Runs', 'Balls', 'NO', 
+            headers = ['Player', 'Team', 'Mat', 'Inn', 'Runs', 'Balls', 'NO',
                       'SR', 'Avg', '0s', '1s', '2s', '3s', '4s', '6s', '30s', '50s', '100s']
+            if match_format == 'FC':
+                headers.insert(5, 'HS')
+                headers += ['200s', '300s']
             rows = [
                 [
                     d['player'], d['team'], d['matches'], d['innings'], d['runs'],
+                    *([d.get('highest_score', 0)] if match_format == 'FC' else []),
                     d['balls'], d['not_outs'], d['strike_rate'], d['average'],
                     d['zeros'], d['ones'], d['twos'], d['threes'], d['fours'],
-                    d['sixes'], d['thirties'], d['fifties'], d['hundreds']
+                    d['sixes'], d['thirties'], d['fifties'], d['hundreds'],
+                    *([d.get('double_centuries', 0), d.get('triple_centuries', 0)] if match_format == 'FC' else [])
                 ]
                 for d in data
             ]
         elif stat_type == 'bowling':
-            headers = ['Team', 'Player', 'Mat', 'Inn', 'Overs', 'Runs', 'Wkts', 
-                      'Best', 'Avg', 'Econ', 'Dots', 'Bwld', 'LBW', 'Byes', 'LB', 'Wd', 'NB']
+            headers = ['Team', 'Player', 'Mat', 'Inn', 'Overs', 'Runs', 'Wkts',
+                      'BBI', 'Avg', 'Econ', 'Dots', 'Bwld', 'LBW', 'Byes', 'LB', 'Wd', 'NB']
+            if match_format == 'FC':
+                headers.insert(7, 'Mdns')
+                headers.insert(12, 'SR')
+                headers += ['BBM', '5WI', '10WM']
             rows = [
                 [
                     d['team'], d['player'], d['matches'], d['innings'], d['overs'],
-                    d['runs'], d['wickets'], d['best'], d['average'], d['economy'], d['dots'],
-                    d['bowled'], d['lbw'], d['byes'], d['leg_byes'], d['wides'], d['no_balls']
+                    d['runs'], d['wickets'],
+                    *([d.get('maidens', 0)] if match_format == 'FC' else []),
+                    d['best'], d['average'], d['economy'],
+                    *([d.get('strike_rate')] if match_format == 'FC' else []),
+                    d['dots'], d['bowled'], d['lbw'],
+                    d['byes'], d['leg_byes'], d['wides'], d['no_balls'],
+                    *([d.get('best_match', '-'), d.get('five_wicket_hauls', 0), d.get('ten_wicket_matches', 0)] if match_format == 'FC' else [])
                 ]
                 for d in data
             ]
         else:  # fielding
-            headers = ['Player', 'Team', 'Matches', 'Catches', 'Run Outs']
+            headers = ['Player', 'Team', 'Matches', 'Catches', 'Run Outs', 'Stumpings']
             rows = [
-                [d['player'], d['team'], d['matches'], d['catches'], d['run_outs']]
+                [d['player'], d['team'], d['matches'], d['catches'], d['run_outs'], d.get('stumpings', 0)]
                 for d in data
             ]
         
@@ -1090,6 +1244,8 @@ class StatsService:
                 
                 if card.record_type == 'batting' and ((card.balls or 0) > 0 or (card.runs or 0) > 0 or bool(card.is_out)):
                     batting_data.append({
+                        'match_id': match.id,
+                        'innings_number': card.innings_number,
                         'runs': card.runs or 0,
                         'balls': card.balls or 0,
                         'is_out': card.is_out,
@@ -1099,6 +1255,8 @@ class StatsService:
                 
                 if card.record_type == 'bowling' and (card.balls_bowled or 0) > 0:
                     bowling_data.append({
+                        'match_id': match.id,
+                        'innings_number': card.innings_number,
                         'wickets': card.wickets or 0,
                         'runs': card.runs_conceded or 0,
                         'balls': card.balls_bowled or 0
@@ -1159,7 +1317,9 @@ class StatsService:
             'fours': sum(i['fours'] for i in innings_list),
             'sixes': sum(i['sixes'] for i in innings_list),
             'fifties': sum(1 for i in innings_list if 50 <= i['runs'] < 100),
-            'hundreds': sum(1 for i in innings_list if i['runs'] >= 100)
+            'hundreds': sum(1 for i in innings_list if i['runs'] >= 100),
+            'double_centuries': sum(1 for i in innings_list if 200 <= i['runs'] < 300),
+            'triple_centuries': sum(1 for i in innings_list if i['runs'] >= 300),
         }
     
     def _calculate_bowling_metrics(self, bowling_list):
@@ -1179,16 +1339,32 @@ class StatsService:
         sr = round(total_balls / total_wickets, 1) if total_wickets > 0 else None
 
         best = max(bowling_list, key=lambda x: (x['wickets'], -x['runs'])) if bowling_list else None
+        by_match = defaultdict(lambda: {'wickets': 0, 'runs': 0})
+        for figures in bowling_list:
+            match_key = figures.get('match_id')
+            if match_key is None:
+                continue
+            by_match[match_key]['wickets'] += figures['wickets']
+            by_match[match_key]['runs'] += figures['runs']
+        best_match = max(
+            by_match.values(), key=lambda x: (x['wickets'], -x['runs']), default=None
+        )
 
         return {
             'innings': innings,
             'wickets': total_wickets,
             'runs': total_runs,
             'balls': total_balls,
+            'overs': f"{total_balls // 6}.{total_balls % 6}",
             'average': avg,
             'economy': round(economy, 2),
             'strike_rate': sr,
-            'best_figures': f"{best['wickets']}/{best['runs']}" if best else 'N/A'
+            'best_figures': f"{best['wickets']}/{best['runs']}" if best else 'N/A',
+            'best_match_figures': (
+                f"{best_match['wickets']}/{best_match['runs']}" if best_match else 'N/A'
+            ),
+            'five_wicket_hauls': sum(1 for b in bowling_list if b['wickets'] >= 5),
+            'ten_wicket_matches': sum(1 for b in by_match.values() if b['wickets'] >= 10),
         }
     
     def _build_batting_comparison(self, players):
@@ -1202,7 +1378,9 @@ class StatsService:
             'strike_rate': p['batting'].get('strike_rate', 0),
             'high_score': p['batting'].get('high_score', 0),
             'fifties': p['batting'].get('fifties', 0),
-            'hundreds': p['batting'].get('hundreds', 0)
+            'hundreds': p['batting'].get('hundreds', 0),
+            'double_centuries': p['batting'].get('double_centuries', 0),
+            'triple_centuries': p['batting'].get('triple_centuries', 0),
         } for p in players if p.get('batting')]
     
     def _build_bowling_comparison(self, players):
@@ -1215,7 +1393,10 @@ class StatsService:
             'average': p['bowling'].get('average', 0),
             'economy': p['bowling'].get('economy', 0),
             'strike_rate': p['bowling'].get('strike_rate', 0),
-            'best_figures': p['bowling'].get('best_figures', 'N/A')
+            'best_figures': p['bowling'].get('best_figures', 'N/A'),
+            'best_match_figures': p['bowling'].get('best_match_figures', 'N/A'),
+            'five_wicket_hauls': p['bowling'].get('five_wicket_hauls', 0),
+            'ten_wicket_matches': p['bowling'].get('ten_wicket_matches', 0),
         } for p in players if p.get('bowling')]
     
     def _build_fielding_comparison(self, players):
@@ -1471,6 +1652,33 @@ class StatsService:
     # Head-to-Head Team Comparison
     # ========================================================================
 
+    @staticmethod
+    def _side_innings_scores(match, is_home):
+        """Return every persisted innings for one side as display strings."""
+        if is_home:
+            values = (
+                (match.home_team_score, match.home_team_wickets),
+                (match.home_team_score_innings2, match.home_team_wickets_innings2),
+            )
+        else:
+            values = (
+                (match.away_team_score, match.away_team_wickets),
+                (match.away_team_score_innings2, match.away_team_wickets_innings2),
+            )
+        return [f"{score or 0}/{wickets or 0}" for score, wickets in values if score is not None]
+
+    @staticmethod
+    def _match_result_code(match, team_id):
+        if match.winner_team_id == team_id:
+            return "W"
+        if match.winner_team_id is not None:
+            return "L"
+        if match.match_status == "drawn":
+            return "D"
+        if match.match_status in {"no_result", "aborted"}:
+            return "NR"
+        return "T"
+
     def get_head_to_head(self, user_id, team1_id, team2_id, match_format=None):
         """Compare two teams' records against each other."""
         try:
@@ -1495,11 +1703,11 @@ class StatsService:
             if not matches:
                 return {
                     "team1": team1.name, "team2": team2.name,
-                    "matches": [], "summary": {"played": 0, "team1_wins": 0, "team2_wins": 0, "ties": 0},
+                    "matches": [], "summary": {"played": 0, "team1_wins": 0, "team2_wins": 0, "ties": 0, "draws": 0, "no_results": 0},
                     "top_performers": {"team1": [], "team2": []},
                 }
 
-            t1_wins = t2_wins = ties = 0
+            t1_wins = t2_wins = ties = draws = no_results = 0
             match_list = []
             match_ids = []
             for m in matches:
@@ -1508,8 +1716,14 @@ class StatsService:
                     t1_wins += 1
                 elif m.winner_team_id == team2_id:
                     t2_wins += 1
+                elif m.match_status == "drawn":
+                    draws += 1
+                elif m.match_status in {"no_result", "aborted"}:
+                    no_results += 1
                 else:
                     ties += 1
+                home_innings = self._side_innings_scores(m, True)
+                away_innings = self._side_innings_scores(m, False)
                 match_list.append({
                     "match_id": m.id,
                     "date": m.date.strftime("%Y-%m-%d") if m.date else "",
@@ -1517,8 +1731,10 @@ class StatsService:
                     "home": team1.name if m.home_team_id == team1_id else team2.name,
                     "away": team2.name if m.home_team_id == team1_id else team1.name,
                     "result": m.result_description or "",
-                    "home_score": f"{m.home_team_score or 0}/{m.home_team_wickets or 0}",
-                    "away_score": f"{m.away_team_score or 0}/{m.away_team_wickets or 0}",
+                    "home_innings": home_innings,
+                    "away_innings": away_innings,
+                    "home_score": " & ".join(home_innings) or "-",
+                    "away_score": " & ".join(away_innings) or "-",
                     "format": m.match_format or "T20",
                 })
 
@@ -1551,7 +1767,11 @@ class StatsService:
                 "team1": team1.name, "team2": team2.name,
                 "team1_id": team1_id, "team2_id": team2_id,
                 "matches": match_list,
-                "summary": {"played": len(matches), "team1_wins": t1_wins, "team2_wins": t2_wins, "ties": ties},
+                "summary": {
+                    "played": len(matches), "team1_wins": t1_wins,
+                    "team2_wins": t2_wins, "ties": ties,
+                    "draws": draws, "no_results": no_results,
+                },
                 "top_performers": {"team1": _top_performers(team1_id), "team2": _top_performers(team2_id)},
             }
         except Exception as e:
@@ -1593,7 +1813,9 @@ class StatsService:
             if effective_format:
                 query = query.filter(Match.match_format == effective_format)
 
-            records = query.order_by(Match.date.desc()).all()
+            records = query.order_by(
+                Match.date.desc(), MatchScorecard.innings_number.asc()
+            ).all()
 
             batting_innings = []
             bowling_innings = []
@@ -1614,6 +1836,7 @@ class StatsService:
                     "result": match.result_description or "",
                     "bat_runs": None, "bat_balls": None, "bat_out": None,
                     "bowl_wkts": None, "bowl_runs": None, "bowl_overs": None,
+                    "batting_innings": [], "bowling_innings": [],
                     "catches": 0, "run_outs": 0, "stumpings": 0,
                     "is_motm": match.motm_player_id == player_id,
                 })
@@ -1626,15 +1849,23 @@ class StatsService:
 
                 if card.record_type == "batting" and ((card.balls or 0) > 0 or (card.runs or 0) > 0 or card.is_out):
                     batting_innings.append({
+                        "match_id": match.id, "innings_number": card.innings_number,
                         "runs": card.runs or 0, "balls": card.balls or 0,
                         "is_out": card.is_out, "fours": card.fours or 0, "sixes": card.sixes or 0,
                     })
                     ml["bat_runs"] = card.runs or 0
                     ml["bat_balls"] = card.balls or 0
                     ml["bat_out"] = card.is_out
+                    ml["batting_innings"].append({
+                        "innings_number": card.innings_number,
+                        "runs": card.runs or 0,
+                        "balls": card.balls or 0,
+                        "is_out": bool(card.is_out),
+                    })
 
                 if card.record_type == "bowling" and (card.balls_bowled or 0) > 0:
                     bowling_innings.append({
+                        "match_id": match.id, "innings_number": card.innings_number,
                         "wickets": card.wickets or 0, "runs": card.runs_conceded or 0,
                         "balls": card.balls_bowled or 0,
                     })
@@ -1642,6 +1873,12 @@ class StatsService:
                     ml["bowl_runs"] = card.runs_conceded or 0
                     balls = card.balls_bowled or 0
                     ml["bowl_overs"] = f"{balls // 6}.{balls % 6}"
+                    ml["bowling_innings"].append({
+                        "innings_number": card.innings_number,
+                        "wickets": card.wickets or 0,
+                        "runs": card.runs_conceded or 0,
+                        "overs": f"{balls // 6}.{balls % 6}",
+                    })
 
             batting = self._calculate_batting_metrics(batting_innings)
             bowling = self._calculate_bowling_metrics(bowling_innings)
@@ -1652,6 +1889,14 @@ class StatsService:
                 milestones.append(f"{batting['hundreds']} centuries")
             if batting.get("fifties", 0) > 0:
                 milestones.append(f"{batting['fifties']} half-centuries")
+            if batting.get("double_centuries", 0) > 0:
+                milestones.append(f"{batting['double_centuries']} double-centuries")
+            if batting.get("triple_centuries", 0) > 0:
+                milestones.append(f"{batting['triple_centuries']} triple-centuries")
+            if bowling.get("five_wicket_hauls", 0) > 0:
+                milestones.append(f"{bowling['five_wicket_hauls']} five-wicket hauls")
+            if bowling.get("ten_wicket_matches", 0) > 0:
+                milestones.append(f"{bowling['ten_wicket_matches']} ten-wicket matches")
             if bowling.get("wickets", 0) >= 50:
                 milestones.append(f"{bowling['wickets']} career wickets")
             if batting.get("runs", 0) >= 500:
@@ -1704,23 +1949,31 @@ class StatsService:
             if not matches:
                 return {"team": team.name, "matches": 0, "summary": {}, "recent": [], "batting_first": {}, "chasing": {}}
 
-            wins = losses = ties = 0
-            bat_first_wins = bat_first_total = 0
-            chase_wins = chase_total = 0
+            wins = losses = ties = draws = no_results = 0
+            bat_first_wins = bat_first_draws = bat_first_total = 0
+            chase_wins = chase_draws = chase_total = 0
             total_scored = total_conceded = 0
             recent = []
 
             for m in matches:
                 is_home = m.home_team_id == team_id
-                team_score = m.home_team_score if is_home else m.away_team_score
-                opp_score = m.away_team_score if is_home else m.home_team_score
-                total_scored += team_score or 0
-                total_conceded += opp_score or 0
+                if is_home:
+                    team_values = (m.home_team_score, m.home_team_score_innings2)
+                    opp_values = (m.away_team_score, m.away_team_score_innings2)
+                else:
+                    team_values = (m.away_team_score, m.away_team_score_innings2)
+                    opp_values = (m.home_team_score, m.home_team_score_innings2)
+                total_scored += sum(value or 0 for value in team_values)
+                total_conceded += sum(value or 0 for value in opp_values)
 
                 if m.winner_team_id == team_id:
                     wins += 1
                 elif m.winner_team_id is not None:
                     losses += 1
+                elif m.match_status == "drawn":
+                    draws += 1
+                elif m.match_status in {"no_result", "aborted"}:
+                    no_results += 1
                 else:
                     ties += 1
 
@@ -1736,21 +1989,27 @@ class StatsService:
                     bat_first_total += 1
                     if m.winner_team_id == team_id:
                         bat_first_wins += 1
+                    elif m.match_status == "drawn":
+                        bat_first_draws += 1
                 else:
                     chase_total += 1
                     if m.winner_team_id == team_id:
                         chase_wins += 1
+                    elif m.match_status == "drawn":
+                        chase_draws += 1
 
                 opp_team = Team.query.get(m.away_team_id if is_home else m.home_team_id)
                 if len(recent) < 10:
-                    team_wickets = (m.home_team_wickets if is_home else m.away_team_wickets) or 0
-                    opp_wickets = (m.away_team_wickets if is_home else m.home_team_wickets) or 0
+                    team_innings = self._side_innings_scores(m, is_home)
+                    opp_innings = self._side_innings_scores(m, not is_home)
                     recent.append({
                         "date": m.date.strftime("%Y-%m-%d") if m.date else "",
                         "opponent": opp_team.name if opp_team else "Unknown",
-                        "result": "W" if m.winner_team_id == team_id else ("L" if m.winner_team_id else "T"),
-                        "score": f"{team_score or 0}/{team_wickets}",
-                        "opp_score": f"{opp_score or 0}/{opp_wickets}",
+                        "result": self._match_result_code(m, team_id),
+                        "innings": team_innings,
+                        "opponent_innings": opp_innings,
+                        "score": " & ".join(team_innings) or "-",
+                        "opp_score": " & ".join(opp_innings) or "-",
                         "venue": m.venue or "",
                         "format": m.match_format or "T20",
                     })
@@ -1766,6 +2025,7 @@ class StatsService:
                 "matches": played,
                 "summary": {
                     "played": played, "won": wins, "lost": losses, "tied": ties,
+                    "drawn": draws, "no_result": no_results,
                     "win_pct": round(wins * 100 / played, 1) if played else 0,
                     "avg_scored": avg_scored,
                     "avg_conceded": avg_conceded,
@@ -1773,11 +2033,20 @@ class StatsService:
                 "batting_first": {
                     "played": bat_first_total,
                     "won": bat_first_wins,
+                    "drawn": bat_first_draws,
                     "win_pct": round(bat_first_wins * 100 / bat_first_total, 1) if bat_first_total else 0,
                 },
+                "batting_second": {
+                    "played": chase_total,
+                    "won": chase_wins,
+                    "drawn": chase_draws,
+                    "win_pct": round(chase_wins * 100 / chase_total, 1) if chase_total else 0,
+                },
+                # Backward-compatible alias for the limited-overs template/API.
                 "chasing": {
                     "played": chase_total,
                     "won": chase_wins,
+                    "drawn": chase_draws,
                     "win_pct": round(chase_wins * 100 / chase_total, 1) if chase_total else 0,
                 },
                 "recent": recent,

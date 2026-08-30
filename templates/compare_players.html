@@ -487,7 +487,7 @@
                     <div class="cmp-team-group" data-team="{{ team.name|lower }}">
                         <div class="cmp-team-head">{{ team.name }}</div>
                         {% for player in team.players %}
-                        <div class="cmp-player-row" data-id="{{ player.id }}" data-name="{{ player.name|lower }}" data-display="{{ player.name }}">
+                        <div class="cmp-player-row" data-id="{{ player.id }}" data-name="{{ player.name|lower }}" data-display="{{ player.name }}" data-format="{{ player.profile.format_type if player.profile else 'T20' }}">
                             <span class="cmp-check"></span>
                             <span>{{ player.name }}</span>
                         </div>
@@ -503,6 +503,7 @@
                     <select id="cmp-format">
                         <option value="T20" selected>T20</option>
                         <option value="ListA">List A</option>
+                        <option value="FC">First-Class</option>
                     </select>
                 </div>
                 <div class="cmp-field">
@@ -510,7 +511,7 @@
                     <select id="cmp-tournament">
                         <option value="">All tournaments</option>
                         {% for t in tournaments %}
-                        <option value="{{ t.id }}">{{ t.name }}</option>
+                        <option value="{{ t.id }}" data-format="{{ t.format_type }}">{{ t.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -613,19 +614,43 @@
         renderChips();
     });
 
-    // Search filter
-    $('cmp-search-input').addEventListener('input', (e) => {
-        const q = e.target.value.trim().toLowerCase();
+    function applyPlayerFilters() {
+        const q = $('cmp-search-input').value.trim().toLowerCase();
+        const fmt = $('cmp-format').value || 'T20';
         document.querySelectorAll('.cmp-team-group').forEach(group => {
             let visible = 0;
             group.querySelectorAll('.cmp-player-row').forEach(row => {
                 const name = row.dataset.name || '';
-                const match = !q || name.includes(q);
+                const match = (!q || name.includes(q)) && row.dataset.format === fmt;
                 row.style.display = match ? '' : 'none';
                 if (match) visible++;
             });
             group.style.display = visible ? '' : 'none';
         });
+    }
+    $('cmp-search-input').addEventListener('input', applyPlayerFilters);
+    $('cmp-format').addEventListener('change', () => {
+        const fmt = $('cmp-format').value || 'T20';
+        document.querySelectorAll('.cmp-player-row.selected').forEach(row => {
+            if (row.dataset.format !== fmt) {
+                selected.delete(row.dataset.id);
+                row.classList.remove('selected');
+            }
+        });
+        const tournament = $('cmp-tournament');
+        const selectedTournament = tournament.selectedOptions[0];
+        if (selectedTournament?.value && selectedTournament.dataset.format !== fmt) tournament.value = '';
+        Array.from(tournament.options).forEach(option => {
+            option.hidden = !!option.value && option.dataset.format !== fmt;
+        });
+        renderChips();
+        applyPlayerFilters();
+    });
+    $('cmp-tournament').addEventListener('change', () => {
+        const option = $('cmp-tournament').selectedOptions[0];
+        if (!option?.value || !option.dataset.format) return;
+        $('cmp-format').value = option.dataset.format;
+        $('cmp-format').dispatchEvent(new Event('change'));
     });
 
     // Highlight winners per column helper
@@ -658,8 +683,9 @@
         const tbl = $('cmp-batting');
         const rows = players.filter(p => p.batting && (p.batting.innings || p.batting.runs));
         if (!rows.length) { tbl.innerHTML = '<tbody><tr><td class="muted" style="padding:1rem">No batting data.</td></tr></tbody>'; return; }
+        const isFc = $('cmp-format').value === 'FC';
         let h = `<thead><tr>
-            <th>Player</th><th>Inn</th><th>Runs</th><th>Avg</th><th>SR</th><th>HS</th><th>4s</th><th>6s</th><th>50s</th><th>100s</th>
+            <th>Player</th><th>Inn</th><th>Runs</th><th>Avg</th><th>SR</th><th>HS</th><th>4s</th><th>6s</th><th>50s</th><th>100s</th>${isFc ? '<th>200s</th><th>300s</th>' : ''}
         </tr></thead><tbody>`;
         rows.forEach(p => {
             const b = p.batting || {};
@@ -674,6 +700,7 @@
                 <td data-val="${b.sixes||0}">${num(b.sixes)}</td>
                 <td data-val="${b.fifties||0}">${num(b.fifties)}</td>
                 <td data-val="${b.hundreds||0}">${num(b.hundreds)}</td>
+                ${isFc ? `<td data-val="${b.double_centuries||0}">${num(b.double_centuries)}</td><td data-val="${b.triple_centuries||0}">${num(b.triple_centuries)}</td>` : ''}
             </tr>`;
         });
         h += '</tbody>';
@@ -688,8 +715,9 @@
             return (b.innings || b.wickets || b.overs || b.runs_conceded);
         });
         if (!rows.length) { tbl.innerHTML = '<tbody><tr><td class="muted" style="padding:1rem">No bowling data for the selected players.</td></tr></tbody>'; return; }
+        const isFc = $('cmp-format').value === 'FC';
         let h = `<thead><tr>
-            <th>Player</th><th>Inn</th><th>Overs</th><th>Wkts</th><th>Avg</th><th>Econ</th><th>SR</th><th>Best</th>
+            <th>Player</th><th>Inn</th><th>Overs</th><th>Wkts</th><th>Avg</th><th>Econ</th><th>SR</th><th>BBI</th>${isFc ? '<th>BBM</th><th>5WI</th><th>10WM</th>' : ''}
         </tr></thead><tbody>`;
         rows.forEach(p => {
             const b = p.bowling || {};
@@ -702,6 +730,7 @@
                 <td data-val="${b.economy==null?'':b.economy}">${num(b.economy)}</td>
                 <td data-val="${b.strike_rate==null?'':b.strike_rate}">${num(b.strike_rate)}</td>
                 <td>${num(b.best_figures)}</td>
+                ${isFc ? `<td>${num(b.best_match_figures)}</td><td data-val="${b.five_wicket_hauls||0}">${num(b.five_wicket_hauls)}</td><td data-val="${b.ten_wicket_matches||0}">${num(b.ten_wicket_matches)}</td>` : ''}
             </tr>`;
         });
         h += '</tbody>';
@@ -780,6 +809,8 @@
     $('cmp-btn').addEventListener('click', compareSelected);
 
     renderChips();
+    $('cmp-format').dispatchEvent(new Event('change'));
+    applyPlayerFilters();
 })();
 </script>
 {% endblock %}

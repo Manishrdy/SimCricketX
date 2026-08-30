@@ -132,6 +132,10 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # FC in tournaments: tournament_teams.drawn, tracked separately from tied.
     ("add_tournament_team_drawn_column",
      _loader("migrations.add_tournament_team_drawn_column")),
+    # FC-native tournament statistics (200s/300s, BBI/BBM, 5WI/10WM and
+    # detailed cache parity with direct scorecard aggregation).
+    ("extend_fc_statistics_cache",
+     _loader("migrations.extend_fc_statistics_cache")),
 ]
 
 
