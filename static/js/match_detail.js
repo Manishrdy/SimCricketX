@@ -1237,6 +1237,37 @@ function _processBallResult(data) {
         return;
     }
 
+    // FC: Lunch / Tea. A first-class match is followed at the intervals, so
+    // these pause on the same scorecard modal stumps uses, headed with the
+    // interval and what the session itself produced.
+    if (data.fc_interval) {
+        if (data.commentary) appendLog(data.commentary, 'comment');
+        if (data.scorecard_data) {
+            showScorecard(data.scorecard_data, data);
+            const titleEl = document.getElementById('scorecard-title');
+            if (titleEl) {
+                titleEl.textContent =
+                    `${String(data.interval_name || '').toUpperCase()} — DAY ${data.day_number}`;
+            }
+            const targetInfo = document.getElementById('target-info');
+            if (targetInfo) {
+                const s = data.session_summary || {};
+                targetInfo.style.display = 'block';
+                targetInfo.textContent =
+                    `Session ${data.session_number}: ${s.runs || 0}/${s.wickets || 0} `
+                    + `in ${s.overs || 0} overs.`;
+            }
+            const closeBtn = document.querySelector('.close-scorecard');
+            closeBtn.onclick = () => {
+                document.getElementById('scorecard-overlay').style.display = 'none';
+                scheduleNextBall(delay);
+            };
+            return; // pause until the user acknowledges the interval
+        }
+        scheduleNextBall(delay);
+        return;
+    }
+
     // FC: stumps for the day — not an innings boundary, just a pause.
     // Reuses the scorecard modal to show the state of play so far, with a
     // custom title/footer, and resumes the simulation loop on close (same
@@ -1249,10 +1280,14 @@ function _processBallResult(data) {
             if (titleEl) titleEl.textContent = `STUMPS — DAY ${data.day_number}`;
             const targetInfo = document.getElementById('target-info');
             if (targetInfo) {
+                const ss = data.session_summary || {};
+                const sessLine = (ss.overs)
+                    ? `Session ${data.session_number}: ${ss.runs || 0}/${ss.wickets || 0} in ${ss.overs} overs. `
+                    : '';
                 targetInfo.style.display = 'block';
                 targetInfo.textContent = data.weather_note
-                    ? `${data.weather_note} Play resumes Day ${(data.day_number || 0) + 1}.`
-                    : `Play resumes Day ${(data.day_number || 0) + 1}.`;
+                    ? `${sessLine}${data.weather_note} Play resumes Day ${(data.day_number || 0) + 1}.`
+                    : `${sessLine}Play resumes Day ${(data.day_number || 0) + 1}.`;
             }
             const closeBtn = document.querySelector('.close-scorecard');
             closeBtn.onclick = () => {

@@ -8,6 +8,8 @@ from utils.exception_tracker import log_exception
 
 logger = logging.getLogger(__name__)
 
+_SPIN_BOWLING_TYPES = {"Off spin", "Leg spin", "Finger spin", "Wrist spin"}
+
 
 class CommentaryEngine:
     def __init__(self, data_path=None):
@@ -20,6 +22,11 @@ class CommentaryEngine:
         self.data = self._load_data()
         self.events = self.data.get("events", {})
         self.narratives = self.data.get("narratives", {})
+        # One CommentaryEngine is built per Match, so this is per-match state:
+        # which "announce once" narratives have already been used, and in
+        # what context. Without it a standing condition like the last hour or
+        # a turning pitch would be remarked on at the start of every over.
+        self._announced = set()
 
     def _load_data(self):
         try:
@@ -194,21 +201,23 @@ class CommentaryEngine:
         over_runs = state.get("current_over_runs", -1)
         current_ball = state.get("current_ball", 0)
         is_maiden = state.get("is_maiden_over", False)
-        if is_maiden:
+        if is_maiden and not state.get("is_fc"):
             triggers.extend(self._format_narratives("maiden_over",
                                                      batter=batter, bowler=bowler,
                                                      team=batting_team,
                                                      fielding_team=bowling_team))
 
         # --- 6. Expensive over (15+ runs in the over, at over end) ---
-        if over_runs >= 15 and current_ball >= 5:
+        # Not for FC: 15 in an over is a once-a-match freak there, and the
+        # threshold is a limited-overs one anyway.
+        if not state.get("is_fc") and over_runs >= 15 and current_ball >= 5:
             triggers.extend(self._format_narratives("expensive_over",
                                                      batter=batter, bowler=bowler,
                                                      team=batting_team,
                                                      fielding_team=bowling_team))
 
         # --- 7. Big over (12-14 runs in the over, at over end) ---
-        if 12 <= over_runs < 15 and current_ball >= 5:
+        if not state.get("is_fc") and 12 <= over_runs < 15 and current_ball >= 5:
             triggers.extend(self._format_narratives("big_over",
                                                      batter=batter, bowler=bowler,
                                                      team=batting_team,
@@ -254,9 +263,93 @@ class CommentaryEngine:
                                                      team=batting_team,
                                                      fielding_team=bowling_team))
 
+        # --- First-class narratives -------------------------------------
+        # Everything above is shaped by limited-overs cricket: powerplays,
+        # death overs, run chases, a maiden being a rarity. A first-class
+        # match is told through different things entirely — the new ball,
+        # the lead, the pitch breaking up, the close of play.
+        if state.get("is_fc"):
+            triggers.extend(self._fc_narratives(context, state, batter=batter,
+                                                bowler=bowler,
+                                                team=batting_team,
+                                                fielding_team=bowling_team))
+
         if triggers:
             return random.choice(triggers)
         return None
+
+    # First-class-specific narrative triggers.
+    _FC_MAIDEN_SEQUENCE = 3        # maidens in a row worth remarking on
+    _FC_WEARING_PITCH = 0.55       # pitch_wear past which the surface talks
+    _FC_BIG_HUNDRED = 150
+
+    def _announce_once(self, key):
+        """True the first time this key is seen, False afterwards."""
+        if key in self._announced:
+            return False
+        self._announced.add(key)
+        return True
+
+    def _fc_narratives(self, context, state, **who):
+        out = []
+        day = state.get("fc_day", 0)
+        inns = state.get("fc_innings", 0)
+        runs = context.get("runs", 0)
+        first_ball_of_over = state.get("current_ball", 0) == 0
+
+        # The second new ball: ball age back to zero, but not the start of
+        # an innings (that is simply the innings beginning).
+        if (first_ball_of_over
+                and state.get("fc_ball_overs_bowled", 0) == 0
+                and state.get("current_over", 0) > 0):
+            out.extend(self._format_narratives("fc_new_ball", **who))
+
+        # Going past the opposition's total.
+        lead_before = state.get("fc_lead_before")
+        if lead_before is not None and lead_before < 0 <= lead_before + runs:
+            out.extend(self._format_narratives("fc_lead_taken", **who))
+
+        # Saving the follow-on.
+        mark = state.get("fc_follow_on_mark")
+        if mark is not None:
+            score_before = state.get("score", 0) - runs
+            if score_before < mark <= score_before + runs:
+                out.extend(self._format_narratives("fc_follow_on_saved", **who))
+
+        # A run of maidens — one on its own is unremarkable in this format.
+        streak = state.get("fc_consecutive_maidens", 0)
+        if (state.get("is_maiden_over") and streak >= self._FC_MAIDEN_SEQUENCE
+                and streak % self._FC_MAIDEN_SEQUENCE == 0):
+            out.extend(self._format_narratives("fc_maiden_sequence", **who))
+
+        # The pitch starting to talk, with a spinner operating.
+        if (first_ball_of_over
+                and state.get("pitch_wear", 0.0) >= self._FC_WEARING_PITCH
+                and (context.get("bowling_type") or "") in _SPIN_BOWLING_TYPES
+                and self._announce_once(("wearing", day))):
+            out.extend(self._format_narratives("fc_pitch_wearing", **who))
+
+        # The closing overs of the day — said once as the light goes, not
+        # at the top of every remaining over.
+        if (first_ball_of_over and state.get("last_hour")
+                and self._announce_once(("last_hour", day, inns))):
+            out.extend(self._format_narratives("fc_last_hour", **who))
+
+        # The nightwatchman walking out.
+        if (state.get("fc_is_nightwatchman") and state.get("batter_runs", 0) == 0
+                and self._announce_once(("nightwatchman", day, inns))):
+            out.extend(self._format_narratives("fc_nightwatchman", **who))
+
+        # A big hundred, and a century stand.
+        before = state.get("batter_runs", 0)
+        after = before + (0 if context.get("batter_out") else runs)
+        if before < self._FC_BIG_HUNDRED <= after:
+            out.extend(self._format_narratives("fc_milestone_150", **who))
+        p_before = state.get("partnership_runs", 0)
+        if p_before < 100 <= p_before + runs:
+            out.extend(self._format_narratives("fc_partnership_100", **who))
+
+        return out
 
     def _format_narratives(self, key, **kwargs):
         """Get narrative templates and format them with context."""

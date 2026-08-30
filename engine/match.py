@@ -24,6 +24,7 @@ from engine.game_state_engine import (
 from engine.format_config import get_format, get_any_format
 from engine.bowler_manager import BowlerManager
 from engine.fc_bowler_workload import FCBowlerManager
+from engine import fc_bowler_workload
 from engine import fc_declaration
 from engine import fc_weather
 from engine.toss import innings_teams
@@ -353,6 +354,23 @@ class Match:
         self.fc_innings = 1
         self.fc_day = 1
         self.fc_day_overs_bowled_today = 0
+        # Sessions: a first-class day is three sessions (morning to Lunch,
+        # afternoon to Tea, evening to Stumps), not one flat 90-over block.
+        # fc_sessions_taken_today counts the intervals ALREADY taken today
+        # (0-2), so the session in progress is that + 1.
+        self.fc_sessions_taken_today = 0
+        self.fc_session_start = {"score": 0, "wickets": 0, "day_overs": 0,
+                                 "fc_innings": 1}
+        # None until first computed for the day in progress (the bowling
+        # XI isn't settled yet at this point in __init__).
+        self.fc_day_over_rate_adjust = None
+        # One nightwatchman per innings — a captain does not keep promoting
+        # bowlers every time a wicket falls late.
+        self.fc_nightwatchman_used = False
+        self.fc_nightwatchman_name = None
+        # Maidens are commonplace in first-class cricket, so the commentary
+        # engine remarks on a RUN of them rather than each one.
+        self.fc_consecutive_maidens = 0
         self.fc_innings_declared = False
         # Per-innings time budget (overs) for time-forcing declaration
         # pressure — see fc_declaration.declaration_window_open/
@@ -650,10 +668,57 @@ class Match:
         self.pending_decision = decision
         return decision
 
+    # Overs left in the day inside which a captain would rather send a
+    # bowler in than expose a specialist batter for a handful of deliveries.
+    _FC_NIGHTWATCHMAN_OVERS = 6
+
+    def _fc_pick_nightwatchman(self, next_index):
+        """The classic end-of-day move: a wicket falls with minutes left, and
+        rather than send a front-line batter out to survive an awkward few
+        overs and start again in the morning, the captain pushes a bowler up
+        to see out the day.
+
+        Returns an index to promote, or None to bat in the normal order.
+        """
+        if not self.is_fc or self.fc_nightwatchman_used:
+            return None
+        # Only worth it to protect a specialist; from 7 down the next man in
+        # is already a lower-order player.
+        if next_index > 5:
+            return None
+        # Never with the last pair — there is nobody left to protect.
+        if self.wickets >= 8:
+            return None
+        overs_left = self._fc_effective_overs_today() - self.fc_day_overs_bowled_today
+        if not (0 < overs_left <= self._FC_NIGHTWATCHMAN_OVERS):
+            return None
+
+        # Best available defender among the bowlers below him — technique
+        # first, since the job is to survive, not to score.
+        candidates = [
+            i for i in self.remaining_batter_indices
+            if i > next_index and self.batting_team[i].get("will_bowl")
+        ]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda i: (
+            self.batting_team[i].get("technique_rating") or 0,
+            self.batting_team[i].get("batting_rating") or 0,
+        ))
+
     def _auto_pick_next_batter_index(self):
         if not self.remaining_batter_indices:
             return None
-        return min(self.remaining_batter_indices)
+        next_index = min(self.remaining_batter_indices)
+        watchman = self._fc_pick_nightwatchman(next_index)
+        if watchman is not None:
+            self.fc_nightwatchman_used = True
+            self.fc_nightwatchman_name = self.batting_team[watchman]["name"]
+            logger.info("FC NIGHTWATCHMAN: %s promoted ahead of %s",
+                        self.batting_team[watchman]["name"],
+                        self.batting_team[next_index]["name"])
+            return watchman
+        return next_index
 
     def _bring_new_batter(self, dismissed_end, selected_index):
         selected_player = self.batting_team[selected_index]
@@ -2299,7 +2364,12 @@ class Match:
         # resets here (a bowler genuinely rests while the other side bats)
         # even for FC, where pitch wear itself does NOT reset — see
         # self.match_balls_bowled, deliberately untouched by this method.
-        self.bowler_manager.reset(self.bowling_team)
+        _carry = getattr(self, "_fc_pending_fatigue_carry", 0.0)
+        if _carry:
+            self.bowler_manager.reset(self.bowling_team, carry_fraction=_carry)
+            self._fc_pending_fatigue_carry = 0.0
+        else:
+            self.bowler_manager.reset(self.bowling_team)
         # Re-point alias so existing bowler_history reads remain valid
         self.bowler_history = (self.bowler_manager._overs_this_innings if self.is_fc
                                 else self.bowler_manager._quota)
@@ -4486,26 +4556,68 @@ class Match:
         elif self.fc_innings == 4:
             lead = self.score - (self.target or 0)
 
-        # Simple Phase-1 acceleration heuristic: the batting side is in the
-        # same "time-forcing" window the declaration heuristic itself uses,
-        # and hasn't declared yet — i.e., building quickly toward one.
+        # Acceleration: the batting side is running down its own innings
+        # time budget and is building toward a declaration. Tied to the
+        # budget rather than the whole-match "2 days left" gate, which never
+        # fired early enough on a slow surface — the same reason the
+        # declaration heuristic had to stop using it.
+        _budget = self.fc_innings_time_budget_overs
         acceleration_mode = (
             self.fc_innings in (1, 2, 3) and not self.fc_innings_declared
-            and days_remaining <= 2 and self.current_over >= 60
+            and (
+                (_budget is not None and self.current_over >= _budget * 0.85)
+                or (days_remaining <= 2 and self.current_over >= 60)
+            )
         )
+
+        # Survival: batting to save the game. Real first-class cricket is
+        # full of this innings — 300 behind with a day and a half left, shut
+        # up shop — and it could not happen before, because nothing ever set
+        # the flag and FCPressureEngine's own fallback only covers the last
+        # day. Without it every match had to end in a result.
+        survival_mode = False
+        if self.fc_innings == 4 and self.target is not None:
+            _needed = self.target - self.score
+            _rrr = _needed / max(1.0, self._fc_overs_remaining_in_match())
+            # A chase that has drifted out of reach turns into a rearguard —
+            # and so does one where the wickets have gone. A side six down
+            # chasing a stiff target plays for the draw; it does not keep
+            # chasing until it loses.
+            survival_mode = _rrr > 4.2 or (self.wickets >= 6 and _rrr > 2.8)
+        elif self.fc_innings in (2, 3):
+            survival_mode = (
+                (self.follow_on_enforced and lead < 0)
+                or (lead < -120 and days_remaining <= 2)
+            )
 
         required_run_rate = 0.0
         if self.fc_innings == 4 and self.target is not None:
             required_run_rate = (self.target - self.score) / self._fc_overs_remaining_in_match()
 
+        # The closing overs of a day. Excluded during a live fourth-innings
+        # chase — a side going for the win doesn't shut up shop at 6pm.
+        _overs_left_today = max(
+            0.0, self._fc_effective_overs_today() - self.fc_day_overs_bowled_today)
+        _live_chase = (self.fc_innings == 4 and self.target is not None
+                       and not survival_mode)
+        last_hour = (_overs_left_today <= self.fmt.min_overs_last_hour
+                     and not _live_chase)
+
         return {
             "fc_innings": self.fc_innings,
             "wickets": self.wickets,
+            "last_hour": last_hour,
             "striker_balls_faced": striker_balls_faced,
             "days_remaining": days_remaining,
             "recent_wickets": getattr(self, "recent_wickets_count", 0),
+            # The current stand. Recorded for the archiver since FC was
+            # built, but never fed to anything that could act on it — so a
+            # 200-run partnership had no effect on the game at all.
+            "partnership_balls": self.current_partnership_balls,
+            "partnership_runs": self.current_partnership_runs,
             "lead": lead,
             "acceleration_mode": acceleration_mode,
+            "survival_mode": survival_mode,
             "required_run_rate": required_run_rate,
             # Phase 2: technique dampens the settling-in penalty; temperament
             # dampens pressure-driven wicket increases (survival mode,
@@ -4514,6 +4626,61 @@ class Match:
             "striker_technique": self.current_striker.get("technique_rating"),
             "striker_temperament": self.current_striker.get("temperament_rating"),
         }
+
+    def _fc_attack_freshness(self):
+        """0-1 read on how much the bowling side has left, averaged over the
+        front-line attack. Only meaningful now that fatigue recovers with
+        rest (see FCBowlerManager) — before spells existed every attack was
+        equally, permanently tired."""
+        mgr = self.bowler_manager
+        if not hasattr(mgr, "get_fatigue_mult"):
+            return None
+        bowlers = [p for p in self.bowling_team if p.get("will_bowl")]
+        if not bowlers:
+            return None
+        mults = [mgr.get_fatigue_mult(p["name"], p.get("stamina_rating", 50) or 50)
+                 for p in bowlers]
+        # Rescale the 0.55-1.0 effectiveness range onto 0-1.
+        avg = sum(mults) / len(mults)
+        return max(0.0, min(1.0, (avg - 0.55) / 0.45))
+
+    def _fc_declaring_side_freshness(self):
+        """Freshness of the batting side's OWN attack — they are the ones who
+        must bowl the opposition out after declaring."""
+        mgr = self.bowler_manager
+        if not hasattr(mgr, "get_fatigue_mult"):
+            return None
+        bowlers = [p for p in self.batting_team if p.get("will_bowl")]
+        if not bowlers:
+            return None
+        mults = [mgr.get_fatigue_mult(p["name"], p.get("stamina_rating", 50) or 50)
+                 for p in bowlers]
+        avg = sum(mults) / len(mults)
+        return max(0.0, min(1.0, (avg - 0.55) / 0.45))
+
+    def _fc_lead_before_ball(self):
+        """Batting side's lead over the opposition's completed innings,
+        BEFORE this delivery — so a narrative can spot the moment it goes
+        from behind to in front. None when there is no lead concept yet."""
+        if not self.is_fc or self.fc_innings == 1:
+            return None
+        if self.fc_innings == 2:
+            return self.score - self.fc_innings_totals.get(1, {}).get("score", 0)
+        if self.fc_innings == 3 and not self.follow_on_enforced:
+            a1 = self.fc_innings_totals.get(1, {}).get("score", 0)
+            b1 = self.fc_innings_totals.get(2, {}).get("score", 0)
+            return a1 + self.score - b1
+        return None
+
+    def _fc_follow_on_mark(self):
+        """Runs the side batting second needs to avoid following on, or
+        None when the follow-on isn't in play."""
+        if not self.is_fc or self.fc_innings != 2 or self.follow_on_enforced:
+            return None
+        first = self.fc_innings_totals.get(1, {}).get("score")
+        if first is None:
+            return None
+        return max(0, first - self.fmt.follow_on_margin)
 
     def _fc_pick_bowler(self):
         """
@@ -4557,12 +4724,43 @@ class Match:
         """Full match days left INCLUDING today (today counts as 1)."""
         return max(0, self.fmt.days - self.fc_day + 1)
 
+    # Over rates. A first-class day is 90 overs on the schedule and almost
+    # never 90 in practice: a seam-dominated attack with long run-ups gets
+    # through fewer, a spin-heavy one gets through more. Modelled as a
+    # per-day adjustment fixed at the start of play so the day's length is
+    # stable (and so Lunch/Tea don't move around mid-session).
+    _FC_OVER_RATE_ALL_PACE = -9      # a four-seamer attack loses overs
+    _FC_OVER_RATE_ALL_SPIN = +5      # spinners get through them
+
+    def _fc_compute_day_over_rate_adjust(self):
+        """Overs gained or lost today to the over rate, from the bowling
+        attack's composition."""
+        bowlers = [p for p in (self.bowling_team or []) if p.get("will_bowl")]
+        if not bowlers:
+            return 0
+        spin = sum(1 for p in bowlers
+                   if (p.get("bowling_type") or "").strip()
+                   in fc_bowler_workload._SPIN_TYPES)
+        spin_share = spin / len(bowlers)
+        span = self._FC_OVER_RATE_ALL_SPIN - self._FC_OVER_RATE_ALL_PACE
+        return int(round(self._FC_OVER_RATE_ALL_PACE + span * spin_share))
+
     def _fc_effective_overs_today(self):
-        """Today's schedulable overs after any weather loss (Phase 2) —
-        engine/fc_weather.py. Equals fmt.overs_per_day on an unaffected day."""
-        return fc_weather.effective_overs_today(
+        """Today's schedulable overs after weather loss and the over rate.
+        No longer a flat fmt.overs_per_day: days now come in a bit short or
+        a bit long depending on who is bowling, which is what makes running
+        out of time a real risk rather than an arithmetic certainty."""
+        base = fc_weather.effective_overs_today(
             self.fc_weather_script, self.fc_day, self.fmt.overs_per_day
         )
+        if base <= 0:
+            return 0
+        if getattr(self, "fc_day_over_rate_adjust", None) is None:
+            self.fc_day_over_rate_adjust = self._fc_compute_day_over_rate_adjust()
+        adjusted = base + self.fc_day_over_rate_adjust
+        # The over-rate model must never cut a day below the last-hour
+        # minimum the weather model already respects.
+        return max(min(base, self.fmt.min_overs_last_hour), adjusted)
 
     def _fc_overs_remaining_in_match(self):
         """Rough overs-left estimate: today's remaining overs plus a flat
@@ -4577,6 +4775,85 @@ class Match:
         full_days_left = max(0, self.fmt.days - self.fc_day)
         return max(1, overs_left_today + full_days_left * self.fmt.overs_per_day)
 
+    # ── Sessions ────────────────────────────────────────────────────────
+    # A first-class day is played in three sessions. Intervals fall at the
+    # thirds of whatever is actually schedulable today, so a rain-shortened
+    # day still gets Lunch and Tea in sensible places rather than at a fixed
+    # over 30/60 that may no longer exist.
+
+    FC_SESSION_NAMES = ("Lunch", "Tea", "Stumps")
+
+    def _fc_session_boundaries(self):
+        """Over-counts within today at which Lunch and Tea fall."""
+        total = self._fc_effective_overs_today()
+        if total < 6:
+            return []
+        return [int(round(total / 3.0)), int(round(total * 2.0 / 3.0))]
+
+    def _fc_current_session(self):
+        """Session in progress today, 1-3."""
+        return min(3, self.fc_sessions_taken_today + 1)
+
+    def _fc_snapshot_session_start(self):
+        """Freeze the score at the start of a session, so the interval card
+        can report what the session itself produced. Re-taken on an innings
+        change too — otherwise the delta would go negative when the score
+        resets to 0 mid-session."""
+        self.fc_session_start = {
+            "score": self.score,
+            "wickets": self.wickets,
+            "day_overs": self.fc_day_overs_bowled_today,
+            "fc_innings": self.fc_innings,
+        }
+
+    def _fc_session_summary(self):
+        """Runs/wickets/overs produced since the last interval (or since the
+        innings started, if that came later)."""
+        start = self.fc_session_start or {}
+        if start.get("fc_innings") != self.fc_innings:
+            runs, wkts = self.score, self.wickets
+        else:
+            runs = self.score - start.get("score", 0)
+            wkts = self.wickets - start.get("wickets", 0)
+        overs = self.fc_day_overs_bowled_today - start.get("day_overs", 0)
+        return {"runs": max(0, runs), "wickets": max(0, wkts),
+                "overs": max(0, overs)}
+
+    def _fc_interval_response(self, interval_name):
+        """Lunch/Tea break: the same scorecard pause the end of a day already
+        does. Following a first-class match means reading the score at the
+        intervals, so this is a real stopping point, not a log line."""
+        scorecard_data = self._generate_detailed_scorecard()
+        session_no = self._fc_current_session()
+        summary = self._fc_session_summary()
+        self.fc_sessions_taken_today += 1
+        self._fc_snapshot_session_start()
+        sess_line = (f"{summary['runs']}/{summary['wickets']} in "
+                     f"{summary['overs']} overs this session")
+        return {
+            "fc_interval": True,
+            "interval_name": interval_name,
+            "day_number": self.fc_day,
+            "session_number": session_no,
+            "session_summary": summary,
+            "match_over": False,
+            "innings_end": False,
+            "scorecard_data": scorecard_data,
+            "score": self.score,
+            "wickets": self.wickets,
+            "over": self.current_over,
+            "ball": self.current_ball,
+            "commentary": (
+                f"<strong>{interval_name} &mdash; Day {self.fc_day}</strong><br>"
+                f"<em>{sess_line}</em><br>"
+                + self._format_innings_complete_summary(
+                    f"{interval_name}, Day {self.fc_day}")
+            ),
+            "striker": self.current_striker["name"],
+            "non_striker": self.current_non_striker["name"],
+            "bowler": self.current_bowler["name"] if self.current_bowler else "",
+        }
+
     def _fc_pre_ball_checks(self):
         """
         Called only at an over boundary (current_ball == 0), before the
@@ -4587,12 +4864,40 @@ class Match:
         always decides declaration/follow-on in Phase 1, per the agreed
         scope).
         """
-        if self.fc_day_overs_bowled_today >= self._fc_effective_overs_today():
+        _day_over = self.fc_day_overs_bowled_today >= self._fc_effective_overs_today()
+
+        _bounds = self._fc_session_boundaries()
+        _at_session_break = (
+            not _day_over
+            and self.fc_sessions_taken_today < len(_bounds)
+            and self.fc_day_overs_bowled_today >= _bounds[self.fc_sessions_taken_today]
+        )
+
+        # Captains declare at an interval — Lunch, Tea, or overnight — not
+        # three overs into a session. The standing exception is the tail
+        # being exposed, where the call is about protecting the last pair
+        # and can't wait for the next break.
+        if _day_over or _at_session_break or self.wickets >= 9:
+            _decl = self._fc_check_declaration_and_follow_on()
+            if _decl is not None:
+                return _decl                 # user-captained: pause and ask
+            if self.fc_innings_declared:
+                # Declared. Return None so this same next_ball() call falls
+                # straight through to _innings_should_end() and closes the
+                # innings here, rather than showing an interval card for an
+                # innings that is already over.
+                return None
+
+        if _day_over:
             if self.fc_day >= self.fmt.days:
                 return self._fc_finalize_draw()
             return self._fc_day_break_response()
 
-        return self._fc_check_declaration_and_follow_on()
+        if _at_session_break:
+            return self._fc_interval_response(
+                self.FC_SESSION_NAMES[self.fc_sessions_taken_today])
+
+        return None
 
     def _fc_check_declaration_and_follow_on(self):
         """
@@ -4679,6 +4984,12 @@ class Match:
             days_remaining=days_remaining,
             pitch_par_factor=pitch_factor,
             innings_time_budget_overs=self.fc_innings_time_budget_overs,
+            # What the captain can actually see from the balcony. Note the
+            # freshness that matters is HIS OWN attack — the side currently
+            # batting is the side that has to bowl next.
+            rain_risk=self._fc_rain_risk(),
+            projected_final_wear=self._fc_projected_final_wear(),
+            attack_freshness=self._fc_declaring_side_freshness(),
             **mc_kwargs,
         ):
             self.fc_innings_declared = True
@@ -4719,12 +5030,21 @@ class Match:
     def _fc_day_break_response(self):
         scorecard_data = self._generate_detailed_scorecard()
         day_ended = self.fc_day
+        # Stumps closes the evening session, so it reports one the same way
+        # Lunch and Tea do.
+        session_summary = self._fc_session_summary()
+        session_no = self._fc_current_session()
         weather_line = fc_weather.day_summary_line(self.fc_weather_script, day_ended)
         self.fc_day += 1
         self.fc_day_overs_bowled_today = 0
+        self.fc_sessions_taken_today = 0
+        self.fc_day_over_rate_adjust = self._fc_compute_day_over_rate_adjust()
+        self._fc_snapshot_session_start()
         return {
             "day_break": True,
             "day_number": day_ended,
+            "session_number": session_no,
+            "session_summary": session_summary,
             "match_over": False,
             "innings_end": False,
             "scorecard_data": scorecard_data,
@@ -4735,6 +5055,8 @@ class Match:
             "weather_note": weather_line,
             "commentary": (
                 f"<strong>Stumps &mdash; Day {day_ended}</strong><br>"
+                + (f"<em>{session_summary['runs']}/{session_summary['wickets']} in "
+                   f"{session_summary['overs']} overs this session</em><br>")
                 + (f"<em>{weather_line}</em><br>" if weather_line else "")
                 + f"{self._format_innings_complete_summary(f'Stumps, Day {day_ended}')}"
             ),
@@ -4780,6 +5102,10 @@ class Match:
             self._fc_overs_remaining_in_match()
         )
         self.fc_ball_overs_bowled = 0  # a fresh new ball is always issued at the start of an innings
+        self.fc_nightwatchman_used = False
+        self.fc_nightwatchman_name = None
+        self.fc_consecutive_maidens = 0
+        self._fc_snapshot_session_start()
         if self.scenario_engine:
             self.scenario_engine.on_innings_transition()
 
@@ -4889,6 +5215,9 @@ class Match:
             enforce_fo = deficit > 0 and fc_declaration.should_enforce_follow_on(
                 deficit=deficit, follow_on_margin=self.fmt.follow_on_margin,
                 days_remaining=self._fc_days_remaining(),
+                attack_overs_bowled=self._fc_attack_overs_bowled(),
+                projected_final_wear=self._fc_projected_final_wear(),
+                rain_risk=self._fc_rain_risk(),
             )
             return self._fc_apply_follow_on_decision(enforce_fo, scorecard_data)
 
@@ -4976,6 +5305,35 @@ class Match:
         self.pending_decision = decision
         return decision
 
+    # Share of an innings' bowling workload that follows an attack into the
+    # next innings when they are sent straight back out on a follow-on.
+    # Not 1.0 — there is a break and an adrenaline bump — but not 0 either.
+    _FC_FOLLOW_ON_FATIGUE_CARRY = 0.45
+
+    def _fc_attack_overs_bowled(self):
+        """Overs the side that has just been bowling has sent down across
+        the match so far — what a captain means by "are my bowlers gone?"."""
+        total = 0.0
+        for entry in self.fc_innings_stats:
+            for st in (entry.get("bowling_stats") or {}).values():
+                total += (st.get("overs", 0) or 0) + (st.get("balls_bowled", 0) or 0) / 6.0
+        return total
+
+    def _fc_projected_final_wear(self):
+        """Roughly how worn the pitch will be by the fourth innings — the
+        surface the enforcing captain would be batting last on."""
+        total_balls = max(1, self.fmt.days * self.fmt.overs_per_day * 6)
+        # Assume the rest of the match is played out; that is the situation
+        # the decision is being made against.
+        return min(1.0, (self.match_balls_bowled + total_balls * 0.35) / total_balls)
+
+    def _fc_rain_risk(self):
+        """0-1 read on how much play the forecast threatens to cost over the
+        rest of the match. Time lost argues for enforcing the follow-on."""
+        return fc_weather.remaining_rain_risk(
+            self.fc_weather_script, self.fc_day, self.fmt.days,
+            overs_per_day=self.fmt.overs_per_day)
+
     def _fc_apply_follow_on_decision(self, enforce_fo, scorecard_data):
         """Completes the innings-2 -> innings-3 transition once the
         follow-on call is made, AI-decided or user-captained alike. Must run
@@ -4985,6 +5343,11 @@ class Match:
         decision is pending)."""
         self.follow_on_enforced = enforce_fo
         if enforce_fo:
+            # The attack goes straight back out. Carry part of their
+            # workload into the new innings rather than resetting to fresh —
+            # otherwise enforcing the follow-on is free, which is exactly
+            # backwards from the real decision.
+            self._fc_pending_fatigue_carry = self._FC_FOLLOW_ON_FATIGUE_CARRY
             # B bats again immediately — batting/bowling roles unchanged
             # from innings 2 (B was batting, A was bowling; B bats on).
             self._fc_start_next_innings(3, self.batting_team, self.bowling_team)
@@ -5414,6 +5777,27 @@ class Match:
             # calls fall back safely (not that those T20/ListA-scaled
             # defaults are meaningful at FC over numbers anyway).
             comm_state['is_fc'] = self.is_fc
+            if self.is_fc:
+                # First-class narrative context. None of this exists in the
+                # limited-overs state object, and without it the engine has
+                # nothing FC-shaped to talk about — no new ball, no lead, no
+                # wearing pitch, no close of play.
+                comm_state['fc_day'] = self.fc_day
+                comm_state['fc_innings'] = self.fc_innings
+                comm_state['fc_ball_overs_bowled'] = self.fc_ball_overs_bowled
+                comm_state['fc_new_ball_overs'] = self.fmt.new_ball_overs
+                comm_state['pitch_wear'] = self._compute_pitch_wear()
+                comm_state['fc_consecutive_maidens'] = self.fc_consecutive_maidens
+                comm_state['fc_lead_before'] = self._fc_lead_before_ball()
+                comm_state['last_hour'] = (
+                    max(0.0, self._fc_effective_overs_today()
+                        - self.fc_day_overs_bowled_today) <= self.fmt.min_overs_last_hour
+                )
+                comm_state['fc_is_nightwatchman'] = (
+                    self.fc_nightwatchman_name is not None
+                    and self.current_striker["name"] == self.fc_nightwatchman_name
+                )
+                comm_state['fc_follow_on_mark'] = self._fc_follow_on_mark()
             if not self.is_fc:
                 comm_state['_fmt_last_over'] = self.fmt.overs - 1       # 19 for T20, 49 for ListA
                 comm_state['_fmt_death_start'] = self.fmt.death_phase.start  # 16 for T20, 40 for ListA
@@ -6215,6 +6599,13 @@ class Match:
             if self.is_fc:
                 self.fc_day_overs_bowled_today += 1
                 self.fc_ball_overs_bowled += 1
+                # Maidens are commonplace in first-class cricket (~1 over in
+                # 8), so a single one is not worth remarking on — a RUN of
+                # them is. Track the streak for the commentary engine.
+                if self.current_over_runs == 0 and not self.current_over_maiden_invalid:
+                    self.fc_consecutive_maidens += 1
+                else:
+                    self.fc_consecutive_maidens = 0
                 # New ball taken automatically as soon as it's due (Phase 2
                 # — no user-captained delay option yet, consistent with
                 # "AI always decides" for FC in this phase).
@@ -7616,9 +8007,19 @@ class Match:
                 "overs_this_innings": dict(self.bowler_manager._overs_this_innings),
                 "last_bowler": self.bowler_manager._last_bowler,
                 "prev_over_runs": dict(self.bowler_manager._prev_over_runs),
+                # FC spell state. Absent for T20/ListA's BowlerManager, and
+                # absent from snapshots taken before spells existed — the
+                # restore side treats both as "everyone fresh".
+                "spell_overs": dict(getattr(self.bowler_manager, "_spell_overs", {}) or {}),
+                "rest_overs": dict(getattr(self.bowler_manager, "_rest_overs", {}) or {}),
+                "fatigue": dict(getattr(self.bowler_manager, "_fatigue", {}) or {}),
             },
             "fc_day": self.fc_day,
             "fc_day_overs_bowled_today": self.fc_day_overs_bowled_today,
+            "fc_sessions_taken_today": self.fc_sessions_taken_today,
+            "fc_session_start": self.fc_session_start,
+            "fc_day_over_rate_adjust": self.fc_day_over_rate_adjust,
+            "fc_nightwatchman_used": self.fc_nightwatchman_used,
             "fc_ball_overs_bowled": self.fc_ball_overs_bowled,
             "fc_innings_declared": self.fc_innings_declared,
             "fc_innings_time_budget_overs": self.fc_innings_time_budget_overs,
@@ -7701,10 +8102,24 @@ class Match:
         self.bowler_manager._overs_this_innings = dict(bm.get("overs_this_innings") or {})
         self.bowler_manager._last_bowler = bm.get("last_bowler")
         self.bowler_manager._prev_over_runs = dict(bm.get("prev_over_runs") or {})
+        if hasattr(self.bowler_manager, "_spell_overs"):
+            self.bowler_manager._spell_overs = dict(bm.get("spell_overs") or {})
+            self.bowler_manager._rest_overs = dict(bm.get("rest_overs") or {})
+            self.bowler_manager._fatigue = {
+                k: float(v) for k, v in (bm.get("fatigue") or {}).items()
+            }
         self.bowler_history = self.bowler_manager._overs_this_innings
 
         self.fc_day = snap.get("fc_day", 1)
         self.fc_day_overs_bowled_today = snap.get("fc_day_overs_bowled_today", 0)
+        self.fc_sessions_taken_today = snap.get("fc_sessions_taken_today", 0)
+        self.fc_day_over_rate_adjust = snap.get("fc_day_over_rate_adjust")
+        self.fc_nightwatchman_used = snap.get("fc_nightwatchman_used", False)
+        self.fc_session_start = snap.get("fc_session_start") or {
+            "score": self.score, "wickets": self.wickets,
+            "day_overs": self.fc_day_overs_bowled_today,
+            "fc_innings": self.fc_innings,
+        }
         self.fc_ball_overs_bowled = snap.get("fc_ball_overs_bowled", 0)
         self.fc_innings_declared = snap.get("fc_innings_declared", False)
         # Must be the exact frozen value captured when the CURRENT innings

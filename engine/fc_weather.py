@@ -92,6 +92,30 @@ def effective_overs_today(weather_script, day_number, overs_per_day):
     return max(0, overs_per_day - event.get("overs_lost", 0))
 
 
+def remaining_rain_risk(weather_script, from_day, total_days, overs_per_day=90):
+    """
+    0-1 read on how much of the remaining match the pre-rolled weather is
+    going to cost, as a fraction of the overs still scheduled.
+
+    The script is rolled once for the whole match, so this is the captain's
+    forecast: real captains do factor "rain about on the last two days" into
+    whether to enforce the follow-on, because time lost is time they may not
+    get back to bowl the opposition out twice.
+    """
+    if not weather_script or from_day > total_days:
+        return 0.0
+    scheduled = 0
+    lost = 0
+    for day in range(from_day, total_days + 1):
+        scheduled += overs_per_day
+        event = get_day_event(weather_script, day)
+        if event:
+            lost += min(overs_per_day, event.get("overs_lost", 0))
+    if scheduled <= 0:
+        return 0.0
+    return min(1.0, lost / scheduled)
+
+
 def day_summary_line(weather_script, day_number):
     """Human-readable one-liner for the day-break commentary, or None if
     the day was unaffected by weather."""
