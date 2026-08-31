@@ -31,6 +31,7 @@ from tabulate import tabulate
 from tabulate import tabulate
 from typing import Dict, List, Any, Optional, Union
 import zipfile
+from werkzeug.utils import secure_filename
 
 from sqlalchemy import func as sa_func
 
@@ -206,27 +207,43 @@ class MatchArchiver:
 
 
     def _include_scorecard_images(self):
-        """Include scorecard images in the archive if they exist"""
-        temp_dir = Path("data") / "temp_scorecard_images"
-        
-        if not temp_dir.exists():
-            return
-        
-        # Look for scorecard images for this match
-        first_innings_img = temp_dir / f"{self.match_id}_first_innings_scorecard.png"
-        second_innings_img = temp_dir / f"{self.match_id}_second_innings_scorecard.png"
-        
-        if first_innings_img.exists():
-            dest_path = self.archive_path / f"{self.team_home}_vs_{self.team_away}_first_innings_scorecard.png"
-            shutil.copy2(first_innings_img, dest_path)
-            self.created_files.append(dest_path)
-            self.logger.debug(f"Added first innings scorecard image: {dest_path.name}")
-        
-        if second_innings_img.exists():
-            dest_path = self.archive_path / f"{self.team_home}_vs_{self.team_away}_second_innings_scorecard.png"
-            shutil.copy2(second_innings_img, dest_path)
-            self.created_files.append(dest_path)
-            self.logger.debug(f"Added second innings scorecard image: {dest_path.name}")
+        """Include every scorecard image uploaded for this match.
+
+        New uploads are isolated under a per-user directory. The flat root is
+        also scanned for backwards compatibility with images created before
+        user isolation was added.
+        """
+        temp_root = PROJECT_ROOT / "data" / "temp_scorecard_images"
+        user_dir = temp_root / secure_filename(str(self.username))
+        source_dirs = (user_dir, temp_root)
+        allowed_suffixes = {".png", ".jpg", ".webp"}
+        match_prefix = f"{self.match_id}_"
+        copied_names = set()
+
+        for source_dir in source_dirs:
+            if not source_dir.exists():
+                continue
+            for source_path in sorted(source_dir.glob(f"{self.match_id}_*")):
+                if not source_path.is_file() or source_path.suffix.lower() not in allowed_suffixes:
+                    continue
+
+                label = source_path.stem[len(match_prefix):]
+                if not label or not re.fullmatch(r"[A-Za-z0-9_-]+", label):
+                    self.logger.warning("Skipping unsafe scorecard image name: %s", source_path.name)
+                    continue
+
+                dest_name = (
+                    f"{self.team_home}_vs_{self.team_away}_{label}"
+                    f"{source_path.suffix.lower()}"
+                )
+                if dest_name in copied_names:
+                    continue
+                copied_names.add(dest_name)
+
+                dest_path = self.archive_path / dest_name
+                shutil.copy2(source_path, dest_path)
+                self.created_files.append(dest_path)
+                self.logger.debug("Added scorecard image: %s", dest_path.name)
 
 
     def _validate_match_data(self, match_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -2116,15 +2133,18 @@ class MatchArchiver:
         # ========== PHASE 3: SCORECARD IMAGES CLEANUP ==========
         try:
             self.logger.debug(f"🧹 Phase 3: Cleaning scorecard images for match {self.match_id}")
-            temp_dir = Path("data") / "temp_scorecard_images"
-            
+            temp_dir = PROJECT_ROOT / "data" / "temp_scorecard_images"
+
             if temp_dir.exists():
-                # Clean this match's specific images
-                match_images = [
-                    temp_dir / f"{self.match_id}_first_innings_scorecard.png",
-                    temp_dir / f"{self.match_id}_second_innings_scorecard.png"
-                ]
-                
+                user_dir = temp_dir / secure_filename(str(self.username))
+                match_images = []
+                for source_dir in (user_dir, temp_dir):
+                    if source_dir.exists():
+                        match_images.extend(
+                            path for path in source_dir.glob(f"{self.match_id}_*")
+                            if path.is_file()
+                        )
+
                 images_removed = 0
                 for img_path in match_images:
                     try:
@@ -2144,8 +2164,8 @@ class MatchArchiver:
                 
                 # Clean up old images (older than 2 hours) to prevent accumulation
                 self._cleanup_old_scorecard_images(temp_dir)
-                
-                # Try to remove temp directory if empty
+
+                # Remove empty user directories, then the root if empty.
                 self._cleanup_empty_temp_directory(temp_dir)
                 
             else:
@@ -2262,9 +2282,10 @@ class MatchArchiver:
             two_hours_ago = current_time - 7200  # 2 hours in seconds
             
             old_files_removed = 0
-            for file_path in temp_dir.glob("*.png"):
+            allowed_suffixes = {".png", ".jpg", ".webp"}
+            for file_path in temp_dir.rglob("*"):
                 try:
-                    if file_path.is_file():
+                    if file_path.is_file() and file_path.suffix.lower() in allowed_suffixes:
                         file_age = file_path.stat().st_mtime
                         if file_age < two_hours_ago:
                             file_path.unlink()
@@ -2282,15 +2303,28 @@ class MatchArchiver:
             self.logger.debug(f"Error during old image cleanup: {e}")
 
     def _cleanup_empty_temp_directory(self, temp_dir: Path) -> None:
-        """Remove temp directory if it's empty"""
+        """Remove empty user directories, followed by the empty root."""
         try:
             if temp_dir.exists():
-                contents = list(temp_dir.iterdir())
-                if not contents:
+                child_dirs = sorted(
+                    (path for path in temp_dir.rglob("*") if path.is_dir()),
+                    key=lambda path: len(path.parts),
+                    reverse=True,
+                )
+                for child_dir in child_dirs:
+                    try:
+                        child_dir.rmdir()
+                    except OSError:
+                        pass
+                try:
                     temp_dir.rmdir()
-                    self.logger.debug(f"✅ Removed empty temp directory: {temp_dir}")
+                except OSError:
+                    contents = [item.name for item in temp_dir.iterdir()]
+                    self.logger.debug(
+                        "Temp directory not empty, contains: %s", contents
+                    )
                 else:
-                    self.logger.debug(f"Temp directory not empty, contains: {[item.name for item in contents]}")
+                    self.logger.debug(f"✅ Removed empty temp directory: {temp_dir}")
         except Exception as e:
             log_exception(e)
             self.logger.debug(f"Could not remove temp directory: {e}")

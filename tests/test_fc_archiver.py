@@ -27,12 +27,14 @@ import copy
 import os
 import sys
 import uuid
+from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import db
 from database.models import Match as DBMatch, MatchScorecard, MatchPartnership, Player as DBPlayer
 import engine.match as match_module
+import match_archiver as match_archiver_module
 from match_archiver import MatchArchiver
 
 
@@ -171,6 +173,49 @@ def _archive(match):
     ok = arch._save_to_database()
     db.session.commit()
     return ok, arch
+
+
+def test_archiver_includes_all_named_fc_and_legacy_scorecard_images(monkeypatch, tmp_path):
+    """The ZIP input list contains every card uploaded for this match only."""
+    match = match_module.Match(_fc_match_data("viewer@example.com"))
+    archiver = MatchArchiver(match.match_data, match)
+    monkeypatch.setattr(match_archiver_module, "PROJECT_ROOT", Path(tmp_path))
+    archiver.archive_path = tmp_path / "archive"
+    archiver.archive_path.mkdir()
+
+    temp_root = tmp_path / "data" / "temp_scorecard_images"
+    user_dir = temp_root / "viewerexample.com"
+    user_dir.mkdir(parents=True)
+    match_id = match.match_data["match_id"]
+
+    expected_labels = {
+        "day_01_lunch_innings_2_scorecard",
+        "day_01_tea_innings_2_scorecard",
+        "day_01_stumps_innings_2_scorecard",
+        "innings_2_end_scorecard",
+    }
+    for label in expected_labels:
+        (user_dir / f"{match_id}_{label}.png").write_bytes(b"png")
+
+    # Existing T20/List A names, and historical flat-directory uploads, are
+    # still discovered after the FC extension.
+    (temp_root / f"{match_id}_first_innings_scorecard.png").write_bytes(b"png")
+    (user_dir / f"{match_id}_second_innings_scorecard.png").write_bytes(b"png")
+    (user_dir / "another-match_innings_1_end_scorecard.png").write_bytes(b"other")
+
+    archiver._include_scorecard_images()
+
+    archived_names = {path.name for path in archiver.created_files}
+    assert archived_names == {
+        *(f"TW_vs_TC_{label}.png" for label in expected_labels),
+        "TW_vs_TC_first_innings_scorecard.png",
+        "TW_vs_TC_second_innings_scorecard.png",
+    }
+    assert all((archiver.archive_path / name).read_bytes() == b"png" for name in archived_names)
+
+    zip_path = archiver._create_zip_archive()
+    with match_archiver_module.zipfile.ZipFile(zip_path) as archive:
+        assert set(archive.namelist()) == archived_names
 
 
 def test_fc_build_innings_plan_has_all_four_innings(app, regular_user, test_team, test_team_2):
