@@ -372,6 +372,10 @@
 
     .ms-setting-row:last-child { border-bottom: none; }
 
+    /* display:flex above out-specifies the user agent's [hidden] rule, so a
+       row toggled with element.hidden would otherwise stay on screen. */
+    .ms-setting-row[hidden] { display: none; }
+
     .ms-setting-copy {
         display: flex;
         flex-direction: column;
@@ -1145,7 +1149,7 @@
                 <div class="ms-settings-group">
                     <h3 class="ms-group-title"><i class="fa-solid fa-sliders"></i> Simulation &amp; Extras</h3>
 
-                    <div class="ms-setting-row">
+                    <div class="ms-setting-row" id="simulation-mode-row">
                         <div class="ms-setting-copy">
                             <label class="ms-setting-label" for="simulation-mode-toggle">Simulation Mode</label>
                             <span class="ms-setting-hint"><span id="simulation-mode-help">Auto sim runs continuously.</span></span>
@@ -1879,10 +1883,41 @@
         const mode = modeToggle && modeToggle.checked ? 'manual' : 'auto';
         if (modeHidden) modeHidden.value = mode;
         if (modeHelp) {
-            modeHelp.textContent = mode === 'manual'
-                ? 'Manual asks for next batter/bowler at decision points.'
-                : 'Auto sim runs continuously.';
+            const disabledReason = modeToggle && modeToggle.disabled
+                ? modeToggle.dataset.disabledReason
+                : '';
+            modeHelp.textContent = disabledReason
+                ? disabledReason
+                : (mode === 'manual'
+                    ? 'Manual asks for next batter/bowler at decision points.'
+                    : 'Auto sim runs continuously.');
         }
+    }
+
+    /**
+     * First-class matches are auto-only. Four days of cricket is several
+     * thousand deliveries; being asked to name the next batter and bowler
+     * through all of it is not a mode anyone wants, so the control is
+     * hidden and the hidden field pinned to 'auto' (which the server
+     * enforces independently).
+     */
+    function applySimulationModeGate() {
+        const modeToggle = document.getElementById('simulation-mode-toggle');
+        if (!modeToggle) return;
+
+        const format = document.getElementById('match-format-value')?.value || 'T20';
+        const isFC = format === 'FC';
+
+        modeToggle.disabled = isFC;
+        modeToggle.dataset.disabledReason = isFC
+            ? 'First-class matches are simulated in auto mode.'
+            : '';
+        if (isFC && modeToggle.checked) modeToggle.checked = false;
+
+        const row = document.getElementById('simulation-mode-row');
+        if (row) row.hidden = isFC;
+
+        syncSimulationModeControl();
     }
 
     function syncInterestingMatchControl() {
@@ -1955,6 +1990,7 @@
         // FC matches run over multiple days — a scripted dramatic finish
         // doesn't fit that time scale, so gate the toggle off for FC.
         applyInterestingMatchGate();
+        applySimulationModeGate();
 
         // Swap every team's active player list to the correct format squad.
         // No fallback — if the format has no squad, players becomes [].

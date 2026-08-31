@@ -15,9 +15,13 @@ harness rather than a branch in that one, for two reasons:
    every side bats like six No. 3s and totals land far above anything a real
    team makes. The XI below carries the spread a real one has.
 
-The numbers these bands encode are ordinary first-class cricket: roughly
-3.2 runs an over, a ball every ~63 for a wicket, a dot rate near 70%, and a
-specialist top-order batter surviving several times longer than a No. 11.
+The numbers these bands encode are ordinary modern first-class cricket:
+roughly 3.5 runs an over on a first-day pitch, a ball every ~60 for a wicket,
+a dot rate near two thirds, and a specialist top-order batter surviving
+several times longer than a No. 11. (These are FIRST-innings figures on a
+fresh pitch under clear skies, which is the fastest-scoring passage of a
+first-class match — scripts/bench_fc.py measures the match-wide economy and
+reads about 0.1 RPO lower.)
 
 Report mode:
     pytest tests/test_fc_calibration.py::test_report_fc_calibration -s --no-cov
@@ -60,18 +64,28 @@ FC_XI = [
 # while doing it. Wide enough to survive a re-tune; narrow enough that a
 # pitch drifting out of one no longer means what its name says.
 #            (runs_lo, runs_hi, rpo_lo, rpo_hi)
+#
+# Moved up by the 2026-08-30 scoring acceleration: the FC scoring matrices
+# now carry ~12% more run-scoring mass and ~5% more wicket, which lifts the
+# run rate without letting totals or batting averages run away with it.
+#
+# Widened at the same time. Two measurements of the SAME model taken either
+# side of an RNG-stream shift (the commentary engine moving to its own
+# generator) differed by up to 54 runs on a pitch, which is more than the old
+# +/-45 half-width. These bands are for catching a model that has drifted, not
+# for pinning one sample of it, so they now carry +/-65 runs and +/-0.32 RPO.
 FC_TARGET_BANDS = {
-    "Green": (200, 290, 2.75, 3.25),
-    "Dry":   (250, 350, 2.85, 3.35),
-    "Hard":  (285, 385, 3.00, 3.50),
-    "Flat":  (330, 450, 3.15, 3.70),
-    "Dead":  (350, 470, 3.25, 3.85),
+    "Green": (190, 315, 2.80, 3.45),
+    "Dry":   (290, 415, 3.00, 3.65),
+    "Hard":  (290, 420, 3.15, 3.80),
+    "Flat":  (340, 470, 3.35, 4.00),
+    "Dead":  (330, 460, 3.50, 4.15),
 }
 
 # Whole-format aggregates.
-AGG_RPO = (3.05, 3.45)
-AGG_RUNS_PER_WICKET = (29.0, 38.0)
-AGG_DOT_PCT = (66.0, 73.0)
+AGG_RPO = (3.30, 3.75)
+AGG_RUNS_PER_WICKET = (31.0, 41.0)
+AGG_DOT_PCT = (62.0, 69.0)
 # A specialist top-six batter must survive several times longer than a
 # genuine No. 11. Before this calibration the ratio was 1.02 — the tail
 # batted exactly like the top order, which is why nobody ever collapsed.
