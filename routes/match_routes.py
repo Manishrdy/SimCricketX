@@ -293,14 +293,41 @@ def register_match_routes(
             # Backward-compatible payload support: if XI data is missing, derive a default XI.
             if not isinstance(data.get("playing_xi"), dict):
                 def _default_xi(team_payload):
+                    """The XI to use when the client sends none of its own.
+
+                    Marks up to MIN_BOWLING_OPTIONS bowlers/all-rounders as
+                    the attack. The count is of BOWLERS FOUND, not batting
+                    positions: this used to read `idx < 5`, and since a real
+                    side bats its bowlers at 7-11 that marked none of them —
+                    the match then began with nobody able to bowl and died on
+                    the first delivery with "Bowler selection failed at over
+                    0.0". Roles come from squad_rules so this cannot drift
+                    from the squad validation that guarantees five of them.
+                    """
+                    from utils.squad_rules import BOWLING_ROLES, MIN_BOWLING_OPTIONS
+
+                    bowling_roles = {r.strip().lower() for r in BOWLING_ROLES}
                     players = list(team_payload.get("players", []))
-                    xi = []
-                    for idx, player in enumerate(players[:11]):
-                        row = {"name": player.get("name", "")}
-                        # Mark the first up-to-5 bowlers/all-rounders as active bowlers by default.
+                    xi, marked = [], 0
+                    for player in players[:11]:
                         role = str(player.get("role", "")).strip().lower()
-                        row["will_bowl"] = role in {"bowler", "all-rounder"} and idx < 5
-                        xi.append(row)
+                        will_bowl = role in bowling_roles and marked < MIN_BOWLING_OPTIONS
+                        if will_bowl:
+                            marked += 1
+                        xi.append({"name": player.get("name", ""), "will_bowl": will_bowl})
+
+                    if not marked and xi:
+                        # A published squad always carries five bowling
+                        # options, so this means unset/unknown roles. Fall
+                        # back to the lower order rather than handing the
+                        # engine an XI with no attack at all.
+                        for row in xi[-MIN_BOWLING_OPTIONS:]:
+                            row["will_bowl"] = True
+                        app.logger.warning(
+                            "Default XI found no bowling roles for %s; marking the "
+                            "lower order so the match is playable.",
+                            team_payload.get("team_name", "?"),
+                        )
                     return xi
 
                 data["playing_xi"] = {
