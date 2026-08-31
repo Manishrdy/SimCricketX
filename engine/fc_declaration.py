@@ -23,17 +23,21 @@ be adjusted after playtesting without touching control flow. Treat them as
 a documented starting point, not a final tuning.
 
 Declaring from innings 2/3 (setting an actual target) additionally supports
-a Monte Carlo win-probability estimate (see estimate_lead_declaration_outcome
-below) in place of the flat lead-vs-threshold check, when the caller
-supplies the strength/overs-remaining inputs it needs. Innings 1 (raw
-score, nothing to compare against yet, and up to 3 more innings still to
-play out) keeps the simpler flat-threshold heuristic — modeling "will we
-win the whole rest of the match" is a different, much larger problem than
-"can we bowl this specific opposition innings out and defend/chase the
-target," which is what the Monte Carlo model actually estimates.
+Monte Carlo win-probability estimates in place of the flat lead-vs-threshold
+check, when the caller supplies the strength/overs-remaining inputs they
+need. Innings 2 uses estimate_lead_declaration_outcome because both sides
+may genuinely bat again. Innings 3 uses estimate_target_defence_outcome:
+the opposition's fourth-innings chase ends the match, so the declaring side
+can never receive another innings. Innings 1 (raw score, nothing to compare
+against yet, and up to 3 more innings still to play out) keeps the simpler
+flat-threshold heuristic.
 """
 
+import logging
 import random as _random
+
+
+logger = logging.getLogger(__name__)
 
 # Minimum overs into the innings before a declaration is even considered —
 # a captain doesn't declare inside the first few overs regardless of score.
@@ -119,7 +123,7 @@ def compute_innings_time_budget_overs(overs_remaining_in_match) -> float:
     return _INNINGS_TIME_BUDGET_FRACTION * overs_remaining_in_match
 
 
-# ── Monte Carlo declaration model (innings 2/3 only — see module docstring) ─
+# ── Monte Carlo declaration models (innings 2/3 only — see module docstring) ─
 
 _MC_TRIALS = 400
 
@@ -247,6 +251,59 @@ def estimate_lead_declaration_outcome(*, lead, overs_remaining_in_match,
     return wins / trials, draws / trials, losses / trials
 
 
+def _classify_target_defence_trial(*, target, overs_remaining_in_match,
+                                   dismiss_overs, scoring_rate):
+    """Classify one fourth-innings chase from the declaring side's view."""
+    available_overs = max(0.0, overs_remaining_in_match)
+    overs_played = min(dismiss_overs, available_overs)
+    projected_runs = overs_played * scoring_rate
+
+    # The chase ends the instant the target is reached. Even if the sampled
+    # aggregate projection says "325 all out", a side chasing 311 won at
+    # 311; there is no later innings for the declaring side.
+    if projected_runs >= target:
+        return "loss"
+    if dismiss_overs <= available_overs:
+        return "win"
+    return "draw"
+
+
+def estimate_target_defence_outcome(*, lead, overs_remaining_in_match,
+                                    own_bowling_strength,
+                                    opp_batting_strength, pitch_wear=0.5,
+                                    trials=_MC_TRIALS, rng=None):
+    """Estimate (win, draw, loss) after an innings-three declaration.
+
+    The current lead becomes the opposition's fourth-innings target
+    (lead + 1). Each aggregate trial runs only until the target is reached,
+    ten wickets fall, or the available overs expire. The declaring side's
+    batting strength is intentionally absent: it cannot bat again.
+    """
+    rng = rng or _random
+    wins = draws = losses = 0
+    target = lead + 1
+
+    for _ in range(trials):
+        dismiss_overs = _mc_sample_dismiss_overs(
+            own_bowling_strength, pitch_wear, rng,
+        )
+        scoring_rate = _mc_sample_score_rate(opp_batting_strength, rng)
+        result = _classify_target_defence_trial(
+            target=target,
+            overs_remaining_in_match=overs_remaining_in_match,
+            dismiss_overs=dismiss_overs,
+            scoring_rate=scoring_rate,
+        )
+        if result == "win":
+            wins += 1
+        elif result == "loss":
+            losses += 1
+        else:
+            draws += 1
+
+    return wins / trials, draws / trials, losses / trials
+
+
 def declaration_window_open(*, fc_innings, wickets, overs_bowled_this_innings,
                              days_remaining, innings_time_budget_overs=None) -> bool:
     """
@@ -330,17 +387,15 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                                  preserves the exact prior behavior for any
                                  caller that doesn't supply it.
 
-    Monte Carlo inputs (innings 2/3 only — see estimate_lead_declaration_outcome)
-    ----------------------------------------------------------------------
+    Monte Carlo inputs (innings 2/3 only)
+    -------------------------------------
     overs_remaining_in_match, own_bowling_strength, own_batting_strength,
     opp_batting_strength, pitch_wear, rng
-        When all four strength/overs inputs are supplied, the lead-vs-flat-
-        threshold check below is replaced by a simulated win/draw/loss
-        estimate — a genuine model of "is there time to bowl them out and
-        defend/chase this lead," rather than a static run number. Any
-        caller that omits them (e.g. existing unit tests, or innings 1,
-        which never uses this path at all) gets the original flat-threshold
-        behavior unchanged.
+        Innings 2 requires all four strength/overs inputs and retains the
+        bowl-then-possibly-chase model. Innings 3 requires overs remaining,
+        own bowling strength, and opposition batting strength, and models
+        only the final target defence; own batting strength is ignored.
+        Missing inputs preserve the original flat-threshold fallback.
     """
     if not declaration_window_open(
         fc_innings=fc_innings, wickets=wickets,
@@ -358,9 +413,19 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
     if fc_innings in (2, 3) and lead < _MIN_LEAD_TO_DECLARE:
         return False
 
-    _mc_inputs = (overs_remaining_in_match, own_bowling_strength,
-                  own_batting_strength, opp_batting_strength)
-    if fc_innings != 1 and all(v is not None for v in _mc_inputs):
+    innings_two_inputs = (
+        overs_remaining_in_match, own_bowling_strength,
+        own_batting_strength, opp_batting_strength,
+    )
+    innings_three_inputs = (
+        overs_remaining_in_match, own_bowling_strength,
+        opp_batting_strength,
+    )
+    forecast_ready = (
+        (fc_innings == 2 and all(v is not None for v in innings_two_inputs))
+        or (fc_innings == 3 and all(v is not None for v in innings_three_inputs))
+    )
+    if forecast_ready:
         # overs_remaining_in_match keeps shrinking the longer this innings
         # overruns its budget, which LOWERS the Monte Carlo model's win
         # probability (less time = harder to force a result) — the opposite
@@ -372,12 +437,26 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                 and overs_bowled_this_innings >= innings_time_budget_overs * _MC_OVERRUN_CEILING_MULTIPLIER
                 and lead > 0):
             return True
-        win_prob, _draw_prob, loss_prob = estimate_lead_declaration_outcome(
-            lead=lead, overs_remaining_in_match=overs_remaining_in_match,
-            own_bowling_strength=own_bowling_strength,
-            own_batting_strength=own_batting_strength,
-            opp_batting_strength=opp_batting_strength,
-            pitch_wear=pitch_wear, rng=rng,
+        if fc_innings == 2:
+            forecast_name = "innings_two_bowl_then_chase"
+            win_prob, draw_prob, loss_prob = estimate_lead_declaration_outcome(
+                lead=lead, overs_remaining_in_match=overs_remaining_in_match,
+                own_bowling_strength=own_bowling_strength,
+                own_batting_strength=own_batting_strength,
+                opp_batting_strength=opp_batting_strength,
+                pitch_wear=pitch_wear, rng=rng,
+            )
+        else:
+            forecast_name = "innings_three_target_defence"
+            win_prob, draw_prob, loss_prob = estimate_target_defence_outcome(
+                lead=lead, overs_remaining_in_match=overs_remaining_in_match,
+                own_bowling_strength=own_bowling_strength,
+                opp_batting_strength=opp_batting_strength,
+                pitch_wear=pitch_wear, rng=rng,
+            )
+        logger.debug(
+            "FC declaration forecast=%s innings=%d win=%.3f draw=%.3f loss=%.3f",
+            forecast_name, fc_innings, win_prob, draw_prob, loss_prob,
         )
         return (win_prob >= _MC_MIN_WIN_PROB
                 and (win_prob - loss_prob) >= _MC_MIN_WIN_EDGE_OVER_LOSS)

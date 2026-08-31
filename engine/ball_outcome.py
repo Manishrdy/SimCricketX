@@ -22,6 +22,7 @@ from engine.ground_config import (
     get_fc_run_factor as _gc_fc_run_factor,
     get_fc_wicket_factor_for as _gc_fc_wicket_factor_for,
     get_fc_pitch_wear as _gc_fc_pitch_wear,
+    get_fc_ball_condition as _gc_fc_ball_condition,
     get_fc_ball_condition_factor as _gc_fc_ball_condition_factor,
     get_fc_ball_condition_outcome_factors as _gc_fc_ball_condition_outcomes,
     get_fc_rough_targeting_factor as _gc_fc_rough_targeting_factor,
@@ -463,6 +464,7 @@ def compute_weighted_prob(
     format_name: Optional[str] = None,
     config=None,
     technique_rating: Optional[int] = None,
+    technique_weight: float = 0.30,
 ) -> float:
     """
     Returns a raw weight for one outcome (Dot/Single/Double/Three/Four/Six/Wicket/Extras),
@@ -540,7 +542,11 @@ def compute_weighted_prob(
         # batting_rating as a more free-scoring one.
         _defensive_batting = effective_batting
         if _is_fc and technique_rating is not None:
-            _defensive_batting = effective_batting * 0.70 + technique_rating * 0.30
+            technique_weight = max(0.0, min(1.0, technique_weight))
+            _defensive_batting = (
+                effective_batting * (1.0 - technique_weight)
+                + technique_rating * technique_weight
+            )
         if (_defensive_batting + bowling) > 0:
             contest_frac = bowling / (_defensive_batting + bowling)
             skill_frac = contest_frac
@@ -961,6 +967,14 @@ def calculate_outcome(
     _gc = ground_config_override  # shorthand; None → global config cache
     _is_lista = (format_config is not None and format_config.name == "ListA")
     _is_fc = (format_config is not None and getattr(format_config, "format_family", None) == "multi_day")
+    _fc_technique_weight = 0.30
+    if _is_fc:
+        _ball_spec = _gc_fc_ball_condition(config=_gc)
+        _swing_overs = _ball_spec.get("new_ball_swing_overs", 10)
+        if ball_overs_bowled < _swing_overs:
+            # Against the moving new ball, defensive technique matters more
+            # than it does once the ball has softened.
+            _fc_technique_weight = 0.45
 
     if _is_lista:
         # Pick the phase matrix then scale every outcome by the pitch run factor.
@@ -1041,6 +1055,7 @@ def calculate_outcome(
                 format_name=(format_config.name if format_config is not None else None),
                 config=_gc,
                 technique_rating=batter.get("technique_rating"),
+                technique_weight=_fc_technique_weight,
             ) * matchup_boost
         else:  # "Extras"
             weight = compute_weighted_prob(

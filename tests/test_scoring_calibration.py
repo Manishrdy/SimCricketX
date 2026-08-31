@@ -120,6 +120,21 @@ not a probability-model bias: the calibration squad uses a flat
 fielding_rating=70 for all 11 players, so individual-vs-team-average quality is
 numerically identical, yet the old baseline is only reproduced by stripping the
 new fielding_team argument back out.
+
+REPIN NOTE (2026-08-30): re-measured again after the commentary pack was
+expanded (dot-ball lines 20 -> 52, singles 16 -> 42) and CommentaryEngine was
+given its own random.Random(). Same story as above and confirmed the same way:
+pure RNG-sequence drift, not a model change — commentary cannot influence a ball
+outcome, but random.choice() draws a bit-count that depends on len(seq), so
+picking from a larger pool reordered the shared stream for the rest of every
+match. The private generator means this is the LAST time a commentary edit can
+move these numbers.
+
+Worth knowing when one of these fails: a resample of the same model over these
+16 seeds moves mean wickets by well over a wicket on some pitches (T20/Flat went
+3.5 -> 4.9 on nothing but a stream shift). If a band fails after a change that
+cannot touch the probability model, look for RNG displacement before concluding
+the model drifted.
 """
 
 import statistics
@@ -154,25 +169,26 @@ SQUAD = [
 ]
 
 # Pinned to engine behaviour at Phase 0, re-pinned after the fielder-first
-# catch-drop/misfield change (see REPIN NOTE above), and again after the
-# 2026-08-16 T20 pitch recalibration (see T20 PITCH RECALIBRATION above).
+# catch-drop/misfield change (see the first REPIN NOTE above), again after the
+# 2026-08-16 T20 pitch recalibration (see T20 PITCH RECALIBRATION above), and
+# again on 2026-08-30 for the commentary-RNG split (second REPIN NOTE).
 # (mean_runs, mean_wickets, dot_pct, bdry_per_100)
 T20_BASELINE = {
-    "Green": (123.3, 8.3, 41.7, 11.9),
-    "Dry":   (130.6, 8.2, 42.1, 13.2),
-    "Hard":  (184.9, 5.0, 34.0, 20.1),
-    "Flat":  (212.5, 3.5, 28.6, 23.8),
-    "Dead":  (249.1, 1.8, 25.1, 30.8),
+    "Green": (116.9, 8.4, 42.7, 12.2),
+    "Dry":   (132.4, 7.8, 41.7, 13.4),
+    "Hard":  (182.8, 5.2, 34.4, 19.6),
+    "Flat":  (209.0, 4.9, 30.3, 23.4),
+    "Dead":  (247.8, 1.8, 24.3, 29.8),
 }
 
 # Re-pinned after the 2026-08-16 ListA recalibration (see LISTA PITCH
-# RECALIBRATION below).
+# RECALIBRATION below) and again on 2026-08-30 for the commentary-RNG split.
 LISTA_BASELINE = {
-    "Green": (235.2, 9.2, 46.1, 4.3),
-    "Dry":   (210.5, 10.0, 45.5, 4.7),
-    "Hard":  (296.1, 7.9, 38.5, 6.9),
-    "Flat":  (341.6, 4.6, 35.2, 9.4),
-    "Dead":  (362.4, 3.4, 32.4, 10.3),
+    "Green": (229.1, 8.6, 44.9, 4.2),
+    "Dry":   (214.0, 10.0, 45.0, 4.0),
+    "Hard":  (309.1, 6.8, 38.5, 7.3),
+    "Flat":  (336.1, 4.9, 35.6, 8.8),
+    "Dead":  (363.1, 3.6, 31.7, 9.8),
 }
 
 RUN_TOLERANCE = 0.05      # +/-5% on mean runs

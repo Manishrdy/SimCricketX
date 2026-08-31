@@ -17,8 +17,15 @@ let impactPlayerState = {
 
 let matchOver = false;
 let currentInningsNumber = null;
-let delay = 500; // 0.5s delay between each ball
-const MIN_BALL_DELAY_MS = 500; // Enforce 0.5s minimum gap between balls
+// A first-class match is several thousand deliveries. At half a second a
+// ball that is well over an hour of real time per innings, so FC runs the
+// ball loop as fast as the browser will schedule it (setTimeout still yields
+// between balls, so the log keeps painting). The limited-overs formats keep
+// their half-second beat — 120 balls is meant to be watched.
+const IS_FC_MATCH = (typeof matchData !== 'undefined')
+    && String(matchData.match_format || '').trim().toUpperCase() === 'FC';
+let delay = IS_FC_MATCH ? 0 : 500; // gap between each ball
+const MIN_BALL_DELAY_MS = IS_FC_MATCH ? 0 : 500; // floor on that gap
 let logLineCount = 1; // Track line numbers for commentary display
 let isFinalScoreboard = false;
 let simTimerId = null; // F4: track simulation timer to prevent overlapping loops
@@ -95,6 +102,28 @@ function updateCurrentOverBalls(bd) {
 let thisOverBallResults = [];
 
 document.addEventListener('DOMContentLoaded', () => {
+    // A first-class match is followed one way and one way only: auto
+    // simulation, read as commentary. Manual would ask the user to name the
+    // next batter and bowler several thousand times over four days, and the
+    // Match Center's panels (win probability, the worm, run-rate charts) are
+    // limited-overs instruments with nothing to say about a 150-over innings.
+    // Both toggles come out of the bar entirely rather than sitting there
+    // disabled.
+    const isFCMatch = IS_FC_MATCH;
+    if (isFCMatch) {
+        simulationMode = 'auto';
+        if (typeof matchData === 'object' && matchData) matchData.simulation_mode = 'auto';
+        // .ctrl-pill-group is display:flex, so the hidden attribute alone
+        // would not take it out of the bar.
+        ['pill-auto', 'pill-commentary'].forEach((id) => {
+            const group = document.getElementById(id)?.closest('.ctrl-pill-group');
+            if (group) group.style.display = 'none';
+        });
+        // The Match Center is the only thing that button captures.
+        const saveBtn = document.getElementById('save-dashboard-btn');
+        if (saveBtn) saveBtn.style.display = 'none';
+    }
+
     // --- Pill toggle: Simulation Mode (Auto / Manual) ---
     const pillAuto = document.getElementById('pill-auto');
     const pillManual = document.getElementById('pill-manual');
@@ -125,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewToggle = document.getElementById('view-toggle');
 
     function setView(view) {
+        if (isFCMatch) view = 'commentary';
         currentMainView = view;
         dashboardActive = view === 'matchcenter';
 
@@ -870,7 +900,7 @@ function spinTossAndStartMatch() {
             const batNameEl = document.getElementById('sb-bat-name');
             if (batNameEl) batNameEl.textContent = batFirst;
 
-            setTimeout(startMatch, 1000);
+            setTimeout(startMatch, IS_FC_MATCH ? 0 : 1000);
         })
         .catch(err => {
             appendLog(`[ERROR] Toss failed: ${err}`, 'error');

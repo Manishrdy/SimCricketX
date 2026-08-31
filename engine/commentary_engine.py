@@ -1,4 +1,5 @@
 
+import collections
 import json
 import random
 import logging
@@ -10,9 +11,24 @@ logger = logging.getLogger(__name__)
 
 _SPIN_BOWLING_TYPES = {"Off spin", "Leg spin", "Finger spin", "Wrist spin"}
 
+# Tags that say a line belongs to one kind of bowling and reads wrong for the
+# other ("moves away late past the outside edge" is not an off-spinner). Every
+# other tag in the pack is descriptive (off_side, defensive, running) and says
+# nothing about who is bowling.
+_STYLE_TAGS = {"pace", "spin"}
+
 
 class CommentaryEngine:
-    def __init__(self, data_path=None):
+    def __init__(self, data_path=None, rng=None):
+        # Commentary must never be able to change the cricket. random.choice()
+        # draws a number of bits that depends on the size of the sequence, so
+        # picking from a 52-line pool instead of a 20-line one displaces every
+        # subsequent ball in the shared stream — which meant adding a
+        # commentary line literally changed who won matches, and broke the
+        # pinned T20/ListA scoring bands every time anyone touched the pack.
+        # Own generator, seeded once from the shared one so a seeded match is
+        # still reproducible end to end.
+        self._rng = rng or random.Random(random.random())
         if data_path is None:
             # Default to data/commentary_pack.json relative to project root
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,6 +43,11 @@ class CommentaryEngine:
         # what context. Without it a standing condition like the last hour or
         # a turning pitch would be remarked on at the start of every over.
         self._announced = set()
+        # Recently-used line per event key. Uniform random picks cluster, and
+        # a cluster is what a reader notices — over a first-class innings the
+        # same dot-ball line coming round twice in an over reads as a bug even
+        # when the pool is large. See _pick_template().
+        self._recent = collections.defaultdict(collections.deque)
 
     def _load_data(self):
         try:
@@ -60,15 +81,27 @@ class CommentaryEngine:
         is_extra = context.get("is_extra", False)
 
         if outcome_type == "wicket":
-            wkt_type = context.get("wicket_type", "caught").lower()
+            # ball_outcome.py emits "Run Out" and "Hit Wicket" with a space,
+            # so the naive f"wicket_{lower}" produced "wicket_run out" — a key
+            # that does not exist, which sent every run-out to the CAUGHT
+            # fallback pool ("Taken at slip!" for a run-out).
+            wkt_type = "_".join(context.get("wicket_type", "caught").lower().split())
             return f"wicket_{wkt_type}"
 
         if is_extra:
             extra_type = context.get("extra_type", "").lower()
             if "wide" in extra_type:
                 return "wide"
-            if "no" in extra_type:
+            if "no ball" in extra_type or "noball" in extra_type:
                 return "noball"
+            # Byes and leg byes used to fall through to "dot", so three byes
+            # run off the keeper were described as a solid forward defence
+            # and the pack's own byes/legbyes pools were never reached.
+            # "leg bye" first — "bye" is a substring of it.
+            if "leg bye" in extra_type:
+                return "legbyes"
+            if "bye" in extra_type:
+                return "byes"
             return "dot"
 
         if runs == 4:
@@ -101,10 +134,30 @@ class CommentaryEngine:
         bowling_type = (context.get("bowling_type") or "").lower()
         if bowling_type in ("fast", "medium", "fast-medium", "medium-fast"):
             tags.add("pace")
-        elif bowling_type in ("spin", "off-spin", "leg-spin", "left-arm spin",
-                              "off spin", "leg spin", "left arm spin"):
+        # Matches every style in engine/player.py's BOWLING_TYPES —
+        # "finger spin" and "wrist spin" used to fall through this list and
+        # be treated as neither pace nor spin.
+        elif "spin" in bowling_type:
             tags.add("spin")
         return tags
+
+    # How much of a pool to remember as "just said". 0.6 of a 20-line pool
+    # means a line cannot come back until twelve others have been used.
+    _RECENT_FRACTION = 0.6
+
+    def _pick_template(self, key, templates):
+        """Choose a template, avoiding anything said recently for this key."""
+        if not templates:
+            return None
+        recent = self._recent[key]
+        window = max(1, int(len(set(t.get("text") for t in templates))
+                            * self._RECENT_FRACTION) - 1)
+        fresh = [t for t in templates if t.get("text") not in recent]
+        chosen = self._rng.choice(fresh or templates)
+        recent.append(chosen.get("text"))
+        while len(recent) > window:
+            recent.popleft()
+        return chosen
 
     def _select_template(self, key, context):
         """Select a template for the given key, preferring tag-matched templates."""
@@ -125,13 +178,23 @@ class CommentaryEngine:
         bowling_tags = self._get_bowling_tags(context)
 
         if bowling_tags:
-            # Prefer templates whose tags overlap with the bowling context
-            matched = [t for t in templates if bowling_tags & set(t.get("tags", []))]
-            if matched:
-                templates = matched
-            # else: no matches, fall through to all templates (better than nothing)
+            # Filter the WRONG style out; don't filter down to the right one.
+            # Style tags are rare in the pack — one dot-ball line in twenty
+            # carries "pace" — so narrowing to matches collapsed the pool to
+            # that single line, and 27% of all dot balls off a seamer came
+            # out word for word identical. Style-matched lines are instead
+            # weighted up, which biases without starving.
+            wrong = _STYLE_TAGS - bowling_tags
+            pool = [t for t in templates
+                    if not (wrong & set(t.get("tags", [])))]
+            if pool:
+                matched = [t for t in pool
+                           if bowling_tags & set(t.get("tags", []))]
+                templates = pool + matched * 2
 
-        template_obj = random.choice(templates)
+        template_obj = self._pick_template(key, templates)
+        if template_obj is None:
+            return context.get("description", "Play continues.")
         text = template_obj.get("text", "")
 
         return text.format(
@@ -275,7 +338,7 @@ class CommentaryEngine:
                                                 fielding_team=bowling_team))
 
         if triggers:
-            return random.choice(triggers)
+            return self._rng.choice(triggers)
         return None
 
     # First-class-specific narrative triggers.

@@ -115,9 +115,15 @@ def register_match_routes(
                     return jsonify({"error": "Invalid or unsupported match format"}), 400
                 data["match_format"] = _fmt
 
-            # First-Class (FC) match length — 4 or 5 days, defaults to 4.
-            # Every other format ignores this field entirely.
             if data["match_format"] == "FC":
+                # First-Class matches are auto-only. A four-day match is
+                # hundreds of overs and thousands of deliveries; being asked
+                # to pick the next batter and bowler through all of it is not
+                # a mode anyone wants, so the setup page hides the control
+                # and this is the matching server-side guarantee.
+                data["simulation_mode"] = "auto"
+                # Match length — 4 or 5 days, defaults to 4. Every other
+                # format ignores this field entirely.
                 try:
                     _days = int(data.get("days"))
                 except (TypeError, ValueError):
@@ -1346,6 +1352,14 @@ def register_match_routes(
             match_data, match_path, err = _load_match_file_for_user(match_id)
             if err:
                 return err
+
+            # FC is auto-only (see the creation route). The live page hides
+            # the Auto/Manual control for it, so anything reaching here for
+            # an FC match is not the UI.
+            if str(match_data.get("match_format", "")).strip().upper() == "FC":
+                return jsonify({
+                    "error": "First-class matches are simulated in auto mode only"
+                }), 400
 
             match_data["simulation_mode"] = mode
             with open(match_path, "w", encoding="utf-8") as f:
