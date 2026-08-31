@@ -7,6 +7,9 @@ import pytest
 import json
 import os
 import uuid
+from io import BytesIO
+from pathlib import Path
+from types import SimpleNamespace
 from database.models import Match as DBMatch, MatchScorecard
 
 
@@ -329,6 +332,54 @@ class TestSaveScorecardImages:
             follow_redirects=True,
         )
         assert response.status_code in [200, 400, 404]
+
+    def test_save_named_fc_scorecard_image(self, authenticated_client, regular_user):
+        """FC interval cards are accepted with a safe event-specific label."""
+        from app import MATCH_INSTANCES, MATCH_INSTANCES_LOCK, PROJECT_ROOT
+        from werkzeug.utils import secure_filename
+
+        match_id = str(uuid.uuid4())
+        with MATCH_INSTANCES_LOCK:
+            MATCH_INSTANCES[match_id] = SimpleNamespace(
+                data={"created_by": regular_user.id}
+            )
+
+        image_path = (
+            Path(PROJECT_ROOT) / "data" / "temp_scorecard_images"
+            / secure_filename(regular_user.id)
+            / f"{match_id}_day_01_lunch_innings_2_scorecard.png"
+        )
+        try:
+            response = authenticated_client.post(
+                f"/match/{match_id}/save-scorecard-images",
+                data={
+                    "archive_label": "day_01_lunch_innings_2_scorecard",
+                    "scorecard_image": (BytesIO(b"png-data"), "scorecard.png", "image/png"),
+                },
+                content_type="multipart/form-data",
+            )
+            assert response.status_code == 200, response.get_data(as_text=True)
+            assert image_path.read_bytes() == b"png-data"
+
+            invalid = authenticated_client.post(
+                f"/match/{match_id}/save-scorecard-images",
+                data={
+                    "archive_label": "../../unsafe",
+                    "scorecard_image": (BytesIO(b"png-data"), "scorecard.png", "image/png"),
+                },
+                content_type="multipart/form-data",
+            )
+            assert invalid.status_code == 400
+        finally:
+            with MATCH_INSTANCES_LOCK:
+                MATCH_INSTANCES.pop(match_id, None)
+            if image_path.exists():
+                image_path.unlink()
+            try:
+                image_path.parent.rmdir()
+                image_path.parent.parent.rmdir()
+            except OSError:
+                pass
 
 
 class TestMatchValidation:

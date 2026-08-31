@@ -2126,7 +2126,7 @@ def register_match_routes(
     # ============================================================================
     @app.route('/match/<match_id>/save-scorecard-images', methods=['POST'])
     @login_required
-    @limiter.limit("10 per minute")
+    @limiter.limit("60 per minute")
     def save_scorecard_images(match_id):
         MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
         ALLOWED_CONTENT_TYPES = {'image/png', 'image/jpeg', 'image/webp'}
@@ -2154,28 +2154,43 @@ def register_match_routes(
             temp_dir.mkdir(parents=True, exist_ok=True)
 
             saved_files = []
+            image_fields = [
+                ('first_innings_image', 'first_innings_scorecard'),
+                ('second_innings_image', 'second_innings_scorecard'),
+            ]
 
-            for field_name, label in [('first_innings_image', 'first'), ('second_innings_image', 'second')]:
+            # FC sends one image for every displayed interval/innings card.
+            # Keep the two legacy multipart fields above for T20/List A.
+            if 'scorecard_image' in request.files:
+                archive_label = str(request.form.get('archive_label') or '').strip().lower()
+                if not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,95}', archive_label):
+                    return jsonify({"error": "Invalid scorecard image label"}), 400
+                image_fields.append(('scorecard_image', archive_label))
+
+            if not any(field_name in request.files for field_name, _label in image_fields):
+                return jsonify({"error": "No scorecard images supplied"}), 400
+
+            for field_name, label in image_fields:
                 if field_name in request.files:
                     img = request.files[field_name]
                     if img.filename:
                         # Validate content type
                         if img.content_type not in ALLOWED_CONTENT_TYPES:
-                            return jsonify({"error": f"Invalid file type for {label} innings image. Allowed: PNG, JPEG, WebP"}), 400
+                            return jsonify({"error": f"Invalid file type for {label}. Allowed: PNG, JPEG, WebP"}), 400
 
                         # Validate file size
                         img.seek(0, 2)  # Seek to end
                         size = img.tell()
                         img.seek(0)     # Reset to start
                         if size > MAX_IMAGE_SIZE:
-                            return jsonify({"error": f"The {label} innings image exceeds the 5 MB size limit"}), 400
+                            return jsonify({"error": f"The {label} image exceeds the 5 MB size limit"}), 400
 
                         safe_match_id = secure_filename(match_id)
                         if safe_match_id != match_id:
                             return jsonify({"error": "Invalid match id"}), 400
 
                         ext = 'png' if img.content_type == 'image/png' else ('jpg' if img.content_type == 'image/jpeg' else 'webp')
-                        img_path = temp_dir / f"{safe_match_id}_{label}_innings_scorecard.{ext}"
+                        img_path = temp_dir / f"{safe_match_id}_{label}.{ext}"
                         img.save(img_path)
                         saved_files.append(str(img_path))
 
