@@ -702,9 +702,9 @@ class FCPressureEngine:
         # --- Survival: batting out time with little/no scoring incentive
         # left (following on with a hopeless chase, or run out of match time
         # to force a positive result). Temperament dampens how much extra
-        # SAFETY this buys — a batter who resists pressure well doesn't need
-        # to defend as hard to stay in, so their wicket_modifier reduction
-        # is smaller (closer to 1.0) than a low-temperament batter's. ---
+        # SAFETY this buys. Temperament now has the intuitive cricketing
+        # identity: the calmer batter is better at executing the rearguard
+        # and receives more of the survival wicket reduction. ---
         is_survival = match_state.get("survival_mode", False) or (
             days_remaining <= 1 and fc_innings in (2, 4)
         )
@@ -713,10 +713,16 @@ class FCPressureEngine:
             effects["boundary_modifier"] *= 0.65
             wicket_reduction = 0.20  # base: wicket_modifier *= (1 - 0.20) = 0.80
             if striker_temperament is not None:
-                # 50 (neutral) -> unchanged; 100 -> half the reduction; 0 -> 1.5x the reduction
-                wicket_reduction *= 1.0 - (striker_temperament - 50) / 100.0
-                wicket_reduction = max(0.0, wicket_reduction)
+                # 50 -> 20%; 100 -> 30%; 0 -> 10%.
+                wicket_reduction += (striker_temperament - 50) / 500.0
+                wicket_reduction = max(0.10, min(0.30, wicket_reduction))
             effects["wicket_modifier"] *= 1.0 - wicket_reduction
+        elif fc_innings == 4 and striker_temperament is not None:
+            # In a live fourth-innings chase, calm decision-making protects
+            # against the target and deteriorating surface without forcing a
+            # high-temperament player into full survival mode.
+            resilience = max(-1.0, min(1.0, (striker_temperament - 50) / 50.0))
+            effects["wicket_modifier"] *= 1.0 - 0.08 * resilience
 
         # --- Last hour before stumps: nobody wants to be the man who gets
         # out with ten minutes left. Milder than full survival mode — this

@@ -25,6 +25,7 @@ Rules enforced
 """
 
 import logging
+import random
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -142,6 +143,98 @@ class FCBowlerManager:
 
         return sorted(eligible, key=_sort_key)
 
+    def weighted_selection_scores(self, eligible: List[dict], pitch_wear: float,
+                                  fc_day: int, new_ball_window: bool = False) -> Dict[str, dict]:
+        """Return the captain's weighted preference score for each bowler.
+
+        The four components deliberately mirror the cricketing judgement in
+        Match._fc_pick_bowler: current ability (50%), suitability for these
+        conditions/this ball (25%), spell freshness (15%), and recent control
+        (10%). The final sixth power keeps this a preference rather than a
+        lottery between a strike bowler and a part-timer.
+        """
+        preferred = _fc_preferred_style(pitch_wear, fc_day)
+        scores = {}
+        for player in eligible:
+            name = player["name"]
+            style = (player.get("bowling_type") or "").strip()
+            is_spin = style in _SPIN_TYPES
+            is_strike_pace = style in _STRIKE_PACE_TYPES
+
+            ability = max(0.0, min(1.0, player.get("bowling_rating", 0) / 100.0))
+
+            if new_ball_window:
+                conditions = 1.0 if is_strike_pace else (0.55 if not is_spin else 0.15)
+            elif preferred == "spin":
+                conditions = 1.0 if is_spin else 0.35
+            elif preferred == "pace":
+                conditions = 1.0 if not is_spin else 0.35
+            else:
+                conditions = 0.75
+
+            fatigue_mult = self.get_fatigue_mult(
+                name, player.get("stamina_rating", 50) or 50,
+            )
+            freshness = max(0.0, min(1.0, (fatigue_mult - _MIN_FATIGUE_MULT)
+                                          / (1.0 - _MIN_FATIGUE_MULT)))
+            if self.is_spell_spent(name):
+                freshness *= 0.25
+
+            prev_runs = self.prev_over_runs(name)
+            if prev_runs < 0:
+                recent = 0.50
+            elif prev_runs == 0:
+                recent = 1.00
+            elif prev_runs <= 2:
+                recent = 0.85
+            elif prev_runs <= 4:
+                recent = 0.65
+            elif prev_runs <= 6:
+                recent = 0.50
+            elif prev_runs <= 9:
+                recent = 0.30
+            else:
+                recent = 0.10
+
+            composite = (
+                ability * 0.50
+                + conditions * 0.25
+                + freshness * 0.15
+                + recent * 0.10
+            )
+            scores[name] = {
+                "ability": ability,
+                "conditions": conditions,
+                "freshness": freshness,
+                "recent": recent,
+                "composite": composite,
+                "weight": max(0.01, composite) ** 6,
+            }
+        return scores
+
+    def choose_weighted_bowler(self, eligible: List[dict], pitch_wear: float,
+                               fc_day: int, new_ball_window: bool = False,
+                               rng=None) -> dict:
+        """Choose one legal bowler from weighted, seeded preferences."""
+        if not eligible:
+            raise ValueError("No eligible FC bowlers to choose from")
+        rng = rng or random
+        scores = self.weighted_selection_scores(
+            eligible, pitch_wear, fc_day, new_ball_window=new_ball_window,
+        )
+        weights = [scores[player["name"]]["weight"] for player in eligible]
+        selected = rng.choices(eligible, weights=weights, k=1)[0]
+        logger.debug(
+            "FC bowler selection new_ball=%s selected=%s preferences=%s",
+            new_ball_window,
+            selected["name"],
+            {
+                name: {key: round(value, 4) for key, value in parts.items()}
+                for name, parts in scores.items()
+            },
+        )
+        return selected
+
     def record_over_completion(self, bowler_name: str, runs_this_over: int):
         """Book one over to a bowler, and advance everyone else's rest.
 
@@ -186,7 +279,8 @@ class FCBowlerManager:
         return (self._player(bowler_name).get("bowling_type") or "").strip() in _SPIN_TYPES
 
     def _stamina(self, bowler_name: str) -> int:
-        return max(0, min(100, self._player(bowler_name).get("stamina_rating", 50) or 50))
+        raw = self._player(bowler_name).get("stamina_rating")
+        return 50 if raw is None else max(0, min(100, raw))
 
     def max_spell_overs(self, bowler_name: str) -> int:
         """How long a spell this bowler can sustain before the captain takes
@@ -271,6 +365,7 @@ class FCBowlerManager:
 # preference ranking — matches the keys used in wicket_factors_start/_end
 # in config/ground_conditions_defaults.yaml's FC block.
 _SPIN_TYPES = {"Off spin", "Leg spin", "Finger spin", "Wrist spin"}
+_STRIKE_PACE_TYPES = {"Fast", "Fast-medium", "Medium-fast"}
 
 # Wear threshold past which the preference shifts to spin-first.
 # ── Spell model ──────────────────────────────────────────────────────────

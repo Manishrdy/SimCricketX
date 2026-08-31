@@ -123,6 +123,12 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
      _loader("migrations.reset_stale_t20_pitch_tuning")),
     ("reset_stale_fc_pitch_tuning",
      _loader("migrations.reset_stale_fc_pitch_tuning")),
+    # 2026-08-30 FC scoring acceleration: the FC scoring matrices moved again
+    # (~12% more scoring mass, ~5% more wicket) to lift the run rate from
+    # ~3.10 to ~3.40. Same shadowing trap as above — strip the involuntary
+    # copies of the slower matrices.
+    ("reset_slow_fc_scoring",
+     _loader("migrations.reset_slow_fc_scoring")),
     # First-Class format: matches.days/follow_on_enforced/*_innings2 columns
     # for up-to-2-innings-per-side matches.
     ("add_fc_match_columns",     _loader("migrations.add_fc_match_columns")),

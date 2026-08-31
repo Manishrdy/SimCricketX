@@ -423,19 +423,33 @@ formats:
   # factors (wicket_factors_start -> wicket_factors_end), which is the
   # mechanism that makes a Dry pitch a mild-early/raging-turner-by-day-5
   # surface instead of one static bias for the whole match.
+  #
+  # 2026-08-30 acceleration: every FC scoring_matrix below carries 12% more
+  # probability on the scoring outcomes (Single/Double/Three/Four/Six) and 5%
+  # more on Wicket than the recalibration that first set them, with Dot
+  # absorbing the difference. Measured over 400 five-day matches that takes
+  # the format from 3.09 to 3.43 runs an over and batting strike rates from
+  # ~50 to ~56 — modern Test tempo — while leaving the draw rate at a
+  # realistic 17%. The wicket bump is deliberately smaller than the scoring
+  # bump: matching them exactly (x1.12 on both) holds runs-per-wicket at 30.7
+  # but collapses draws to 8%, which is not first-class cricket. The cost of
+  # the split is that batting averages sit a few runs above the previous
+  # calibration's reference.
+  # A stored user config deep-merges OVER these, so any change here needs a
+  # migration — see migrations/reset_slow_fc_scoring.py.
   FC:
     pitch_profiles:
       # Seam-friendly fresh pitch, eases with wear — uneven bounce and rough-assisted spin by day 4-5
       Green:
         description: "Seam-friendly fresh pitch, eases with wear — uneven bounce and rough-assisted spin by day 4-5"
         scoring_matrix:
-          Dot: 0.70617
-          Single: 0.18074
-          Double: 0.04346
-          Three: 0.00494
-          Four: 0.03556
-          Six: 0.00198
-          Wicket: 0.01383
+          Dot: 0.67347
+          Single: 0.20243
+          Double: 0.04868
+          Three: 0.00553
+          Four: 0.03983
+          Six: 0.00222
+          Wicket: 0.01452
           Extras: 0.01333
         run_factor: 1.0
         wicket_factors_start:
@@ -456,13 +470,13 @@ formats:
       Dry:
         description: "Mild early, a genuine raging turner for spin by day 4-5"
         scoring_matrix:
-          Dot: 0.70054
-          Single: 0.18352
-          Double: 0.04440
-          Three: 0.00493
-          Four: 0.03749
-          Six: 0.00247
-          Wicket: 0.01381
+          Dot: 0.66712
+          Single: 0.20554
+          Double: 0.04973
+          Three: 0.00552
+          Four: 0.04199
+          Six: 0.00277
+          Wicket: 0.01450
           Extras: 0.01283
         run_factor: 1.0
         wicket_factors_start:
@@ -483,13 +497,13 @@ formats:
       Hard:
         description: "True, neutral surface — stays close to neutral throughout the match"
         scoring_matrix:
-          Dot: 0.68932
-          Single: 0.19005
-          Double: 0.04727
-          Three: 0.00591
-          Four: 0.04136
-          Six: 0.00295
-          Wicket: 0.01379
+          Dot: 0.65413
+          Single: 0.21286
+          Double: 0.05294
+          Three: 0.00662
+          Four: 0.04632
+          Six: 0.00330
+          Wicket: 0.01448
           Extras: 0.00935
         run_factor: 1.0
         wicket_factors_start:
@@ -506,13 +520,13 @@ formats:
       Flat:
         description: "Good batting surface — a patient grind, not a run-fest"
         scoring_matrix:
-          Dot: 0.67813
-          Single: 0.19459
-          Double: 0.05012
-          Three: 0.00590
-          Four: 0.04521
-          Six: 0.00344
-          Wicket: 0.01376
+          Dot: 0.64153
+          Single: 0.21794
+          Double: 0.05613
+          Three: 0.00661
+          Four: 0.05064
+          Six: 0.00385
+          Wicket: 0.01445
           Extras: 0.00885
         run_factor: 1.0
         wicket_factors_start:
@@ -526,13 +540,13 @@ formats:
       Dead:
         description: "Lifeless surface, offers spin some late assistance over 5 days"
         scoring_matrix:
-          Dot: 0.66928
-          Single: 0.19725
-          Double: 0.05299
-          Three: 0.00589
-          Four: 0.04907
-          Six: 0.00393
-          Wicket: 0.01374
+          Dot: 0.63150
+          Single: 0.22092
+          Double: 0.05935
+          Three: 0.00660
+          Four: 0.05496
+          Six: 0.00440
+          Wicket: 0.01443
           Extras: 0.00785
         run_factor: 1.0
         wicket_factors_start:

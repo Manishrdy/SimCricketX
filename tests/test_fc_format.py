@@ -17,9 +17,11 @@ import pytest
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import engine.match as match_module
+import engine.fc_declaration as fc_declaration_module
 from engine.format_config import MULTIDAY_FORMAT_REGISTRY, get_any_format
 from engine.fc_declaration import (
     should_declare, should_enforce_follow_on, estimate_lead_declaration_outcome,
+    estimate_target_defence_outcome,
     declaration_window_open, compute_innings_time_budget_overs,
 )
 from engine import fc_bowler_workload
@@ -413,6 +415,99 @@ def test_monte_carlo_declaration_zero_overs_remaining_is_all_draws():
     assert draw > 0.95 and win < 0.05 and loss < 0.05
 
 
+class _FixedGaussRng:
+    """Supply exact aggregate projections to a one-trial forecast."""
+
+    def __init__(self, *values):
+        self._values = iter(values)
+
+    def gauss(self, _mean, _stddev):
+        return next(self._values)
+
+
+@pytest.mark.parametrize(
+    ("dismiss_overs", "scoring_rate", "expected"),
+    [
+        (65, 250 / 65, (1.0, 0.0, 0.0)),   # 250 all out: defence wins
+        (80, 250 / 80, (1.0, 0.0, 0.0)),   # all out on final ball: win
+        (100, 270 / 80, (0.0, 1.0, 0.0)),  # 270/7 at stumps: draw
+        (100, 311 / 70, (0.0, 0.0, 1.0)),  # target reached in 70 overs
+        (65, 325 / 65, (0.0, 0.0, 1.0)),   # reaches 311 before 325 all out
+        (100, 311 / 80, (0.0, 0.0, 1.0)),  # exactly 311: chase wins
+        (100, 310 / 80, (0.0, 1.0, 0.0)),  # exactly 310 at stumps: draw
+    ],
+)
+def test_innings_three_target_defence_scenarios(dismiss_overs, scoring_rate,
+                                                 expected):
+    outcome = estimate_target_defence_outcome(
+        lead=310,
+        overs_remaining_in_match=80,
+        own_bowling_strength=70,
+        opp_batting_strength=70,
+        trials=1,
+        rng=_FixedGaussRng(dismiss_overs, scoring_rate),
+    )
+    assert outcome == expected
+
+
+def test_target_defence_probabilities_and_cricket_invariants():
+    import random
+
+    common = dict(
+        overs_remaining_in_match=120,
+        own_bowling_strength=70,
+        opp_batting_strength=70,
+        pitch_wear=0.6,
+        trials=800,
+    )
+    seed = 1729
+    small_lead = estimate_target_defence_outcome(
+        lead=180, rng=random.Random(seed), **common,
+    )
+    big_lead = estimate_target_defence_outcome(
+        lead=320, rng=random.Random(seed), **common,
+    )
+
+    assert sum(small_lead) == pytest.approx(1.0)
+    assert sum(big_lead) == pytest.approx(1.0)
+    assert big_lead[0] >= small_lead[0]
+
+    weak_attack = estimate_target_defence_outcome(
+        lead=240, rng=random.Random(seed),
+        **{**common, "own_bowling_strength": 40},
+    )
+    strong_attack = estimate_target_defence_outcome(
+        lead=240, rng=random.Random(seed),
+        **{**common, "own_bowling_strength": 90},
+    )
+    assert strong_attack[0] >= weak_attack[0]
+
+    weak_batting = estimate_target_defence_outcome(
+        lead=240, rng=random.Random(seed),
+        **{**common, "opp_batting_strength": 35},
+    )
+    strong_batting = estimate_target_defence_outcome(
+        lead=240, rng=random.Random(seed),
+        **{**common, "opp_batting_strength": 90},
+    )
+    assert strong_batting[2] >= weak_batting[2]
+
+
+def test_target_defence_with_almost_no_time_is_a_draw():
+    import random
+
+    outcome = estimate_target_defence_outcome(
+        lead=310,
+        overs_remaining_in_match=1,
+        own_bowling_strength=90,
+        opp_batting_strength=90,
+        pitch_wear=1.0,
+        trials=300,
+        rng=random.Random(2),
+    )
+    assert outcome == (0.0, 1.0, 0.0)
+
+
 def test_should_declare_uses_monte_carlo_when_inputs_supplied():
     """A lead below the flat _LEAD_BASE_THRESHOLD (250) but with a lot of
     match time left and a strong bowling attack against weak opposition
@@ -422,18 +517,93 @@ def test_should_declare_uses_monte_carlo_when_inputs_supplied():
     import random
     base_kwargs = dict(
         fc_innings=3, wickets=6, overs_bowled_this_innings=65,
-        score=0, lead=180, days_remaining=2,
+        score=0, lead=220, days_remaining=2,
     )
-    # No MC inputs -> old flat-threshold path -> lead (180) < 250 -> False.
+    # No MC inputs -> old flat-threshold path -> lead (220) < 250 -> False.
     assert should_declare(**base_kwargs) is False
 
     # MC inputs supplied, favorable matchup -> should now say True.
     assert should_declare(
         **base_kwargs,
         overs_remaining_in_match=180, own_bowling_strength=90,
-        own_batting_strength=70, opp_batting_strength=25,
+        opp_batting_strength=25,
         pitch_wear=0.6, rng=random.Random(3),
     ) is True
+
+
+def test_should_declare_routes_innings_two_and_three_forecasts(monkeypatch, caplog):
+    calls = []
+
+    def innings_two_forecast(**kwargs):
+        calls.append(("two", kwargs))
+        return 1.0, 0.0, 0.0
+
+    def innings_three_forecast(**kwargs):
+        calls.append(("three", kwargs))
+        return 1.0, 0.0, 0.0
+
+    monkeypatch.setattr(
+        fc_declaration_module,
+        "estimate_lead_declaration_outcome",
+        innings_two_forecast,
+    )
+    monkeypatch.setattr(
+        fc_declaration_module,
+        "estimate_target_defence_outcome",
+        innings_three_forecast,
+    )
+    common = dict(
+        wickets=6,
+        overs_bowled_this_innings=65,
+        score=300,
+        lead=180,
+        days_remaining=2,
+        overs_remaining_in_match=120,
+        own_bowling_strength=75,
+        opp_batting_strength=65,
+    )
+
+    with caplog.at_level("DEBUG", logger="engine.fc_declaration"):
+        assert should_declare(
+            fc_innings=2, own_batting_strength=68, **common,
+        ) is True
+        assert should_declare(
+            fc_innings=3, own_batting_strength=None, **common,
+        ) is True
+
+    assert [name for name, _kwargs in calls] == ["two", "three"]
+    assert calls[0][1]["own_batting_strength"] == 68
+    assert "own_batting_strength" not in calls[1][1]
+    assert "innings_two_bowl_then_chase" in caplog.text
+    assert "innings_three_target_defence" in caplog.text
+
+
+def test_innings_three_ignores_declaring_sides_batting_strength():
+    import random
+
+    common = dict(
+        fc_innings=3,
+        wickets=6,
+        overs_bowled_this_innings=65,
+        score=300,
+        lead=240,
+        days_remaining=2,
+        overs_remaining_in_match=120,
+        own_bowling_strength=75,
+        opp_batting_strength=65,
+        pitch_wear=0.6,
+    )
+    weak_batting_decision = should_declare(
+        own_batting_strength=1,
+        rng=random.Random(99),
+        **common,
+    )
+    strong_batting_decision = should_declare(
+        own_batting_strength=100,
+        rng=random.Random(99),
+        **common,
+    )
+    assert weak_batting_decision == strong_batting_decision
 
 
 def test_follow_on_thresholds_unit():
@@ -745,17 +915,55 @@ def test_ball_condition_factor_boosts_pace_fresh_and_reverse_not_middle():
     assert gc.get_fc_ball_condition_factor("Medium", 72, 80) == 1.0
 
 
-def test_fc_ball_overs_resets_at_new_innings_and_new_ball(app):
+def test_fc_second_new_ball_can_be_delayed_then_is_forced(app):
     m = _fc_match(days=5)
     assert m.fc_ball_overs_bowled == 0
-    # Drive well past the (default) 80-over new-ball mark within one long innings.
-    for _ in range(600):
-        r = m.next_ball()
-        if r.get("match_over") or r.get("innings_end") or r.get("day_break"):
-            break
-        # The ball-age counter must never reach or exceed new_ball_overs —
-        # it auto-resets to 0 the moment it gets there.
-        assert m.fc_ball_overs_bowled < m.fmt.new_ball_overs
+    m.current_over = m.fmt.new_ball_overs
+    m.fc_ball_overs_bowled = m.fmt.new_ball_overs
+
+    # A productive reverse-swing spell is a reason to retain the old ball.
+    quick = next(p for p in m.bowling_team if p["bowling_type"] == "Fast")
+    m.current_bowler = quick
+    m.bowler_manager._last_bowler = quick["name"]
+    m.bowler_manager._prev_over_runs[quick["name"]] = 0
+    m.batsman_stats[m.current_striker["name"]]["balls"] = 40
+    take, reason, _score = m._fc_should_take_new_ball()
+    assert take is False
+    assert "reverse_swing_working" in reason
+    assert m._fc_consider_new_ball() is False
+    assert m.fc_ball_overs_bowled == m.fmt.new_ball_overs
+
+    # The captain cannot delay indefinitely: twenty overs after it became
+    # available, the replacement ball is taken and its swing window begins.
+    m.fc_ball_overs_bowled = m.fmt.new_ball_overs + 20
+    assert m._fc_consider_new_ball() is True
+    assert m.fc_ball_overs_bowled == 0
+    assert m._fc_is_new_ball_window() is True
+    assert "new ball is taken" in m.pending_pre_ball_commentary[-1].lower()
+
+
+def test_fc_captain_takes_new_ball_immediately_for_a_long_stand(app):
+    m = _fc_match(days=5)
+    m.current_over = m.fmt.new_ball_overs
+    m.fc_ball_overs_bowled = m.fmt.new_ball_overs
+    m.current_partnership_balls = 240
+    m.batsman_stats[m.current_striker["name"]]["balls"] = 80
+
+    take, reason, score = m._fc_should_take_new_ball()
+    assert take is True
+    assert score >= 0.5
+    assert "long_partnership" in reason
+
+
+def test_delayed_new_ball_age_survives_snapshot_roundtrip(app):
+    m = _fc_match(days=5)
+    m.current_over = 87
+    m.fc_ball_overs_bowled = 87
+    snap = m.serialize_fc_snapshot()
+    restored = _fc_match(days=5)
+    restored.restore_fc_snapshot(snap)
+    assert restored.fc_ball_overs_bowled == 87
+    assert restored._fc_should_take_new_ball()[1] != "not_available"
 
 
 
@@ -811,7 +1019,95 @@ def test_temperament_dampens_survival_wicket_reduction_and_collapse():
         "fc_innings": 4, "wickets": 5, "striker_balls_faced": 40, "days_remaining": 1,
         "recent_wickets": 0, "survival_mode": True, "striker_temperament": 95,
     })
-    assert high["wicket_modifier"] > low["wicket_modifier"]
+    assert high["wicket_modifier"] < low["wicket_modifier"]
+
+
+def test_temperament_protects_a_live_fourth_innings_chase():
+    fpe = FCPressureEngine()
+    base = {
+        "fc_innings": 4, "wickets": 3, "striker_balls_faced": 50,
+        "days_remaining": 2, "recent_wickets": 0, "survival_mode": False,
+        "required_run_rate": 3.0,
+    }
+    rattled = fpe.get_pressure_effects({**base, "striker_temperament": 0})
+    calm = fpe.get_pressure_effects({**base, "striker_temperament": 100})
+    assert calm["wicket_modifier"] < rattled["wicket_modifier"]
+
+
+def test_technique_has_more_identity_against_the_moving_new_ball():
+    from engine.ball_outcome import compute_weighted_prob
+
+    def wicket_weight(technique, technique_weight):
+        return compute_weighted_prob(
+            "Wicket", 0.02, batting=70, bowling=75, fielding=65,
+            pitch="Green", bowling_type="Fast", streak={},
+            format_name="FC", technique_rating=technique,
+            technique_weight=technique_weight,
+        )
+
+    ordinary_gap = wicket_weight(20, 0.30) - wicket_weight(90, 0.30)
+    new_ball_gap = wicket_weight(20, 0.45) - wicket_weight(90, 0.45)
+    assert new_ball_gap > ordinary_gap > 0
+
+
+def test_batter_stamina_only_separates_players_in_a_long_innings(app):
+    low = {"stamina_rating": 0}
+    high = {"stamina_rating": 100}
+    assert match_module.Match._fc_batter_stamina_multiplier(low, 100) == 1.0
+    assert match_module.Match._fc_batter_stamina_multiplier(high, 100) == 1.0
+    assert match_module.Match._fc_batter_stamina_multiplier(low, 360) == pytest.approx(0.90)
+    assert match_module.Match._fc_batter_stamina_multiplier(high, 360) == pytest.approx(1.10)
+
+
+def test_fc_home_factor_is_situational_capped_and_non_mutating(app):
+    m = _fc_match(days=5, pitch="Hard")
+    original = m.home_xi[0]["batting_rating"]
+    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.04)
+    assert m._fc_home_advantage_factor(m.away_xi) == 1.0
+
+    m.pitch = "Green"
+    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.07)
+    m.fc_innings = 3
+    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.10)
+    assert m._fc_home_advantage_factor(m.home_xi) <= 1.10
+    assert m._fc_home_skill_multiplier(m.home_xi) ** 4 == pytest.approx(1.10)
+    assert m.home_xi[0]["batting_rating"] == original
+
+
+def test_fc_home_factor_reaches_effective_rating_not_stored_player(monkeypatch, app):
+    captured = {}
+
+    def fixed_dot(**kwargs):
+        captured["batting_rating"] = kwargs["batter"]["batting_rating"]
+        captured["bowling_rating"] = kwargs["bowler"]["bowling_rating"]
+        return {
+            "type": "run", "runs": 0, "description": "Dot ball.",
+            "wicket_type": None, "is_extra": False, "batter_out": False,
+        }
+
+    monkeypatch.setattr(match_module, "calculate_outcome", fixed_dot)
+    m = _fc_match(days=5, pitch="Hard", toss_winner="HOM", toss_decision="Bat")
+    raw_batting = m.current_striker["batting_rating"]
+    m.next_ball()
+
+    assert captured["batting_rating"] == pytest.approx(raw_batting * (1.04 ** 0.25))
+    assert m.current_striker["batting_rating"] == raw_batting
+
+
+def test_fc_toss_choice_has_no_permanent_boundary_modifier(monkeypatch, app):
+    modifiers = []
+
+    def fixed_dot(**kwargs):
+        modifiers.append(kwargs["pressure_effects"]["boundary_modifier"])
+        return {
+            "type": "run", "runs": 0, "description": "Dot ball.",
+            "wicket_type": None, "is_extra": False, "batter_out": False,
+        }
+
+    monkeypatch.setattr(match_module, "calculate_outcome", fixed_dot)
+    _fc_match(pitch="Green", toss_winner="HOM", toss_decision="Bowl").next_ball()
+    _fc_match(pitch="Green", toss_winner="HOM", toss_decision="Bat").next_ball()
+    assert modifiers[0] == pytest.approx(modifiers[1])
 
 
 def test_technique_dampens_settling_in_penalty():
@@ -1067,6 +1363,56 @@ def _spell_mgr(stamina=60):
          "bowling_rating": 72, "stamina_rating": stamina},
     ]
     return fc_bowler_workload.FCBowlerManager(xi, fmt=None), xi
+
+
+def test_fc_weighted_bowler_choice_is_seeded_and_uses_all_four_preferences(app):
+    import random
+
+    mgr, xi = _spell_mgr(stamina=70)
+    mgr._prev_over_runs["Quick"] = 0
+    mgr._prev_over_runs["Seamer"] = 12
+    scores = mgr.weighted_selection_scores(
+        xi, pitch_wear=0.1, fc_day=1, new_ball_window=True,
+    )
+
+    quick = scores["Quick"]
+    assert quick["composite"] == pytest.approx(
+        quick["ability"] * 0.50
+        + quick["conditions"] * 0.25
+        + quick["freshness"] * 0.15
+        + quick["recent"] * 0.10
+    )
+    assert quick["recent"] > scores["Seamer"]["recent"]
+    assert quick["conditions"] > scores["Spinner"]["conditions"]
+
+    def sequence(seed):
+        rng = random.Random(seed)
+        return [
+            mgr.choose_weighted_bowler(
+                xi, pitch_wear=0.1, fc_day=1,
+                new_ball_window=True, rng=rng,
+            )["name"]
+            for _ in range(40)
+        ]
+
+    assert sequence(991) == sequence(991)
+
+
+def test_new_ball_weighting_prefers_fresh_strike_pace_without_hard_filtering(app):
+    import collections
+    import random
+
+    mgr, xi = _spell_mgr(stamina=80)
+    rng = random.Random(31415)
+    picks = collections.Counter(
+        mgr.choose_weighted_bowler(
+            xi, pitch_wear=0.8, fc_day=4,
+            new_ball_window=True, rng=rng,
+        )["name"]
+        for _ in range(1000)
+    )
+    assert picks["Quick"] + picks["Seamer"] > picks["Spinner"]
+    assert picks["Spinner"] > 0  # preference, not an illegal hard filter
 
 
 def test_spell_length_differs_by_bowling_type(app):
@@ -1450,3 +1796,119 @@ def test_partnership_balls_reach_the_pressure_engine(app):
     assert "partnership_balls" in state
     assert state["partnership_balls"] == m.current_partnership_balls
     assert state["partnership_runs"] == m.current_partnership_runs
+
+
+# ---------------------------------------------------------------------------
+# 16. Session clock, the match-situation line, and auto-only simulation
+# ---------------------------------------------------------------------------
+
+def test_fc_intervals_do_not_move_with_the_over_rate(app):
+    """Lunch is at 30 and Tea at 60 on a full day whatever the over rate.
+
+    Sessions are two-hour blocks. A pace-heavy attack getting through 86 of
+    the day's 90 overs loses those four overs at the END of the day; it does
+    not drag Lunch back to over 29. The intervals used to be thirds of the
+    over-rate-adjusted total, which produced "End of over 29, Lunch"."""
+    script = {"forecast": "clear", "day_events": {}}
+    m = _fc_match(days=5, fc_weather_script=script)
+    for adjust in (-9, -4, 0, 5):
+        m.fc_day_over_rate_adjust = adjust
+        assert m._fc_scheduled_overs_today() == 90
+        assert m._fc_effective_overs_today() == 90 + adjust
+        assert m._fc_session_boundaries() == [30, 60], (
+            f"over-rate adjust {adjust:+d} moved the intervals")
+
+
+def test_fc_intervals_still_compress_on_a_weather_shortened_day(app):
+    """Weather removes scheduled playing time, so it DOES move the intervals
+    — the distinction the over rate does not get."""
+    script = {"forecast": "rain_around",
+              "day_events": {1: {"reason": "rain", "overs_lost": 45}}}
+    m = _fc_match(days=5, fc_weather_script=script)
+    m.fc_day_over_rate_adjust = 0
+    assert m._fc_session_boundaries() == [15, 30]      # thirds of 45
+
+
+def test_fc_session_summary_survives_an_innings_ending_inside_it(app):
+    """A declaration is taken AT the interval, so the innings ends and the
+    interval card is built moments later. The card used to report "0/0 in 0
+    overs this session" because the session baseline was re-taken when the
+    score reset."""
+    m = _fc_match(days=5)
+    m.fc_day_overs_bowled_today = 20
+    m._fc_snapshot_session_start()
+    m.fc_day_overs_bowled_today = 30
+    m.score, m.wickets = 62, 3
+
+    m._fc_start_next_innings(2, m.bowling_team, m.batting_team)
+
+    summary = m._fc_session_summary()
+    assert summary["overs"] == 10, "the session clock kept running"
+    assert summary["runs"] == 62 and summary["wickets"] == 3, (
+        "what the session produced before the innings ended still counts")
+
+
+def test_fc_first_innings_says_nothing_about_a_target(app):
+    """There is no target in the first innings, and the limited-overs line
+    read "need None runs from 450 overs" when it tried to name one."""
+    m = _fc_match(days=5)
+    assert m.fc_innings == 1
+    assert m._fc_match_situation() is None
+    assert m._format_innings_complete_summary("Lunch, Day 1") == ""
+
+
+def test_fc_match_situation_reads_like_a_scoreboard(app):
+    """Lead / trail / a chase, stated the way the game states them."""
+    m = _fc_match(days=5)
+    home, away = m._get_team_name(m.home_xi), m._get_team_name(m.away_xi)
+
+    # Innings 2: the side batting is behind, so the side in front is named.
+    m.fc_innings_totals[1] = {"score": 380, "wickets": 10}
+    m.fc_innings = 2
+    m.batting_team, m.bowling_team = m.away_xi, m.home_xi
+    m.score = 242
+    assert m._fc_match_situation() == f"{home} lead by 138 runs"
+    m.score = 380
+    assert m._fc_match_situation() == "The scores are level"
+    m.score = 381
+    assert m._fc_match_situation() == f"{away} lead by 1 run"
+
+    # Innings 3 after a follow-on: the side batting again is the one behind,
+    # and a side following on trails rather than being trailed.
+    m.fc_innings_totals[2] = {"score": 150, "wickets": 10}
+    m.fc_innings = 3
+    m.follow_on_enforced = True
+    m.score = 90
+    assert m._fc_match_situation() == f"{away} trail by 140 runs"
+    m.score = 260
+    assert m._fc_match_situation() == f"{away} lead by 30 runs"
+
+    # Innings 3 without a follow-on: the first-innings side bats again, so
+    # its two innings are measured against the other side's one.
+    m.follow_on_enforced = False
+    m.batting_team, m.bowling_team = m.home_xi, m.away_xi
+    m.score = 40
+    assert m._fc_match_situation() == f"{home} lead by 270 runs"
+
+    # The last innings is simply a chase — no overs, no run rate.
+    m.fc_innings = 4
+    m.target = 246
+    m.batting_team, m.bowling_team = m.away_xi, m.home_xi
+    m.score = 200
+    assert m._fc_match_situation() == f"{away} need 46 runs to win"
+    m.score = 245
+    assert m._fc_match_situation() == f"{away} need 1 run to win"
+
+
+def test_fc_is_always_simulated_in_auto_mode(app):
+    """Naming the next batter and bowler several thousand times over four
+    days is not a mode anyone wants, so FC pins it — including for a match
+    saved before the setup control was removed."""
+    data = _fc_match(days=4).match_data
+    data = copy.deepcopy(data)
+    data["match_id"] = str(uuid.uuid4())
+    data["simulation_mode"] = "manual"
+    m = match_module.Match(data)
+    assert m.simulation_mode == "auto"
+    assert m._is_manual_mode() is False
+    assert data["simulation_mode"] == "auto", "and the saved file is corrected"
