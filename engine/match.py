@@ -6819,29 +6819,17 @@ class Match:
                             "economy": f"{economy:.2f}"
                         })
                     else:
-                        # Bowler didn't bowl - empty stats
-                        bowlers.append({
-                            "name": player_name,
-                            "overs": "",
-                            "maidens": "",
-                            "runs": "",
-                            "wickets": "",
-                            "noballs": "",
-                            "wides": "",
-                            "economy": ""
-                        })
+                        # Didn't bowl — leave him off the card entirely.
+                        # A real scorecard lists the bowlers who bowled, not
+                        # everyone who might have. This used to append a row
+                        # of empty strings, which the UI renders verbatim as
+                        # a blank line; it shows up most in first-class
+                        # cricket, where a captain often never needs his
+                        # fifth bowler across a whole innings.
+                        continue
                 else:
-                    # Bowler not in stats - didn't bowl
-                    bowlers.append({
-                        "name": player_name,
-                        "overs": "",
-                        "maidens": "",
-                        "runs": "",
-                        "wickets": "",
-                        "noballs": "",
-                        "wides": "",
-                        "economy": ""
-                    })
+                    # Never even got a stats entry — same story, leave him off.
+                    continue
 
         # Calculate extras
         individual_runs = sum(stats["runs"] for stats in self.batsman_stats.values())
