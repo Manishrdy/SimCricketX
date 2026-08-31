@@ -165,9 +165,55 @@ def log_exception(
                 sys.stderr.write(tb_text)
             return None
 
+        # Persist on a SHORT-LIVED SESSION OF OUR OWN — never db.session.
+        #
+        # This runs from except-handlers that have usually already modified
+        # the shared session. Committing db.session here would commit THEIR
+        # half-finished work as a side effect of logging the failure, and
+        # since the caller's own `db.session.rollback()` runs after we
+        # return, it would by then be rolling back nothing. That is exactly
+        # how a failed tournament resimulate came to null out a fixture's
+        # match_id while leaving the match row itself in place.
+        #
+        # An independent session and transaction removes the coupling: the
+        # error record commits, the caller's pending work is untouched, and
+        # their rollback still does what they expect.
+        from sqlalchemy.orm import Session as _SASession
+        _sess = _SASession(bind=db.engine, expire_on_commit=False)
+        try:
+            return _persist_exception_entry(
+                _sess, fingerprint, now, tb_text, context_json,
+                resolved_request_id, user_email, exc_type_name, exc_message,
+                module_name, func_name, lineno, fname, severity,
+                normalized_source, handled,
+            )
+        finally:
+            try:
+                _sess.close()
+            except Exception:
+                pass
+    except Exception:
+        if has_app_context():
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        return None
+
+
+def _persist_exception_entry(session, fingerprint, now, tb_text, context_json,
+                              resolved_request_id, user_email, exc_type_name,
+                              exc_message, module_name, func_name, lineno,
+                              fname, severity, normalized_source, handled):
+    """Write (or bump) the ExceptionLog row on *session*.
+
+    Split out of log_exception purely so the isolated-session lifetime is
+    obvious at the call site; the logic is unchanged.
+    """
+    try:
         # Idempotency: one canonical DB row per fingerprint.
         # Repeated occurrences increment counters and update last_seen fields.
-        entry = ExceptionLog.query.filter_by(fingerprint=fingerprint).first()
+        entry = session.query(ExceptionLog).filter_by(fingerprint=fingerprint).first()
         if entry:
             entry.occurrence_count = int(entry.occurrence_count or 1) + 1
             entry.last_seen_at = now
@@ -180,7 +226,7 @@ def log_exception(
                 entry.request_id = resolved_request_id[:64]
             if user_email:
                 entry.user_email = user_email
-            db.session.commit()
+            session.commit()
             return entry.id
 
         entry = ExceptionLog(
@@ -204,8 +250,8 @@ def log_exception(
             timestamp=now,
             github_sync_status="pending",
         )
-        db.session.add(entry)
-        db.session.commit()
+        session.add(entry)
+        session.commit()
 
         # Hand the GitHub issue creation off to the background queue so we
         # never block the caller on a network round-trip. The worker will
@@ -217,14 +263,13 @@ def log_exception(
         except Exception:
             # Never let queue failures bubble up — caller's error handling
             # must remain intact.
-            db.session.rollback()
+            session.rollback()
         return created_id
     except Exception:
-        if has_app_context():
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
+        try:
+            session.rollback()
+        except Exception:
+            pass
         return None
 
 
