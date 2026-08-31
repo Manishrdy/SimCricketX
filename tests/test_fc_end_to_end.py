@@ -82,13 +82,7 @@ def fc_teams(app, regular_user):
 
 
 def _xi_payload(code):
-    """The XI as the match-setup page sends it: names plus who is bowling.
-
-    Sent explicitly rather than relying on the route's default, which marks
-    will_bowl only for roles in the first five batting positions — and a real
-    first-class side bats its bowlers at 7-11, so the default leaves the
-    attack empty and the match dies at over 0.
-    """
+    """The XI as the match-setup page sends it: names plus who is bowling."""
     return [
         {"name": f"{code} {name}",
          "will_bowl": role in ("Bowler", "All-rounder")}
@@ -96,16 +90,22 @@ def _xi_payload(code):
     ]
 
 
-def _create_match(client, home, away, days=4, pitch="Hard"):
-    """Create the match through the real setup route."""
-    resp = client.post("/match/setup", json={
-        "playing_xi": {"home": _xi_payload("RED"), "away": _xi_payload("BLU")},
+def _create_match(client, home, away, days=4, pitch="Hard", send_xi=True):
+    """Create the match through the real setup route.
+
+    send_xi mirrors the match-setup page, which always posts its own XI.
+    Passing False exercises the route's default instead.
+    """
+    payload = {
         "team_home": home.id, "team_away": away.id,
         "match_format": "FC", "days": days,
         "stadium": "Lord's", "pitch": pitch,
         "toss_winner": "HOM", "toss_decision": "Bat",
         "simulation_mode": "auto", "weather_forecast": "clear",
-    })
+    }
+    if send_xi:
+        payload["playing_xi"] = {"home": _xi_payload("RED"), "away": _xi_payload("BLU")}
+    resp = client.post("/match/setup", json=payload)
     assert resp.status_code == 200, resp.get_data(as_text=True)[:500]
     return resp.get_json()
 
@@ -193,3 +193,61 @@ def test_fc_ratings_reach_the_engine_through_match_setup(app, authenticated_clie
         # ...and they are the real values, not a default fill.
         assert {p["technique_rating"] for p in xi} != {50}, (
             f"{xi_name} technique ratings look like defaults, not the squad's")
+
+
+def test_default_xi_picks_an_attack_from_a_realistic_squad(app, authenticated_client, fc_teams):
+    """A client that posts no playing_xi must still get a playable match.
+
+    The default used to mark will_bowl only for bowling roles in the first
+    five BATTING positions. A real side bats its bowlers at 7-11, so nobody
+    was marked, and the match died on the first delivery with "Bowler
+    selection failed at over 0.0".
+    """
+    from utils.squad_rules import MIN_BOWLING_OPTIONS
+    from app import MATCH_INSTANCES
+
+    home, away = fc_teams
+    created = _create_match(authenticated_client, home, away, send_xi=False)
+    match_id = created["match_id"]
+
+    # It must survive the first ball — that is where it used to fall over.
+    resp = authenticated_client.post(f"/match/{match_id}/next-ball")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert "error" not in data, data.get("error")
+    assert data.get("bowler"), "no bowler was selected for the first over"
+
+    inst = MATCH_INSTANCES.get(match_id)
+    for side, xi in (("home", inst.home_xi), ("away", inst.away_xi)):
+        attack = [p for p in xi if p.get("will_bowl")]
+        assert len(attack) == MIN_BOWLING_OPTIONS, (
+            f"{side} default XI marked {len(attack)} bowlers, "
+            f"expected {MIN_BOWLING_OPTIONS}")
+        # ...and they are the actual bowling roles, wherever they bat.
+        assert all(p["role"] in ("Bowler", "All-rounder") for p in attack), (
+            f"{side} attack contains a specialist batter: "
+            f"{[(p['name'], p['role']) for p in attack]}")
+
+
+def test_scorecard_omits_bowlers_who_never_bowled(app, authenticated_client, fc_teams):
+    """A real scorecard lists the bowlers who bowled, not everyone who might
+    have. The card used to carry a row of empty strings for each unused
+    bowler, which the UI rendered verbatim as a blank line — most visible in
+    first-class cricket, where the fifth bowler often isn't needed."""
+    home, away = fc_teams
+    match_id = _create_match(authenticated_client, home, away)["match_id"]
+
+    seen_cards = 0
+    for _ in range(40000):
+        data = authenticated_client.post(f"/match/{match_id}/next-ball").get_json()
+        assert "error" not in data, data.get("error")
+        card = data.get("scorecard_data")
+        if card and card.get("bowlers"):
+            seen_cards += 1
+            for b in card["bowlers"]:
+                assert b.get("overs") not in ("", None), (
+                    f"{b.get('name')} is on the card without having bowled: {b}")
+                assert b.get("runs") != "", f"blank figures for {b.get('name')}"
+        if data.get("match_over"):
+            break
+    assert seen_cards, "no scorecards were produced to check"
