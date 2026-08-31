@@ -1900,6 +1900,114 @@ def test_fc_match_situation_reads_like_a_scoreboard(app):
     assert m._fc_match_situation() == f"{away} need 1 run to win"
 
 
+def test_fc_interval_situation_always_names_the_batting_team(app):
+    """Lunch/tea/stumps cards describe the displayed batting scorecard."""
+    m = _fc_match(days=5)
+    home, away = m._get_team_name(m.home_xi), m._get_team_name(m.away_xi)
+    m.fc_innings_totals[1] = {"score": 380, "wickets": 10}
+    m.fc_innings = 2
+    m.batting_team, m.bowling_team = m.away_xi, m.home_xi
+    m.score = 242
+
+    assert m._fc_batting_team_lead_or_trail() == f"{away} trail by 138 runs"
+
+    m.fc_innings_totals[2] = {"score": 150, "wickets": 10}
+    m.fc_innings = 3
+    m.follow_on_enforced = True
+    m.score = 260
+    assert m._fc_batting_team_lead_or_trail() == f"{away} lead by 30 runs"
+
+    m.fc_innings = 4
+    m.follow_on_enforced = False
+    m.batting_team, m.bowling_team = m.away_xi, m.home_xi
+    m.target = 246
+    m.score = 200
+    assert m._fc_batting_team_lead_or_trail() == f"{away} trail by 45 runs"
+
+    m.fc_session_start = {
+        "score": 190, "wickets": 2, "day_overs": 30, "fc_innings": 4,
+        "carry": None,
+    }
+    m.fc_day_overs_bowled_today = 40
+    response = m._fc_interval_response("Tea")
+    assert response["match_situation"] == f"{away} trail by 45 runs"
+    assert response["session_summary"] == {"runs": 10, "wickets": 0, "overs": 10}
+    assert f"{away} trail by 45 runs" in response["commentary"]
+
+
+def test_fc_follow_on_innings_win_has_team_result_and_third_innings_card(app):
+    m = _fc_match(days=5)
+    m._fc_create_match_archive = lambda: True
+    m._fc_first_batting_xi = m.home_xi
+    m._fc_first_bowling_xi = m.away_xi
+    m.fc_innings_totals[1] = {"score": 500, "wickets": 10}
+    m.fc_innings_totals[2] = {"score": 150, "wickets": 10}
+    m.follow_on_enforced = True
+    m._fc_start_next_innings(3, m.away_xi, m.home_xi)
+    m.follow_on_enforced = True
+    m.score, m.wickets, m.current_over = 200, 10, 60
+    m.batsman_stats[m.current_striker["name"]]["balls"] = 1
+
+    response = m._fc_transition_to_next_innings()
+
+    assert response["match_over"] is True
+    assert response["result"] == "HOM win by 150 runs with innings left."
+    assert m.margin_type == "innings" and m.margin_value == 150
+    assert response["scorecard_data"]["innings"] == "3rd"
+    assert response["scorecard_data"]["total_score"] == 200
+
+
+def test_fc_second_batting_team_innings_win_never_starts_empty_chase(app):
+    """A side ahead of the opponent's two innings has no chase to make."""
+    m = _fc_match(days=5)
+    m._fc_create_match_archive = lambda: True
+    m._fc_first_batting_xi = m.home_xi
+    m._fc_first_bowling_xi = m.away_xi
+    m.fc_innings_totals[1] = {"score": 200, "wickets": 10}
+    m.fc_innings_totals[2] = {"score": 450, "wickets": 10}
+    m.follow_on_enforced = False
+    m._fc_start_next_innings(3, m.home_xi, m.away_xi)
+    m.score, m.wickets, m.current_over = 100, 10, 35
+    m.batsman_stats[m.current_striker["name"]]["balls"] = 1
+
+    response = m._fc_transition_to_next_innings()
+
+    assert response["match_over"] is True
+    assert response["result"] == "AWY win by 150 runs with innings left."
+    assert m.fc_innings == 3, "a phantom fourth innings was not created"
+    assert response["scorecard_data"]["innings"] == "3rd"
+    assert response["scorecard_data"]["total_score"] == 100
+    assert response["scorecard_data"]["wickets"] == 10
+
+
+def test_fc_tenth_wicket_commentary_precedes_innings_end(monkeypatch, app):
+    def fixed_wicket(**kwargs):
+        return {
+            "type": "wicket", "runs": 0, "description": "Middle stump knocked back.",
+            "wicket_type": "Bowled", "is_extra": False, "batter_out": True,
+        }
+
+    monkeypatch.setattr(match_module, "calculate_outcome", fixed_wicket)
+    m = _fc_match(days=5)
+    dismissed_name = m.current_striker["name"]
+    m.score, m.wickets = 246, 9
+    m.current_over, m.current_ball = 74, 2
+    m.remaining_batter_indices = set()
+    m.current_bowler = next(p for p in m.bowling_team if p.get("will_bowl"))
+    m.bowler_selected_for_over = m.current_over
+
+    response = m.next_ball()
+
+    assert response["innings_end"] is True
+    assert response["scorecard_data"]["total_score"] == 246
+    commentary = response["commentary"]
+    assert "Wicket!" in commentary
+    assert dismissed_name in commentary
+    assert "Bowled" in commentary
+    assert "All Out!" in commentary
+    assert commentary.index("Wicket!") < commentary.index("End of 1st Innings")
+
+
 def test_fc_is_always_simulated_in_auto_mode(app):
     """Naming the next batter and bowler several thousand times over four
     days is not a mode anyone wants, so FC pins it — including for a match

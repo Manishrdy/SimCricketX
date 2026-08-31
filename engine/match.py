@@ -4750,6 +4750,45 @@ class Match:
             return f"{batting} trail by {self._plural_runs(-lead)}"
         return f"{bowling} lead by {self._plural_runs(-lead)}"
 
+    def _fc_batting_team_lead_or_trail(self):
+        """State the aggregate match position from the batting side's view.
+
+        Interval scoreboards always identify the team whose scorecard is on
+        screen. This deliberately differs from ``_fc_match_situation()``,
+        whose conventional prose may name the fielding side when it leads.
+        """
+        if not self.is_fc or self.fc_innings == 1:
+            return None
+
+        totals = self.fc_innings_totals
+        if self.fc_innings == 2:
+            lead = self.score - totals.get(1, {}).get("score", 0)
+        elif self.fc_innings == 3:
+            if self.follow_on_enforced:
+                lead = (
+                    totals.get(2, {}).get("score", 0)
+                    + self.score
+                    - totals.get(1, {}).get("score", 0)
+                )
+            else:
+                lead = (
+                    totals.get(1, {}).get("score", 0)
+                    + self.score
+                    - totals.get(2, {}).get("score", 0)
+                )
+        elif self.fc_innings == 4 and self.target is not None:
+            # target - 1 is the opposition's aggregate.
+            lead = self.score - (self.target - 1)
+        else:
+            return None
+
+        batting = self._get_team_name(self.batting_team)
+        if lead > 0:
+            return f"{batting} lead by {self._plural_runs(lead)}"
+        if lead < 0:
+            return f"{batting} trail by {self._plural_runs(-lead)}"
+        return "The scores are level"
+
     def _fc_follow_on_mark(self):
         """Runs the side batting second needs to avoid following on, or
         None when the follow-on isn't in play."""
@@ -5054,6 +5093,7 @@ class Match:
         scorecard_data = self._generate_detailed_scorecard()
         session_no = self._fc_current_session()
         summary = self._fc_session_summary()
+        match_situation = self._fc_batting_team_lead_or_trail()
         self.fc_sessions_taken_today += 1
         self._fc_snapshot_session_start()
         sess_line = (f"{summary['runs']}/{summary['wickets']} in "
@@ -5064,6 +5104,7 @@ class Match:
             "day_number": self.fc_day,
             "session_number": session_no,
             "session_summary": summary,
+            "match_situation": match_situation,
             "match_over": False,
             "innings_end": False,
             "scorecard_data": scorecard_data,
@@ -5074,7 +5115,7 @@ class Match:
             "commentary": self._fc_join(
                 f"<strong>{interval_name} &mdash; Day {self.fc_day}</strong>",
                 f"<em>{sess_line}</em>",
-                self._fc_match_situation(),
+                match_situation,
             ),
             "striker": self.current_striker["name"],
             "non_striker": self.current_non_striker["name"],
@@ -5268,6 +5309,7 @@ class Match:
         # Lunch and Tea do.
         session_summary = self._fc_session_summary()
         session_no = self._fc_current_session()
+        match_situation = self._fc_batting_team_lead_or_trail()
         weather_line = fc_weather.day_summary_line(self.fc_weather_script, day_ended)
         self.fc_day += 1
         self.fc_day_overs_bowled_today = 0
@@ -5279,6 +5321,7 @@ class Match:
             "day_number": day_ended,
             "session_number": session_no,
             "session_summary": session_summary,
+            "match_situation": match_situation,
             "match_over": False,
             "innings_end": False,
             "scorecard_data": scorecard_data,
@@ -5291,8 +5334,8 @@ class Match:
                 f"<strong>Stumps &mdash; Day {day_ended}</strong>",
                 f"<em>{session_summary['runs']}/{session_summary['wickets']} in "
                 f"{session_summary['overs']} overs this session</em>",
+                match_situation,
                 f"<em>{weather_line}</em>" if weather_line else "",
-                self._fc_match_situation(),
             ),
             "striker": self.current_striker["name"],
             "non_striker": self.current_non_striker["name"],
@@ -5372,19 +5415,40 @@ class Match:
         self._second_innings_stats_saved = True
         return self._create_match_archive()
 
-    def _fc_finalize_match(self, scorecard_data):
+    @staticmethod
+    def _scorecard_has_play(scorecard_data):
+        """Return False only for a freshly reset, never-played innings card."""
+        if not scorecard_data:
+            return False
+        if scorecard_data.get("total_score") or scorecard_data.get("wickets"):
+            return True
+        if str(scorecard_data.get("overs", "0")) not in ("0", "0.0", ""):
+            return True
+        return any(
+            player.get("status") or player.get("balls") not in ("", None, 0)
+            for player in scorecard_data.get("players", [])
+        )
+
+    def _fc_finalize_match(self, scorecard_data, commentary_prefix=None):
         self._fc_create_match_archive()
-        return {
+        response = {
             "innings_end": True,
             "innings_number": self.fc_innings,
             "match_over": True,
-            "scorecard_data": scorecard_data,
             "final_score": self.score,
             "wickets": self.wickets,
             "result": self.result,
             "days_played": self.fc_day,
-            "commentary": f"<strong>Match Over!</strong> {self.result}",
+            "commentary": self._fc_join(
+                commentary_prefix,
+                f"<strong>Match Over!</strong> {self.result}",
+            ),
         }
+        # Never put a blank 0/0 modal in front of the result. A legitimate
+        # scoreless all-out innings still has ten wickets and is retained.
+        if self._scorecard_has_play(scorecard_data):
+            response["scorecard_data"] = scorecard_data
+        return response
 
     def _fc_finalize_draw(self):
         if self.wickets < 10 and self.current_partnership_balls > 0:
@@ -5403,7 +5467,7 @@ class Match:
         )
         return self._fc_finalize_match(scorecard_data)
 
-    def _fc_transition_to_next_innings(self):
+    def _fc_transition_to_next_innings(self, commentary_prefix=None):
         if self.wickets < 10 and self.current_partnership_balls > 0:
             self._save_partnership("not_out")
 
@@ -5426,6 +5490,7 @@ class Match:
                 "scorecard_data": scorecard_data,
                 "score": 0, "wickets": 0, "over": 0, "ball": 0,
                 "commentary": self._fc_join(
+                    commentary_prefix,
                     f"<strong>End of 1st Innings:</strong> "
                     f"{self.fc_innings_totals[1]['score']}/"
                     f"{self.fc_innings_totals[1]['wickets']}.",
@@ -5449,7 +5514,10 @@ class Match:
                 self._fc_pending_innings_end_scorecard = scorecard_data
                 return self._build_decision_required_response(
                     self._create_fc_follow_on_decision(deficit),
-                    commentary=self._format_innings_complete_summary('End of innings'),
+                    commentary=self._fc_join(
+                        commentary_prefix,
+                        self._format_innings_complete_summary('End of innings'),
+                    ),
                 )
 
             enforce_fo = deficit > 0 and fc_declaration.should_enforce_follow_on(
@@ -5459,7 +5527,9 @@ class Match:
                 projected_final_wear=self._fc_projected_final_wear(),
                 rain_risk=self._fc_rain_risk(),
             )
-            return self._fc_apply_follow_on_decision(enforce_fo, scorecard_data)
+            return self._fc_apply_follow_on_decision(
+                enforce_fo, scorecard_data, commentary_prefix=commentary_prefix
+            )
 
         if ending_innings == 3:
             if self.follow_on_enforced:
@@ -5468,18 +5538,38 @@ class Match:
                 a1 = self.fc_innings_totals[1]["score"]
                 if (b1 + b2) < a1:
                     margin = a1 - (b1 + b2)
+                    winner = self._get_team_name(self._fc_first_batting_xi)
                     self._set_outcome(
-                        result_text=f"Match won by an innings and {margin} run(s).",
+                        result_text=(
+                            f"{winner} win by {self._plural_runs(margin)} "
+                            f"with innings left."
+                        ),
                         winner_is_home=(self._fc_first_batting_xi is self.home_xi),
                         match_status='completed', margin_type='innings', margin_value=margin,
                     )
-                    return self._fc_finalize_match(scorecard_data)
+                    return self._fc_finalize_match(scorecard_data, commentary_prefix)
                 self.target = (b1 + b2) - a1 + 1
                 self._fc_start_next_innings(4, self._fc_first_batting_xi, self._fc_first_bowling_xi)
             else:
                 a1 = self.fc_innings_totals[1]["score"]
                 a2 = self.score
                 b1 = self.fc_innings_totals[2]["score"]
+                if (a1 + a2) < b1:
+                    # The side that batted second already leads the first
+                    # side's two-innings aggregate. Starting innings four
+                    # here creates an empty 0/0 scorecard and a false
+                    # ten-wicket win without a delivery being faced.
+                    margin = b1 - (a1 + a2)
+                    winner = self._get_team_name(self.bowling_team)
+                    self._set_outcome(
+                        result_text=(
+                            f"{winner} win by {self._plural_runs(margin)} "
+                            f"with innings left."
+                        ),
+                        winner_is_home=(self.bowling_team is self.home_xi),
+                        match_status='completed', margin_type='innings', margin_value=margin,
+                    )
+                    return self._fc_finalize_match(scorecard_data, commentary_prefix)
                 self.target = a1 + a2 - b1 + 1
                 # B chases: B was bowling during innings 3 (A's 2nd innings).
                 self._fc_start_next_innings(4, self.bowling_team, self.batting_team)
@@ -5489,6 +5579,7 @@ class Match:
                 "score": 0, "wickets": 0, "over": 0, "ball": 0,
                 "target": self.target,
                 "commentary": self._fc_join(
+                    commentary_prefix,
                     "<strong>End of 3rd Innings.</strong>",
                     self._fc_match_situation(),
                 ),
@@ -5503,8 +5594,9 @@ class Match:
         # or for all-out).
         if self.score >= self.target:
             wkts_left = 10 - self.wickets
+            winner = self._get_team_name(self.batting_team)
             self._set_outcome(
-                result_text=f"Match won by {wkts_left} wicket(s).",
+                result_text=f"{winner} won by {wkts_left} wicket(s).",
                 winner_is_home=(self.batting_team is self.home_xi),
                 match_status='completed', margin_type='wickets', margin_value=wkts_left,
             )
@@ -5516,12 +5608,13 @@ class Match:
             )
         else:
             run_diff = self.target - self.score - 1
+            winner = self._get_team_name(self.bowling_team)
             self._set_outcome(
-                result_text=f"Match won by {run_diff} run(s).",
+                result_text=f"{winner} won by {self._plural_runs(run_diff)}.",
                 winner_is_home=(self.bowling_team is self.home_xi),
                 match_status='completed', margin_type='runs', margin_value=run_diff,
             )
-        return self._fc_finalize_match(scorecard_data)
+        return self._fc_finalize_match(scorecard_data, commentary_prefix)
 
     def _create_fc_follow_on_decision(self, deficit):
         """Build the user-captained "enforce the follow-on?" pending_decision,
@@ -5574,7 +5667,8 @@ class Match:
             self.fc_weather_script, self.fc_day, self.fmt.days,
             overs_per_day=self.fmt.overs_per_day)
 
-    def _fc_apply_follow_on_decision(self, enforce_fo, scorecard_data):
+    def _fc_apply_follow_on_decision(self, enforce_fo, scorecard_data,
+                                     commentary_prefix=None):
         """Completes the innings-2 -> innings-3 transition once the
         follow-on call is made, AI-decided or user-captained alike. Must run
         with self.batting_team/self.bowling_team still at their innings-2
@@ -5600,6 +5694,7 @@ class Match:
             "scorecard_data": scorecard_data,
             "score": 0, "wickets": 0, "over": 0, "ball": 0,
             "commentary": self._fc_join(
+                commentary_prefix,
                 "<strong>Follow-on enforced.</strong>" if enforce_fo
                 else "<strong>End of 2nd Innings.</strong>",
                 self._fc_match_situation(),
@@ -6257,7 +6352,27 @@ class Match:
                     # it's safe to call from here too — this bypasses the
                     # T20-specific inline innings==1/else block entirely
                     # rather than re-implementing it a second time for FC.
-                    return self._fc_transition_to_next_innings()
+                    stats = self.batsman_stats[dismissed_name]
+                    dismissal_bits = []
+                    if stats.get("fours"):
+                        dismissal_bits.append(f"{stats['fours']}x4")
+                    if stats.get("sixes"):
+                        dismissal_bits.append(f"{stats['sixes']}x6")
+                    boundary_text = (
+                        f" [{', '.join(dismissal_bits)}]" if dismissal_bits else ""
+                    )
+                    dismissal_line = (
+                        f"{dismissed_name} {stats['runs']}({stats['balls']}b)"
+                        f"{boundary_text} — {stats['wicket_type']}"
+                    )
+                    final_wicket_commentary = self._fc_join(
+                        commentary_line,
+                        dismissal_line,
+                        "<strong>All Out!</strong>",
+                    )
+                    return self._fc_transition_to_next_innings(
+                        commentary_prefix=final_wicket_commentary
+                    )
                 scorecard_data = self._generate_detailed_scorecard()
 
                 # ✅ BUILD ENHANCED ALL-OUT COMMENTARY
@@ -7126,9 +7241,13 @@ class Match:
             # For 2nd innings end, show the match result
             target_info_value = self.result
         
+        innings_number = self.fc_innings if self.is_fc else self.innings
+        innings_labels = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
+
         return {
             "team_name": team_name,
-            "innings": "1st" if self.innings == 1 else "2nd",
+            "innings": innings_labels.get(innings_number, f"{innings_number}th"),
+            "innings_number": innings_number,
             "players": players,
             "bowlers": bowlers,  # ← ADD THIS LINE
             "total_score": self.score,

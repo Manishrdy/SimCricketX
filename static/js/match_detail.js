@@ -38,6 +38,7 @@ let modeChangeInFlight = false;
 
 // Global variable to store first innings scorecard image
 let firstInningsImageBlob = null;
+const pendingScorecardImageUploads = new Set();
 
 // Dashboard data stores
 let ballHistory = [];          // Array of ball_data objects for current innings
@@ -1199,7 +1200,7 @@ let _wsReady = false;
 
 // All ball-result processing lives here — called by both the WS listener
 // above AND the HTTP fetch path below. Zero logic change vs the original.
-function _processBallResult(data) {
+async function _processBallResult(data) {
     if (data.error) {
         appendLog(`[ERROR] ${data.error}`, 'error');
         return;
@@ -1282,11 +1283,15 @@ function _processBallResult(data) {
             const targetInfo = document.getElementById('target-info');
             if (targetInfo) {
                 const s = data.session_summary || {};
+                const situation = data.match_situation
+                    ? ` | ${data.match_situation}`
+                    : '';
                 targetInfo.style.display = 'block';
                 targetInfo.textContent =
                     `Session ${data.session_number}: ${s.runs || 0}/${s.wickets || 0} `
-                    + `in ${s.overs || 0} overs.`;
+                    + `in ${s.overs || 0} overs.${situation}`;
             }
+            await captureCurrentScorecardImage(fcScorecardArchiveLabel('interval', data));
             const closeBtn = document.querySelector('.close-scorecard');
             closeBtn.onclick = () => {
                 document.getElementById('scorecard-overlay').style.display = 'none';
@@ -1311,14 +1316,18 @@ function _processBallResult(data) {
             const targetInfo = document.getElementById('target-info');
             if (targetInfo) {
                 const ss = data.session_summary || {};
+                const situation = data.match_situation
+                    ? ` | ${data.match_situation}. `
+                    : ' ';
                 const sessLine = (ss.overs)
-                    ? `Session ${data.session_number}: ${ss.runs || 0}/${ss.wickets || 0} in ${ss.overs} overs. `
+                    ? `Session ${data.session_number}: ${ss.runs || 0}/${ss.wickets || 0} in ${ss.overs} overs.${situation}`
                     : '';
                 targetInfo.style.display = 'block';
                 targetInfo.textContent = data.weather_note
                     ? `${sessLine}${data.weather_note} Play resumes Day ${(data.day_number || 0) + 1}.`
                     : `${sessLine}Play resumes Day ${(data.day_number || 0) + 1}.`;
             }
+            await captureCurrentScorecardImage(fcScorecardArchiveLabel('stumps', data));
             const closeBtn = document.querySelector('.close-scorecard');
             closeBtn.onclick = () => {
                 document.getElementById('scorecard-overlay').style.display = 'none';
@@ -1379,10 +1388,16 @@ function _processBallResult(data) {
         if (data.scorecard_data) {
             showScorecard(data.scorecard_data, data);
 
+            if (IS_FC_MATCH) {
+                await captureCurrentScorecardImage(fcScorecardArchiveLabel('innings_end', data));
+            }
+
             const closeBtn = document.querySelector('.close-scorecard');
             // One-time listener for closing 1st innings scorecard
             closeBtn.onclick = async () => {
-                await captureCurrentScorecardImage(); // Save 1st innings image
+                if (!IS_FC_MATCH) {
+                    await captureCurrentScorecardImage(); // Save 1st innings image
+                }
 
                 if (isImpactPlayerEnabled() && !matchData.impact_players_swapped) {
                     document.getElementById('scorecard-overlay').style.display = 'none';
@@ -1403,13 +1418,17 @@ function _processBallResult(data) {
         if (data.scorecard_data) {
             isFinalScoreboard = true;
             showScorecard(data.scorecard_data, data);
+            const archiveLabel = IS_FC_MATCH
+                ? fcScorecardArchiveLabel('innings_end', data)
+                : null;
+            await captureCurrentScorecardImage(archiveLabel);
         }
         // Append final commentary BEFORE saving the archive so the
         // Full Snapshot + both scorecard blocks are captured in the HTML
         appendLog(data.commentary || "Match Concluded.", 'comment');
         if (!archiveSaved) {
             archiveSaved = true;
-            saveMatchArchive();
+            await saveMatchArchive();
         }
         matchOver = true;
         return;
@@ -1420,12 +1439,13 @@ function _processBallResult(data) {
         if (data.scorecard_data) {
             isFinalScoreboard = true;
             showScorecard(data.scorecard_data, data);
+            await captureCurrentScorecardImage();
         }
         // Same: append before archiving
         appendLog(data.commentary || "Match Concluded.", 'comment');
         if (!archiveSaved) {
             archiveSaved = true;
-            saveMatchArchive();
+            await saveMatchArchive();
         }
         matchOver = true;
         return;
@@ -1543,6 +1563,13 @@ function closeScorecard() {
     // This is the default close action. 
     // Specific flows (like 1st innings end) override the onclick handler.
     // If we are here, it's likely a manual view or end of match simple close.
+    if (IS_FC_MATCH) {
+        // FC cards are captured at display time with their event-specific
+        // label. Capturing again here would create an unlabeled legacy file
+        // after the match ZIP has already been generated.
+        document.getElementById('scorecard-overlay').style.display = 'none';
+        return;
+    }
     captureCurrentScorecardImage().then(() => {
         document.getElementById('scorecard-overlay').style.display = 'none';
     });
@@ -1552,7 +1579,50 @@ window.closeScorecard = closeScorecard;
 
 // --- Image Capture & Saving ---
 
-async function captureCurrentScorecardImage() {
+function fcScorecardArchiveLabel(kind, completeData) {
+    const scorecard = completeData.scorecard_data || {};
+    const inningsNumber = Number(scorecard.innings_number || completeData.innings_number || 1);
+    const safeInnings = Number.isFinite(inningsNumber) ? inningsNumber : 1;
+    const dayNumber = Number(completeData.day_number || 1);
+    const safeDay = Number.isFinite(dayNumber) ? String(dayNumber).padStart(2, '0') : '01';
+
+    if (kind === 'interval') {
+        const interval = String(completeData.interval_name || 'interval')
+            .trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        return `day_${safeDay}_${interval}_innings_${safeInnings}_scorecard`;
+    }
+    if (kind === 'stumps') {
+        return `day_${safeDay}_stumps_innings_${safeInnings}_scorecard`;
+    }
+    return `innings_${safeInnings}_end_scorecard`;
+}
+
+async function uploadNamedScorecardImage(blob, archiveLabel) {
+    if (!blob || !archiveLabel) return false;
+
+    const formData = new FormData();
+    formData.append('archive_label', archiveLabel);
+    formData.append('scorecard_image', blob, `${archiveLabel}.png`);
+
+    const uploadPromise = fetch(`${window.location.pathname}/save-scorecard-images`, {
+        method: 'POST', body: formData
+    }).then(async response => {
+        if (!response.ok) {
+            const detail = await response.text();
+            throw new Error(`Scorecard upload failed (${response.status}): ${detail}`);
+        }
+        return true;
+    });
+
+    pendingScorecardImageUploads.add(uploadPromise);
+    try {
+        return await uploadPromise;
+    } finally {
+        pendingScorecardImageUploads.delete(uploadPromise);
+    }
+}
+
+async function captureCurrentScorecardImage(archiveLabel = null) {
     try {
         const panel = document.querySelector('.scorecard-panel');
         const titleElement = document.getElementById('scorecard-title');
@@ -1578,17 +1648,22 @@ async function captureCurrentScorecardImage() {
         titleElement.style = ''; // Reset inline styles
         panel.style.cssText = originalPanelStyle;
 
-        return new Promise(resolve => {
-            canvas.toBlob(blob => {
-                const title = titleElement.textContent || '';
-                if (title.includes('1st INNINGS')) {
-                    firstInningsImageBlob = blob;
-                } else if (title.includes('2nd INNINGS')) {
-                    sendScorecardImagesToBackend(firstInningsImageBlob, blob);
-                }
-                resolve(true);
-            }, 'image/png');
-        });
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) return false;
+
+        if (archiveLabel) {
+            return await uploadNamedScorecardImage(blob, archiveLabel);
+        }
+
+        // Existing T20/List A flow: retain innings one in memory, then send
+        // both cards together as soon as the final innings card is rendered.
+        const title = titleElement.textContent || '';
+        if (title.includes('1st INNINGS')) {
+            firstInningsImageBlob = blob;
+        } else if (title.includes('2nd INNINGS')) {
+            return await sendScorecardImagesToBackend(firstInningsImageBlob, blob);
+        }
+        return true;
     } catch (e) {
         console.error("Capture failed", e);
         return false;
@@ -1606,12 +1681,23 @@ async function sendScorecardImagesToBackend(firstBlob, secondBlob) {
     if (firstBlob) formData.append('first_innings_image', firstBlob, `${safeTeams}_1st.png`);
     if (secondBlob) formData.append('second_innings_image', secondBlob, `${safeTeams}_2nd.png`);
 
+    let uploadPromise = null;
     try {
-        await fetch(`${window.location.pathname}/save-scorecard-images`, {
+        uploadPromise = fetch(`${window.location.pathname}/save-scorecard-images`, {
             method: 'POST', body: formData
         });
+        pendingScorecardImageUploads.add(uploadPromise);
+        const response = await uploadPromise;
+        if (!response.ok) {
+            const detail = await response.text();
+            throw new Error(`Scorecard upload failed (${response.status}): ${detail}`);
+        }
+        return true;
     } catch (e) {
         console.error("Failed to send images", e);
+        return false;
+    } finally {
+        if (uploadPromise) pendingScorecardImageUploads.delete(uploadPromise);
     }
 }
 
@@ -1619,6 +1705,10 @@ async function saveMatchArchive() {
     // Saves Webpage + Commentary + triggers backend archiving + downloads ZIP
     try {
         console.log("📦 Starting match archive process...");
+
+        if (pendingScorecardImageUploads.size) {
+            await Promise.allSettled([...pendingScorecardImageUploads]);
+        }
 
         const fullCommentary = document.getElementById('commentary-log').innerHTML;
 
