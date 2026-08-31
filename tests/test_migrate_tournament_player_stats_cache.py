@@ -412,3 +412,41 @@ class TestResimulateAgainstLegacyCache:
         finally:
             if os.path.isfile(json_path):
                 os.remove(json_path)
+
+
+def test_rebuild_script_schema_matches_the_model(app):
+    """The standalone rebuild script keeps its own hand-written copy of the
+    cache schema — deliberately, since it is pure stdlib so it can be copied
+    onto a prod box with no Flask or SQLAlchemy available.
+
+    That copy has to be kept in step with the ORM by hand, and when the
+    FC statistics columns were added it was not: the script then rebuilt the
+    table without them, so every cache read failed until an app restart let
+    the precheck ALTER them back. This test is the tripwire.
+    """
+    from scripts.migrate_tournament_player_stats_cache import (
+        WANTED_COL_NAMES, NEW_TABLE_SQL, _SELECT_DEFAULTS,
+    )
+    from database.models import TournamentPlayerStatsCache
+
+    model_cols = [c.name for c in TournamentPlayerStatsCache.__table__.columns]
+
+    missing = [c for c in model_cols if c not in WANTED_COL_NAMES]
+    assert not missing, (
+        f"the rebuild script would DROP these model columns: {missing}. "
+        "Add them to WANTED_COLUMNS and _SELECT_DEFAULTS."
+    )
+    stale = [c for c in WANTED_COL_NAMES if c not in model_cols]
+    assert not stale, f"rebuild script lists columns the model no longer has: {stale}"
+
+    # The CREATE is generated from WANTED_COLUMNS, so every column must
+    # appear in it — this catches the two drifting apart again.
+    for col in model_cols:
+        assert f"{col} " in NEW_TABLE_SQL, f"{col} missing from NEW_TABLE_SQL"
+
+    # Every non-identity column needs a SELECT fallback for the copy step,
+    # otherwise rebuilding a table that predates it fails.
+    for col in model_cols:
+        if col in ("id", "tournament_id", "player_id", "team_id"):
+            continue
+        assert col in _SELECT_DEFAULTS, f"{col} missing from _SELECT_DEFAULTS"

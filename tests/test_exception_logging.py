@@ -70,21 +70,59 @@ def test_log_exception_captures_request_context_and_user(app, regular_user):
 
 
 def test_log_exception_is_fail_safe_when_db_write_fails(app, monkeypatch):
+    """The logger must never raise, and must clean up after itself.
+
+    It now writes through a short-lived session of its own rather than
+    db.session (so that logging a failure cannot commit the caller's
+    half-finished work), so the failure is injected at the Session class.
+    """
+    from sqlalchemy.orm import Session as SASession
+
     with app.app_context():
         rollback_called = {"value": False}
 
-        def _boom():
+        def _boom(self, *a, **k):
             raise RuntimeError("forced-commit-failure")
 
-        def _rollback():
+        def _rollback(self, *a, **k):
             rollback_called["value"] = True
 
-        monkeypatch.setattr(db.session, "commit", _boom)
-        monkeypatch.setattr(db.session, "rollback", _rollback)
+        monkeypatch.setattr(SASession, "commit", _boom)
+        monkeypatch.setattr(SASession, "rollback", _rollback)
 
-        # Should never raise, even when DB write fails internally.
-        log_exception(Exception("should-not-propagate"), source="backend")
+        # Should never raise, even when the DB write fails internally.
+        assert log_exception(Exception("should-not-propagate"), source="backend") is None
         assert rollback_called["value"] is True
+
+
+def test_log_exception_never_commits_the_callers_session(app):
+    """The bug this isolation exists to prevent: an except-handler that has
+    already dirtied db.session had that half-finished work committed as a
+    side effect of logging the failure — so its own rollback, which runs
+    afterwards, was left with nothing to undo."""
+    from database.models import ExceptionLog
+
+    with app.app_context():
+        # Dirty the shared session the way a mid-failure route would have.
+        pending = ExceptionLog(
+            exception_type="CallerPending",
+            exception_message="must-not-be-committed",
+            severity="error",
+            source="backend",
+            fingerprint="caller-pending-fingerprint",
+        )
+        db.session.add(pending)
+
+        log_exception(Exception("logged-while-caller-is-dirty"), source="backend")
+
+        # The caller's rollback must still have something to undo.
+        db.session.rollback()
+        assert ExceptionLog.query.filter_by(
+            fingerprint="caller-pending-fingerprint").first() is None, (
+            "logging an exception committed the caller's pending work")
+        # ...while the logger's own record did land.
+        assert ExceptionLog.query.filter_by(
+            exception_type="Exception").count() >= 1
 
 
 def test_statistics_route_exception_is_logged_to_db(app, authenticated_client, regular_user, monkeypatch):

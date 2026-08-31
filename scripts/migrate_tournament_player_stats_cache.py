@@ -96,6 +96,27 @@ WANTED_COLUMNS: List[Tuple[str, str]] = [
     ("catches", "INTEGER DEFAULT 0"),
     ("run_outs", "INTEGER DEFAULT 0"),
     ("stumpings", "INTEGER DEFAULT 0"),
+    # FC-native statistics (migrations/extend_fc_statistics_cache.py). These
+    # MUST be listed here: this script rebuilds the table from scratch, so a
+    # column it does not know about is silently dropped, and every cache read
+    # then fails until an app restart lets the precheck ALTER it back.
+    ("ducks", "INTEGER DEFAULT 0"),
+    ("ones", "INTEGER DEFAULT 0"),
+    ("twos", "INTEGER DEFAULT 0"),
+    ("threes", "INTEGER DEFAULT 0"),
+    ("thirties", "INTEGER DEFAULT 0"),
+    ("double_centuries", "INTEGER DEFAULT 0"),
+    ("triple_centuries", "INTEGER DEFAULT 0"),
+    ("best_match_bowling_wickets", "INTEGER DEFAULT 0"),
+    ("best_match_bowling_runs", "INTEGER DEFAULT 0"),
+    ("ten_wicket_matches", "INTEGER DEFAULT 0"),
+    ("dot_balls_bowled", "INTEGER DEFAULT 0"),
+    ("wickets_bowled", "INTEGER DEFAULT 0"),
+    ("wickets_lbw", "INTEGER DEFAULT 0"),
+    ("wides", "INTEGER DEFAULT 0"),
+    ("noballs", "INTEGER DEFAULT 0"),
+    ("byes", "INTEGER DEFAULT 0"),
+    ("leg_byes", "INTEGER DEFAULT 0"),
 ]
 
 WANTED_COL_NAMES = [name for name, _ in WANTED_COLUMNS]
@@ -128,41 +149,36 @@ _SELECT_DEFAULTS: Dict[str, str] = {
     "catches": "0",
     "run_outs": "0",
     "stumpings": "0",
+    "ducks": "0",
+    "ones": "0",
+    "twos": "0",
+    "threes": "0",
+    "thirties": "0",
+    "double_centuries": "0",
+    "triple_centuries": "0",
+    "best_match_bowling_wickets": "0",
+    "best_match_bowling_runs": "0",
+    "ten_wicket_matches": "0",
+    "dot_balls_bowled": "0",
+    "wickets_bowled": "0",
+    "wickets_lbw": "0",
+    "wides": "0",
+    "noballs": "0",
+    "byes": "0",
+    "leg_byes": "0",
 }
 
 
+# Built from WANTED_COLUMNS rather than spelled out a second time. The two
+# used to be separate hand-maintained lists, and when the FC statistics
+# columns were added to the model neither was updated — so this script
+# rebuilt the table without them and every cache read failed until an app
+# restart ALTERed them back. One list, one source of truth.
+_COLUMN_DDL = ",\n    ".join(f"{name} {decl}" for name, decl in WANTED_COLUMNS)
+
 NEW_TABLE_SQL = f"""
 CREATE TABLE {NEW_TABLE} (
-    id INTEGER NOT NULL,
-    tournament_id INTEGER NOT NULL,
-    player_id INTEGER NOT NULL,
-    team_id INTEGER NOT NULL,
-    matches_played INTEGER DEFAULT 0,
-    innings_batted INTEGER DEFAULT 0,
-    runs_scored INTEGER DEFAULT 0,
-    balls_faced INTEGER DEFAULT 0,
-    fours INTEGER DEFAULT 0,
-    sixes INTEGER DEFAULT 0,
-    not_outs INTEGER DEFAULT 0,
-    highest_score INTEGER DEFAULT 0,
-    fifties INTEGER DEFAULT 0,
-    centuries INTEGER DEFAULT 0,
-    batting_average FLOAT DEFAULT 0.0,
-    batting_strike_rate FLOAT DEFAULT 0.0,
-    innings_bowled INTEGER DEFAULT 0,
-    overs_bowled VARCHAR(10) DEFAULT '0.0',
-    runs_conceded INTEGER DEFAULT 0,
-    wickets_taken INTEGER DEFAULT 0,
-    maidens INTEGER DEFAULT 0,
-    best_bowling_wickets INTEGER DEFAULT 0,
-    best_bowling_runs INTEGER DEFAULT 0,
-    five_wicket_hauls INTEGER DEFAULT 0,
-    bowling_average FLOAT DEFAULT 0.0,
-    bowling_economy FLOAT DEFAULT 0.0,
-    bowling_strike_rate FLOAT DEFAULT 0.0,
-    catches INTEGER DEFAULT 0,
-    run_outs INTEGER DEFAULT 0,
-    stumpings INTEGER DEFAULT 0,
+    {_COLUMN_DDL},
     PRIMARY KEY (id),
     CONSTRAINT {UNIQUE_NAME} UNIQUE (tournament_id, player_id),
     FOREIGN KEY(tournament_id) REFERENCES tournaments (id),
