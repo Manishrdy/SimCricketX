@@ -225,6 +225,7 @@ class Match:
                 match_data["fc_weather_script"] = fc_weather.generate_weather_script(
                     self.weather_forecast, self.fmt.days, self.fmt.overs_per_day,
                     min_overs_last_hour=self.fmt.min_overs_last_hour,
+                    is_day_night=bool(match_data.get("is_day_night", False)),
                 )
             self.fc_weather_script = match_data["fc_weather_script"]
         elif match_data.get("weather_script") is None:
@@ -365,6 +366,32 @@ class Match:
         self.fc_innings = 1
         self.fc_day = 1
         self.fc_day_overs_bowled_today = 0
+        # Version-2 FC weather uses an actual match clock. Legacy day_events
+        # continue through the aggregate overs path below, so old saved
+        # matches retain their exact semantics and are never re-rolled.
+        self.fc_weather_v2 = bool(
+            self.is_fc and fc_weather.is_v2_script(getattr(self, "fc_weather_script", None))
+        )
+        self.fc_clock_minute = 0.0
+        self.fc_revised_close_minute = float(fc_weather.SCHEDULED_CLOSE_MINUTE)
+        self.fc_weather_event_index = 0
+        self.fc_active_weather_event = None
+        self.fc_day_start_emitted = False
+        self.fc_weather_affected = False
+        self.fc_weather_log = []
+        self.fc_day_gross_delay_minutes = 0
+        self.fc_day_makeup_minutes = 0
+        self.fc_day_net_lost_minutes = 0
+        self.fc_total_gross_delay_minutes = 0
+        self.fc_total_makeup_minutes = 0
+        self.fc_total_net_lost_minutes = 0
+        self.fc_carry_forward_minutes = 0
+        self.fc_force_day_end = False
+        if self.fc_weather_v2:
+            _timing = fc_weather.day_timing_summary(
+                self.fc_weather_script, self.fc_day, self.fmt.overs_per_day,
+            )
+            self.fc_revised_close_minute = float(_timing["revised_close_minute"])
         # Sessions: a first-class day is three sessions (morning to Lunch,
         # afternoon to Tea, evening to Stumps), not one flat 90-over block.
         # fc_sessions_taken_today counts the intervals ALREADY taken today
@@ -4618,13 +4645,22 @@ class Match:
             0.0, self._fc_effective_overs_today() - self.fc_day_overs_bowled_today)
         _live_chase = (self.fc_innings == 4 and self.target is not None
                        and not survival_mode)
-        last_hour = (_overs_left_today <= self.fmt.min_overs_last_hour
-                     and not _live_chase)
+        last_hour = (
+            self.fc_day == self.fmt.days
+            and _overs_left_today <= self.fmt.min_overs_last_hour
+            and not _live_chase
+        )
+        close_of_play = (
+            self.fc_day < self.fmt.days
+            and _overs_left_today <= self.fmt.min_overs_last_hour
+            and not _live_chase
+        )
 
         return {
             "fc_innings": self.fc_innings,
             "wickets": self.wickets,
             "last_hour": last_hour,
+            "close_of_play": close_of_play,
             "striker_balls_faced": striker_balls_faced,
             "days_remaining": days_remaining,
             "recent_wickets": getattr(self, "recent_wickets_count", 0),
@@ -4858,6 +4894,7 @@ class Match:
             pitch_wear,
             self.fc_day,
             new_ball_window=self._fc_is_new_ball_window(),
+            under_lights=self._fc_is_under_lights(),
             rng=random,
         )
         self._update_bowler_tracking(selected)
@@ -4870,8 +4907,24 @@ class Match:
         if not self.is_fc or self.current_over < self.fmt.new_ball_overs:
             return False
         spec = ground_config_engine.get_fc_ball_condition(config=self.ground_config)
-        swing_overs = spec.get("new_ball_swing_overs", 10)
+        pink = spec.get("pink_ball") if self.data.get("is_day_night", False) else None
+        swing_overs = (pink.get("swing_overs", 15) if isinstance(pink, dict)
+                       else spec.get("new_ball_swing_overs", 10))
         return self.fc_ball_overs_bowled < swing_overs
+
+    def _fc_is_under_lights(self) -> bool:
+        """Whether a configured pink-ball match is in its third session.
+
+        The session is derived from the existing weather-aware interval
+        clock. Requiring the snapshotted config block keeps in-progress
+        matches created before this feature on their original behaviour.
+        """
+        if not self.is_fc or not self.data.get("is_day_night", False):
+            return False
+        spec = ground_config_engine.get_fc_ball_condition(config=self.ground_config)
+        if not isinstance(spec.get("pink_ball"), dict):
+            return False
+        return self._fc_current_session() == 3
 
     def _fc_should_take_new_ball(self):
         """Return (take_now, reason, score) once a replacement ball is due.
@@ -5015,6 +5068,10 @@ class Match:
         if getattr(self, "fc_day_over_rate_adjust", None) is None:
             self.fc_day_over_rate_adjust = self._fc_compute_day_over_rate_adjust()
         adjusted = base + self.fc_day_over_rate_adjust
+        if getattr(self, "fc_weather_v2", False):
+            # The 15-over provision belongs to the last hour of the final
+            # day; it is not a minimum amount of play after an interruption.
+            return max(0, adjusted)
         # The over-rate model must never cut a day below the last-hour
         # minimum the weather model already respects.
         return max(min(base, self.fmt.min_overs_last_hour), adjusted)
@@ -5044,6 +5101,10 @@ class Match:
 
     def _fc_session_boundaries(self):
         """Over-counts within today at which Lunch and Tea fall."""
+        if getattr(self, "fc_weather_v2", False):
+            # Compatibility value for callers that still reason in overs.
+            # The actual v2 interval gate below uses the 13:00/15:40 clock.
+            return [30, 60]
         scheduled = self._fc_scheduled_overs_today()
         if scheduled < 6:
             return []
@@ -5052,6 +5113,250 @@ class Match:
     def _fc_current_session(self):
         """Session in progress today, 1-3."""
         return min(3, self.fc_sessions_taken_today + 1)
+
+    def _fc_minutes_per_delivery(self):
+        """Current attack's over rate expressed as simulated clock time."""
+        adjust = self._fc_compute_day_over_rate_adjust()
+        overs_per_six_hours = max(1, self.fmt.overs_per_day + adjust)
+        return fc_weather.PLAYING_MINUTES_PER_DAY / overs_per_six_hours / 6.0
+
+    def _fc_advance_clock_for_delivery(self):
+        if getattr(self, "fc_weather_v2", False):
+            self.fc_clock_minute += self._fc_minutes_per_delivery()
+
+    def _fc_weather_status(self):
+        forecast = fc_weather.public_day_forecast(self.fc_weather_script, self.fc_day)
+        return {
+            "day": self.fc_day,
+            "session": self._fc_current_session(),
+            "clock_minute": round(self.fc_clock_minute, 2),
+            "clock_label": fc_weather.minute_label(self.fc_clock_minute),
+            "revised_close_minute": round(self.fc_revised_close_minute, 2),
+            "revised_close_label": fc_weather.minute_label(self.fc_revised_close_minute),
+            "gross_delay_minutes": int(round(self.fc_day_gross_delay_minutes)),
+            "makeup_minutes": int(round(self.fc_day_makeup_minutes)),
+            "net_lost_minutes": int(round(self.fc_day_net_lost_minutes)),
+            "overs_lost": int(self.fc_day_net_lost_minutes // fc_weather.MINUTES_PER_OVER),
+            "forecast": forecast,
+            "affected": bool(self.fc_weather_affected),
+        }
+
+    def _fc_weather_response(self, event, phase, message, **extra):
+        status = self._fc_weather_status()
+        # Projection is based only on time already lost. Calling
+        # _fc_effective_overs_today() here would consult the hidden events
+        # still to come and leak the actual script through the public API.
+        projected_overs = max(
+            self.fc_day_overs_bowled_today,
+            self.fmt.overs_per_day + self._fc_compute_day_over_rate_adjust()
+            - int(self.fc_day_net_lost_minutes // fc_weather.MINUTES_PER_OVER),
+        )
+        payload = {
+            "event_id": event.get("id", f"d{self.fc_day}-weather"),
+            "phase": phase,
+            "cause": event.get("kind", "forecast"),
+            "day": self.fc_day,
+            "session": self._fc_current_session(),
+            "clock_label": fc_weather.minute_label(
+                event.get("start_minute", self.fc_clock_minute)
+                if phase in ("suspended", "early_stumps") else self.fc_clock_minute
+            ),
+            "message": message,
+            "delay_minutes": status["gross_delay_minutes"],
+            "net_lost_minutes_today": status["net_lost_minutes"],
+            "revised_close_label": status["revised_close_label"],
+            "projected_overs_today": projected_overs,
+        }
+        payload.update(extra)
+        return {
+            "fc_weather_event": payload,
+            "fc_weather_status": status,
+            "match_over": False,
+            "innings_end": False,
+            "score": self.score,
+            "wickets": self.wickets,
+            "over": self.current_over,
+            "ball": self.current_ball,
+            "commentary": self._fc_join(
+                f"<strong>{message}</strong>",
+                f"<em>Day {self.fc_day}, {payload['clock_label']}</em>",
+            ),
+            "striker": self.current_striker["name"],
+            "non_striker": self.current_non_striker["name"],
+            "bowler": self.current_bowler["name"] if self.current_bowler else "",
+        }
+
+    def _fc_mark_intervals_consumed_by_weather(self, start, end):
+        if start < fc_weather.LUNCH_END_MINUTE <= end:
+            self.fc_sessions_taken_today = max(self.fc_sessions_taken_today, 1)
+        if start < fc_weather.TEA_END_MINUTE <= end:
+            self.fc_sessions_taken_today = max(self.fc_sessions_taken_today, 2)
+
+    def _fc_weather_pre_delivery(self):
+        """Advance the v2 interruption state machine without simulating a ball."""
+        if not getattr(self, "fc_weather_v2", False):
+            return None
+
+        if not self.fc_day_start_emitted:
+            self.fc_day_start_emitted = True
+            forecast = fc_weather.public_day_forecast(self.fc_weather_script, self.fc_day)
+            # A completely dry, normal-start day needs no extra modal; the
+            # forecast remains available in fc_weather_status. This also
+            # keeps clear-weather engine calls behaviorally transparent.
+            if forecast["state"] != "dry" or self.fc_carry_forward_minutes:
+                light = " Late poor light is possible." if forecast["late_light_risk"] else ""
+                carry = (
+                    f" {self.fc_carry_forward_minutes} minute(s) are being made up before "
+                    "the normal start." if self.fc_carry_forward_minutes else ""
+                )
+                event = {"id": f"d{self.fc_day}-forecast", "kind": "forecast"}
+                return self._fc_weather_response(
+                    event, "day_start",
+                    f"Day {self.fc_day} forecast: {forecast['label']} "
+                    f"({forecast['rain_chance']}% rain chance).{light}{carry}",
+                    forecast=forecast,
+                )
+            # A dry public forecast may still hide an actual shower. Fall
+            # through so a delayed-start event at minute zero is processed
+            # before the first delivery instead of leaking one ball.
+
+        if self.fc_active_weather_event:
+            active = self.fc_active_weather_event
+            event = active["event"]
+            if active["phase"] == "inspection":
+                active["phase"] = "resolve"
+                if event.get("kind") == "bad_light" or event.get("washout"):
+                    inspection = min(
+                        event.get("rain_end_minute", event["end_minute"]),
+                        event["start_minute"] + 30,
+                    )
+                else:
+                    # With at most three pauses, use the one intermediate
+                    # update for the meaningful transition from rainfall to
+                    # ground recovery. The final pause is actual resumption.
+                    inspection = event.get("rain_end_minute", event["end_minute"])
+                self.fc_clock_minute = max(self.fc_clock_minute, inspection)
+                if event.get("kind") == "bad_light":
+                    message = "The umpires inspect the light; it has not improved."
+                elif event.get("washout"):
+                    message = "The rain continues and there is still no prospect of play."
+                elif inspection < event.get("rain_end_minute", inspection):
+                    message = "The inspection finds the rain still falling."
+                else:
+                    message = "The rain has stopped; the outfield is now being inspected."
+                return self._fc_weather_response(
+                    event, "inspection", message,
+                    next_inspection_label=fc_weather.minute_label(event["end_minute"]),
+                )
+
+            start = event["start_minute"]
+            end = event["end_minute"]
+            scheduled_end = min(end, fc_weather.SCHEDULED_CLOSE_MINUTE)
+            lost = fc_weather.playable_minutes_lost(start, scheduled_end)
+            self.fc_day_gross_delay_minutes += int(round(lost))
+            self.fc_weather_affected = True
+            self._fc_mark_intervals_consumed_by_weather(start, end)
+            self.fc_clock_minute = max(self.fc_clock_minute, end)
+            self.fc_weather_event_index += 1
+            self.fc_active_weather_event = None
+
+            latest_close = (
+                fc_weather.SCHEDULED_CLOSE_MINUTE
+                + fc_weather.MAX_SAME_DAY_EXTENSION_MINUTES
+            )
+            closes_day = bool(
+                event.get("washout") or event.get("kind") == "bad_light"
+                or end >= latest_close
+            )
+            if closes_day:
+                self.fc_day_makeup_minutes = 0
+                self.fc_day_net_lost_minutes = self.fc_day_gross_delay_minutes
+                self.fc_force_day_end = True
+            else:
+                extension_available = max(
+                    0, latest_close - max(fc_weather.SCHEDULED_CLOSE_MINUTE, end)
+                )
+                self.fc_day_makeup_minutes = min(
+                    fc_weather.MAX_SAME_DAY_EXTENSION_MINUTES,
+                    self.fc_day_gross_delay_minutes,
+                    extension_available if end >= fc_weather.SCHEDULED_CLOSE_MINUTE
+                    else fc_weather.MAX_SAME_DAY_EXTENSION_MINUTES,
+                )
+                self.fc_day_net_lost_minutes = max(
+                    0, self.fc_day_gross_delay_minutes - self.fc_day_makeup_minutes,
+                )
+                self.fc_revised_close_minute = (
+                    max(fc_weather.SCHEDULED_CLOSE_MINUTE, end)
+                    + self.fc_day_makeup_minutes
+                )
+
+            log_entry = {
+                "event_id": event.get("id"), "day": self.fc_day,
+                "cause": event.get("kind"), "start_minute": start,
+                "end_minute": end, "delay_minutes": int(round(lost)),
+                "rain_minutes": event.get("rain_minutes", 0),
+                "recovery_minutes": event.get("recovery_minutes", 0),
+                "outcome": "washout" if event.get("washout") else (
+                    "early_stumps" if closes_day else "resumed"),
+            }
+            self.fc_weather_log.append(log_entry)
+
+            if event.get("washout"):
+                return self._fc_weather_response(
+                    event, "washout", "Play has been washed out for the day."
+                )
+            if closes_day:
+                reason = "Bad light ends play for the day." if event.get("kind") == "bad_light" \
+                    else "Conditions do not improve before the close; play is over for the day."
+                return self._fc_weather_response(event, "early_stumps", reason)
+            recovery = int(event.get("recovery_minutes", 0))
+            message = "Play resumes after the interruption."
+            if recovery:
+                message = f"The outfield is fit and play resumes after {recovery} minutes of recovery."
+            return self._fc_weather_response(
+                event, "resumed", message,
+                event_delay_minutes=int(round(lost)),
+                recovery_minutes=recovery,
+                makeup_minutes=self.fc_day_makeup_minutes,
+            )
+
+        events = fc_weather.day_events(self.fc_weather_script, self.fc_day)
+        while self.fc_weather_event_index < len(events):
+            absorbed = events[self.fc_weather_event_index]
+            if (
+                absorbed.get("end_minute", 0) <= self.fc_clock_minute
+                and fc_weather.playable_minutes_lost(
+                    absorbed.get("start_minute", 0), absorbed.get("end_minute", 0)
+                ) <= 0
+            ):
+                self.fc_weather_event_index += 1
+                continue
+            break
+        if self.fc_weather_event_index >= len(events):
+            return None
+        event = events[self.fc_weather_event_index]
+        if self.fc_clock_minute + 1e-6 < event["start_minute"]:
+            return None
+
+        self.fc_active_weather_event = {"event": dict(event), "phase": "inspection"}
+        self.fc_weather_affected = True
+        if event.get("kind") == "bad_light":
+            message = "The umpires bring the players off for bad light."
+        elif event.get("start_minute") == 0:
+            message = "The start is delayed as rain covers the ground."
+        else:
+            message = "Rain arrives and the players leave the field."
+        return self._fc_weather_response(
+            event, "suspended", message,
+            next_inspection_label=fc_weather.minute_label(
+                (
+                    min(event.get("rain_end_minute", event["end_minute"]),
+                        event["start_minute"] + 30)
+                    if event.get("kind") == "bad_light" or event.get("washout")
+                    else event.get("rain_end_minute", event["end_minute"])
+                )
+            ),
+        )
 
     def _fc_snapshot_session_start(self, carry=None):
         """Freeze the score at the start of a session, so the interval card
@@ -5095,9 +5400,22 @@ class Match:
         summary = self._fc_session_summary()
         match_situation = self._fc_batting_team_lead_or_trail()
         self.fc_sessions_taken_today += 1
+        if getattr(self, "fc_weather_v2", False):
+            if interval_name == "Lunch":
+                self.fc_clock_minute = max(
+                    self.fc_clock_minute, fc_weather.LUNCH_END_MINUTE)
+            elif interval_name == "Tea":
+                self.fc_clock_minute = max(
+                    self.fc_clock_minute, fc_weather.TEA_END_MINUTE)
         self._fc_snapshot_session_start()
         sess_line = (f"{summary['runs']}/{summary['wickets']} in "
                      f"{summary['overs']} overs this session")
+        lights_line = ""
+        if interval_name == "Tea" and self._fc_is_under_lights():
+            lights_line = (
+                "<em>The floodlights take over now; the pink ball may offer "
+                "the seamers extra movement.</em>"
+            )
         return {
             "fc_interval": True,
             "interval_name": interval_name,
@@ -5116,10 +5434,14 @@ class Match:
                 f"<strong>{interval_name} &mdash; Day {self.fc_day}</strong>",
                 f"<em>{sess_line}</em>",
                 match_situation,
+                lights_line,
             ),
             "striker": self.current_striker["name"],
             "non_striker": self.current_non_striker["name"],
             "bowler": self.current_bowler["name"] if self.current_bowler else "",
+            "fc_weather_status": (
+                self._fc_weather_status() if getattr(self, "fc_weather_v2", False) else None
+            ),
         }
 
     def _fc_pre_ball_checks(self):
@@ -5132,14 +5454,39 @@ class Match:
         always decides declaration/follow-on in Phase 1, per the agreed
         scope).
         """
-        _day_over = self.fc_day_overs_bowled_today >= self._fc_effective_overs_today()
-
-        _bounds = self._fc_session_boundaries()
-        _at_session_break = (
-            not _day_over
-            and self.fc_sessions_taken_today < len(_bounds)
-            and self.fc_day_overs_bowled_today >= _bounds[self.fc_sessions_taken_today]
-        )
+        if getattr(self, "fc_weather_v2", False):
+            _day_over = (
+                self.fc_force_day_end
+                or self.fc_clock_minute >= self.fc_revised_close_minute
+                or (
+                    self.fc_clock_minute <= 0
+                    and self.fc_day_overs_bowled_today >= self._fc_effective_overs_today()
+                )
+            )
+            _at_session_break = (
+                not _day_over
+                and (
+                    (self.fc_sessions_taken_today == 0
+                     and self.fc_clock_minute >= fc_weather.LUNCH_START_MINUTE)
+                    or (self.fc_sessions_taken_today == 1
+                        and self.fc_clock_minute >= fc_weather.TEA_START_MINUTE)
+                    or (
+                        self.fc_clock_minute <= 0
+                        and
+                        self.fc_sessions_taken_today < 2
+                        and self.fc_day_overs_bowled_today
+                        >= self._fc_session_boundaries()[self.fc_sessions_taken_today]
+                    )
+                )
+            )
+        else:
+            _day_over = self.fc_day_overs_bowled_today >= self._fc_effective_overs_today()
+            _bounds = self._fc_session_boundaries()
+            _at_session_break = (
+                not _day_over
+                and self.fc_sessions_taken_today < len(_bounds)
+                and self.fc_day_overs_bowled_today >= _bounds[self.fc_sessions_taken_today]
+            )
 
         # Captains declare at an interval — Lunch, Tea, or overnight — not
         # three overs into a session. The standing exception is the tail
@@ -5311,10 +5658,36 @@ class Match:
         session_no = self._fc_current_session()
         match_situation = self._fc_batting_team_lead_or_trail()
         weather_line = fc_weather.day_summary_line(self.fc_weather_script, day_ended)
+        weather_status = (
+            self._fc_weather_status() if getattr(self, "fc_weather_v2", False) else None
+        )
+        if getattr(self, "fc_weather_v2", False):
+            carry = min(
+                fc_weather.MAX_CARRY_FORWARD_MINUTES,
+                int(round(self.fc_day_net_lost_minutes)),
+            )
+        else:
+            carry = 0
+        if getattr(self, "fc_weather_v2", False):
+            self.fc_total_gross_delay_minutes += self.fc_day_gross_delay_minutes
+            self.fc_total_makeup_minutes += self.fc_day_makeup_minutes + carry
+            self.fc_total_net_lost_minutes += max(
+                0, self.fc_day_net_lost_minutes - carry)
         self.fc_day += 1
         self.fc_day_overs_bowled_today = 0
         self.fc_sessions_taken_today = 0
         self.fc_day_over_rate_adjust = self._fc_compute_day_over_rate_adjust()
+        if getattr(self, "fc_weather_v2", False):
+            self.fc_carry_forward_minutes = carry if self.fc_day <= self.fmt.days else 0
+            self.fc_clock_minute = -float(self.fc_carry_forward_minutes)
+            self.fc_revised_close_minute = float(fc_weather.SCHEDULED_CLOSE_MINUTE)
+            self.fc_weather_event_index = 0
+            self.fc_active_weather_event = None
+            self.fc_day_start_emitted = False
+            self.fc_day_gross_delay_minutes = 0
+            self.fc_day_makeup_minutes = 0
+            self.fc_day_net_lost_minutes = 0
+            self.fc_force_day_end = False
         self._fc_snapshot_session_start()
         return {
             "day_break": True,
@@ -5330,6 +5703,7 @@ class Match:
             "over": self.current_over,
             "ball": self.current_ball,
             "weather_note": weather_line,
+            "fc_weather_status": weather_status,
             "commentary": self._fc_join(
                 f"<strong>Stumps &mdash; Day {day_ended}</strong>",
                 f"<em>{session_summary['runs']}/{session_summary['wickets']} in "
@@ -5745,6 +6119,14 @@ class Match:
             if status_code != 200:
                 return {"error": apply_result.get("error", "Failed to auto-resolve pending decision")}
 
+        # FC v2 weather is a delivery-boundary clock, so rain can interrupt
+        # an over without altering or completing the delivery that follows.
+        # Limited-overs rain remains in _check_rain_events below.
+        if self.is_fc and getattr(self, "fc_weather_v2", False):
+            _fc_weather = self._fc_weather_pre_delivery()
+            if _fc_weather is not None:
+                return _fc_weather
+
         # Rain check at the start of a fresh over — this is where deferred
         # innings-break events land (a chase reduced before it begins).
         # Inert for FC (weather_script has an empty events list — no
@@ -5761,7 +6143,9 @@ class Match:
         # decides automatically at the over boundary, same style as the
         # rain check above (no pending_decision involved; AI always
         # decides in Phase 1).
-        if self.current_ball == 0 and self.is_fc:
+        if self.is_fc and (
+            self.current_ball == 0 or getattr(self, "fc_force_day_end", False)
+        ):
             _fc_pre = self._fc_pre_ball_checks()
             if _fc_pre is not None:
                 return _fc_pre
@@ -6126,6 +6510,7 @@ class Match:
                 ground_config_override=self.ground_config,
                 format_config=self.fmt,
                 is_day_night=self.data.get("is_day_night", False),
+                fc_session_number=(self._fc_current_session() if self.is_fc else None),
                 ball_overs_bowled=self.fc_ball_overs_bowled if self.is_fc else 0,
                 new_ball_overs=getattr(self.fmt, "new_ball_overs", 80),
             )
@@ -6167,8 +6552,14 @@ class Match:
                 comm_state['fc_consecutive_maidens'] = self.fc_consecutive_maidens
                 comm_state['fc_lead_before'] = self._fc_lead_before_ball()
                 comm_state['last_hour'] = (
-                    max(0.0, self._fc_effective_overs_today()
-                        - self.fc_day_overs_bowled_today) <= self.fmt.min_overs_last_hour
+                    self.fc_day == self.fmt.days
+                    and max(0.0, self._fc_effective_overs_today()
+                            - self.fc_day_overs_bowled_today) <= self.fmt.min_overs_last_hour
+                )
+                comm_state['close_of_play'] = (
+                    self.fc_day < self.fmt.days
+                    and max(0.0, self._fc_effective_overs_today()
+                            - self.fc_day_overs_bowled_today) <= self.fmt.min_overs_last_hour
                 )
                 comm_state['fc_is_nightwatchman'] = (
                     self.fc_nightwatchman_name is not None
@@ -6212,6 +6603,7 @@ class Match:
                 ground_config_override=self.ground_config,
                 format_config=self.fmt,
                 is_day_night=self.data.get("is_day_night", False),
+                fc_session_number=(self._fc_current_session() if self.is_fc else None),
                 ball_overs_bowled=self.fc_ball_overs_bowled if self.is_fc else 0,
                 new_ball_overs=getattr(self.fmt, "new_ball_overs", 80),
             )
@@ -6309,6 +6701,8 @@ class Match:
         self.innings_balls_bowled += 1
         # FC only: match-long counter, never reset by _reset_innings_state()
         self.match_balls_bowled += 1
+        if self.is_fc:
+            self._fc_advance_clock_for_delivery()
 
         self.prev_delivery_was_extra = extra
 
@@ -8364,9 +8758,8 @@ class Match:
     # prevent for tied T20/ListA matches, now closed for FC too.
 
     def serialize_fc_snapshot(self):
-        """JSON-safe snapshot of the live FC match state. Returns None when
-        this isn't an FC match or no over has completed yet (nothing to
-        snapshot before the first natural checkpoint)."""
+        """JSON-safe snapshot of the live FC match state. Returns None only
+        outside FC; v2 weather transitions are valid mid-over checkpoints."""
         if not self.is_fc:
             return None
 
@@ -8374,7 +8767,7 @@ class Match:
             return "home" if team is self.home_xi else "away"
 
         snap = {
-            "v": 1,
+            "v": 2,
             "fc_innings": self.fc_innings,
             "batting_side": _side(self.batting_team),
             "bowling_side": _side(self.bowling_team),
@@ -8382,6 +8775,13 @@ class Match:
             "wickets": self.wickets,
             "current_over": self.current_over,
             "current_ball": self.current_ball,
+            "current_over_runs": self.current_over_runs,
+            "current_over_outcomes": list(self.current_over_outcomes),
+            "current_over_maiden_invalid": self.current_over_maiden_invalid,
+            "free_hit_active": self.free_hit_active,
+            "prev_delivery_was_extra": self.prev_delivery_was_extra,
+            "pending_pre_ball_commentary": list(self.pending_pre_ball_commentary),
+            "ball_history": list(getattr(self, "ball_history", [])),
             "batter_idx": list(self.batter_idx),
             "remaining_batter_indices": sorted(self.remaining_batter_indices),
             "bowler_selected_for_over": self.bowler_selected_for_over,
@@ -8408,6 +8808,24 @@ class Match:
             "fc_session_start": self.fc_session_start,
             "fc_day_over_rate_adjust": self.fc_day_over_rate_adjust,
             "fc_nightwatchman_used": self.fc_nightwatchman_used,
+            "fc_nightwatchman_name": self.fc_nightwatchman_name,
+            "fc_consecutive_maidens": self.fc_consecutive_maidens,
+            "fc_weather_v2": self.fc_weather_v2,
+            "fc_clock_minute": self.fc_clock_minute,
+            "fc_revised_close_minute": self.fc_revised_close_minute,
+            "fc_weather_event_index": self.fc_weather_event_index,
+            "fc_active_weather_event": self.fc_active_weather_event,
+            "fc_day_start_emitted": self.fc_day_start_emitted,
+            "fc_weather_affected": self.fc_weather_affected,
+            "fc_weather_log": self.fc_weather_log,
+            "fc_day_gross_delay_minutes": self.fc_day_gross_delay_minutes,
+            "fc_day_makeup_minutes": self.fc_day_makeup_minutes,
+            "fc_day_net_lost_minutes": self.fc_day_net_lost_minutes,
+            "fc_total_gross_delay_minutes": self.fc_total_gross_delay_minutes,
+            "fc_total_makeup_minutes": self.fc_total_makeup_minutes,
+            "fc_total_net_lost_minutes": self.fc_total_net_lost_minutes,
+            "fc_carry_forward_minutes": self.fc_carry_forward_minutes,
+            "fc_force_day_end": self.fc_force_day_end,
             "fc_ball_overs_bowled": self.fc_ball_overs_bowled,
             "fc_innings_declared": self.fc_innings_declared,
             "fc_innings_time_budget_overs": self.fc_innings_time_budget_overs,
@@ -8447,7 +8865,7 @@ class Match:
         Raises ValueError on a snapshot it cannot safely restore — callers
         must surface that rather than silently falling through to a fresh
         (fc_innings=1) instance, which would silently restart the match."""
-        if not isinstance(snap, dict) or snap.get("v") != 1:
+        if not isinstance(snap, dict) or snap.get("v") not in (1, 2):
             raise ValueError("Unsupported FC snapshot format")
 
         xi = {"home": self.home_xi, "away": self.away_xi}
@@ -8465,6 +8883,14 @@ class Match:
         self.wickets = snap.get("wickets", 0)
         self.current_over = snap.get("current_over", 0)
         self.current_ball = snap.get("current_ball", 0)
+        self.current_over_runs = snap.get("current_over_runs", 0)
+        self.current_over_outcomes = list(snap.get("current_over_outcomes") or [])
+        self.current_over_maiden_invalid = snap.get("current_over_maiden_invalid", False)
+        self.free_hit_active = snap.get("free_hit_active", False)
+        self.prev_delivery_was_extra = snap.get("prev_delivery_was_extra", False)
+        self.pending_pre_ball_commentary = list(
+            snap.get("pending_pre_ball_commentary") or [])
+        self.ball_history = list(snap.get("ball_history") or [])
         self.batter_idx = list(snap.get("batter_idx", [0, 1]))
         self.remaining_batter_indices = set(snap.get("remaining_batter_indices", []))
         self.bowler_selected_for_over = snap.get("bowler_selected_for_over", -1)
@@ -8503,6 +8929,30 @@ class Match:
         self.fc_sessions_taken_today = snap.get("fc_sessions_taken_today", 0)
         self.fc_day_over_rate_adjust = snap.get("fc_day_over_rate_adjust")
         self.fc_nightwatchman_used = snap.get("fc_nightwatchman_used", False)
+        self.fc_nightwatchman_name = snap.get("fc_nightwatchman_name")
+        self.fc_consecutive_maidens = snap.get("fc_consecutive_maidens", 0)
+        self.fc_weather_v2 = bool(
+            snap.get("fc_weather_v2", fc_weather.is_v2_script(self.fc_weather_script))
+        )
+        self.fc_clock_minute = float(snap.get("fc_clock_minute", 0.0))
+        self.fc_revised_close_minute = float(snap.get(
+            "fc_revised_close_minute", fc_weather.SCHEDULED_CLOSE_MINUTE))
+        self.fc_weather_event_index = int(snap.get("fc_weather_event_index", 0))
+        self.fc_active_weather_event = snap.get("fc_active_weather_event")
+        self.fc_day_start_emitted = bool(snap.get("fc_day_start_emitted", False))
+        self.fc_weather_affected = bool(snap.get("fc_weather_affected", False))
+        self.fc_weather_log = list(snap.get("fc_weather_log") or [])
+        self.fc_day_gross_delay_minutes = int(
+            snap.get("fc_day_gross_delay_minutes", 0))
+        self.fc_day_makeup_minutes = int(snap.get("fc_day_makeup_minutes", 0))
+        self.fc_day_net_lost_minutes = int(snap.get("fc_day_net_lost_minutes", 0))
+        self.fc_total_gross_delay_minutes = int(
+            snap.get("fc_total_gross_delay_minutes", 0))
+        self.fc_total_makeup_minutes = int(snap.get("fc_total_makeup_minutes", 0))
+        self.fc_total_net_lost_minutes = int(
+            snap.get("fc_total_net_lost_minutes", 0))
+        self.fc_carry_forward_minutes = int(snap.get("fc_carry_forward_minutes", 0))
+        self.fc_force_day_end = bool(snap.get("fc_force_day_end", False))
         self.fc_session_start = snap.get("fc_session_start") or {
             "score": self.score, "wickets": self.wickets,
             "day_overs": self.fc_day_overs_bowled_today,

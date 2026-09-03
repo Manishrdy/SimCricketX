@@ -175,6 +175,37 @@ def _archive(match):
     return ok, arch
 
 
+def test_fc_day_night_archive_identifies_pink_ball(app):
+    data = _fc_match_data("archive-viewer")
+    data["is_day_night"] = True
+    match = match_module.Match(data)
+    archiver = MatchArchiver(match.match_data, match)
+    assert archiver._match_type_label() == "Day/Night · Pink ball"
+    assert "Match type: Day/Night · Pink ball" in archiver._generate_text_header()
+
+
+def test_fc_weather_archive_uses_time_loss_language_and_never_dls(app):
+    data = _fc_match_data("weather-archive")
+    data["weather_forecast"] = "rain_around"
+    match = match_module.Match(data)
+    match.fc_weather_affected = True
+    match.fc_day_gross_delay_minutes = 90
+    match.fc_day_makeup_minutes = 60
+    match.fc_day_net_lost_minutes = 30
+    match.fc_weather_log = [{
+        "day": 1, "cause": "rain", "delay_minutes": 90,
+        "outcome": "resumed",
+    }]
+
+    archiver = MatchArchiver(match.match_data, match)
+    archive_text = archiver._generate_text_header() + archiver._format_match_summary()
+    assert "WEATHER AFFECTED" in archive_text
+    assert "Gross delay: 90 minute(s)" in archive_text
+    assert "Time recovered: 60 minute(s)" in archive_text
+    assert "Net lost: 30 minute(s) (7 over(s))" in archive_text
+    assert "DLS method applied" not in archive_text
+
+
 def test_archiver_includes_all_named_fc_and_legacy_scorecard_images(monkeypatch, tmp_path):
     """The ZIP input list contains every card uploaded for this match only."""
     match = match_module.Match(_fc_match_data("viewer@example.com"))
@@ -216,6 +247,41 @@ def test_archiver_includes_all_named_fc_and_legacy_scorecard_images(monkeypatch,
     zip_path = archiver._create_zip_archive()
     with match_archiver_module.zipfile.ZipFile(zip_path) as archive:
         assert set(archive.namelist()) == archived_names
+
+
+def test_archiver_rebuild_preserves_existing_scorecards_and_new_capture(monkeypatch, tmp_path):
+    """The final browser pass must not erase cards sealed by engine completion."""
+    match = match_module.Match(_fc_match_data("viewer@example.com"))
+    archiver = MatchArchiver(match.match_data, match)
+    monkeypatch.setattr(match_archiver_module, "PROJECT_ROOT", Path(tmp_path))
+    archiver.archive_path = tmp_path / "archive"
+    archiver.archive_path.mkdir()
+
+    zip_path = tmp_path / "data" / archiver.filenames["zip"]
+    zip_path.parent.mkdir(parents=True)
+    old_name = "TW_vs_TC_day_01_lunch_innings_1_scorecard.png"
+    with match_archiver_module.zipfile.ZipFile(zip_path, "w") as existing:
+        existing.writestr(old_name, b"old-card")
+        existing.writestr("commentary.txt", b"not an image")
+        existing.writestr("../unsafe_scorecard.png", b"unsafe")
+
+    archiver._restore_scorecard_images_from_existing_archive()
+
+    user_dir = tmp_path / "data" / "temp_scorecard_images" / "viewerexample.com"
+    user_dir.mkdir(parents=True)
+    match_id = match.match_data["match_id"]
+    final_name = "TW_vs_TC_innings_4_end_scorecard.png"
+    (user_dir / f"{match_id}_innings_4_end_scorecard.png").write_bytes(b"final-card")
+    archiver._include_scorecard_images()
+
+    assert {path.name for path in archiver.created_files} == {old_name, final_name}
+    assert (archiver.archive_path / old_name).read_bytes() == b"old-card"
+    assert (archiver.archive_path / final_name).read_bytes() == b"final-card"
+    assert not (tmp_path / "unsafe_scorecard.png").exists()
+
+    rebuilt_path = archiver._create_zip_archive()
+    with match_archiver_module.zipfile.ZipFile(rebuilt_path) as rebuilt:
+        assert set(rebuilt.namelist()) == {old_name, final_name}
 
 
 def test_fc_build_innings_plan_has_all_four_innings(app, regular_user, test_team, test_team_2):

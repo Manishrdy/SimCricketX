@@ -962,6 +962,38 @@
     font-size: 0.95rem;
 }
 
+.fc-weather-panel {
+    width: min(92vw, 520px);
+}
+
+.fc-weather-body {
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.fc-weather-icon {
+    font-size: 3rem;
+    line-height: 1;
+    margin-bottom: 0.75rem;
+}
+
+.fc-weather-message {
+    color: var(--fg-primary);
+    font-size: 1.05rem;
+    font-weight: 650;
+    margin: 0 0 1rem;
+}
+
+.fc-weather-meta {
+    background: var(--bg-secondary);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    color: var(--fg-secondary);
+    line-height: 1.65;
+    margin-bottom: 1.25rem;
+    padding: 0.8rem 1rem;
+}
+
 /* ======================= */
 /* IMPACT PLAYER MODAL - ENHANCED UI */
 /* ======================= */

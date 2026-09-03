@@ -167,6 +167,9 @@ def test_fc_match_plays_through_to_a_result(app, authenticated_client, fc_teams)
         assert archived.match_format == "FC"
         assert archived.days == 4
         assert archived.match_status in ("completed", "drawn", "tied"), archived.match_status
+        assert archived.weather_forecast == "clear"
+        assert archived.weather_affected is False
+        assert archived.weather_minutes_lost == 0
 
 
 def test_fc_ratings_reach_the_engine_through_match_setup(app, authenticated_client, fc_teams):

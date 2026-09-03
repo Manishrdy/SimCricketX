@@ -508,7 +508,9 @@ def get_fc_ball_condition(config=None):
     return _block(config, "FC").get("ball_condition") or {}
 
 
-def get_fc_ball_condition_factor(bowling_type, ball_overs_bowled, new_ball_overs, config=None):
+def get_fc_ball_condition_factor(bowling_type, ball_overs_bowled, new_ball_overs,
+                                 config=None, is_day_night=False,
+                                 session_number=None):
     """
     Resolve the ball-condition wicket multiplier for one delivery, given
     how many overs the CURRENT ball has been in use (ball_overs_bowled,
@@ -530,22 +532,35 @@ def get_fc_ball_condition_factor(bowling_type, ball_overs_bowled, new_ball_overs
     if not spec:
         return 1.0
 
-    swing_overs = spec.get("new_ball_swing_overs", 10)
+    pink = spec.get("pink_ball") if is_day_night else None
+    # A snapshotted match created before pink-ball support has no pink_ball
+    # block. Falling back to the red-ball table preserves that match's
+    # pre-feature behaviour when it is resumed.
+    use_pink = isinstance(pink, dict)
+    swing_overs = (pink.get("swing_overs", 15) if use_pink
+                   else spec.get("new_ball_swing_overs", 10))
     reverse_window = spec.get("reverse_swing_window_overs", 15)
 
     if ball_overs_bowled < swing_overs:
-        factors = spec.get("new_ball_wicket_factors") or {}
-        return factors.get(bowling_type, factors.get("default", 1.0))
-
-    if ball_overs_bowled >= new_ball_overs - reverse_window:
+        factors = ((pink.get("new_ball_wicket_factors") or {}) if use_pink
+                   else (spec.get("new_ball_wicket_factors") or {}))
+        factor = factors.get(bowling_type, factors.get("default", 1.0))
+    elif ball_overs_bowled >= new_ball_overs - reverse_window:
         factors = spec.get("reverse_swing_wicket_factors") or {}
-        return factors.get(bowling_type, factors.get("default", 1.0))
+        factor = factors.get(bowling_type, factors.get("default", 1.0))
+    else:
+        factor = 1.0
 
-    return 1.0
+    if use_pink and session_number == 3:
+        lights = pink.get("under_lights_wicket_factors") or {}
+        factor *= lights.get(bowling_type, lights.get("default", 1.0))
+    return factor
 
 
 def get_fc_ball_condition_outcome_factors(bowling_type, ball_overs_bowled,
-                                          new_ball_overs, config=None):
+                                          new_ball_overs, config=None,
+                                          is_day_night=False,
+                                          session_number=None):
     """
     Per-outcome multipliers for the current ball's condition — the scoring
     counterpart to get_fc_ball_condition_factor's wicket scalar, returned
@@ -563,21 +578,45 @@ def get_fc_ball_condition_outcome_factors(bowling_type, ball_overs_bowled,
     if not spec:
         return {}
 
-    swing_overs = spec.get("new_ball_swing_overs", 10)
+    pink = spec.get("pink_ball") if is_day_night else None
+    # See get_fc_ball_condition_factor: an old per-match config snapshot
+    # without this block stays on its original red-ball behaviour.
+    use_pink = isinstance(pink, dict)
+    swing_overs = (pink.get("swing_overs", 15) if use_pink
+                   else spec.get("new_ball_swing_overs", 10))
     reverse_window = spec.get("reverse_swing_window_overs", 15)
 
     if ball_overs_bowled < swing_overs:
-        wicket_key, scoring_key = "new_ball_wicket_factors", "new_ball_scoring_factors"
+        if use_pink:
+            factors = dict(pink.get("new_ball_scoring_factors") or {})
+            wicket_factors = pink.get("new_ball_wicket_factors") or {}
+        else:
+            factors = dict(spec.get("new_ball_scoring_factors") or {})
+            wicket_factors = spec.get("new_ball_wicket_factors") or {}
     elif ball_overs_bowled >= new_ball_overs - reverse_window:
-        wicket_key = "reverse_swing_wicket_factors"
-        scoring_key = "reverse_swing_scoring_factors"
+        factors = dict(spec.get("reverse_swing_scoring_factors") or {})
+        wicket_factors = spec.get("reverse_swing_wicket_factors") or {}
     else:
-        return {}   # middle overs: the ball is doing nothing special
+        factors = {}
+        wicket_factors = {}
 
-    factors = dict(spec.get(scoring_key) or {})
-    wicket_factors = spec.get(wicket_key) or {}
     factors["Wicket"] = wicket_factors.get(
         bowling_type, wicket_factors.get("default", 1.0))
+
+    if use_pink and session_number == 3:
+        lights_scoring = pink.get("under_lights_scoring_factors") or {}
+        for outcome, multiplier in lights_scoring.items():
+            factors[outcome] = factors.get(outcome, 1.0) * multiplier
+        lights_wickets = pink.get("under_lights_wicket_factors") or {}
+        factors["Wicket"] *= lights_wickets.get(
+            bowling_type, lights_wickets.get("default", 1.0))
+
+    # Preserve the historical empty-middle-window contract for day matches
+    # and old snapshots. A configured pink-ball lights session intentionally
+    # returns a non-empty dict even when the current ball is in its middle age.
+    if not factors or (factors == {"Wicket": 1.0}
+                       and not (use_pink and session_number == 3)):
+        return {}
     return factors
 
 

@@ -611,6 +611,35 @@ formats:
         Six: 0.80
         Extras: 1.08
         Dot: 1.05
+      # First-Class day/night matches use a pink ball. Its lacquer keeps the
+      # conventional new-ball movement alive for longer, while the final
+      # session under lights supplies an additional (style-aware) seam/swing
+      # layer. These factors are deliberately separate from List A dew: FC
+      # receives no second-innings dew modifier at all.
+      pink_ball:
+        swing_overs: 15
+        new_ball_wicket_factors:
+          Fast: 1.35
+          Fast-medium: 1.25
+          Medium-fast: 1.10
+          Medium: 1.03
+          default: 1.00
+        new_ball_scoring_factors:
+          Dot: 1.04
+          Four: 1.20
+          Six: 1.10
+          Extras: 1.35
+        under_lights_wicket_factors:
+          Fast: 1.12
+          Fast-medium: 1.10
+          Medium-fast: 1.08
+          Medium: 1.05
+          default: 1.00
+        under_lights_scoring_factors:
+          Dot: 1.04
+          Four: 0.95
+          Six: 0.95
+          Extras: 1.05
     # Handedness-specific rough-targeting (Phase 3): footmark rough only
     # exists where days of the same bowling angle have worn the same patch,
     # so this is a WEAR-ramped bonus (0 at a fresh pitch, full value here at

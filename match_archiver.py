@@ -219,6 +219,7 @@ class MatchArchiver:
         allowed_suffixes = {".png", ".jpg", ".webp"}
         match_prefix = f"{self.match_id}_"
         copied_names = set()
+        created_names = {Path(path).name for path in self.created_files}
 
         for source_dir in source_dirs:
             if not source_dir.exists():
@@ -242,8 +243,55 @@ class MatchArchiver:
 
                 dest_path = self.archive_path / dest_name
                 shutil.copy2(source_path, dest_path)
-                self.created_files.append(dest_path)
+                # A final browser-side capture may replace the provisional
+                # copy restored from the server-created archive. Keep one ZIP
+                # entry for the name while allowing the newer file to win.
+                if dest_name not in created_names:
+                    self.created_files.append(dest_path)
+                    created_names.add(dest_name)
                 self.logger.debug("Added scorecard image: %s", dest_path.name)
+
+    def _restore_scorecard_images_from_existing_archive(self):
+        """Carry scorecard images forward when finalizing an existing ZIP.
+
+        The engine creates a durable archive as soon as a match ends. The
+        browser then uploads the final scorecard and requests the downloadable
+        archive. That second pass must retain interval/innings images already
+        sealed into the first ZIP, because their temporary upload files have
+        correctly been cleaned up by then.
+        """
+        zip_path = PROJECT_ROOT / "data" / self.filenames["zip"]
+        if not zip_path.is_file() or not zipfile.is_zipfile(zip_path):
+            return
+
+        allowed_suffixes = {".png", ".jpg", ".webp"}
+        restored_names = {Path(path).name for path in self.created_files}
+
+        try:
+            with zipfile.ZipFile(zip_path, "r") as existing_zip:
+                for member in existing_zip.infolist():
+                    member_name = Path(member.filename)
+                    safe_name = member_name.name
+                    if (
+                        member.is_dir()
+                        or member.filename != safe_name
+                        or member_name.suffix.lower() not in allowed_suffixes
+                        or "scorecard" not in member_name.stem.lower()
+                        or member.file_size > self.MAX_FILE_SIZE
+                    ):
+                        continue
+
+                    dest_path = self.archive_path / safe_name
+                    with existing_zip.open(member, "r") as source, dest_path.open("wb") as destination:
+                        shutil.copyfileobj(source, destination)
+                    if safe_name not in restored_names:
+                        self.created_files.append(dest_path)
+                        restored_names.add(safe_name)
+                    self.logger.debug("Restored scorecard image from existing ZIP: %s", safe_name)
+        except (OSError, zipfile.BadZipFile) as exc:
+            # A stale/corrupt prior ZIP must not prevent creation of a fresh
+            # archive; normal validation below will cover the new output.
+            self.logger.warning("Could not restore scorecard images from %s: %s", zip_path, exc)
 
 
     def _validate_match_data(self, match_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -308,6 +356,10 @@ class MatchArchiver:
             
             # Create archive directory
             self._create_archive_directory()
+
+            # If this is the browser's finalization pass, preserve the cards
+            # already captured by the engine's durable completion archive.
+            self._restore_scorecard_images_from_existing_archive()
             
             # Create all individual files
             self._copy_json_file(original_json_path)
@@ -654,6 +706,7 @@ class MatchArchiver:
             margin_type = getattr(self.match, 'margin_type', None)
             margin_value = getattr(self.match, 'margin_value', None)
             match_status = getattr(self.match, 'match_status', None)
+            fc_weather_summary = self._fc_weather_totals()
 
             # Resolve toss winner
             toss_winner_id = self._resolve_toss_winner_id(home_team, away_team)
@@ -687,6 +740,13 @@ class MatchArchiver:
                 db_match.match_format = self.match_data.get('match_format', 'T20')
                 db_match.overs_per_side = self.match_data.get('overs', 20)
                 db_match.is_day_night = bool(self.match_data.get('is_day_night', False))
+                db_match.weather_forecast = self.match_data.get('weather_forecast', 'clear')
+                db_match.weather_affected = bool(
+                    fc_weather_summary and fc_weather_summary['affected'])
+                db_match.weather_minutes_lost = (
+                    fc_weather_summary['net_lost_minutes'] if fc_weather_summary else 0)
+                db_match.weather_overs_lost = (
+                    fc_weather_summary['overs_lost'] if fc_weather_summary else 0)
 
                 # First-Class (FC) match length + follow-on outcome
                 if getattr(self.match, 'is_fc', False):
@@ -739,6 +799,13 @@ class MatchArchiver:
                     match_format=self.match_data.get('match_format', 'T20'),
                     overs_per_side=self.match_data.get('overs', 20),
                     is_day_night=bool(self.match_data.get('is_day_night', False)),
+                    weather_forecast=self.match_data.get('weather_forecast', 'clear'),
+                    weather_affected=bool(
+                        fc_weather_summary and fc_weather_summary['affected']),
+                    weather_minutes_lost=(
+                        fc_weather_summary['net_lost_minutes'] if fc_weather_summary else 0),
+                    weather_overs_lost=(
+                        fc_weather_summary['overs_lost'] if fc_weather_summary else 0),
                     # First-Class (FC) match length + follow-on outcome
                     days=(getattr(self.match.fmt, 'days', None) if getattr(self.match, 'is_fc', False) else None),
                     follow_on_enforced=(getattr(self.match, 'follow_on_enforced', None) if getattr(self.match, 'is_fc', False) else None),
@@ -1254,6 +1321,35 @@ class MatchArchiver:
         from engine.weather import forecast_label
         return forecast_label(self.match_data.get('weather_forecast', 'clear'))
 
+    def _fc_weather_totals(self):
+        """Compact completed-match weather record; never carries DLS data."""
+        if not getattr(self.match, 'is_fc', False):
+            return None
+        gross = int(getattr(self.match, 'fc_total_gross_delay_minutes', 0) or 0)
+        makeup = int(getattr(self.match, 'fc_total_makeup_minutes', 0) or 0)
+        net = int(getattr(self.match, 'fc_total_net_lost_minutes', 0) or 0)
+        # The current day is not banked until stumps; include it when a match
+        # finishes during that day.
+        gross += int(getattr(self.match, 'fc_day_gross_delay_minutes', 0) or 0)
+        makeup += int(getattr(self.match, 'fc_day_makeup_minutes', 0) or 0)
+        net += int(getattr(self.match, 'fc_day_net_lost_minutes', 0) or 0)
+        return {
+            'forecast': self.match_data.get('weather_forecast', 'clear'),
+            'affected': bool(getattr(self.match, 'fc_weather_affected', False)),
+            'gross_delay_minutes': gross,
+            'makeup_minutes': makeup,
+            'net_lost_minutes': net,
+            'overs_lost': net // 4,
+        }
+
+    def _match_type_label(self) -> str:
+        """Human label for day/day-night conditions and the FC ball colour."""
+        is_day_night = bool(self.match_data.get('is_day_night', False))
+        is_fc = str(self.match_data.get('match_format', '')).strip().upper() == 'FC'
+        if is_fc:
+            return "Day/Night · Pink ball" if is_day_night else "Day · Red ball"
+        return "Day/Night" if is_day_night else "Day"
+
     def _generate_text_header(self) -> str:
         """Generate formatted header for text file"""
         header_lines = [
@@ -1266,9 +1362,17 @@ class MatchArchiver:
             f"Created by: {self.username}",
             f"Stadium: {self.match_data.get('stadium', 'N/A')}",
             f"Pitch: {self.match_data.get('pitch', 'N/A')}",
+            f"Match type: {self._match_type_label()}",
             f"Weather: {self._weather_label()}",
         ]
-        if getattr(self.match, 'rain_affected', False):
+        fc_weather = self._fc_weather_totals()
+        if fc_weather and fc_weather['affected']:
+            header_lines.append(
+                "WEATHER AFFECTED - "
+                f"{fc_weather['net_lost_minutes']} minutes / "
+                f"{fc_weather['overs_lost']} overs lost (no DLS)"
+            )
+        elif getattr(self.match, 'rain_affected', False):
             header_lines.append("RAIN AFFECTED - Duckworth-Lewis-Stern method applied")
         header_lines.extend([
             f"Archive Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -1473,10 +1577,31 @@ class MatchArchiver:
             ])
             
             # Add match conditions
+            lines.append(f"Match type: {self._match_type_label()}")
             lines.append(f"Weather forecast: {self._weather_label()}")
 
+            fc_weather = self._fc_weather_totals()
+            if fc_weather and fc_weather['affected']:
+                lines.extend([
+                    "",
+                    "MATCH AFFECTED BY WEATHER - FIRST-CLASS TIME-LOSS RULES",
+                    f"  Gross delay: {fc_weather['gross_delay_minutes']} minute(s)",
+                    f"  Time recovered: {fc_weather['makeup_minutes']} minute(s)",
+                    f"  Net lost: {fc_weather['net_lost_minutes']} minute(s) "
+                    f"({fc_weather['overs_lost']} over(s))",
+                ])
+                for ev in getattr(self.match, 'fc_weather_log', []):
+                    cause = str(ev.get('cause', 'weather')).replace('_', ' ').title()
+                    lines.append(
+                        f"  Day {ev.get('day')}, {cause}: "
+                        f"{ev.get('delay_minutes', 0)} minute(s) - "
+                        f"{str(ev.get('outcome', '')).replace('_', ' ')}"
+                    )
+                lines.append("")
+
             # Add rain interruption details if any occurred
-            if hasattr(self.match, 'rain_affected') and self.match.rain_affected:
+            if (not getattr(self.match, 'is_fc', False)
+                    and hasattr(self.match, 'rain_affected') and self.match.rain_affected):
                 lines.extend([
                     "",
                     "MATCH AFFECTED BY RAIN - DLS method applied",
@@ -1712,9 +1837,15 @@ class MatchArchiver:
             toss_line = 'N/A'
 
         weather_text = self._weather_label()
-        if getattr(self.match, 'rain_affected', False):
+        fc_weather_summary = self._fc_weather_totals()
+        if fc_weather_summary and fc_weather_summary['affected']:
+            weather_text += (
+                f" (weather affected - {fc_weather_summary['overs_lost']} overs lost, no DLS)"
+            )
+        elif getattr(self.match, 'rain_affected', False):
             weather_text += " (rain affected - DLS)"
         weather  = html_mod.escape(weather_text)
+        match_type = html_mod.escape(self._match_type_label())
         stadium  = html_mod.escape(self.match_data.get('stadium', 'N/A'))
         pitch    = html_mod.escape(self.match_data.get('pitch', 'N/A'))
 
@@ -1877,6 +2008,7 @@ class MatchArchiver:
   <div class="meta-grid">
     <div class="meta-item">Stadium: <span>{stadium}</span></div>
     <div class="meta-item">Pitch: <span>{pitch}</span></div>
+    <div class="meta-item">Match type: <span>{match_type}</span></div>
     <div class="meta-item">Weather: <span>{weather}</span></div>
     <div class="meta-item">Toss: <span>{html_mod.escape(toss_line)}</span></div>
     <div class="meta-item">Date: <span>{html_mod.escape(self.timestamp)}</span></div>
