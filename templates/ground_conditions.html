@@ -355,6 +355,7 @@
 {% if match_format == 'FC' %}
 {% set fc_profiles = config.get('pitch_profiles') or {} %}
 {% set fc_ball = config.get('ball_condition') or {} %}
+{% set fc_pink = fc_ball.get('pink_ball') or {} %}
 {% set fc_rough = config.get('rough_targeting') or {} %}
 
 <!-- First-Class Pitch Profiles -->
@@ -470,6 +471,60 @@
                     <label>{{ style }}</label>
                     <input type="number" class="gc-fc-ballwf-input" step="0.01" min="0" max="3"
                         value="{{ val }}" data-table="{{ tbl_key }}" data-style="{{ style }}">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="gc-section-header" style="margin-top: 1.5rem;">
+        <i class="fa-solid fa-lightbulb"></i>
+        <span class="gc-section-title">Pink Ball &amp; Floodlights</span>
+    </div>
+    <p class="gc-format-note">
+        Used only for First-Class day/night matches. The pink ball moves for a
+        longer new-ball window, then seamers receive an additional soft advantage
+        throughout the third session under lights.
+    </p>
+    <div class="gc-la-matrix-grid" id="fc-pink-ball-config">
+        <div class="gc-la-matrix-card">
+            <div class="gc-la-matrix-head"><span class="gc-la-phase-name">Pink-ball window</span></div>
+            <div class="gc-la-matrix-rows">
+                <div class="gc-la-row">
+                    <label>Swing overs</label>
+                    <input type="number" class="gc-fc-pink-input" step="1" min="0" max="40"
+                        value="{{ fc_pink.get('swing_overs', 15) }}" data-field="swing_overs">
+                </div>
+            </div>
+        </div>
+
+        {% for tbl_key, tbl_label in [('new_ball_wicket_factors', 'Pink new-ball wickets'),
+                                      ('under_lights_wicket_factors', 'Under-lights wickets')] %}
+        <div class="gc-la-matrix-card">
+            <div class="gc-la-matrix-head"><span class="gc-la-phase-name">{{ tbl_label }}</span></div>
+            <div class="gc-la-matrix-rows">
+                {% for style, val in (fc_pink.get(tbl_key) or {}).items() %}
+                <div class="gc-la-row">
+                    <label>{{ style }}</label>
+                    <input type="number" class="gc-fc-pink-wf-input" step="0.01" min="0" max="3"
+                        value="{{ val }}" data-table="{{ tbl_key }}" data-style="{{ style }}">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        {% for tbl_key, tbl_label in [('new_ball_scoring_factors', 'Pink new-ball scoring'),
+                                      ('under_lights_scoring_factors', 'Under-lights scoring')] %}
+        <div class="gc-la-matrix-card">
+            <div class="gc-la-matrix-head"><span class="gc-la-phase-name">{{ tbl_label }}</span></div>
+            <div class="gc-la-matrix-rows">
+                {% for outcome, val in (fc_pink.get(tbl_key) or {}).items() %}
+                <div class="gc-la-row">
+                    <label>{{ outcome }}</label>
+                    <input type="number" class="gc-fc-pink-scoring-input" step="0.01" min="0" max="3"
+                        value="{{ val }}" data-table="{{ tbl_key }}" data-outcome="{{ outcome }}">
                 </div>
                 {% endfor %}
             </div>
@@ -1517,6 +1572,27 @@
                 if (!inputs.length) return;
                 cfg.ball_condition[tbl] = {};
                 inputs.forEach(i => { cfg.ball_condition[tbl][i.dataset.style] = parseFloat(i.value) || 0; });
+            });
+
+            cfg.ball_condition.pink_ball = cfg.ball_condition.pink_ball || {};
+            document.querySelectorAll('.gc-fc-pink-input').forEach(i => {
+                cfg.ball_condition.pink_ball[i.dataset.field] = parseInt(i.value) || 0;
+            });
+            ['new_ball_wicket_factors', 'under_lights_wicket_factors'].forEach(tbl => {
+                const inputs = document.querySelectorAll(`.gc-fc-pink-wf-input[data-table="${tbl}"]`);
+                if (!inputs.length) return;
+                cfg.ball_condition.pink_ball[tbl] = {};
+                inputs.forEach(i => {
+                    cfg.ball_condition.pink_ball[tbl][i.dataset.style] = parseFloat(i.value) || 0;
+                });
+            });
+            ['new_ball_scoring_factors', 'under_lights_scoring_factors'].forEach(tbl => {
+                const inputs = document.querySelectorAll(`.gc-fc-pink-scoring-input[data-table="${tbl}"]`);
+                if (!inputs.length) return;
+                cfg.ball_condition.pink_ball[tbl] = {};
+                inputs.forEach(i => {
+                    cfg.ball_condition.pink_ball[tbl][i.dataset.outcome] = parseFloat(i.value) || 0;
+                });
             });
 
             applyBlending(cfg);

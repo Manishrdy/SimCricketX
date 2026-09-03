@@ -450,6 +450,7 @@ def register_match_routes(
                 data["fc_weather_script"] = fc_weather.generate_weather_script(
                     _forecast, _fmt_cfg.days, _fmt_cfg.overs_per_day,
                     min_overs_last_hour=_fmt_cfg.min_overs_last_hour,
+                    is_day_night=bool(data.get("is_day_night", False)),
                 )
             else:
                 data["weather_script"] = generate_weather_script(
@@ -688,6 +689,14 @@ def register_match_routes(
             "rain_affected": getattr(match, "rain_affected", False),
             "dls_par": match._current_dls_par() if hasattr(match, "_current_dls_par") else None,
             "rain_events": getattr(match, "rain_events_log", []),
+            "fc_weather_status": (
+                match._fc_weather_status()
+                if match.is_fc and getattr(match, "fc_weather_v2", False)
+                else None
+            ),
+            "fc_weather_log": (
+                list(getattr(match, "fc_weather_log", [])) if match.is_fc else []
+            ),
         })
     
     @app.route("/match/<match_id>/scoreboard")
@@ -846,6 +855,11 @@ def register_match_routes(
                 or "DLS method" in _result_text
                 or "abandoned due to rain" in _result_text.lower()
             ),
+            "weather_affected": bool(getattr(db_match, "weather_affected", False)),
+            "weather_minutes_lost": int(
+                getattr(db_match, "weather_minutes_lost", 0) or 0),
+            "weather_overs_lost": int(
+                getattr(db_match, "weather_overs_lost", 0) or 0),
             "motm_player_name": motm_player_name,
             "motm_team_name": motm_team_name,
             "motm_stat_line": motm_stat_line,
@@ -1273,6 +1287,8 @@ def register_match_routes(
             if match.data.get("created_by") != current_user.id:
                 return jsonify({"error": "Unauthorized"}), 403
             outcome = match.next_ball()
+            if match.is_fc and getattr(match, "fc_weather_v2", False):
+                outcome.setdefault("fc_weather_status", match._fc_weather_status())
 
             # Accumulate commentary for resume replay
             commentary_html = outcome.get("commentary")
@@ -1291,7 +1307,15 @@ def register_match_routes(
             # == 0 right after a ball was just processed means one of those
             # was just reached) so a restart/eviction resumes instead of
             # silently restarting the match from fc_innings=1.
-            if match.is_fc and match.current_ball == 0 and not outcome.get("match_over"):
+            if (
+                match.is_fc and not outcome.get("match_over")
+                and (
+                    match.current_ball == 0
+                    or outcome.get("fc_weather_event")
+                    or outcome.get("fc_interval")
+                    or outcome.get("day_break")
+                )
+            ):
                 _persist_fc_snapshot(match, match_id)
 
             # Explicitly send final score and wickets clearly
@@ -1320,7 +1344,8 @@ def register_match_routes(
                     "scorecard_data":  outcome.get("scorecard_data"),
                     "score":           outcome.get("final_score", match.score),
                     "wickets":         outcome.get("wickets",  match.wickets),
-                    "result":          outcome.get("result",  "Match ended")
+                    "result":          outcome.get("result",  "Match ended"),
+                    "fc_weather_status": outcome.get("fc_weather_status"),
                 })
 
             return jsonify(outcome)
@@ -1554,7 +1579,11 @@ def register_match_routes(
             # html_content is accepted for backwards-compatibility but is no longer
             # used to build the archive HTML file. The HTML report is now generated
             # entirely from commentary_log + match metadata on the backend.
-            payload = request.get_json() or {}
+            # Native form submission is used for the attachment download so
+            # browsers do not suppress a delayed Blob/synthetic-click. There
+            # is no JSON body in that path; POSTed JSON remains supported for
+            # backwards compatibility.
+            payload = request.get_json(silent=True) or {}
             html_content = payload.get("html_content")
             if html_content:
                 app.logger.debug(f"[DownloadArchive] html_content received ({len(html_content):,} chars) — not used for HTML generation")

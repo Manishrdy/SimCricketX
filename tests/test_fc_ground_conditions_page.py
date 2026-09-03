@@ -13,6 +13,9 @@ def test_fc_ground_conditions_page_renders(authenticated_client):
     assert 'data-table="wicket_factors_start"' in html
     assert 'data-table="wicket_factors_end"' in html
     assert 'data-field="new_ball_swing_overs"' in html
+    assert 'id="fc-pink-ball-config"' in html
+    assert 'data-table="under_lights_wicket_factors"' in html
+    assert 'data-table="under_lights_scoring_factors"' in html
     assert "First Class" in html
     # ...and it must not be mislabelled as List A any more.
     assert "Editing the <strong>First Class</strong>" in html
@@ -27,6 +30,13 @@ def test_fc_ground_conditions_round_trips_a_save(authenticated_client):
                 "Four": 0.06, "Six": 0.005, "Wicket": 0.015, "Extras": 0.02},
                 "run_factor": 1.0}
         },
+        "ball_condition": {
+            "pink_ball": {
+                "swing_overs": 17,
+                "under_lights_wicket_factors": {"Fast": 1.19, "default": 1.0},
+                "under_lights_scoring_factors": {"Dot": 1.07, "Four": 0.93},
+            }
+        },
     }
     resp = authenticated_client.post("/ground-conditions/save",
                                      data=json.dumps(payload),
@@ -36,8 +46,11 @@ def test_fc_ground_conditions_round_trips_a_save(authenticated_client):
     # It must come back on the FC page, and must NOT have leaked into T20.
     page = authenticated_client.get("/ground-conditions?format=FC").get_data(as_text=True)
     assert "0.6" in page
+    assert 'value="17" data-field="swing_overs"' in page
+    assert 'value="1.19" data-table="under_lights_wicket_factors" data-style="Fast"' in page
     # The FC editor markup must stay gated to the FC tab. (The buildFCConfig
     # JS is shared across formats, so assert on markup, not the class name.)
     t20 = authenticated_client.get("/ground-conditions?format=T20").get_data(as_text=True)
     assert 'data-table="wicket_factors_start"' not in t20
+    assert 'id="fc-pink-ball-config"' not in t20
     assert "Editing the <strong>T20</strong>" in t20

@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from migrations.add_fc_match_columns import run_migration as run_fc_match_columns
 from migrations.add_fc_player_ratings import run_migration as run_fc_player_ratings
+from migrations.add_match_weather_summary import run_migration as run_weather_summary
 
 
 def _columns(app, db, table):
@@ -48,3 +49,18 @@ def test_add_fc_player_ratings_idempotent(app):
     run_fc_player_ratings(db, app)
     cols_after_second = _columns(app, db, "players")
     assert cols_after_first == cols_after_second
+
+
+def test_add_match_weather_summary_idempotent(app):
+    from app import db
+
+    run_weather_summary(db, app)
+    cols_after_first = _columns(app, db, "matches")
+    for col in (
+        "weather_forecast", "weather_affected",
+        "weather_minutes_lost", "weather_overs_lost",
+    ):
+        assert col in cols_after_first
+
+    run_weather_summary(db, app)
+    assert _columns(app, db, "matches") == cols_after_first

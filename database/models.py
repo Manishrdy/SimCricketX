@@ -698,6 +698,10 @@ class Match(db.Model):
     match_format = db.Column(db.String(20), default='T20')
     overs_per_side = db.Column(db.Integer, default=20)
     is_day_night = db.Column(db.Boolean, default=False)
+    weather_forecast = db.Column(db.String(20), nullable=True)
+    weather_affected = db.Column(db.Boolean, default=False)
+    weather_minutes_lost = db.Column(db.Integer, default=0)
+    weather_overs_lost = db.Column(db.Integer, default=0)
 
     # First-Class (FC) fields — NULL for T20/ListA matches. FC allows up to
     # 2 innings per side, so the existing home/away_team_score/*_overs
