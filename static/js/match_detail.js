@@ -984,6 +984,25 @@ function updateRainStatus(data) {
     const rainEl = document.getElementById('sb-rain');
     if (!rainEl) return;
 
+    // FC has a time-loss model, never DLS. Reuse the broadcast strip while
+    // keeping the limited-overs wording and state completely separate.
+    if (data.fc_weather_status) {
+        const status = data.fc_weather_status;
+        const forecast = status.forecast || {};
+        const lost = Number(status.overs_lost || 0);
+        const parts = [
+            `Day ${status.day}`,
+            `Session ${status.session}`,
+            status.clock_label,
+            `close ${status.revised_close_label}`,
+            forecast.label || null,
+            lost ? `${lost} ov lost` : null,
+        ].filter(Boolean);
+        rainEl.textContent = `🌦 ${parts.join(' · ')}`;
+        rainEl.style.display = '';
+        return;
+    }
+
     if (data.rain_interruption) {
         const info = data.rain_interruption;
         if (info.innings === 2 && info.target) {
@@ -1005,6 +1024,50 @@ function updateRainStatus(data) {
         rainEl.textContent = text;
         rainEl.style.display = '';
     }
+}
+
+function showFCWeatherEvent(data) {
+    const event = data.fc_weather_event || {};
+    const status = data.fc_weather_status || {};
+    const overlay = document.getElementById('fc-weather-overlay');
+    if (!overlay) {
+        scheduleNextBall(delay);
+        return;
+    }
+
+    const phaseLabels = {
+        day_start: 'Day Forecast',
+        suspended: 'Play Suspended',
+        inspection: 'Umpires’ Inspection',
+        resumed: 'Play Resumes',
+        early_stumps: 'Early Stumps',
+        washout: 'Day Washed Out',
+    };
+    const icons = {
+        forecast: '🌦', rain: '🌧', bad_light: '🌘',
+    };
+    document.getElementById('fc-weather-title').textContent =
+        `${phaseLabels[event.phase] || 'Weather Update'} — Day ${event.day || status.day || ''}`;
+    document.getElementById('fc-weather-icon').textContent = icons[event.cause] || '🌦';
+    document.getElementById('fc-weather-message').textContent = event.message || 'Weather update';
+
+    const meta = [];
+    if (event.clock_label) meta.push(`Time: ${event.clock_label}`);
+    if (event.next_inspection_label) meta.push(`Next inspection: ${event.next_inspection_label}`);
+    if (status.revised_close_label) meta.push(`Revised close: ${status.revised_close_label}`);
+    if (event.event_delay_minutes) meta.push(`Playing time lost: ${event.event_delay_minutes} min`);
+    if (event.recovery_minutes) meta.push(`Ground recovery: ${event.recovery_minutes} min`);
+    if (status.makeup_minutes) meta.push(`Extra time: ${status.makeup_minutes} min`);
+    if (status.overs_lost) meta.push(`Net overs lost today: ${status.overs_lost}`);
+    document.getElementById('fc-weather-meta').textContent = meta.join(' · ');
+
+    const button = document.getElementById('fc-weather-continue-btn');
+    button.textContent = event.phase === 'day_start' ? 'Start Day' : 'Continue';
+    button.onclick = () => {
+        overlay.style.display = 'none';
+        scheduleNextBall(delay);
+    };
+    overlay.style.display = 'flex';
 }
 
 function updateScoreBanner(data) {
@@ -1237,6 +1300,12 @@ async function _processBallResult(data) {
 
     // Rain / DLS status strip
     updateRainStatus(data);
+
+    if (data.fc_weather_event) {
+        if (data.commentary) appendLog(data.commentary, 'comment');
+        showFCWeatherEvent(data);
+        return;
+    }
 
     // Dashboard: process ball_data for every ball (runs in background regardless of view)
     if (data.ball_data) {
@@ -1723,45 +1792,20 @@ async function saveMatchArchive() {
         });
         console.log("✅ Commentary saved");
 
-        // 2. Trigger ZIP download
-        console.log("📥 Triggering ZIP download...");
-        const downloadResponse = await fetch(`${window.location.pathname}/download-archive`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                // C8: Send only the match content, not the full page (avoids leaking CSRF tokens/session data)
-                html_content: (document.querySelector('.match-layout') || document.body).outerHTML
-            })
-        });
-
-        if (downloadResponse.ok) {
-            // Get the blob and create download
-            const blob = await downloadResponse.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-
-            // Extract filename from Content-Disposition header or generate one
-            const contentDisposition = downloadResponse.headers.get('Content-Disposition');
-            let filename = `match_${matchData.match_id}_archive.zip`;
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename=(.+)/);
-                if (filenameMatch) {
-                    filename = filenameMatch[1].replace(/"/g, '');
-                }
-            }
-
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            console.log(`✅ ZIP downloaded: ${filename}`);
-        } else {
-            const errorText = await downloadResponse.text();
-            console.error("❌ Failed to download archive:", downloadResponse.status, errorText);
-            alert(`Failed to download match archive: ${downloadResponse.status}`);
-        }
+        // 2. Trigger a native attachment response. A fetch() + Blob URL +
+        // synthetic click can be suppressed once the async simulation has
+        // lost its user-activation window (and immediate URL revocation can
+        // cancel it in some browsers). A normal form navigation lets the
+        // browser handle Content-Disposition directly.
+        console.log("📥 Triggering native ZIP download...");
+        const downloadForm = document.createElement('form');
+        downloadForm.method = 'POST';
+        downloadForm.action = `${window.location.pathname}/download-archive`;
+        downloadForm.style.display = 'none';
+        document.body.appendChild(downloadForm);
+        downloadForm.submit();
+        window.setTimeout(() => downloadForm.remove(), 1000);
+        console.log("✅ ZIP download requested");
 
     } catch (e) {
         console.error("❌ Archive save failed:", e);

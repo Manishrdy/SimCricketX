@@ -71,7 +71,7 @@ def test_fc_snapshot_roundtrip_mid_match(app, regular_user):
                 break
 
         snap = _json_roundtrip(m.serialize_fc_snapshot())
-        assert snap["v"] == 1
+        assert snap["v"] == 2
 
         m2 = _fresh_copy(m)
         m2.restore_fc_snapshot(snap)
@@ -107,6 +107,24 @@ def test_fc_snapshot_none_when_not_fc(app, regular_user):
         data["overs"] = 20
         m = match_module.Match(data)
         assert m.serialize_fc_snapshot() is None
+
+
+def test_fc_day_night_resume_restores_under_lights_condition(app, regular_user):
+    from engine.ground_config import get_defaults
+
+    with app.app_context():
+        data = _fc_match_data(regular_user.id)
+        data["is_day_night"] = True
+        data["ground_config"] = get_defaults("FC", mutable=True)
+        m = match_module.Match(data)
+        m.fc_sessions_taken_today = 2
+        assert m._fc_is_under_lights() is True
+
+        snap = _json_roundtrip(m.serialize_fc_snapshot())
+        m2 = _fresh_copy(m)
+        m2.restore_fc_snapshot(snap)
+        assert m2.fc_sessions_taken_today == 2
+        assert m2._fc_is_under_lights() is True
 
 
 def test_fc_restore_rejects_corrupt_snapshot(app, regular_user):
@@ -217,10 +235,54 @@ def test_fc_next_ball_persists_snapshot_at_over_boundary(app, authenticated_clie
         with open(path, "r", encoding="utf-8") as f:
             on_disk = json.load(f)
         assert on_disk.get("fc_snapshot") is not None
-        assert on_disk["fc_snapshot"]["v"] == 1
+        assert on_disk["fc_snapshot"]["v"] == 2
     finally:
         app_module.MATCH_INSTANCES.pop(match_id, None)
         try:
             os.remove(path)
         except OSError:
             pass
+
+
+def test_fc_snapshot_roundtrip_during_weather_and_partial_over(app, regular_user):
+    with app.app_context():
+        data = _fc_match_data(regular_user.id)
+        data["weather_forecast"] = "rain_around"
+        data["fc_weather_script"] = {
+            "v": 2, "forecast": "rain_around", "overs_per_day": 90,
+            "is_day_night": False,
+            "days": {"1": {
+                "public_state": "rain", "public_label": "Rain likely",
+                "rain_chance": 65, "late_light_risk": True,
+                "actual_state": "rain", "cloud_index": 0.7, "washout": False,
+                "events": [{
+                    "id": "d1-e1", "kind": "rain", "start_minute": 1,
+                    "rain_minutes": 20, "recovery_minutes": 10,
+                    "rain_end_minute": 21, "end_minute": 31, "washout": False,
+                }],
+            }},
+        }
+        m = match_module.Match(data)
+        # Forecast card, then enough deliveries for the clock to reach the
+        # interruption during an unfinished over.
+        m.next_ball()
+        weather = None
+        for _ in range(20):
+            result = m.next_ball()
+            if result.get("fc_weather_event", {}).get("phase") == "suspended":
+                weather = result
+                break
+        assert weather is not None
+        assert m.current_ball != 0
+
+        snap = _json_roundtrip(m.serialize_fc_snapshot())
+        m2 = match_module.Match(_json_roundtrip(data))
+        m2.restore_fc_snapshot(snap)
+        assert m2.current_ball == m.current_ball
+        assert m2.current_over_runs == m.current_over_runs
+        assert m2.current_over_outcomes == m.current_over_outcomes
+        assert m2.fc_active_weather_event == m.fc_active_weather_event
+        assert m2.fc_clock_minute == m.fc_clock_minute
+
+        inspection = m2.next_ball()
+        assert inspection["fc_weather_event"]["phase"] == "inspection"

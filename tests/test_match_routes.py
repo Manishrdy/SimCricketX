@@ -21,6 +21,10 @@ class TestMatchSetupRoute:
         response = authenticated_client.get("/match/setup")
         assert response.status_code == 200
         assert b"setup" in response.data.lower() or b"match" in response.data.lower()
+        assert b"Pink ball; movement lasts longer" in response.data
+        assert "Day/Night · Pink ball".encode() in response.data
+        assert b"Sustained rain can remove sessions or wash out a full day" in response.data
+        assert b"No DLS is used" in response.data
 
     def test_match_setup_unauthenticated(self, client):
         """Test accessing match setup without login redirects."""
@@ -252,6 +256,15 @@ class TestMatchArchiveRoutes:
         """Test downloading match archive without login redirects."""
         response = client.post("/match/test-match-id/download-archive")
         assert response.status_code == 302
+
+    def test_download_archive_accepts_native_form_post(self, authenticated_client):
+        """A form POST reaches archive lookup instead of failing JSON parsing."""
+        response = authenticated_client.post(
+            "/match/nonexistent-native-download/download-archive",
+            data={},
+            content_type="application/x-www-form-urlencoded",
+        )
+        assert response.status_code == 404
 
     def test_access_archive_unauthenticated(self, client):
         """Test accessing an archived match file without login redirects."""

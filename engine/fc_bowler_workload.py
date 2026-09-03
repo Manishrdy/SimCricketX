@@ -144,7 +144,8 @@ class FCBowlerManager:
         return sorted(eligible, key=_sort_key)
 
     def weighted_selection_scores(self, eligible: List[dict], pitch_wear: float,
-                                  fc_day: int, new_ball_window: bool = False) -> Dict[str, dict]:
+                                  fc_day: int, new_ball_window: bool = False,
+                                  under_lights: bool = False) -> Dict[str, dict]:
         """Return the captain's weighted preference score for each bowler.
 
         The four components deliberately mirror the cricketing judgement in
@@ -165,6 +166,11 @@ class FCBowlerManager:
 
             if new_ball_window:
                 conditions = 1.0 if is_strike_pace else (0.55 if not is_spin else 0.15)
+            elif under_lights:
+                # Floodlit pink-ball conditions are a soft captaincy signal,
+                # not an eligibility rule. Medium pace still benefits, while
+                # fatigue/freshness can keep a spinner in the attack.
+                conditions = 1.0 if not is_spin else 0.35
             elif preferred == "spin":
                 conditions = 1.0 if is_spin else 0.35
             elif preferred == "pace":
@@ -214,6 +220,7 @@ class FCBowlerManager:
 
     def choose_weighted_bowler(self, eligible: List[dict], pitch_wear: float,
                                fc_day: int, new_ball_window: bool = False,
+                               under_lights: bool = False,
                                rng=None) -> dict:
         """Choose one legal bowler from weighted, seeded preferences."""
         if not eligible:
@@ -221,12 +228,13 @@ class FCBowlerManager:
         rng = rng or random
         scores = self.weighted_selection_scores(
             eligible, pitch_wear, fc_day, new_ball_window=new_ball_window,
+            under_lights=under_lights,
         )
         weights = [scores[player["name"]]["weight"] for player in eligible]
         selected = rng.choices(eligible, weights=weights, k=1)[0]
         logger.debug(
-            "FC bowler selection new_ball=%s selected=%s preferences=%s",
-            new_ball_window,
+            "FC bowler selection new_ball=%s under_lights=%s selected=%s preferences=%s",
+            new_ball_window, under_lights,
             selected["name"],
             {
                 name: {key: round(value, 4) for key, value in parts.items()}

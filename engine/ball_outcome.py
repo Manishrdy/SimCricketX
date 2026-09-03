@@ -897,6 +897,7 @@ def calculate_outcome(
     ground_config_override: dict = None,
     format_config: Optional[FormatConfig] = None,
     is_day_night: bool = False,
+    fc_session_number: int = None,
     ball_overs_bowled: int = 0,
     new_ball_overs: int = 80,
 ) -> dict:
@@ -970,7 +971,12 @@ def calculate_outcome(
     _fc_technique_weight = 0.30
     if _is_fc:
         _ball_spec = _gc_fc_ball_condition(config=_gc)
-        _swing_overs = _ball_spec.get("new_ball_swing_overs", 10)
+        _pink_spec = _ball_spec.get("pink_ball") if is_day_night else None
+        _swing_overs = (
+            _pink_spec.get("swing_overs", 15)
+            if isinstance(_pink_spec, dict)
+            else _ball_spec.get("new_ball_swing_overs", 10)
+        )
         if ball_overs_bowled < _swing_overs:
             # Against the moving new ball, defensive technique matters more
             # than it does once the ball has softened.
@@ -1171,7 +1177,8 @@ def calculate_outcome(
         # work at both ends. Applying it to wickets alone made the new ball
         # a purely hostile event, which is not how it reads from the stands.
         _scale_outcomes(raw_weights, _gc_fc_ball_condition_outcomes(
-            bowling_type, ball_overs_bowled, new_ball_overs, config=_gc))
+            bowling_type, ball_overs_bowled, new_ball_overs, config=_gc,
+            is_day_night=is_day_night, session_number=fc_session_number))
         # A batter who has just walked in is at his most vulnerable — see
         # _FC_NEW_BATTER_WICKET_BOOST.
         _new_batter_boost = _FC_NEW_BATTER_WICKET_BOOST.get(balls_faced)

@@ -65,7 +65,8 @@ AWAY = _squad("AWY")
 
 
 def _fc_match(days=4, pitch="Hard", toss_winner="HOM", toss_decision="Bat",
-               weather_forecast="clear", fc_weather_script=None):
+               weather_forecast="clear", fc_weather_script=None,
+               is_day_night=False, ground_config=None):
     data = {
         "match_id": str(uuid.uuid4()), "created_by": 1,
         "timestamp": "2026-08-09T12:00:00",
@@ -73,12 +74,15 @@ def _fc_match(days=4, pitch="Hard", toss_winner="HOM", toss_decision="Bat",
         "stadium": "Test Ground", "pitch": pitch,
         "toss": "Heads", "toss_winner": toss_winner, "toss_decision": toss_decision,
         "match_format": "FC", "days": days, "simulation_mode": "auto",
+        "is_day_night": is_day_night,
         "playing_xi": {"home": copy.deepcopy(HOME), "away": copy.deepcopy(AWAY)},
         "substitutes": {"home": [], "away": []},
         "weather_forecast": weather_forecast,
     }
     if fc_weather_script is not None:
         data["fc_weather_script"] = fc_weather_script
+    if ground_config is not None:
+        data["ground_config"] = ground_config
     return match_module.Match(data)
 
 
@@ -837,24 +841,24 @@ def test_weather_script_deterministic_for_same_seed():
     assert s1 == s2
 
 
-def test_weather_partial_loss_never_breaches_min_overs_last_hour():
-    import random
-    rng = random.Random(7)
-    script = fc_weather.generate_weather_script(
-        "storm_warning", 20, 90, min_overs_last_hour=15, rng=rng
-    )
-    for day, event in script["day_events"].items():
-        if event["reason"] != "washed_out":
-            effective = fc_weather.effective_overs_today(script, day, 90)
-            assert effective >= 15
+def test_weather_v2_does_not_apply_a_fifteen_over_floor():
+    script = {
+        "v": 2, "overs_per_day": 90,
+        "days": {"1": {"washout": True, "events": [{
+            "id": "d1-e1", "kind": "rain", "start_minute": 0,
+            "rain_minutes": 420, "recovery_minutes": 0,
+            "rain_end_minute": 420, "end_minute": 420, "washout": True,
+        }]}},
+    }
+    assert fc_weather.effective_overs_today(script, 1, 90) == 0
 
 
-def test_weather_clear_forecast_rarely_interrupts():
+def test_weather_clear_forecast_never_interrupts():
     import random
     rng = random.Random(3)
     script = fc_weather.generate_weather_script("clear", 20, 90, rng=rng)
-    # "clear" is a 5% chance per day — 20 days should see only a handful.
-    assert len(script["day_events"]) <= 6
+    assert all(not day["events"] for day in script["days"].values())
+    assert all(day["actual_state"] == "dry" for day in script["days"].values())
 
 
 def test_weather_string_keys_tolerated_after_json_roundtrip():
@@ -868,6 +872,187 @@ def test_weather_string_keys_tolerated_after_json_roundtrip():
         before = fc_weather.effective_overs_today(script, day, 90)
         after = fc_weather.effective_overs_today(roundtripped, day, 90)
         assert before == after
+
+
+def test_weather_v2_forecasts_are_correlated_and_actual_is_hidden():
+    import random
+    script = fc_weather.generate_weather_script(
+        "rain_around", 12, 90, rng=random.Random(19)
+    )
+    public = [script["days"][str(day)]["public_state"] for day in range(1, 13)]
+    assert any(a == b for a, b in zip(public, public[1:]))
+    risk_before = fc_weather.remaining_rain_risk(script, 1, 12)
+    # Changing hidden actual events cannot change the captain's public risk.
+    changed = copy.deepcopy(script)
+    for day in changed["days"].values():
+        day["actual_state"] = "storm"
+        day["events"] = []
+    assert fc_weather.remaining_rain_risk(changed, 1, 12) == risk_before
+
+
+def test_weather_interval_overlap_counts_only_playing_time():
+    # 12:40-14:00 spans the whole 40-minute lunch interval, so only forty
+    # of the eighty elapsed minutes are playing time lost.
+    assert fc_weather.interval_overlap_minutes(100, 180) == 40
+    assert fc_weather.playable_minutes_lost(100, 180) == 40
+
+
+def test_weather_cells_less_than_twenty_minutes_apart_merge():
+    merged = fc_weather._merge_rain_events([
+        {"id": "a", "kind": "rain", "start_minute": 100,
+         "rain_minutes": 10, "recovery_minutes": 5, "washout": False},
+        {"id": "b", "kind": "rain", "start_minute": 130,
+         "rain_minutes": 10, "recovery_minutes": 5, "washout": False},
+        {"id": "c", "kind": "rain", "start_minute": 170,
+         "rain_minutes": 8, "recovery_minutes": 5, "washout": False},
+    ])
+    assert len(merged) == 2
+    assert merged[0]["start_minute"] == 100
+    assert merged[0]["end_minute"] == 145
+    assert merged[1]["start_minute"] == 170
+
+
+def test_weather_cells_exactly_twenty_minutes_apart_remain_separate():
+    merged = fc_weather._merge_rain_events([
+        {"id": "a", "kind": "rain", "start_minute": 100,
+         "rain_minutes": 10, "recovery_minutes": 5, "washout": False},
+        {"id": "b", "kind": "rain", "start_minute": 135,
+         "rain_minutes": 10, "recovery_minutes": 5, "washout": False},
+    ])
+    assert len(merged) == 2
+
+
+def test_late_rain_can_recover_time_inside_extension_window():
+    script = {
+        "v": 2, "overs_per_day": 90,
+        "days": {"1": {"events": [{
+            "id": "d1-e1", "kind": "rain", "start_minute": 405,
+            "rain_minutes": 25, "recovery_minutes": 20,
+            "rain_end_minute": 430, "end_minute": 450, "washout": False,
+        }]}},
+    }
+    summary = fc_weather.day_timing_summary(script, 1, 90)
+    assert summary["gross_delay_minutes"] == 15
+    assert summary["makeup_minutes"] == 15
+    assert summary["net_lost_minutes"] == 0
+    assert summary["revised_close_minute"] == 465
+
+
+def test_bad_light_is_late_and_floodlights_suppress_it():
+    red_ball = fc_weather.bad_light_start_minute(0.95, is_day_night=False)
+    pink_ball = fc_weather.bad_light_start_minute(0.95, is_day_night=True)
+    assert fc_weather.TEA_END_MINUTE <= red_ball < fc_weather.SCHEDULED_CLOSE_MINUTE
+    assert pink_ball is None or pink_ball > red_ball
+
+
+def test_fc_v2_weather_pauses_without_consuming_a_delivery(app):
+    script = {
+        "v": 2, "forecast": "rain_around", "overs_per_day": 90,
+        "is_day_night": False,
+        "days": {"1": {
+            "public_state": "rain", "public_label": "Rain likely",
+            "rain_chance": 65, "late_light_risk": True,
+            "actual_state": "rain", "cloud_index": 0.7, "washout": False,
+            "events": [{
+                "id": "d1-e1", "kind": "rain", "start_minute": 0,
+                "rain_minutes": 20, "recovery_minutes": 10,
+                "rain_end_minute": 20, "end_minute": 30, "washout": False,
+            }],
+        }},
+    }
+    m = _fc_match(days=4, weather_forecast="rain_around", fc_weather_script=script)
+    start = m.next_ball()
+    assert start["fc_weather_event"]["phase"] == "day_start"
+    suspended = m.next_ball()
+    assert suspended["fc_weather_event"]["phase"] == "suspended"
+    assert m.match_balls_bowled == 0 and m.current_ball == 0
+    inspection = m.next_ball()
+    assert inspection["fc_weather_event"]["phase"] == "inspection"
+    resumed = m.next_ball()
+    assert resumed["fc_weather_event"]["phase"] == "resumed"
+    assert m.match_balls_bowled == 0 and m.current_ball == 0
+    assert m.fc_weather_affected is True
+    assert m.fc_day_gross_delay_minutes == 30
+    assert m.fc_day_makeup_minutes == 30
+    assert m.fc_day_net_lost_minutes == 0
+    assert m.dls_ledger_innings1 is None and m.dls_ledger_innings2 is None
+
+
+def test_fc_v2_hidden_delayed_start_precedes_first_ball(app):
+    script = {
+        "v": 2, "forecast": "passing_showers", "overs_per_day": 90,
+        "is_day_night": False,
+        "days": {"1": {
+            "public_state": "dry", "public_label": "Dry",
+            "rain_chance": 10, "late_light_risk": False,
+            "actual_state": "showers", "cloud_index": 0.45, "washout": False,
+            "events": [{
+                "id": "d1-e1", "kind": "rain", "start_minute": 0,
+                "rain_minutes": 8, "recovery_minutes": 5,
+                "rain_end_minute": 8, "end_minute": 13, "washout": False,
+            }],
+        }},
+    }
+    m = _fc_match(days=4, weather_forecast="passing_showers", fc_weather_script=script)
+    response = m.next_ball()
+    assert response["fc_weather_event"]["phase"] == "suspended"
+    assert m.match_balls_bowled == 0 and m.current_ball == 0
+
+
+def test_fc_weather_projection_does_not_reveal_later_hidden_events(app):
+    def scripted(events):
+        return {
+            "v": 2, "forecast": "passing_showers", "overs_per_day": 90,
+            "is_day_night": False,
+            "days": {"1": {
+                "public_state": "showers", "public_label": "Showers possible",
+                "rain_chance": 35, "late_light_risk": False,
+                "actual_state": "showers", "cloud_index": 0.45,
+                "washout": False, "events": events,
+            }},
+        }
+
+    clear_actual = _fc_match(
+        days=4, weather_forecast="passing_showers", fc_weather_script=scripted([]))
+    hidden_storm = _fc_match(days=4, weather_forecast="passing_showers",
+        fc_weather_script=scripted([{
+            "id": "d1-e1", "kind": "rain", "start_minute": 300,
+            "rain_minutes": 120, "recovery_minutes": 30,
+            "rain_end_minute": 420, "end_minute": 450, "washout": False,
+        }]))
+    public_a = clear_actual.next_ball()["fc_weather_event"]
+    public_b = hidden_storm.next_ball()["fc_weather_event"]
+    assert public_a["phase"] == public_b["phase"] == "day_start"
+    assert public_a["projected_overs_today"] == public_b["projected_overs_today"]
+
+
+def test_weather_v2_seeded_calibration_is_monotonic_and_lights_help():
+    import random
+
+    def sample(tier, day_night):
+        losses, bad_light_days = [], 0
+        for seed in range(400):
+            script = fc_weather.generate_weather_script(
+                tier, 4, 90, rng=random.Random(seed), is_day_night=day_night
+            )
+            losses.append(sum(
+                fc_weather.day_timing_summary(script, day, 90)["net_lost_minutes"]
+                for day in range(1, 5)
+            ))
+            bad_light_days += sum(
+                any(event["kind"] == "bad_light"
+                    for event in fc_weather.day_events(script, day))
+                for day in range(1, 5)
+            )
+        return sorted(losses)[len(losses) // 2], bad_light_days
+
+    medians = [sample(tier, False)[0] for tier in (
+        "clear", "passing_showers", "rain_around", "storm_warning")]
+    assert medians == sorted(medians)
+    assert medians[0] == 0 < medians[-1]
+    red_bad_light = sample("storm_warning", False)[1]
+    pink_bad_light = sample("storm_warning", True)[1]
+    assert pink_bad_light <= red_bad_light * 0.30
 
 
 def test_fc_scripted_washout_day_ends_immediately_with_zero_overs(app):
@@ -913,6 +1098,42 @@ def test_ball_condition_factor_boosts_pace_fresh_and_reverse_not_middle():
     assert reverse > middle
     # Reverse swing is a genuine-pace-only tool — medium pace gets nothing extra.
     assert gc.get_fc_ball_condition_factor("Medium", 72, 80) == 1.0
+
+
+def test_fc_day_night_uses_longer_pink_ball_window_and_stacks_lights():
+    from engine.ground_config import get_fc_ball_condition_outcome_factors as factors
+
+    # Red-ball behaviour is unchanged: its swing window has ended by over 14.
+    assert factors("Fast", 14, 80, is_day_night=False, session_number=2) == {}
+
+    pink = factors("Fast", 14, 80, is_day_night=True, session_number=2)
+    assert pink["Wicket"] == pytest.approx(1.35)
+    assert pink["Four"] == pytest.approx(1.20)
+    assert factors("Fast", 15, 80, is_day_night=True, session_number=2) == {}
+
+    under_lights = factors("Fast", 14, 80, is_day_night=True, session_number=3)
+    assert under_lights["Wicket"] == pytest.approx(1.35 * 1.12)
+    assert under_lights["Four"] == pytest.approx(1.20 * 0.95)
+    assert under_lights["Dot"] == pytest.approx(1.04 * 1.04)
+
+    middle_lights = factors("Fast-medium", 40, 80,
+                            is_day_night=True, session_number=3)
+    assert middle_lights["Wicket"] == pytest.approx(1.10)
+    assert middle_lights["Four"] < 1.0
+    assert middle_lights["Dot"] > 1.0
+
+    spinner = factors("Off spin", 3, 80, is_day_night=True, session_number=3)
+    assert spinner["Wicket"] == 1.0, "pink ball must not directly boost spin wickets"
+
+
+def test_old_fc_config_snapshot_without_pink_ball_keeps_red_ball_behaviour():
+    from engine.ground_config import (
+        get_defaults, get_fc_ball_condition_outcome_factors as factors,
+    )
+    old_snapshot = get_defaults("FC", mutable=True)
+    old_snapshot["ball_condition"].pop("pink_ball")
+    assert factors("Fast", 14, 80, config=old_snapshot,
+                   is_day_night=True, session_number=3) == {}
 
 
 def test_fc_second_new_ball_can_be_delayed_then_is_forced(app):
@@ -1249,6 +1470,20 @@ def test_fc_session_boundaries_track_a_shortened_day(app):
     assert m._fc_session_boundaries() == [15, 30]   # thirds of 45
 
 
+def test_fc_day_night_lights_follow_weather_aware_third_session(app):
+    script = {"forecast": "rain_around", "day_events": {1: {"reason": "rain", "overs_lost": 45}}}
+    m = _fc_match(days=5, fc_weather_script=script, is_day_night=True)
+    m.fc_day_over_rate_adjust = 0
+    assert m._fc_session_boundaries() == [15, 30]
+    m.fc_day_overs_bowled_today = 30
+    m.fc_sessions_taken_today = 1
+    assert m._fc_is_under_lights() is False
+    tea = m._fc_interval_response("Tea")
+    assert m._fc_is_under_lights() is True
+    assert "floodlights" in tea["commentary"].lower()
+    assert "pink ball" in tea["commentary"].lower()
+
+
 def test_fc_interval_emits_a_scorecard_and_session_summary(app):
     """Lunch/Tea pause the match on a scorecard the same way stumps does —
     following a first-class match means reading the score at the breaks."""
@@ -1263,10 +1498,16 @@ def test_fc_interval_emits_a_scorecard_and_session_summary(app):
     assert summary["overs"] > 0
     assert summary["runs"] == r["score"]            # first session of the match
     # Tea follows, and the session summary covers only the new session.
+    innings_after_lunch = m.fc_innings
     r2 = _play_until(m, lambda mm, rr: rr.get("fc_interval"))
     assert r2["interval_name"] == "Tea"
     assert r2["session_number"] == 2
-    assert r2["session_summary"]["runs"] == r2["score"] - summary["runs"]
+    if m.fc_innings == innings_after_lunch:
+        assert r2["session_summary"]["runs"] == r2["score"] - summary["runs"]
+    else:
+        # If the first innings ended during the afternoon, the summary also
+        # carries the runs made before the score reset for the next innings.
+        assert r2["session_summary"]["runs"] >= r2["score"]
 
 
 def test_fc_stumps_reports_the_evening_session(app):
@@ -1398,6 +1639,31 @@ def test_fc_weighted_bowler_choice_is_seeded_and_uses_all_four_preferences(app):
     assert sequence(991) == sequence(991)
 
 
+def test_under_lights_softly_prefers_seam_without_banning_spin(app):
+    import collections
+    import random
+
+    mgr, xi = _spell_mgr(stamina=80)
+    daylight = mgr.weighted_selection_scores(
+        xi, pitch_wear=0.8, fc_day=4, under_lights=False,
+    )
+    lights = mgr.weighted_selection_scores(
+        xi, pitch_wear=0.8, fc_day=4, under_lights=True,
+    )
+    assert lights["Quick"]["conditions"] > daylight["Quick"]["conditions"]
+    assert lights["Spinner"]["conditions"] < daylight["Spinner"]["conditions"]
+
+    rng = random.Random(2718)
+    picks = collections.Counter(
+        mgr.choose_weighted_bowler(
+            xi, pitch_wear=0.8, fc_day=4, under_lights=True, rng=rng,
+        )["name"]
+        for _ in range(1000)
+    )
+    assert picks["Quick"] + picks["Seamer"] > picks["Spinner"]
+    assert picks["Spinner"] > 0
+
+
 def test_new_ball_weighting_prefers_fresh_strike_pace_without_hard_filtering(app):
     import collections
     import random
@@ -1507,15 +1773,20 @@ def _park_near_stumps(m, overs_left=3):
     m.fc_day_overs_bowled_today = m._fc_effective_overs_today() - overs_left
 
 
-def test_last_hour_is_a_real_passage_of_play(app):
-    """Nobody wants to be the man out with ten minutes left."""
+def test_last_hour_is_reserved_for_final_day(app):
+    """Earlier days use close-of-play pressure, not the final-day rule."""
     m = _fc_match(days=5, fc_weather_script={"forecast": "clear", "day_events": {}})
     m.fc_day_overs_bowled_today = 20
     m.fc_day_over_rate_adjust = 0
     assert m._fc_build_match_state()["last_hour"] is False
 
     _park_near_stumps(m, overs_left=5)
+    assert m._fc_build_match_state()["last_hour"] is False
+    assert m._fc_build_match_state()["close_of_play"] is True
+
+    m.fc_day = m.fmt.days
     assert m._fc_build_match_state()["last_hour"] is True
+    assert m._fc_build_match_state()["close_of_play"] is False
 
     engine = FCPressureEngine()
     close = engine.get_pressure_effects({"fc_innings": 1, "wickets": 3,
@@ -1532,8 +1803,9 @@ def test_last_hour_is_a_real_passage_of_play(app):
 def test_last_hour_does_not_apply_to_a_live_chase(app):
     """A side going for the win doesn't shut up shop at six o'clock."""
     m = _fc_match(days=5, fc_weather_script={"forecast": "clear", "day_events": {}})
+    m.fc_day = m.fmt.days
     m.fc_innings = 4
-    m.target = m.score + 40          # gettable -> not survival
+    m.target = m.score + 9           # gettable in the three overs left
     _park_near_stumps(m, overs_left=3)
     assert m._fc_build_match_state()["last_hour"] is False
 

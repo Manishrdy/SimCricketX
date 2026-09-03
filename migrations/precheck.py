@@ -132,6 +132,9 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # First-Class format: matches.days/follow_on_enforced/*_innings2 columns
     # for up-to-2-innings-per-side matches.
     ("add_fc_match_columns",     _loader("migrations.add_fc_match_columns")),
+    # Compact weather outcome used by completed FC scorecards. Detailed
+    # interruption events stay in the generated match archive.
+    ("add_match_weather_summary", _loader("migrations.add_match_weather_summary")),
     # First-Class format: players.technique_rating/temperament_rating/
     # stamina_rating, scoped per-profile like every other rating.
     ("add_fc_player_ratings",    _loader("migrations.add_fc_player_ratings")),

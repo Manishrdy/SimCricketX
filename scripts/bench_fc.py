@@ -81,7 +81,7 @@ def _forecast_for(seed, override=None):
     return override or FORECAST_MIX[seed % len(FORECAST_MIX)]
 
 
-def _fc_match(pitch, seed, days=5, forecast=None):
+def _fc_match(pitch, seed, days=5, forecast=None, is_day_night=False):
     random.seed(seed)
     data = {
         "match_id": str(uuid.uuid4()), "created_by": "bench",
@@ -90,6 +90,7 @@ def _fc_match(pitch, seed, days=5, forecast=None):
         "stadium": "Bench Ground", "pitch": pitch,
         "toss": "Heads", "toss_winner": "HOM", "toss_decision": "Bat",
         "match_format": "FC", "days": days, "simulation_mode": "auto",
+        "is_day_night": is_day_night,
         "playing_xi": {"home": copy.deepcopy(HOME), "away": copy.deepcopy(AWAY)},
         "substitutes": {"home": [], "away": []},
         "weather_forecast": _forecast_for(seed, forecast),
@@ -97,8 +98,10 @@ def _fc_match(pitch, seed, days=5, forecast=None):
     return match_module.Match(data)
 
 
-def _simulate_match(pitch, seed, days=5, limit=60000, forecast=None):
-    m = _fc_match(pitch, seed, days=days, forecast=forecast)
+def _simulate_match(pitch, seed, days=5, limit=60000, forecast=None,
+                    is_day_night=False):
+    m = _fc_match(pitch, seed, days=days, forecast=forecast,
+                  is_day_night=is_day_night)
 
     # Instrument the exact moment an innings is ruled over, BEFORE
     # _fc_transition_to_next_innings() resets fc_innings_declared / advances
@@ -124,8 +127,14 @@ def _simulate_match(pitch, seed, days=5, limit=60000, forecast=None):
     knocks = []   # every individual innings played in the match
     extras = collections.Counter()   # extra_type -> count, from the ball stream
     stands = []   # runs in each partnership, recorded as it is broken
+    pace_wickets_session3 = 0
+    bowling_types = {
+        player["name"]: (player.get("bowling_type") or "")
+        for player in HOME + AWAY
+    }
     for _ in range(limit):
         _partnership_before = m.current_partnership_runs
+        _session_before = m._fc_current_session()
         resp = m.next_ball()
         if "error" in resp:
             return None
@@ -134,6 +143,10 @@ def _simulate_match(pitch, seed, days=5, limit=60000, forecast=None):
             extras[_bd["extra_type"]] += 1
         if _bd.get("batter_out"):
             stands.append(_partnership_before)
+            if (_session_before == 3
+                    and bowling_types.get(_bd.get("bowler"))
+                    not in {"Off spin", "Leg spin", "Finger spin", "Wrist spin"}):
+                pace_wickets_session3 += 1
         if resp.get("innings_end"):
             n = resp.get("innings_number")
             sc = resp.get("scorecard_data", {}) or {}
@@ -161,8 +174,12 @@ def _simulate_match(pitch, seed, days=5, limit=60000, forecast=None):
                 })
 
         if resp.get("match_over"):
+            total_runs = sum(row["runs"] for row in innings.values())
+            total_overs = sum(_overs_to_float(row["overs"]) for row in innings.values())
             return {"innings": innings, "match_status": m.match_status,
-                    "knocks": knocks, "extras": extras, "stands": stands}
+                    "knocks": knocks, "extras": extras, "stands": stands,
+                    "pace_wickets_session3": pace_wickets_session3,
+                    "total_runs": total_runs, "total_overs": total_overs}
     return None
 
 
@@ -273,6 +290,49 @@ def _print_extras_mix(extras):
         print(f"    {kind:<12} {extras[kind] / total * 100:6.1f}% {real_s:>9}")
 
 
+def _compare_day_night(per_pitch, days, forecast):
+    """Paired-seed calibration for the pink-ball model."""
+    paired = []
+    for pitch in PITCHES:
+        for seed in range(1, per_pitch + 1):
+            day = _simulate_match(pitch, seed, days=days, forecast=forecast,
+                                  is_day_night=False)
+            night = _simulate_match(pitch, seed, days=days, forecast=forecast,
+                                    is_day_night=True)
+            if day and night:
+                paired.append((day, night))
+
+    def aggregate(index):
+        rows = [pair[index] for pair in paired]
+        runs = sum(row["total_runs"] for row in rows)
+        overs = sum(row["total_overs"] for row in rows)
+        return {
+            "pace_wickets_session3": sum(row["pace_wickets_session3"] for row in rows),
+            "rpo": runs / overs if overs else 0.0,
+            "draw_pct": (sum(row["match_status"] == "drawn" for row in rows)
+                         / max(len(rows), 1) * 100),
+        }
+
+    day, night = aggregate(0), aggregate(1)
+    rpo_delta = ((night["rpo"] / day["rpo"] - 1) * 100) if day["rpo"] else 0.0
+    draw_delta = night["draw_pct"] - day["draw_pct"]
+    print(f"FC day/night paired benchmark ({len(paired)} seed pairs)")
+    print(f"Third-session pace wickets: day {day['pace_wickets_session3']}, "
+          f"day/night {night['pace_wickets_session3']}")
+    print(f"Runs per over: day {day['rpo']:.2f}, day/night {night['rpo']:.2f} "
+          f"({rpo_delta:+.1f}%)")
+    print(f"Draw rate: day {day['draw_pct']:.1f}%, day/night {night['draw_pct']:.1f}% "
+          f"({draw_delta:+.1f} points)")
+    if len(paired) < 100:
+        print("Guardrails: NOT EVALUATED (fewer than 100 seed pairs; "
+              "use --per-pitch 20 or more for calibration)")
+    else:
+        print("Guardrails: "
+              f"pace advantage={'PASS' if night['pace_wickets_session3'] > day['pace_wickets_session3'] else 'FAIL'}, "
+              f"RPO={'PASS' if abs(rpo_delta) <= 8 else 'FAIL'}, "
+              f"draw rate={'PASS' if abs(draw_delta) <= 5 else 'FAIL'}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-pitch", type=int, default=100)
@@ -281,7 +341,13 @@ def main():
     ap.add_argument("--forecast", default=None,
                     help="pin one weather tier (clear/passing_showers/rain_around/"
                          "storm_warning) instead of the realistic mix")
+    ap.add_argument("--compare-day-night", action="store_true",
+                    help="run paired day vs pink-ball day/night calibration and exit")
     args = ap.parse_args()
+
+    if args.compare_day_night:
+        _compare_day_night(args.per_pitch, args.days, args.forecast)
+        return
 
     fieldnames = ["pitch", "seed", "match_status"]
     for n in (1, 2, 3, 4):

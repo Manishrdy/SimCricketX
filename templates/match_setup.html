@@ -2005,6 +2005,11 @@
         // Re-gate story options for the new format.
         syncStoryControl();
 
+        // Day/night means pink-ball movement for FC and late dew for the
+        // limited-overs formats, so refresh the format-specific explanation.
+        syncDayNightControl();
+        syncWeatherControl();
+
         // If already on Step 3, re-render squads for the new format.
         if (currentStep === 3 && selectedTeamIndices.length === 2) {
             initializeStep3();
@@ -2016,11 +2021,18 @@
         const dayNightHidden = document.getElementById('day-night-value');
         const dayNightHelp = document.getElementById('day-night-help');
         const isDayNight = !!(dayNightToggle && dayNightToggle.checked);
+        const format = document.getElementById('match-format-value')?.value || 'T20';
         if (dayNightHidden) dayNightHidden.value = isDayNight ? 'true' : 'false';
         if (dayNightHelp) {
-            dayNightHelp.textContent = isDayNight
-                ? 'Day/Night match — dew may assist batting late.'
-                : 'Day match — no dew effect.';
+            if (format === 'FC') {
+                dayNightHelp.textContent = isDayNight
+                    ? 'Pink ball; movement lasts longer and seamers gain assistance under lights.'
+                    : 'Day match with a red ball and normal First-Class conditions.';
+            } else {
+                dayNightHelp.textContent = isDayNight
+                    ? 'Day/Night match — dew may assist batting late.'
+                    : 'Day match — no dew effect.';
+            }
         }
     }
 
@@ -2035,6 +2047,17 @@
         const weatherSelect = document.getElementById('weather-forecast-select');
         const weatherHelp = document.getElementById('weather-help');
         if (!weatherSelect || !weatherHelp) return;
+        const format = document.getElementById('match-format-value')?.value || 'T20';
+        if (format === 'FC') {
+            const fcHelpText = {
+                'clear': 'Dry forecast — the full day should be available.',
+                'passing_showers': 'Brief showers may delay play; lost time can be made up later in the day.',
+                'rain_around': 'Rain may cost overs or a session, with wet-ground recovery before play resumes.',
+                'storm_warning': 'Sustained rain can remove sessions or wash out a full day. No DLS is used.',
+            };
+            weatherHelp.textContent = fcHelpText[weatherSelect.value] || fcHelpText['clear'];
+            return;
+        }
         const helpText = {
             'clear': 'No rain. Every over will be bowled.',
             'passing_showers': '~25% chance of a short interruption. DLS revises targets if rain arrives.',
@@ -2073,7 +2096,9 @@
         const fcDays = document.getElementById('fc-days-value')?.value || '4';
         const formatLabels = { 'T20': 'T20', 'ListA': 'List A (50-ov)', 'FC': `First-Class (${fcDays}-day)` };
         setText('summary-format', formatLabels[format] || format);
-        setText('summary-day-night', isDayNight ? 'Day/Night' : 'Day');
+        setText('summary-day-night', isDayNight
+            ? (format === 'FC' ? 'Day/Night · Pink ball' : 'Day/Night')
+            : (format === 'FC' ? 'Day · Red ball' : 'Day'));
         const weatherValue = document.getElementById('weather-forecast-select')?.value || 'clear';
         setText('summary-weather', WEATHER_LABELS[weatherValue] || 'Clear skies');
     }
