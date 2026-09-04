@@ -252,30 +252,69 @@ class TestCommentaryRoute:
 class TestMatchArchiveRoutes:
     """Tests for match archiving and downloads."""
 
-    def test_native_archive_download_form_includes_csrf_token(self):
-        """The dynamic POST form must carry the token that fetch() injects elsewhere."""
-        script_path = Path(__file__).resolve().parents[1] / "static" / "js" / "match_detail.js"
-        script = script_path.read_text(encoding="utf-8")
+    def test_archive_is_reachable_without_an_automatic_download(self):
+        """The archive must never depend only on a download the page fires itself.
 
-        form_start = script.index("const downloadForm = document.createElement('form');")
-        form_submit = script.index("downloadForm.submit();", form_start)
-        form_code = script[form_start:form_submit]
+        A page-triggered download carries no user activation, and Chromium
+        cancels those under its "automatic downloads" gate without telling the
+        page. The rendered link is the recovery path, so it has to exist and be
+        shown unconditionally.
+        """
+        root = Path(__file__).resolve().parents[1]
+        script = (root / "static" / "js" / "match_detail.js").read_text(encoding="utf-8")
+        template = (root / "templates" / "match_detail.html").read_text(encoding="utf-8")
 
-        assert 'meta[name="csrf-token"]' in form_code
-        assert "csrfInput.name = 'csrf_token';" in form_code
-        assert "downloadForm.appendChild(csrfInput);" in form_code
+        # The link the user clicks must be in the page...
+        assert 'id="archive-download-link"' in template
+        assert 'id="archive-ready-bar"' in template
+
+        # ...outside the panel html2canvas captures and outside any modal.
+        panel_start = template.index('id="scorecard-panel"')
+        panel_end = template.index('id="fc-weather-overlay"')
+        assert 'id="archive-ready-bar"' not in template[panel_start:panel_end]
+
+        # The bar is revealed before, and independently of, the auto attempt.
+        show = script.index("showArchiveDownload(archiveInfo);")
+        auto = script.index("tryAutoDownloadArchive(archiveInfo.download_url);")
+        assert show < auto
+
+        # showArchiveDownload() must not be conditional on the auto attempt.
+        body_start = script.index("function showArchiveDownload(archiveInfo) {")
+        body_end = script.index("function showArchiveError()")
+        assert "bar.hidden = false;" in script[body_start:body_end]
+
+        # The bar starts hidden, and author `display` beats the UA stylesheet's
+        # [hidden] rule — without this the bar shows from page load.
+        styles = (root / "static" / "css" / "match_detail.css").read_text(encoding="utf-8")
+        assert "hidden" in template[template.index('id="archive-ready-bar"'):
+                                    template.index('id="archive-ready-bar"') + 60]
+        assert ".archive-ready-bar[hidden]" in styles
+        assert ".archive-ready-btn[hidden]" in styles
+
+    def test_download_archive_returns_link_not_attachment(self):
+        """The endpoint hands back a URL; the ZIP is served by serve_archive()."""
+        script_path = Path(__file__).resolve().parents[1] / "routes" / "match_routes.py"
+        source = script_path.read_text(encoding="utf-8")
+
+        route_start = source.index('def download_archive(match_id):')
+        route_end = source.index('@app.route("/my-matches")')
+        route_src = source[route_start:route_end]
+
+        assert '"download_url": download_url' in route_src
+        assert 'url_for(' in route_src
+        # No attachment streaming from this endpoint any more.
+        assert "as_attachment" not in route_src
 
     def test_download_archive_unauthenticated(self, client):
         """Test downloading match archive without login redirects."""
         response = client.post("/match/test-match-id/download-archive")
         assert response.status_code == 302
 
-    def test_download_archive_accepts_native_form_post(self, authenticated_client):
-        """A form POST reaches archive lookup instead of failing JSON parsing."""
+    def test_download_archive_accepts_json_post(self, authenticated_client):
+        """The JSON POST the frontend sends reaches archive lookup."""
         response = authenticated_client.post(
-            "/match/nonexistent-native-download/download-archive",
-            data={},
-            content_type="application/x-www-form-urlencoded",
+            "/match/nonexistent-json-download/download-archive",
+            json={"match_id": "nonexistent-json-download"},
         )
         assert response.status_code == 404
 
