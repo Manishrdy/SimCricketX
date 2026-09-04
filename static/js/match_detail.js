@@ -1579,6 +1579,11 @@ function showScorecard(data, completeData) {
 
     document.getElementById('scorecard-title').textContent = `${data.innings} INNINGS SCORECARD`;
 
+    document.getElementById('scorecard-batting-title').textContent =
+        data.batting_team_name ? `${data.batting_team_name} Batting` : 'Batting';
+    document.getElementById('scorecard-bowling-title').textContent =
+        data.bowling_team_name ? `${data.bowling_team_name} Bowling` : 'Bowling';
+
     // Batsmen - Compact format
     const tbody = document.getElementById('scorecard-tbody');
     tbody.innerHTML = '';
@@ -1792,37 +1797,96 @@ async function saveMatchArchive() {
         });
         console.log("✅ Commentary saved");
 
-        // 2. Trigger a native attachment response. A fetch() + Blob URL +
-        // synthetic click can be suppressed once the async simulation has
-        // lost its user-activation window (and immediate URL revocation can
-        // cancel it in some browsers). A normal form navigation lets the
-        // browser handle Content-Disposition directly.
-        console.log("📥 Triggering native ZIP download...");
-        const downloadForm = document.createElement('form');
-        downloadForm.method = 'POST';
-        downloadForm.action = `${window.location.pathname}/download-archive`;
-        downloadForm.style.display = 'none';
+        // 2. Build the archive and surface a real download link.
+        //
+        // The page cannot reliably download the ZIP by itself. Both a Blob URL
+        // + synthetic click and a native form POST are downloads with no user
+        // activation, fired minutes after the last click, and Chromium gates
+        // those behind its "automatic downloads" permission: the browser reads
+        // the response, then cancels the download at zero bytes without ever
+        // picking a filename. None of that is observable from JS, so the page
+        // reported success while the archive silently disappeared.
+        //
+        // So the backend returns a URL and we render a button instead. A click
+        // carries user activation and is never gated. The automatic attempt is
+        // kept as a convenience — it succeeds when the browser allows it —
+        // but the button is always shown, so a blocked download is recoverable.
+        console.log("📦 Requesting archive build...");
+        const archiveRes = await fetch(`${window.location.pathname}/download-archive`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ match_id: matchData.match_id })
+        });
 
-        // Native form submissions bypass the global fetch() wrapper in
-        // layout.html, so Flask-WTF will reject this POST unless the token is
-        // included as a regular form field.
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-        if (!csrfToken) {
-            throw new Error('Unable to download archive: CSRF token is unavailable');
+        if (!archiveRes.ok) {
+            const detail = await archiveRes.text().catch(() => '');
+            throw new Error(`Archive build failed (${archiveRes.status}): ${detail}`);
         }
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = 'csrf_token';
-        csrfInput.value = csrfToken;
-        downloadForm.appendChild(csrfInput);
 
-        document.body.appendChild(downloadForm);
-        downloadForm.submit();
-        window.setTimeout(() => downloadForm.remove(), 1000);
-        console.log("✅ ZIP download requested");
+        const archiveInfo = await archiveRes.json();
+        if (!archiveInfo.download_url) {
+            throw new Error('Archive build returned no download URL');
+        }
+        console.log(`✅ Archive ready: ${archiveInfo.filename}`);
+
+        showArchiveDownload(archiveInfo);
+        tryAutoDownloadArchive(archiveInfo.download_url);
 
     } catch (e) {
         console.error("❌ Archive save failed:", e);
+        showArchiveError();
+    }
+}
+
+// Reveal the persistent download bar. It lives outside the scorecard modal so
+// closing the scorecard cannot lose the only route to the archive.
+function showArchiveDownload(archiveInfo) {
+    const bar = document.getElementById('archive-ready-bar');
+    const link = document.getElementById('archive-download-link');
+    if (!bar || !link) return;
+
+    link.href = archiveInfo.download_url;
+    if (archiveInfo.filename) link.setAttribute('download', archiveInfo.filename);
+    link.hidden = false;
+
+    const meta = document.getElementById('archive-ready-meta');
+    if (meta) {
+        const mb = archiveInfo.size_bytes
+            ? ` (${(archiveInfo.size_bytes / 1048576).toFixed(1)} MB)`
+            : '';
+        meta.textContent = `${archiveInfo.filename || 'archive.zip'}${mb}`;
+    }
+    bar.hidden = false;
+}
+
+// Shown when the archive could not be built at all, so the user is not left
+// believing a silent success.
+function showArchiveError() {
+    const bar = document.getElementById('archive-ready-bar');
+    const link = document.getElementById('archive-download-link');
+    const meta = document.getElementById('archive-ready-meta');
+    if (!bar || !link) return;
+
+    const label = bar.querySelector('.archive-ready-text strong');
+    if (label) label.textContent = 'Match archive could not be created';
+    if (meta) meta.textContent = 'Check the server log for [DownloadArchive] errors.';
+    link.hidden = true;
+    bar.hidden = false;
+}
+
+// Best-effort automatic download. Expected to be blocked in some browsers —
+// that is exactly why showArchiveDownload() runs first and unconditionally.
+function tryAutoDownloadArchive(downloadUrl) {
+    try {
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = '';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        window.setTimeout(() => a.remove(), 1000);
+    } catch (e) {
+        console.warn('Automatic archive download not permitted:', e);
     }
 }
 

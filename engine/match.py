@@ -559,6 +559,63 @@ class Match:
             f"{bowler_name} {over_progress:.1f}-{bowler_stats.get('maidens', 0)}-{bowler_stats.get('runs', 0)}-{bowler_stats.get('wickets', 0)}"
         )
 
+    def _format_team_score_rr_line(self):
+        """'{Team} {score}/{wickets}, RR: {rr}' — the same score/RR line
+        _format_over_summary shows at the end of every over, reused here so
+        an innings ending on the tenth wicket carries the same final-score
+        line instead of leaving the reader to infer it."""
+        team_name = self._get_team_name(self.batting_team)
+        balls_played = self.current_over * 6 + self.current_ball
+        current_rr = (self.score * 6) / balls_played if balls_played > 0 else 0
+        return f"{team_name} {self.score}/{self.wickets}, RR: {current_rr:.2f}"
+
+    def _format_dismissal_line(self, name, wicket_type, fielder_name=None):
+        """'{name} {runs}({balls}b) [boundaries] — {WicketType} (fielder)' —
+        the canonical one-line summary of a dismissal, used wherever an
+        innings ends on a wicket (T20/ListA/FC all alike)."""
+        stats = self.batsman_stats[name]
+        bits = []
+        if stats.get("fours"):
+            bits.append(f"{stats['fours']}x4")
+        if stats.get("sixes"):
+            bits.append(f"{stats['sixes']}x6")
+        boundary_text = f" [{', '.join(bits)}]" if bits else ""
+        detail = (
+            f" ({fielder_name})"
+            if fielder_name and wicket_type in ("Caught", "Stumped", "Run Out")
+            else ""
+        )
+        return f"{name} {stats['runs']}({stats['balls']}b){boundary_text} — {wicket_type}{detail}"
+
+    def _format_bowler_figures_line(self, bowler_name):
+        """'{bowler}  {overs}-{maidens}-{runs}-{wickets} (extras)' for the
+        bowler who took the final wicket."""
+        stats = self.bowler_stats.get(bowler_name, {})
+        balls_this_over = stats.get("balls_bowled", 0) % 6
+        overs = stats.get("overs", 0) + (balls_this_over / 10) if balls_this_over else stats.get("overs", 0)
+        extras_parts = []
+        if stats.get("wides"):
+            extras_parts.append(f"{stats['wides']}w")
+        if stats.get("noballs"):
+            extras_parts.append(f"{stats['noballs']}nb")
+        extras_str = f" ({', '.join(extras_parts)})" if extras_parts else ""
+        return f"{bowler_name}\t\t{overs:.1f}-{stats.get('maidens', 0)}-{stats.get('runs', 0)}-{stats.get('wickets', 0)}{extras_str}"
+
+    def _format_all_out_block(self, dismissed_name, wicket_type, fielder_name=None):
+        """The shared 'innings just ended on the tenth wicket' block: the
+        final team score/RR line, the dismissed batsman's own line, and the
+        wicket-taking bowler's final figures — identical across T20, ListA
+        and FC so an all-out reads the same regardless of format."""
+        lines = [
+            self._format_team_score_rr_line(),
+            "",
+            self._format_dismissal_line(dismissed_name, wicket_type, fielder_name),
+        ]
+        bowler_name = self.current_bowler["name"] if self.current_bowler else None
+        if bowler_name:
+            lines.append(self._format_bowler_figures_line(bowler_name))
+        return "<br>".join(lines)
+
     def _format_innings_complete_summary(self, title="End of innings"):
         """Format a simple innings completion message"""
         if self.is_fc:
@@ -868,6 +925,14 @@ class Match:
         total = scorecard.get("total_score", 0)
         wkts = scorecard.get("wickets", 0)
         overs = scorecard.get("overs", "0.0")
+        batting_label = (
+            f"{scorecard['batting_team_name']} Batting"
+            if scorecard.get("batting_team_name") else "Batting"
+        )
+        bowling_label = (
+            f"{scorecard['bowling_team_name']} Bowling"
+            if scorecard.get("bowling_team_name") else "Bowling"
+        )
 
         def dismissal_text(player):
             wicket_type = (player.get("wicket_type") or "").strip()
@@ -922,7 +987,7 @@ class Match:
         return (
             f"<strong>{title}</strong><br>"
             f"Total: {total}/{wkts} ({overs} ov)<br>"
-            f"<div style='margin-top:6px;font-weight:600;'>Batting</div>"
+            f"<div style='margin-top:6px;font-weight:600;'>{batting_label}</div>"
             f"<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>"
             f"<thead><tr><th style='text-align:left;border-bottom:1px solid #444;'>Batter</th>"
             f"<th style='text-align:left;border-bottom:1px solid #444;'>Dismissal</th>"
@@ -931,7 +996,7 @@ class Match:
             f"<th style='text-align:right;border-bottom:1px solid #444;'>4s</th>"
             f"<th style='text-align:right;border-bottom:1px solid #444;'>6s</th></tr></thead>"
             f"<tbody>{batting_rows}</tbody></table>"
-            f"<div style='margin-top:8px;font-weight:600;'>Bowling</div>"
+            f"<div style='margin-top:8px;font-weight:600;'>{bowling_label}</div>"
             f"<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>"
             f"<thead><tr><th style='text-align:left;border-bottom:1px solid #444;'>Bowler</th>"
             f"<th style='text-align:right;border-bottom:1px solid #444;'>O</th>"
@@ -6746,22 +6811,9 @@ class Match:
                     # it's safe to call from here too — this bypasses the
                     # T20-specific inline innings==1/else block entirely
                     # rather than re-implementing it a second time for FC.
-                    stats = self.batsman_stats[dismissed_name]
-                    dismissal_bits = []
-                    if stats.get("fours"):
-                        dismissal_bits.append(f"{stats['fours']}x4")
-                    if stats.get("sixes"):
-                        dismissal_bits.append(f"{stats['sixes']}x6")
-                    boundary_text = (
-                        f" [{', '.join(dismissal_bits)}]" if dismissal_bits else ""
-                    )
-                    dismissal_line = (
-                        f"{dismissed_name} {stats['runs']}({stats['balls']}b)"
-                        f"{boundary_text} — {stats['wicket_type']}"
-                    )
                     final_wicket_commentary = self._fc_join(
                         commentary_line,
-                        dismissal_line,
+                        self._format_all_out_block(dismissed_name, wicket_type, fielder_name),
                         "<strong>All Out!</strong>",
                     )
                     return self._fc_transition_to_next_innings(
@@ -6769,37 +6821,15 @@ class Match:
                     )
                 scorecard_data = self._generate_detailed_scorecard()
 
-                # ✅ BUILD ENHANCED ALL-OUT COMMENTARY
-                enhanced_commentary_parts = []
+                # Shared end-of-innings block (score/RR, dismissal line,
+                # bowler's final figures) — same format used for the FC
+                # all-out case, see _format_all_out_block.
+                all_out_commentary = "<br>".join([
+                    commentary_line,
+                    self._format_all_out_block(dismissed_name, wicket_type, fielder_name),
+                    "<strong>All Out!</strong>",
+                ])
 
-                # 1. Add the wicket ball commentary (already built)
-                enhanced_commentary_parts.append(commentary_line)
-
-                 # 2. Add current bowler's final stats (like end of over)
-                bowler_stats = self.bowler_stats[self.current_bowler["name"]]
-                balls_bowled_this_over = bowler_stats["balls_bowled"] % 6
-                overs_bowled = bowler_stats["overs"] + (balls_bowled_this_over / 10) if balls_bowled_this_over > 0 else bowler_stats["overs"]
-                
-                # Build extras string
-                extras_str = ""
-                if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
-                    extras_parts = []
-                    if bowler_stats["wides"] > 0:
-                        extras_parts.append(f"{bowler_stats['wides']}w")
-                    if bowler_stats["noballs"] > 0:
-                        extras_parts.append(f"{bowler_stats['noballs']}nb")
-                    if extras_parts:
-                        extras_str = f" ({', '.join(extras_parts)})"
-
-
-                enhanced_commentary_parts.append(f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}")
-    
-                # 3. Add "All Out!" message
-                enhanced_commentary_parts.append("<br><strong>All Out!</strong>")
-
-                # 4. Combine all parts
-                all_out_commentary = "<br>".join(enhanced_commentary_parts)
-                
                 if self.innings == 1:
                     # ✅ FIRST INNINGS ALL OUT - Transition to second innings
                     self.first_innings_score = self.score
@@ -6902,51 +6932,6 @@ class Match:
                     self._save_second_innings_stats()
                     self._create_match_archive()
 
-                    #Include logic for all out result
-
-                    # 3. Add dismissed batsman's line (could be striker or non-striker on run-out)
-                    out_name      = dismissed_name
-                    stats         = self.batsman_stats[out_name]
-                    runs_scored   = stats["runs"]
-                    balls_faced   = stats["balls"]
-                    fours_scored  = stats["fours"]
-                    sixes_scored  = stats["sixes"]
-                    extras = []
-
-                    if fours_scored > 0:
-                        extras.append(f"{fours_scored}x4")
-                    if sixes_scored > 0:
-                        extras.append(f"{sixes_scored}x6")
-                    extra_str = f"[{', '.join(extras)}]" if extras else ""
-                    dismissal_line = f"{out_name} {runs_scored}({balls_faced}b) {extra_str}"
-                    enhanced_commentary_parts.append(dismissal_line)
-
-                    # 4. Add non-striker stats
-                    non_striker_stats = self.batsman_stats[self.current_non_striker["name"]]
-                    enhanced_commentary_parts.append(
-                        f"{self.current_non_striker['name']}\t\t{non_striker_stats['runs']}({non_striker_stats['balls']}b) "
-                        f"[{non_striker_stats['fours']}x4, {non_striker_stats['sixes']}x6]"
-                    )
-
-                    # 5. Add bowler stats line
-                    bowler_stats = self.bowler_stats[self.current_bowler["name"]]
-                    extras_str = ""
-                    if bowler_stats["wides"] > 0 or bowler_stats["noballs"] > 0:
-                        extras_parts = []
-                        if bowler_stats["wides"] > 0:
-                            extras_parts.append(f"{bowler_stats['wides']}w")
-                        if bowler_stats["noballs"] > 0:
-                            extras_parts.append(f"{bowler_stats['noballs']}nb")
-                        extras_str = f" ({', '.join(extras_parts)})"
-
-                    balls_bowled_this_over = bowler_stats["balls_bowled"] % 6
-                    overs_bowled = bowler_stats["overs"] + (balls_bowled_this_over / 10) if balls_bowled_this_over > 0 else bowler_stats["overs"]
-                    enhanced_commentary_parts.append(
-                        f"{self.current_bowler['name']}\t\t{overs_bowled:.1f}-"
-                        f"{bowler_stats['maidens']}-{bowler_stats['runs']}-{bowler_stats['wickets']}{extras_str}"
-                    )
-
-                    all_out_commentary = "<br>".join(enhanced_commentary_parts)
                     first_block = self._format_scorecard_block(getattr(self, 'first_innings_scorecard', None), '1st Innings Scorecard')
                     second_block = self._format_scorecard_block(scorecard_data, '2nd Innings Scorecard')
                     scorecards_block = f"<br><br><strong>Scorecards:</strong><br>{first_block}<br><br>{second_block}" if first_block and second_block else ""
@@ -7504,12 +7489,10 @@ class Match:
 
     def _generate_detailed_scorecard(self):
         """Generate detailed cricbuzz-style scorecard"""
-        
-        if self.batting_team is self.home_xi:
-            team_name = self.data["team_home"].split("_")[0]
-        else:
-            team_name = self.data["team_away"].split("_")[0]
-        
+
+        team_name = self._get_team_name(self.batting_team)
+        bowling_team_name = self._get_team_name(self.bowling_team)
+
         players = []
 
         # Loop through ALL players in batting order, not just those who batted
@@ -7640,6 +7623,8 @@ class Match:
 
         return {
             "team_name": team_name,
+            "batting_team_name": team_name,
+            "bowling_team_name": bowling_team_name,
             "innings": innings_labels.get(innings_number, f"{innings_number}th"),
             "innings_number": innings_number,
             "players": players,

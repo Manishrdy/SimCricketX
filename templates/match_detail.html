@@ -152,6 +152,22 @@
             </div>
         </div>
 
+        <!-- Match archive: revealed by match_detail.js once the ZIP is built.
+             Deliberately outside .scorecard-panel so html2canvas never captures
+             it, and outside any modal so closing the scorecard cannot lose it. -->
+        <div class="archive-ready-bar" id="archive-ready-bar" hidden>
+            <div class="archive-ready-text">
+                <i class="fa fa-box-archive archive-ready-icon"></i>
+                <div>
+                    <strong>Match archive ready</strong>
+                    <span id="archive-ready-meta"></span>
+                </div>
+            </div>
+            <a class="archive-ready-btn" id="archive-download-link" href="#" download>
+                <i class="fa fa-download"></i> Download archive
+            </a>
+        </div>
+
         <div class="live-view-stack" id="live-view-stack">
             <!-- Premium AI-Style Code Block Console -->
             <div class="code-window view-pane pane-commentary is-active" data-view-pane="commentary">
@@ -394,7 +410,7 @@
         <div class="scorecard-body">
             <!-- Batting Section -->
             <div>
-                <h3 class="section-title">Batting</h3>
+                <h3 class="section-title" id="scorecard-batting-title">Batting</h3>
                 <table class="score-table">
                     <thead>
                         <tr>
@@ -413,7 +429,7 @@
 
             <!-- Bowling Section -->
             <div>
-                <h3 class="section-title">Bowling</h3>
+                <h3 class="section-title" id="scorecard-bowling-title">Bowling</h3>
                 <table class="score-table">
                     <thead>
                         <tr>
