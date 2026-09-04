@@ -1,7 +1,7 @@
 """Core app route registration (home + ground conditions)."""
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from flask import jsonify, render_template, request, send_from_directory, session
 from flask_login import current_user, login_required
@@ -22,6 +22,21 @@ def register_core_routes(
     increment_visit_counter,
     basedir,
 ):
+    def _active_user_count():
+        """Return distinct users with activity inside the presence window.
+
+        ActiveSession timestamps are stored as naive UTC values, so use the
+        same representation for reliable comparisons on every database.
+        """
+        window_minutes = max(1, int(app.config.get("ONLINE_ACTIVITY_MINUTES", 5)))
+        active_threshold = datetime.utcnow() - timedelta(minutes=window_minutes)
+        count = (
+            db.session.query(func.count(func.distinct(ActiveSession.user_id)))
+            .filter(ActiveSession.last_active >= active_threshold)
+            .scalar()
+        )
+        return count or 0, window_minutes
+
     def _get_changelog_for_version(version):
         """Return list of bullet strings for the given version block in changelog.txt."""
         try:
@@ -58,9 +73,8 @@ def register_core_routes(
             increment_visit_counter()
             session["visit_counted"] = True
 
-        # Count currently active users (active session in last 15 minutes)
-        active_threshold = datetime.now(timezone.utc) - timedelta(minutes=15)
-        active_users_count = db.session.query(func.count(func.distinct(ActiveSession.user_id))).filter(ActiveSession.last_active >= active_threshold).scalar() or 0
+        # This is recent activity, not the number of unexpired login sessions.
+        active_users_count, online_activity_minutes = _active_user_count()
 
         app_version = _get_app_version()
         changelog_entries = _get_changelog_for_version(app_version)
@@ -93,10 +107,23 @@ def register_core_routes(
             total_visits=get_visit_counter(),
             matches_simulated=get_matches_simulated(),
             active_users=active_users_count,
+            online_activity_minutes=online_activity_minutes,
             app_version=app_version,
             changelog_entries=changelog_entries,
             announcement_banner=announcement_banner,
         )
+
+    @app.route("/api/presence")
+    @login_required
+    def presence():
+        """Return the current recent-activity estimate for the home page."""
+        active_users_count, window_minutes = _active_user_count()
+        response = jsonify({
+            "active_users": active_users_count,
+            "window_minutes": window_minutes,
+        })
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.route("/announcement-banner/dismiss", methods=["POST"])
     @login_required
