@@ -1203,6 +1203,9 @@ def create_app():
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)
     app.config["REMEMBER_COOKIE_REFRESH_EACH_REQUEST"] = True
     app.config["SESSION_INACTIVITY_MINUTES"] = 60 * 48  # 48-hour inactivity timeout
+    # Presence is deliberately much shorter than the authentication/session
+    # lifetime.  It is an activity estimate, not a count of valid sessions.
+    app.config["ONLINE_ACTIVITY_MINUTES"] = 5
 
     # --- CSRF Protection ---
     csrf = CSRFProtect(app)
