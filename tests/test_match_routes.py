@@ -252,6 +252,19 @@ class TestCommentaryRoute:
 class TestMatchArchiveRoutes:
     """Tests for match archiving and downloads."""
 
+    def test_native_archive_download_form_includes_csrf_token(self):
+        """The dynamic POST form must carry the token that fetch() injects elsewhere."""
+        script_path = Path(__file__).resolve().parents[1] / "static" / "js" / "match_detail.js"
+        script = script_path.read_text(encoding="utf-8")
+
+        form_start = script.index("const downloadForm = document.createElement('form');")
+        form_submit = script.index("downloadForm.submit();", form_start)
+        form_code = script[form_start:form_submit]
+
+        assert 'meta[name="csrf-token"]' in form_code
+        assert "csrfInput.name = 'csrf_token';" in form_code
+        assert "downloadForm.appendChild(csrfInput);" in form_code
+
     def test_download_archive_unauthenticated(self, client):
         """Test downloading match archive without login redirects."""
         response = client.post("/match/test-match-id/download-archive")
