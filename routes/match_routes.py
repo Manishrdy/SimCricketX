@@ -1566,11 +1566,14 @@ def register_match_routes(
     @limiter.limit("10 per minute")
     def download_archive(match_id):
         """
-        PRODUCTION VERSION with HTML Integration
-        1) Receive HTML content from frontend
-        2) Load match metadata and instance
-        3) Use MatchArchiver to create complete archive with CSV, JSON, TXT, AND HTML
-        4) Return ZIP file to user (also stored under <PROJECT_ROOT>/data/)
+        Build the match archive and return a link to it.
+
+        1) Load match metadata and instance
+        2) Use MatchArchiver to create complete archive with CSV, JSON, TXT, AND HTML
+        3) Store the ZIP under <PROJECT_ROOT>/data/ and return its download URL
+
+        Returns JSON rather than the ZIP itself; the page renders a download
+        button pointing at serve_archive(). See section H for why.
         """
         try:
             app.logger.info(f"[DownloadArchive] Starting archive creation for match '{match_id}'")
@@ -1579,10 +1582,6 @@ def register_match_routes(
             # html_content is accepted for backwards-compatibility but is no longer
             # used to build the archive HTML file. The HTML report is now generated
             # entirely from commentary_log + match metadata on the backend.
-            # Native form submission is used for the attachment download so
-            # browsers do not suppress a delayed Blob/synthetic-click. There
-            # is no JSON body in that path; POSTed JSON remains supported for
-            # backwards compatibility.
             payload = request.get_json(silent=True) or {}
             html_content = payload.get("html_content")
             if html_content:
@@ -1689,25 +1688,30 @@ def register_match_routes(
             zip_size = os.path.getsize(zip_path)
             app.logger.info(f"[DownloadArchive] ZIP successfully created: '{zip_name}' ({zip_size:,} bytes)")
 
-            # ??? H) Stream the ZIP file back to the browser ?????????????????????
-            try:
-                app.logger.debug(f"[DownloadArchive] Sending ZIP to client: '{zip_path}'")
-                # Include milestone notifications as a response header
-                milestones = getattr(archiver, '_milestones', [])
-                response = send_file(
-                    zip_path,
-                    mimetype="application/zip",
-                    as_attachment=True,
-                    download_name=zip_name
-                )
-                if milestones:
-                    import json as _json
-                    response.headers['X-Milestones'] = _json.dumps(milestones)
-                return response
-            except Exception as send_err:
-                log_exception(send_err)
-                app.logger.error(f"[DownloadArchive] Error sending ZIP file for match '{match_id}': {send_err}", exc_info=True)
-                return jsonify({"error": "Failed to send archive file"}), 500
+            # ??? H) Hand the browser a link instead of the bytes ?????????????????
+            # This endpoint used to stream the ZIP as an attachment, which meant
+            # the archive's only delivery path was a download the page triggered
+            # itself, with no user activation, minutes after the last click.
+            # Chromium gates exactly that ("automatic downloads"): the browser
+            # accepts the response, then cancels the download at 0 bytes before
+            # picking a filename. A native form navigation gives the frontend no
+            # way to observe that, so the archive vanished silently.
+            #
+            # The ZIP already lives under data/ and serve_archive() streams it
+            # with an ownership check, so return its URL and let the page render
+            # a real button. A click carries user activation and is never gated.
+            milestones = getattr(archiver, '_milestones', [])
+            download_url = url_for(
+                "serve_archive", username=current_user.id, filename=zip_name
+            )
+            app.logger.info(f"[DownloadArchive] Archive ready for '{match_id}': {download_url}")
+            return jsonify({
+                "ok": True,
+                "filename": zip_name,
+                "download_url": download_url,
+                "size_bytes": zip_size,
+                "milestones": milestones,
+            })
 
         except Exception as e:
             log_exception(e)

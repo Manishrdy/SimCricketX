@@ -1653,3 +1653,86 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ── Match archive ready bar ───────────────────────────────────────────────
+   Shown after the archive ZIP is built. The download is a real link the user
+   clicks: a page-triggered download has no user activation and Chromium
+   cancels those under its "automatic downloads" gate, silently. */
+.archive-ready-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 0 0 12px;
+    padding: 12px 16px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-lg, var(--border-radius));
+    box-shadow: var(--shadow-sm, var(--shadow-lg));
+}
+
+/* Author `display` beats the UA stylesheet's [hidden] { display: none },
+   so both elements need to opt back out explicitly or they show on load. */
+.archive-ready-bar[hidden],
+.archive-ready-btn[hidden] {
+    display: none;
+}
+
+.archive-ready-text {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.archive-ready-icon {
+    color: var(--accent);
+    font-size: 1.1rem;
+}
+
+.archive-ready-text strong {
+    display: block;
+    color: var(--fg);
+    font-size: 0.92rem;
+}
+
+#archive-ready-meta {
+    display: block;
+    color: var(--fg-secondary);
+    font-size: 0.78rem;
+    font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+    overflow-wrap: anywhere;
+}
+
+.archive-ready-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    background: var(--brand-gradient, var(--gradient));
+    color: var(--text-on-accent, #fff);
+    border-radius: var(--radius-full, 999px);
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    box-shadow: var(--shadow-sm, var(--shadow-lg));
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.archive-ready-btn:hover {
+    box-shadow: var(--shadow-glow, var(--shadow-lg));
+    transform: translateY(-1px);
+}
+
+.archive-ready-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .archive-ready-btn { transition: none; }
+    .archive-ready-btn:hover { transform: none; }
+}
