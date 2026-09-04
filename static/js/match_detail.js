@@ -1802,6 +1802,20 @@ async function saveMatchArchive() {
         downloadForm.method = 'POST';
         downloadForm.action = `${window.location.pathname}/download-archive`;
         downloadForm.style.display = 'none';
+
+        // Native form submissions bypass the global fetch() wrapper in
+        // layout.html, so Flask-WTF will reject this POST unless the token is
+        // included as a regular form field.
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        if (!csrfToken) {
+            throw new Error('Unable to download archive: CSRF token is unavailable');
+        }
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = csrfToken;
+        downloadForm.appendChild(csrfInput);
+
         document.body.appendChild(downloadForm);
         downloadForm.submit();
         window.setTimeout(() => downloadForm.remove(), 1000);
