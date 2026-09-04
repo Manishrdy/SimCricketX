@@ -787,8 +787,8 @@
             <span class="cmd-stat-label">Fans</span>
         </div>
         <div class="cmd-stat">
-            <span class="cmd-stat-num{% if active_users > 0 %} is-online{% endif %}">{{ active_users }}</span>
-            <span class="cmd-stat-label">Online</span>
+            <span id="active-users-count" class="cmd-stat-num{% if active_users > 0 %} is-online{% endif %}">{{ active_users }}</span>
+            <span id="active-users-label" class="cmd-stat-label" title="Users active in the last {{ online_activity_minutes }} minutes">Active ({{ online_activity_minutes }}m)</span>
         </div>
     </div>
 </section>
@@ -944,6 +944,58 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         clearTeamCreateDraftIfNeeded();
+
+        // Keep the estimate fresh without letting an abandoned background tab
+        // manufacture activity. A refresh only runs for a visible tab after
+        // recent keyboard, pointer, touch, or scroll interaction.
+        const activeUsersCount = document.getElementById('active-users-count');
+        const activeUsersLabel = document.getElementById('active-users-label');
+        let lastInteractionAt = Date.now();
+        let lastPresenceRefreshAt = 0;
+        let presenceRefreshInFlight = false;
+
+        const noteInteraction = () => { lastInteractionAt = Date.now(); };
+        ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach((eventName) => {
+            document.addEventListener(eventName, noteInteraction, { passive: true });
+        });
+
+        const refreshPresence = async () => {
+            const now = Date.now();
+            if (!activeUsersCount || document.hidden || presenceRefreshInFlight) return;
+            if (now - lastInteractionAt > 2 * 60 * 1000) return;
+            if (now - lastPresenceRefreshAt < 30 * 1000) return;
+
+            presenceRefreshInFlight = true;
+            lastPresenceRefreshAt = now;
+            try {
+                const response = await fetch('/api/presence', {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                const count = Number(data.active_users || 0);
+                const minutes = Number(data.window_minutes || {{ online_activity_minutes }});
+                activeUsersCount.textContent = String(count);
+                activeUsersCount.classList.toggle('is-online', count > 0);
+                if (activeUsersLabel) {
+                    activeUsersLabel.textContent = `Active (${minutes}m)`;
+                    activeUsersLabel.title = `Users active in the last ${minutes} minutes`;
+                }
+            } catch (err) {
+                // Keep the last known count when the network is unavailable.
+            } finally {
+                presenceRefreshInFlight = false;
+            }
+        };
+
+        window.setInterval(refreshPresence, 60 * 1000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                noteInteraction();
+                refreshPresence();
+            }
+        });
 
         {% if announcement_banner %}
         const announcementBanner = document.getElementById('global-announcement-banner');
