@@ -9,7 +9,8 @@ import uuid
 import zipfile
 from datetime import datetime, timedelta
 
-from engine.toss import home_bats_first
+from engine.format_config import get_any_format as _get_any_format
+from engine.toss import decide_toss, home_bats_first
 from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
@@ -951,7 +952,20 @@ def register_match_routes(
             away_captain = get_captain_name(match_data["playing_xi"]["away"], team_away)
 
             toss_winner = team_away if toss_choice == toss_result else team_home
-            toss_decision = random.choice(["Bat", "Bowl"])
+            # The captain reads the pitch rather than flipping a second coin.
+            # decide_toss() resolves the format's correct_toss_choice (with
+            # the day/night override where one applies) and lets him get it
+            # wrong one time in five — see engine/toss.py. get_any_format,
+            # not get_format: the latter only knows T20/ListA and silently
+            # returns T20's config for "FC", whose pitch table is different.
+            _toss_fmt = _get_any_format(
+                match_data.get("match_format", "T20"), days=match_data.get("days")
+            )
+            toss_decision = decide_toss(
+                _toss_fmt,
+                match_data.get("pitch"),
+                is_day_night=bool(match_data.get("is_day_night", False)),
+            )
 
             match_data["toss_winner"] = toss_winner
             match_data["toss_decision"] = toss_decision

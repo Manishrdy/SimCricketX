@@ -93,6 +93,12 @@ class FormatConfig:
     # code should branch on this tag rather than on `match_format` strings.
     format_family: str = "limited_overs"
 
+    # The free hit is a limited-overs invention. The no-ball itself (one-run
+    # penalty, delivery not counted, restricted modes of dismissal) is a Law
+    # and applies everywhere; the free hit that follows it is not, and the
+    # first-class playing conditions do not provide for one.
+    free_hit_after_no_ball: bool = True
+
     # ------------------------------------------------------------------ #
     # Phase helpers                                                        #
     # ------------------------------------------------------------------ #
@@ -404,8 +410,28 @@ class MultiDayFormatConfig:
                             matches, 200 for 5-day, per MCC Law 14.1)
     min_overs_last_hour  : minimum overs in the last hour of a day
                             (Phase 2 — over-rate enforcement)
+    min_overs_per_day    : overs that MUST be bowled in a full day, before
+                            weather and innings-change deductions. None
+                            means "the same as overs_per_day" — they are the
+                            same number in every real playing condition, and
+                            tying them stops a per-match overs_per_day
+                            override silently leaving the minimum at 90
+    innings_change_over_deduction : overs taken off the day's minimum for
+                            each innings that STARTS during the day,
+                            standing in for the ten minutes between
+                            innings. The changeover deliberately costs no
+                            clock time here — this deduction is the model
+    max_overtime_minutes : extra playing time allowed past the scheduled
+                            close to complete the day's minimum. Entirely
+                            separate from
+                            fc_weather.MAX_SAME_DAY_EXTENSION_MINUTES, which
+                            buys back time lost to weather; one day can use
+                            both. 0 disables overtime
     allow_consecutive_overs : MCC Law 17.2 — universal, not a limited-overs
                             convention, so it carries over (always False)
+    free_hit_after_no_ball : always False — the free hit is a limited-overs
+                            provision and the FC playing conditions have no
+                            equivalent (the no-ball itself is unchanged)
     pitch_par_factors    : per-pitch-type multiplier used to scale the
                             declaration run-thresholds (see fc_declaration.py)
                             so "a good total" means something different on a
@@ -422,12 +448,29 @@ class MultiDayFormatConfig:
     new_ball_overs: int = 80
     follow_on_margin: int = 150
     min_overs_last_hour: int = 15
+    # The day's over obligation. The clock decides when play stops; these
+    # decide whether it may. See Match._fc_minimum_overs_today().
+    min_overs_per_day: Optional[int] = None
+    innings_change_over_deduction: int = 2
+    max_overtime_minutes: int = 30
     allow_consecutive_overs: bool = False
+    # No free hit in first-class cricket — see FormatConfig's matching field.
+    free_hit_after_no_ball: bool = False
+    # "What counts as a good total here", scaling fc_declaration's
+    # _INNINGS1_BASE_THRESHOLD / _LEAD_BASE_THRESHOLD. For FC this is the
+    # ONLY consumer — GSME (the other user of pitch_par_factors) is off for
+    # multi-day, see Match._fc_next_ball's _gsme_state.
+    #
+    # These are a real ceiling on first-innings totals, not just flavour:
+    # once a surface's scoring outgrows its declaration bar, tuning the
+    # scoring matrix does nothing to the average total — sides simply reach
+    # the same bar with fewer wickets down and in more overs. Flat was
+    # raised 1.15 -> 1.22 for exactly that reason.
     pitch_par_factors: Dict[str, float] = field(default_factory=lambda: {
         "Green": 0.85,
         "Dry":   0.90,
         "Hard":  1.00,
-        "Flat":  1.15,
+        "Flat":  1.22,
         "Dead":  1.30,
     })
     correct_toss_choice: Dict[str, str] = field(default_factory=lambda: {
