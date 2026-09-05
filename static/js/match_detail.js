@@ -97,6 +97,19 @@ function updateCurrentOverBalls(bd) {
     }
 }
 
+// FC: what a session produced, written out rather than as "105/3".
+// A session can span an innings change, so the total belongs to no single
+// team — shown score-shaped beside a scorecard it reads as that team's score.
+// `overs` arrives from the engine already in cricket notation ("28.5" is 28
+// overs and 5 balls), so it is printed as-is and never arithmetic'd.
+function sessionProduction(s) {
+    const runs = s.runs || 0;
+    const wkts = s.wickets || 0;
+    const overs = (s.overs === undefined || s.overs === null) ? '0.0' : s.overs;
+    return `${runs} run${runs === 1 ? '' : 's'}, `
+         + `${wkts} wicket${wkts === 1 ? '' : 's'} in ${overs} overs`;
+}
+
 // --- Initialization ---
 
 // Track this-over ball results for the banner strip
@@ -980,6 +993,21 @@ function updateWinProbBanner(data) {
 // par score (the chasing side wins a washout if they are ahead of par).
 let rainRevisionText = '';
 
+// FC: the day's over obligation, shown in the score banner's phase slot.
+// A first-class day owes a minimum number of overs (90, less two for each
+// innings that started today, less anything the weather has taken), so
+// "46/88 OV" says how far through that obligation the day is — not how far
+// through the innings, which #sb-overs already shows.
+function updateFCDayBadge(status) {
+    const el = document.getElementById('sb-phase');
+    if (!el || !status) return;
+    const bowled = Number(status.overs_bowled_today || 0);
+    const minimum = Number(status.minimum_overs_today || 0);
+    if (!minimum) { el.textContent = ''; return; }
+    el.textContent = `${bowled}/${minimum} OV`
+        + (status.in_overtime ? ' +ET' : '');
+}
+
 function updateRainStatus(data) {
     const rainEl = document.getElementById('sb-rain');
     if (!rainEl) return;
@@ -997,9 +1025,13 @@ function updateRainStatus(data) {
             `close ${status.revised_close_label}`,
             forecast.label || null,
             lost ? `${lost} ov lost` : null,
+            status.in_overtime ? 'EXTRA TIME' : null,
         ].filter(Boolean);
         rainEl.textContent = `🌦 ${parts.join(' · ')}`;
         rainEl.style.display = '';
+        // The day's over obligation goes in #sb-phase, which FC otherwise
+        // leaves permanently empty (the engine sends phase_name: null).
+        updateFCDayBadge(status);
         return;
     }
 
@@ -1355,10 +1387,14 @@ async function _processBallResult(data) {
                 const situation = data.match_situation
                     ? ` | ${data.match_situation}`
                     : '';
+                const st = data.fc_weather_status;
+                const obligation = (st && st.minimum_overs_today)
+                    ? ` | ${st.overs_bowled_today}/${st.minimum_overs_today} overs today`
+                    : '';
                 targetInfo.style.display = 'block';
                 targetInfo.textContent =
-                    `Session ${data.session_number}: ${s.runs || 0}/${s.wickets || 0} `
-                    + `in ${s.overs || 0} overs.${situation}`;
+                    `Session ${data.session_number}: ${sessionProduction(s)}.`
+                    + `${obligation}${situation}`;
             }
             await captureCurrentScorecardImage(fcScorecardArchiveLabel('interval', data));
             const closeBtn = document.querySelector('.close-scorecard');
@@ -1389,12 +1425,25 @@ async function _processBallResult(data) {
                     ? ` | ${data.match_situation}. `
                     : ' ';
                 const sessLine = (ss.overs)
-                    ? `Session ${data.session_number}: ${ss.runs || 0}/${ss.wickets || 0} in ${ss.overs} overs.${situation}`
+                    ? `Session ${data.session_number}: ${sessionProduction(ss)}.${situation}`
+                    : '';
+                // What the day owed against what it delivered.
+                const ds = data.day_summary;
+                const dayLine = ds
+                    ? (ds.no_play
+                        ? 'No play today. '
+                        : `Day ${ds.day}: ${ds.overs_bowled} overs bowled `
+                          + `(minimum ${ds.minimum_overs})`
+                          + (ds.overtime_minutes
+                              ? `, ${ds.overtime_minutes} min extra time` : '')
+                          + (ds.shortfall_overs
+                              ? `, ${ds.shortfall_overs} short` : '')
+                          + '. ')
                     : '';
                 targetInfo.style.display = 'block';
                 targetInfo.textContent = data.weather_note
-                    ? `${sessLine}${data.weather_note} Play resumes Day ${(data.day_number || 0) + 1}.`
-                    : `${sessLine}Play resumes Day ${(data.day_number || 0) + 1}.`;
+                    ? `${sessLine}${dayLine}${data.weather_note} Play resumes Day ${(data.day_number || 0) + 1}.`
+                    : `${sessLine}${dayLine}Play resumes Day ${(data.day_number || 0) + 1}.`;
             }
             await captureCurrentScorecardImage(fcScorecardArchiveLabel('stumps', data));
             const closeBtn = document.querySelector('.close-scorecard');
@@ -2458,6 +2507,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // Set batting team name in banner
             const batNameEl = document.getElementById('sb-bat-name');
             if (batNameEl && state.batting_team_name) batNameEl.textContent = state.batting_team_name;
+
+            // Restore the FC day/session/clock strip after a refresh.
+            // /live-state has always returned fc_weather_status, but the
+            // restore below gates on rain_affected — a limited-overs DLS flag
+            // that is never true for FC — so the strip stayed blank until the
+            // next weather event.
+            if (state.fc_weather_status) {
+                updateRainStatus({ fc_weather_status: state.fc_weather_status });
+            }
 
             // Restore the rain / DLS strip after a refresh
             if (state.rain_affected) {

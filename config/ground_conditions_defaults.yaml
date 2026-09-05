@@ -435,8 +435,50 @@ formats:
   # but collapses draws to 8%, which is not first-class cricket. The cost of
   # the split is that batting averages sit a few runs above the previous
   # calibration's reference.
+  #
+  # 2026-09-04 pitch ladder: Flat and Dead were producing near-identical
+  # first-innings totals (429 vs 413 over 60 benchmark matches each), and
+  # Dead's fresh-pitch wicket factors were actually HIGHER than Flat's —
+  # backwards for the deadest surface in the game. Both were lifted so the
+  # five surfaces read as a ladder. Measured with scripts/bench_fc.py,
+  # 100 games per pitch, first-innings total as it appears on the board
+  # (all out or declared) — mean / median / 90th percentile:
+  #
+  #     Green 273/252/456   Dry 309/288/476   Hard 334/331/494
+  #     Flat  417/420/582   Dead 508/540/662
+  #
+  # Use the total on the BOARD, never the all-out-only average, when
+  # judging any of this: the all-out pool is censored by the declaration
+  # threshold, so pushing a surface flatter moves its best innings into the
+  # declared pool and the all-out mean can FALL while the pitch gets
+  # easier. It did exactly that on Flat during this tuning pass.
+  #
+  # Flat: scoring outcomes x1.05, wicket factors x0.94, and its declaration
+  # bar raised (pitch_par_factors 1.15 -> 1.22 in engine/format_config.py —
+  # code, so no migration needed for that half). Dead: scoring outcomes
+  # x1.10 with wicket_factors_start 0.825 -> 0.680; its late spin assistance
+  # is deliberately kept near 1.0 so a long innings still runs into a worn
+  # pitch rather than batting forever.
+  #
+  # Two things to know before retuning either of them:
+  #   * Scoring and wicket tweaks alone stop working once a surface outgrows
+  #     its declaration bar — sides just reach the same bar with fewer
+  #     wickets down, in more overs. Flat needed BOTH the wicket cut and the
+  #     par-factor raise; either alone moved its average by under 2%.
+  #   * Part of Dead's lift is deliberately run RATE (4.3 RPO) rather than
+  #     wicket suppression. Taking it all out of the wicket rate held the
+  #     total but pushed Dead's draw rate to 57%; as shipped it is ~47%,
+  #     which is what a genuine road does to a five-day match.
+  #   * The runaway tail is held by fc_declaration's
+  #     _LONG_INNINGS_WINDOW_OVERS, not by anything in this file. Without
+  #     it a side 700 for 5 with no time pressure could not declare at all
+  #     and Dead produced 950-run first innings.
+  # Green, Dry and Hard are untouched and still carry realistic first-class
+  # numbers (~3.3-3.5 RPO, 28-36 runs per wicket).
+  #
   # A stored user config deep-merges OVER these, so any change here needs a
-  # migration — see migrations/reset_slow_fc_scoring.py.
+  # migration — see migrations/reset_slow_fc_scoring.py and
+  # migrations/reset_flat_dead_fc_tuning.py.
   FC:
     pitch_profiles:
       # Seam-friendly fresh pitch, eases with wear — uneven bounce and rough-assisted spin by day 4-5
@@ -516,45 +558,45 @@ formats:
           Off spin: 0.958
           Leg spin: 0.958
           default: 0.842
-      # Good batting surface — a patient grind, not a run-fest
+      # Good batting surface — big first-innings runs, but earned over time
       Flat:
-        description: "Good batting surface — a patient grind, not a run-fest"
+        description: "Good batting surface — big first-innings runs, but earned over time"
         scoring_matrix:
-          Dot: 0.64153
-          Single: 0.21794
-          Double: 0.05613
-          Three: 0.00661
-          Four: 0.05064
-          Six: 0.00385
+          Dot: 0.62477
+          Single: 0.22884
+          Double: 0.05894
+          Three: 0.00694
+          Four: 0.05317
+          Six: 0.00404
           Wicket: 0.01445
           Extras: 0.00885
         run_factor: 1.0
         wicket_factors_start:
-          Fast: 0.834
-          default: 0.792
+          Fast: 0.784
+          default: 0.744
         wicket_factors_end:
-          Off spin: 0.981
-          Leg spin: 0.981
-          default: 0.887
+          Off spin: 0.922
+          Leg spin: 0.922
+          default: 0.834
       # Lifeless surface, offers spin some late assistance over 5 days
       Dead:
         description: "Lifeless surface, offers spin some late assistance over 5 days"
         scoring_matrix:
-          Dot: 0.63150
-          Single: 0.22092
-          Double: 0.05935
-          Three: 0.00660
-          Four: 0.05496
-          Six: 0.00440
+          Dot: 0.59686
+          Single: 0.24301
+          Double: 0.06529
+          Three: 0.00726
+          Four: 0.06046
+          Six: 0.00484
           Wicket: 0.01443
           Extras: 0.00785
         run_factor: 1.0
         wicket_factors_start:
-          default: 0.825
+          default: 0.680
         wicket_factors_end:
-          Off spin: 1.008
-          Leg spin: 1.008
-          default: 0.845
+          Off spin: 0.980
+          Leg spin: 0.980
+          default: 0.740
     pitch_wear:
       Green:
         factors: {Dot: -0.03, Four: 0.05, Wicket: 0.05}

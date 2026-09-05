@@ -355,3 +355,83 @@ def test_fc_archiver_persists_partnerships_for_every_innings(app, regular_user, 
         assert len(inn1) == 1 and inn1[0].runs == 60
         # Innings 3 (a "middle" innings the old shim dropped) is persisted.
         assert len(inn3) == 1 and inn3[0].runs == 30
+
+
+def test_html_archive_header_reports_the_actual_toss(app):
+    """The header read match_data['toss'], which holds the *coin call*
+    ("Heads"), not a {winner, decision} dict — so the isinstance check never
+    matched and every archive said "Toss: N/A" while its own commentary
+    narrated the toss."""
+    data = _fc_match_data("toss-header")
+    data["toss"] = "Heads"
+    data["toss_winner"] = "AUS"
+    data["toss_decision"] = "Bowl"
+    match = match_module.Match(data)
+
+    html = MatchArchiver(match.match_data, match)._build_commentary_html([])
+
+    assert "Toss: <span>N/A" not in html
+    assert "AUS won the toss and elected to field" in html
+
+
+def test_html_archive_toss_says_bat_when_the_winner_batted(app):
+    data = _fc_match_data("toss-header-bat")
+    data["toss"] = "Tails"
+    data["toss_winner"] = "IND"
+    data["toss_decision"] = "Bat"
+    match = match_module.Match(data)
+
+    html = MatchArchiver(match.match_data, match)._build_commentary_html([])
+
+    assert "IND won the toss and elected to bat" in html
+
+
+def test_html_archive_toss_falls_back_when_there_is_no_toss_data(app):
+    data = _fc_match_data("toss-header-missing")
+    data.pop("toss_winner", None)
+    data.pop("toss_decision", None)
+    match = match_module.Match(data)
+    match.match_data.pop("toss_winner", None)
+    match.match_data.pop("toss_decision", None)
+
+    html = MatchArchiver(match.match_data, match)._build_commentary_html([])
+
+    assert "Toss: <span>N/A" in html
+
+
+def test_fc_archive_reports_overs_bowled_against_the_days_minimum(app):
+    """The archive records what each day owed and what it delivered, so a
+    slow over rate is visible after the fact."""
+    data = _fc_match_data("day-overs-table")
+    match = match_module.Match(data)
+    match.fc_day_log = [
+        {"day": 1, "overs_bowled": 90, "minimum_overs": 90, "innings_changes": 0,
+         "overtime_minutes": 0, "shortfall_overs": 0, "no_play": False},
+        {"day": 2, "overs_bowled": 88, "minimum_overs": 88, "innings_changes": 1,
+         "overtime_minutes": 9, "shortfall_overs": 0, "no_play": False},
+        {"day": 3, "overs_bowled": 86, "minimum_overs": 88, "innings_changes": 1,
+         "overtime_minutes": 30, "shortfall_overs": 2, "no_play": False},
+        {"day": 4, "overs_bowled": 0, "minimum_overs": 90, "innings_changes": 0,
+         "overtime_minutes": 0, "shortfall_overs": 90, "no_play": True},
+    ]
+
+    text = MatchArchiver(match.match_data, match)._format_match_summary()
+
+    assert "OVERS PER DAY" in text
+    assert "90       90" in text                 # met without extra time
+    assert "9 min" in text and "30 min" in text  # extra time taken
+    assert "2 ov" in text                        # the shortfall
+    # A washed-out day is "no play", never a 90-over over-rate offence.
+    assert "no play" in text
+    assert "90 ov" not in text
+
+
+def test_fc_archive_omits_the_day_table_when_there_is_no_day_log(app):
+    """A match archived before this model existed, or one that never reached
+    stumps, must not sprout an empty table."""
+    data = _fc_match_data("no-day-log")
+    match = match_module.Match(data)
+    match.fc_day_log = []
+
+    text = MatchArchiver(match.match_data, match)._format_match_summary()
+    assert "OVERS PER DAY" not in text

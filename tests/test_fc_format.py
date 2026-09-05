@@ -228,14 +228,27 @@ def test_declaration_thresholds_unit():
     # protect.
     assert should_declare(fc_innings=1, wickets=9, overs_bowled_this_innings=25,
                            score=200, lead=0, days_remaining=4) is False
+    # ...and with three days still to play, a merely good total is not
+    # enough either: nine down with no time pressure needs an overwhelming
+    # score before the last wicket is worth throwing away (see
+    # _LAST_PAIR_NO_PRESSURE_MULTIPLIER).
     assert should_declare(fc_innings=1, wickets=9, overs_bowled_this_innings=25,
-                           score=320, lead=0, days_remaining=4) is True
+                           score=320, lead=0, days_remaining=4) is False
+    assert should_declare(fc_innings=1, wickets=9, overs_bowled_this_innings=25,
+                           score=500, lead=0, days_remaining=4) is True
+    # The same 320 IS enough once time is actually short — the closing days
+    # with a long innings behind you is the pressure the multiplier is
+    # waiting for.
+    assert should_declare(fc_innings=1, wickets=9, overs_bowled_this_innings=70,
+                           score=320, lead=0, days_remaining=2) is True
     # Innings 2/3 at 9 down with no lead: same principle — nothing to
     # protect while still behind (or only level), so keep batting.
     assert should_declare(fc_innings=2, wickets=9, overs_bowled_this_innings=25,
                            score=200, lead=0, days_remaining=4) is False
     assert should_declare(fc_innings=2, wickets=9, overs_bowled_this_innings=25,
-                           score=200, lead=260, days_remaining=4) is True
+                           score=200, lead=260, days_remaining=4) is False
+    assert should_declare(fc_innings=2, wickets=9, overs_bowled_this_innings=25,
+                           score=200, lead=420, days_remaining=4) is True
     # Innings 4 (the chase) is never eligible — nothing to declare to.
     assert should_declare(fc_innings=4, wickets=9, overs_bowled_this_innings=25,
                            score=200, lead=0, days_remaining=4) is False
@@ -300,6 +313,24 @@ def test_declaration_window_open_time_budget_branch():
     # window early rather than waiting for the 60-over floor.
     assert declaration_window_open(fc_innings=3, wickets=0, overs_bowled_this_innings=40,
                                     days_remaining=5, innings_time_budget_overs=40) is True
+
+
+def test_declaration_window_open_long_innings_branch():
+    """A side four down after a day and a half is not protected by the
+    nine-down rule and has not reached its time budget, but its captain is
+    still weighing whether they have enough — see
+    _LONG_INNINGS_WINDOW_OVERS. Before this branch existed a first innings
+    could bat to 900 without the AI ever being asked."""
+    common = dict(fc_innings=1, wickets=4, days_remaining=4,
+                  innings_time_budget_overs=180)
+    assert declaration_window_open(overs_bowled_this_innings=120, **common) is False
+    assert declaration_window_open(overs_bowled_this_innings=140, **common) is True
+    # Opening the window is not declaring: the score still has to clear the
+    # no-time-pressure bar (300 x 1.55 on a par-1.0 pitch).
+    decl = dict(fc_innings=1, wickets=4, lead=0, days_remaining=4,
+                overs_bowled_this_innings=140, innings_time_budget_overs=180)
+    assert should_declare(score=400, **decl) is False
+    assert should_declare(score=520, **decl) is True
 
 
 def test_mc_overrun_ceiling_overrides_unfavorable_verdict():
@@ -1495,7 +1526,10 @@ def test_fc_interval_emits_a_scorecard_and_session_summary(app):
     assert r["scorecard_data"]                      # the board itself
     assert r["match_over"] is False and r["innings_end"] is False
     summary = r["session_summary"]
-    assert summary["overs"] > 0
+    assert summary["balls"] > 0
+    # Overs are cricket notation ("28.5" = 28 overs 5 balls), never a number.
+    assert isinstance(summary["overs"], str)
+    assert summary["overs"] == f"{summary['balls'] // 6}.{summary['balls'] % 6}"
     assert summary["runs"] == r["score"]            # first session of the match
     # Tea follows, and the session summary covers only the new session.
     innings_after_lunch = m.fc_innings
@@ -1514,7 +1548,8 @@ def test_fc_stumps_reports_the_evening_session(app):
     m = _fc_match(days=5)
     r = _play_until(m, lambda mm, rr: rr.get("day_break"))
     assert r["session_number"] == 3
-    assert "this session" in r["commentary"]
+    assert "Session:" in r["commentary"]
+    assert "wicket" in r["commentary"] and "overs" in r["commentary"]
 
 
 def test_fc_over_rate_adjusts_days_length(app):
@@ -1774,19 +1809,21 @@ def _park_near_stumps(m, overs_left=3):
 
 
 def test_last_hour_is_reserved_for_final_day(app):
-    """Earlier days use close-of-play pressure, not the final-day rule."""
+    """The last-hour rule belongs to the final day. Earlier days get no
+    equivalent flag — `close_of_play` used to be computed alongside it (twice
+    per ball, in two places) and was read by nothing at all, so it was
+    removed rather than left as a decoy."""
     m = _fc_match(days=5, fc_weather_script={"forecast": "clear", "day_events": {}})
     m.fc_day_overs_bowled_today = 20
     m.fc_day_over_rate_adjust = 0
     assert m._fc_build_match_state()["last_hour"] is False
+    assert "close_of_play" not in m._fc_build_match_state()
 
     _park_near_stumps(m, overs_left=5)
     assert m._fc_build_match_state()["last_hour"] is False
-    assert m._fc_build_match_state()["close_of_play"] is True
 
     m.fc_day = m.fmt.days
     assert m._fc_build_match_state()["last_hour"] is True
-    assert m._fc_build_match_state()["close_of_play"] is False
 
     engine = FCPressureEngine()
     close = engine.get_pressure_effects({"fc_innings": 1, "wickets": 3,
@@ -2115,9 +2152,50 @@ def test_fc_session_summary_survives_an_innings_ending_inside_it(app):
     m._fc_start_next_innings(2, m.bowling_team, m.batting_team)
 
     summary = m._fc_session_summary()
-    assert summary["overs"] == 10, "the session clock kept running"
+    assert summary["balls"] == 60 and summary["overs"] == "10.0", (
+        "the session clock kept running")
     assert summary["runs"] == 62 and summary["wickets"] == 3, (
         "what the session produced before the innings ended still counts")
+
+
+def test_fc_session_overs_count_the_balls_of_an_unfinished_over(app):
+    """An innings ending mid-over still played those balls, and a session is
+    reported in cricket notation — 28.5 is 28 overs and 5 balls, so it must
+    not be floored to 28 nor written as a decimal."""
+    m = _fc_match(days=5)
+    m.fc_day_balls_bowled_today = 47 * 6
+    m._fc_snapshot_session_start()
+    # ... 25 overs and 5 balls later, the innings ends part-way through one.
+    m.fc_day_balls_bowled_today = 47 * 6 + 25 * 6 + 5
+    m.score, m.wickets = 64, 5
+
+    m._fc_start_next_innings(4, m.bowling_team, m.batting_team)
+    m.fc_day_balls_bowled_today += 3 * 6      # the new side bats three overs
+    m.score, m.wickets = 6, 0
+
+    summary = m._fc_session_summary()
+    assert summary["balls"] == 25 * 6 + 5 + 3 * 6
+    assert summary["overs"] == "28.5", "partial overs were truncated"
+    assert summary["runs"] == 70 and summary["wickets"] == 5
+
+
+def test_fc_session_overs_keep_an_over_finished_by_the_final_wicket(app):
+    """An innings ending ON the last ball of an over used to lose the whole
+    over: the innings-end paths return before the end-of-over block that did
+    the counting."""
+    m = _fc_match(days=5)
+    m.fc_day_balls_bowled_today = 58 * 6
+    m._fc_snapshot_session_start()
+    m.fc_day_balls_bowled_today = 60 * 6       # all out on the last ball of 59
+    m.score, m.wickets = 3, 2
+
+    m._fc_start_next_innings(2, m.bowling_team, m.batting_team)
+    m.fc_day_balls_bowled_today += 27 * 6
+    m.score, m.wickets = 102, 1
+
+    summary = m._fc_session_summary()
+    assert summary["overs"] == "29.0", "the completed final over was dropped"
+    assert summary["runs"] == 105 and summary["wickets"] == 3
 
 
 def test_fc_first_innings_says_nothing_about_a_target(app):
@@ -2203,7 +2281,8 @@ def test_fc_interval_situation_always_names_the_batting_team(app):
     m.fc_day_overs_bowled_today = 40
     response = m._fc_interval_response("Tea")
     assert response["match_situation"] == f"{away} trail by 45 runs"
-    assert response["session_summary"] == {"runs": 10, "wickets": 0, "overs": 10}
+    assert response["session_summary"] == {
+        "runs": 10, "wickets": 0, "balls": 60, "overs": "10.0"}
     assert f"{away} trail by 45 runs" in response["commentary"]
 
 
@@ -2292,3 +2371,518 @@ def test_fc_is_always_simulated_in_auto_mode(app):
     assert m.simulation_mode == "auto"
     assert m._is_manual_mode() is False
     assert data["simulation_mode"] == "auto", "and the saved file is corrected"
+
+
+# ---------------------------------------------------------------------------
+# Playing conditions that are NOT shared with limited-overs cricket
+# ---------------------------------------------------------------------------
+
+def _no_ball_outcome(**_kwargs):
+    return {
+        "runs": 1, "batter_out": False, "wicket_type": None,
+        "is_extra": True, "extra_type": "No Ball", "description": "No Ball",
+    }
+
+
+def test_fc_no_ball_does_not_arm_a_free_hit(app, monkeypatch):
+    """The Test playing conditions carry the no-ball provisions (one-run
+    penalty, delivery not counted, restricted dismissals) but have no free
+    hit — that is a limited-overs rule. The next delivery is an ordinary one."""
+    m = _fc_match(days=5)
+    monkeypatch.setattr(match_module, "calculate_outcome", _no_ball_outcome)
+
+    r = m.next_ball()
+
+    bowled = m.bowler_stats[m.current_bowler["name"]]
+    assert bowled["noballs"] == 1, "the no-ball itself must still be recorded"
+    assert m.free_hit_active is False
+    assert "FREE HIT" not in str(r.get("commentary", "")).upper()
+
+
+def test_limited_overs_no_ball_still_arms_a_free_hit(monkeypatch):
+    """The same delivery in a T20 must behave exactly as it did before —
+    the FC fix is a format gate, not a removal."""
+    import tests.test_free_hit_state_ordering as fh
+    m = match_module.Match(fh._build_match_data(match_format="T20"))
+    monkeypatch.setattr(match_module, "calculate_outcome", _no_ball_outcome)
+
+    m.next_ball()
+
+    assert m.free_hit_active is True
+
+
+def test_fc_no_ball_over_a_whole_match_never_arms_a_free_hit(app):
+    """End-to-end: no ball in a full FC match may be flagged as a free hit,
+    and the commentary must never announce one."""
+    m = _fc_match(days=4)
+    seen_no_ball = False
+    for _ in range(20000):
+        r = m.next_ball()
+        assert m.free_hit_active is False, "a free hit was armed in an FC match"
+        text = str(r.get("commentary", ""))
+        assert "FREE HIT" not in text.upper()
+        if "No Ball" in text or "no ball" in text.lower():
+            seen_no_ball = True
+        if r.get("match_over"):
+            break
+    assert seen_no_ball, "no no-ball occurred, so the test proved nothing"
+
+
+def test_limited_overs_still_gets_a_free_hit():
+    """The FC fix must not disarm the free hit where it does belong."""
+    for fmt_name in ("T20", "ListA"):
+        fmt = get_any_format(fmt_name)
+        assert fmt.free_hit_after_no_ball is True
+
+
+def test_fc_innings_banner_numbers_all_four_innings(app):
+    """Every innings used to announce itself as "INNINGS 1": the banner read
+    self.innings, a limited-overs counter FC never advances."""
+    m = _fc_match(days=5)
+    seen = []
+    for fc_innings in (1, 2, 3, 4):
+        m.fc_innings = fc_innings
+        seen.append(m._innings_banner())
+
+    assert seen[0].startswith("1st INNINGS")
+    assert seen[1].startswith("2nd INNINGS")
+    assert seen[2].startswith("3rd INNINGS")
+    assert seen[3].startswith("4th INNINGS")
+    assert len(set(seen)) == 4, "all four innings carried the same label"
+    # The side batting is named, since the number alone doesn't say who is in.
+    assert m._get_team_name(m.batting_team) in seen[0]
+
+
+def test_fc_day_ball_count_never_drifts_from_the_over_position(app):
+    """The day's ball tally must advance in lockstep with the over position.
+
+    It did not: a wicket ball is counted inside its own dismissal helper, not
+    on the main delivery path, so a tally added to the main path alone
+    silently lost one ball per wicket — the day read 28.5 overs where the
+    scoreboard read 29.0. Checked on every ball, not just at the intervals,
+    and specifically across wickets."""
+    m = _fc_match(days=4)
+    prev_pos = m.current_over * 6 + m.current_ball
+    prev_balls = m.fc_day_balls_bowled_today
+    wickets_seen = 0
+    for _ in range(20000):
+        r = m.next_ball()
+        if r.get("match_over"):
+            break
+        pos = m.current_over * 6 + m.current_ball
+        balls = m.fc_day_balls_bowled_today
+        # A day change zeroes the tally and an innings change zeroes the over
+        # position; both re-baseline rather than break the invariant.
+        if not r.get("day_break") and not r.get("innings_end"):
+            assert pos - prev_pos == balls - prev_balls, (
+                f"tally moved {balls - prev_balls} while the over position "
+                f"moved {pos - prev_pos} at {m.current_over}.{m.current_ball}")
+        if m.wickets > wickets_seen:
+            wickets_seen = m.wickets
+        prev_pos, prev_balls = pos, balls
+    assert wickets_seen > 0, "no wicket fell, so the test proved nothing"
+
+
+# ---------------------------------------------------------------------------
+# The day's over obligation: minimum overs, innings-change deduction, overtime
+#
+# Every test here builds an explicit v2 script. A {"forecast", "day_events"}
+# dict routes to the LEGACY v1 path, where none of this machinery runs at all,
+# so a test written that way would pass while proving nothing.
+# ---------------------------------------------------------------------------
+
+def _v2_clear_script(days=5):
+    return {
+        "v": 2, "forecast": "clear", "is_day_night": False, "overs_per_day": 90,
+        "days": {str(d): {
+            "public_state": "dry", "public_label": "Dry", "rain_chance": 0,
+            "late_light_risk": False, "actual_state": "dry",
+            "cloud_index": 0.1, "washout": False, "events": [],
+        } for d in range(1, days + 1)},
+    }
+
+
+def _fc_v2_match(days=5, over_rate_adjust=None, **kw):
+    m = _fc_match(days=days, fc_weather_script=_v2_clear_script(days), **kw)
+    assert m.fc_weather_v2, "test built a v1 script and would prove nothing"
+    if over_rate_adjust is not None:
+        # _fc_minutes_per_delivery recomputes the adjust every ball rather
+        # than reading the cache, so both have to be pinned.
+        m._fc_compute_day_over_rate_adjust = lambda: over_rate_adjust
+        m.fc_day_over_rate_adjust = over_rate_adjust
+    return m
+
+
+def test_fc_minimum_overs_extends_a_slow_day(app):
+    """A pace-heavy attack used to simply bowl fewer overs and go home. The
+    minimum means it stays out later instead: 81 overs in the scheduled six
+    hours becomes ~88 once the day owes them."""
+    m = _fc_v2_match(over_rate_adjust=-9)
+    # _fc_day_break_response resets the clock and the day tally, so the
+    # day's final state has to be sampled on the ball before the break.
+    last = {}
+    def _sample(mm, rr):
+        if not rr.get("day_break"):
+            last["overs"] = mm.fc_day_overs_bowled_today
+            last["clock"] = mm.fc_clock_minute
+        return rr.get("day_break")
+    r = _play_until(m, _sample)
+
+    assert r["day_number"] == 1
+    # 81 overs is all this attack fits into the scheduled six hours.
+    assert last["overs"] >= 86, f"day ended on {last['overs']} overs"
+    assert last["clock"] > fc_weather.SCHEDULED_CLOSE_MINUTE, (
+        "the day did not run into overtime to get there")
+
+
+def test_fc_overtime_is_capped_and_the_day_always_ends(app):
+    """The anti-infinite-loop regression. However slow the attack, the day
+    must terminate: _fc_latest_close_minute() is a finite hard stop and the
+    clock advances by a strictly positive amount every delivery."""
+    m = _fc_v2_match(over_rate_adjust=-60)      # far slower than any real XI
+    r = _play_until(m, lambda mm, rr: rr.get("day_break"), limit=6000)
+
+    assert r.get("day_break"), "the day never ended"
+    assert not m._fc_minimum_overs_met(), "this attack cannot reach the minimum"
+
+
+def test_fc_fast_over_rate_still_plays_to_the_scheduled_close(app):
+    """Meeting the minimum early buys nothing — you play until six o'clock.
+    A spin-heavy attack therefore still bowls MORE than the minimum."""
+    m = _fc_v2_match(over_rate_adjust=+5)
+    _play_until(m, lambda mm, rr: rr.get("day_break"))
+
+    # 95 overs in the day at this rate, comfortably past a 90/88 minimum.
+    assert m.fc_day == 2
+
+
+def test_fc_innings_change_reduces_the_days_minimum(app):
+    m = _fc_v2_match()
+    assert m.fmt.innings_change_over_deduction == 2
+
+    for changes, expected in ((0, 90), (1, 88), (2, 86)):
+        m.fc_day_innings_changes = changes
+        assert m._fc_minimum_overs_today() == expected
+
+    # Weather already lost stacks with the deduction.
+    m.fc_day_net_lost_minutes = 40          # 10 overs at 4 min/over
+    for changes, expected in ((0, 80), (1, 78), (2, 76)):
+        m.fc_day_innings_changes = changes
+        assert m._fc_minimum_overs_today() == expected
+
+
+def test_fc_minimum_overs_ignore_the_over_rate(app):
+    """The minimum must NOT carry fc_day_over_rate_adjust — if it did, a slow
+    attack would get a proportionally smaller minimum and the whole rule
+    would be a no-op."""
+    for adjust in (-9, -4, 0, +5):
+        m = _fc_v2_match(over_rate_adjust=adjust)
+        assert m._fc_minimum_overs_today() == 90, (
+            f"over-rate adjust {adjust:+d} moved the day's minimum")
+
+
+def test_fc_innings_change_counter_increments_and_resets_at_stumps(app):
+    m = _fc_v2_match()
+    assert m.fc_day_innings_changes == 0
+
+    m._fc_start_next_innings(2, m.bowling_team, m.batting_team)
+    assert m.fc_day_innings_changes == 1
+    assert m._fc_minimum_overs_today() == 88
+
+    m._fc_day_break_response()
+    assert m.fc_day_innings_changes == 0, "the deduction leaked into tomorrow"
+    assert m._fc_minimum_overs_today() == 90
+
+
+def test_fc_forced_day_end_never_takes_overtime(app):
+    """A washout or bad-light close ends the day where it stands. An
+    abandoned day is not played out in overtime to complete a minimum it
+    was never going to reach."""
+    m = _fc_v2_match(over_rate_adjust=-9)
+    _play_until(m, lambda mm, rr: mm.fc_day_balls_bowled_today > 60)
+    assert not m._fc_minimum_overs_met()
+
+    m.fc_force_day_end = True
+    assert m._fc_in_overtime() is False
+
+    r = _play_until(m, lambda mm, rr: rr.get("day_break"), limit=20)
+    assert r.get("day_break"), "a forced day end did not stop play"
+    assert m.fc_clock_minute < fc_weather.SCHEDULED_CLOSE_MINUTE, (
+        "the day ran into overtime despite being abandoned")
+
+
+def test_fc_scripted_washout_still_ends_at_zero_overs(app):
+    """The clock <= 0 fast path must NOT be gated on the minimum. At that
+    point fc_day_net_lost_minutes is still 0, so the minimum reads a full 90
+    and would keep a washed-out day open forever."""
+    script = _v2_clear_script(days=4)
+    script["days"]["1"] = {
+        "public_state": "storm", "public_label": "Heavy rain likely",
+        "rain_chance": 90, "late_light_risk": False, "actual_state": "storm",
+        "cloud_index": 0.95, "washout": True,
+        "events": [{
+            "id": "d1-e1", "kind": "rain", "start_minute": 0,
+            "rain_minutes": 420, "recovery_minutes": 0,
+            "rain_end_minute": 420, "end_minute": 420, "washout": True,
+        }],
+    }
+    m = _fc_match(days=4, weather_forecast="storm_warning",
+                  fc_weather_script=script)
+    r = _play_until(m, lambda mm, rr: rr.get("day_break"), limit=40)
+
+    assert r["day_number"] == 1
+    assert m.fc_day_overs_bowled_today == 0
+    assert "washed out" in str(r.get("weather_note", "")).lower()
+
+
+def test_fc_overtime_does_not_serve_a_third_interval(app):
+    """Overtime is played inside the evening session. Tea must not be served
+    at six o'clock because the clock sailed past its trigger."""
+    m = _fc_v2_match(over_rate_adjust=-9)
+    m.fc_sessions_taken_today = 1                       # Lunch taken, Tea not
+    m.fc_clock_minute = fc_weather.SCHEDULED_CLOSE_MINUTE + 5
+    m.fc_day_balls_bowled_today = 60 * 6                 # short of the minimum
+
+    assert m._fc_in_overtime() is True
+    r = m._fc_pre_ball_checks()
+    assert not (r or {}).get("fc_interval"), "an interval was served in overtime"
+
+
+def test_fc_snapshot_roundtrips_the_innings_change_counter(app):
+    m = _fc_v2_match()
+    m._fc_start_next_innings(2, m.bowling_team, m.batting_team)
+    assert m.fc_day_innings_changes == 1
+
+    snap = m.serialize_fc_snapshot()
+    assert snap["v"] == 2, "the snapshot version must stay additive"
+
+    restored = _fc_v2_match()
+    restored.restore_fc_snapshot(snap)
+    assert restored.fc_day_innings_changes == 1
+    assert restored._fc_minimum_overs_today() == 88
+
+
+def test_fc_snapshot_without_the_counter_restores_to_zero(app):
+    """In-flight matches saved before this model existed must resume, not
+    crash. Zero gives today the full minimum — a slightly longer day that
+    self-corrects at the next stumps."""
+    m = _fc_v2_match()
+    snap = m.serialize_fc_snapshot()
+    snap.pop("fc_day_innings_changes", None)
+
+    restored = _fc_v2_match()
+    restored.restore_fc_snapshot(snap)
+    assert restored.fc_day_innings_changes == 0
+    assert restored._fc_minimum_overs_today() == 90
+
+
+def test_fc_day_obligation_config_knobs(app):
+    fmt = get_any_format("FC", days=5)
+    assert fmt.min_overs_per_day is None      # falls back to overs_per_day
+    assert fmt.innings_change_over_deduction == 2
+    assert fmt.max_overtime_minutes == 30
+    # dataclasses.replace must still carry the per-match overrides.
+    assert fmt.days == 5 and fmt.follow_on_margin == 200
+
+
+def test_fc_day_log_records_what_each_day_owed_and_delivered(app):
+    m = _fc_v2_match(days=4, over_rate_adjust=-9)
+    _play_until(m, lambda mm, rr: rr.get("day_break"))
+
+    assert len(m.fc_day_log) == 1
+    rec = m.fc_day_log[0]
+    assert rec["day"] == 1
+    assert rec["no_play"] is False
+    assert rec["minimum_overs"] in (88, 90)
+    assert rec["overs_bowled"] >= 86
+    # A slow attack needs extra time to get there.
+    assert rec["overtime_minutes"] > 0
+    assert rec["shortfall_overs"] == max(
+        0, rec["minimum_overs"] - rec["overs_bowled"])
+
+
+def test_fc_day_log_marks_a_washout_as_no_play_not_a_shortfall(app):
+    """A washed-out day is not the worst over-rate offence of the match."""
+    script = _v2_clear_script(days=4)
+    script["days"]["1"] = {
+        "public_state": "storm", "public_label": "Heavy rain likely",
+        "rain_chance": 90, "late_light_risk": False, "actual_state": "storm",
+        "cloud_index": 0.95, "washout": True,
+        "events": [{
+            "id": "d1-e1", "kind": "rain", "start_minute": 0,
+            "rain_minutes": 420, "recovery_minutes": 0,
+            "rain_end_minute": 420, "end_minute": 420, "washout": True,
+        }],
+    }
+    m = _fc_match(days=4, weather_forecast="storm_warning",
+                  fc_weather_script=script)
+    _play_until(m, lambda mm, rr: rr.get("day_break"), limit=40)
+
+    rec = m.fc_day_log[0]
+    assert rec["no_play"] is True and rec["overs_bowled"] == 0
+    assert match_module.Match._fc_day_over_summary_line(rec) == "No play today."
+
+
+def test_fc_day_log_survives_a_snapshot_roundtrip(app):
+    m = _fc_v2_match(days=4, over_rate_adjust=-9)
+    _play_until(m, lambda mm, rr: rr.get("day_break"))
+    snap = m.serialize_fc_snapshot()
+
+    restored = _fc_v2_match(days=4)
+    restored.restore_fc_snapshot(snap)
+    assert restored.fc_day_log == m.fc_day_log
+
+    # And an older snapshot with no day log restores to an empty one.
+    snap.pop("fc_day_log", None)
+    older = _fc_v2_match(days=4)
+    older.restore_fc_snapshot(snap)
+    assert older.fc_day_log == []
+
+
+def test_fc_over_obligation_payload_does_not_reveal_hidden_weather(app):
+    """The published minimum must be built from realised loss only. Using
+    _fc_effective_overs_today() would resolve the whole of today's hidden
+    script and leak it — this is the same guard as
+    test_fc_weather_projection_does_not_reveal_later_hidden_events."""
+    def scripted(events):
+        return {
+            "v": 2, "forecast": "passing_showers", "overs_per_day": 90,
+            "is_day_night": False,
+            "days": {"1": {
+                "public_state": "showers", "public_label": "Showers possible",
+                "rain_chance": 35, "late_light_risk": False,
+                "actual_state": "showers", "cloud_index": 0.45,
+                "washout": False, "events": events,
+            }},
+        }
+
+    clear = _fc_match(days=4, weather_forecast="passing_showers",
+                      fc_weather_script=scripted([]))
+    hidden = _fc_match(days=4, weather_forecast="passing_showers",
+                       fc_weather_script=scripted([{
+                           "id": "d1-e1", "kind": "rain", "start_minute": 300,
+                           "rain_minutes": 120, "recovery_minutes": 30,
+                           "rain_end_minute": 420, "end_minute": 450,
+                           "washout": False,
+                       }]))
+
+    for key in ("minimum_overs_today", "overs_bowled_today", "in_overtime"):
+        assert clear._fc_weather_status()[key] == hidden._fc_weather_status()[key], (
+            f"{key} leaked a weather event that has not happened yet")
+
+
+def test_fc_nightwatchman_window_follows_the_real_end_of_day(app):
+    """_fc_effective_overs_today() hits zero at over 81 for a slow attack
+    while the minimum keeps the day going to ~88. Reading the wrong one means
+    no nightwatchman is ever sent in during the actual last hour."""
+    m = _fc_v2_match(over_rate_adjust=-9)
+    m.fc_day_balls_bowled_today = 84 * 6      # past the over-rate estimate
+
+    assert m._fc_effective_overs_today() - m.fc_day_overs_bowled_today <= 0
+    assert m._fc_overs_remaining_today() > 0, (
+        "the nightwatchman window closed before the day actually ended")
+
+
+def test_fc_draw_records_the_final_day_but_a_result_does_not(app):
+    """A draw plays the last day out, so it belongs in the day log. A day cut
+    short by a RESULT is deliberately left out — it stopped because the match
+    was won, and scoring it against the day's minimum would misreport it as
+    an over-rate offence."""
+    m = _fc_v2_match(days=4)
+    _play_to_completion(m)
+
+    days = [d["day"] for d in m.fc_day_log]
+    assert days == sorted(days) and len(days) == len(set(days))
+    if "drawn" in str(m.result).lower():
+        assert days == [1, 2, 3, 4], "a draw must record every day"
+    else:
+        # Result: the closing day is absent, and no recorded day is the one
+        # play actually stopped on.
+        assert m.fc_day not in days or m.fc_day_log[-1]["day"] < m.fc_day
+
+
+def test_fc_day_one_close_does_not_announce_rain_that_has_not_fallen(app):
+    """Day 1's revised close used to be pre-seeded from
+    fc_weather.day_timing_summary(), which resolves the WHOLE of today's
+    hidden script. A match whose hidden timeline held an afternoon shower
+    therefore published a 19:00 close in fc_weather_status before a ball was
+    bowled. Days 2+ never did this; day 1 now matches them."""
+    def scripted(events):
+        return {
+            "v": 2, "forecast": "passing_showers", "overs_per_day": 90,
+            "is_day_night": False,
+            "days": {"1": {
+                "public_state": "showers", "public_label": "Showers possible",
+                "rain_chance": 35, "late_light_risk": False,
+                "actual_state": "showers", "cloud_index": 0.45,
+                "washout": False, "events": events,
+            }},
+        }
+
+    clear = _fc_match(days=4, weather_forecast="passing_showers",
+                      fc_weather_script=scripted([]))
+    hidden = _fc_match(days=4, weather_forecast="passing_showers",
+                       fc_weather_script=scripted([{
+                           "id": "d1-e1", "kind": "rain", "start_minute": 200,
+                           "rain_minutes": 40, "recovery_minutes": 20,
+                           "rain_end_minute": 240, "end_minute": 260,
+                           "washout": False,
+                       }]))
+
+    assert clear.fc_revised_close_minute == fc_weather.SCHEDULED_CLOSE_MINUTE
+    assert hidden.fc_revised_close_minute == clear.fc_revised_close_minute, (
+        "day 1 leaked an interruption that has not happened yet")
+    for key in ("revised_close_minute", "revised_close_label"):
+        assert clear._fc_weather_status()[key] == hidden._fc_weather_status()[key]
+
+
+def test_fc_day_log_does_not_charge_a_rain_stoppage_as_overtime(app):
+    """A stoppage jumps fc_clock_minute straight to the event's end, so
+    measuring overtime as (clock - close) once logged 145 minutes of "extra
+    time" against a 30-minute allowance on a day that actually closed early."""
+    m = _fc_v2_match(days=4)
+    m.fc_day_balls_bowled_today = 40 * 6
+    m.fc_revised_close_minute = 420.0
+    m.fc_clock_minute = 565.0          # rain ran to 20:25, then stumps
+
+    m.fc_force_day_end = True
+    assert m._fc_record_day(1)["overtime_minutes"] == 0, (
+        "an abandoned day was charged overtime it never played")
+
+    m.fc_day_log.clear()
+    m.fc_force_day_end = False
+    assert m._fc_record_day(1)["overtime_minutes"] == m.fmt.max_overtime_minutes, (
+        "overtime exceeded the allowance the predicate actually grants")
+
+
+def test_fc_multi_event_day_makeup_matches_the_whole_day_calculation(app):
+    """fc_day_makeup_minutes is ASSIGNED per event rather than accumulated,
+    which looks like a bug and is not: it is recomputed from the CUMULATIVE
+    fc_day_gross_delay_minutes each time, so the incremental per-event path
+    converges on fc_weather.day_timing_summary's whole-day figures. Pinned
+    because the assignment is the kind of thing a later reader 'fixes'."""
+    events = [
+        {"id": "e1", "kind": "rain", "start_minute": 60, "rain_minutes": 20,
+         "recovery_minutes": 10, "rain_end_minute": 80, "end_minute": 90,
+         "washout": False},
+        {"id": "e2", "kind": "rain", "start_minute": 200, "rain_minutes": 30,
+         "recovery_minutes": 10, "rain_end_minute": 230, "end_minute": 240,
+         "washout": False},
+    ]
+    script = {
+        "v": 2, "forecast": "rain_around", "overs_per_day": 90,
+        "is_day_night": False,
+        "days": {"1": {
+            "public_state": "rain", "public_label": "Rain likely",
+            "rain_chance": 65, "late_light_risk": False, "actual_state": "rain",
+            "cloud_index": 0.7, "washout": False, "events": events,
+        }},
+    }
+    m = _fc_match(days=4, weather_forecast="rain_around", fc_weather_script=script)
+    _play_until(m, lambda mm, rr: mm.fc_weather_event_index >= 2, limit=4000)
+
+    reference = fc_weather.day_timing_summary(script, 1, 90)
+    assert m.fc_day_gross_delay_minutes == reference["gross_delay_minutes"]
+    assert m.fc_day_makeup_minutes == reference["makeup_minutes"]
+    assert m.fc_day_net_lost_minutes == reference["net_lost_minutes"]
+    assert m.fc_revised_close_minute == reference["revised_close_minute"]

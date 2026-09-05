@@ -145,9 +145,13 @@ def test_spin_toss_away_win_and_bat_puts_the_away_side_in(app, authenticated_cli
     # one) — this is the path that used to be corrupted.
     app_module.MATCH_INSTANCES[match_id] = match_module.Match(json.loads(json.dumps(data)))
 
-    # First element of each choice list: coin "Heads" (matches the away call,
-    # so away wins) and decision "Bat".
+    # Coin lands "Heads", which matches the away call, so away wins the toss.
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+    # Pin the captain's call. This test is about who BATS once the toss is
+    # decided, not about how the decision is reached — stubbing the policy
+    # keeps it that way if decide_toss's pitch reading is ever retuned.
+    import routes.match_routes as match_routes
+    monkeypatch.setattr(match_routes, "decide_toss", lambda *a, **k: "Bat")
 
     resp = authenticated_client.post(f"/match/{match_id}/spin-toss")
     assert resp.status_code == 200
@@ -220,3 +224,80 @@ def test_spin_toss_allowed_before_the_first_ball(app, authenticated_client, regu
     resp = authenticated_client.post(f"/match/{match_id}/spin-toss")
     assert resp.status_code == 200
     assert resp.get_json()["toss_winner"] in {"TW", "TC"}
+
+
+# ── 4. The captain reads the pitch ───────────────────────────────────────────
+# `/spin-toss` used to settle the decision with random.choice(["Bat","Bowl"]) —
+# a second coin flip that never looked at the surface, so a side won the toss
+# on a Green seamer and batted first half the time, and the format's
+# correct_toss_choice table was only ever consulted afterwards to grade the
+# call it had played no part in making.
+
+from engine.format_config import get_any_format
+from engine.toss import correct_decision, decide_toss
+
+
+@pytest.mark.parametrize("match_format,pitch,expected", [
+    ("T20",  "Green", "Bowl"),   # seam on a fresh pitch → have a bowl
+    ("T20",  "Hard",  "Bat"),
+    ("FC",   "Green", "Bowl"),
+    ("FC",   "Hard",  "Bat"),    # true surface over five days → bat
+    ("FC",   "Dead",  "Bat"),
+])
+def test_correct_decision_reads_the_format_pitch_table(match_format, pitch, expected):
+    fmt = get_any_format(match_format, days=5)
+    assert correct_decision(fmt, pitch) == expected
+
+
+def test_correct_decision_prefers_the_day_night_override():
+    """Dew in the second innings tilts a floodlit T20 towards bowling first
+    even on a pitch that reads 'bat' in daylight."""
+    fmt = get_any_format("T20")
+    assert correct_decision(fmt, "Hard") == "Bat"
+    assert correct_decision(fmt, "Hard", is_day_night=True) == "Bowl"
+    # FC ships no D/N override, so it falls back to the daylight table.
+    fc = get_any_format("FC", days=5)
+    assert correct_decision(fc, "Hard", is_day_night=True) == "Bat"
+
+
+def test_decide_toss_follows_the_pitch_but_not_slavishly():
+    fmt = get_any_format("FC", days=5)
+
+    class _Rng:
+        def __init__(self, value): self.value = value
+        def random(self): return self.value
+
+    # Below the threshold the captain reads it right; at or above it he
+    # misreads the surface, which is what keeps every match on one pitch
+    # from opening identically.
+    assert decide_toss(fmt, "Green", rng=_Rng(0.0)) == "Bowl"
+    assert decide_toss(fmt, "Green", rng=_Rng(0.99)) == "Bat"
+    assert decide_toss(fmt, "Hard", rng=_Rng(0.0)) == "Bat"
+    assert decide_toss(fmt, "Hard", rng=_Rng(0.99)) == "Bowl"
+
+
+def test_decide_toss_gets_it_right_most_of_the_time():
+    fmt = get_any_format("FC", days=5)
+    rng = random.Random(20260904)
+    calls = [decide_toss(fmt, "Green", rng=rng) for _ in range(2000)]
+    right = calls.count("Bowl") / len(calls)
+    assert 0.74 < right < 0.86, right
+
+
+def test_spin_toss_route_reads_the_pitch(app, authenticated_client, regular_user, match_file, monkeypatch):
+    """End to end: on a Green FC pitch the winning captain bowls, and the
+    engine then grades that call as the correct one."""
+    data = _match_data(regular_user.id, toss_winner=None, toss_decision=None)
+    data.update({"match_format": "FC", "days": 5, "pitch": "Green"})
+    data.pop("overs", None)
+    match_id, path = match_file(data)
+
+    monkeypatch.setattr(random, "random", lambda: 0.0)   # captain reads it right
+    resp = authenticated_client.post(f"/match/{match_id}/spin-toss")
+    assert resp.status_code == 200
+    assert resp.get_json()["toss_decision"] == "Bowl"
+
+    with open(path, encoding="utf-8") as f:
+        persisted = json.load(f)
+    assert persisted["toss_decision"] == "Bowl"
+    assert match_module.Match(persisted)._toss_choice_correct is True

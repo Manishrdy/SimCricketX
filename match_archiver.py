@@ -39,6 +39,7 @@ from database import db
 from database.models import Match as DBMatch, MatchScorecard, Team as DBTeam, Player as DBPlayer, TeamProfile as DBTeamProfile, Tournament, MatchPartnership
 from utils.exception_tracker import log_exception, log_data_anomaly
 from engine.cricket_math import balls_to_overs_str
+from engine import fc_weather
 
 # ─── Define PROJECT_ROOT so that we can write to /<project_root>/data/… ─────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -1339,7 +1340,10 @@ class MatchArchiver:
             'gross_delay_minutes': gross,
             'makeup_minutes': makeup,
             'net_lost_minutes': net,
-            'overs_lost': net // 4,
+            # The minutes-to-overs exchange rate belongs to the weather model,
+            # not to a literal 4 here — this is the same number the engine
+            # converts with, and it must not drift away from it.
+            'overs_lost': net // fc_weather.MINUTES_PER_OVER,
         }
 
     def _match_type_label(self) -> str:
@@ -1365,12 +1369,12 @@ class MatchArchiver:
             f"Match type: {self._match_type_label()}",
             f"Weather: {self._weather_label()}",
         ]
-        fc_weather = self._fc_weather_totals()
-        if fc_weather and fc_weather['affected']:
+        fc_weather_summary = self._fc_weather_totals()
+        if fc_weather_summary and fc_weather_summary['affected']:
             header_lines.append(
                 "WEATHER AFFECTED - "
-                f"{fc_weather['net_lost_minutes']} minutes / "
-                f"{fc_weather['overs_lost']} overs lost (no DLS)"
+                f"{fc_weather_summary['net_lost_minutes']} minutes / "
+                f"{fc_weather_summary['overs_lost']} overs lost (no DLS)"
             )
         elif getattr(self.match, 'rain_affected', False):
             header_lines.append("RAIN AFFECTED - Duckworth-Lewis-Stern method applied")
@@ -1580,15 +1584,15 @@ class MatchArchiver:
             lines.append(f"Match type: {self._match_type_label()}")
             lines.append(f"Weather forecast: {self._weather_label()}")
 
-            fc_weather = self._fc_weather_totals()
-            if fc_weather and fc_weather['affected']:
+            fc_weather_summary = self._fc_weather_totals()
+            if fc_weather_summary and fc_weather_summary['affected']:
                 lines.extend([
                     "",
                     "MATCH AFFECTED BY WEATHER - FIRST-CLASS TIME-LOSS RULES",
-                    f"  Gross delay: {fc_weather['gross_delay_minutes']} minute(s)",
-                    f"  Time recovered: {fc_weather['makeup_minutes']} minute(s)",
-                    f"  Net lost: {fc_weather['net_lost_minutes']} minute(s) "
-                    f"({fc_weather['overs_lost']} over(s))",
+                    f"  Gross delay: {fc_weather_summary['gross_delay_minutes']} minute(s)",
+                    f"  Time recovered: {fc_weather_summary['makeup_minutes']} minute(s)",
+                    f"  Net lost: {fc_weather_summary['net_lost_minutes']} minute(s) "
+                    f"({fc_weather_summary['overs_lost']} over(s))",
                 ])
                 for ev in getattr(self.match, 'fc_weather_log', []):
                     cause = str(ev.get('cause', 'weather')).replace('_', ' ').title()
@@ -1596,6 +1600,30 @@ class MatchArchiver:
                         f"  Day {ev.get('day')}, {cause}: "
                         f"{ev.get('delay_minutes', 0)} minute(s) - "
                         f"{str(ev.get('outcome', '')).replace('_', ' ')}"
+                    )
+                lines.append("")
+
+            # Per-day over record: what each day owed and what it delivered.
+            day_log = getattr(self.match, 'fc_day_log', None) or []
+            if day_log:
+                lines.extend([
+                    "",
+                    "OVERS PER DAY",
+                    f"  {'Day':<5}{'Bowled':>8}{'Minimum':>9}"
+                    f"{'Extra time':>12}{'Shortfall':>11}",
+                ])
+                for rec in day_log:
+                    if rec.get('no_play'):
+                        lines.append(f"  {rec.get('day'):<5}{'no play':>8}")
+                        continue
+                    extra = rec.get('overtime_minutes', 0)
+                    short = rec.get('shortfall_overs', 0)
+                    lines.append(
+                        f"  {rec.get('day'):<5}"
+                        f"{rec.get('overs_bowled', 0):>8}"
+                        f"{rec.get('minimum_overs', 0):>9}"
+                        f"{(str(extra) + ' min') if extra else '-':>12}"
+                        f"{(str(short) + ' ov') if short else '-':>11}"
                     )
                 lines.append("")
 
@@ -1828,11 +1856,19 @@ class MatchArchiver:
             result_text = str(self.match.result)
 
         # ── Toss ────────────────────────────────────────────────────────────────
-        toss = self.match_data.get('toss', {})
-        if isinstance(toss, dict):
-            toss_winner   = toss.get('winner', 'N/A')
-            toss_decision = toss.get('decision', 'N/A')
-            toss_line     = f"{toss_winner} won the toss and elected to {toss_decision}"
+        # The winner and the decision live in their own top-level keys, which
+        # is what the .txt summary has always read. `match_data['toss']` is the
+        # *coin call* ("Heads"/"Tails"), not a {winner, decision} dict, so the
+        # dict branch this used to take never matched and every archived match
+        # reported "Toss: N/A" while its own commentary narrated the toss.
+        toss_winner   = self.match_data.get('toss_winner')
+        toss_decision = self.match_data.get('toss_decision')
+        if toss_winner and toss_decision:
+            _verb = {'bat': 'bat', 'bowl': 'field'}.get(
+                str(toss_decision).strip().lower(), str(toss_decision).lower())
+            toss_line = f"{toss_winner} won the toss and elected to {_verb}"
+        elif toss_winner:
+            toss_line = f"{toss_winner} won the toss"
         else:
             toss_line = 'N/A'
 
