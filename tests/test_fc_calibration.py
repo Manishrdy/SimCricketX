@@ -60,6 +60,30 @@ FC_XI = [
     (12, 70, 14, 38, 74, "Bowler",       "Leg spin",    True),
 ]
 
+# The XI a user actually picks. FC_XI's top six averages 72.3 — roughly the
+# 85th percentile of the player pool, i.e. a good domestic side. Given a pool
+# whose median batting rating is 45 and whose 99th percentile is 92, nobody
+# builds a team that way: an all-star international XI comes out with a top six
+# near 86 and an attack near 89, and it scores far more.
+#
+# Kept as a SECOND banded tier rather than a replacement. Benchmarking only
+# FC_XI meant every documented FC number described a match almost none of our
+# users play, so a perfectly healthy 469 on Hard read as a regression.
+ELITE_XI = [
+    # (bat, bowl, technique, temperament, stamina, role, bowling_type, will_bowl)
+    (88, 25, 88, 86, 60, "Batsman",      "Medium",      False),
+    (86, 25, 86, 84, 60, "Batsman",      "Medium",      False),
+    (92, 30, 92, 90, 60, "Batsman",      "Medium",      False),
+    (89, 35, 88, 88, 60, "Batsman",      "Off spin",    False),
+    (84, 25, 84, 82, 60, "Batsman",      "Medium",      False),
+    (80, 35, 78, 80, 60, "Wicketkeeper", "Medium",      False),
+    (72, 84, 70, 74, 72, "All-rounder",  "Fast-medium", True),
+    (52, 92, 54, 60, 76, "Bowler",       "Fast",        True),
+    (36, 95, 38, 52, 74, "Bowler",       "Fast-medium", True),
+    (28, 90, 30, 48, 78, "Bowler",       "Off spin",    True),
+    (20, 88, 22, 45, 78, "Bowler",       "Leg spin",    True),
+]
+
 # Runs it should cost to bowl a side out on each surface, and the run rate
 # while doing it. Wide enough to survive a re-tune; narrow enough that a
 # pitch drifting out of one no longer means what its name says.
@@ -119,7 +143,7 @@ TOP_ORDER_VS_TAIL_SURVIVAL = (2.0, 5.0)
 MAX_PITCH_SPREAD = 2.6
 
 
-def _squad(prefix):
+def _squad(prefix, xi=None):
     return [{
         "name": f"{prefix}_P{i+1}", "role": role,
         "batting_rating": bat, "bowling_rating": bowl, "fielding_rating": 68,
@@ -128,10 +152,11 @@ def _squad(prefix):
         "batting_hand": "Left" if i in (1, 4, 8) else "Right",
         "bowling_type": btype, "bowling_hand": "Right" if i % 2 else "Left",
         "will_bowl": wb, "is_captain": i == 0, "is_wicketkeeper": i == 5,
-    } for i, (bat, bowl, tech, temp, stam, role, btype, wb) in enumerate(FC_XI)]
+    } for i, (bat, bowl, tech, temp, stam, role, btype, wb) in enumerate(
+        xi if xi is not None else FC_XI)]
 
 
-def _fc_innings(pitch, seed, budget=8000):
+def _fc_innings(pitch, seed, budget=8000, xi=None):
     """One first innings run to ten wickets, declarations disabled."""
     original = fc_declaration.should_declare
     fc_declaration.should_declare = lambda **kw: False
@@ -143,7 +168,7 @@ def _fc_innings(pitch, seed, budget=8000):
             "stadium": "Cal Ground", "pitch": pitch,
             "toss": "Heads", "toss_winner": "HOM", "toss_decision": "Bat",
             "match_format": "FC", "days": 5, "simulation_mode": "auto",
-            "playing_xi": {"home": _squad("H"), "away": _squad("A")},
+            "playing_xi": {"home": _squad("H", xi), "away": _squad("A", xi)},
             "substitutes": {"home": [], "away": []},
             "weather_forecast": "clear",
         })
@@ -192,12 +217,10 @@ def _fc_innings(pitch, seed, budget=8000):
         fc_declaration.should_declare = original
 
 
-@pytest.fixture(scope="module")
-def fc_stats():
-    """Every pitch simulated once; each test reads the same sample."""
+def _collect(xi=None):
     out = {}
     for pitch in PITCHES:
-        rows = [_fc_innings(pitch, s) for s in SEEDS]
+        rows = [_fc_innings(pitch, s, xi=xi) for s in SEEDS]
         runs = sum(r["runs"] for r in rows)
         balls = sum(r["balls"] for r in rows)
         out[pitch] = {
@@ -209,6 +232,18 @@ def fc_stats():
             "rows": rows,
         }
     return out
+
+
+@pytest.fixture(scope="module")
+def fc_stats():
+    """Every pitch simulated once; each test reads the same sample."""
+    return _collect()
+
+
+@pytest.fixture(scope="module")
+def fc_stats_elite():
+    """The same sample for an all-star XI — the squad users actually pick."""
+    return _collect(ELITE_XI)
 
 
 def _survival(stats, positions):
@@ -415,3 +450,94 @@ def test_fc_duck_rate_is_first_class(fc_stats):
     assert innings > 500, "not enough sample to judge"
     rate = ducks / innings * 100
     assert 7.5 <= rate <= 15.0, f"duck rate {rate:.1f}% outside 7.5-15%"
+
+
+def test_calibration_squads_match_the_bench_script():
+    """scripts/bench_fc.py keeps its own copy of both XIs so it stays runnable
+    as a standalone file on a box with no test deps. Copies drift — the
+    tournament-stats migration script silently fell 17 columns behind its
+    model exactly this way — so pin them to each other."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_bench_fc", os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "scripts", "bench_fc.py"))
+    bench = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bench)
+
+    assert bench.FC_XI == FC_XI, "bench_fc.FC_XI drifted from the calibration copy"
+    assert bench.ELITE_XI == ELITE_XI, "bench_fc.ELITE_XI drifted from the calibration copy"
+
+
+# ---------------------------------------------------------------------------
+# Squad quality: level vs gap
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("pitch", PITCHES)
+def test_fc_elite_squad_sits_in_the_same_band(fc_stats_elite, pitch):
+    """An all-star XI scores no more than a good domestic one, and the SAME
+    bands hold for both.
+
+    This is not a coincidence, it is the shape of the model: skill_frac is
+    batting/(batting+bowling), a RATIO. Lifting a whole match from a top six
+    of 72 to one of 86 lifts the attacks with it, so the contest is unchanged.
+    Scores move when the two sides are unequal, not when both are good.
+    """
+    lo, hi, rpo_lo, rpo_hi = FC_TARGET_BANDS[pitch]
+    got = fc_stats_elite[pitch]
+    assert lo <= got["runs"] <= hi, (
+        f"FC-elite/{pitch}: {got['runs']:.0f} runs, outside {lo}-{hi}")
+    assert rpo_lo <= got["rpo"] <= rpo_hi, (
+        f"FC-elite/{pitch}: {got['rpo']:.2f} RPO outside {rpo_lo}-{rpo_hi}")
+
+
+def test_fc_scoring_tracks_the_rating_gap_not_the_rating_level(fc_stats, fc_stats_elite):
+    """Raising both sides equally must not move the aggregate.
+
+    A regression guard on the property above: if some future change makes an
+    absolute rating matter on its own (a threshold, a cap, a non-linear
+    transform on one side only), elite-vs-elite will start diverging from
+    standard-vs-standard and this fails.
+    """
+    std = sum(s["runs"] for s in fc_stats.values()) / len(fc_stats)
+    elite = sum(s["runs"] for s in fc_stats_elite.values()) / len(fc_stats_elite)
+    assert abs(elite - std) <= 65, (
+        f"elite squads averaged {elite:.0f} vs standard {std:.0f} — the model "
+        f"has started reading the rating level, not the gap between sides")
+
+
+def test_fc_a_mismatched_attack_is_what_moves_the_score(fc_stats):
+    """The flip side, stated as a test so the property is not mistaken for
+    'ratings do nothing'. An elite top six against a domestic attack DOES
+    score far more — that gap is the lever, and it is why a user's all-star
+    XI beating a weaker side posts totals no single-tier bench ever shows."""
+    mixed = [_fc_innings("Hard", s, xi=None) for s in SEEDS[:12]]
+    strong_bat = []
+    for s in SEEDS[:12]:
+        random.seed(s)
+        m = match_module.Match({
+            "match_id": str(uuid.uuid4()), "created_by": "calibration",
+            "team_home": "HOM_cal", "team_away": "AWY_cal",
+            "stadium": "Cal Ground", "pitch": "Hard",
+            "toss": "Heads", "toss_winner": "HOM", "toss_decision": "Bat",
+            "match_format": "FC", "days": 5, "simulation_mode": "auto",
+            # Elite batting, ordinary attack — the mismatch case.
+            "playing_xi": {"home": _squad("H", ELITE_XI), "away": _squad("A")},
+            "substitutes": {"home": [], "away": []},
+            "weather_forecast": "clear",
+        })
+        original = fc_declaration.should_declare
+        fc_declaration.should_declare = lambda **kw: False
+        try:
+            for _ in range(8000):
+                r = m.next_ball()
+                if r.get("innings_end") or r.get("match_over"):
+                    break
+        finally:
+            fc_declaration.should_declare = original
+        strong_bat.append(m.fc_innings_totals.get(1, {}).get("score", m.score))
+
+    even = sum(r["runs"] for r in mixed) / len(mixed)
+    gapped = sum(strong_bat) / len(strong_bat)
+    assert gapped > even * 1.15, (
+        f"an elite top six against a domestic attack scored {gapped:.0f} vs "
+        f"{even:.0f} for an even contest — the rating gap should matter")

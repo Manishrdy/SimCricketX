@@ -50,9 +50,39 @@ FC_XI = [
 ]
 
 
-def _squad(prefix):
+# The XI a user actually picks. FC_XI's top six averages 72.3, which is about
+# the 85th percentile of the player pool — a good domestic side. Nobody builds
+# a team that way: given a pool whose median is 45 and whose 99th percentile is
+# 92, users pick the best players available, and an all-star international XI
+# comes out with a top six around 86 and an attack around 89.
+#
+# That is not a different tuning of the model, it is a different INPUT to it,
+# and it scores far more (see FC_TARGET_BANDS_ELITE in
+# tests/test_fc_calibration.py). Benchmarking only FC_XI meant the documented
+# FC numbers described a match almost none of our users were playing, and a
+# perfectly healthy 469 read as a regression.
+ELITE_XI = [
+    # (bat, bowl, technique, temperament, stamina, role, bowling_type, will_bowl)
+    (88, 25, 88, 86, 60, "Batsman",      "Medium",      False),
+    (86, 25, 86, 84, 60, "Batsman",      "Medium",      False),
+    (92, 30, 92, 90, 60, "Batsman",      "Medium",      False),
+    (89, 35, 88, 88, 60, "Batsman",      "Off spin",    False),
+    (84, 25, 84, 82, 60, "Batsman",      "Medium",      False),
+    (80, 35, 78, 80, 60, "Wicketkeeper", "Medium",      False),
+    (72, 84, 70, 74, 72, "All-rounder",  "Fast-medium", True),
+    (52, 92, 54, 60, 76, "Bowler",       "Fast",        True),
+    (36, 95, 38, 52, 74, "Bowler",       "Fast-medium", True),
+    (28, 90, 30, 48, 78, "Bowler",       "Off spin",    True),
+    (20, 88, 22, 45, 78, "Bowler",       "Leg spin",    True),
+]
+
+SQUAD_TIERS = {"standard": FC_XI, "elite": ELITE_XI}
+
+
+def _squad(prefix, tier=None):
     players = []
-    for i, (bat, bowl, tech, temp, stam, role, btype, wb) in enumerate(FC_XI):
+    for i, (bat, bowl, tech, temp, stam, role, btype, wb) in enumerate(
+            SQUAD_TIERS[tier or "standard"]):
         players.append({
             "name": f"{prefix}_P{i+1}", "role": role,
             "batting_rating": bat, "bowling_rating": bowl, "fielding_rating": 68,
@@ -343,7 +373,21 @@ def main():
                          "storm_warning) instead of the realistic mix")
     ap.add_argument("--compare-day-night", action="store_true",
                     help="run paired day vs pink-ball day/night calibration and exit")
+    ap.add_argument("--tier", choices=sorted(SQUAD_TIERS), default="standard",
+                    help="squad quality: 'standard' (FC_XI, a good domestic "
+                         "side, top six ~72) or 'elite' (an all-star "
+                         "international XI, top six ~86 — what users actually "
+                         "pick). The two score very differently; both are "
+                         "banded in tests/test_fc_calibration.py")
     args = ap.parse_args()
+
+    # Rebound rather than threaded through every helper: this is a bench
+    # script and _fc_match/_simulate_match/_compare_day_night all read the
+    # module-level squads.
+    global HOME, AWAY
+    if args.tier != "standard":
+        HOME = _squad("HOM", args.tier)
+        AWAY = _squad("AWY", args.tier)
 
     if args.compare_day_night:
         _compare_day_night(args.per_pitch, args.days, args.forecast)
@@ -387,7 +431,10 @@ def main():
 
     print(f"\nWrote {len(rows)} match rows to {args.out}\n")
 
-    print(f"FC benchmark  ({args.per_pitch} games per pitch, {args.days}-day matches)\n")
+    _top6 = sorted((p["batting_rating"] for p in HOME), reverse=True)[:6]
+    print(f"FC benchmark  ({args.per_pitch} games per pitch, {args.days}-day "
+          f"matches, {args.tier} squads — top six averages "
+          f"{sum(_top6)/len(_top6):.1f})\n")
     hdr = f"{'Pitch':<7}  {'Games':>5}"
     for n in (1, 2, 3, 4):
         hdr += f"  {'Inn'+str(n)+'Runs':>10}  {'Inn'+str(n)+'Wkts':>9}"
