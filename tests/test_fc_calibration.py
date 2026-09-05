@@ -74,18 +74,30 @@ FC_XI = [
 # generator) differed by up to 54 runs on a pitch, which is more than the old
 # +/-45 half-width. These bands are for catching a model that has drifted, not
 # for pinning one sample of it, so they now carry +/-65 runs and +/-0.32 RPO.
+#
+# Flat and Dead were moved up again on 2026-09-04 at the user's request:
+# a first-innings total on the board (all out or declared) should read 400+
+# on Flat and 500-600 on Dead, so the five surfaces span a real ladder
+# instead of Flat and Dead producing the same score. Flat took a 6% wicket
+# cut plus a 5% scoring lift; Dead took a 10% scoring lift with its early
+# wicket factors dropped from 0.825 to 0.680 (it had been TAKING WICKETS
+# MORE EASILY than Flat on a fresh pitch, which is backwards for the
+# deadest surface in the game). Green/Dry/Hard are untouched.
 FC_TARGET_BANDS = {
     "Green": (190, 315, 2.80, 3.45),
     "Dry":   (290, 415, 3.00, 3.65),
     "Hard":  (290, 420, 3.15, 3.80),
-    "Flat":  (340, 470, 3.35, 4.00),
-    "Dead":  (330, 460, 3.50, 4.15),
+    "Flat":  (375, 510, 3.55, 4.20),
+    "Dead":  (490, 690, 4.00, 4.70),
 }
 
-# Whole-format aggregates.
-AGG_RPO = (3.30, 3.75)
-AGG_RUNS_PER_WICKET = (31.0, 41.0)
-AGG_DOT_PCT = (62.0, 69.0)
+# Whole-format aggregates. Runs per wicket now sits ABOVE real first-class
+# cricket's ~31, and deliberately so: two of the five surfaces were asked to
+# produce 400+ and 500-600 first-innings totals, and that has to show up in
+# the aggregate. Green, Dry and Hard still carry the realistic numbers.
+AGG_RPO = (3.45, 4.00)
+AGG_RUNS_PER_WICKET = (35.0, 47.0)
+AGG_DOT_PCT = (60.0, 69.0)
 # A specialist top-six batter must survive several times longer than a
 # genuine No. 11. Before this calibration the ratio was 1.02 — the tail
 # batted exactly like the top order, which is why nobody ever collapsed.
@@ -98,7 +110,13 @@ AGG_DOT_PCT = (62.0, 69.0)
 # scripts/bench_fc.py, which tracks real first-class figures slot by slot.
 TOP_ORDER_VS_TAIL_SURVIVAL = (2.0, 5.0)
 # A first-class surface should not be a different sport from its neighbour.
-MAX_PITCH_SPREAD = 2.1
+# Widened from 2.1 to 2.6 when Dead was lifted to a 500-600 pitch while
+# Green stayed at ~285: that ladder is a 2.1x spread by construction, so the
+# old ceiling left no headroom for sampling noise at all (Dead's own mean
+# moves 560-600 between samples — its tail is long enough that 40 innings
+# does not pin it). Still far from the 5.1x caricature this guard was
+# written for.
+MAX_PITCH_SPREAD = 2.6
 
 
 def _squad(prefix):

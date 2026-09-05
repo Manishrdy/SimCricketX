@@ -28,7 +28,7 @@ from engine import fc_bowler_workload
 from engine import fc_declaration
 from engine import fc_weather
 from engine import ground_config as ground_config_engine
-from engine.toss import innings_teams
+from engine.toss import correct_decision, innings_teams
 from utils.exception_tracker import log_exception
 
 
@@ -169,13 +169,13 @@ class Match:
         # bowling first on almost every pitch.  Use the D/N override dict when
         # available; fall back to the standard pitch-only dict for day games.
         _is_dn = bool(match_data.get("is_day_night", False))
-        _dn_choices = getattr(self.fmt, "correct_toss_choice_dn", None)
-        if _is_dn and _dn_choices:
-            _correct_choice = _dn_choices.get(self.pitch, "bowl")
-        else:
-            _correct_choice = self.fmt.correct_toss_choice.get(self.pitch, "bat")
-        # toss_decision stored as 'Bat' or 'Bowl'; correct_choice is lowercase.
-        self._toss_choice_correct = (self.toss_decision or "").lower() == _correct_choice
+        # correct_decision() is the same helper spin_toss uses to make the
+        # call, so the choice the AI captain makes and the choice he is
+        # graded against here cannot drift apart.
+        _correct_choice = correct_decision(self.fmt, self.pitch, is_day_night=_is_dn)
+        self._toss_choice_correct = (
+            (self.toss_decision or "").strip().lower() == _correct_choice.lower()
+        )
         # Track which XI won the toss (used in next_ball for per-innings check).
         if self.toss_winner == team_home:
             self._toss_winner_xi = self.home_xi
@@ -226,6 +226,16 @@ class Match:
                     self.weather_forecast, self.fmt.days, self.fmt.overs_per_day,
                     min_overs_last_hour=self.fmt.min_overs_last_hour,
                     is_day_night=bool(match_data.get("is_day_night", False)),
+                    # Ride the shared, seedable stream rather than
+                    # generate_weather_script's `random.Random()` fallback,
+                    # which seeds itself from OS entropy. Without this a
+                    # seeded FC match is NOT reproducible: the rain timeline
+                    # is redrawn every run, so scripts/bench_fc.py returned
+                    # different match results (and draw rates swinging ~9
+                    # points at 100 games a pitch) for a byte-identical
+                    # config. Live matches are unaffected — the module RNG
+                    # is entropy-seeded at startup anyway.
+                    rng=random,
                 )
             self.fc_weather_script = match_data["fc_weather_script"]
         elif match_data.get("weather_script") is None:
@@ -365,7 +375,9 @@ class Match:
         # confuse with a real 3rd/4th innings — see is_fc dispatch above.
         self.fc_innings = 1
         self.fc_day = 1
-        self.fc_day_overs_bowled_today = 0
+        # Balls, not overs, is the stored quantity — see the
+        # fc_day_overs_bowled_today property for why.
+        self.fc_day_balls_bowled_today = 0
         # Version-2 FC weather uses an actual match clock. Legacy day_events
         # continue through the aggregate overs path below, so old saved
         # matches retain their exact semantics and are never re-rolled.
@@ -379,6 +391,9 @@ class Match:
         self.fc_day_start_emitted = False
         self.fc_weather_affected = False
         self.fc_weather_log = []
+        # One row per completed day: overs bowled against the minimum the day
+        # owed, plus any extra time taken. Modelled on fc_weather_log.
+        self.fc_day_log = []
         self.fc_day_gross_delay_minutes = 0
         self.fc_day_makeup_minutes = 0
         self.fc_day_net_lost_minutes = 0
@@ -387,17 +402,24 @@ class Match:
         self.fc_total_net_lost_minutes = 0
         self.fc_carry_forward_minutes = 0
         self.fc_force_day_end = False
-        if self.fc_weather_v2:
-            _timing = fc_weather.day_timing_summary(
-                self.fc_weather_script, self.fc_day, self.fmt.overs_per_day,
-            )
-            self.fc_revised_close_minute = float(_timing["revised_close_minute"])
+        # Day 1 deliberately starts on the scheduled close, exactly as every
+        # later day does (see _fc_day_break_response). This used to be
+        # pre-seeded from fc_weather.day_timing_summary(), which resolves the
+        # whole of today's HIDDEN script — so a day-1 match announced a 19:00
+        # close in fc_weather_status before a drop of rain had fallen, telling
+        # the user rain was coming. The close is pushed out by real
+        # interruptions in _fc_weather_pre_delivery and nowhere else.
         # Sessions: a first-class day is three sessions (morning to Lunch,
         # afternoon to Tea, evening to Stumps), not one flat 90-over block.
         # fc_sessions_taken_today counts the intervals ALREADY taken today
         # (0-2), so the session in progress is that + 1.
         self.fc_sessions_taken_today = 0
-        self.fc_session_start = {"score": 0, "wickets": 0, "day_overs": 0,
+        # Innings that have STARTED today. Each costs the day two overs off
+        # its minimum (fmt.innings_change_over_deduction), standing in for
+        # the ten minutes between innings — the changeover deliberately does
+        # NOT advance fc_clock_minute. Reset at stumps.
+        self.fc_day_innings_changes = 0
+        self.fc_session_start = {"score": 0, "wickets": 0, "day_balls": 0,
                                  "fc_innings": 1}
         # None until first computed for the day in progress (the bowling
         # XI isn't settled yet at this point in __init__).
@@ -601,6 +623,43 @@ class Match:
         extras_str = f" ({', '.join(extras_parts)})" if extras_parts else ""
         return f"{bowler_name}\t\t{overs:.1f}-{stats.get('maidens', 0)}-{stats.get('runs', 0)}-{stats.get('wickets', 0)}{extras_str}"
 
+    def _count_legal_delivery(self):
+        """One legal delivery has been bowled.
+
+        The single place the in-over ball count advances. There are four call
+        sites because a wicket ball is counted in its own dismissal helper
+        rather than on the main path — anything that has to tally deliveries
+        must go through here, or it silently misses every wicket ball."""
+        self.current_ball += 1
+        if self.is_fc:
+            # Counted per delivery, not at the end of the over: an innings can
+            # end on any ball, and the innings-end paths return before the
+            # end-of-over block ever runs.
+            self.fc_day_balls_bowled_today += 1
+
+    @staticmethod
+    def _ordinal(n):
+        """1 -> '1st', 2 -> '2nd', 3 -> '3rd', 4 -> '4th'."""
+        if 10 <= (n % 100) <= 20:
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix}"
+
+    def _innings_banner(self):
+        """Header printed at the top of each innings.
+
+        `self.innings` is a limited-overs counter that FC never advances — it
+        stays 1 for the whole match (see the note in _fc_next_ball), which is
+        why all four innings of a Test used to announce themselves as
+        "INNINGS 1". The multi-day counter is `fc_innings`, so use that and
+        name the side batting: over four innings the number alone does not
+        say who is in."""
+        if self.is_fc:
+            return (f"{self._ordinal(self.fc_innings)} INNINGS — "
+                    f"{self._get_team_name(self.batting_team)}")
+        return f"INNINGS {self.innings}"
+
     def _format_all_out_block(self, dismissed_name, wicket_type, fielder_name=None):
         """The shared 'innings just ended on the tenth wicket' block: the
         final team score/RR line, the dismissed batsman's own line, and the
@@ -791,7 +850,12 @@ class Match:
         # Never with the last pair — there is nobody left to protect.
         if self.wickets >= 8:
             return None
-        overs_left = self._fc_effective_overs_today() - self.fc_day_overs_bowled_today
+        # Must track the day's REAL remaining overs, not the over-rate
+        # estimate: _fc_effective_overs_today() reaches zero at over 81 for a
+        # slow attack, while the minimum-overs rule keeps that day going to
+        # ~88. Read the wrong one and a nightwatchman is never sent in during
+        # the actual last hour of a slow day.
+        overs_left = self._fc_overs_remaining_today()
         if not (0 < overs_left <= self._FC_NIGHTWATCHMAN_OVERS):
             return None
 
@@ -2810,7 +2874,7 @@ class Match:
                 is_legal_delivery = True
 
         if is_legal_delivery:
-            self.current_ball += 1
+            self._count_legal_delivery()
             self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
             self.batsman_stats[self.current_striker["name"]]["balls"] += 1
             self.current_partnership_balls += 1
@@ -2854,7 +2918,7 @@ class Match:
                 is_legal_delivery = True
 
         if is_legal_delivery:
-            self.current_ball += 1
+            self._count_legal_delivery()
             self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
             self.batsman_stats[self.current_striker["name"]]["balls"] += 1
             self._credit_partnership_contribution(balls=1)
@@ -4706,17 +4770,16 @@ class Match:
 
         # The closing overs of a day. Excluded during a live fourth-innings
         # chase — a side going for the win doesn't shut up shop at 6pm.
-        _overs_left_today = max(
-            0.0, self._fc_effective_overs_today() - self.fc_day_overs_bowled_today)
+        # Must be the day's REAL remaining overs. _fc_effective_overs_today()
+        # is the over-rate estimate, which for a slow attack runs out at over
+        # 81 while the minimum keeps the day going to ~88 — that would flag
+        # "last hour" for 22 overs instead of 15 and shut the batting down far
+        # too early. Same trap as _fc_pick_nightwatchman.
+        _overs_left_today = float(self._fc_overs_remaining_today())
         _live_chase = (self.fc_innings == 4 and self.target is not None
                        and not survival_mode)
         last_hour = (
             self.fc_day == self.fmt.days
-            and _overs_left_today <= self.fmt.min_overs_last_hour
-            and not _live_chase
-        )
-        close_of_play = (
-            self.fc_day < self.fmt.days
             and _overs_left_today <= self.fmt.min_overs_last_hour
             and not _live_chase
         )
@@ -4725,7 +4788,6 @@ class Match:
             "fc_innings": self.fc_innings,
             "wickets": self.wickets,
             "last_hour": last_hour,
-            "close_of_play": close_of_play,
             "striker_balls_faced": striker_balls_faced,
             "days_remaining": days_remaining,
             "recent_wickets": getattr(self, "recent_wickets_count", 0),
@@ -5091,6 +5153,33 @@ class Match:
         """Full match days left INCLUDING today (today counts as 1)."""
         return max(0, self.fmt.days - self.fc_day + 1)
 
+    # ── Today's play, counted in balls ──────────────────────────────────
+    # The day's progress is stored as a ball count and the over count is
+    # derived from it. Two bugs came out of storing overs directly:
+    #
+    #   * an innings ending mid-over simply discarded the balls already
+    #     bowled in it, so a session that contained a declaration or an
+    #     all-out was reported short by up to five balls; and
+    #   * an innings ending ON the last ball of an over lost the whole over,
+    #     because the innings-end paths return before reaching the
+    #     end-of-over block that used to do the incrementing.
+    #
+    # Deriving the over count keeps every existing gate (session boundaries,
+    # end of day, the declaration budget) reading exactly the completed-over
+    # integer it read before, while the balls stay available for anything
+    # that needs to report a real cricket score.
+
+    @property
+    def fc_day_overs_bowled_today(self):
+        """Completed overs bowled today."""
+        return self.fc_day_balls_bowled_today // 6
+
+    @fc_day_overs_bowled_today.setter
+    def fc_day_overs_bowled_today(self, overs):
+        """Kept writable for the day reset and for restoring a snapshot
+        saved before the ball counter existed."""
+        self.fc_day_balls_bowled_today = int(overs) * 6
+
     # Over rates. A first-class day is 90 overs on the schedule and almost
     # never 90 in practice: a seam-dominated attack with long run-ups gets
     # through fewer, a spin-heavy one gets through more. Modelled as a
@@ -5140,6 +5229,122 @@ class Match:
         # The over-rate model must never cut a day below the last-hour
         # minimum the weather model already respects.
         return max(min(base, self.fmt.min_overs_last_hour), adjusted)
+
+    # ── The day's over obligation ───────────────────────────────────────
+    # A first-class day owes a minimum number of overs. The clock says when
+    # play stops; the minimum says whether it may. Without one, a slow over
+    # rate costs overs and nothing else — which is what made every day here
+    # come out at a flat 87 regardless of what happened in it.
+
+    def _fc_minimum_overs_today(self):
+        """Overs that MUST be bowled today, whatever the over rate.
+
+        Deliberately does NOT carry fc_day_over_rate_adjust: the whole point
+        of a minimum is that a slow attack does not get to bowl fewer overs,
+        it gets to stay out later.
+
+        Weather loss is read from fc_day_net_lost_minutes — time ALREADY
+        lost — and not from _fc_scheduled_overs_today(), which resolves the
+        whole of today's hidden script at once. That keeps this figure
+        causally honest (you cannot lose minimum overs to rain that has not
+        fallen yet), monotone through the day, and safe to publish in an API
+        payload. See _fc_weather_response's matching note."""
+        base = self.fmt.min_overs_per_day
+        if base is None:
+            base = self.fmt.overs_per_day
+        if base <= 0:
+            return 0
+        base -= int(self.fc_day_net_lost_minutes // fc_weather.MINUTES_PER_OVER)
+        base -= self.fmt.innings_change_over_deduction * self.fc_day_innings_changes
+        return max(0, base)
+
+    def _fc_minimum_overs_met(self):
+        return self.fc_day_overs_bowled_today >= self._fc_minimum_overs_today()
+
+    def _fc_latest_close_minute(self):
+        """Hard stop for the day: the scheduled close (already pushed out by
+        any weather make-up) plus the overtime allowance. Finite by
+        construction, which is what guarantees the day always ends even when
+        the minimum is unreachable."""
+        return self.fc_revised_close_minute + max(0, self.fmt.max_overtime_minutes)
+
+    def _fc_in_overtime(self):
+        """Past the scheduled close, still short of the minimum, still
+        inside the allowance."""
+        if self.fc_force_day_end or not getattr(self, "fc_weather_v2", False):
+            return False
+        return (
+            self.fc_clock_minute >= self.fc_revised_close_minute
+            and self.fc_clock_minute < self._fc_latest_close_minute()
+            and not self._fc_minimum_overs_met()
+        )
+
+    def _fc_overs_remaining_today(self):
+        """Overs still expected today: what the clock allows, or what the
+        minimum demands, whichever is longer, capped by the overtime
+        ceiling. This is the figure a captain reasons with — the
+        authoritative stumps gate is the clock check in
+        _fc_pre_ball_checks."""
+        effective = self._fc_effective_overs_today()
+        target = max(effective, self._fc_minimum_overs_today())
+        if getattr(self, "fc_weather_v2", False):
+            over_minutes = self._fc_minutes_per_delivery() * 6.0
+            if over_minutes > 0:
+                ceiling = effective + int(
+                    max(0, self.fmt.max_overtime_minutes) // over_minutes)
+                target = min(target, ceiling)
+        return max(0, target - self.fc_day_overs_bowled_today)
+
+    def _fc_record_day(self, day_number):
+        """Append one row to fc_day_log. Called from _fc_day_break_response
+        BEFORE the day's counters reset — everything here reads today."""
+        bowled = self.fc_day_overs_bowled_today
+        minimum = self._fc_minimum_overs_today()
+        # Extra time actually PLAYED past the close, which is not the same as
+        # the clock being past it. A stoppage jumps fc_clock_minute straight
+        # to the event's end (see _fc_weather_pre_delivery), so a day that lost
+        # its evening to rain and closed early would otherwise be logged as
+        # having taken hours of overtime it never played. Clamp to the
+        # allowance the predicate actually grants, and charge none of it to a
+        # day that was abandoned rather than extended.
+        if self.fc_force_day_end:
+            overtime = 0
+        else:
+            overtime = min(
+                max(0, self.fmt.max_overtime_minutes),
+                max(0, int(round(
+                    self.fc_clock_minute - self.fc_revised_close_minute))),
+            )
+        record = {
+            "day": day_number,
+            "overs_bowled": bowled,
+            "minimum_overs": minimum,
+            "innings_changes": self.fc_day_innings_changes,
+            "overtime_minutes": overtime,
+            "shortfall_overs": max(0, minimum - bowled),
+            # A washed-out day is not a 90-over shortfall, it is no play.
+            # Without this the archive would report a day that never started
+            # as the worst over-rate offence of the match.
+            "no_play": bowled == 0,
+        }
+        self.fc_day_log.append(record)
+        return record
+
+    def fc_day_log_has_day(self, day_number):
+        return any(r.get("day") == day_number for r in self.fc_day_log)
+
+    @staticmethod
+    def _fc_day_over_summary_line(record):
+        """One line for the stumps card: what the day owed and what it got."""
+        if record["no_play"]:
+            return "No play today."
+        parts = [f"{record['overs_bowled']} overs bowled "
+                 f"(minimum {record['minimum_overs']})"]
+        if record["overtime_minutes"] > 0:
+            parts.append(f"{record['overtime_minutes']} min extra time taken")
+        if record["shortfall_overs"] > 0:
+            parts.append(f"{record['shortfall_overs']} over(s) short of the minimum")
+        return "; ".join(parts) + "."
 
     def _fc_overs_remaining_in_match(self):
         """Rough overs-left estimate: today's remaining overs plus a flat
@@ -5204,6 +5409,14 @@ class Match:
             "overs_lost": int(self.fc_day_net_lost_minutes // fc_weather.MINUTES_PER_OVER),
             "forecast": forecast,
             "affected": bool(self.fc_weather_affected),
+            # The day's over obligation. Every figure here is built from
+            # realised loss only — see _fc_minimum_overs_today's note. Using
+            # _fc_effective_overs_today() would resolve the whole of today's
+            # hidden script and leak it through this payload.
+            "minimum_overs_today": self._fc_minimum_overs_today(),
+            "overs_bowled_today": self.fc_day_overs_bowled_today,
+            "innings_changes_today": self.fc_day_innings_changes,
+            "in_overtime": self._fc_in_overtime(),
         }
 
     def _fc_weather_response(self, event, phase, message, **extra):
@@ -5436,14 +5649,19 @@ class Match:
         self.fc_session_start = {
             "score": self.score,
             "wickets": self.wickets,
-            "day_overs": self.fc_day_overs_bowled_today,
+            "day_balls": self.fc_day_balls_bowled_today,
             "fc_innings": self.fc_innings,
             "carry": carry,
         }
 
     def _fc_session_summary(self):
         """Runs/wickets/overs produced since the last interval, across an
-        innings change if one happened inside the session."""
+        innings change if one happened inside the session.
+
+        Measured in balls: a session very often starts or ends part-way
+        through an over (an innings ends, a declaration is made), and those
+        balls are part of the session's play whether or not the over they
+        belong to was finished."""
         start = self.fc_session_start or {}
         carry = start.get("carry") or {}
         if start.get("fc_innings") != self.fc_innings:
@@ -5451,10 +5669,35 @@ class Match:
         else:
             runs = self.score - start.get("score", 0)
             wkts = self.wickets - start.get("wickets", 0)
-        overs = self.fc_day_overs_bowled_today - start.get("day_overs", 0)
+        # "day_overs" is what snapshots taken before the ball counter existed
+        # carry; fall back to it so a match saved mid-session still adds up.
+        start_balls = start.get("day_balls")
+        if start_balls is None:
+            start_balls = int(start.get("day_overs", 0)) * 6
+        balls = self.fc_day_balls_bowled_today - start_balls
+        carry_balls = carry.get("balls")
+        if carry_balls is None:
+            # Pre-ball-counter snapshot: its carry holds a plain over count.
+            carry_balls = int(carry.get("overs", 0) or 0) * 6
+        total_balls = max(0, balls) + carry_balls
         return {"runs": max(0, runs) + carry.get("runs", 0),
                 "wickets": max(0, wkts) + carry.get("wickets", 0),
-                "overs": max(0, overs) + carry.get("overs", 0)}
+                "balls": total_balls,
+                "overs": self._balls_to_overs_notation(total_balls)}
+
+    @staticmethod
+    def _fc_session_line(summary):
+        """The session's production, spelled out.
+
+        Deliberately not "105/3": a session total can span an innings change,
+        so the figure is what the session produced across both sides and is
+        not any team's score. Printed next to a scorecard reading 102/1, the
+        score-shaped form invited exactly that misreading."""
+        runs = summary["runs"]
+        wkts = summary["wickets"]
+        return (f"Session: {runs} run{'' if runs == 1 else 's'}, "
+                f"{wkts} wicket{'' if wkts == 1 else 's'} "
+                f"in {summary['overs']} overs")
 
     def _fc_interval_response(self, interval_name):
         """Lunch/Tea break: the same scorecard pause the end of a day already
@@ -5473,8 +5716,7 @@ class Match:
                 self.fc_clock_minute = max(
                     self.fc_clock_minute, fc_weather.TEA_END_MINUTE)
         self._fc_snapshot_session_start()
-        sess_line = (f"{summary['runs']}/{summary['wickets']} in "
-                     f"{summary['overs']} overs this session")
+        sess_line = self._fc_session_line(summary)
         lights_line = ""
         if interval_name == "Tea" and self._fc_is_under_lights():
             lights_line = (
@@ -5511,18 +5753,39 @@ class Match:
 
     def _fc_pre_ball_checks(self):
         """
-        Called only at an over boundary (current_ball == 0), before the
-        shared bowler-selection/ball-processing code runs. Returns a
-        response dict to short-circuit next_ball(), or None to continue.
-        Mirrors the existing rain-check's "engine decides automatically at
-        an over boundary" precedent — no pending_decision involved (AI
-        always decides declaration/follow-on in Phase 1, per the agreed
-        scope).
+        Called at an over boundary (current_ball == 0), and also mid-over
+        whenever fc_force_day_end is set — that is what lets a washout or a
+        bad-light close stop play without waiting for the over to finish.
+        Runs before the shared bowler-selection/ball-processing code.
+        Returns a response dict to short-circuit next_ball(), or None to
+        continue. Mirrors the existing rain-check's "engine decides
+        automatically at an over boundary" precedent — no pending_decision
+        involved (AI always decides declaration/follow-on in Phase 1, per
+        the agreed scope).
+
+        Being over-boundary-gated is also why the day's minimum never
+        truncates an over: the over in progress when the clock runs out is
+        always completed, which is the Law and comes for free here.
         """
         if getattr(self, "fc_weather_v2", False):
+            _in_overtime = self._fc_in_overtime()
             _day_over = (
+                # Washout or bad light. An abandoned day is never played out
+                # in overtime — the minimum is simply not completed. Must
+                # stay the first disjunct.
                 self.fc_force_day_end
-                or self.fc_clock_minute >= self.fc_revised_close_minute
+                # The normal close: the clock has reached the (weather-
+                # revised) close AND the day's minimum is complete.
+                or (self.fc_clock_minute >= self.fc_revised_close_minute
+                    and self._fc_minimum_overs_met())
+                # The overtime allowance is spent and the minimum is still
+                # short — which is the point: a slow enough over rate now
+                # actually costs overs instead of costing nothing.
+                or self.fc_clock_minute >= self._fc_latest_close_minute()
+                # Scripted-washout fast path, deliberately NOT gated on the
+                # minimum: at clock <= 0 nothing has been lost as far as
+                # fc_day_net_lost_minutes knows, so the minimum still reads
+                # a full day and would block this.
                 or (
                     self.fc_clock_minute <= 0
                     and self.fc_day_overs_bowled_today >= self._fc_effective_overs_today()
@@ -5530,6 +5793,10 @@ class Match:
             )
             _at_session_break = (
                 not _day_over
+                # Overtime is played inside the evening session. Without
+                # this, a day whose Tea was swallowed by weather without
+                # being marked consumed would serve Tea at six o'clock.
+                and not _in_overtime
                 and (
                     (self.fc_sessions_taken_today == 0
                      and self.fc_clock_minute >= fc_weather.LUNCH_START_MINUTE)
@@ -5726,6 +5993,10 @@ class Match:
         weather_status = (
             self._fc_weather_status() if getattr(self, "fc_weather_v2", False) else None
         )
+        # Bank what the day actually delivered, BEFORE the counters below
+        # reset. This is the only per-day record the match keeps.
+        day_record = self._fc_record_day(day_ended)
+        day_line = self._fc_day_over_summary_line(day_record)
         if getattr(self, "fc_weather_v2", False):
             carry = min(
                 fc_weather.MAX_CARRY_FORWARD_MINUTES,
@@ -5739,8 +6010,9 @@ class Match:
             self.fc_total_net_lost_minutes += max(
                 0, self.fc_day_net_lost_minutes - carry)
         self.fc_day += 1
-        self.fc_day_overs_bowled_today = 0
+        self.fc_day_balls_bowled_today = 0
         self.fc_sessions_taken_today = 0
+        self.fc_day_innings_changes = 0
         self.fc_day_over_rate_adjust = self._fc_compute_day_over_rate_adjust()
         if getattr(self, "fc_weather_v2", False):
             self.fc_carry_forward_minutes = carry if self.fc_day <= self.fmt.days else 0
@@ -5769,10 +6041,11 @@ class Match:
             "ball": self.current_ball,
             "weather_note": weather_line,
             "fc_weather_status": weather_status,
+            "day_summary": day_record,
             "commentary": self._fc_join(
                 f"<strong>Stumps &mdash; Day {day_ended}</strong>",
-                f"<em>{session_summary['runs']}/{session_summary['wickets']} in "
-                f"{session_summary['overs']} overs this session</em>",
+                f"<em>{self._fc_session_line(session_summary)}</em>",
+                f"<em>{day_line}</em>",
                 match_situation,
                 f"<em>{weather_line}</em>" if weather_line else "",
             ),
@@ -5815,6 +6088,12 @@ class Match:
         self._reset_innings_state()
         self.fc_innings = next_fc_innings
         self.fc_innings_declared = False
+        # Ten minutes between innings, charged to the day's minimum rather
+        # than to the clock. Every innings 2/3/4 start funnels through here,
+        # and _fc_day_break_response zeroes it, so a declaration taken AT
+        # stumps bumps a counter that is discarded moments later — correct,
+        # since that changeover costs tomorrow nothing.
+        self.fc_day_innings_changes += 1
         # Recomputed fresh — see __init__'s matching comment. Uses whatever
         # is actually left in the match right now, so an innings that
         # starts late (because an earlier one ran long) gets a
@@ -5890,6 +6169,13 @@ class Match:
         return response
 
     def _fc_finalize_draw(self):
+        # A draw means the last day was played out to its end, so it belongs
+        # in the day log like any other. (A day cut short by a RESULT is
+        # deliberately not recorded — it stopped because the match was won,
+        # not because the over rate fell short, and scoring it against the
+        # day's minimum would read as an over-rate offence.)
+        if self.is_fc and not self.fc_day_log_has_day(self.fc_day):
+            self._fc_record_day(self.fc_day)
         if self.wickets < 10 and self.current_partnership_balls > 0:
             self._save_partnership("not_out")
         scorecard_data = self._generate_detailed_scorecard()
@@ -6285,7 +6571,7 @@ class Match:
                 opener_2 = self.current_striker['name']
                 self.pending_pre_ball_commentary.extend([
                     "",
-                    f"<strong>INNINGS {self.innings}</strong>",
+                    f"<strong>{self._innings_banner()}</strong>",
                     "",
                     f"{opener_1} and {opener_2} will open the attack for {batting_team_name}. {opener_2} is on strike.",
                     f"{self.current_bowler['name']} will bowl the opening over for {bowling_team_name}.",
@@ -6616,15 +6902,11 @@ class Match:
                 comm_state['pitch_wear'] = self._compute_pitch_wear()
                 comm_state['fc_consecutive_maidens'] = self.fc_consecutive_maidens
                 comm_state['fc_lead_before'] = self._fc_lead_before_ball()
+                # Real remaining overs, not the over-rate estimate — see the
+                # matching note in _fc_build_match_state.
                 comm_state['last_hour'] = (
                     self.fc_day == self.fmt.days
-                    and max(0.0, self._fc_effective_overs_today()
-                            - self.fc_day_overs_bowled_today) <= self.fmt.min_overs_last_hour
-                )
-                comm_state['close_of_play'] = (
-                    self.fc_day < self.fmt.days
-                    and max(0.0, self._fc_effective_overs_today()
-                            - self.fc_day_overs_bowled_today) <= self.fmt.min_overs_last_hour
+                    and self._fc_overs_remaining_today() <= self.fmt.min_overs_last_hour
                 )
                 comm_state['fc_is_nightwatchman'] = (
                     self.fc_nightwatchman_name is not None
@@ -7158,7 +7440,7 @@ class Match:
                         is_legal_delivery = True
                 
                 if is_legal_delivery:
-                    self.current_ball += 1  # Increment ball count for this delivery
+                    self._count_legal_delivery()
                     self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
 
                 # ✅ ADD THIS: Check if over completed with match-winning ball
@@ -7290,7 +7572,7 @@ class Match:
                 is_legal_delivery = True
         
         if is_legal_delivery:
-            self.current_ball += 1
+            self._count_legal_delivery()
             self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
 
         if extra:
@@ -7321,7 +7603,13 @@ class Match:
 
             # A5: Free hit state management for extras
             if extra_type == "No Ball":
-                self.free_hit_active = True  # No Ball triggers free hit
+                # Limited-overs only. In first-class cricket the ball after a
+                # no-ball is an ordinary delivery, so leave the flag alone
+                # rather than arming it — every downstream consumer (dismissal
+                # invalidation, the boundary-weight skew in ball_outcome, the
+                # "FREE HIT!" commentary prefix) is then inert by construction.
+                if getattr(self.fmt, "free_hit_after_no_ball", True):
+                    self.free_hit_active = True
             elif extra_type == "Wide":
                 pass  # Wide: free_hit_active stays unchanged (persists through wides)
             else:
@@ -7373,7 +7661,8 @@ class Match:
             self.batter_idx.reverse()
 
             if self.is_fc:
-                self.fc_day_overs_bowled_today += 1
+                # fc_day_balls_bowled_today is incremented per legal delivery
+                # above; fc_day_overs_bowled_today derives from it.
                 self.fc_ball_overs_bowled += 1
                 # Maidens are commonplace in first-class cricket (~1 over in
                 # 8), so a single one is not worth remarking on — a RUN of
@@ -8788,8 +9077,12 @@ class Match:
                 "fatigue": dict(getattr(self.bowler_manager, "_fatigue", {}) or {}),
             },
             "fc_day": self.fc_day,
+            # Both are written: the ball count is the real state, the over
+            # count keeps a snapshot readable by an older build.
+            "fc_day_balls_bowled_today": self.fc_day_balls_bowled_today,
             "fc_day_overs_bowled_today": self.fc_day_overs_bowled_today,
             "fc_sessions_taken_today": self.fc_sessions_taken_today,
+            "fc_day_innings_changes": self.fc_day_innings_changes,
             "fc_session_start": self.fc_session_start,
             "fc_day_over_rate_adjust": self.fc_day_over_rate_adjust,
             "fc_nightwatchman_used": self.fc_nightwatchman_used,
@@ -8803,6 +9096,7 @@ class Match:
             "fc_day_start_emitted": self.fc_day_start_emitted,
             "fc_weather_affected": self.fc_weather_affected,
             "fc_weather_log": self.fc_weather_log,
+            "fc_day_log": self.fc_day_log,
             "fc_day_gross_delay_minutes": self.fc_day_gross_delay_minutes,
             "fc_day_makeup_minutes": self.fc_day_makeup_minutes,
             "fc_day_net_lost_minutes": self.fc_day_net_lost_minutes,
@@ -8910,8 +9204,19 @@ class Match:
         self.bowler_history = self.bowler_manager._overs_this_innings
 
         self.fc_day = snap.get("fc_day", 1)
-        self.fc_day_overs_bowled_today = snap.get("fc_day_overs_bowled_today", 0)
+        # Prefer the ball count; fall back to the over count for a match
+        # saved before it existed (the setter converts).
+        if "fc_day_balls_bowled_today" in snap:
+            self.fc_day_balls_bowled_today = int(
+                snap["fc_day_balls_bowled_today"])
+        else:
+            self.fc_day_overs_bowled_today = snap.get(
+                "fc_day_overs_bowled_today", 0)
         self.fc_sessions_taken_today = snap.get("fc_sessions_taken_today", 0)
+        # Absent on a snapshot taken before the minimum-overs model existed:
+        # 0 gives today the full minimum, which errs toward a slightly longer
+        # day and self-corrects at the next stumps. Never a crash.
+        self.fc_day_innings_changes = int(snap.get("fc_day_innings_changes", 0))
         self.fc_day_over_rate_adjust = snap.get("fc_day_over_rate_adjust")
         self.fc_nightwatchman_used = snap.get("fc_nightwatchman_used", False)
         self.fc_nightwatchman_name = snap.get("fc_nightwatchman_name")
@@ -8927,6 +9232,7 @@ class Match:
         self.fc_day_start_emitted = bool(snap.get("fc_day_start_emitted", False))
         self.fc_weather_affected = bool(snap.get("fc_weather_affected", False))
         self.fc_weather_log = list(snap.get("fc_weather_log") or [])
+        self.fc_day_log = list(snap.get("fc_day_log") or [])
         self.fc_day_gross_delay_minutes = int(
             snap.get("fc_day_gross_delay_minutes", 0))
         self.fc_day_makeup_minutes = int(snap.get("fc_day_makeup_minutes", 0))
@@ -8940,7 +9246,7 @@ class Match:
         self.fc_force_day_end = bool(snap.get("fc_force_day_end", False))
         self.fc_session_start = snap.get("fc_session_start") or {
             "score": self.score, "wickets": self.wickets,
-            "day_overs": self.fc_day_overs_bowled_today,
+            "day_balls": self.fc_day_balls_bowled_today,
             "fc_innings": self.fc_innings,
         }
         self.fc_ball_overs_bowled = snap.get("fc_ball_overs_bowled", 0)

@@ -156,7 +156,10 @@ def test_fc_match_plays_through_to_a_result(app, authenticated_client, fc_teams)
     assert names <= {"Lunch", "Tea"}, f"unexpected interval names: {names}"
     for _day, _name, session_no, summary in intervals:
         assert session_no in (1, 2)
-        assert summary["overs"] > 0
+        assert summary["balls"] > 0
+        # Cricket notation, not a decimal: "28.5" is 28 overs and 5 balls.
+        assert summary["overs"] == (
+            f"{summary['balls'] // 6}.{summary['balls'] % 6}")
         assert summary["runs"] >= 0 and summary["wickets"] >= 0
     assert stumps, "the match never reached stumps"
     assert max(days_seen) >= 2, f"only reached day {max(days_seen)}"

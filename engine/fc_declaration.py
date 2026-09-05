@@ -58,6 +58,40 @@ _LEAD_BASE_THRESHOLD = 250
 _WICKETS_DOWN_FLOOR = 6
 _OVERS_DOWN_FLOOR = 100
 
+# A captain does not declare at nine down merely because the score has
+# passed "a good total". At nine wickets the only thing still on offer is a
+# last-wicket stand worth twenty-odd runs, so closing the innings early is a
+# decision about TIME — and with three days still to play there is no time
+# worth buying. Captains who do declare nine down on day two are sitting on
+# a total that is already overwhelming, not one that is merely competitive.
+#
+# So when the last-pair trigger is the ONLY thing that opened the window
+# (the innings is still inside its time budget and the match is not in its
+# closing days), the score/lead bar is raised by this multiplier.
+#
+# Left at 1.0 this fired on essentially EVERY first innings that reached
+# 300 with nine down — in scripts/bench_fc.py 100% of innings-1
+# declarations came at exactly 9 wickets — which capped the all-out
+# first-innings total below the threshold by construction and made "bowled
+# out for under 300" look like the norm on every surface. Measured effect
+# of raising it: see the FC section of scripts/bench_fc.py's output.
+_LAST_PAIR_NO_PRESSURE_MULTIPLIER = 1.55
+
+# A very long innings is its own kind of pressure. Past this many overs a
+# captain is asking "have we got enough?" every over, whatever the wicket
+# count — so the window opens here too, and the score threshold below
+# decides. Without it the window opened ONLY at nine down, at the innings
+# time budget (180 overs of a fresh five-day match) or in the closing days,
+# which left a side 700 for 5 after 140 overs on day three with no way to
+# declare at all. That is where the 900-run first innings on Dead came from.
+#
+# Set deliberately high (a side has batted a day and a half by here). At 100
+# it truncated the distribution visibly — every long innings that cleared
+# the score bar declared, so Hard's biggest all-out total in 100 matches was
+# 459 against a bar of 465, and every pitch's mean dropped 10-15 runs. The
+# point is to catch the runaway innings, not to cap the good ones.
+_LONG_INNINGS_WINDOW_OVERS = 135
+
 # Days-remaining ceiling — declaring makes sense only when there's still
 # enough of the match left to bowl the opposition out twice (or once, in
 # the follow-on-free innings-3 case).
@@ -304,13 +338,32 @@ def estimate_target_defence_outcome(*, lead, overs_remaining_in_match,
     return wins / trials, draws / trials, losses / trials
 
 
+def _time_pressure(overs_bowled_this_innings, days_remaining,
+                   innings_time_budget_overs) -> bool:
+    """
+    True when something other than the exposed last pair is pushing the
+    captain to close the innings: this innings has used up its time budget,
+    or the match itself is into its closing days with a long innings already
+    behind it. These are exactly the two non-last-pair branches of
+    declaration_window_open(), so `window open and not _time_pressure(...)`
+    means "the only reason we are even asking is that we are nine down".
+    """
+    if (innings_time_budget_overs is not None
+            and overs_bowled_this_innings >= innings_time_budget_overs):
+        return True
+    return (overs_bowled_this_innings >= _TIME_FORCING_OVERS_THRESHOLD
+            and days_remaining <= _MAX_DAYS_REMAINING_FOR_DECLARE)
+
+
 def declaration_window_open(*, fc_innings, wickets, overs_bowled_this_innings,
                              days_remaining, innings_time_budget_overs=None) -> bool:
     """
     True once the STRUCTURAL conditions for even considering a declaration
     are met: minimum overs faced, and either the tail is exposed
-    (wickets==9, "protect the last pair") or enough time has passed to
-    start "time-forcing" with a realistic amount of match still left. Does
+    (wickets==9, "protect the last pair"), the innings has simply gone on a
+    very long time (_LONG_INNINGS_WINDOW_OVERS, whatever the wicket count),
+    or enough time has passed to start "time-forcing" with a realistic
+    amount of match still left. Does
     NOT judge whether the score/lead itself is worth declaring on — that's
     should_declare()'s (AI mode) or the user-captained UI's job once this
     window is open.
@@ -335,6 +388,8 @@ def declaration_window_open(*, fc_innings, wickets, overs_bowled_this_innings,
         return True
     if (innings_time_budget_overs is not None
             and overs_bowled_this_innings >= innings_time_budget_overs):
+        return True
+    if overs_bowled_this_innings >= _LONG_INNINGS_WINDOW_OVERS:
         return True
     if overs_bowled_this_innings < _TIME_FORCING_OVERS_THRESHOLD:
         return False
@@ -464,6 +519,16 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
     target_metric = score if fc_innings == 1 else lead
     base_threshold = _INNINGS1_BASE_THRESHOLD if fc_innings == 1 else _LEAD_BASE_THRESHOLD
     threshold = base_threshold * pitch_par_factor
+
+    # Nine down, but nothing forcing the issue — see
+    # _LAST_PAIR_NO_PRESSURE_MULTIPLIER. If the last pair is the only reason
+    # this window is open, the innings still has its time budget in hand and
+    # the match is not in its closing days, so the total has to be genuinely
+    # overwhelming rather than merely good before the last wicket is thrown
+    # away for a few extra overs.
+    if not _time_pressure(overs_bowled_this_innings, days_remaining,
+                          innings_time_budget_overs):
+        threshold *= _LAST_PAIR_NO_PRESSURE_MULTIPLIER
 
     # A first-innings declaration is not a number being reached. A captain
     # declares on 250 at tea on day two if it is seaming and he fancies a

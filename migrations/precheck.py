@@ -129,6 +129,13 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # copies of the slower matrices.
     ("reset_slow_fc_scoring",
      _loader("migrations.reset_slow_fc_scoring")),
+    # 2026-09-04 FC pitch ladder: Flat and Dead were producing near-identical
+    # first-innings totals (429 vs 413). Flat lifted to 400+, Dead to 500-600,
+    # with Dead's fresh-pitch wicket factors dropped below Flat's (they had
+    # been higher, which is backwards). Same shadowing trap — strip the
+    # involuntary copies of the pre-ladder Flat/Dead profiles.
+    ("reset_flat_dead_fc_tuning",
+     _loader("migrations.reset_flat_dead_fc_tuning")),
     # First-Class format: matches.days/follow_on_enforced/*_innings2 columns
     # for up-to-2-innings-per-side matches.
     ("add_fc_match_columns",     _loader("migrations.add_fc_match_columns")),
