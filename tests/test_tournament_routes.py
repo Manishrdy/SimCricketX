@@ -636,13 +636,14 @@ class TestResimulateStatsReversal:
     ever, that exact player played another match in the same tournament.
     """
 
+    @pytest.mark.parametrize("match_format", ["T20", "FC"])
     def test_resimulate_reverses_career_and_cache_then_replay_is_clean(
-        self, authenticated_client, regular_user, test_team, test_team_2
+        self, authenticated_client, regular_user, test_team, test_team_2, match_format
     ):
         engine = TournamentEngine()
         tournament = engine.create_tournament(
             name="Resim Stats Check", user_id=regular_user.id,
-            team_ids=[test_team.id, test_team_2.id], mode="round_robin",
+            team_ids=[test_team.id, test_team_2.id], mode="round_robin", format_type=match_format,
         )
         fixture = TournamentFixture.query.filter_by(tournament_id=tournament.id).first()
         assert fixture is not None
@@ -663,7 +664,7 @@ class TestResimulateStatsReversal:
         match = DBMatch(
             id=match_id, user_id=regular_user.id, tournament_id=tournament.id,
             home_team_id=test_team.id, away_team_id=test_team_2.id,
-            winner_team_id=test_team.id, match_format="T20",
+            winner_team_id=test_team.id, match_format=match_format,
             motm_player_id=batter.id,
         )
         db.session.add(match)
@@ -753,7 +754,7 @@ class TestResimulateStatsReversal:
         new_match = DBMatch(
             id=new_match_id, user_id=regular_user.id, tournament_id=tournament.id,
             home_team_id=test_team.id, away_team_id=test_team_2.id,
-            winner_team_id=test_team_2.id, match_format="T20",
+            winner_team_id=test_team_2.id, match_format=match_format,
             motm_player_id=bowler.id,
         )
         db.session.add(new_match)

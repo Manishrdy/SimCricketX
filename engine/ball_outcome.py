@@ -303,13 +303,16 @@ def _apply_lista_pitch_wear(weights: dict, pitch: str,
     return _renormalise_to(weights, w)
 
 
+FC_SCORING_RATE_FACTOR = 0.95
+
+
 def _apply_fc_pitch_wear(weights: dict, pitch: str,
                           pitch_wear: float, config=None) -> dict:
     """
     General (bowling-style-agnostic) pitch wear for First-Class matches,
     applied against the CONTINUOUS match-long wear scalar (0=fresh,
-    1=fully worn after `days * overs_per_day` overs — see
-    Match.match_balls_bowled), not a per-innings one. Mirrors
+    1=fully worn at the end of day 5 — see
+    Match._compute_pitch_wear), not a per-innings one. Mirrors
     _apply_lista_pitch_wear's mode/threshold/factors shape exactly, reading
     from the FC pitch_wear YAML block instead of ListA's.
 
@@ -1219,6 +1222,17 @@ def calculate_outcome(
     if free_hit and "Four" in raw_weights and "Six" in raw_weights:
         raw_weights["Four"] *= FREE_HIT_BOUNDARY_BOOST
         raw_weights["Six"] *= FREE_HIT_BOUNDARY_BOOST
+        total_weight = sum(raw_weights.values())
+
+    # Reduce FC expected bat runs by 5% after all situational modifiers.
+    # Transfer mass to dots, preserving wicket/extras probability exactly.
+    if _is_fc:
+        removed = 0.0
+        for outcome in ("Single", "Double", "Three", "Four", "Six"):
+            weight = raw_weights.get(outcome, 0.0)
+            removed += weight * (1.0 - FC_SCORING_RATE_FACTOR)
+            raw_weights[outcome] = weight * FC_SCORING_RATE_FACTOR
+        raw_weights["Dot"] = raw_weights.get("Dot", 0.0) + removed
         total_weight = sum(raw_weights.values())
 
     # 5) Normalize weights into probabilities
