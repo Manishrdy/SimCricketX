@@ -525,15 +525,19 @@ class Match:
 
     def _compute_pitch_wear(self):
         """
-        FC: continuous match-long wear (never resets at an innings break —
-        that's the entire point of FC pitch deterioration), normalized to
-        the match's total ball capacity (days * overs_per_day * 6).
+        FC: continuous calendar-day wear, with light wear through day 3
+        and most deterioration on days 4-5. Innings changes never age the
+        surface. Rain still allows the pitch to age between days.
         T20/ListA: unchanged — per-innings wear, normalized to that
         format's fixed innings ball count.
         """
         if self.is_fc:
-            _total_balls = self.fmt.days * self.fmt.overs_per_day * 6
-            return min(1.0, self.match_balls_bowled / _total_balls)
+            day_progress = min(1.0, self.fc_day_balls_bowled_today /
+                               (self.fmt.overs_per_day * 6))
+            elapsed_days = max(0.0, self.fc_day - 1 + day_progress)
+            if elapsed_days <= 3.0:
+                return 0.20 * elapsed_days / 3.0
+            return min(1.0, 0.20 + 0.40 * (elapsed_days - 3.0))
         _total_balls = self.fmt.overs * 6
         return min(1.0, self.innings_balls_bowled / _total_balls)
 
@@ -4974,20 +4978,17 @@ class Match:
         bonus = self._FC_HOME_BASE_FACTOR
         if self.pitch in ("Green", "Dry"):
             bonus += self._FC_HOME_CHARACTERISTIC_PITCH_FACTOR
-        if self.fc_innings in (3, 4):
+        if self.fc_day >= 4:
             bonus += self._FC_HOME_LATE_MATCH_FACTOR
         return min(self._FC_HOME_FACTOR_CAP, 1.0 + bonus)
 
     def _fc_home_skill_multiplier(self, team) -> float:
-        """Distribute the one home factor across four FC skill applications.
+        """Apply familiarity to each skill contest without diluting it.
 
-        A side can receive it while batting and bowling in each of two
-        innings. Applying the full factor every time compounds a nominal 10%
-        match advantage four times. The fourth root keeps the combined match
-        influence at the configured cap while every passage still feels home
-        familiarity.
+        Innings are separate contests, so their skill multipliers do not
+        multiply together into a single match probability.
         """
-        return self._fc_home_advantage_factor(team) ** 0.25
+        return self._fc_home_advantage_factor(team)
 
     @staticmethod
     def _fc_batter_stamina_multiplier(batter: dict, balls_faced: int) -> float:
