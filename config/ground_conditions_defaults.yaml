@@ -418,7 +418,7 @@ formats:
   # scoring (see engine/format_config.py docstring for the "why" — boundaries
   # are a comparatively rare event, not the primary scoring route the way
   # they are in T20/ListA). Continuous match-long pitch wear (not per-innings
-  # — see Match.match_balls_bowled) is what drives both the general
+  # — see Match._compute_pitch_wear) is what drives both the general
   # pitch_wear curve below AND the wear-interpolated bowling-style wicket
   # factors (wicket_factors_start -> wicket_factors_end), which is the
   # mechanism that makes a Dry pitch a mild-early/raging-turner-by-day-5

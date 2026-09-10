@@ -1320,9 +1320,11 @@ def test_fc_home_factor_is_situational_capped_and_non_mutating(app):
     m.pitch = "Green"
     assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.07)
     m.fc_innings = 3
+    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.07)
+    m.fc_day = 4
     assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.10)
     assert m._fc_home_advantage_factor(m.home_xi) <= 1.10
-    assert m._fc_home_skill_multiplier(m.home_xi) ** 4 == pytest.approx(1.10)
+    assert m._fc_home_skill_multiplier(m.home_xi) == pytest.approx(1.10)
     assert m.home_xi[0]["batting_rating"] == original
 
 
@@ -1342,7 +1344,7 @@ def test_fc_home_factor_reaches_effective_rating_not_stored_player(monkeypatch, 
     raw_batting = m.current_striker["batting_rating"]
     m.next_ball()
 
-    assert captured["batting_rating"] == pytest.approx(raw_batting * (1.04 ** 0.25))
+    assert captured["batting_rating"] == pytest.approx(raw_batting * 1.04)
     assert m.current_striker["batting_rating"] == raw_batting
 
 
@@ -2886,3 +2888,45 @@ def test_fc_multi_event_day_makeup_matches_the_whole_day_calculation(app):
     assert m.fc_day_makeup_minutes == reference["makeup_minutes"]
     assert m.fc_day_net_lost_minutes == reference["net_lost_minutes"]
     assert m.fc_revised_close_minute == reference["revised_close_minute"]
+
+
+@pytest.mark.parametrize("days", [4, 5])
+def test_fc_wear_follows_day_not_innings(app, days):
+    m = _fc_match(days=days)
+    m.fc_day = 3
+    m.fc_day_balls_bowled_today = 45 * 6
+    early = m._compute_pitch_wear()
+    assert early < 0.2
+    m.fc_innings = 4
+    assert m._compute_pitch_wear() == early
+    m.fc_day = 4
+    assert m._compute_pitch_wear() > early
+    m.fc_day = 5
+    assert m._compute_pitch_wear() > 0.6
+
+
+def test_fc_scoring_reduction_preserves_wicket_and_extras_probability(monkeypatch):
+    import engine.ball_outcome as outcomes
+    from engine.format_config import get_any_format
+    batter = {"name": "X", "batting_rating": 70, "batting_hand": "Right", "fielding_rating": 60}
+    bowler = {"name": "B", "bowling_rating": 75, "bowling_hand": "Right", "bowling_type": "Medium", "fielding_rating": 60}
+    captured = []
+
+    def choose(population, weights):
+        captured.append(dict(zip(population, weights)))
+        return ["Dot"]
+
+    monkeypatch.setattr(outcomes.random, "choices", choose)
+    for factor in (1.0, 0.95):
+        monkeypatch.setattr(outcomes, "FC_SCORING_RATE_FACTOR", factor)
+        outcomes.calculate_outcome(
+            batter, bowler, "Hard", {"boundaries": 0}, 40, 20,
+            innings=1, balls_faced=30, pitch_wear=0.3,
+            format_config=get_any_format("FC"), batting_position=3,
+        )
+    before, after = captured
+    runs = {"Single": 1, "Double": 2, "Three": 3, "Four": 4, "Six": 6}
+    assert sum(after[k] * v for k, v in runs.items()) == pytest.approx(
+        0.95 * sum(before[k] * v for k, v in runs.items()))
+    assert after["Wicket"] == pytest.approx(before["Wicket"])
+    assert after["Extras"] == pytest.approx(before["Extras"])
