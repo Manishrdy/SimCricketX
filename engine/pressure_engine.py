@@ -705,41 +705,26 @@ class FCPressureEngine:
         # SAFETY this buys. Temperament now has the intuitive cricketing
         # identity: the calmer batter is better at executing the rearguard
         # and receives more of the survival wicket reduction. ---
-        is_survival = match_state.get("survival_mode", False) or (
-            days_remaining <= 1 and fc_innings in (2, 4)
-        )
-        if is_survival:
-            effects["dot_bonus"] += 0.18
-            effects["boundary_modifier"] *= 0.65
-            wicket_reduction = 0.20  # base: wicket_modifier *= (1 - 0.20) = 0.80
-            if striker_temperament is not None:
-                # 50 -> 20%; 100 -> 30%; 0 -> 10%.
-                wicket_reduction += (striker_temperament - 50) / 500.0
-                wicket_reduction = max(0.10, min(0.30, wicket_reduction))
-            effects["wicket_modifier"] *= 1.0 - wicket_reduction
-        elif fc_innings == 4 and striker_temperament is not None:
-            # In a live fourth-innings chase, calm decision-making protects
-            # against the target and deteriorating surface without forcing a
-            # high-temperament player into full survival mode.
-            resilience = max(-1.0, min(1.0, (striker_temperament - 50) / 50.0))
-            effects["wicket_modifier"] *= 1.0 - 0.08 * resilience
-
-        # --- Last hour before stumps: nobody wants to be the man who gets
-        # out with ten minutes left. Milder than full survival mode — this
-        # is seeing out a day, not saving a match — and it is what makes the
-        # close of play a passage of play rather than just more overs. ---
-        if match_state.get("last_hour", False):
-            effects["dot_bonus"] += 0.08
-            effects["boundary_modifier"] *= 0.80
-            effects["wicket_modifier"] *= 0.92
-
-        # --- Declaration-push / chase-acceleration: building quickly toward
-        # a declaration, or chasing a gettable target with time to spare. ---
-        is_accelerating = match_state.get("acceleration_mode", False)
-        if is_accelerating:
-            effects["boundary_modifier"] *= 1.35
-            effects["dot_bonus"] -= 0.08
-            effects["wicket_modifier"] *= 1.10
+        intent = match_state.get("intent")
+        if intent is None:
+            # Older callers may supply explicit modes. Never infer survival
+            # merely from the calendar day, or stack opposing full modes.
+            survival = float(bool(match_state.get("survival_mode", False)))
+            attack = float(bool(match_state.get("acceleration_mode", False))) * (1-survival)
+            stumps = float(bool(match_state.get("last_hour", False))) * (1-survival)
+        else:
+            survival, attack, stumps = (intent[k] for k in ("survival", "attack", "stumps"))
+        effects["dot_bonus"] += 0.18 * survival - 0.08 * attack + 0.08 * stumps
+        effects["boundary_modifier"] *= (1 - 0.35 * survival) * (1 + 0.35 * attack) * (1 - 0.20 * stumps)
+        reduction = 0.20
+        if striker_temperament is not None:
+            reduction = max(0.10, min(0.30, reduction + (striker_temperament - 50) / 500))
+        effects["wicket_modifier"] *= (1 - reduction * survival) * (1 + 0.10 * attack) * (1 - 0.08 * stumps)
+        if fc_innings == 4 and striker_temperament is not None:
+            resilience = max(-1.0, min(1.0, (striker_temperament - 50) / 50))
+            effects["wicket_modifier"] *= 1 - 0.08 * resilience * (1-survival)
+        if match_state.get("tail_protection"):
+            effects["fc_tail_protection"] = match_state["tail_protection"]
 
         # --- Partnership grind: an established stand wears an attack down.
         # The bowlers have been at it a while, the ball is old, the captain
@@ -762,18 +747,6 @@ class FCPressureEngine:
             effects["wicket_modifier"] *= severity
             logger.info("FC COLLAPSE: %.2fx wicket boost (%d down, %d recent)",
                         severity, wickets, recent_wickets)
-
-        # --- 4th-innings chase: the one FC innings with a genuine target,
-        # so it's the one place a rate-pressure signal applies — recalibrated
-        # to FC's much lower baseline run rates (RRR ~3.5 is real pressure
-        # here; it would be trivial in T20/ListA). ---
-        if fc_innings == 4:
-            required_rr = match_state.get("required_run_rate", 0.0)
-            if required_rr > 4.5:
-                rr_risk = min((required_rr - 4.5) * 0.25, 1.2)
-                effects["boundary_modifier"] *= 1.0 + rr_risk * 0.6
-                effects["wicket_modifier"] *= 1.0 + rr_risk * 0.5
-                effects["dot_bonus"] -= min(rr_risk * 0.05, 0.10)
 
         # dot_bonus should never go negative enough to imply MORE dots from
         # a "less cautious" signal than the base matrix already encodes.

@@ -1,4 +1,5 @@
 import random
+import math
 import logging
 from typing import Optional
 from engine.ground_config import (
@@ -1235,6 +1236,25 @@ def calculate_outcome(
         raw_weights["Dot"] = raw_weights.get("Dot", 0.0) + removed
         total_weight = sum(raw_weights.values())
 
+    if _is_fc and pressure_effects and pressure_effects.get("fc_tail_protection"):
+        from engine.fc_batting_intent import apply_tail_protection
+        raw_weights = apply_tail_protection(raw_weights, pressure_effects["fc_tail_protection"])
+        total_weight = sum(raw_weights.values())
+
+    if _is_fc:
+        from engine.fc_delivery import extra_profile, apply_keeper_mass
+        _fc_extra_profile = extra_profile(bowler, fielding_team)
+        raw_weights = apply_keeper_mass(raw_weights, _fc_extra_profile)
+        total_weight = sum(raw_weights.values())
+
+    if _is_fc:
+        if not all(math.isfinite(weight) for weight in raw_weights.values()):
+            raise ValueError("Non-finite FC outcome weight")
+        # Custom pitch matrices may carry too little dot mass for an
+        # attacking policy's additive adjustment. Never sample negatives.
+        raw_weights = {key: max(0.0, weight) for key, weight in raw_weights.items()}
+        total_weight = sum(raw_weights.values())
+
     # 5) Normalize weights into probabilities
     # print(f"\n[calculate_outcome] Total raw weight sum: {total_weight:.6f}")
     if total_weight <= 0:
@@ -1349,7 +1369,7 @@ def calculate_outcome(
             extra_weights = [0.52,   0.13,      0.22,      0.13]
         elif _is_fc:
             extra_types   = ["Wide", "No Ball", "Leg Bye", "Byes"]
-            extra_weights = [0.18,   0.18,      0.38,      0.26]
+            extra_weights = [_fc_extra_profile[k] for k in extra_types]
         else:
             extra_types   = ["Wide", "No Ball", "Leg Bye", "Byes"]
             extra_weights = [0.40,   0.25,      0.20,      0.15]
@@ -1357,11 +1377,12 @@ def calculate_outcome(
 
         # A4: Variable runs per extra type
         if extra_choice == "Wide":
-            result["runs"] = 1
+            result["runs"] = random.choices([1, 2, 3, 5], weights=[.94, .035, .015, .01])[0] if _is_fc else 1
         elif extra_choice == "No Ball":
             result["runs"] = 1
         elif extra_choice == "Leg Bye":
-            result["runs"] = random.choices([1, 2], weights=[0.80, 0.20])[0]
+            result["runs"] = (random.choices([1, 2, 4], weights=[.79, .19, .02])[0] if _is_fc
+                              else random.choices([1, 2], weights=[0.80, 0.20])[0])
         elif extra_choice == "Byes":
             result["runs"] = random.choices([1, 2, 4], weights=[0.85, 0.10, 0.05])[0]
 
