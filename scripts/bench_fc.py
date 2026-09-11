@@ -20,13 +20,16 @@ import statistics
 import sys
 import os
 import uuid
+import json
+import hashlib
+import subprocess
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-logging.disable(logging.CRITICAL)
-
+from scripts.fc_metrics import MatchMetrics, summarize
+from engine.ground_config import get_defaults
 import engine.match as match_module
-match_module.print = lambda *a, **k: None   # silence match prints
 
 
 # A realistic first-class XI shape. A uniform-rated squad is useless as a
@@ -111,6 +114,18 @@ def _forecast_for(seed, override=None):
     return override or FORECAST_MIX[seed % len(FORECAST_MIX)]
 
 
+def source_hash():
+    root = Path(__file__).resolve().parent.parent
+    digest = hashlib.sha256()
+    for path in sorted((root / "engine").glob("*.py")):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+ENGINE_SOURCE_HASH = source_hash()
+
+
 def _fc_match(pitch, seed, days=5, forecast=None, is_day_night=False):
     random.seed(seed)
     data = {
@@ -132,6 +147,11 @@ def _simulate_match(pitch, seed, days=5, limit=60000, forecast=None,
                     is_day_night=False):
     m = _fc_match(pitch, seed, days=days, forecast=forecast,
                   is_day_night=is_day_night)
+
+    metrics = MatchMetrics(m)
+    inputs = dict(pitch=pitch, seed=seed, days=days, forecast=_forecast_for(seed, forecast),
+                  is_day_night=is_day_night, squads=copy.deepcopy(m.data["playing_xi"]),
+                  ground_config=copy.deepcopy(m.ground_config if m.ground_config is not None else get_defaults("FC")), weather=copy.deepcopy(m.fc_weather_script))
 
     # Instrument the exact moment an innings is ruled over, BEFORE
     # _fc_transition_to_next_innings() resets fc_innings_declared / advances
@@ -167,7 +187,7 @@ def _simulate_match(pitch, seed, days=5, limit=60000, forecast=None,
         _session_before = m._fc_current_session()
         resp = m.next_ball()
         if "error" in resp:
-            return None
+            raise RuntimeError(f"FC {pitch}/{seed}: {resp['error']}")
         _bd = resp.get("ball_data") or {}
         if _bd.get("is_extra") and _bd.get("extra_type"):
             extras[_bd["extra_type"]] += 1
@@ -204,13 +224,23 @@ def _simulate_match(pitch, seed, days=5, limit=60000, forecast=None,
                 })
 
         if resp.get("match_over"):
+            for num, row in innings.items():
+                if row["runs"] != metrics.runs[num]:
+                    raise AssertionError(f"FC {pitch}/{seed} innings {num}: score/event mismatch")
+                row["legal_balls"] = metrics.legal[num]
+                row["ending"] = ("all_out" if row["wickets"] == 10 else
+                                  "declared" if row["declared"] else
+                                  "target" if num == 4 and m.score >= (m.target or 1) else "time")
             total_runs = sum(row["runs"] for row in innings.values())
             total_overs = sum(_overs_to_float(row["overs"]) for row in innings.values())
             return {"innings": innings, "match_status": m.match_status,
-                    "knocks": knocks, "extras": extras, "stands": stands,
+                    "inputs": inputs, "metrics": metrics.finish(), "completed": True,
+                    "result_type": getattr(m, "margin_type", None) or m.match_status,
+                    "knocks": knocks, "extras": dict(metrics.extras_events),
+                    "stands": [s["runs"] for s in metrics.finish()["partnerships"]],
                     "pace_wickets_session3": pace_wickets_session3,
                     "total_runs": total_runs, "total_overs": total_overs}
-    return None
+    raise RuntimeError(f"FC {pitch}/{seed}: did not finish in {limit} calls")
 
 
 PITCHES = ["Green", "Dry", "Hard", "Flat", "Dead"]
@@ -364,9 +394,16 @@ def _compare_day_night(per_pitch, days, forecast):
 
 
 def main():
+    logging.disable(logging.CRITICAL)
+    match_module.print = lambda *a, **k: None
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-pitch", type=int, default=100)
-    ap.add_argument("--days", type=int, default=5)
+    ap.add_argument("--days", type=int, choices=(4,5), default=5)
+    ap.add_argument("--seed-start", type=int, default=1)
+    ap.add_argument("--away-tier", choices=sorted(SQUAD_TIERS), default=None)
+    ap.add_argument("--attack", choices=("balanced", "pace", "spin"), default="balanced")
+    ap.add_argument("--day-night", action="store_true")
+    ap.add_argument("--overwrite", action="store_true", help="replace existing benchmark outputs")
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "fc_bench_results.csv"))
     ap.add_argument("--forecast", default=None,
                     help="pin one weather tier (clear/passing_showers/rain_around/"
@@ -389,6 +426,17 @@ def main():
         HOME = _squad("HOM", args.tier)
         AWAY = _squad("AWY", args.tier)
 
+    if args.away_tier:
+        AWAY = _squad("AWY", args.away_tier)
+    if args.attack != "balanced":
+        for player in AWAY:
+            if player["will_bowl"]:
+                player["bowling_type"] = "Fast-medium" if args.attack == "pace" else "Off spin"
+    if args.per_pitch < 1:
+        ap.error("--per-pitch must be positive")
+    if not args.overwrite and (Path(args.out).exists() or Path(args.out + ".json").exists()):
+        ap.error("output exists; choose a new --out or explicitly use --overwrite")
+
     if args.compare_day_night:
         _compare_day_night(args.per_pitch, args.days, args.forecast)
         return
@@ -401,13 +449,15 @@ def main():
         fieldnames.append(f"innings{n}_overs")
 
     rows = []
+    detailed = []
     all_knocks = []
     all_extras = collections.Counter()
     all_stands = []
     for pitch in PITCHES:
-        for seed in range(1, args.per_pitch + 1):
+        for seed in range(args.seed_start, args.seed_start + args.per_pitch):
             res = _simulate_match(pitch, seed, days=args.days,
-                                  forecast=args.forecast)
+                                  forecast=args.forecast, is_day_night=args.day_night)
+            detailed.append(res)
             if res:
                 all_knocks.extend(res.get("knocks") or [])
                 all_extras.update(res.get("extras") or {})
@@ -424,7 +474,14 @@ def main():
                 row[f"innings{n}_overs"] = data["overs"] if data else ""
             rows.append(row)
 
-    with open(args.out, "w", newline="") as f:
+    metadata = dict(engine_source_hash=ENGINE_SOURCE_HASH, revision=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+                    dirty=bool(subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()),
+                    arguments=vars(args), python=sys.version)
+    report = dict(metadata=metadata, summary={p: summarize([m for m in detailed if m["inputs"]["pitch"]==p]) for p in PITCHES},
+                  matches=detailed)
+    with open(args.out + ".json", "w" if args.overwrite else "x") as f:
+        json.dump(report, f, indent=2)
+    with open(args.out, "w" if args.overwrite else "x", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
         w.writerows(rows)

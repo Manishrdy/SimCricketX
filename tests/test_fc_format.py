@@ -1810,11 +1810,8 @@ def _park_near_stumps(m, overs_left=3):
     m.fc_day_overs_bowled_today = m._fc_effective_overs_today() - overs_left
 
 
-def test_last_hour_is_reserved_for_final_day(app):
-    """The last-hour rule belongs to the final day. Earlier days get no
-    equivalent flag — `close_of_play` used to be computed alongside it (twice
-    per ball, in two places) and was read by nothing at all, so it was
-    removed rather than left as a decoy."""
+def test_stumps_caution_applies_each_day(app):
+    """Tactical caution before stumps is separate from final-day rules."""
     m = _fc_match(days=5, fc_weather_script={"forecast": "clear", "day_events": {}})
     m.fc_day_overs_bowled_today = 20
     m.fc_day_over_rate_adjust = 0
@@ -1822,7 +1819,7 @@ def test_last_hour_is_reserved_for_final_day(app):
     assert "close_of_play" not in m._fc_build_match_state()
 
     _park_near_stumps(m, overs_left=5)
-    assert m._fc_build_match_state()["last_hour"] is False
+    assert m._fc_build_match_state()["last_hour"] is True
 
     m.fc_day = m.fmt.days
     assert m._fc_build_match_state()["last_hour"] is True

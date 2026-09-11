@@ -27,6 +27,8 @@ from engine.fc_bowler_workload import FCBowlerManager
 from engine import fc_bowler_workload
 from engine import fc_declaration
 from engine import fc_weather
+from engine.fc_batting_intent import ability, batting_intent, tail_protection
+from engine.fc_delivery import resolve_delivery
 from engine import ground_config as ground_config_engine
 from engine.toss import correct_decision, innings_teams
 from utils.exception_tracker import log_exception
@@ -1181,6 +1183,15 @@ class Match:
         stats = self.batsman_stats.get(striker_name)
         if stats is None:
             return
+
+        if self.is_fc and outcome.get("delivery"):
+            # Form follows the striker's bat, not penalty runs or a partner's
+            # dismissal. Keep the finalized event intact for other observers.
+            if outcome.get("batter_out") and outcome.get("dismissed_end") == "non_striker":
+                self.batsman_stats[self.current_non_striker["name"]]["form"] = 1.0
+                outcome = dict(outcome, batter_out=False)
+            if outcome.get("is_extra"):
+                outcome = dict(outcome, is_extra=False, runs=outcome["delivery"]["bat_runs"])
 
         current_form = stats.get("form", 1.0)
 
@@ -2641,6 +2652,9 @@ class Match:
         else:
             fatigue = self.bowler_manager.get_fatigue_mult(bowler_name)
 
+        if self.is_fc:
+            eff["_fc_fatigue"] = fatigue
+
         # Feature 8: previous over performance feedback via BowlerManager
         prev_runs = self.bowler_manager.prev_over_runs(bowler_name)
         if prev_runs == 0:           # Maiden — confidence boost
@@ -2851,6 +2865,9 @@ class Match:
 
         Returns (dismissed_end, dismissed_name, fielder_name, commentary_line).
         """
+        if self.is_fc:
+            return self._fc_apply_run_out(outcome, commentary_line)
+
         # 1. Credit the 1 completed run to score
         self.score += 1
         self.current_over_runs += 1
@@ -2905,6 +2922,33 @@ class Match:
         self.commentary.append(commentary_line)
 
         return dismissed_end, dismissed_name, fielder_name, commentary_line
+
+    def _fc_apply_run_out(self, outcome, commentary_line):
+        d = outcome["delivery"]
+        self.score += d["total_runs"]
+        self.current_over_runs += d["total_runs"]
+        self.current_over_maiden_invalid |= d["bowler_runs"] > 0
+        self.bowler_stats[self.current_bowler["name"]]["runs"] += d["bowler_runs"]
+        stats = self.batsman_stats[self.current_striker["name"]]
+        stats["runs"] += d["bat_runs"]
+        if d["bat_runs"] in (1, 2, 3):
+            stats[{1: "ones", 2: "twos", 3: "threes"}[d["bat_runs"]]] += 1
+        if d["batter_faced"]:
+            stats["balls"] += 1
+        if d["legal"]:
+            self._count_legal_delivery()
+            self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
+            self.current_partnership_balls += 1
+        self._credit_partnership_contribution(runs=d["bat_runs"], balls=int(d["batter_faced"]))
+        self.current_partnership_runs += d["total_runs"]
+        self._save_partnership("Run Out")
+        end = outcome["dismissed_end"]
+        name = (self.current_striker if end == "striker" else self.current_non_striker)["name"]
+        fielder = outcome.get("fielder_name") or self._select_fielder_for_wicket("Run Out")
+        self.batsman_stats[name].update(wicket_type="Run Out", fielder_out=fielder)
+        commentary_line += self._generate_wicket_commentary(outcome, fielder)
+        self.commentary.append(commentary_line)
+        return end, name, fielder, commentary_line
 
     def _apply_normal_wicket(self, outcome, extra, commentary_line):
         """
@@ -4727,68 +4771,36 @@ class Match:
         striker_balls_faced = self.batsman_stats.get(striker_name, {}).get("balls", 0)
         days_remaining = self._fc_days_remaining()
 
-        lead = 0
-        if self.fc_innings in (2, 3):
-            a1 = self.fc_innings_totals.get(1, {}).get("score", 0)
-            lead = self.score - a1
-        elif self.fc_innings == 4:
-            lead = self.score - (self.target or 0)
-
-        # Acceleration: the batting side is running down its own innings
-        # time budget and is building toward a declaration. Tied to the
-        # budget rather than the whole-match "2 days left" gate, which never
-        # fired early enough on a slow surface — the same reason the
-        # declaration heuristic had to stop using it.
-        _budget = self.fc_innings_time_budget_overs
-        acceleration_mode = (
-            self.fc_innings in (1, 2, 3) and not self.fc_innings_declared
-            and (
-                (_budget is not None and self.current_over >= _budget * 0.85)
-                or (days_remaining <= 2 and self.current_over >= 60)
-            )
-        )
-
-        # Survival: batting to save the game. Real first-class cricket is
-        # full of this innings — 300 behind with a day and a half left, shut
-        # up shop — and it could not happen before, because nothing ever set
-        # the flag and FCPressureEngine's own fallback only covers the last
-        # day. Without it every match had to end in a result.
-        survival_mode = False
-        if self.fc_innings == 4 and self.target is not None:
-            _needed = self.target - self.score
-            _rrr = _needed / max(1.0, self._fc_overs_remaining_in_match())
-            # A chase that has drifted out of reach turns into a rearguard —
-            # and so does one where the wickets have gone. A side six down
-            # chasing a stiff target plays for the draw; it does not keep
-            # chasing until it loses.
-            survival_mode = _rrr > 4.2 or (self.wickets >= 6 and _rrr > 2.8)
-        elif self.fc_innings in (2, 3):
-            survival_mode = (
-                (self.follow_on_enforced and lead < 0)
-                or (lead < -120 and days_remaining <= 2)
-            )
-
-        required_run_rate = 0.0
-        if self.fc_innings == 4 and self.target is not None:
-            required_run_rate = (self.target - self.score) / self._fc_overs_remaining_in_match()
-
-        # The closing overs of a day. Excluded during a live fourth-innings
-        # chase — a side going for the win doesn't shut up shop at 6pm.
-        # Must be the day's REAL remaining overs. _fc_effective_overs_today()
-        # is the over-rate estimate, which for a slow attack runs out at over
-        # 81 while the minimum keeps the day going to ~88 — that would flag
-        # "last hour" for 22 overs instead of 15 and shut the batting down far
-        # too early. Same trap as _fc_pick_nightwatchman.
-        _overs_left_today = float(self._fc_overs_remaining_today())
-        _live_chase = (self.fc_innings == 4 and self.target is not None
-                       and not survival_mode)
-        last_hour = (
-            self.fc_day == self.fmt.days
-            and _overs_left_today <= self.fmt.min_overs_last_hour
-            and not _live_chase
-        )
+        lead = self._fc_aggregate_lead()
+        overs_remaining = (self._fc_overs_remaining_today()
+                           + max(0, self.fmt.days-self.fc_day) * self.fmt.overs_per_day)
+        needed = max(0, self.target - self.score) if self.fc_innings == 4 and self.target is not None else None
+        remaining = [self.current_striker, self.current_non_striker] + [
+            self.batting_team[i] for i in self.remaining_batter_indices]
+        context = {
+            "fc_innings": self.fc_innings, "wickets": self.wickets,
+            "lead": lead, "runs_needed": needed, "overs_remaining": overs_remaining,
+            "remaining_strength": sum(ability(p) for p in remaining) / max(1, len(remaining)),
+            "pitch": self.pitch, "pitch_wear": self._compute_pitch_wear(),
+            "ball_age": self.fc_ball_overs_bowled,
+            "innings_budget": self.fc_innings_time_budget_overs,
+            "innings_overs": self.current_over + self.current_ball / 6,
+            "overs_today": self._fc_overs_remaining_today(),
+            "last_hour_overs": self.fmt.min_overs_last_hour,
+            "follow_on": self.follow_on_enforced, "declared": self.fc_innings_declared,
+            "striker_ability": ability(self.current_striker),
+            "partner_ability": ability(self.current_non_striker),
+            "striker_balls_faced": striker_balls_faced, "ball_in_over": self.current_ball,
+        }
+        intent = batting_intent(context)
+        required_run_rate = needed / max(1/6, overs_remaining) if needed is not None else 0.0
+        survival_mode = intent["survival"] >= 0.5
+        acceleration_mode = intent["attack"] >= 0.5
+        last_hour = intent["stumps"] > 0
 
         return {
+            "intent": intent,
+            "tail_protection": tail_protection(context, intent),
             "fc_innings": self.fc_innings,
             "wickets": self.wickets,
             "last_hour": last_hour,
@@ -4843,19 +4855,22 @@ class Match:
         avg = sum(mults) / len(mults)
         return max(0.0, min(1.0, (avg - 0.55) / 0.45))
 
-    def _fc_lead_before_ball(self):
-        """Batting side's lead over the opposition's completed innings,
-        BEFORE this delivery — so a narrative can spot the moment it goes
-        from behind to in front. None when there is no lead concept yet."""
+    def _fc_aggregate_lead(self):
+        """Numeric batting-side aggregate lead; unavailable in innings one."""
         if not self.is_fc or self.fc_innings == 1:
             return None
+        a1 = self.fc_innings_totals.get(1, {}).get("score", 0)
+        b1 = self.fc_innings_totals.get(2, {}).get("score", 0)
         if self.fc_innings == 2:
-            return self.score - self.fc_innings_totals.get(1, {}).get("score", 0)
-        if self.fc_innings == 3 and not self.follow_on_enforced:
-            a1 = self.fc_innings_totals.get(1, {}).get("score", 0)
-            b1 = self.fc_innings_totals.get(2, {}).get("score", 0)
-            return a1 + self.score - b1
+            return self.score - a1
+        if self.fc_innings == 3:
+            return self.score + (b1 - a1 if self.follow_on_enforced else a1 - b1)
+        if self.fc_innings == 4 and self.target is not None:
+            return self.score - (self.target - 1)
         return None
+
+    def _fc_lead_before_ball(self):
+        return self._fc_aggregate_lead()
 
     @staticmethod
     def _plural_runs(n):
@@ -4927,26 +4942,8 @@ class Match:
         if not self.is_fc or self.fc_innings == 1:
             return None
 
-        totals = self.fc_innings_totals
-        if self.fc_innings == 2:
-            lead = self.score - totals.get(1, {}).get("score", 0)
-        elif self.fc_innings == 3:
-            if self.follow_on_enforced:
-                lead = (
-                    totals.get(2, {}).get("score", 0)
-                    + self.score
-                    - totals.get(1, {}).get("score", 0)
-                )
-            else:
-                lead = (
-                    totals.get(1, {}).get("score", 0)
-                    + self.score
-                    - totals.get(2, {}).get("score", 0)
-                )
-        elif self.fc_innings == 4 and self.target is not None:
-            # target - 1 is the opposition's aggregate.
-            lead = self.score - (self.target - 1)
-        else:
+        lead = self._fc_aggregate_lead()
+        if lead is None:
             return None
 
         batting = self._get_team_name(self.batting_team)
@@ -5874,23 +5871,7 @@ class Match:
             # running again first would short-circuit that.
             return None
 
-        lead = 0
-        if self.fc_innings == 2:
-            a1 = self.fc_innings_totals.get(1, {}).get("score", 0)
-            lead = self.score - a1
-        elif self.fc_innings == 3:
-            # Non-follow-on case only (a follow-on-enforced side never
-            # reaches this method — see the guard above). The batting
-            # side's true lead is their combined 1st+2nd innings total
-            # against the opposition's completed innings-2 total, matching
-            # the target formula used when this innings actually ends
-            # (a1 + a2 - b1 + 1 in _fc_transition_to_next_innings) — NOT
-            # just this innings' own score against their own 1st innings,
-            # which is what the shared `self.score - a1` line above used to
-            # compute here.
-            a1 = self.fc_innings_totals.get(1, {}).get("score", 0)
-            b1 = self.fc_innings_totals.get(2, {}).get("score", 0)
-            lead = a1 + self.score - b1
+        lead = self._fc_aggregate_lead() or 0
         days_remaining = self._fc_days_remaining()
 
         if self._is_manual_mode():
@@ -6867,6 +6848,41 @@ class Match:
                 new_ball_overs=getattr(self.fmt, "new_ball_overs", 80),
             )
 
+        if self.is_fc:
+            needed = self.target - self.score if self.fc_innings == 4 and self.target is not None else None
+            contact = None
+            if outcome.get("extra_type") == "No Ball" and needed != 1:
+                contact = calculate_outcome(
+                    batter=_no_ball_batter if not scenario_override else self.current_striker,
+                    bowler=_effective_bowler if not scenario_override else self.current_bowler,
+                    pitch=self.pitch, streak=self.batter_streaks.get(self.current_striker["name"], {}),
+                    over_number=self.current_over, batter_runs=self.batsman_stats[self.current_striker["name"]]["runs"],
+                    innings=self.innings, pressure_effects=pressure_effects, allow_extras=False,
+                    balls_faced=self.batsman_stats[self.current_striker["name"]]["balls"],
+                    pitch_wear=self._compute_pitch_wear(), format_config=self.fmt,
+                    fielding_team=self.bowling_team, ground_config_override=self.ground_config,
+                    batting_position=self.batting_team.index(self.current_striker)+1,
+                    is_day_night=self.data.get("is_day_night", False),
+                    fc_session_number=self._fc_current_session(),
+                    ball_overs_bowled=self.fc_ball_overs_bowled,
+                    new_ball_overs=self.fmt.new_ball_overs,
+                )
+                # One contact on the illegal delivery. A small share of
+                # missed balls pass the bat/keeper; no second penalty roll.
+                if not contact.get("batter_out") and contact.get("runs", 0) == 0:
+                    from engine.fc_delivery import extra_profile
+                    profile = extra_profile(self.current_bowler, self.bowling_team)
+                    nonbat = random.choices([None, "Byes", "Leg Bye"],
+                        weights=[.90, .10 * profile["Byes"], .10 * profile["Leg Bye"]])[0]
+                    if nonbat:
+                        contact.update(non_bat_type=nonbat,
+                            runs=random.choices([1, 2, 4], weights=[.85, .10, .05])[0])
+            outcome = resolve_delivery(outcome, contact, needed)
+            # Resolve the dismissed player before observers see the event.
+            if outcome.get("wicket_type") == "Run Out":
+                outcome.setdefault("dismissed_end", random.choice(["striker", "non_striker"]))
+                outcome["delivery"]["dismissed_end"] = outcome["dismissed_end"]
+
         # 🎙️ COMMENTARY REVAMP INTEGRATION
         if hasattr(self, 'commentary_engine'):
             # Enrich outcome with context for the engine
@@ -6905,10 +6921,7 @@ class Match:
                 comm_state['fc_lead_before'] = self._fc_lead_before_ball()
                 # Real remaining overs, not the over-rate estimate — see the
                 # matching note in _fc_build_match_state.
-                comm_state['last_hour'] = (
-                    self.fc_day == self.fmt.days
-                    and self._fc_overs_remaining_today() <= self.fmt.min_overs_last_hour
-                )
+                comm_state['last_hour'] = match_state.get("last_hour", False)
                 comm_state['fc_is_nightwatchman'] = (
                     self.fc_nightwatchman_name is not None
                     and self.current_striker["name"] == self.fc_nightwatchman_name
@@ -6931,7 +6944,7 @@ class Match:
 
         # No Ball: roll an additional bat outcome (no extras), wicket invalidated
         extra_type = outcome.get("extra_type")
-        if outcome.get("is_extra") and extra_type == "No Ball":
+        if not self.is_fc and outcome.get("is_extra") and extra_type == "No Ball":
             bat_outcome = calculate_outcome(
                 batter=_no_ball_batter if self.is_fc else self.current_striker,
                 bowler=_effective_bowler,
@@ -6985,6 +6998,9 @@ class Match:
             outcome["wicket_type"] = None
             outcome["description"] = "Free hit! Batsman survives, no run."
 
+        if self.is_fc:
+            self._fc_last_delivery = outcome["delivery"]
+
         # Update pressure engine with outcome
         self.pressure_engine.update_recent_events(outcome)
         
@@ -7009,6 +7025,13 @@ class Match:
         _bd_ball = self.current_ball
         _bd_score_before = self.score
         _bd_was_free_hit = self.free_hit_active
+
+        if self.is_fc:
+            keys = {"Wide": "wides", "No Ball": "noballs", "Byes": "byes", "Leg Bye": "legbyes"}
+            for kind, amount in outcome["delivery"]["extras"].items():
+                self.bowler_stats[self.current_bowler["name"]][keys[kind]] += amount
+            if outcome["delivery"]["extras"].get("Wide") or outcome["delivery"]["extras"].get("No Ball"):
+                self.current_over_maiden_invalid = True
 
         # 🔧 WICKET TRACKING (after wicket is defined)
         # Trim + recompute every ball (not just wicket balls) so the collapse
@@ -7325,6 +7348,10 @@ class Match:
                     self.current_non_striker, self.current_striker
                 )
                 self.batter_idx.reverse()
+            if (self.is_fc and wicket_type == "Run Out"
+                    and outcome["delivery"]["completed_runs"] % 2 == 0):
+                self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
+                self.batter_idx.reverse()
             commentary_line += f"<br>{self.current_striker['name']} walks in next."
             if self._is_manual_mode():
                 pending_decision_for_response = {
@@ -7340,14 +7367,14 @@ class Match:
             self.score += runs
             self.current_over_runs += runs
             
-            # Byes and Leg Byes are not charged to the bowler
-            if extra:
-                extra_type = outcome.get("extra_type", "")
-                if extra_type not in ("Byes", "Leg Bye"):
+            if self.is_fc:
+                self.bowler_stats[self.current_bowler["name"]]["runs"] += outcome["delivery"]["bowler_runs"]
+            elif extra:
+                if outcome.get("extra_type") not in ("Byes", "Leg Bye"):
                     self.bowler_stats[self.current_bowler["name"]]["runs"] += runs
             else:
                 self.bowler_stats[self.current_bowler["name"]]["runs"] += runs
-            
+
             if not extra:
                 self.batsman_stats[self.current_striker["name"]]["runs"] += runs
                 self.batsman_stats[self.current_striker["name"]]["balls"] += 1
@@ -7403,7 +7430,11 @@ class Match:
                     # No Ball with 0 bat runs = dot ball for the batsman
                     self.batsman_stats[self.current_striker["name"]]["dots"] += 1
 
-                commentary_line += f"No Ball + {bat_runs} run(s), {outcome.get('bat_description', '')}"
+                if self.is_fc:
+                    detail = ", ".join(f"{v} {k}" for k, v in outcome["extra_components"].items())
+                    commentary_line += f"{detail}; {bat_runs} off the bat."
+                else:
+                    commentary_line += f"No Ball + {bat_runs} run(s), {outcome.get('bat_description', '')}"
             else:
                 commentary_line += f"{runs} run(s), {outcome['description']}"
             self.commentary.append(commentary_line)
@@ -7427,6 +7458,8 @@ class Match:
                     additional_runs = runs - 1
                     if additional_runs > 0 and additional_runs % 2 == 1:
                         should_rotate = True
+            if self.is_fc:
+                should_rotate = outcome["delivery"]["completed_runs"] % 2 == 1
             if should_rotate:
                 self.current_striker, self.current_non_striker = self.current_non_striker, self.current_striker
                 self.batter_idx.reverse()
@@ -7576,7 +7609,7 @@ class Match:
             self._count_legal_delivery()
             self.bowler_stats[self.current_bowler["name"]]["balls_bowled"] += 1
 
-        if extra:
+        if extra and not self.is_fc:
             extra_type = outcome.get("extra_type", "")
             if not extra_type:
                 # Fallback to description-based detection for older code paths
@@ -7695,6 +7728,7 @@ class Match:
                     all_commentary.append(_foreshadow)
 
         ball_data_payload = {
+            "delivery": outcome.get("delivery"),
             "runs": self.score - _bd_score_before,
             "batter_out": wicket,
             "is_extra": extra,
