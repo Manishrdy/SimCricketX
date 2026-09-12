@@ -11,6 +11,11 @@ Usage from the repository root::
 The apply path is idempotent: existing columns are never added again, and
 every apply rebuilds existing tournament cache rows. Retrying after a partial
 deployment is therefore safe.
+
+The rebuild goes through the ORM, so it needs the rest of the schema to be
+current — run ``python -m migrations.precheck --db <path>`` first on a
+database that has missed earlier migrations. Both modes report that drift up
+front, and ``--apply`` refuses to touch anything until it is resolved.
 """
 
 import argparse
@@ -47,17 +52,49 @@ _COLUMNS = (
 )
 
 
-def _existing_columns(conn):
+class SchemaPrerequisiteError(RuntimeError):
+    """The database is behind on a migration this one's rebuild depends on."""
+
+
+# Tables the ORM-driven rebuild reads. `tournament_player_stats_cache` is
+# deliberately absent: its drift is exactly what this migration repairs.
+_PREREQUISITE_MODELS = ("Player", "MatchScorecard", "TournamentFixture")
+
+
+def _existing_columns(conn, table_name=TABLE_NAME):
     if conn.dialect.name == "sqlite":
         return {
             row[1]
-            for row in conn.execute(text(f"PRAGMA table_info({TABLE_NAME})")).fetchall()
+            for row in conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
         }
     rows = conn.execute(text(
         "SELECT column_name FROM information_schema.columns "
-        f"WHERE table_name = '{TABLE_NAME}'"
+        f"WHERE table_name = '{table_name}'"
     )).fetchall()
     return {row[0] for row in rows}
+
+
+def _prerequisite_gaps(conn):
+    """ORM-mapped columns the live database lacks, keyed by table.
+
+    `_rebuild_caches` goes through the ORM, and SQLAlchemy SELECTs every
+    column a model maps whether the rebuild reads it or not. A database that
+    missed an earlier migration therefore dies deep inside the rebuild with a
+    bare ``no such column: players.technique_rating`` — after the ALTERs have
+    already committed. Detect it up front instead, while nothing has changed.
+    """
+    from database import models
+
+    gaps = {}
+    for model_name in _PREREQUISITE_MODELS:
+        table = getattr(models, model_name).__table__
+        if not inspect(conn).has_table(table.name):
+            continue
+        live = _existing_columns(conn, table.name)
+        missing = [column.name for column in table.columns if column.name not in live]
+        if missing:
+            gaps[table.name] = missing
+    return gaps
 
 
 def _safe_count(conn, table_name):
@@ -77,6 +114,7 @@ def _inspect_plan(conn):
         "cache_rows": _safe_count(conn, TABLE_NAME),
         "scorecard_rows": _safe_count(conn, "match_scorecards"),
         "fixture_rows": _safe_count(conn, "tournament_fixtures"),
+        "prerequisite_gaps": _prerequisite_gaps(conn),
     }
 
 
@@ -95,6 +133,13 @@ def _print_report(report, *, apply):
             print(f"  - {name}")
     else:
         print("Columns to add:        none (schema is current)")
+    if report["prerequisite_gaps"]:
+        print()
+        print("BLOCKED — this database is behind on earlier migrations:")
+        for table, columns in sorted(report["prerequisite_gaps"].items()):
+            print(f"  {table}: missing {', '.join(columns)}")
+        print("  Run the full chain first:")
+        print("    python -m migrations.precheck --db <path-to.db>")
 
 
 def _rebuild_caches(db):
@@ -159,6 +204,19 @@ def run_migration(db, app, apply=False):
                 print("DRY RUN — no changes made. Re-run with --apply to execute.")
                 return report
 
+            if report["prerequisite_gaps"]:
+                print()
+                print("ABORTED — no changes made; nothing to roll back.")
+                raise SchemaPrerequisiteError(
+                    "the cache rebuild needs columns this database does not "
+                    "have — "
+                    + "; ".join(
+                        f"{table}: {', '.join(columns)}"
+                        for table, columns in sorted(report["prerequisite_gaps"].items())
+                    )
+                    + ". Run `python -m migrations.precheck --db <path-to.db>` first."
+                )
+
             try:
                 for name, ddl in _COLUMNS:
                     if name in report["existing_columns"]:
@@ -186,6 +244,8 @@ def run_migration(db, app, apply=False):
                 f"{rebuilt_tournaments} tournament(s)."
             )
             return post_report
+        except SchemaPrerequisiteError:
+            raise
         except Exception as exc:
             db.session.rollback()
             try:
@@ -240,4 +300,8 @@ if __name__ == "__main__":
     from app import create_app
 
     _app = create_app()
-    run_migration(_db, _app, apply=args.apply)
+    try:
+        run_migration(_db, _app, apply=args.apply)
+    except SchemaPrerequisiteError as exc:
+        print(f"PREREQUISITE MISSING — {exc}")
+        sys.exit(2)
