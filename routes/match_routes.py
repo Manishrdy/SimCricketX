@@ -7,12 +7,11 @@ import re
 import time
 import uuid
 import zipfile
-from services.match_diagnostics import record as trace_match, enabled as trace_enabled
 from datetime import datetime, timedelta
 
 from engine.format_config import get_any_format as _get_any_format
 from engine.toss import decide_toss, home_bats_first
-from flask import g, flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 from utils.exception_tracker import log_exception
@@ -686,6 +685,11 @@ def register_match_routes(
             "crr": crr,
             "match_format": match.data.get("match_format", "T20"),
             "commentary_log": getattr(match, "commentary_replay_log", []),
+            # An interval / stumps / innings-end card the client never
+            # confirmed seeing — normally because the socket died during the
+            # long call that built it. The client replays it before resuming
+            # the ball loop, then acks it.
+            "pending_card": getattr(match, "pending_interval_card", None),
             "total_overs": getattr(match, "overs", None),
             "original_overs": getattr(match, "original_overs", None),
             "rain_affected": getattr(match, "rain_affected", False),
@@ -1202,7 +1206,6 @@ def register_match_routes(
         failure — the in-memory state is still authoritative for the live
         session."""
         try:
-            trace_match(match_id, "snapshot_start")
             snap = match.serialize_fc_snapshot()
             if not snap:
                 return
@@ -1210,15 +1213,43 @@ def register_match_routes(
                 match_data, match_path, err = _load_match_file_for_user(match_id)
                 if err or not match_path:
                     return
-                trace_match(match_id, "snapshot_file_loaded")
                 match_data["fc_snapshot"] = snap
                 with open(match_path, "w", encoding="utf-8") as f:
                     json.dump(match_data, f, indent=2)
-            trace_match(match_id, "snapshot_finished")
         except Exception as e:
             log_exception(e)
-            trace_match(match_id, "snapshot_error", {"error": str(e)})
             app.logger.warning(f"[FC] Snapshot persist failed for {match_id}: {e}")
+
+    def _remember_pending_card(match, outcome):
+        """Hold on to an interval / stumps / innings-end card until the client
+        says it displayed it.
+
+        These payloads are built once and were emitted once. When the call
+        that builds one also takes tens of seconds — which is exactly what
+        happens, because the FC declaration model runs at the same session
+        boundary that produces the card — the socket can be gone by the time
+        the emit happens, and the card is simply lost. The engine meanwhile
+        has already consumed the session (fc_sessions_taken_today), so it will
+        never be produced again.
+
+        Stashing it here makes delivery at-least-once instead of at-most-once:
+        a reconnecting client picks it up from /live-state and acknowledges
+        it. The final match-over card is excluded — that one has a persisted
+        scoreboard page of its own.
+        """
+        if not outcome or outcome.get("match_over"):
+            return
+        if not outcome.get("scorecard_data"):
+            return
+        card_id = uuid.uuid4().hex
+        # Stamped into the outcome itself, so the copy that goes out live and
+        # the copy replayed after a reconnect carry the same id and the client
+        # can acknowledge either one.
+        outcome["pending_card_id"] = card_id
+        match.pending_interval_card = {
+            "card_id": card_id,
+            "payload": outcome,
+        }
 
     def _get_or_restore_match_instance(match_id):
         """Fetch the in-memory match instance; if absent, rebuild it from the
@@ -1317,9 +1348,7 @@ def register_match_routes(
         if match.data.get("created_by") != user_id:
             return None, (jsonify({"error": "Unauthorized"}), 403)
 
-        trace_match(match_id, "engine_start", {"over": match.current_over, "ball": match.current_ball})
         outcome = match.next_ball()
-        trace_match(match_id, "engine_result", outcome)
         if match.is_fc and getattr(match, "fc_weather_v2", False):
             outcome.setdefault("fc_weather_status", match._fc_weather_status())
 
@@ -1329,6 +1358,10 @@ def register_match_routes(
             if not hasattr(match, "commentary_replay_log"):
                 match.commentary_replay_log = []
             match.commentary_replay_log.append(commentary_html)
+
+        # Owed-card bookkeeping runs before any persistence below, so a
+        # snapshot written in this same call carries the card too.
+        _remember_pending_card(match, outcome)
 
         # A tie just pushed the match into super-over state — persist the
         # snapshot immediately so a crash before the first super-over ball
@@ -1347,6 +1380,9 @@ def register_match_routes(
                 or outcome.get("fc_weather_event")
                 or outcome.get("fc_interval")
                 or outcome.get("day_break")
+                # Any card the client still owes us an ack for must reach
+                # disk with the state that produced it.
+                or outcome.get("scorecard_data")
             )
         ):
             _persist_fc_snapshot(match, match_id)
@@ -1382,48 +1418,16 @@ def register_match_routes(
 
         return outcome, None
 
-    @app.route("/match/<match_id>/diagnostics", methods=["POST"])
-    @login_required
-    @rate_limit(max_requests=1200, window_seconds=60)
-    def match_diagnostics(match_id):
-        if not trace_enabled(match_id):
-            return jsonify({"enabled": False})
-        if request.content_length is None or request.content_length > 150000:
-            return jsonify({"error": "Diagnostic body too large"}), 413
-        match = MATCH_INSTANCES.get(match_id)
-        if match is not None:
-            if match.data.get("created_by") != current_user.id:
-                return jsonify({"error": "Unauthorized"}), 403
-        else:
-            _, _, err = _load_match_file_for_user(match_id)
-            if err:
-                return err
-        data = request.get_json(silent=True) or {}
-        allowed = {"request_sent", "response_received", "processing_error", "response_timeout",
-                   "socket_connect", "socket_disconnect", "socket_error", "scorecard_shown",
-                   "scorecard_close", "capture_start", "capture_finished"}
-        if not isinstance(data, dict) or data.get("stage") not in allowed:
-            return jsonify({"error": "Invalid diagnostic event"}), 400
-        trace_match(match_id, data["stage"], data.get("payload"),
-                    trace_id=str(data.get("trace_id", "")), source="browser")
-        return jsonify({"enabled": True})
-
     @app.route("/match/<match_id>/next-ball", methods=["POST"])
     @login_required
     @rate_limit(max_requests=60, window_seconds=10)  # C3: Rate limit to prevent DoS
     def next_ball(match_id):
-        g.match_trace_id = request.headers.get("X-Match-Trace-ID", "")[:64]
-        trace_match(match_id, "http_received")
         try:
             payload, err = _advance_one_ball(match_id, current_user.id)
             if err is not None:
                 return err
-            if g.match_trace_id:
-                payload["_trace_id"] = g.match_trace_id
-            trace_match(match_id, "http_response", payload)
             return jsonify(payload)
         except Exception as e:
-            trace_match(match_id, "http_error", {"error": str(e)})
             log_exception(e)
             # Log the complete error with stack trace to execution.log
             app.logger.error(f"[NextBall] Error processing ball for match {match_id}: {e}", exc_info=True)
@@ -1438,6 +1442,37 @@ def register_match_routes(
                 "details": str(e),
                 "match_id": match_id
             }), 500
+
+    @app.route("/match/<match_id>/ack-card", methods=["POST"])
+    @login_required
+    def ack_interval_card(match_id):
+        """Client confirms it displayed an interval / stumps / innings-end
+        card, so the server can stop offering it on resume.
+
+        Acks carry the card_id they are acking. A late ack for a card that has
+        already been superseded must not clear the newer one — that would
+        reintroduce the very loss this exists to prevent — so a mismatched
+        card_id is accepted and ignored rather than treated as an error.
+        """
+        card_id = (request.get_json(silent=True) or {}).get("card_id")
+        with MATCH_INSTANCES_LOCK:
+            match = MATCH_INSTANCES.get(match_id)
+            if match is None:
+                # Nothing in memory means nothing is owed.
+                return jsonify({"acked": False, "reason": "not_in_memory"})
+            if match.data.get("created_by") != current_user.id:
+                return jsonify({"error": "Unauthorized"}), 403
+            pending = getattr(match, "pending_interval_card", None)
+            if pending and pending.get("card_id") == card_id:
+                match.pending_interval_card = None
+                acked = True
+            else:
+                acked = False
+        if acked and match.is_fc:
+            # Persist the cleared state, or a restart would re-offer a card
+            # the user has already seen.
+            _persist_fc_snapshot(match, match_id)
+        return jsonify({"acked": acked})
 
     @app.route("/match/<match_id>/set-simulation-mode", methods=["POST"])
     @login_required

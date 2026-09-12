@@ -4,37 +4,6 @@
  * Expects 'matchData' and 'html2canvas' to be available in the global scope.
  */
 
-// Temporary opt-in trace. No debugger breakpoints: pausing alters the race.
-let matchTraceId = '';
-let matchTraceTimer = null;
-function traceMatch(stage, payload = {}) {
-    if (!window.matchDiagnosticsEnabled) return;
-    const event = {stage, trace_id: matchTraceId, payload: {
-        client_time: new Date().toISOString(), monotonic_ms: performance.now(),
-        visibility: document.visibilityState, online: navigator.onLine,
-        ...payload
-    }};
-    console.info('[MatchTrace]', event);
-    fetch(`${window.location.pathname}/diagnostics`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(event), signal: AbortSignal.timeout(5000)
-    }).then(response => {
-        if (!response.ok) console.warn('[MatchTrace] ingestion failed', response.status);
-    }).catch(error => console.warn('[MatchTrace] ingestion unavailable', String(error)));
-}
-async function receiveBallResult(data) {
-    clearTimeout(matchTraceTimer);
-    if (data._trace_id) matchTraceId = data._trace_id;
-    traceMatch('response_received', {response: data});
-    try {
-        await _processBallResult(data);
-    } catch (error) {
-        traceMatch('processing_error', {message: String(error), stack: error.stack});
-        console.error('[BallResult]', error);
-        appendLog('[system_error] Ball response processing failed: ' + escapeHtml(String(error)), 'error');
-    }
-}
-
 // --- Global State ---
 let impactPlayerState = {
     home: {
@@ -1301,20 +1270,76 @@ function renderThisOverBalls() {
     });
 }
 
+// ---- Interval-card delivery guarantee ----
+// Interval / stumps / innings-end cards are built once, and the engine has
+// already consumed the session (fc_sessions_taken_today) by the time it hands
+// one over. Emitting it once was therefore at-most-once delivery: a socket
+// that dropped while the server was busy building the card lost it for good.
+// The server now holds each card until we confirm we drew it, and re-offers
+// it from /live-state after a reconnect.
+let ballInFlight = false;
+
+function scorecardIsVisible() {
+    const overlay = document.getElementById('scorecard-overlay');
+    return !!overlay && overlay.style.display === 'flex';
+}
+
+function ackCard(cardId) {
+    if (!cardId) return;
+    fetch(`${window.location.pathname}/ack-card`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_id: cardId }),
+    }).catch(() => { /* best effort — a re-offer on resume is harmless */ });
+}
+
+// Returns true when a card was owed and has been handed to the normal result
+// path, which then owns whether the loop resumes.
+async function replayPendingCard() {
+    if (matchOver) return false;
+    try {
+        const res = await fetch(`${window.location.pathname}/live-state`);
+        const state = await res.json();
+        const card = state && state.pending_card;
+        if (card && card.payload) {
+            await _processBallResult(card.payload);
+            return true;
+        }
+    } catch (e) {
+        /* fall through and resume normally */
+    }
+    return false;
+}
+
 // ---- WebSocket Setup ----
 // Connects once; falls back to HTTP fetch transparently if socket is
 // unavailable or disconnected. Zero changes to simulation logic.
 let _wsSocket = null;
 let _wsReady = false;
+let _wsEverConnected = false;
 
 (function _initWebSocket() {
     if (typeof io === 'undefined') return; // socket.io CDN not loaded
     try {
         _wsSocket = io({ transports: ['websocket', 'polling'] });
-        _wsSocket.on('connect',       () => { _wsReady = true; traceMatch('socket_connect'); });
-        _wsSocket.on('disconnect', reason => { _wsReady = false; traceMatch('socket_disconnect', {reason}); });
-        _wsSocket.on('connect_error', error => { _wsReady = false; traceMatch('socket_error', {message: String(error)}); });
-        _wsSocket.on('ball_result',   (data) => receiveBallResult(data));
+        _wsSocket.on('connect', async () => {
+            const reconnected = _wsEverConnected;
+            _wsReady = true;
+            _wsEverConnected = true;
+            if (!reconnected) return;
+            // The drop may have swallowed a response. If it was a card, draw
+            // it now — it will never be offered again otherwise. If it was an
+            // ordinary ball, the loop is sitting waiting for a reply that is
+            // never coming, so restart it.
+            const replayed = await replayPendingCard();
+            if (!replayed && ballInFlight && !matchOver && !scorecardIsVisible()) {
+                ballInFlight = false;
+                scheduleNextBall(delay);
+            }
+        });
+        _wsSocket.on('disconnect',    () => { _wsReady = false; });
+        _wsSocket.on('connect_error', () => { _wsReady = false; });
+        _wsSocket.on('ball_result',   (data) => _processBallResult(data));
         _wsSocket.on('ws_error',      (data) => {
             appendLog(`[system_error] ${data.message || 'WebSocket error'}`, 'error');
         });
@@ -1327,6 +1352,16 @@ let _wsReady = false;
 // All ball-result processing lives here — called by both the WS listener
 // above AND the HTTP fetch path below. Zero logic change vs the original.
 async function _processBallResult(data) {
+    ballInFlight = false;
+    // Rate limited, not broken. FC drives the loop with no delay between
+    // deliveries, so the HTTP fallback trips the per-user limit routinely;
+    // treating that as a fatal error stopped the match dead. Wait out the
+    // window and carry on.
+    if (data.rate_limited) {
+        const waitMs = Math.max(250, Math.ceil((data.retry_after || 1) * 1000));
+        scheduleNextBall(waitMs);
+        return;
+    }
     if (data.error) {
         appendLog(`[ERROR] ${data.error}`, 'error');
         return;
@@ -1626,27 +1661,21 @@ async function _processBallResult(data) {
 function startMatch() {
     simTimerId = null;
     if (matchOver) return;
+    // Lets a reconnect tell "waiting on a reply" apart from "idle", so a
+    // response lost with the socket restarts the loop instead of stalling it.
+    ballInFlight = true;
 
-    if (window.matchDiagnosticsEnabled) {
-        matchTraceId = crypto.randomUUID();
-        traceMatch('request_sent', {transport: _wsReady ? 'websocket' : 'http'});
-        clearTimeout(matchTraceTimer);
-        matchTraceTimer = setTimeout(() => {
-            traceMatch('response_timeout', {wait_ms: 15000});
-            appendLog('[system_error] Waiting over 15 seconds for a ball response. Diagnostic recorded; no ball retried.', 'error');
-        }, 15000);
-    }
     // WebSocket path — emit event, _processBallResult handles the response
     if (_wsReady && _wsSocket) {
-        _wsSocket.emit('next_ball', { match_id: matchData.match_id, trace_id: matchTraceId });
+        _wsSocket.emit('next_ball', { match_id: matchData.match_id });
         return;
     }
 
     // HTTP fallback — original fetch path, unchanged
-    fetch(window.location.pathname + "/next-ball", { method: 'POST', headers: {'X-Match-Trace-ID': matchTraceId} })
+    fetch(window.location.pathname + "/next-ball", { method: 'POST' })
         .then(res => res.json())
-        .then(data => receiveBallResult(data))
-        .catch(err => appendLog(`[system_error] ${err}`, 'error'));
+        .then(data => _processBallResult(data))
+        .catch(err => { ballInFlight = false; appendLog(`[system_error] ${err}`, 'error'); });
 }
 
 
@@ -1656,6 +1685,11 @@ function showScorecard(data, completeData) {
     currentInningsNumber = completeData.innings_number;
     const overlay = document.getElementById('scorecard-overlay');
     overlay.style.display = 'flex';
+    // Drawn, so the server can stop holding it. Acking here rather than on
+    // close means a user who wanders off mid-interval is not re-shown the
+    // card on their next reconnect. Cards with no id (the final scoreboard,
+    // super-over cards) are not held server-side and no-op here.
+    ackCard(completeData.pending_card_id);
     // Each card gets its own close action; a final card must not inherit
     // an interval handler that schedules another ball.
     const closeBtn = document.querySelector('.close-scorecard');
@@ -1707,7 +1741,6 @@ function showScorecard(data, completeData) {
     document.getElementById('scorecard-summary').textContent =
         `Total: ${data.total_score}/${data.wickets} | Overs: ${data.overs} | Run Rate: ${data.run_rate} | Extras: ${data.extras}`;
 
-    traceMatch("scorecard_shown", {innings: currentInningsNumber, scorecard: data});
     // Target Info
     const targetInfo = document.getElementById('target-info');
     if (data.target_info && data.innings_number !== 2) {
@@ -1722,7 +1755,6 @@ function showScorecard(data, completeData) {
 }
 
 function closeScorecard() {
-    traceMatch("scorecard_close");
     // This is the default close action. 
     // Specific flows (like 1st innings end) override the onclick handler.
     // If we are here, it's likely a manual view or end of match simple close.
@@ -1761,7 +1793,6 @@ async function fcHoldScorecard(archiveLabel) {
     let closing = false;
 
     const finish = async () => {
-        traceMatch("scorecard_close");
         if (closing) return;
         closing = true;
         if (closeBtn) {
