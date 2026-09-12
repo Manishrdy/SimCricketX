@@ -1497,7 +1497,8 @@ async function _processBallResult(data) {
             showScorecard(data.scorecard_data, data);
 
             if (IS_FC_MATCH) {
-                await captureCurrentScorecardImage(fcScorecardArchiveLabel('innings_end', data));
+                await fcHoldScorecard(fcScorecardArchiveLabel('innings_end', data));
+                return;
             }
 
             const closeBtn = document.querySelector('.close-scorecard');
@@ -1615,6 +1616,13 @@ function showScorecard(data, completeData) {
     currentInningsNumber = completeData.innings_number;
     const overlay = document.getElementById('scorecard-overlay');
     overlay.style.display = 'flex';
+    // Each card gets its own close action; a final card must not inherit
+    // an interval handler that schedules another ball.
+    const closeBtn = document.querySelector('.close-scorecard');
+    if (closeBtn) {
+        closeBtn.onclick = closeScorecard;
+        closeBtn.disabled = false;
+    }
 
     document.getElementById('scorecard-title').textContent = `${data.innings} INNINGS SCORECARD`;
 
@@ -1758,7 +1766,7 @@ async function uploadNamedScorecardImage(blob, archiveLabel) {
     formData.append('scorecard_image', blob, `${archiveLabel}.png`);
 
     const uploadPromise = fetch(`${window.location.pathname}/save-scorecard-images`, {
-        method: 'POST', body: formData
+        method: 'POST', body: formData, signal: AbortSignal.timeout(10000)
     }).then(async response => {
         if (!response.ok) {
             const detail = await response.text();
@@ -1772,6 +1780,21 @@ async function uploadNamedScorecardImage(blob, archiveLabel) {
         return await uploadPromise;
     } finally {
         pendingScorecardImageUploads.delete(uploadPromise);
+    }
+}
+
+// Export is optional; a stalled renderer must not trap the simulation.
+async function withScorecardTimeout(promise, operation, timeoutMs = 10000) {
+    let timer;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error(`${operation} timed out`)), timeoutMs);
+            })
+        ]);
+    } finally {
+        clearTimeout(timer);
     }
 }
 
@@ -1791,26 +1814,33 @@ async function captureCurrentScorecardImage(archiveLabel = null) {
 
         if (!panel || !titleElement) return false;
 
-        const originalPanelStyle = panel.style.cssText;
-        // Simplified styling for capture
-        titleElement.style.background = 'none';
-        titleElement.style.color = '#3b82f6'; // blue accent
+        // Let the modal paint before starting export. Never restyle the live
+        // panel: a failed export must leave the scoreboard usable.
+        const title = titleElement.textContent || '';
+        await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
-        panel.style.maxHeight = 'none';
-        panel.style.overflow = 'visible';
-        panel.scrollTop = 0;
+        const canvas = await withScorecardTimeout(html2canvas(panel, {
+            backgroundColor: null, scale: 2, useCORS: true, logging: false,
+            imageTimeout: 5000,
+            // html2canvas otherwise clones the entire match page, including
+            // thousands of commentary/animation nodes in a long FC match.
+            // Keep the panel, its ancestors and stylesheet resources only.
+            ignoreElements: element => !['STYLE', 'LINK', 'HEAD'].includes(element.tagName)
+                && !element.contains(panel) && !panel.contains(element),
+            onclone: (_doc, clonedPanel) => {
+                clonedPanel.style.maxHeight = 'none';
+                clonedPanel.style.overflow = 'visible';
+                clonedPanel.scrollTop = 0;
+                const clonedTitle = clonedPanel.querySelector('#scorecard-title');
+                if (clonedTitle) {
+                    clonedTitle.style.background = 'none';
+                    clonedTitle.style.color = '#3b82f6';
+                }
+            }
+        }), 'Scorecard rendering');
 
-        await new Promise(res => setTimeout(res, 150)); // rendering wait
-
-        const canvas = await html2canvas(panel, {
-            backgroundColor: null, scale: 2, useCORS: true, logging: false
-        });
-
-        // Restore
-        titleElement.style = ''; // Reset inline styles
-        panel.style.cssText = originalPanelStyle;
-
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        const blob = await withScorecardTimeout(
+            new Promise(resolve => canvas.toBlob(resolve, 'image/png')), 'Scorecard encoding');
         if (!blob) return false;
 
         if (archiveLabel) {
@@ -1819,7 +1849,6 @@ async function captureCurrentScorecardImage(archiveLabel = null) {
 
         // Existing T20/List A flow: retain innings one in memory, then send
         // both cards together as soon as the final innings card is rendered.
-        const title = titleElement.textContent || '';
         if (title.includes('1st INNINGS')) {
             firstInningsImageBlob = blob;
         } else if (title.includes('2nd INNINGS')) {
@@ -1850,7 +1879,7 @@ async function sendScorecardImagesToBackend(firstBlob, secondBlob) {
     let uploadPromise = null;
     try {
         uploadPromise = fetch(`${window.location.pathname}/save-scorecard-images`, {
-            method: 'POST', body: formData
+            method: 'POST', body: formData, signal: AbortSignal.timeout(10000)
         });
         pendingScorecardImageUploads.add(uploadPromise);
         const response = await uploadPromise;
