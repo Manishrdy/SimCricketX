@@ -1326,3 +1326,20 @@ class SupportConversationReadState(db.Model):
         db.UniqueConstraint('conversation_id', 'reader_type', 'reader_id', name='uq_support_read_state_reader'),
         db.Index('ix_support_read_state_reader', 'reader_type', 'reader_id'),
     )
+
+
+class MatchDiagnosticEvent(db.Model):
+    """Temporary opt-in request/payload/resource trace; no credentials recorded."""
+    __tablename__ = 'match_diagnostic_events'
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.String(40), nullable=False)
+    match_id = db.Column(db.String(64), nullable=False, index=True)
+    trace_id = db.Column(db.String(64), index=True)
+    source = db.Column(db.String(16), nullable=False)
+    stage = db.Column(db.String(64), nullable=False)
+    pid = db.Column(db.Integer)
+    monotonic_seconds = db.Column(db.Float)
+    payload_json = db.Column(db.Text)
+    payload_bytes = db.Column(db.Integer)
+    payload_truncated = db.Column(db.Boolean)
+    metrics_json = db.Column(db.Text)
