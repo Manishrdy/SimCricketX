@@ -1288,81 +1288,102 @@ def register_match_routes(
         else:
             _persist_non_tournament_match_completion(match, match_id, outcome, app.logger)
 
+    def _advance_one_ball(match_id, user_id):
+        """Advance a match by one ball. Transport-agnostic.
+
+        Shared by the HTTP POST /next-ball route below AND app.py's
+        WebSocket next_ball handler. They used to be two hand-copied
+        implementations, and the copy had silently drifted: it never
+        restored an FC/super-over snapshot (rebuilding a fresh
+        fc_innings=1 match instead) and never persisted one, so a
+        first-class match played over WebSocket ran completely
+        uncheckpointed. One body, called by both, is what stops that
+        recurring.
+
+        Returns (payload, error) with exactly one non-None. `error` is a
+        Flask (response, status) pair; each caller renders it in its own
+        idiom.
+        """
+        # Thread-safe fetch/rebuild (Bug Fix B2), snapshot-aware: a rebuilt
+        # instance restores any persisted super-over or FC state.
+        match, err = _get_or_restore_match_instance(match_id)
+        if err:
+            return None, err
+        if match.data.get("created_by") != user_id:
+            return None, (jsonify({"error": "Unauthorized"}), 403)
+
+        outcome = match.next_ball()
+        if match.is_fc and getattr(match, "fc_weather_v2", False):
+            outcome.setdefault("fc_weather_status", match._fc_weather_status())
+
+        # Accumulate commentary for resume replay
+        commentary_html = outcome.get("commentary")
+        if commentary_html:
+            if not hasattr(match, "commentary_replay_log"):
+                match.commentary_replay_log = []
+            match.commentary_replay_log.append(commentary_html)
+
+        # A tie just pushed the match into super-over state — persist the
+        # snapshot immediately so a crash before the first super-over ball
+        # is already recoverable.
+        if outcome.get("super_over_required"):
+            _persist_super_over_snapshot(match, match_id)
+
+        # FC: persist after every over/innings/day boundary (current_ball
+        # == 0 right after a ball was just processed means one of those
+        # was just reached) so a restart/eviction resumes instead of
+        # silently restarting the match from fc_innings=1.
+        if (
+            match.is_fc and not outcome.get("match_over")
+            and (
+                match.current_ball == 0
+                or outcome.get("fc_weather_event")
+                or outcome.get("fc_interval")
+                or outcome.get("day_break")
+            )
+        ):
+            _persist_fc_snapshot(match, match_id)
+
+        if outcome.get("match_over"):
+            _finalize_completed_match(match, match_id, outcome)
+
+            # FC's own next_ball() response already carries the correct
+            # innings number (fc_innings, via _fc_finalize_match) — for
+            # FC, match.innings stays 1 for the whole match by design
+            # (it's the super-over-overloaded counter), so deriving from
+            # it here would always report innings 1. Source from the
+            # engine's own outcome dict for FC; keep match.innings for
+            # T20/ListA, unchanged.
+            if match.is_fc:
+                innings_number = outcome.get("innings_number", match.fc_innings)
+                innings_end_flag = bool(outcome.get("innings_end"))
+            else:
+                innings_number = match.innings
+                innings_end_flag = match.innings == 2
+
+            return {
+                "innings_end":     innings_end_flag,
+                "innings_number":  innings_number,
+                "match_over":      True,
+                "commentary":      outcome.get("commentary", "<b>Match Over!</b>"),
+                "scorecard_data":  outcome.get("scorecard_data"),
+                "score":           outcome.get("final_score", match.score),
+                "wickets":         outcome.get("wickets",  match.wickets),
+                "result":          outcome.get("result",  "Match ended"),
+                "fc_weather_status": outcome.get("fc_weather_status"),
+            }, None
+
+        return outcome, None
+
     @app.route("/match/<match_id>/next-ball", methods=["POST"])
     @login_required
     @rate_limit(max_requests=60, window_seconds=10)  # C3: Rate limit to prevent DoS
     def next_ball(match_id):
         try:
-            # Thread-safe fetch/rebuild (Bug Fix B2), now snapshot-aware: a
-            # rebuilt instance restores any persisted super-over or FC state.
-            match, err = _get_or_restore_match_instance(match_id)
-            if err:
+            payload, err = _advance_one_ball(match_id, current_user.id)
+            if err is not None:
                 return err
-            if match.data.get("created_by") != current_user.id:
-                return jsonify({"error": "Unauthorized"}), 403
-            outcome = match.next_ball()
-            if match.is_fc and getattr(match, "fc_weather_v2", False):
-                outcome.setdefault("fc_weather_status", match._fc_weather_status())
-
-            # Accumulate commentary for resume replay
-            commentary_html = outcome.get("commentary")
-            if commentary_html:
-                if not hasattr(match, "commentary_replay_log"):
-                    match.commentary_replay_log = []
-                match.commentary_replay_log.append(commentary_html)
-
-            # A tie just pushed the match into super-over state — persist the
-            # snapshot immediately so a crash before the first super-over ball
-            # is already recoverable.
-            if outcome.get("super_over_required"):
-                _persist_super_over_snapshot(match, match_id)
-
-            # FC: persist after every over/innings/day boundary (current_ball
-            # == 0 right after a ball was just processed means one of those
-            # was just reached) so a restart/eviction resumes instead of
-            # silently restarting the match from fc_innings=1.
-            if (
-                match.is_fc and not outcome.get("match_over")
-                and (
-                    match.current_ball == 0
-                    or outcome.get("fc_weather_event")
-                    or outcome.get("fc_interval")
-                    or outcome.get("day_break")
-                )
-            ):
-                _persist_fc_snapshot(match, match_id)
-
-            # Explicitly send final score and wickets clearly
-            if outcome.get("match_over"):
-                _finalize_completed_match(match, match_id, outcome)
-
-                # FC's own next_ball() response already carries the correct
-                # innings number (fc_innings, via _fc_finalize_match) — for
-                # FC, match.innings stays 1 for the whole match by design
-                # (it's the super-over-overloaded counter), so deriving from
-                # it here would always report innings 1. Source from the
-                # engine's own outcome dict for FC; keep match.innings for
-                # T20/ListA, unchanged.
-                if match.is_fc:
-                    innings_number = outcome.get("innings_number", match.fc_innings)
-                    innings_end_flag = bool(outcome.get("innings_end"))
-                else:
-                    innings_number = match.innings
-                    innings_end_flag = match.innings == 2
-
-                return jsonify({
-                    "innings_end":     innings_end_flag,
-                    "innings_number":  innings_number,
-                    "match_over":      True,
-                    "commentary":      outcome.get("commentary", "<b>Match Over!</b>"),
-                    "scorecard_data":  outcome.get("scorecard_data"),
-                    "score":           outcome.get("final_score", match.score),
-                    "wickets":         outcome.get("wickets",  match.wickets),
-                    "result":          outcome.get("result",  "Match ended"),
-                    "fc_weather_status": outcome.get("fc_weather_status"),
-                })
-
-            return jsonify(outcome)
+            return jsonify(payload)
         except Exception as e:
             log_exception(e)
             # Log the complete error with stack trace to execution.log
@@ -2250,3 +2271,15 @@ def register_match_routes(
             log_exception(e)
             app.logger.error(f"Error saving scorecard images: {e}", exc_info=True)
             return jsonify({"error": "An error occurred while saving images"}), 500
+
+    # Handed to app.py so the WebSocket next_ball handler runs this module's
+    # implementation instead of keeping its own copy. The two diverged once
+    # (the copy lost FC snapshot restore/persist entirely); sharing the
+    # callable is what prevents a second divergence.
+    return {
+        "advance_one_ball": _advance_one_ball,
+        "get_or_restore_match_instance": _get_or_restore_match_instance,
+        "persist_fc_snapshot": _persist_fc_snapshot,
+        "persist_super_over_snapshot": _persist_super_over_snapshot,
+        "finalize_completed_match": _finalize_completed_match,
+    }
