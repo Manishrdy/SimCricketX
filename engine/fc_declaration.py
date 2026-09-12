@@ -36,6 +36,9 @@ flat-threshold heuristic.
 import logging
 import random as _random
 
+from engine import fc_captain
+from engine.fc_captain import DEFAULT_RISK_APPETITE
+
 
 logger = logging.getLogger(__name__)
 
@@ -356,7 +359,8 @@ def _time_pressure(overs_bowled_this_innings, days_remaining,
 
 
 def declaration_window_open(*, fc_innings, wickets, overs_bowled_this_innings,
-                             days_remaining, innings_time_budget_overs=None) -> bool:
+                             days_remaining, innings_time_budget_overs=None,
+                             model_driven=False) -> bool:
     """
     True once the STRUCTURAL conditions for even considering a declaration
     are met: minimum overs faced, and either the tail is exposed
@@ -384,6 +388,16 @@ def declaration_window_open(*, fc_innings, wickets, overs_bowled_this_innings,
         return False
     if overs_bowled_this_innings < _MIN_OVERS_BEFORE_DECLARE:
         return False
+    if model_driven:
+        # With a value function behind the decision the window is purely a
+        # legality/plausibility constraint: a captain does not declare in
+        # the first few overs, and that is the only structural rule left.
+        # The remaining clauses below exist because the flat-threshold rule
+        # could not be trusted to be asked often — they kept it quiet until
+        # the tail was exposed or the clock was nearly gone, by which time
+        # the first innings had already run to 600. Asking a model that
+        # prices batting on is the entire point, so ask it early and often.
+        return True
     if wickets == 9:
         return True
     if (innings_time_budget_overs is not None
@@ -403,7 +417,9 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                     own_batting_strength=None, opp_batting_strength=None,
                     pitch_wear=0.5, rng=None,
                     rain_risk=None, projected_final_wear=None,
-                    attack_freshness=None) -> bool:
+                    attack_freshness=None,
+                    pitch=None, own_strengths=None, opposition_strengths=None,
+                    risk_appetite=None) -> bool:
     """
     Returns True if the AI captain should declare the current innings
     closed right now (called at an over boundary only).
@@ -442,8 +458,18 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                                  preserves the exact prior behavior for any
                                  caller that doesn't supply it.
 
-    Monte Carlo inputs (innings 2/3 only)
-    -------------------------------------
+    Forward-model inputs (preferred, innings 2/3)
+    ---------------------------------------------
+    pitch, own_strengths, opposition_strengths, risk_appetite
+        Supplying a pitch and both sides' strengths-by-wickets maps (see
+        fc_captain.strengths_by_wickets) selects the fitted forward model,
+        which compares declaring now against batting on for a set of
+        horizons. risk_appetite is the captain's temperament; None uses the
+        neutral default. Missing inputs fall through to the sampled
+        estimator and then to the flat thresholds, unchanged.
+
+    Monte Carlo inputs (innings 2/3 only, legacy fallback)
+    ------------------------------------------------------
     overs_remaining_in_match, own_bowling_strength, own_batting_strength,
     opp_batting_strength, pitch_wear, rng
         Innings 2 requires all four strength/overs inputs and retains the
@@ -452,20 +478,28 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
         only the final target defence; own batting strength is ignored.
         Missing inputs preserve the original flat-threshold fallback.
     """
+    model_driven = (fc_innings in (1, 2, 3) and pitch is not None
+                    and bool(own_strengths) and bool(opposition_strengths)
+                    and overs_remaining_in_match is not None)
+
     if not declaration_window_open(
         fc_innings=fc_innings, wickets=wickets,
         overs_bowled_this_innings=overs_bowled_this_innings,
         days_remaining=days_remaining,
         innings_time_budget_overs=innings_time_budget_overs,
+        model_driven=model_driven,
     ):
         return False
 
-    if not (wickets >= _WICKETS_DOWN_FLOOR or overs_bowled_this_innings >= _OVERS_DOWN_FLOOR):
+    # Innings 2/3 only: you declare from in front. Being behind and closing
+    # the innings gives the opposition a lead for nothing. This is a rule of
+    # the game rather than a judgement, so it binds the model too.
+    if fc_innings in (2, 3) and lead < _MIN_LEAD_TO_DECLARE:
         return False
 
-    # Innings 2/3 only: you declare from in front. Being behind and closing
-    # the innings gives the opposition a lead for nothing.
-    if fc_innings in (2, 3) and lead < _MIN_LEAD_TO_DECLARE:
+    if not model_driven and not (
+            wickets >= _WICKETS_DOWN_FLOOR
+            or overs_bowled_this_innings >= _OVERS_DOWN_FLOOR):
         return False
 
     innings_two_inputs = (
@@ -476,6 +510,40 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
         overs_remaining_in_match, own_bowling_strength,
         opp_batting_strength,
     )
+    # Preferred path: the fitted forward model (engine/fc_forecast.py) via
+    # the value function in engine/fc_captain.py. It is chosen over the
+    # sampled estimator below whenever the caller supplies squad strengths
+    # and a pitch, because it prices the OVERS batting on would cost as well
+    # as the runs it would gain. The sampled estimator could only ask
+    # whether the lead was already big enough, so its one way to grow a lead
+    # was to keep batting — which is how targets of 500+ were set.
+    if model_driven:
+        plan = fc_captain.evaluate_declaration(
+            pitch=pitch, fc_innings=fc_innings,
+            # Innings 1 has no lead to speak of yet: the runs on the board
+            # ARE the position, and three innings still have to be played
+            # out against them.
+            lead=score if fc_innings == 1 else lead,
+            overs_remaining=overs_remaining_in_match,
+            own_strengths=own_strengths,
+            opposition_strengths=opposition_strengths,
+            wickets_in_hand=max(1, 10 - wickets),
+            wear_start=pitch_wear,
+            wear_end=projected_final_wear if projected_final_wear is not None
+            else min(1.0, pitch_wear + 0.3),
+            risk_appetite=(DEFAULT_RISK_APPETITE if risk_appetite is None
+                           else risk_appetite),
+        )
+        if plan is not None:
+            best, now = plan["best"], plan["now"]
+            logger.debug(
+                "FC declaration innings=%d lead=%d best_horizon=%+d value=%.3f "
+                "(now: W%.2f D%.2f L%.2f) -> %s",
+                fc_innings, lead, best["horizon"], best["value"],
+                (now or best)["win"], (now or best)["draw"], (now or best)["loss"],
+                "DECLARE" if plan["declare_now"] else "bat on")
+            return plan["declare_now"]
+
     forecast_ready = (
         (fc_innings == 2 and all(v is not None for v in innings_two_inputs))
         or (fc_innings == 3 and all(v is not None for v in innings_three_inputs))
@@ -605,7 +673,10 @@ _FO_OVERWHELMING_DEFICIT_MULT = 2.0
 
 def should_enforce_follow_on(*, deficit, follow_on_margin, days_remaining,
                               attack_overs_bowled=None, projected_final_wear=None,
-                              rain_risk=None) -> bool:
+                              rain_risk=None, pitch=None, own_strengths=None,
+                              opposition_strengths=None, pitch_wear=0.5,
+                              overs_remaining_in_match=None,
+                              attack_freshness=None, risk_appetite=None) -> bool:
     """
     Returns True if the side that batted first should enforce the
     follow-on, given the second side's deficit after being dismissed.
@@ -634,6 +705,32 @@ def should_enforce_follow_on(*, deficit, follow_on_margin, days_remaining,
         return False
     if days_remaining < _MIN_DAYS_REMAINING_FOR_FOLLOW_ON:
         return False
+
+    # Preferred path: weigh enforcing against batting again under the same
+    # value function every other decision uses. The thresholds below remain
+    # as the fallback for callers that cannot supply the model's inputs.
+    if (pitch is not None and own_strengths and opposition_strengths
+            and overs_remaining_in_match is not None):
+        plan = fc_captain.evaluate_follow_on(
+            pitch=pitch, deficit=deficit,
+            overs_remaining=overs_remaining_in_match,
+            own_strengths=own_strengths,
+            opposition_strengths=opposition_strengths,
+            wear_start=pitch_wear,
+            wear_end=projected_final_wear if projected_final_wear is not None
+            else min(1.0, pitch_wear + 0.3),
+            risk_appetite=(DEFAULT_RISK_APPETITE if risk_appetite is None
+                           else risk_appetite),
+            attack_freshness=1.0 if attack_freshness is None else attack_freshness,
+        )
+        if plan is not None:
+            logger.debug(
+                "FC follow-on deficit=%d enforce_value=%.3f decline_value=%.3f "
+                "fatigue_penalty=%.1f -> %s", deficit,
+                plan["options"]["enforce"]["value"],
+                plan["options"]["decline"]["value"], plan["fatigue_penalty"],
+                "ENFORCE" if plan["enforce"] else "bat again")
+            return plan["enforce"]
 
     # Crushing lead: make them follow on and be done with it.
     if deficit >= follow_on_margin * _FO_OVERWHELMING_DEFICIT_MULT:
