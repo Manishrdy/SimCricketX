@@ -617,7 +617,6 @@
         console.error("Failed to parse match data", e);
         window.matchData = {};
     }
-    window.matchDiagnosticsEnabled = {{ ('*' in config.get('MATCH_DIAGNOSTICS', '').split(',') or match.match_id in config.get('MATCH_DIAGNOSTICS', '').replace(' ', '').split(',')) | tojson }};
     window.resumeMode = {{ resume_mode | default(false) | tojson }};
 </script>
 

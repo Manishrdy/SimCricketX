@@ -84,6 +84,38 @@ def frontier(pitch, wear, ball_age_overs, strength_diff, aggression):
             max(MIN_WICKET_RATE, min(MAX_WICKET_RATE, wicket_rate)))
 
 
+@functools.lru_cache(maxsize=256)
+def _frontier_basis(pitch, aggression):
+    """frontier() split into the parts innings_forecast can hoist.
+
+    The fitted frontier is log-linear, and inside one dynamic programme the
+    only term that moves with wickets in hand is the strength one. So
+
+        exp(intercept + wear*w + age + sd_coef*sd/100)
+            == exp(intercept + wear*w + age) * exp(sd_coef*sd/100)
+
+    splits into a factor that changes once per over and a factor that is
+    fixed for the whole innings. Hoisting it turns two dict builds and two
+    generator sums per (over, wicket) into a single multiply.
+
+    Returns, for runs then wickets: (intercept, wear coefficient, per-age-
+    bucket offsets, strength coefficient). `aggression` must already be
+    clamped by the caller, exactly as frontier() clamps it.
+    """
+    pitch = pitch if pitch in PITCHES else "Hard"
+    out = []
+    for block in (MODEL["log_rate"], MODEL["log_wicket_rate"]):
+        intercept = (block[f"pitch[{pitch}]"]
+                     + block[f"aggression[{pitch}]"] * aggression)
+        # _design only emits a ball_age term for a non-zero bucket, so
+        # bucket 0 contributes nothing.
+        ages = tuple(0.0 if b == 0 else block.get(f"ball_age[{b}]", 0.0)
+                     for b in range(N_AGE_BUCKETS))
+        out.append((intercept, block["wear"], ages,
+                    block["strength_diff_per_100"]))
+    return tuple(out)
+
+
 @functools.lru_cache(maxsize=4096)
 def _over_runs_pmf(rate_key, bucket):
     """Discretised negative-binomial runs for one over, on the runs grid."""
@@ -110,6 +142,17 @@ def _over_runs_pmf(rate_key, bucket):
     np.add.at(folded, lower, pmf * (1.0 - fraction))
     np.add.at(folded, lower + 1, pmf * fraction)
     return folded / folded.sum()
+
+
+@functools.lru_cache(maxsize=8192)
+def _as_pmf_array(pmf):
+    """ndarray view of a _wicket_pmf tuple. Cached on the tuple itself, which
+    _wicket_pmf already memoises, so the conversion happens once per distinct
+    (rate, wickets) pair rather than once per over."""
+    array = np.asarray(pmf)
+    # Shared out of a cache, so nobody gets to write through it.
+    array.flags.writeable = False
+    return array
 
 
 @functools.lru_cache(maxsize=8192)
@@ -156,45 +199,81 @@ def innings_forecast(*, pitch, overs_available, wickets_in_hand,
                           absorption)
     state[wickets_in_hand, 0] = 1.0
 
+    # Hoisted frontier (see _frontier_basis). The strength factor is fixed
+    # for the whole innings; only the (wear, ball age) factor moves, once
+    # per over rather than once per over per wicket.
+    clamped_aggression = max(-1.0, min(1.0, float(aggression)))
+    (r_intercept, r_wear_coef, r_ages, r_sd_coef), \
+        (k_intercept, k_wear_coef, k_ages, k_sd_coef) = _frontier_basis(
+            pitch, clamped_aggression)
+    rate_strength = [0.0] * (wickets_in_hand + 1)
+    wicket_strength = [0.0] * (wickets_in_hand + 1)
+    for w in range(1, wickets_in_hand + 1):
+        sd = strength_by_wickets.get(w, 0.0) / 100.0
+        rate_strength[w] = math.exp(r_sd_coef * sd)
+        wicket_strength[w] = math.exp(k_sd_coef * sd)
+
     expected_overs = 0.0
     for over in range(overs_available):
         progress = over / max(1, overs_available - 1) if overs_available > 1 else 1.0
         wear = wear_start + (wear_end - wear_start) * progress
         age = (ball_age_start + over) % max(1, new_ball_overs)
-        live = state.sum()
+        # One reduction for every wicket state, instead of one per state
+        # plus two more inside the loop below.
+        row_sums = state.sum(axis=1)
+        live = row_sums.sum()
         if live < 1e-9:
             break
         expected_overs += live
 
+        clamped_wear = max(0.0, min(1.0, wear))
+        age_bucket = ball_age_bucket(age)
+        base_rate = math.exp(
+            r_intercept + r_wear_coef * clamped_wear + r_ages[age_bucket])
+        base_wicket_rate = math.exp(
+            k_intercept + k_wear_coef * clamped_wear + k_ages[age_bucket])
+
         nxt = np.zeros_like(state)
         for w in range(1, wickets_in_hand + 1):
-            row = state[w]
-            if row.sum() < 1e-12:
+            row_mass = row_sums[w]
+            if row_mass < 1e-12:
                 continue
-            rate, wicket_rate = frontier(
-                pitch, wear, age, strength_by_wickets.get(w, 0.0), aggression)
+            row = state[w]
+            rate = max(MIN_RATE, min(MAX_RATE, base_rate * rate_strength[w]))
+            wicket_rate = max(MIN_WICKET_RATE,
+                              min(MAX_WICKET_RATE,
+                                  base_wicket_rate * wicket_strength[w]))
             runs_pmf = _over_runs_pmf(int(round(rate * 100)), bucket)
             wickets_pmf = _wicket_pmf(int(round(wicket_rate * 1000)), w)
 
             spread = np.convolve(row, runs_pmf)[:size]
             # Runs beyond the grid pile up in the last bucket rather than
             # vanishing, so total probability is conserved.
-            spread[-1] += row.sum() - spread.sum()
+            spread[-1] += row_mass - spread.sum()
             if target_bucket is not None and target_bucket < size:
                 p_target += spread[target_bucket:].sum()
                 spread = spread.copy()
                 spread[target_bucket:] = 0.0
 
-            for lost, probability in enumerate(wickets_pmf):
-                if probability <= 0.0:
-                    continue
-                remaining = w - lost
-                if remaining <= 0:
-                    all_out += spread * probability
-                    if absorption is not None:
-                        absorption[over] += spread * probability
-                else:
-                    nxt[remaining] += spread * probability
+            # Scatter the over's outcome across the surviving wicket
+            # states. wickets_pmf has w+1 entries, so `lost` runs 0..w and
+            # `remaining = w - lost` lands on rows w..1 for lost < w, and on
+            # "all out" only for lost == w. Each of those rows is written
+            # exactly once per w, so the whole fan-out is one outer product
+            # — the same additions in the same order, with the per-`lost`
+            # Python round trip removed. Rows whose probability is zero add
+            # a zero row, which is what the old `continue` did.
+            pmf = _as_pmf_array(wickets_pmf)
+            # Broadcast rather than np.outer: both operands are already 1-D
+            # and contiguous, so outer's ravel/reshape wrapper is pure
+            # overhead at this call count.
+            nxt[1:w + 1] += pmf[w - 1::-1, None] * spread
+            tail = pmf[w]
+            if tail > 0.0:
+                absorbed = spread * tail
+                all_out += absorbed
+                if absorption is not None:
+                    absorption[over] += absorbed
         state = nxt
 
     return _summarise(state.sum(axis=0), all_out, p_target, bucket,
