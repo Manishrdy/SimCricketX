@@ -1738,6 +1738,20 @@ def create_app():
             return render_template('500.html', exception_log_id=exc_log_id), 500
         return ("Internal Server Error", 500)
 
+    @app.errorhandler(413)
+    def handle_payload_too_large(err):
+        # Only fires when Flask itself rejects the body; a reverse proxy's own
+        # cap answers before the app is reached. Either way the remedy is the
+        # same, so name it instead of showing a bare 413.
+        reason = (
+            "That upload is too large to send in one request. Large player-pool "
+            "files import in batches — use the batch importer on "
+            "/admin/player-pool/import, or scripts/import_player_pool_chunked.py."
+        )
+        if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+            return jsonify({"error": "Payload too large", "reason": reason}), 413
+        return render_template('400.html', reason=reason), 413
+
     @app.errorhandler(404)
     def handle_not_found(err):
         path = request.path or ""

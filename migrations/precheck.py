@@ -17,8 +17,9 @@ Usage:
     from migrations.precheck import run_all
     run_all(db, app)
 
-    # CLI (manual pre-deploy check)
+    # CLI (manual pre-deploy check, e.g. before a standalone data migration)
     python -m migrations.precheck
+    python -m migrations.precheck --db /path/to/cricket_sim.db
 """
 
 import argparse
@@ -196,12 +197,26 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run all schema migrations in order.")
     parser.add_argument("--fail-fast", action="store_true",
                         help="Exit immediately on first migration failure (default: continue).")
+    parser.add_argument("--db", default=None,
+                        help="SQLite database path (default: repository cricket_sim.db).")
     args = parser.parse_args()
 
     # Prevent module-level app bootstrap while importing app.py in CLI mode.
     os.environ["SIMCRICKETX_SKIP_GLOBAL_APP"] = "1"
     # Prevent app.create_app() from recursively invoking precheck again.
     os.environ["SIMCRICKETX_PRECHECK_RUNNING"] = "1"
+
+    if args.db:
+        db_path = os.path.abspath(args.db)
+        if not os.path.isfile(db_path):
+            parser.error(f"database does not exist: {db_path}")
+        # Same escape hatch the standalone data migrations use: point the app
+        # factory at an explicit file and suppress the normal production
+        # startup side effects (backup scheduler, background workers).
+        os.environ["SIMCRICKETX_TEST_MODE"] = "1"
+        os.environ["SIMCRICKETX_TEST_DB_URI"] = f"sqlite:///{db_path}"
+        print(f"[Precheck] Target database: {db_path}")
+
     from database import db as _db
     from app import create_app
 
