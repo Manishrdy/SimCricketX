@@ -930,6 +930,7 @@
       search: '',
       role: '',
       loading: false,
+      lastKey: null,      // filter combination currently rendered
     },
     submitting: false,
   };
@@ -1003,14 +1004,68 @@
   }
 
   // ── Pool: fetch + render ─────────────────────────────────────────────
+  // Typing must never lose a keystroke: a new search aborts whatever is still
+  // in flight and always wins. (The old code returned early while a request
+  // was pending, so mid-word queries were silently dropped and the list only
+  // caught up on the next keystroke that happened to land while idle.)
+  let poolRequestSeq = 0;
+  let poolInFlight = null;
+  const poolCache = new Map();          // filter key -> first page of results
+  const POOL_CACHE_MAX = 40;
+  const POOL_CACHE_TTL_MS = 60000;
+
+  function poolFilterKey() {
+    return state.pool.search + '\u0000' + state.pool.role;
+  }
+
+  function poolCacheGet(key) {
+    const hit = poolCache.get(key);
+    if (!hit) return null;
+    if (Date.now() - hit.at > POOL_CACHE_TTL_MS) { poolCache.delete(key); return null; }
+    return hit;
+  }
+
+  function poolCachePut(key, data) {
+    poolCache.set(key, {
+      at: Date.now(),
+      players: (data.players || []).slice(),
+      total: data.total || 0,
+      hasMore: !!data.has_more,
+    });
+    while (poolCache.size > POOL_CACHE_MAX) {
+      poolCache.delete(poolCache.keys().next().value);
+    }
+  }
+
   async function fetchPool(reset) {
-    if (state.pool.loading) return;
+    // Paging keeps the in-flight guard — those append in order and must not
+    // overlap. A reset (new search/filter) supersedes instead.
+    if (!reset && (state.pool.loading || !state.pool.hasMore)) return;
+
+    const key = poolFilterKey();
+
     if (reset) {
+      if (poolInFlight) { poolInFlight.abort(); poolInFlight = null; }
       state.pool.offset = 0;
       state.pool.items = [];
       state.pool.hasMore = true;
+
+      const cached = poolCacheGet(key);
+      if (cached) {                       // backspacing redraws with no request
+        state.pool.items = cached.players.slice();
+        state.pool.offset = cached.players.length;
+        state.pool.total = cached.total;
+        state.pool.hasMore = cached.hasMore;
+        state.pool.loading = false;
+        state.pool.lastKey = key;
+        renderPool();
+        return;
+      }
     }
-    if (!state.pool.hasMore) return;
+
+    const seq = ++poolRequestSeq;
+    const controller = ('AbortController' in window) ? new AbortController() : null;
+    if (reset) poolInFlight = controller;
     state.pool.loading = true;
     renderPool();
 
@@ -1025,18 +1080,27 @@
       const res = await fetch('/api/player-pool/search?' + params.toString(), {
         headers: { 'Accept': 'application/json' },
         credentials: 'same-origin',
+        signal: controller ? controller.signal : undefined,
       });
       if (!res.ok) throw new Error('pool fetch failed');
       const data = await res.json();
+      if (seq !== poolRequestSeq) return;        // a newer search owns the list
       state.pool.items = state.pool.items.concat(data.players || []);
       state.pool.offset = (data.offset || 0) + (data.players || []).length;
       state.pool.total = data.total || 0;
       state.pool.hasMore = !!data.has_more;
+      state.pool.lastKey = key;
+      if (reset) poolCachePut(key, data);
     } catch (e) {
+      if (e && e.name === 'AbortError') return;  // superseded, nothing to undo
+      if (seq === poolRequestSeq) state.pool.lastKey = null;   // allow a retry
       console.error(e);
     } finally {
-      state.pool.loading = false;
-      renderPool();
+      if (seq === poolRequestSeq) {
+        state.pool.loading = false;
+        if (poolInFlight === controller) poolInFlight = null;
+        renderPool();
+      }
     }
   }
 
@@ -1099,14 +1163,19 @@
     if (p) addToRoster(p);
   });
 
-  // Filters (debounced)
+  // Filters. Short debounce so the list tracks typing rather than trailing it;
+  // an identical filter combination that is already rendered is not re-fetched.
   const debouncedSearch = debounce(() => {
-    state.pool.search = poolSearch.value.trim();
+    const next = poolSearch.value.trim();
+    state.pool.search = next;
+    if (poolFilterKey() === state.pool.lastKey) return;
     fetchPool(true);
-  }, 250);
+  }, 110);
   poolSearch.addEventListener('input', debouncedSearch);
+  poolSearch.addEventListener('search', debouncedSearch);   // native clear (×)
   poolRole.addEventListener('change', () => {
     state.pool.role = poolRole.value;
+    if (poolFilterKey() === state.pool.lastKey) return;
     fetchPool(true);
   });
 
