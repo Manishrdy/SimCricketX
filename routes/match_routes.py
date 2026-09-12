@@ -7,11 +7,12 @@ import re
 import time
 import uuid
 import zipfile
+from services.match_diagnostics import record as trace_match, enabled as trace_enabled
 from datetime import datetime, timedelta
 
 from engine.format_config import get_any_format as _get_any_format
 from engine.toss import decide_toss, home_bats_first
-from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask import g, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 from utils.exception_tracker import log_exception
@@ -1201,6 +1202,7 @@ def register_match_routes(
         failure — the in-memory state is still authoritative for the live
         session."""
         try:
+            trace_match(match_id, "snapshot_start")
             snap = match.serialize_fc_snapshot()
             if not snap:
                 return
@@ -1208,11 +1210,14 @@ def register_match_routes(
                 match_data, match_path, err = _load_match_file_for_user(match_id)
                 if err or not match_path:
                     return
+                trace_match(match_id, "snapshot_file_loaded")
                 match_data["fc_snapshot"] = snap
                 with open(match_path, "w", encoding="utf-8") as f:
                     json.dump(match_data, f, indent=2)
+            trace_match(match_id, "snapshot_finished")
         except Exception as e:
             log_exception(e)
+            trace_match(match_id, "snapshot_error", {"error": str(e)})
             app.logger.warning(f"[FC] Snapshot persist failed for {match_id}: {e}")
 
     def _get_or_restore_match_instance(match_id):
@@ -1312,7 +1317,9 @@ def register_match_routes(
         if match.data.get("created_by") != user_id:
             return None, (jsonify({"error": "Unauthorized"}), 403)
 
+        trace_match(match_id, "engine_start", {"over": match.current_over, "ball": match.current_ball})
         outcome = match.next_ball()
+        trace_match(match_id, "engine_result", outcome)
         if match.is_fc and getattr(match, "fc_weather_v2", False):
             outcome.setdefault("fc_weather_status", match._fc_weather_status())
 
@@ -1375,16 +1382,48 @@ def register_match_routes(
 
         return outcome, None
 
+    @app.route("/match/<match_id>/diagnostics", methods=["POST"])
+    @login_required
+    @rate_limit(max_requests=1200, window_seconds=60)
+    def match_diagnostics(match_id):
+        if not trace_enabled(match_id):
+            return jsonify({"enabled": False})
+        if request.content_length is None or request.content_length > 150000:
+            return jsonify({"error": "Diagnostic body too large"}), 413
+        match = MATCH_INSTANCES.get(match_id)
+        if match is not None:
+            if match.data.get("created_by") != current_user.id:
+                return jsonify({"error": "Unauthorized"}), 403
+        else:
+            _, _, err = _load_match_file_for_user(match_id)
+            if err:
+                return err
+        data = request.get_json(silent=True) or {}
+        allowed = {"request_sent", "response_received", "processing_error", "response_timeout",
+                   "socket_connect", "socket_disconnect", "socket_error", "scorecard_shown",
+                   "scorecard_close", "capture_start", "capture_finished"}
+        if not isinstance(data, dict) or data.get("stage") not in allowed:
+            return jsonify({"error": "Invalid diagnostic event"}), 400
+        trace_match(match_id, data["stage"], data.get("payload"),
+                    trace_id=str(data.get("trace_id", "")), source="browser")
+        return jsonify({"enabled": True})
+
     @app.route("/match/<match_id>/next-ball", methods=["POST"])
     @login_required
     @rate_limit(max_requests=60, window_seconds=10)  # C3: Rate limit to prevent DoS
     def next_ball(match_id):
+        g.match_trace_id = request.headers.get("X-Match-Trace-ID", "")[:64]
+        trace_match(match_id, "http_received")
         try:
             payload, err = _advance_one_ball(match_id, current_user.id)
             if err is not None:
                 return err
+            if g.match_trace_id:
+                payload["_trace_id"] = g.match_trace_id
+            trace_match(match_id, "http_response", payload)
             return jsonify(payload)
         except Exception as e:
+            trace_match(match_id, "http_error", {"error": str(e)})
             log_exception(e)
             # Log the complete error with stack trace to execution.log
             app.logger.error(f"[NextBall] Error processing ball for match {match_id}: {e}", exc_info=True)

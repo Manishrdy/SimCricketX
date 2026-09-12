@@ -516,6 +516,7 @@ def create_app():
     global _backup_scheduler_started, MAINTENANCE_MODE, IP_WHITELIST_MODE
     # --- Flask setup ---
     app = Flask(__name__)
+    app.config["MATCH_DIAGNOSTICS"] = os.getenv("MATCH_DIAGNOSTICS", "")
     test_mode = bool(
         os.getenv("SIMCRICKETX_TEST_MODE", "").strip() in {"1", "true", "True"}
         or _is_pytest_runtime()
@@ -2554,6 +2555,9 @@ def create_app():
                 # first-class match played over WebSocket was never
                 # checkpointed and silently restarted at fc_innings=1
                 # whenever the instance was rebuilt.
+                from services.match_diagnostics import record as trace_match
+                g.match_trace_id = str((data or {}).get('trace_id', ''))[:64]
+                trace_match(match_id, 'ws_received')
                 payload, err = _match_route_helpers['advance_one_ball'](
                     match_id, current_user.id)
                 if err is not None:
@@ -2565,10 +2569,16 @@ def create_app():
                     ws_emit('ws_error', {'message': message, 'status': err_status})
                     return
 
+                if g.match_trace_id:
+                    payload['_trace_id'] = g.match_trace_id
+                trace_match(match_id, 'ws_emit_start', payload)
                 ws_emit('ball_result', payload)
+                trace_match(match_id, 'ws_emit_returned')
 
             except Exception as exc:
                 log_exception(exc)
+                from services.match_diagnostics import record as trace_match
+                trace_match(match_id, 'ws_error', {'error': str(exc)})
                 app.logger.error(f'[WS next_ball] match={match_id}: {exc}', exc_info=True)
                 ws_emit('ws_error', {'message': 'Internal error', 'details': str(exc)})
 
