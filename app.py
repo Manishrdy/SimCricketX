@@ -451,10 +451,23 @@ def cleanup_temp_scorecard_images(logger=None, min_age_seconds=300):
 
         now = time.time()
         removed = 0
+
+        # Never delete cards belonging to a match that is still being played.
+        # Files are named "<match_id>_<label>.<ext>", and the age threshold
+        # alone is not a safety net for first-class cricket: a five-day match
+        # captures a card at every interval, so Day 1's Lunch card is already
+        # far older than five minutes while the match is still going. Any
+        # match-setup POST (this runs on that path) would otherwise wipe the
+        # interval cards out from under the archive that is yet to be built.
+        with MATCH_INSTANCES_LOCK:
+            live_match_ids = tuple(MATCH_INSTANCES.keys())
+
         for root, dirs, files in os.walk(temp_images_dir, topdown=False):
             for fn in files:
                 fpath = os.path.join(root, fn)
                 try:
+                    if any(fn.startswith(mid) for mid in live_match_ids):
+                        continue
                     if now - os.path.getmtime(fpath) > min_age_seconds:
                         os.remove(fpath)
                         removed += 1
@@ -2438,7 +2451,7 @@ def create_app():
     )
 
     # --- Match & Archive Routes (Phase 4 extraction) ---
-    register_match_routes(
+    _match_route_helpers = register_match_routes(
         app,
         limiter=limiter,
         db=db,
@@ -2533,42 +2546,26 @@ def create_app():
                 return
 
             try:
-                with MATCH_INSTANCES_LOCK:
-                    if match_id not in MATCH_INSTANCES:
-                        match_data_ws, _path_ws, _err_ws = _load_match_file_for_user(match_id)
-                        if match_data_ws:
-                            if 'rain_probability' not in match_data_ws:
-                                match_data_ws['rain_probability'] = load_config().get('rain_probability', 0.0)
-                            MATCH_INSTANCES[match_id] = Match(match_data_ws)
-                        else:
-                            ws_emit('ws_error', {'message': 'Match not found'})
-                            return
-                    match = MATCH_INSTANCES[match_id]
-
-                if match.data.get('created_by') != current_user.id:
-                    ws_emit('ws_error', {'message': 'Unauthorized'})
+                # One shared implementation with the HTTP POST /next-ball
+                # route (routes/match_routes.py::_advance_one_ball). This
+                # handler used to keep its own copy, which had drifted:
+                # it rebuilt a fresh Match instead of restoring the FC /
+                # super-over snapshot, and never persisted one — so a
+                # first-class match played over WebSocket was never
+                # checkpointed and silently restarted at fc_innings=1
+                # whenever the instance was rebuilt.
+                payload, err = _match_route_helpers['advance_one_ball'](
+                    match_id, current_user.id)
+                if err is not None:
+                    err_response, err_status = err
+                    try:
+                        message = (err_response.get_json() or {}).get('error', 'Error')
+                    except Exception:
+                        message = 'Error'
+                    ws_emit('ws_error', {'message': message, 'status': err_status})
                     return
 
-                outcome = match.next_ball()
-
-                # Accumulate commentary for resume replay (mirrors HTTP path)
-                commentary_html = outcome.get('commentary')
-                if commentary_html:
-                    if not hasattr(match, 'commentary_replay_log'):
-                        match.commentary_replay_log = []
-                    match.commentary_replay_log.append(commentary_html)
-
-                if outcome.get('match_over'):
-                    first_completion = match.data.get('current_state') != 'completed'
-                    if first_completion:
-                        increment_matches_simulated()
-                        if match.data.get('tournament_id'):
-                            _handle_tournament_match_completion(match, match_id, outcome, app.logger)
-                        else:
-                            _persist_non_tournament_match_completion(match, match_id, outcome, app.logger)
-                    ws_emit('ball_result', {**outcome, 'match_over': True})
-                else:
-                    ws_emit('ball_result', outcome)
+                ws_emit('ball_result', payload)
 
             except Exception as exc:
                 log_exception(exc)
@@ -2585,6 +2582,29 @@ if os.getenv("SIMCRICKETX_SKIP_GLOBAL_APP", "").strip() in {"1", "true", "True"}
     app = None
 else:
     app = create_app()
+
+
+# The systemd unit runs `gunicorn -c gunicorn.conf.py "app:create_app()"`.
+# That imports this module — which builds the app immediately above — and
+# THEN calls the factory again, so production was constructing two complete
+# Flask apps: two blueprint/route registrations and a second
+# socketio.init_app() on the module-level SocketIO singleton, with only the
+# second app ever served. On a 1 GB host that waste is not academic.
+#
+# Rebinding the factory to hand back the app that already exists makes
+# `app:create_app()` and `app:app` equivalent, so either entrypoint spelling
+# is correct and no deploy change is required. When no module-level app was
+# built — under pytest, or with SIMCRICKETX_SKIP_GLOBAL_APP=1 — this falls
+# through to a genuine build, so tests still get a fresh app per call.
+_create_app_uncached = create_app
+
+
+def create_app():  # noqa: F811 - deliberate rebind, see comment above
+    """Return the module-level app when one exists, else build a new one."""
+    if app is not None:
+        return app
+    return _create_app_uncached()
+
 
 if __name__ == "__main__":
     import socket
