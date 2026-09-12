@@ -469,6 +469,33 @@ formats:
   #     wicket suppression. Taking it all out of the wicket rate held the
   #     total but pushed Dead's draw rate to 57%; as shipped it is ~47%,
   #     which is what a genuine road does to a five-day match.
+  # 2026-09 retune (Phase 2). Counting EVERY innings rather than all-out ones
+  # only — the all-out pool hides runaway innings, because runaway innings get
+  # declared — Flat was producing a 600+ total once every ten and Dead once
+  # every five, against a real first-class rate nearer one in forty.
+  #
+  # Flat was raised: start 0.744 -> 0.800 (Fast 0.784 -> 0.845), end 0.834 ->
+  # 0.900 (spin 0.922 -> 0.995). Measured: its 600+ rate halved to 4% and its
+  # draw rate went 33% -> 17%. That trade is worth making.
+  #
+  # Dead was tried at +25% and +12% and REVERTED at both. The lever moves the
+  # draw rate about five times as hard as it moves the tail: +12% bought two
+  # points of 600+ rate (19% -> 17%) for ten points of draws (58% -> 17% on
+  # that surface), and +25% took the whole benchmark's draw rate to 7% against
+  # a real first-class ~25%. Dead's fat tail is a VARIANCE problem — the
+  # spread of innings lengths, not their average — and mean wicket rate cannot
+  # fix it without destroying the draw rate. Partnership grind was checked as
+  # the suspected amplifier and caps at 10% wicket suppression, so that is not
+  # the cause either. Leave this lever alone and treat the tail separately.
+  #
+  # Run rate is untouched on both surfaces: a road is a road because you score
+  # quickly on it, not because you cannot be dismissed on it.
+  #
+  # The note below is now historical: with engine/fc_captain.py deciding
+  # declarations from a forward model, _LONG_INNINGS_WINDOW_OVERS no longer
+  # gates anything in normal play, so a wicket-factor change does reach the
+  # tail rather than being absorbed by the declaration bar.
+  #
   #   * The runaway tail is held by fc_declaration's
   #     _LONG_INNINGS_WINDOW_OVERS, not by anything in this file. Without
   #     it a side 700 for 5 with no time pressure could not declare at all
@@ -572,12 +599,12 @@ formats:
           Extras: 0.00885
         run_factor: 1.0
         wicket_factors_start:
-          Fast: 0.784
-          default: 0.744
+          Fast: 0.845
+          default: 0.800
         wicket_factors_end:
-          Off spin: 0.922
-          Leg spin: 0.922
-          default: 0.834
+          Off spin: 0.995
+          Leg spin: 0.995
+          default: 0.900
       # Lifeless surface, offers spin some late assistance over 5 days
       Dead:
         description: "Lifeless surface, offers spin some late assistance over 5 days"

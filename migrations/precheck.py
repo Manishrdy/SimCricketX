@@ -136,6 +136,16 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # involuntary copies of the pre-ladder Flat/Dead profiles.
     ("reset_flat_dead_fc_tuning",
      _loader("migrations.reset_flat_dead_fc_tuning")),
+    # 2026-09-11 FC Flat/Dead wicket retune: those two surfaces were producing
+    # a 600+ innings once every five (Dead) and one in ten (Flat), against a
+    # real first-class rate nearer one in forty, with a 973 as the worst case.
+    # Their wicket factors were raised; run rate is untouched, because a road
+    # is a road for how fast you score on it, not for being undismissable.
+    # Same shadowing trap as the entries above, but this one CORRECTS stale
+    # values rather than stripping them, and leaves any value the user
+    # deliberately tuned alone.
+    ("fc_flat_dead_wicket_retune",
+     _loader("migrations.fc_flat_dead_wicket_retune")),
     # First-Class format: matches.days/follow_on_enforced/*_innings2 columns
     # for up-to-2-innings-per-side matches.
     ("add_fc_match_columns",     _loader("migrations.add_fc_match_columns")),

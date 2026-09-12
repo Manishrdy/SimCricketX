@@ -107,6 +107,13 @@ ELITE_XI = [
 # wicket factors dropped from 0.825 to 0.680 (it had been TAKING WICKETS
 # MORE EASILY than Flat on a fresh pitch, which is backwards for the
 # deadest surface in the game). Green/Dry/Hard are untouched.
+# Flat's wicket factors were raised in the 2026-09 retune (its 600+ innings
+# rate was one in ten against a real first-class rate nearer one in forty),
+# which moved its all-out first innings 482 -> 435. Still inside the band,
+# so the band is unchanged. Dead was tried and REVERTED — the lever moves
+# the draw rate about five times as hard as it moves the tail — so its band
+# is unchanged too. See the FC retune note in
+# config/ground_conditions_defaults.yaml.
 FC_TARGET_BANDS = {
     "Green": (190, 315, 2.80, 3.45),
     "Dry":   (290, 415, 3.00, 3.65),
