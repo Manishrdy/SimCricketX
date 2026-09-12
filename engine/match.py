@@ -257,6 +257,14 @@ class Match:
         self.score = 0
         self.wickets = 0
         self.commentary = []
+        # The last interval / stumps / innings-end card the engine produced,
+        # held until the client confirms it actually displayed it. These
+        # payloads are generated exactly once and were previously emitted
+        # exactly once, so a socket that died during the call that built the
+        # card lost it for good — and the engine had already consumed the
+        # session that produced it. See routes/match_routes.py's
+        # _remember_pending_card / ack-card.
+        self.pending_interval_card = None
 
         # Initialize comprehensive stats
         self.batsman_stats = {p["name"]: self._new_batting_stats(p) for p in self.batting_team}
@@ -5866,8 +5874,16 @@ class Match:
 
     def _fc_check_declaration_and_follow_on(self):
         """
-        Declaration check, run at every FC over boundary. AI mode decides
-        automatically via engine/fc_declaration.py's should_declare().
+        Declaration check. NOT run at every over boundary, despite what this
+        said for a long time — the caller (_fc_pre_ball_checks) only reaches
+        it at a session break, at stumps, or with nine down. That matters
+        because should_declare() runs a forward model that costs tens of
+        seconds on a small host, so where it is invoked from is the whole
+        performance story; see utils/cpu_offload and
+        tests/test_fc_declaration_stall.py.
+
+        AI mode decides automatically via engine/fc_declaration.py's
+        should_declare().
         User-captained mode instead pauses with a decision once
         declaration_window_open() says the moment is live, and leaves the
         actual call to the human (see _create_fc_declare_decision).
@@ -9207,6 +9223,9 @@ class Match:
             "recent_wickets_count": getattr(self, "recent_wickets_count", 0),
             "commentary": self.commentary,
             "commentary_replay_log": getattr(self, "commentary_replay_log", []),
+            # Survives worker restart / instance eviction, not just a dropped
+            # socket: an unacknowledged card is still owed to the client.
+            "pending_interval_card": getattr(self, "pending_interval_card", None),
             "match_status": self.match_status,
             "margin_type": self.margin_type,
             "margin_value": self.margin_value,
@@ -9377,6 +9396,7 @@ class Match:
         self.recent_wickets_count = snap.get("recent_wickets_count", 0)
 
         self.commentary = snap.get("commentary") or []
+        self.pending_interval_card = snap.get("pending_interval_card")
         self.commentary_replay_log = snap.get("commentary_replay_log") or []
 
         self.match_status = snap.get("match_status")

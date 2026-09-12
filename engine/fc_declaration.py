@@ -38,6 +38,7 @@ import random as _random
 
 from engine import fc_captain
 from engine.fc_captain import DEFAULT_RISK_APPETITE
+from utils.cpu_offload import run_offloaded
 
 
 logger = logging.getLogger(__name__)
@@ -518,7 +519,14 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
     # whether the lead was already big enough, so its one way to grow a lead
     # was to keep batting — which is how targets of 500+ were set.
     if model_driven:
-        plan = fc_captain.evaluate_declaration(
+        # Off the gevent hub: this is the single most expensive thing the FC
+        # engine does (two measured production calls took 52.6 s and 45.6 s),
+        # and run inline on a one-worker gevent server it stops even the
+        # Socket.IO heartbeat, which loses the payload the very same
+        # next_ball() is about to emit. See utils/cpu_offload. Pure CPU over
+        # plain dicts and floats, so it is safe on a worker thread.
+        plan = run_offloaded(
+            fc_captain.evaluate_declaration,
             pitch=pitch, fc_innings=fc_innings,
             # Innings 1 has no lead to speak of yet: the runs on the board
             # ARE the position, and three innings still have to be played

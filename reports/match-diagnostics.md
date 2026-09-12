@@ -1,3 +1,10 @@
+# Diagnostic recording removed
+
+The temporary instrumentation and database insert code have been removed.
+The table and existing records remain available for analysis. Setting
+`MATCH_DIAGNOSTICS` no longer enables recording. The instructions below
+are historical documentation of how the existing report was captured.
+
 # Temporary scoreboard diagnostics
 
 After deploying the code, run `python migrate.py` from the project environment

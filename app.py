@@ -230,7 +230,19 @@ def rate_limit(max_requests=30, window_seconds=10):
                 while timestamps and timestamps[0] < cutoff:
                     timestamps.popleft()
                 if len(timestamps) >= effective_max:
-                    return jsonify({"error": "Rate limit exceeded. Please slow down."}), 429
+                    # Machine-readable, because a caller that treats this as a
+                    # fatal error stops. The FC ball loop runs with no delay
+                    # between deliveries, so on the HTTP fallback it reaches
+                    # this limit routinely — and used to die there, stranding
+                    # the match. retry_after is how long until the oldest
+                    # request in the window ages out.
+                    retry_after = max(0.0, round(
+                        window_seconds - (now - timestamps[0]), 2))
+                    return jsonify({
+                        "error": "Rate limit exceeded. Please slow down.",
+                        "rate_limited": True,
+                        "retry_after": retry_after,
+                    }), 429
                 timestamps.append(now)
             return f(*args, **kwargs)
         return wrapped
@@ -516,7 +528,6 @@ def create_app():
     global _backup_scheduler_started, MAINTENANCE_MODE, IP_WHITELIST_MODE
     # --- Flask setup ---
     app = Flask(__name__)
-    app.config["MATCH_DIAGNOSTICS"] = os.getenv("MATCH_DIAGNOSTICS", "")
     test_mode = bool(
         os.getenv("SIMCRICKETX_TEST_MODE", "").strip() in {"1", "true", "True"}
         or _is_pytest_runtime()
@@ -2528,8 +2539,19 @@ def create_app():
     # helper functions (_load_match_file_for_user, etc.) defined above.
     # ======================================================================
     if _SOCKETIO_AVAILABLE and socketio:
+        # Heartbeat budget. Engine.IO's defaults (ping_interval 25s +
+        # ping_timeout 20s) give a client 45s to answer before it declares
+        # the connection dead — and a single slow server-side call used to
+        # blow straight through that, tearing down the socket before the
+        # result was emitted and losing the payload (the FC session
+        # scorecard, most visibly). The declaration model no longer blocks
+        # the hub (see utils/cpu_offload), so pings keep flowing regardless;
+        # this wider timeout is the second line of defence, and also buys
+        # real-world slack for phones on bad signal. ping_interval stays at
+        # the default so a genuinely dead client is still noticed promptly.
         socketio.init_app(app, async_mode='gevent',
                           cors_allowed_origins="*",
+                          ping_interval=25, ping_timeout=60,
                           logger=False, engineio_logger=False)
 
         @socketio.on('next_ball')
@@ -2555,9 +2577,6 @@ def create_app():
                 # first-class match played over WebSocket was never
                 # checkpointed and silently restarted at fc_innings=1
                 # whenever the instance was rebuilt.
-                from services.match_diagnostics import record as trace_match
-                g.match_trace_id = str((data or {}).get('trace_id', ''))[:64]
-                trace_match(match_id, 'ws_received')
                 payload, err = _match_route_helpers['advance_one_ball'](
                     match_id, current_user.id)
                 if err is not None:
@@ -2569,16 +2588,10 @@ def create_app():
                     ws_emit('ws_error', {'message': message, 'status': err_status})
                     return
 
-                if g.match_trace_id:
-                    payload['_trace_id'] = g.match_trace_id
-                trace_match(match_id, 'ws_emit_start', payload)
                 ws_emit('ball_result', payload)
-                trace_match(match_id, 'ws_emit_returned')
 
             except Exception as exc:
                 log_exception(exc)
-                from services.match_diagnostics import record as trace_match
-                trace_match(match_id, 'ws_error', {'error': str(exc)})
                 app.logger.error(f'[WS next_ball] match={match_id}: {exc}', exc_info=True)
                 ws_emit('ws_error', {'message': 'Internal error', 'details': str(exc)})
 
