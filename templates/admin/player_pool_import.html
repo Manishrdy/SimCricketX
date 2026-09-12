@@ -6,6 +6,12 @@
     .api-grid > div { display: flex; flex-direction: column; min-width: 0; }
     .api-grid > div > .a-card { flex: 1; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; height: var(--api-panel-height) !important; min-height: var(--api-panel-height) !important; max-height: var(--api-panel-height) !important; min-width: 0; }
     #adminImportForm { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+    /* The card is a fixed height, so the controls scroll and the action row
+       stays pinned to the bottom — the Import button can never be clipped. */
+    .api-form-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-right: 4px; }
+    .api-actions.is-footer { flex-shrink: 0; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--border-light, #e5e7eb); }
+    .api-field-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+    .api-field-row > div { min-width: 0; }
     .api-ai-body { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
     @media (max-width: 900px) { .api-grid { grid-template-columns: 1fr; --api-panel-height: 560px; } }
     .api-card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 1rem; font-weight: 600; color: var(--text-primary, #111); margin: 0 0 16px; }
@@ -13,7 +19,7 @@
     .api-label { display: block; font-size: .78rem; font-weight: 600; color: var(--text-muted, #667085); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
     .api-select, .api-input { width: 100%; padding: 9px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .88rem; background: var(--bg-surface, #fff); color: var(--text-primary, #111); box-sizing: border-box; margin-bottom: 14px; }
     .api-select:focus, .api-input:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
-    .api-textarea { width: 100%; min-height: 170px; flex: 1; padding: 10px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .82rem; background: var(--bg-surface, #fff); color: var(--text-primary, #111); box-sizing: border-box; margin-bottom: 14px; font-family: 'IBM Plex Mono', monospace; resize: none; }
+    .api-textarea { width: 100%; min-height: 110px; flex: 1; padding: 10px 12px; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; font-size: .82rem; background: var(--bg-surface, #fff); color: var(--text-primary, #111); box-sizing: border-box; margin-bottom: 14px; font-family: 'IBM Plex Mono', monospace; resize: none; }
     .api-textarea:focus { outline: none; border-color: var(--brand-primary, #0f766e); box-shadow: 0 0 0 3px rgba(15,118,110,.1); }
     .api-or { text-align: center; color: var(--text-muted, #667085); font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin: 4px 0 12px; }
     .api-note { color: var(--text-muted, #667085); font-size: .8rem; margin: 0 0 10px; }
@@ -78,6 +84,7 @@
             <form method="POST" enctype="multipart/form-data" id="adminImportForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
+                <div class="api-form-body">
                 <label class="api-label">File Format</label>
                 <select name="format" class="api-select" id="importFormat">
                     <option value="json">JSON</option>
@@ -87,18 +94,23 @@
                 <label class="api-label">Upload File</label>
                 <input type="file" name="file" class="api-input" id="importFile" accept=".json,.csv">
 
-                <label class="api-label">Existing Names</label>
-                <select name="mode" class="api-select" id="importMode">
-                    <option value="skip">Skip duplicates (keep current ratings)</option>
-                    <option value="update">Update duplicates (overwrite ratings)</option>
-                </select>
-
-                <label class="api-label" for="importBatchSize">Rows Per Request</label>
-                <select name="batch_size" class="api-select" id="importBatchSize">
-                    <option value="100" {% if default_chunk_rows == 100 %}selected{% endif %}>100 — slowest, safest</option>
-                    <option value="200" {% if default_chunk_rows == 200 %}selected{% endif %}>200 — recommended</option>
-                    <option value="500" {% if default_chunk_rows == 500 %}selected{% endif %}>500 — fastest</option>
-                </select>
+                <div class="api-field-row">
+                    <div>
+                        <label class="api-label" for="importMode">Existing Names</label>
+                        <select name="mode" class="api-select" id="importMode">
+                            <option value="skip">Skip duplicates</option>
+                            <option value="update">Update duplicates</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="api-label" for="importBatchSize">Rows Per Request</label>
+                        <select name="batch_size" class="api-select" id="importBatchSize">
+                            <option value="100" {% if default_chunk_rows == 100 %}selected{% endif %}>100 — safest</option>
+                            <option value="200" {% if default_chunk_rows == 200 %}selected{% endif %}>200 — recommended</option>
+                            <option value="500" {% if default_chunk_rows == 500 %}selected{% endif %}>500 — fastest</option>
+                        </select>
+                    </div>
+                </div>
 
                 <div class="api-or">or</div>
 
@@ -110,8 +122,9 @@
                     into batches of the size above and sent one request at a time, so a
                     multi-MB file never trips an upload size limit.
                 </p>
+                </div><!-- /.api-form-body -->
 
-                <div class="api-actions">
+                <div class="api-actions is-footer">
                     <button type="submit" class="a-btn a-btn-primary">
                         <i class="fas fa-file-import"></i> Import
                     </button>
