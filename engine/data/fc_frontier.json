@@ -1,0 +1,78 @@
+{
+  "ball_age_edges": [
+    10,
+    25,
+    50
+  ],
+  "features": [
+    "pitch[Green]",
+    "pitch[Dry]",
+    "pitch[Hard]",
+    "pitch[Flat]",
+    "pitch[Dead]",
+    "aggression[Green]",
+    "aggression[Dry]",
+    "aggression[Hard]",
+    "aggression[Flat]",
+    "aggression[Dead]",
+    "wear",
+    "strength_diff_per_100",
+    "ball_age[1]",
+    "ball_age[2]",
+    "ball_age[3]"
+  ],
+  "fit": {
+    "cells_total": 3615,
+    "cells_used": 2510,
+    "legal_balls": 288097,
+    "weighted_r2_rate": 0.5216060459331455,
+    "weighted_r2_wicket_rate": 0.18998451702409158
+  },
+  "log_rate": {
+    "aggression[Dead]": 0.23386548071316868,
+    "aggression[Dry]": 0.19338270315762043,
+    "aggression[Flat]": 0.19605539965114074,
+    "aggression[Green]": 0.16723936177805368,
+    "aggression[Hard]": 0.17441610714974123,
+    "ball_age[1]": -0.08286556623181954,
+    "ball_age[2]": -0.0901150001714806,
+    "ball_age[3]": -0.14524004341447416,
+    "pitch[Dead]": 1.4944461046634605,
+    "pitch[Dry]": 1.2630943724032249,
+    "pitch[Flat]": 1.4068051249066187,
+    "pitch[Green]": 1.2353906510095525,
+    "pitch[Hard]": 1.3002374940681558,
+    "strength_diff_per_100": 0.08297615682952517,
+    "wear": -0.09187597671599947
+  },
+  "log_wicket_rate": {
+    "aggression[Dead]": 0.08908187034823975,
+    "aggression[Dry]": 0.44763891432176917,
+    "aggression[Flat]": 0.3910790611948033,
+    "aggression[Green]": 0.5035949630933327,
+    "aggression[Hard]": 0.4996288105489898,
+    "ball_age[1]": -0.31309618951555723,
+    "ball_age[2]": -0.44584397570758794,
+    "ball_age[3]": -0.48193658196166156,
+    "pitch[Dead]": -2.989300943807123,
+    "pitch[Dry]": -2.691785920107703,
+    "pitch[Flat]": -2.835576593534763,
+    "pitch[Green]": -2.6001017747012214,
+    "pitch[Hard]": -2.584825106414902,
+    "strength_diff_per_100": -1.4254993858114293,
+    "wear": 0.7077582790061008
+  },
+  "n_age_buckets": 4,
+  "pitches": [
+    "Green",
+    "Dry",
+    "Hard",
+    "Flat",
+    "Dead"
+  ],
+  "provenance": {
+    "dataset_path": "reports/fc_frontier_dataset.json",
+    "dataset_sha256": "17666c6d28241158cb0412d1e2c67d9a946987e3067f563fddd392b3c2edf295",
+    "engine_source_hash": "9244168dc22f229b4ecc3eeb22255489cc2a11669d0b781dfbd69a8b0916a5e6"
+  }
+}

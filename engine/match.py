@@ -25,6 +25,7 @@ from engine.format_config import get_format, get_any_format
 from engine.bowler_manager import BowlerManager
 from engine.fc_bowler_workload import FCBowlerManager
 from engine import fc_bowler_workload
+from engine import fc_captain
 from engine import fc_declaration
 from engine import fc_weather
 from engine.fc_batting_intent import ability, batting_intent, tail_protection
@@ -4792,7 +4793,11 @@ class Match:
             "partner_ability": ability(self.current_non_striker),
             "striker_balls_faced": striker_balls_faced, "ball_in_over": self.current_ball,
         }
-        intent = batting_intent(context)
+        # Calibration hook: scripts/fc_sweep.py pins intent to a fixed level
+        # so the rate/risk frontier can be measured as a function of it.
+        # Never set in a real match, so production behaviour is unchanged.
+        _pinned = getattr(self, "fc_intent_override", None)
+        intent = dict(batting_intent(context), **_pinned) if _pinned else batting_intent(context)
         required_run_rate = needed / max(1/6, overs_remaining) if needed is not None else 0.0
         survival_mode = intent["survival"] >= 0.5
         acceleration_mode = intent["attack"] >= 0.5
@@ -4840,6 +4845,21 @@ class Match:
         # Rescale the 0.55-1.0 effectiveness range onto 0-1.
         avg = sum(mults) / len(mults)
         return max(0.0, min(1.0, (avg - 0.55) / 0.45))
+
+    def _fc_risk_appetite(self):
+        """The captain's nerve, as the value function's loss weight.
+
+        Below 1.0 a captain backs itself and accepts the chance of defeat to
+        chase a win; above 1.0 it plays for the draw. Read off the captain's
+        temperament so that two sides in the same position can legitimately
+        make different calls — under the old fixed win-probability
+        thresholds every captain on every surface had identical nerve.
+        """
+        captain = next((p for p in self.batting_team if p.get("is_captain")), None)
+        temperament = (captain or {}).get("temperament_rating")
+        if temperament is None:
+            return fc_captain.DEFAULT_RISK_APPETITE
+        return max(0.6, min(1.4, 1.4 - 0.8 * (float(temperament) / 100.0)))
 
     def _fc_declaring_side_freshness(self):
         """Freshness of the batting side's OWN attack — they are the ones who
@@ -5890,6 +5910,22 @@ class Match:
 
         pitch_factor = self.fmt.pitch_par_factors.get(self.pitch, 1.0)
 
+        # Forward-model inputs. strengths_by_wickets models the tail AS the
+        # tail — a side eight down is not its team average, which is all the
+        # sampled estimator could see.
+        forecast_kwargs = dict(
+            pitch=self.pitch,
+            # Supplied for every innings, not just 2/3: the first innings is
+            # where the runaway totals are built, so it is exactly where the
+            # captain most needs to be asked.
+            overs_remaining_in_match=self._fc_overs_remaining_in_match(),
+            own_strengths=fc_captain.strengths_by_wickets(
+                self.batting_team, self.bowling_team),
+            opposition_strengths=fc_captain.strengths_by_wickets(
+                self.bowling_team, self.batting_team),
+            risk_appetite=self._fc_risk_appetite(),
+        )
+
         # Monte Carlo inputs (innings 2/3 only — should_declare() falls back
         # to the flat-threshold heuristic for innings 1, which never reads
         # these). self.batting_team is OUR side (deciding whether to
@@ -5897,7 +5933,6 @@ class Match:
         mc_kwargs = {}
         if self.fc_innings == 2:
             mc_kwargs = dict(
-                overs_remaining_in_match=self._fc_overs_remaining_in_match(),
                 own_bowling_strength=self._fc_avg_rating(self.batting_team, "bowling_rating"),
                 own_batting_strength=self._fc_avg_rating(self.batting_team, "batting_rating"),
                 opp_batting_strength=self._fc_avg_rating(self.bowling_team, "batting_rating"),
@@ -5905,7 +5940,6 @@ class Match:
             )
         elif self.fc_innings == 3:
             mc_kwargs = dict(
-                overs_remaining_in_match=self._fc_overs_remaining_in_match(),
                 own_bowling_strength=self._fc_avg_rating(self.batting_team, "bowling_rating"),
                 opp_batting_strength=self._fc_avg_rating(self.bowling_team, "batting_rating"),
                 pitch_wear=self._compute_pitch_wear(),
@@ -5926,6 +5960,7 @@ class Match:
             rain_risk=self._fc_rain_risk(),
             projected_final_wear=self._fc_projected_final_wear(),
             attack_freshness=self._fc_declaring_side_freshness(),
+            **forecast_kwargs,
             **mc_kwargs,
         ):
             self.fc_innings_declared = True
@@ -6233,6 +6268,18 @@ class Match:
                 attack_overs_bowled=self._fc_attack_overs_bowled(),
                 projected_final_wear=self._fc_projected_final_wear(),
                 rain_risk=self._fc_rain_risk(),
+                pitch=self.pitch,
+                pitch_wear=self._compute_pitch_wear(),
+                overs_remaining_in_match=self._fc_overs_remaining_in_match(),
+                # self.batting_team is the side that just followed on or
+                # not; the side DECIDING is the one that batted first, which
+                # is bowling at this moment.
+                own_strengths=fc_captain.strengths_by_wickets(
+                    self.bowling_team, self.batting_team),
+                opposition_strengths=fc_captain.strengths_by_wickets(
+                    self.batting_team, self.bowling_team),
+                attack_freshness=self._fc_attack_freshness(),
+                risk_appetite=self._fc_risk_appetite(),
             )
             return self._fc_apply_follow_on_decision(
                 enforce_fo, scorecard_data, commentary_prefix=commentary_prefix
