@@ -45,6 +45,20 @@ IMPORT_FIELDS = [
 STRICT_BOOL_TRUE = {"true", "1", "yes"}
 STRICT_BOOL_FALSE = {"false", "0", "no"}
 
+# Chunked import. A multi-MB pool file posted in one request dies on the
+# reverse proxy's body cap (a 413 the app never sees), so large imports are
+# split client-side into many small requests against
+# /api/admin/player-pool/import/chunk. The cap below is per request, not per
+# import — an import of any size is just more chunks.
+MAX_IMPORT_CHUNK_ROWS = 500
+DEFAULT_IMPORT_CHUNK_ROWS = 200
+# Per-chunk error detail returned to the caller; the full list would dwarf the
+# counts on a badly formed file.
+IMPORT_CHUNK_ERROR_SAMPLE = 10
+# "skip" leaves an existing same-name player alone (the historical behaviour);
+# "update" overwrites its fields, which is what a ratings refresh wants.
+VALID_IMPORT_MODES = ("skip", "update")
+
 
 def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
 
@@ -310,24 +324,42 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
             return None, f"Invalid CSV file: {exc}"
         return _parse_csv_text(raw)
 
-    def _bulk_import_master(rows):
-        imported, skipped, errors = 0, 0, []
-        for idx, raw in enumerate(rows, start=1):
+    def _bulk_import_master(rows, mode="skip", offset=0):
+        """Import global-pool rows, returning a counts dict.
+
+        ``mode`` is one of VALID_IMPORT_MODES. ``offset`` is the number of rows
+        already processed before this batch, so error messages carry row
+        numbers from the original file rather than from the batch.
+        """
+        imported, updated, skipped, errors = 0, 0, 0, []
+        for idx, raw in enumerate(rows, start=offset + 1):
             data, err = _validate_player_dict(raw, idx, strict_import=True)
             if err:
                 errors.append(err)
                 continue
+            # Autoflush pushes pending adds before this query, so a name
+            # repeated inside one batch is matched against the persisted row
+            # instead of being inserted twice.
             existing = DBMasterPlayer.query.filter_by(name=data["name"]).first()
             if existing:
-                skipped += 1
+                if mode == "update":
+                    _apply_fields(existing, data)
+                    updated += 1
+                else:
+                    skipped += 1
                 continue
             player = DBMasterPlayer()
             _apply_fields(player, data)
             db.session.add(player)
             imported += 1
-        if imported:
+        if imported or updated:
             db.session.commit()
-        return imported, skipped, errors
+        return {
+            "imported": imported,
+            "updated": updated,
+            "skipped": skipped,
+            "errors": errors,
+        }
 
     def _bulk_import_user(rows, user_id):
         imported, skipped, errors = 0, 0, []
@@ -508,14 +540,21 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
             if err:
                 flash(err, "danger")
                 return redirect(url_for("admin_player_pool_import"))
+            mode = request.form.get("mode", "skip").strip().lower()
+            if mode not in VALID_IMPORT_MODES:
+                mode = "skip"
             try:
-                imported, skipped, errors = _bulk_import_master(rows)
+                result = _bulk_import_master(rows, mode=mode)
             except Exception as exc:
                 db.session.rollback()
                 log_exception(exc, source="player_pool")
                 flash(f"Import failed: {exc}", "danger")
                 return redirect(url_for("admin_player_pool_import"))
-            msg = f"Imported {imported}, skipped {skipped} duplicate(s)."
+            errors = result["errors"]
+            msg = (
+                f"Imported {result['imported']}, updated {result['updated']}, "
+                f"skipped {result['skipped']} duplicate(s)."
+            )
             if errors:
                 msg += f" {len(errors)} error(s): " + "; ".join(errors[:5])
             flash(msg, "success" if not errors else "warning")
@@ -527,7 +566,88 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
             batting_hands=sorted(VALID_BATTING_HANDS - {""}),
             bowling_types=sorted(VALID_BOWLING_TYPES - {""}),
             bowling_hands=sorted(VALID_BOWLING_HANDS - {""}),
+            max_chunk_rows=MAX_IMPORT_CHUNK_ROWS,
+            default_chunk_rows=DEFAULT_IMPORT_CHUNK_ROWS,
         )
+
+    @app.route("/api/admin/player-pool/import/limits")
+    @admin_required
+    def admin_player_pool_import_limits():
+        """Batch limits for chunked importers (browser JS and CLI alike)."""
+        return jsonify({
+            "max_chunk_rows": MAX_IMPORT_CHUNK_ROWS,
+            "default_chunk_rows": DEFAULT_IMPORT_CHUNK_ROWS,
+            "modes": list(VALID_IMPORT_MODES),
+            "fields": IMPORT_FIELDS,
+        })
+
+    @app.route("/api/admin/player-pool/import/chunk", methods=["POST"])
+    @admin_required
+    def admin_player_pool_import_chunk():
+        """Import one small batch of the global pool.
+
+        Body: {"rows": [...]} or {"csv_text": "header\nrow..."} plus optional
+        "mode" (skip|update) and "offset" (rows already processed, for row
+        numbers in error messages). Each batch commits on its own, so a failure
+        part-way through a large file leaves the earlier batches intact and the
+        caller can resume from its own offset.
+        """
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "Expected a JSON object body."}), 400
+
+        mode = str(payload.get("mode", "skip")).strip().lower()
+        if mode not in VALID_IMPORT_MODES:
+            return jsonify({
+                "error": f"Invalid mode '{mode}'. Use one of: {', '.join(VALID_IMPORT_MODES)}.",
+            }), 400
+        try:
+            offset = int(payload.get("offset", 0) or 0)
+        except (TypeError, ValueError):
+            return jsonify({"error": "offset must be an integer."}), 400
+        if offset < 0:
+            return jsonify({"error": "offset must not be negative."}), 400
+
+        rows = payload.get("rows")
+        csv_text = payload.get("csv_text")
+        if rows is not None and csv_text is not None:
+            return jsonify({"error": "Send either rows or csv_text, not both."}), 400
+        if csv_text is not None:
+            rows, err = _parse_csv_text(str(csv_text))
+            if err:
+                return jsonify({"error": err}), 400
+        if not isinstance(rows, list):
+            return jsonify({"error": "rows must be a JSON array of player objects."}), 400
+        if not rows:
+            return jsonify({"error": "Batch contained no rows."}), 400
+        if len(rows) > MAX_IMPORT_CHUNK_ROWS:
+            return jsonify({
+                "error": (
+                    f"Batch too large: {len(rows)} rows (max {MAX_IMPORT_CHUNK_ROWS}). "
+                    "Send fewer rows per request."
+                ),
+                "max_chunk_rows": MAX_IMPORT_CHUNK_ROWS,
+            }), 400
+
+        try:
+            result = _bulk_import_master(rows, mode=mode, offset=offset)
+        except Exception as exc:
+            db.session.rollback()
+            log_exception(exc, source="player_pool")
+            return jsonify({"error": f"Batch import failed: {exc}"}), 500
+
+        errors = result["errors"]
+        return jsonify({
+            "ok": True,
+            "mode": mode,
+            "offset": offset,
+            "received": len(rows),
+            "imported": result["imported"],
+            "updated": result["updated"],
+            "skipped": result["skipped"],
+            "failed": len(errors),
+            "errors": errors[:IMPORT_CHUNK_ERROR_SAMPLE],
+        })
 
     @app.route("/admin/player-pool/export/json")
     @admin_required

@@ -21,6 +21,27 @@
     .api-actions.is-header { margin: 0; }
     .api-code { background: var(--surface-alt, #f9fafb); padding: 12px; border-radius: 8px; font-size: .72rem; font-family: 'IBM Plex Mono', monospace; border: 1px solid var(--border-light, #e5e7eb); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; margin: 0; overflow-y: auto; flex: 1; min-height: 0; min-width: 0; }
     .is-hidden { display: none; }
+
+    /* Batch-import progress meter */
+    .imp-progress { margin-top: 1.5rem; }
+    .imp-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .imp-stage { font-size: .9rem; font-weight: 600; color: var(--text-primary, #111); }
+    .imp-pct { font-size: 1.45rem; font-weight: 700; color: var(--brand-primary, #0f766e); font-variant-numeric: tabular-nums; }
+    .imp-bar { height: 10px; border-radius: 999px; background: var(--surface-alt, #f1f5f9); border: 1px solid var(--border-light, #e5e7eb); overflow: hidden; }
+    .imp-bar-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, var(--brand-primary, #0f766e), #14b8a6); transition: width .2s ease; }
+    .imp-progress.is-done .imp-bar-fill { background: #16a34a; }
+    .imp-progress.is-failed .imp-bar-fill { background: #dc2626; }
+    .imp-progress.is-failed .imp-pct { color: #dc2626; }
+    .imp-meta { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: .78rem; color: var(--text-muted, #667085); font-variant-numeric: tabular-nums; }
+    .imp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 16px; }
+    .imp-stat { border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; padding: 10px 12px; background: var(--surface-alt, #f9fafb); }
+    .imp-stat-label { display: block; font-size: .68rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted, #667085); }
+    .imp-stat-value { font-size: 1.15rem; font-weight: 700; color: var(--text-primary, #111); font-variant-numeric: tabular-nums; }
+    .imp-stat.is-bad .imp-stat-value { color: #dc2626; }
+    .imp-errors { margin-top: 14px; max-height: 180px; overflow-y: auto; border: 1px solid var(--border-light, #e5e7eb); border-radius: 8px; padding: 10px 12px; background: var(--bg-surface, #fff); font-size: .76rem; font-family: 'IBM Plex Mono', monospace; color: #b91c1c; }
+    .imp-errors div { padding: 2px 0; overflow-wrap: anywhere; }
+    .imp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    @media (prefers-reduced-motion: reduce) { .imp-bar-fill { transition: none; } }
 </style>
 
 <div class="a-breadcrumb">
@@ -66,12 +87,29 @@
                 <label class="api-label">Upload File</label>
                 <input type="file" name="file" class="api-input" id="importFile" accept=".json,.csv">
 
+                <label class="api-label">Existing Names</label>
+                <select name="mode" class="api-select" id="importMode">
+                    <option value="skip">Skip duplicates (keep current ratings)</option>
+                    <option value="update">Update duplicates (overwrite ratings)</option>
+                </select>
+
+                <label class="api-label" for="importBatchSize">Rows Per Request</label>
+                <select name="batch_size" class="api-select" id="importBatchSize">
+                    <option value="100" {% if default_chunk_rows == 100 %}selected{% endif %}>100 — slowest, safest</option>
+                    <option value="200" {% if default_chunk_rows == 200 %}selected{% endif %}>200 — recommended</option>
+                    <option value="500" {% if default_chunk_rows == 500 %}selected{% endif %}>500 — fastest</option>
+                </select>
+
                 <div class="api-or">or</div>
 
                 <label class="api-label">Paste JSON/CSV Data</label>
                 <textarea name="pasted_data" id="pastedData" class="api-textarea" placeholder="Paste your JSON array or CSV rows here."></textarea>
 
-                <p class="api-note">Format must strictly match the expected schema.</p>
+                <p class="api-note">
+                    Format must strictly match the expected schema. Large files are split
+                    into batches of the size above and sent one request at a time, so a
+                    multi-MB file never trips an upload size limit.
+                </p>
 
                 <div class="api-actions">
                     <button type="submit" class="a-btn a-btn-primary">
@@ -101,6 +139,46 @@
                 <pre class="api-code" id="aiPrompt"></pre>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Batch progress meter (shown once an import starts) -->
+<div class="a-card imp-progress is-hidden" id="importProgress" aria-live="polite">
+    <div class="api-card-title"><span><i class="fas fa-gauge-high"></i> Import Progress</span></div>
+
+    <div class="imp-head">
+        <span class="imp-stage" id="impStage">Preparing…</span>
+        <span class="imp-pct" id="impPct">0%</span>
+    </div>
+
+    <div class="imp-bar" role="progressbar" id="impBar"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Import progress">
+        <div class="imp-bar-fill" id="impBarFill"></div>
+    </div>
+
+    <div class="imp-meta">
+        <span id="impRows">0 / 0 rows</span>
+        <span id="impBatch">batch 0 / 0</span>
+        <span id="impElapsed">elapsed 0s</span>
+        <span id="impEta">ETA —</span>
+    </div>
+
+    <div class="imp-stats">
+        <div class="imp-stat"><span class="imp-stat-label">Imported</span><span class="imp-stat-value" id="impImported">0</span></div>
+        <div class="imp-stat"><span class="imp-stat-label">Updated</span><span class="imp-stat-value" id="impUpdated">0</span></div>
+        <div class="imp-stat"><span class="imp-stat-label">Skipped</span><span class="imp-stat-value" id="impSkipped">0</span></div>
+        <div class="imp-stat is-bad"><span class="imp-stat-label">Rejected</span><span class="imp-stat-value" id="impFailed">0</span></div>
+    </div>
+
+    <div class="imp-errors is-hidden" id="impErrors"></div>
+
+    <div class="imp-actions">
+        <button type="button" class="a-btn a-btn-sm a-btn-secondary" id="impCancelBtn">
+            <i class="fas fa-stop"></i> Stop After Current Batch
+        </button>
+        <a href="{{ url_for('admin_player_pool') }}" class="a-btn a-btn-sm a-btn-primary is-hidden" id="impDoneBtn">
+            <i class="fas fa-arrow-right"></i> View Player Pool
+        </a>
     </div>
 </div>
 
@@ -235,13 +313,373 @@
         }
     });
 
+    // ── Batched import ───────────────────────────────────────────────────────
+    // A multi-MB pool file posted in one request is rejected by the proxy's
+    // body cap (HTTP 413) before the app sees it, so the file is parsed here
+    // and sent to /api/admin/player-pool/import/chunk a few hundred rows at a
+    // time, with the running totals shown on screen.
+    var CHUNK_URL = '{{ url_for("admin_player_pool_import_chunk") }}';
+    var MAX_CHUNK_ROWS = {{ max_chunk_rows }};
+    var MAX_CHUNK_BYTES = 512 * 1024;   // keep each request far below any cap
+    var MAX_RETRIES = 3;
+    var ERROR_DISPLAY_LIMIT = 50;
+
+    var modeSelect = document.getElementById('importMode');
+    var batchSelect = document.getElementById('importBatchSize');
+    var panel = document.getElementById('importProgress');
+    var elStage = document.getElementById('impStage');
+    var elPct = document.getElementById('impPct');
+    var elBar = document.getElementById('impBar');
+    var elBarFill = document.getElementById('impBarFill');
+    var elRows = document.getElementById('impRows');
+    var elBatch = document.getElementById('impBatch');
+    var elElapsed = document.getElementById('impElapsed');
+    var elEta = document.getElementById('impEta');
+    var elImported = document.getElementById('impImported');
+    var elUpdated = document.getElementById('impUpdated');
+    var elSkipped = document.getElementById('impSkipped');
+    var elFailed = document.getElementById('impFailed');
+    var elErrors = document.getElementById('impErrors');
+    var cancelBtn = document.getElementById('impCancelBtn');
+    var doneBtn = document.getElementById('impDoneBtn');
+    var submitBtn = form.querySelector('button[type="submit"]');
+
+    var csrfToken = form.querySelector('input[name="csrf_token"]').value;
+    var cancelled = false;
+    var running = false;
+    var errorsShown = 0;
+
+    function fmtInt(n) { return Number(n).toLocaleString(); }
+
+    function fmtClock(seconds) {
+        if (!isFinite(seconds) || seconds < 0) { return '—'; }
+        var s = Math.round(seconds);
+        var m = Math.floor(s / 60);
+        return m > 0 ? (m + 'm ' + (s % 60) + 's') : (s + 's');
+    }
+
+    function setBar(pct) {
+        var clamped = Math.max(0, Math.min(100, pct));
+        elBarFill.style.width = clamped + '%';
+        elPct.textContent = Math.round(clamped) + '%';
+        elBar.setAttribute('aria-valuenow', String(Math.round(clamped)));
+    }
+
+    function addErrors(list) {
+        if (!list || !list.length) { return; }
+        elErrors.classList.remove('is-hidden');
+        for (var i = 0; i < list.length; i++) {
+            if (errorsShown >= ERROR_DISPLAY_LIMIT) {
+                if (errorsShown === ERROR_DISPLAY_LIMIT) {
+                    var more = document.createElement('div');
+                    more.textContent = '… further errors not shown.';
+                    elErrors.appendChild(more);
+                    errorsShown++;
+                }
+                return;
+            }
+            var row = document.createElement('div');
+            row.textContent = list[i];
+            elErrors.appendChild(row);
+            errorsShown++;
+        }
+    }
+
+    // Split rows into batches of at most `size` rows AND MAX_CHUNK_BYTES of
+    // serialized JSON, so an unusually fat row cannot produce a huge request.
+    function planBatches(rows, size) {
+        var batches = [];
+        var i = 0;
+        while (i < rows.length) {
+            var take = Math.min(size, rows.length - i);
+            var slice = rows.slice(i, i + take);
+            while (take > 1 && JSON.stringify(slice).length > MAX_CHUNK_BYTES) {
+                take = Math.ceil(take / 2);
+                slice = rows.slice(i, i + take);
+            }
+            batches.push(slice);
+            i += take;
+        }
+        return batches;
+    }
+
+    function splitCsv(raw) {
+        var lines = raw.replace(/\r\n/g, '\n').split('\n');
+        var header = null;
+        var body = [];
+        for (var i = 0; i < lines.length; i++) {
+            if (lines[i].trim() === '') { continue; }
+            if (header === null) { header = lines[i]; continue; }
+            body.push(lines[i]);
+        }
+        return { header: header, rows: body };
+    }
+
+    function postBatch(payload) {
+        return fetch(CHUNK_URL, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        }).then(function(res){
+            return res.json().catch(function(){ return {}; }).then(function(body){
+                return { status: res.status, body: body };
+            });
+        });
+    }
+
+    // Halve a batch payload (rows or CSV lines), or null if it cannot shrink.
+    function splitPayload(payload) {
+        if (payload.rows && payload.rows.length > 1) {
+            var half = Math.ceil(payload.rows.length / 2);
+            return [
+                { rows: payload.rows.slice(0, half), mode: payload.mode, offset: payload.offset },
+                { rows: payload.rows.slice(half), mode: payload.mode, offset: payload.offset + half }
+            ];
+        }
+        if (payload.csv_text) {
+            var lines = payload.csv_text.split('\n');
+            if (lines.length > 2) {
+                var header = lines[0];
+                var body = lines.slice(1);
+                var cut = Math.ceil(body.length / 2);
+                return [
+                    { csv_text: header + '\n' + body.slice(0, cut).join('\n'), mode: payload.mode, offset: payload.offset },
+                    { csv_text: header + '\n' + body.slice(cut).join('\n'), mode: payload.mode, offset: payload.offset + cut }
+                ];
+            }
+        }
+        return null;
+    }
+
+    function mergeResults(a, b) {
+        return {
+            ok: true,
+            received: (a.received || 0) + (b.received || 0),
+            imported: (a.imported || 0) + (b.imported || 0),
+            updated: (a.updated || 0) + (b.updated || 0),
+            skipped: (a.skipped || 0) + (b.skipped || 0),
+            failed: (a.failed || 0) + (b.failed || 0),
+            errors: (a.errors || []).concat(b.errors || [])
+        };
+    }
+
+    function sendWithRetry(payload, attempt) {
+        attempt = attempt || 1;
+        return postBatch(payload).then(function(res){
+            var retryable = res.status === 429 || res.status >= 500;
+            if (retryable && attempt <= MAX_RETRIES) {
+                var waitMs = 500 * Math.pow(2, attempt - 1);
+                return new Promise(function(resolve){ setTimeout(resolve, waitMs); })
+                    .then(function(){ return sendWithRetry(payload, attempt + 1); });
+            }
+            if (res.status === 413) {
+                // Still too big for this host: halve the batch and send both
+                // halves, so an unknown proxy cap costs a retry, not the run.
+                var halves = splitPayload(payload);
+                if (halves) {
+                    return sendWithRetry(halves[0], 1).then(function(a){
+                        if (a.status !== 200 || !a.body.ok) { return a; }
+                        return sendWithRetry(halves[1], 1).then(function(b){
+                            if (b.status !== 200 || !b.body.ok) { return b; }
+                            return { status: 200, body: mergeResults(a.body, b.body) };
+                        });
+                    });
+                }
+            }
+            return res;
+        });
+    }
+
+    function finish(stage, cssClass) {
+        running = false;
+        elStage.textContent = stage;
+        if (cssClass) { panel.classList.add(cssClass); }
+        cancelBtn.classList.add('is-hidden');
+        doneBtn.classList.remove('is-hidden');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-file-import"></i> Import';
+    }
+
+    function runImport(batches, mode, totalRows) {
+        var totals = { imported: 0, updated: 0, skipped: 0, failed: 0 };
+        var processed = 0;
+        var started = Date.now();
+        var index = 0;
+
+        function tickMeta() {
+            var elapsed = (Date.now() - started) / 1000;
+            elElapsed.textContent = 'elapsed ' + fmtClock(elapsed);
+            if (processed > 0 && processed < totalRows) {
+                elEta.textContent = 'ETA ' + fmtClock(elapsed / processed * (totalRows - processed));
+            } else if (processed >= totalRows) {
+                elEta.textContent = 'ETA done';
+            }
+        }
+
+        function render() {
+            elImported.textContent = fmtInt(totals.imported);
+            elUpdated.textContent = fmtInt(totals.updated);
+            elSkipped.textContent = fmtInt(totals.skipped);
+            elFailed.textContent = fmtInt(totals.failed);
+            elRows.textContent = fmtInt(processed) + ' / ' + fmtInt(totalRows) + ' rows';
+            elBatch.textContent = 'batch ' + fmtInt(Math.min(index, batches.length)) + ' / ' + fmtInt(batches.length);
+            setBar(totalRows ? (processed / totalRows) * 100 : 100);
+            tickMeta();
+        }
+
+        var ticker = setInterval(tickMeta, 1000);
+
+        function step() {
+            if (cancelled) {
+                clearInterval(ticker);
+                finish('Stopped after ' + fmtInt(processed) + ' of ' + fmtInt(totalRows) + ' rows. Earlier batches are saved.', null);
+                return;
+            }
+            if (index >= batches.length) {
+                clearInterval(ticker);
+                setBar(100);
+                var summary = 'Done — imported ' + fmtInt(totals.imported) + ', updated ' + fmtInt(totals.updated) +
+                              ', skipped ' + fmtInt(totals.skipped) + ', rejected ' + fmtInt(totals.failed) + '.';
+                finish(summary, totals.failed ? null : 'is-done');
+                return;
+            }
+
+            var batch = batches[index];
+            var payload = { mode: mode, offset: processed };
+            if (typeof batch === 'string') { payload.csv_text = batch; } else { payload.rows = batch; }
+
+            index++;
+            elStage.textContent = 'Sending batch ' + fmtInt(index) + ' of ' + fmtInt(batches.length) + '…';
+            elBatch.textContent = 'batch ' + fmtInt(index) + ' / ' + fmtInt(batches.length);
+
+            sendWithRetry(payload, 1).then(function(res){
+                var body = res.body || {};
+                if (res.status !== 200 || !body.ok) {
+                    clearInterval(ticker);
+                    addErrors([(body.error || ('HTTP ' + res.status)) + ' (batch ' + index + ')']);
+                    finish('Stopped on batch ' + fmtInt(index) + ' of ' + fmtInt(batches.length) +
+                           '. ' + fmtInt(processed) + ' rows were already saved — fix the data and re-run; ' +
+                           'already-imported names are skipped.', 'is-failed');
+                    return;
+                }
+                totals.imported += body.imported || 0;
+                totals.updated += body.updated || 0;
+                totals.skipped += body.skipped || 0;
+                totals.failed += body.failed || 0;
+                processed += body.received || (typeof batch === 'string' ? 0 : batch.length);
+                addErrors(body.errors);
+                render();
+                step();
+            }).catch(function(err){
+                clearInterval(ticker);
+                addErrors(['Network error on batch ' + index + ': ' + err]);
+                finish('Stopped on batch ' + fmtInt(index) + ' — ' + fmtInt(processed) + ' rows were already saved.', 'is-failed');
+            });
+        }
+
+        render();
+        step();
+    }
+
+    function startImport(rawText, format, mode, batchSize) {
+        var batches, totalRows;
+
+        if (format === 'csv') {
+            var parsed = splitCsv(rawText);
+            if (!parsed.header || !parsed.rows.length) {
+                finish('CSV needs a header row plus at least one data row.', 'is-failed');
+                return;
+            }
+            totalRows = parsed.rows.length;
+            batches = [];
+            for (var i = 0; i < parsed.rows.length; i += batchSize) {
+                batches.push(parsed.header + '\n' + parsed.rows.slice(i, i + batchSize).join('\n'));
+            }
+        } else {
+            var rows;
+            try {
+                rows = JSON.parse(rawText);
+            } catch (err) {
+                finish('Invalid JSON: ' + err.message, 'is-failed');
+                return;
+            }
+            if (!Array.isArray(rows) || !rows.length) {
+                finish('JSON must be a non-empty array of player objects.', 'is-failed');
+                return;
+            }
+            totalRows = rows.length;
+            batches = planBatches(rows, batchSize);
+        }
+
+        elStage.textContent = 'Sending ' + fmtInt(totalRows) + ' rows in ' + fmtInt(batches.length) + ' batches…';
+        runImport(batches, mode, totalRows);
+    }
+
+    function readSource() {
+        var file = fileInput.files && fileInput.files[0];
+        if (file) {
+            if (file.text) { return file.text(); }
+            return new Promise(function(resolve, reject){
+                var reader = new FileReader();
+                reader.onload = function(){ resolve(String(reader.result)); };
+                reader.onerror = function(){ reject(reader.error); };
+                reader.readAsText(file);
+            });
+        }
+        return Promise.resolve(pastedData.value);
+    }
+
     form.addEventListener('submit', function(e){
         var hasFile = fileInput.files && fileInput.files.length > 0;
         var hasPaste = pastedData.value.trim() !== '';
         if (!hasFile && !hasPaste) {
             e.preventDefault();
             alert('Provide either a file upload or pasted data.');
+            return;
         }
+        if (!window.fetch || !window.Promise) {
+            return;   // no batching available: fall back to the plain form POST
+        }
+        e.preventDefault();
+        if (running) { return; }
+
+        running = true;
+        cancelled = false;
+        errorsShown = 0;
+        elErrors.innerHTML = '';
+        elErrors.classList.add('is-hidden');
+        panel.classList.remove('is-hidden', 'is-done', 'is-failed');
+        doneBtn.classList.add('is-hidden');
+        cancelBtn.classList.remove('is-hidden');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
+        elStage.textContent = 'Reading input…';
+        setBar(0);
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        var batchSize = Math.min(parseInt(batchSelect.value, 10) || 200, MAX_CHUNK_ROWS);
+        var mode = modeSelect.value === 'update' ? 'update' : 'skip';
+        var format = fmt.value === 'csv' ? 'csv' : 'json';
+
+        readSource().then(function(text){
+            startImport(text.replace(/^\uFEFF/, ''), format, mode, batchSize);
+        }).catch(function(err){
+            finish('Could not read the input: ' + err, 'is-failed');
+        });
+    });
+
+    cancelBtn.addEventListener('click', function(){
+        cancelled = true;
+        elStage.textContent = 'Stopping after the current batch…';
+    });
+
+    window.addEventListener('beforeunload', function(e){
+        if (running) { e.preventDefault(); e.returnValue = ''; }
     });
 })();
 </script>
