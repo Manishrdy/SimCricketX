@@ -3,6 +3,8 @@
 import csv
 import io
 import json
+import unicodedata
+from functools import lru_cache
 
 from flask import (
     Response, flash, jsonify, redirect, render_template, request, url_for,
@@ -58,6 +60,88 @@ IMPORT_CHUNK_ERROR_SAMPLE = 10
 # "skip" leaves an existing same-name player alone (the historical behaviour);
 # "update" overwrites its fields, which is what a ratings refresh wants.
 VALID_IMPORT_MODES = ("skip", "update")
+
+
+# ── Search matching ──────────────────────────────────────────────────────────
+# Autocomplete fires on every keystroke, so matching has to be cheap and it has
+# to be forgiving: "fouche" should find "Fouché" and "orourke" should find
+# "O’Rourke". Names are folded once and cached, since the same few thousand
+# strings are re-matched on every request.
+
+# Ranking tiers, best first. The tier dominates the sort, so a name that starts
+# with what was typed always outranks one that merely contains it somewhere.
+RANK_NAME_PREFIX = 0        # "josh" -> "Josh Butler"
+RANK_WORD_PREFIX = 1        # "hazle" -> "Josh Hazlewood"
+RANK_ALL_TOKENS_WORD = 2    # "jo haz" -> "Josh Hazlewood"
+RANK_SUBSTRING = 3          # "osh" -> "Josh Butler", "Avaniben Joshi"
+RANK_SQUASHED = 4           # "orourke" -> "O’Rourke"
+# Upper bound on a single page of results, so a hand-crafted limit cannot ask
+# the server to build tens of thousands of player dicts.
+MAX_POOL_PAGE_LIMIT = 200
+
+
+@lru_cache(maxsize=32768)
+def _fold(text):
+    """Casefold and strip accents, invisible format chars, and curly quotes."""
+    if not text:
+        return ""
+    decomposed = unicodedata.normalize("NFKD", str(text))
+    kept = []
+    for ch in decomposed:
+        category = unicodedata.category(ch)
+        if category == "Mn" or category == "Cf":     # combining marks, joiners
+            continue
+        kept.append(ch)
+    return "".join(kept).replace("\u2019", "'").replace("\u2018", "'").casefold()
+
+
+@lru_cache(maxsize=32768)
+def _fold_words(text):
+    """Folded words of a name, cached — re-split on every keystroke otherwise."""
+    return tuple(_fold(text).split())
+
+
+@lru_cache(maxsize=32768)
+def _squash(text):
+    """Folded text with every non-alphanumeric character removed."""
+    return "".join(ch for ch in _fold(text) if ch.isalnum())
+
+
+def _search_terms(search):
+    """(full query, tokens) in folded form; empty tokens mean "match all"."""
+    folded = _fold(search or "").strip()
+    return folded, [tok for tok in folded.split() if tok]
+
+
+def _match_rank(name, query, tokens):
+    """Rank `name` against a folded query, or None when it does not match.
+
+    Returns (tier, position) — lower sorts first — so callers can order by
+    (tier, position, name) for a stable, predictable result list.
+    """
+    if not tokens:
+        return (RANK_NAME_PREFIX, 0)
+
+    folded = _fold(name)
+    words = _fold_words(name)
+
+    if folded.startswith(query):
+        return (RANK_NAME_PREFIX, 0)
+    for word_index, word in enumerate(words):
+        if word.startswith(query):
+            return (RANK_WORD_PREFIX, word_index)
+
+    if all(any(word.startswith(tok) for word in words) for tok in tokens):
+        return (RANK_ALL_TOKENS_WORD, folded.find(tokens[0]))
+
+    if all(tok in folded for tok in tokens):
+        return (RANK_SUBSTRING, folded.find(tokens[0]))
+
+    squashed_name = _squash(name)
+    if all(_squash(tok) in squashed_name for tok in tokens):
+        return (RANK_SQUASHED, squashed_name.find(_squash(tokens[0])))
+
+    return None
 
 
 def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
@@ -187,7 +271,13 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
     # ── Effective pool query ─────────────────────────────────────────────────
 
     def _get_effective_pool(user_id, search=None, role_filter=None, offset=0, limit=None):
-        masters = DBMasterPlayer.query.order_by(DBMasterPlayer.name).all()
+        """Rank and page the user's effective pool (globals + their overrides).
+
+        Matching runs over (id, name, role) tuples rather than hydrated rows,
+        and only the rows on the requested page are turned into player dicts —
+        an autocomplete keystroke should not cost a full-pool materialisation.
+        """
+        query, tokens = _search_terms(search)
 
         overrides = {}
         customs = []
@@ -199,28 +289,58 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
                 else:
                     customs.append(up)
 
-        pool = []
-        for mp in masters:
-            if mp.id in overrides:
-                up = overrides[mp.id]
-                pool.append(_to_pool_dict(up, source="override", master_id=mp.id, user_player_id=up.id))
+        # Candidate scan. An override can rename the player it shadows, so the
+        # name matched here is the effective one, not the global one.
+        matches = []            # (tier, position, sort_name, kind, key, master_id)
+        master_rows = db.session.query(
+            DBMasterPlayer.id, DBMasterPlayer.name, DBMasterPlayer.role,
+        ).all()
+        for master_id, master_name, master_role in master_rows:
+            override = overrides.get(master_id)
+            if override is not None:
+                name, role, kind, key = override.name, override.role, "override", override
             else:
+                name, role, kind, key = master_name, master_role, "master", master_id
+            if role_filter and (role or "") != role_filter:
+                continue
+            rank = _match_rank(name, query, tokens)
+            if rank is None:
+                continue
+            matches.append((rank[0], rank[1], _fold(name), kind, key, master_id))
+
+        for custom in customs:
+            if role_filter and (custom.role or "") != role_filter:
+                continue
+            rank = _match_rank(custom.name, query, tokens)
+            if rank is None:
+                continue
+            matches.append((rank[0], rank[1], _fold(custom.name), "custom", custom, None))
+
+        matches.sort(key=lambda m: (m[0], m[1], m[2]))
+        total = len(matches)
+
+        page = matches[offset:offset + limit] if limit is not None else matches[offset:]
+
+        # Hydrate only what this page shows, in one query for the global rows.
+        master_ids = [m[4] for m in page if m[3] == "master"]
+        master_objects = {}
+        if master_ids:
+            master_objects = {
+                mp.id: mp
+                for mp in DBMasterPlayer.query.filter(DBMasterPlayer.id.in_(master_ids)).all()
+            }
+
+        pool = []
+        for _tier, _pos, _sort_name, kind, key, master_id in page:
+            if kind == "master":
+                mp = master_objects.get(key)
+                if mp is None:          # deleted between the scan and the fetch
+                    continue
                 pool.append(_to_pool_dict(mp, source="master", master_id=mp.id, user_player_id=None))
-
-        for cp in customs:
-            pool.append(_to_pool_dict(cp, source="custom", master_id=None, user_player_id=cp.id))
-
-        if search:
-            q = search.lower()
-            pool = [p for p in pool if q in p["name"].lower()]
-        if role_filter:
-            pool = [p for p in pool if p["role"] == role_filter]
-
-        pool.sort(key=lambda p: p["name"].lower())
-
-        total = len(pool)
-        if limit is not None:
-            pool = pool[offset:offset + limit]
+            elif kind == "override":
+                pool.append(_to_pool_dict(key, source="override", master_id=master_id, user_player_id=key.id))
+            else:
+                pool.append(_to_pool_dict(key, source="custom", master_id=None, user_player_id=key.id))
 
         return pool, total
 
@@ -971,6 +1091,7 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
             limit = int(request.args.get("limit", POOL_PAGE_SIZE))
         except ValueError:
             limit = POOL_PAGE_SIZE
+        limit = max(1, min(limit, MAX_POOL_PAGE_LIMIT))
         pool, total = _get_effective_pool(current_user.id, search=search, role_filter=role_filter, offset=offset, limit=limit)
         return jsonify({"players": pool, "total": total, "offset": offset, "has_more": offset + len(pool) < total})
 

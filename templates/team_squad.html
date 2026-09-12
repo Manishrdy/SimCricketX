@@ -867,6 +867,11 @@
 
     // Pool lazy-load state
     var pool = { offset: 0, limit: 30, loading: false, hasMore: true, search: '', role: '' };
+    // Request tracking for the pool search: the newest request always wins and
+    // older ones are aborted, so no keystroke is dropped. Declared here, above
+    // boot(), because boot() issues the first fetch.
+    var poolRequestSeq = 0;
+    var poolInFlight = null;
 
     // ── Initial squad from server ──────────────────────────────────────────
     var INITIAL_SQUAD = {{ squad_json|safe }};
@@ -933,9 +938,14 @@
     }
 
     // ── Pool fetch ─────────────────────────────────────────────────────────
+    // A new search supersedes whatever is in flight instead of being dropped,
+    // so the list tracks every keystroke; paging still runs one at a time.
     function fetchPool(reset) {
-        if (pool.loading) return;
-        if (!reset && !pool.hasMore) return;
+        if (!reset && (pool.loading || !pool.hasMore)) return;
+        if (reset && poolInFlight) { poolInFlight.abort(); poolInFlight = null; }
+        var seq = ++poolRequestSeq;
+        var controller = ('AbortController' in window) ? new AbortController() : null;
+        if (reset) poolInFlight = controller;
         var listEl = document.getElementById('poolList');
         if (reset) {
             pool.offset = 0;
@@ -953,10 +963,14 @@
             limit: pool.limit
         });
 
-        fetch('/api/player-pool/search?' + params)
+        fetch('/api/player-pool/search?' + params, {
+            signal: controller ? controller.signal : undefined
+        })
             .then(function (r) { return r.json(); })
             .then(function (data) {
+                if (seq !== poolRequestSeq) return;     // a newer search won
                 pool.loading = false;
+                if (poolInFlight === controller) poolInFlight = null;
                 pool.hasMore = data.has_more;
                 pool.offset += data.players.length;
 
@@ -976,8 +990,11 @@
                 document.getElementById('poolCount').textContent = total ? total + ' players' : '';
                 updatePoolSliderControls();
             })
-            .catch(function () {
+            .catch(function (err) {
+                if (err && err.name === 'AbortError') return;   // superseded
+                if (seq !== poolRequestSeq) return;
                 pool.loading = false;
+                if (poolInFlight === controller) poolInFlight = null;
                 var spinner = document.getElementById('poolSpinner');
                 if (spinner) spinner.textContent = 'Failed to load. Refresh to retry.';
                 updatePoolSliderControls();
@@ -1074,7 +1091,7 @@
         var el = squadList().querySelector('[data-squad-name="' + CSS.escape(removed.name.toLowerCase()) + '"]');
         if (el) el.remove();
         if (draft.players.length === 0) {
-            document.getElementById('squadEmpty').style.display = '';
+            showSquadEmpty(true);
         }
 
         markPoolCardInSquad(name, false);
@@ -1086,7 +1103,7 @@
     }
 
     function appendSquadCard(p) {
-        document.getElementById('squadEmpty').style.display = 'none';
+        showSquadEmpty(false);
         var list = squadList();
         var roleClass = roleToClass(p.role);
         var initials = nameToInitials(p.name);
@@ -1122,10 +1139,18 @@
         list.appendChild(div);
     }
 
+    function showSquadEmpty(show) {
+        var el = document.getElementById('squadEmpty');
+        if (el) el.style.display = show ? '' : 'none';
+    }
+
     function renderSquad() {
+        // Remove the player cards only: the empty-state node lives inside this
+        // same list, and wiping it took the node out of the DOM.
         var list = squadList();
-        list.innerHTML = '';
-        document.getElementById('squadEmpty').style.display = draft.players.length ? 'none' : '';
+        Array.prototype.slice.call(list.querySelectorAll('[data-squad-name]'))
+            .forEach(function (el) { el.remove(); });
+        showSquadEmpty(!draft.players.length);
         draft.players.forEach(function (p) { appendSquadCard(p); });
         updateDesignations();
         updateSquadCount();
@@ -1205,9 +1230,11 @@
         document.getElementById('searchInput').addEventListener('input', function () {
             clearTimeout(debounce);
             debounce = setTimeout(function () {
-                pool.search = document.getElementById('searchInput').value.trim();
+                var next = document.getElementById('searchInput').value.trim();
+                if (next === pool.search) return;
+                pool.search = next;
                 fetchPool(true);
-            }, 280);
+            }, 110);
         });
 
         document.getElementById('roleChips').addEventListener('click', function (e) {
