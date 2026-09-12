@@ -4,6 +4,37 @@
  * Expects 'matchData' and 'html2canvas' to be available in the global scope.
  */
 
+// Temporary opt-in trace. No debugger breakpoints: pausing alters the race.
+let matchTraceId = '';
+let matchTraceTimer = null;
+function traceMatch(stage, payload = {}) {
+    if (!window.matchDiagnosticsEnabled) return;
+    const event = {stage, trace_id: matchTraceId, payload: {
+        client_time: new Date().toISOString(), monotonic_ms: performance.now(),
+        visibility: document.visibilityState, online: navigator.onLine,
+        ...payload
+    }};
+    console.info('[MatchTrace]', event);
+    fetch(`${window.location.pathname}/diagnostics`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(event), signal: AbortSignal.timeout(5000)
+    }).then(response => {
+        if (!response.ok) console.warn('[MatchTrace] ingestion failed', response.status);
+    }).catch(error => console.warn('[MatchTrace] ingestion unavailable', String(error)));
+}
+async function receiveBallResult(data) {
+    clearTimeout(matchTraceTimer);
+    if (data._trace_id) matchTraceId = data._trace_id;
+    traceMatch('response_received', {response: data});
+    try {
+        await _processBallResult(data);
+    } catch (error) {
+        traceMatch('processing_error', {message: String(error), stack: error.stack});
+        console.error('[BallResult]', error);
+        appendLog('[system_error] Ball response processing failed: ' + escapeHtml(String(error)), 'error');
+    }
+}
+
 // --- Global State ---
 let impactPlayerState = {
     home: {
@@ -1280,10 +1311,10 @@ let _wsReady = false;
     if (typeof io === 'undefined') return; // socket.io CDN not loaded
     try {
         _wsSocket = io({ transports: ['websocket', 'polling'] });
-        _wsSocket.on('connect',       () => { _wsReady = true; });
-        _wsSocket.on('disconnect',    () => { _wsReady = false; });
-        _wsSocket.on('connect_error', () => { _wsReady = false; });
-        _wsSocket.on('ball_result',   (data) => _processBallResult(data));
+        _wsSocket.on('connect',       () => { _wsReady = true; traceMatch('socket_connect'); });
+        _wsSocket.on('disconnect', reason => { _wsReady = false; traceMatch('socket_disconnect', {reason}); });
+        _wsSocket.on('connect_error', error => { _wsReady = false; traceMatch('socket_error', {message: String(error)}); });
+        _wsSocket.on('ball_result',   (data) => receiveBallResult(data));
         _wsSocket.on('ws_error',      (data) => {
             appendLog(`[system_error] ${data.message || 'WebSocket error'}`, 'error');
         });
@@ -1596,16 +1627,25 @@ function startMatch() {
     simTimerId = null;
     if (matchOver) return;
 
+    if (window.matchDiagnosticsEnabled) {
+        matchTraceId = crypto.randomUUID();
+        traceMatch('request_sent', {transport: _wsReady ? 'websocket' : 'http'});
+        clearTimeout(matchTraceTimer);
+        matchTraceTimer = setTimeout(() => {
+            traceMatch('response_timeout', {wait_ms: 15000});
+            appendLog('[system_error] Waiting over 15 seconds for a ball response. Diagnostic recorded; no ball retried.', 'error');
+        }, 15000);
+    }
     // WebSocket path — emit event, _processBallResult handles the response
     if (_wsReady && _wsSocket) {
-        _wsSocket.emit('next_ball', { match_id: matchData.match_id });
+        _wsSocket.emit('next_ball', { match_id: matchData.match_id, trace_id: matchTraceId });
         return;
     }
 
     // HTTP fallback — original fetch path, unchanged
-    fetch(window.location.pathname + "/next-ball", { method: 'POST' })
+    fetch(window.location.pathname + "/next-ball", { method: 'POST', headers: {'X-Match-Trace-ID': matchTraceId} })
         .then(res => res.json())
-        .then(data => _processBallResult(data))
+        .then(data => receiveBallResult(data))
         .catch(err => appendLog(`[system_error] ${err}`, 'error'));
 }
 
@@ -1667,6 +1707,7 @@ function showScorecard(data, completeData) {
     document.getElementById('scorecard-summary').textContent =
         `Total: ${data.total_score}/${data.wickets} | Overs: ${data.overs} | Run Rate: ${data.run_rate} | Extras: ${data.extras}`;
 
+    traceMatch("scorecard_shown", {innings: currentInningsNumber, scorecard: data});
     // Target Info
     const targetInfo = document.getElementById('target-info');
     if (data.target_info && data.innings_number !== 2) {
@@ -1681,6 +1722,7 @@ function showScorecard(data, completeData) {
 }
 
 function closeScorecard() {
+    traceMatch("scorecard_close");
     // This is the default close action. 
     // Specific flows (like 1st innings end) override the onclick handler.
     // If we are here, it's likely a manual view or end of match simple close.
@@ -1719,6 +1761,7 @@ async function fcHoldScorecard(archiveLabel) {
     let closing = false;
 
     const finish = async () => {
+        traceMatch("scorecard_close");
         if (closing) return;
         closing = true;
         if (closeBtn) {

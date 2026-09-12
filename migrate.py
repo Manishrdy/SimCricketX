@@ -44,7 +44,7 @@ def _import_all_models():
     as they are created so db.create_all() never misses a table.
     """
     from database.models import (  # noqa: F401
-        Team, Player, Match, MatchScorecard,
+        Team, Player, Match, MatchScorecard, MatchDiagnosticEvent,
         Tournament, TournamentTeam, TournamentFixture,
         MatchPartnership, TournamentPlayerStatsCache,
         AdminAuditLog, FailedLoginAttempt, BlockedIP,

@@ -21,7 +21,7 @@ test('FC Close is installed before export and resumes exactly once after failure
             assert.equal(typeof button.onclick, 'function');
             return new Promise((_, reject) => { rejectCapture = reject; });
         },
-        scheduleNextBall: () => resumed++, delay: 0,
+        scheduleNextBall: () => resumed++, delay: 0, traceMatch: () => {},
     });
     vm.runInContext(functionSource('fcHoldScorecard'), context);
     const hold = context.fcHoldScorecard('day_01_lunch');
