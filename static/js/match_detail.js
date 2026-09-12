@@ -1396,12 +1396,7 @@ async function _processBallResult(data) {
                     `Session ${data.session_number}: ${sessionProduction(s)}.`
                     + `${obligation}${situation}`;
             }
-            await captureCurrentScorecardImage(fcScorecardArchiveLabel('interval', data));
-            const closeBtn = document.querySelector('.close-scorecard');
-            closeBtn.onclick = () => {
-                document.getElementById('scorecard-overlay').style.display = 'none';
-                scheduleNextBall(delay);
-            };
+            await fcHoldScorecard(fcScorecardArchiveLabel('interval', data));
             return; // pause until the user acknowledges the interval
         }
         scheduleNextBall(delay);
@@ -1445,12 +1440,7 @@ async function _processBallResult(data) {
                     ? `${sessLine}${dayLine}${data.weather_note} Play resumes Day ${(data.day_number || 0) + 1}.`
                     : `${sessLine}${dayLine}Play resumes Day ${(data.day_number || 0) + 1}.`;
             }
-            await captureCurrentScorecardImage(fcScorecardArchiveLabel('stumps', data));
-            const closeBtn = document.querySelector('.close-scorecard');
-            closeBtn.onclick = () => {
-                document.getElementById('scorecard-overlay').style.display = 'none';
-                scheduleNextBall(delay);
-            };
+            await fcHoldScorecard(fcScorecardArchiveLabel('stumps', data));
             return; // pause simulation until the user acknowledges stumps
         }
         scheduleNextBall(delay);
@@ -1702,6 +1692,46 @@ window.closeScorecard = closeScorecard;
 
 // --- Image Capture & Saving ---
 
+// Holds an FC scorecard modal open until the user closes it, capturing the
+// card image while it is on screen.
+//
+// The Close button is wired BEFORE the capture starts. It used to be wired
+// only after `await captureCurrentScorecardImage(...)`, and that capture
+// takes 3-4 seconds on a full first-class card — so for those seconds Close
+// still ran the inline onclick="closeScorecard()" from match_detail.html,
+// which for an FC match hides the overlay and returns WITHOUT calling
+// scheduleNextBall(). A user who clicked promptly (there are ~15 of these
+// interval cards in a five-day match) silently stalled the simulation and
+// tore the panel out from under html2canvas mid-capture. A click that lands
+// while the capture is still running now waits for it instead.
+async function fcHoldScorecard(archiveLabel) {
+    const overlay = document.getElementById('scorecard-overlay');
+    const closeBtn = document.querySelector('.close-scorecard');
+    let capturePromise = null;
+    let closing = false;
+
+    const finish = async () => {
+        if (closing) return;
+        closing = true;
+        if (closeBtn) {
+            const label = closeBtn.textContent;
+            closeBtn.disabled = true;
+            if (capturePromise) {
+                closeBtn.textContent = 'Saving\u2026';
+                try { await capturePromise; } catch (e) { /* already reported */ }
+            }
+            closeBtn.disabled = false;
+            closeBtn.textContent = label;
+        }
+        if (overlay) overlay.style.display = 'none';
+        scheduleNextBall(delay);
+    };
+
+    if (closeBtn) closeBtn.onclick = finish;
+    capturePromise = captureCurrentScorecardImage(archiveLabel);
+    await capturePromise;
+}
+
 function fcScorecardArchiveLabel(kind, completeData) {
     const scorecard = completeData.scorecard_data || {};
     const inningsNumber = Number(scorecard.innings_number || completeData.innings_number || 1);
@@ -1746,6 +1776,15 @@ async function uploadNamedScorecardImage(blob, archiveLabel) {
 }
 
 async function captureCurrentScorecardImage(archiveLabel = null) {
+    // Every other html2canvas call site in this app guards the library and
+    // tells the user when it is missing (match_dashboard.js, statistics.html);
+    // this one used to swallow a ReferenceError into console.error and return
+    // false, so a blocked or failed CDN load looked exactly like success.
+    if (typeof html2canvas === 'undefined') {
+        appendLog('[system_error] Image export library unavailable \u2014 '
+            + 'scorecard image not saved.', 'error');
+        return false;
+    }
     try {
         const panel = document.querySelector('.scorecard-panel');
         const titleElement = document.getElementById('scorecard-title');
@@ -1789,6 +1828,10 @@ async function captureCurrentScorecardImage(archiveLabel = null) {
         return true;
     } catch (e) {
         console.error("Capture failed", e);
+        // Surface it in the match log too: the console is not where anyone
+        // watching a simulation is looking, and a silent false here is why
+        // a missing scorecard image produced no visible symptom at all.
+        appendLog(`[system_error] Scorecard image capture failed: ${e && e.message ? e.message : e}`, 'error');
         return false;
     }
 }
