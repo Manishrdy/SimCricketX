@@ -90,20 +90,49 @@ def test_run_offloaded_runs_inline_without_gevent():
         run_offloaded(lambda: (_ for _ in ()).throw(ValueError("boom")))
 
 
-def test_declaration_model_is_offloaded():
-    """should_declare must not call the model inline: run_offloaded is what
-    keeps the gevent hub — and therefore the Socket.IO heartbeat — alive while
-    it runs. Asserted against the source so the indirection cannot be quietly
-    removed during a refactor."""
-    import inspect
-    from engine import fc_declaration
-    source = inspect.getsource(fc_declaration.should_declare)
-    assert "run_offloaded(" in source, (
-        "should_declare calls evaluate_declaration inline again — a 45s+ call "
-        "on the gevent hub kills the Socket.IO heartbeat and loses the "
-        "interval scorecard"
-    )
-    assert "fc_captain.evaluate_declaration(" not in source
+def test_every_declaration_path_stays_off_the_hub():
+    """Both routes to the model must go through cpu_offload.
+
+    A 45s+ call on the gevent hub stops the Socket.IO heartbeat for its whole
+    duration, which is what lost the interval scorecard. There are two callers
+    — the synchronous one (stumps, nine down, manual mode) and the deferred
+    one (Lunch/Tea) — and it only takes one of them running inline to bring
+    the bug back. Asserted against the source so a refactor cannot quietly
+    drop the indirection.
+    """
+    import os
+
+    # Read the file rather than inspect.getsource: the latter resolves the
+    # code object's line numbers against whatever is on disk NOW, so it
+    # reports the wrong text if the file is edited while the suite runs, and
+    # it follows any monkeypatch a neighbouring test left behind.
+    source_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "match.py")
+    source = open(source_path, encoding="utf-8").read()
+
+    assert "run_offloaded(fc_declaration.should_declare" in source, (
+        "the synchronous declaration check (stumps / nine down / manual) calls "
+        "should_declare inline again")
+    assert "start_offloaded(\n            fc_declaration.should_declare" in source or \
+           "start_offloaded(fc_declaration.should_declare" in source, (
+        "the deferred declaration check no longer offloads")
+    assert "fc_declaration.should_declare(" not in source, (
+        "some path calls should_declare directly, on the gevent hub")
+
+
+def test_declaration_inputs_withhold_pitch_wear_in_innings_one():
+    """pitch_wear is a Monte-Carlo-path input and is supplied for innings 2
+    and 3 only. Innings 1 must keep falling back to should_declare's own
+    default, because that default is what first-innings declaration behaviour
+    was calibrated against — handing it the real wear silently moves every
+    innings-1 declaration."""
+    match = _fc_match()
+    assert match.fc_innings == 1
+    assert "pitch_wear" not in match._fc_declaration_inputs()
+    for key in ("pitch", "own_strengths", "opposition_strengths",
+                "overs_remaining_in_match", "risk_appetite"):
+        assert key in match._fc_declaration_inputs(), key
 
 
 # --------------------------------------------------------------------------
@@ -283,3 +312,153 @@ def test_rate_limited_response_is_recoverable(app, authenticated_client,
             os.remove(path)
         except OSError:
             pass
+
+
+# --------------------------------------------------------------------------
+# The deferral: card first, decision settled before the next delivery
+# --------------------------------------------------------------------------
+
+def _play_to_first_interval(match, limit=4000):
+    for _ in range(limit):
+        result = match.next_ball()
+        if result.get("fc_interval"):
+            return result
+        if result.get("match_over"):
+            break
+    return None
+
+
+def test_interval_card_does_not_wait_for_the_declaration_model():
+    """Both halves of the deferral contract, against a deliberately slow model.
+
+    The card must come back promptly (that is the entire point — in production
+    this call took 45-53 s and the user stared at it), and the NEXT delivery
+    must then wait for the decision, because a ball may never be bowled
+    against an unsettled one.
+
+    Coordinating with the worker needs care: after monkey.patch_all() a
+    patched Event deadlocks in a pool thread that has no hub, while an
+    unpatched one blocks the main thread and starves the hub that dispatches
+    the work. A plain sleep in the worker avoids both.
+    """
+    import time
+
+    from engine import fc_declaration
+    from utils.cpu_offload import _get_threadpool
+
+    if _get_threadpool() is None:
+        pytest.skip("no gevent hub: start_offloaded runs inline by design")
+
+    from gevent.monkey import get_original
+    real_sleep = get_original("time", "sleep")
+
+    MODEL_SECONDS = 2.0
+    match = _fc_match()
+    original = fc_declaration.should_declare
+
+    def slow(**kwargs):
+        real_sleep(MODEL_SECONDS)   # releases the GIL, as the real model does
+        return False
+
+    fc_declaration.should_declare = slow
+    try:
+        started = time.perf_counter()
+        card = _play_to_first_interval(match)
+        card_seconds = time.perf_counter() - started
+
+        assert card is not None, "no interval reached"
+        assert card.get("fc_interval") is True
+        assert card.get("scorecard_data") is not None
+        assert card_seconds < MODEL_SECONDS / 2, (
+            f"the interval card waited {card_seconds:.2f}s on a "
+            f"{MODEL_SECONDS}s model — the deferral is not working")
+        assert match._fc_declaration_job is not None, "no decision outstanding"
+
+        # The next delivery settles it, and therefore does wait.
+        resumed = time.perf_counter()
+        match.next_ball()
+        assert time.perf_counter() - resumed > MODEL_SECONDS / 4, (
+            "the next delivery did not wait for the outstanding decision")
+        assert match._fc_declaration_job is None
+    finally:
+        fc_declaration.should_declare = original
+
+
+def test_deferred_decision_is_settled_before_the_next_delivery():
+    """No ball may be bowled against an unsettled decision, or it would be
+    applied to a state it was not computed from."""
+    from engine import fc_declaration
+
+    match = _fc_match()
+    card = _play_to_first_interval(match)
+    assert card is not None
+
+    # Either the decision already settled inline (no gevent) or it is pending;
+    # either way, one more delivery must leave nothing outstanding.
+    match.next_ball()
+    assert getattr(match, "_fc_declaration_job", None) is None
+    assert getattr(match, "_fc_interval_rollback", None) is None
+
+
+def test_declaring_at_an_interval_un_takes_the_interval():
+    """When the deferred decision declares, the interval shown in the meantime
+    must be rolled back, leaving the session count and the clock exactly where
+    the synchronous decision left them."""
+    from engine import fc_declaration
+
+    match = _fc_match()
+    # Run up to a break with the model forced to "bat on" so we reach one.
+    original = fc_declaration.should_declare
+    fc_declaration.should_declare = lambda **kw: False
+    try:
+        card = _play_to_first_interval(match)
+        assert card is not None
+    finally:
+        fc_declaration.should_declare = original
+
+    # Now stage a second break and force a declaration on it.
+    before_sessions = match.fc_sessions_taken_today
+    before_clock = match.fc_clock_minute
+    match._fc_start_declaration_decision()
+    match._fc_interval_rollback = {
+        "interval_name": "Tea",
+        "fc_sessions_taken_today": before_sessions,
+        "fc_clock_minute": before_clock,
+        "fc_session_start": dict(match.fc_session_start or {}),
+    }
+    match.fc_sessions_taken_today = before_sessions + 1
+    match.fc_clock_minute = before_clock + 40
+
+    class _Declared:
+        def ready(self):
+            return True
+
+        def get(self):
+            return True
+
+    match._fc_declaration_job = _Declared()
+    match._fc_settle_declaration_decision()
+
+    assert match.fc_innings_declared is True
+    assert match.fc_sessions_taken_today == before_sessions, "interval not un-taken"
+    assert match.fc_clock_minute == before_clock, "clock not restored"
+    assert match._fc_interval_rollback is None
+
+
+def test_a_failed_decision_does_not_break_the_match():
+    """A model that raises must leave the match playable — batting on is the
+    status quo and the check runs again at the next eligible boundary."""
+    match = _fc_match()
+
+    class _Boom:
+        def ready(self):
+            return True
+
+        def get(self):
+            raise RuntimeError("model exploded")
+
+    match._fc_declaration_job = _Boom()
+    match._fc_settle_declaration_decision()
+    assert match.fc_innings_declared is False
+    assert match._fc_declaration_job is None
+    assert match.next_ball() is not None

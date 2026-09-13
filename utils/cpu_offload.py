@@ -30,6 +30,12 @@ hub, and the callable simply runs inline.
 The callable **must be pure CPU over plain data**: no Flask request context, no
 ``db.session``, no ``MATCH_INSTANCES`` mutation. It runs on a real OS thread,
 where none of those are safe to touch.
+
+It must also avoid every gevent-patched primitive — ``threading.Event``,
+``Lock``, ``Queue``, ``time.sleep``, sockets. After ``monkey.patch_all()`` those
+are cooperative objects that expect a hub, and the pool's worker threads have
+none, so blocking on one deadlocks instead of waiting. Pure computation over
+numbers, dicts and NumPy arrays is the whole of what belongs here.
 """
 import logging
 
@@ -73,3 +79,50 @@ def run_offloaded(func, *args, **kwargs):
     if pool is None:
         return func(*args, **kwargs)
     return pool.apply(func, args, kwargs)
+
+class _InlineResult:
+    """The no-gevent stand-in for a thread-pool AsyncResult.
+
+    The work has already run by the time this exists, so ``ready()`` is always
+    True and ``get()`` replays the outcome. That keeps the deferred-call shape
+    usable from tests and from scripts/bench_fc.py, where there is no hub and
+    everything is synchronous anyway.
+    """
+    __slots__ = ("_value", "_error")
+
+    def __init__(self, func, args, kwargs):
+        self._value = None
+        self._error = None
+        try:
+            self._value = func(*args, **kwargs)
+        except BaseException as exc:  # re-raised from get(), as the pool does
+            self._error = exc
+
+    def ready(self):
+        return True
+
+    def get(self):
+        if self._error is not None:
+            raise self._error
+        return self._value
+
+
+def start_offloaded(func, *args, **kwargs):
+    """Begin a CPU-bound call and return a handle, without waiting for it.
+
+    Under gevent the work starts on the hub's thread pool immediately and the
+    caller carries on; ``handle.get()`` waits for the result and re-raises
+    anything the call raised. Without a hub the call runs inline right now and
+    the handle just replays it, so ordering and exceptions match either way.
+
+    This is what lets the FC engine answer a session break before it has
+    decided whether the captain declares: the decision is started here and
+    settled on the next delivery, by which time the user has been looking at
+    the scorecard for several seconds. The same purity rules as
+    ``run_offloaded`` apply — plain data only, no Flask context, no session,
+    no mutation of the Match.
+    """
+    pool = _get_threadpool()
+    if pool is None:
+        return _InlineResult(func, args, kwargs)
+    return pool.spawn(func, *args, **kwargs)
