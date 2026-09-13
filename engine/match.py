@@ -27,6 +27,7 @@ from engine.fc_bowler_workload import FCBowlerManager
 from engine import fc_bowler_workload
 from engine import fc_captain
 from engine import fc_declaration
+from utils.cpu_offload import run_offloaded, start_offloaded
 from engine import fc_weather
 from engine.fc_batting_intent import ability, batting_intent, tail_protection
 from engine.fc_delivery import resolve_delivery
@@ -265,6 +266,18 @@ class Match:
         # session that produced it. See routes/match_routes.py's
         # _remember_pending_card / ack-card.
         self.pending_interval_card = None
+        # An AI declaration decision started but not yet applied, and the
+        # interval taken while it runs. Both are transient: a decision is
+        # always settled before the next delivery, so neither outlives a
+        # single next_ball() gap and neither belongs in the snapshot.
+        self._fc_declaration_job = None
+        self._fc_interval_rollback = None
+        # (day, sessions_taken) of a break whose card has already gone out
+        # while its declaration decision was still running. If that decision
+        # declares, the interval is un-taken and the break becomes live again
+        # for the incoming innings — this stops the same card being shown a
+        # second time. Transient, like the job above.
+        self._fc_deferred_card_break = None
 
         # Initialize comprehensive stats
         self.batsman_stats = {p["name"]: self._new_batting_stats(p) for p in self.batting_team}
@@ -5728,7 +5741,21 @@ class Match:
     def _fc_interval_response(self, interval_name):
         """Lunch/Tea break: the same scorecard pause the end of a day already
         does. Following a first-class match means reading the score at the
-        intervals, so this is a real stopping point, not a log line."""
+        intervals, so this is a real stopping point, not a log line.
+
+        Everything the card reports about the clock and the session number is
+        read AFTER the interval is taken, which is why the interval cannot
+        simply be deferred until the (very slow) declaration decision comes
+        back. Instead the three fields taking it touches are captured first,
+        so _fc_undo_interval can put them back if the captain turns out to be
+        declaring — see _fc_settle_declaration_decision.
+        """
+        self._fc_interval_rollback = {
+            "interval_name": interval_name,
+            "fc_sessions_taken_today": self.fc_sessions_taken_today,
+            "fc_clock_minute": self.fc_clock_minute,
+            "fc_session_start": dict(self.fc_session_start or {}),
+        }
         scorecard_data = self._generate_detailed_scorecard()
         session_no = self._fc_current_session()
         summary = self._fc_session_summary()
@@ -5776,6 +5803,138 @@ class Match:
                 self._fc_weather_status() if getattr(self, "fc_weather_v2", False) else None
             ),
         }
+
+    def _fc_declaration_inputs(self):
+        """Every argument should_declare() needs, read off the current state.
+
+        Snapshotting them here is what makes the decision safe to run on a
+        worker thread: it is then a pure function of plain numbers and dicts,
+        touching no Match attribute while the match carries on being played.
+
+        The shape is load-bearing and is NOT simply "pass everything". The
+        forward-model inputs go in for every innings, but the legacy Monte
+        Carlo ones — including pitch_wear — are supplied only for innings 2
+        and 3, exactly as before. Innings 1 must keep falling back to
+        should_declare's own pitch_wear default, because that default is what
+        the first-innings declaration behaviour was calibrated against;
+        handing it the real wear instead quietly moves every innings-1
+        declaration.
+        """
+        forecast_kwargs = dict(
+            fc_innings=self.fc_innings,
+            wickets=self.wickets,
+            overs_bowled_this_innings=self.current_over,
+            score=self.score,
+            lead=self._fc_aggregate_lead() or 0,
+            days_remaining=self._fc_days_remaining(),
+            pitch_par_factor=self.fmt.pitch_par_factors.get(self.pitch, 1.0),
+            innings_time_budget_overs=self.fc_innings_time_budget_overs,
+            # What the captain can actually see from the balcony. Note the
+            # freshness that matters is HIS OWN attack — the side currently
+            # batting is the side that has to bowl next.
+            rain_risk=self._fc_rain_risk(),
+            projected_final_wear=self._fc_projected_final_wear(),
+            attack_freshness=self._fc_declaring_side_freshness(),
+            pitch=self.pitch,
+            # Supplied for every innings, not just 2/3: the first innings is
+            # where the runaway totals are built, so it is exactly where the
+            # captain most needs to be asked.
+            overs_remaining_in_match=self._fc_overs_remaining_in_match(),
+            # strengths_by_wickets models the tail AS the tail — a side eight
+            # down is not its team average.
+            own_strengths=fc_captain.strengths_by_wickets(
+                self.batting_team, self.bowling_team),
+            opposition_strengths=fc_captain.strengths_by_wickets(
+                self.bowling_team, self.batting_team),
+            risk_appetite=self._fc_risk_appetite(),
+        )
+
+        # Monte Carlo inputs (innings 2/3 only — should_declare() falls back
+        # to the flat-threshold heuristic for innings 1, which never reads
+        # these). self.batting_team is OUR side (deciding whether to
+        # declare); self.bowling_team is the opposition.
+        if self.fc_innings == 2:
+            forecast_kwargs.update(
+                own_bowling_strength=self._fc_avg_rating(self.batting_team, "bowling_rating"),
+                own_batting_strength=self._fc_avg_rating(self.batting_team, "batting_rating"),
+                opp_batting_strength=self._fc_avg_rating(self.bowling_team, "batting_rating"),
+                pitch_wear=self._compute_pitch_wear(),
+            )
+        elif self.fc_innings == 3:
+            forecast_kwargs.update(
+                own_bowling_strength=self._fc_avg_rating(self.batting_team, "bowling_rating"),
+                opp_batting_strength=self._fc_avg_rating(self.bowling_team, "batting_rating"),
+                pitch_wear=self._compute_pitch_wear(),
+            )
+        return forecast_kwargs
+
+    def _fc_start_declaration_decision(self):
+        """Begin the AI declaration decision without waiting for it.
+
+        This is the expensive one — 45-53 s in measured production calls — and
+        it is asked at exactly the moment the interval card is due. Answering
+        the card first and settling this on the next delivery puts the whole
+        cost inside the seconds the user spends reading the scorecard, instead
+        of in front of it.
+
+        Only ever ONE decision is outstanding, and it is always settled before
+        another ball is bowled, so the state it was computed from is still the
+        state it gets applied to.
+        """
+        if getattr(self, "_fc_declaration_job", None) is not None:
+            return
+        self._fc_declaration_job = start_offloaded(
+            fc_declaration.should_declare, **self._fc_declaration_inputs())
+
+    def _fc_settle_declaration_decision(self):
+        """Apply a deferred declaration decision, waiting for it if needed.
+
+        Called before anything else in next_ball(), so no delivery is ever
+        bowled against an unsettled decision. When the captain declares, the
+        interval that was shown in the meantime is un-taken
+        (_fc_undo_interval), leaving the match exactly as the synchronous
+        decision left it.
+        """
+        job = getattr(self, "_fc_declaration_job", None)
+        if job is None:
+            return
+        self._fc_declaration_job = None
+        try:
+            declared = bool(job.get())
+        except Exception:
+            # A failed decision must not take the match down with it. Batting
+            # on is the status quo, and the check runs again at the next
+            # eligible boundary.
+            logger.exception("[FC] Deferred declaration decision failed")
+            self._fc_interval_rollback = None
+            return
+        if declared:
+            self.fc_innings_declared = True
+            self._fc_undo_interval()
+        else:
+            # Batting on: the interval stands exactly as it was taken, and
+            # the break will not fire again, so nothing is owed.
+            self._fc_interval_rollback = None
+            self._fc_deferred_card_break = None
+
+    def _fc_undo_interval(self):
+        """Put back an interval that a deferred declaration means was never
+        taken.
+
+        The window this reverses is one in which no delivery is bowled and no
+        other FC state advances: the card is built and sent, the declaration
+        decision settles on the very next next_ball() call, and only these
+        three fields moved in between. Restoring them leaves the match exactly
+        as it was when the decision was made synchronously, so a declared
+        innings is bit-identical to the old behaviour.
+        """
+        rollback = getattr(self, "_fc_interval_rollback", None)
+        if not rollback:
+            return
+        self.fc_sessions_taken_today = rollback["fc_sessions_taken_today"]
+        self.fc_clock_minute = rollback["fc_clock_minute"]
+        self.fc_session_start = rollback["fc_session_start"]
+        self._fc_interval_rollback = None
 
     def _fc_pre_ball_checks(self):
         """
@@ -5850,7 +6009,26 @@ class Match:
         # three overs into a session. The standing exception is the tail
         # being exposed, where the call is about protecting the last pair
         # and can't wait for the next break.
-        if _day_over or _at_session_break or self.wickets >= 9:
+        #
+        # Of those, a Lunch/Tea break is the one case where the answer can
+        # wait. The
+        # decision costs tens of seconds, the card is due right now, and no
+        # ball is bowled between the two — so the card goes out first and the
+        # decision settles on the next next_ball() (see
+        # _fc_start_declaration_decision). Stumps and the nine-down check stay
+        # synchronous: stumps advances the day and the innings-change
+        # bookkeeping that the minimum-overs model reads, and nine-down has no
+        # card to answer with, so deferring either would buy nothing and risk
+        # a great deal. User-captained mode also stays synchronous — it has a
+        # human to ask, not a model to run.
+        _defer_declaration = (
+            _at_session_break and not _day_over
+            and self.wickets < 9 and not self._is_manual_mode()
+            and self.fc_innings in (1, 2, 3) and not self.follow_on_enforced
+            and not self.fc_innings_declared
+        )
+
+        if (_day_over or _at_session_break or self.wickets >= 9) and not _defer_declaration:
             _decl = self._fc_check_declaration_and_follow_on()
             if _decl is not None:
                 return _decl                 # user-captained: pause and ask
@@ -5867,8 +6045,22 @@ class Match:
             return self._fc_day_break_response()
 
         if _at_session_break:
-            return self._fc_interval_response(
-                self.FC_SESSION_NAMES[self.fc_sessions_taken_today])
+            interval_name = self.FC_SESSION_NAMES[self.fc_sessions_taken_today]
+            already_shown = (
+                self._fc_deferred_card_break == (self.fc_day, self.fc_sessions_taken_today))
+            if already_shown:
+                # This break's card was already sent, before the declaration
+                # it was waiting on rolled the interval back. Take the
+                # interval for real now, but silently — showing it twice is
+                # the one way this deferral could be noticed.
+                self._fc_deferred_card_break = None
+                self._fc_interval_response(interval_name)
+                self._fc_interval_rollback = None
+                return None
+            if _defer_declaration:
+                self._fc_start_declaration_decision()
+                self._fc_deferred_card_break = (self.fc_day, self.fc_sessions_taken_today)
+            return self._fc_interval_response(interval_name)
 
         return None
 
@@ -5924,61 +6116,12 @@ class Match:
                 )
             return None
 
-        pitch_factor = self.fmt.pitch_par_factors.get(self.pitch, 1.0)
-
-        # Forward-model inputs. strengths_by_wickets models the tail AS the
-        # tail — a side eight down is not its team average, which is all the
-        # sampled estimator could see.
-        forecast_kwargs = dict(
-            pitch=self.pitch,
-            # Supplied for every innings, not just 2/3: the first innings is
-            # where the runaway totals are built, so it is exactly where the
-            # captain most needs to be asked.
-            overs_remaining_in_match=self._fc_overs_remaining_in_match(),
-            own_strengths=fc_captain.strengths_by_wickets(
-                self.batting_team, self.bowling_team),
-            opposition_strengths=fc_captain.strengths_by_wickets(
-                self.bowling_team, self.batting_team),
-            risk_appetite=self._fc_risk_appetite(),
-        )
-
-        # Monte Carlo inputs (innings 2/3 only — should_declare() falls back
-        # to the flat-threshold heuristic for innings 1, which never reads
-        # these). self.batting_team is OUR side (deciding whether to
-        # declare); self.bowling_team is the opposition.
-        mc_kwargs = {}
-        if self.fc_innings == 2:
-            mc_kwargs = dict(
-                own_bowling_strength=self._fc_avg_rating(self.batting_team, "bowling_rating"),
-                own_batting_strength=self._fc_avg_rating(self.batting_team, "batting_rating"),
-                opp_batting_strength=self._fc_avg_rating(self.bowling_team, "batting_rating"),
-                pitch_wear=self._compute_pitch_wear(),
-            )
-        elif self.fc_innings == 3:
-            mc_kwargs = dict(
-                own_bowling_strength=self._fc_avg_rating(self.batting_team, "bowling_rating"),
-                opp_batting_strength=self._fc_avg_rating(self.bowling_team, "batting_rating"),
-                pitch_wear=self._compute_pitch_wear(),
-            )
-
-        if fc_declaration.should_declare(
-            fc_innings=self.fc_innings,
-            wickets=self.wickets,
-            overs_bowled_this_innings=self.current_over,
-            score=self.score,
-            lead=lead,
-            days_remaining=days_remaining,
-            pitch_par_factor=pitch_factor,
-            innings_time_budget_overs=self.fc_innings_time_budget_overs,
-            # What the captain can actually see from the balcony. Note the
-            # freshness that matters is HIS OWN attack — the side currently
-            # batting is the side that has to bowl next.
-            rain_risk=self._fc_rain_risk(),
-            projected_final_wear=self._fc_projected_final_wear(),
-            attack_freshness=self._fc_declaring_side_freshness(),
-            **forecast_kwargs,
-            **mc_kwargs,
-        ):
+        # Same inputs the deferred path uses, and the same offloaded call:
+        # this decision must never run on the gevent hub whichever boundary
+        # asks for it, or it stops the Socket.IO heartbeat for its whole
+        # duration. See utils/cpu_offload and _fc_start_declaration_decision.
+        if run_offloaded(fc_declaration.should_declare,
+                         **self._fc_declaration_inputs()):
             self.fc_innings_declared = True
         return None
 
@@ -6475,6 +6618,13 @@ class Match:
         }
 
     def next_ball(self):
+        # A declaration decision deferred at the last interval is settled
+        # before anything else happens, so no delivery is ever bowled against
+        # an unsettled one and the state it was computed from is still the
+        # state it applies to. Cheap and a no-op in every other case.
+        if self.is_fc and getattr(self, "_fc_declaration_job", None) is not None:
+            self._fc_settle_declaration_decision()
+
         # Super Over guard: once a tie pushes the match into super-over state
         # (innings 4 = super over pending/in progress, 5 = decided), the normal
         # ball loop must NOT run. Without this guard a stray next_ball() — from a

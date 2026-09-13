@@ -675,9 +675,21 @@ def test_declared_innings_2_does_not_trigger_follow_on(app):
     m.fc_day_overs_bowled_today = 30
     m.fc_sessions_taken_today = 0
 
+    # The AI declaration decision is deferred at a Lunch/Tea break: the
+    # interval card is answered first and the decision settles on the next
+    # delivery (see Match._fc_start_declaration_decision). So the break
+    # produces the card, and the declaration lands on the call after it. The
+    # interval itself is rolled back when the captain declares, which is why
+    # fc_sessions_taken_today is back to 0 below — the match state is exactly
+    # what the old synchronous decision produced.
+    interval = m.next_ball()
+    assert interval.get("fc_interval") is True
+    assert interval.get("interval_name") == "Lunch"
+
     result = m.next_ball()
     assert result.get("innings_end") is True
     assert result.get("innings_number") == 2
+    assert m.fc_sessions_taken_today == 0  # interval un-taken by the declaration
     assert m.follow_on_enforced is False  # never enforced on a side that's ahead
     assert m.fc_innings == 3
     # No follow-on -> innings 3 is the FIRST side's second innings (home,
