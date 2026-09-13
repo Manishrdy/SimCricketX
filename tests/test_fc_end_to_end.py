@@ -110,6 +110,24 @@ def _create_match(client, home, away, days=4, pitch="Hard", send_xi=True):
     return resp.get_json()
 
 
+def _next_live_ball(client, match_id):
+    import app as app_module
+    import gevent
+
+    # Delivery throughput is not under test here. Pending decisions still get
+    # the same cooperative retry delay as the browser, with a bounded retry.
+    for _ in range(8):
+        app_module._rate_limit_store.clear()
+        resp = client.post(f"/match/{match_id}/next-ball")
+        assert resp.status_code == 200, resp.get_data(as_text=True)[:300]
+        data = resp.get_json()
+        assert "error" not in data, data.get("error")
+        if not data.get("fc_decision_pending"):
+            return data
+        gevent.sleep(data.get("retry_after", 0.5))
+    pytest.fail("captain decision did not resolve within four seconds")
+
+
 def test_fc_match_plays_through_to_a_result(app, authenticated_client, fc_teams):
     """Play a four-day match out over the live routes and check it reads like
     first-class cricket from the outside."""
@@ -124,10 +142,7 @@ def test_fc_match_plays_through_to_a_result(app, authenticated_client, fc_teams)
     days_seen = set()
 
     for _ in range(40000):
-        resp = authenticated_client.post(f"/match/{match_id}/next-ball")
-        assert resp.status_code == 200, resp.get_data(as_text=True)[:300]
-        data = resp.get_json()
-        assert "error" not in data, data.get("error")
+        data = _next_live_ball(authenticated_client, match_id)
 
         if data.get("fc_day"):
             days_seen.add(data["fc_day"])
@@ -245,8 +260,7 @@ def test_scorecard_omits_bowlers_who_never_bowled(app, authenticated_client, fc_
 
     seen_cards = 0
     for _ in range(40000):
-        data = authenticated_client.post(f"/match/{match_id}/next-ball").get_json()
-        assert "error" not in data, data.get("error")
+        data = _next_live_ball(authenticated_client, match_id)
         card = data.get("scorecard_data")
         if card and card.get("bowlers"):
             seen_cards += 1

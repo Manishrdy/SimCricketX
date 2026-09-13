@@ -64,3 +64,48 @@ test('capture excludes commentary, keeps panel ancestry, and never restyles live
     assert.equal(panel.style.cssText, 'original');
     assert.equal(title.style.color, 'original');
 });
+
+test('pending captain response schedules polling without appending a ball', async () => {
+    const status = { hidden: true };
+    const delays = [];
+    const logs = [];
+    const context = vm.createContext({
+        document: { getElementById: id => id === 'fc-captain-status' ? status : null },
+        ballInFlight: true, renderCaptainDiscussion: () => {},
+        scheduleNextBall: ms => delays.push(ms),
+        appendLog: (...args) => logs.push(args),
+    });
+    vm.runInContext(functionSource('_processBallResult'), context);
+    await context._processBallResult({ fc_decision_pending: true, retry_after: 0.5 });
+    assert.equal(context.ballInFlight, false);
+    assert.equal(status.hidden, false);
+    assert.deepEqual(delays, [500]);
+    assert.deepEqual(logs, []);
+    // Rate limiting during polling retains the waiting state.
+    await context._processBallResult({ rate_limited: true, retry_after: 1 });
+    assert.equal(status.hidden, false);
+    assert.deepEqual(delays, [500, 1000]);
+    await context._processBallResult({ error: 'Decision failed' });
+    assert.equal(status.hidden, true);
+});
+
+
+test('simulated coach and captain dialogue is escaped and shown once per decision', () => {
+    const logs = [];
+    const start = source.indexOf('const captainDiscussionSeen = new Set();');
+    const end = source.indexOf('// All ball-result processing', start);
+    const context = vm.createContext({
+        appendLog: text => logs.push(text),
+        escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
+    });
+    vm.runInContext(source.slice(start, end), context);
+    const coach = {id: '1:30:coach', speaker: 'Coach', text: 'We are 410/6. <script>'};
+    const captain = {id: '1:30:captain', speaker: 'Captain', text: "We're declaring."};
+    context.renderCaptainDiscussion({fc_captain_discussion: [coach]});
+    context.renderCaptainDiscussion({fc_captain_discussion: [coach, captain]});
+    context.renderCaptainDiscussion({fc_captain_discussion: [captain]});
+    assert.equal(logs.length, 2);
+    assert.match(logs[0], /Coach \(simulated\)/);
+    assert.match(logs[0], /&lt;script&gt;/);
+    assert.match(logs[1], /We're declaring/);
+});

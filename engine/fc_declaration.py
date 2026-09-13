@@ -34,6 +34,9 @@ flat-threshold heuristic.
 """
 
 import logging
+import time
+
+from engine.fc_decision_budget import DecisionBudgetExceeded, decision_budget
 import random as _random
 
 from engine import fc_captain
@@ -410,6 +413,60 @@ def declaration_window_open(*, fc_innings, wickets, overs_bowled_this_innings,
     return days_remaining <= _MAX_DAYS_REMAINING_FOR_DECLARE
 
 
+LIVE_MODEL_SECONDS = 0.25
+LIVE_DECISION_SECONDS = 0.75
+
+
+def quick_declaration_decision(**inputs):
+    """Constant-time fallback using the existing conditions/time thresholds.
+
+    No forward model or sampled estimator is reachable from this path.
+    A bat-on verdict is reviewed in ten overs, never an indefinite delay.
+    """
+    innings = inputs["fc_innings"]
+    wickets = inputs["wickets"]
+    overs = inputs["overs_bowled_this_innings"]
+    eligible = (wickets < 10 and declaration_window_open(
+        fc_innings=innings, wickets=wickets, overs_bowled_this_innings=overs,
+        days_remaining=inputs["days_remaining"],
+        innings_time_budget_overs=inputs.get("innings_time_budget_overs")))
+    eligible = eligible and (wickets >= _WICKETS_DOWN_FLOOR or overs >= _OVERS_DOWN_FLOOR)
+    if innings in (2, 3) and inputs["lead"] < _MIN_LEAD_TO_DECLARE:
+        eligible = False
+    declared = eligible and _threshold_declare(
+        fc_innings=innings, score=inputs["score"], lead=inputs["lead"],
+        overs_bowled_this_innings=overs, days_remaining=inputs["days_remaining"],
+        pitch_par_factor=inputs.get("pitch_par_factor", 1.0),
+        innings_time_budget_overs=inputs.get("innings_time_budget_overs"),
+        rain_risk=inputs.get("rain_risk"),
+        projected_final_wear=inputs.get("projected_final_wear"),
+        attack_freshness=inputs.get("attack_freshness"))
+    return {"declare_now": bool(declared), "review_after_overs": 0 if declared else 10}
+
+
+def declaration_decision(*, deadline=None, **kwargs):
+    """Bounded live decision; should_declare remains the offline full model."""
+    started = time.monotonic()
+    deadline = min(deadline, started + LIVE_MODEL_SECONDS) if deadline is not None else started + LIVE_MODEL_SECONDS
+    mode = "forecast"
+    try:
+        with decision_budget(deadline):
+            result = should_declare(**kwargs, return_plan=True)
+        if isinstance(result, dict):
+            result = {"declare_now": result["declare_now"],
+                      "review_after_overs": result["best"]["horizon"]}
+        else:
+            result = {"declare_now": bool(result), "review_after_overs": None}
+    except DecisionBudgetExceeded:
+        mode = "quick_policy"
+        result = quick_declaration_decision(**kwargs)
+    logger.info("[FC Captain] innings=%s score=%s/%s mode=%s decision=%s elapsed_ms=%.1f",
+                kwargs["fc_innings"], kwargs["score"], kwargs["wickets"], mode,
+                "declare" if result["declare_now"] else "bat_on",
+                (time.monotonic() - started) * 1000)
+    return result
+
+
 def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                     score, lead, days_remaining, pitch_par_factor=1.0,
                     innings_time_budget_overs=None,
@@ -419,9 +476,11 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                     rain_risk=None, projected_final_wear=None,
                     attack_freshness=None,
                     pitch=None, own_strengths=None, opposition_strengths=None,
-                    risk_appetite=None) -> bool:
+                    risk_appetite=None, continuation_strengths=None,
+                    follow_on_margin=200, return_plan=False):
     """
-    Returns True if the AI captain should declare the current innings
+    With return_plan=True the forward path returns its plan, including the
+    next review horizon. Otherwise returns True if the AI should declare the current innings
     closed right now (called at an over boundary only).
 
     Parameters
@@ -518,6 +577,20 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
     # whether the lead was already big enough, so its one way to grow a lead
     # was to keep batting — which is how targets of 500+ were set.
     if model_driven:
+        # A modest first-innings score with plenty of time and innings budget
+        # left is an ordinary "bat on" decision. Do not run a three-innings
+        # search at every early interval merely to rediscover that. The
+        # conditions-adjusted bar keeps seam/rain opportunities available;
+        # time pressure and the final two days always reach the model.
+        early_bar = (_INNINGS1_BASE_THRESHOLD * pitch_par_factor
+                     * _conditions_threshold_multiplier(
+                         rain_risk=rain_risk, projected_final_wear=projected_final_wear,
+                         attack_freshness=attack_freshness))
+        if (fc_innings == 1 and score < early_bar and days_remaining > 2
+                and overs_remaining_in_match > 180
+                and not _time_pressure(overs_bowled_this_innings, days_remaining,
+                                       innings_time_budget_overs)):
+            return False
         # The single most expensive thing the FC engine does: two measured
         # production calls took 52.6 s and 45.6 s. It is deliberately a plain
         # call here — should_declare stays pure so bench scripts and tests can
@@ -538,6 +611,8 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
             wear_start=pitch_wear,
             wear_end=projected_final_wear if projected_final_wear is not None
             else min(1.0, pitch_wear + 0.3),
+            continuation_strengths=continuation_strengths,
+            follow_on_margin=follow_on_margin,
             risk_appetite=(DEFAULT_RISK_APPETITE if risk_appetite is None
                            else risk_appetite),
         )
@@ -549,7 +624,7 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
                 fc_innings, lead, best["horizon"], best["value"],
                 (now or best)["win"], (now or best)["draw"], (now or best)["loss"],
                 "DECLARE" if plan["declare_now"] else "bat on")
-            return plan["declare_now"]
+            return plan if return_plan else plan["declare_now"]
 
     forecast_ready = (
         (fc_innings == 2 and all(v is not None for v in innings_two_inputs))
@@ -591,6 +666,17 @@ def should_declare(*, fc_innings, wickets, overs_bowled_this_innings,
         return (win_prob >= _MC_MIN_WIN_PROB
                 and (win_prob - loss_prob) >= _MC_MIN_WIN_EDGE_OVER_LOSS)
 
+    return _threshold_declare(
+        fc_innings=fc_innings, score=score, lead=lead,
+        overs_bowled_this_innings=overs_bowled_this_innings, days_remaining=days_remaining,
+        pitch_par_factor=pitch_par_factor, innings_time_budget_overs=innings_time_budget_overs,
+        rain_risk=rain_risk, projected_final_wear=projected_final_wear,
+        attack_freshness=attack_freshness)
+
+
+def _threshold_declare(*, fc_innings, score, lead, overs_bowled_this_innings,
+                       days_remaining, pitch_par_factor=1.0, innings_time_budget_overs=None,
+                       rain_risk=None, projected_final_wear=None, attack_freshness=None):
     target_metric = score if fc_innings == 1 else lead
     base_threshold = _INNINGS1_BASE_THRESHOLD if fc_innings == 1 else _LEAD_BASE_THRESHOLD
     threshold = base_threshold * pitch_par_factor
@@ -710,26 +796,29 @@ def should_enforce_follow_on(*, deficit, follow_on_margin, days_remaining,
     """
     if deficit < follow_on_margin:
         return False
-    if days_remaining < _MIN_DAYS_REMAINING_FOR_FOLLOW_ON:
-        return False
 
     # Preferred path: weigh enforcing against batting again under the same
     # value function every other decision uses. The thresholds below remain
     # as the fallback for callers that cannot supply the model's inputs.
     if (pitch is not None and own_strengths and opposition_strengths
             and overs_remaining_in_match is not None):
-        plan = fc_captain.evaluate_follow_on(
-            pitch=pitch, deficit=deficit,
-            overs_remaining=overs_remaining_in_match,
-            own_strengths=own_strengths,
-            opposition_strengths=opposition_strengths,
-            wear_start=pitch_wear,
-            wear_end=projected_final_wear if projected_final_wear is not None
-            else min(1.0, pitch_wear + 0.3),
-            risk_appetite=(DEFAULT_RISK_APPETITE if risk_appetite is None
-                           else risk_appetite),
-            attack_freshness=1.0 if attack_freshness is None else attack_freshness,
-        )
+        try:
+            with decision_budget(time.monotonic() + LIVE_MODEL_SECONDS):
+                plan = fc_captain.evaluate_follow_on(
+                    pitch=pitch, deficit=deficit,
+                    overs_remaining=overs_remaining_in_match,
+                    own_strengths=own_strengths,
+                    opposition_strengths=opposition_strengths,
+                    wear_start=pitch_wear,
+                    wear_end=projected_final_wear if projected_final_wear is not None
+                    else min(1.0, pitch_wear + 0.3),
+                    risk_appetite=(DEFAULT_RISK_APPETITE if risk_appetite is None
+                                   else risk_appetite),
+                    attack_freshness=1.0 if attack_freshness is None else attack_freshness,
+                )
+        except DecisionBudgetExceeded:
+            logger.info("[FC Captain] follow-on forecast budget reached; applying quick policy")
+            plan = None
         if plan is not None:
             logger.debug(
                 "FC follow-on deficit=%d enforce_value=%.3f decline_value=%.3f "
@@ -738,6 +827,11 @@ def should_enforce_follow_on(*, deficit, follow_on_margin, days_remaining,
                 plan["options"]["decline"]["value"], plan["fatigue_penalty"],
                 "ENFORCE" if plan["enforce"] else "bat again")
             return plan["enforce"]
+
+    # The model prices the remaining overs directly, including the last day.
+    # Retain the old days gate only for the threshold fallback.
+    if days_remaining < _MIN_DAYS_REMAINING_FOR_FOLLOW_ON:
+        return False
 
     # Crushing lead: make them follow on and be done with it.
     if deficit >= follow_on_margin * _FO_OVERWHELMING_DEFICIT_MULT:

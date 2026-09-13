@@ -29,6 +29,7 @@ import logging
 
 import numpy as np
 
+from engine.fc_decision_budget import check_budget
 from engine.fc_batting_intent import ability
 from engine.fc_forecast import chase_curves, innings_forecast
 
@@ -107,6 +108,32 @@ def strengths_by_wickets(batting_order, bowling_attack):
     return out
 
 
+def remaining_strengths_by_wickets(current_batters, unbatted, bowling_attack):
+    """Continuation only: retain both survivors, including a set opener.
+
+    Future dismissals are unknown. Average over which of the two current
+    batters survives each dismissal rather than pretending batting-order
+    position identifies the dismissed player. Unused batters enter in order.
+    Full-XI strengths remain separate for a possible later innings.
+    """
+    attack = [p for p in bowling_attack if p.get("will_bowl")] or list(bowling_attack)
+    bowling = (sum(p.get("bowling_rating", 50) for p in attack) / len(attack)
+               if attack else 50.0)
+    pair = list(current_batters)
+    waiting = list(unbatted)
+    if not pair:
+        return strengths_by_wickets(waiting, bowling_attack)
+    pair_mean = sum(ability(p) for p in pair) / len(pair)
+    wickets = min(10, len(waiting) + len(pair) - 1)
+    out = {}
+    for w in range(wickets, 0, -1):
+        remaining = [ability(p) for p in waiting]
+        out[w] = (2 * pair_mean + sum(remaining)) / (2 + len(remaining)) - bowling
+        if waiting:
+            pair_mean = (pair_mean + ability(waiting.pop(0))) / 2
+    return out
+
+
 def _key(strengths):
     return tuple(round(strengths.get(w, 0.0), 1) for w in range(1, 11))
 
@@ -139,6 +166,7 @@ def _best_response_curves(pitch, overs, strengths_key, wear_start, wear_end,
     """
     stacked = []
     for tempo in TEMPOS:
+        check_budget()
         forecast = _forecast(pitch, overs, strengths_key, wear_start,
                              wear_end, tempo, bucket, False)
         win, loss, draw = chase_curves(forecast)
@@ -171,6 +199,8 @@ def best_response(pitch, overs, strengths, wear_start, wear_end, target,
 # opposition's reply our "lead" may well be a deficit. The lead axis is
 # therefore offset so it can represent both.
 LEAD_FLOOR = 400
+# At five runs per bucket, cover positions from -400 through +2000.
+_MIN_POSITION_BUCKETS = 480
 
 
 def _lead_index(leads, bucket, size):
@@ -178,96 +208,187 @@ def _lead_index(leads, bucket, size):
     return np.clip(np.rint(position).astype(int), 0, size)
 
 
+def _normalise_outcomes(outcome):
+    """Remove floating-point dust and conserve probability for each position."""
+    values = np.maximum(0.0, np.asarray(outcome, dtype=float))
+    total = values.sum(axis=0)
+    values /= np.where(total > 0, total, 1.0)
+    values[1] = np.where(total > 0, values[1], 1.0)
+    return tuple(values)
+
+
+def _wear_after(start, end, elapsed, available):
+    if elapsed <= 0:
+        return round(start, 2)
+    # Future wear is only a projection. A tenth-wide grid bounds nested
+    # forecast caches; the observed starting wear remains exact.
+    projected = round(start + (end - start) * min(1.0, elapsed / max(1, available)), 1)
+    return round(max(min(start, end), min(max(start, end), projected)), 2)
+
+
+def _ending_groups(forecast, horizon):
+    """Joint runs/time distribution, grouped on the model's time grid.
+
+    Surviving mass declares at the horizon; all-out mass ends at its own
+    over. Grouping bounds the number of downstream forecasts, while keeping
+    the full score distribution instead of substituting its mean.
+    """
+    groups = {}
+    absorption = forecast["absorption"]
+    if absorption is not None:
+        for over, mass in enumerate(absorption):
+            if mass.sum() > 0:
+                elapsed = min(horizon, max(1, _rounded(over + 1)))
+                groups[elapsed] = groups.get(elapsed, 0) + mass
+    groups[horizon] = groups.get(horizon, 0) + forecast["survived_pmf"]
+    return groups
+
+
+def _defence_integral(leads, runs, mass, curves, bucket):
+    their_win, their_loss, draw = curves
+    index = _target_index(leads[:, None] + runs[None, :] + 1,
+                          bucket, len(their_win) - 1)
+    return tuple(values[index] @ mass for values in (their_loss, draw, their_win))
+
+
 @functools.lru_cache(maxsize=512)
 def _third_innings_curves(pitch, overs, own_key, opp_key, wear_start, wear_end,
                           risk_appetite, bucket, size):
-    """Our best (win, draw, loss) for every lead, batting the third innings.
-
-    For each lead the captain may bat on for any horizon before declaring,
-    so this already contains the "how long do we bat" decision. Indexed by
-    lead via `_lead_index`, which spans deficits as well as leads.
-    """
+    """Our best outcomes for every lead, including early all-out endings."""
     lead_axis = np.arange(size + 1) * bucket - LEAD_FLOOR
     best_value = np.full(size + 1, -np.inf)
     best = [np.zeros(size + 1) for _ in range(3)]
-
     for horizon in horizons_for(overs):
-        gained = 0.0
+        check_budget()
+        outcome = [np.zeros(size + 1) for _ in range(3)]
         if horizon:
-            gained = _forecast(pitch, _rounded(horizon), own_key, wear_start,
-                               wear_end, 0.5, bucket, False)["expected_runs"]
-        their_win, their_loss, draw = _best_response_curves(
-            pitch, _rounded(overs - horizon), opp_key, wear_start, wear_end,
-            risk_appetite, bucket)
-        index = _target_index(lead_axis + gained + 1, bucket,
-                              len(their_win) - 1)
-        # Their chase ends the match, so their loss is our win.
-        win, loss, drawn = their_loss[index], their_win[index], draw[index]
-        score = (win + DRAW_VALUE * risk_appetite * drawn
-                 - TIME_PREFERENCE * horizon)
+            continuation = _forecast(pitch, horizon, own_key, wear_start,
+                                    _wear_after(wear_start, wear_end, horizon, overs),
+                                    0.5, bucket, True)
+            groups = _ending_groups(continuation, horizon)
+            runs = continuation["runs_axis"]
+            spent = continuation["expected_overs"]
+        else:
+            groups, runs, spent = {0: np.ones(1)}, np.zeros(1), 0
+        for elapsed, mass in groups.items():
+            check_budget()
+            if mass.sum() <= 0:
+                continue
+            curves = _best_response_curves(
+                pitch, _rounded(overs - elapsed), opp_key,
+                _wear_after(wear_start, wear_end, elapsed, overs), wear_end,
+                risk_appetite, bucket)
+            for slot, values in zip(outcome, _defence_integral(
+                    lead_axis, runs, mass, curves, bucket)):
+                slot += values
+        win, drawn, loss = outcome
+        score = win + DRAW_VALUE * risk_appetite * drawn - TIME_PREFERENCE * spent
         take = score > best_value
         best_value = np.where(take, score, best_value)
-        for slot, values in zip(best, (win, drawn, loss)):
+        for slot, values in zip(best, outcome):
             slot[:] = np.where(take, values, slot)
-    return best[0], best[1], best[2]
+    return _normalise_outcomes(best)
+
+
+@functools.lru_cache(maxsize=512)
+def _lead_declaration_curves(pitch, overs, own_key, opp_key, wear_start,
+                             wear_end, risk_appetite, opponent_risk, bucket, size):
+    """Bowl, then possibly chase, for every lead on the same score grid."""
+    leads = np.arange(size + 1) * bucket - LEAD_FLOOR
+    best_score = np.full(size + 1, -np.inf)
+    best = [np.zeros(size + 1) for _ in range(3)]
+    for tempo in TEMPOS:
+        check_budget()
+        forecast = _forecast(pitch, overs, opp_key, wear_start, wear_end,
+                             tempo, bucket, True)
+        axis = forecast["runs_axis"]
+        short = axis[None, :] < leads[:, None]
+        cheaply = short @ forecast["all_out_pmf"]
+        win = cheaply.copy()
+        draw = np.full(size + 1, forecast["survived_pmf"].sum())
+        loss = np.zeros(size + 1)
+        for elapsed, mass in _ending_groups(
+                dict(forecast, survived_pmf=np.zeros_like(axis)), overs).items():
+            check_budget()
+            if mass.sum() <= 0:
+                continue
+            remaining = _rounded(overs - elapsed)
+            if remaining <= 0:
+                draw += (~short) @ mass
+                continue
+            curves = _best_response_curves(
+                pitch, remaining, own_key,
+                _wear_after(wear_start, wear_end, elapsed, overs), wear_end,
+                risk_appetite, bucket)
+            index = _target_index(axis[None, :] - leads[:, None] + 1,
+                                  bucket, len(curves[0]) - 1)
+            for slot, curve in zip((win, loss, draw), curves):
+                slot += (curve[index] * ~short) @ mass
+        # Preserve the opponent's existing objective: avoid an innings defeat.
+        take = -cheaply > best_score
+        best_score = np.where(take, -cheaply, best_score)
+        for slot, values in zip(best, (win, draw, loss)):
+            slot[:] = np.where(take, values, slot)
+    return _normalise_outcomes(best)
+
+
+@functools.lru_cache(maxsize=512)
+def _first_innings_curves(pitch, overs, own_key, opp_key, wear_start, wear_end,
+                         risk_appetite, bucket, size, follow_on_margin):
+    scores = np.arange(size + 1) * bucket - LEAD_FLOOR
+    reply = _forecast(pitch, overs, opp_key, wear_start, wear_end, 0.0, bucket, True)
+    axis = reply["runs_axis"]
+    result = [np.zeros(size + 1),
+              np.full(size + 1, reply["survived_pmf"].sum()), np.zeros(size + 1)]
+    leads = scores[:, None] - axis[None, :]
+    index = _lead_index(leads, bucket, size)
+    for elapsed, mass in _ending_groups(
+            dict(reply, survived_pmf=np.zeros_like(axis)), overs).items():
+        check_budget()
+        if mass.sum() <= 0:
+            continue
+        remaining = _rounded(overs - elapsed)
+        if remaining <= 0:
+            result[1] += mass.sum()
+            continue
+        wear = _wear_after(wear_start, wear_end, elapsed, overs)
+        decline = _third_innings_curves(pitch, remaining, own_key, opp_key,
+                                        wear, wear_end, risk_appetite, bucket, size)
+        chosen = [curve[index] for curve in decline]
+        if follow_on_margin is not None:
+            # Project a spell's workload before asking the same bowl-then-
+            # chase model used by the live follow-on decision. A full innings
+            # of work cannot be treated as a completely fresh attack.
+            freshness = round(max(0.0, 1.0 - elapsed / 180.0) * 4) / 4
+            tired_key = tuple(v + MAX_FATIGUE_PENALTY * (1 - freshness) for v in opp_key)
+            enforce = _lead_declaration_curves(
+                pitch, remaining, own_key, tired_key, wear, wear_end,
+                risk_appetite, DEFAULT_RISK_APPETITE, bucket, size)
+            eligible = leads >= follow_on_margin
+            prefer = eligible & ((enforce[0][index] + DRAW_VALUE * risk_appetite * enforce[1][index])
+                                 > (chosen[0] + DRAW_VALUE * risk_appetite * chosen[1]))
+            chosen = [np.where(prefer, curve[index], old)
+                      for curve, old in zip(enforce, chosen)]
+        for slot, values in zip(result, chosen):
+            slot += values @ mass
+    return _normalise_outcomes(result)
 
 
 def innings_one_declaration_outcome(*, pitch, score, overs_remaining,
                                     own_strengths, opposition_strengths,
                                     wear_start=0.2, wear_end=0.8,
                                     risk_appetite=DEFAULT_RISK_APPETITE,
-                                    bucket=5):
-    """We declare the FIRST innings at `score`. Three innings still to play.
-
-    They reply, we bat again, they chase. The old first-innings rule was a
-    flat "is 300 enough" threshold with no model at all behind it, which is
-    where the 600-plus first innings came from.
-    """
-    overs_remaining = max(0, int(overs_remaining))
+                                    bucket=5, follow_on_margin=200):
+    """Declare innings one, including an eligible follow-on after the reply."""
     if overs_remaining <= 0:
         return 0.0, 1.0, 0.0
-
-    reply = _forecast(pitch, _rounded(overs_remaining),
-                      _key(opposition_strengths), round(wear_start, 2),
-                      round(wear_end, 2), 0.0, bucket, True)
-    axis = reply["runs_axis"]
-    size = len(axis) - 1
-    win = draw = loss = 0.0
-
-    # They bat out the available overs: nobody bats again.
-    draw += float(reply["survived_pmf"].sum())
-
-    absorption = reply["absorption"]
-    if absorption is None:
-        return 0.0, 1.0, 0.0
-
-    grouped = {}
-    for over in range(absorption.shape[0]):
-        row = absorption[over]
-        if row.sum() < 1e-12:
-            continue
-        overs_left = _rounded(overs_remaining - over - 1)
-        if overs_left <= 0:
-            draw += float(row.sum())
-            continue
-        grouped[overs_left] = grouped.get(overs_left, 0) + row
-
-    leads = score - axis
-    for overs_left, mass in grouped.items():
-        win_curve, draw_curve, loss_curve = _third_innings_curves(
-            pitch, overs_left, _key(own_strengths), _key(opposition_strengths),
-            round(wear_start, 2), round(wear_end, 2), risk_appetite, bucket,
-            size)
-        index = _lead_index(leads, bucket, size)
-        win += float((mass * win_curve[index]).sum())
-        draw += float((mass * draw_curve[index]).sum())
-        loss += float((mass * loss_curve[index]).sum())
-
-    win, draw, loss = max(0.0, win), max(0.0, draw), max(0.0, loss)
-    total = win + draw + loss
-    if total <= 0:
-        return 0.0, 1.0, 0.0
-    return win / total, draw / total, loss / total
+    size = max(_MIN_POSITION_BUCKETS, int((score + LEAD_FLOOR) / bucket) + 1)
+    curves = _first_innings_curves(
+        pitch, _rounded(overs_remaining), _key(own_strengths),
+        _key(opposition_strengths), round(wear_start, 2), round(wear_end, 2),
+        risk_appetite, bucket, size, follow_on_margin)
+    index = int(_lead_index([score], bucket, size)[0])
+    return tuple(float(curve[index]) for curve in curves)
 
 
 MAX_FATIGUE_PENALTY = 12.0
@@ -298,7 +419,7 @@ def evaluate_follow_on(*, pitch, deficit, overs_remaining, own_strengths,
     win_curve, draw_curve, loss_curve = _third_innings_curves(
         pitch, _rounded(overs_remaining), _key(own_strengths),
         _key(opposition_strengths), round(wear_start, 2), round(wear_end, 2),
-        risk_appetite, bucket, len(np.arange(900 // bucket + 1)) - 1)
+        risk_appetite, bucket, max(_MIN_POSITION_BUCKETS, int((deficit + LEAD_FLOOR) / bucket) + 1))
     index = int(_lead_index([deficit], bucket, len(win_curve) - 1)[0])
     decline = (float(win_curve[index]), float(draw_curve[index]),
                float(loss_curve[index]))
@@ -339,78 +460,23 @@ def lead_declaration_outcome(*, pitch, lead, overs_remaining,
     and the overs it consumes are what we have left to chase in — pricing
     that is the entire point.
     """
-    overs_remaining = max(0, int(overs_remaining))
     if overs_remaining <= 0:
         return 0.0, 1.0, 0.0
-
-    # Their best response when batting to set us a target rather than chase.
-    opposition = None
-    for tempo in TEMPOS:
-        forecast = _forecast(pitch, _rounded(overs_remaining),
-                             _key(opposition_strengths), round(wear_start, 2),
-                             round(wear_end, 2), tempo, 5, True)
-        # A side batting third wants runs on the board and time off the
-        # clock; score it by how rarely it is dismissed cheaply.
-        cheaply = float(forecast["all_out_pmf"][forecast["runs_axis"] < lead].sum())
-        score = -cheaply
-        if opposition is None or score > opposition[0]:
-            opposition = (score, forecast)
-    forecast = opposition[1]
-
-    win = draw = loss = 0.0
-    axis = forecast["runs_axis"]
-    absorption = forecast["absorption"]
-    bucket = forecast["bucket"]
-
-    # Mass that survives the available overs: nobody bats again.
-    draw += float(forecast["survived_pmf"].sum())
-
-    if absorption is None:
-        return 0.0, 1.0, 0.0
-
-    # Bowled out short of our lead, whenever it happens: an innings victory.
-    short = axis < lead
-    win += float(absorption[:, short].sum())
-    targets = axis[~short] - lead + 1
-
-    # Group the remaining mass by how many overs our chase would have. The
-    # chase curve is evaluated once per group rather than once per outcome.
-    grouped = {}
-    for over in range(absorption.shape[0]):
-        rest = absorption[over][~short]
-        if rest.sum() < 1e-12:
-            continue
-        overs_left = overs_remaining - over - 1
-        if overs_left <= 0:
-            draw += float(rest.sum())
-            continue
-        key = _rounded(overs_left)
-        if key <= 0:
-            draw += float(rest.sum())
-            continue
-        grouped[key] = grouped.get(key, 0) + rest
-
-    for overs_left, mass in grouped.items():
-        win_curve, loss_curve, draw_curve = _best_response_curves(
-            pitch, overs_left, _key(own_strengths), round(wear_start, 2),
-            round(wear_end, 2), risk_appetite, bucket)
-        index = _target_index(targets, bucket, len(win_curve) - 1)
-        win += float((mass * win_curve[index]).sum())
-        loss += float((mass * loss_curve[index]).sum())
-        draw += float((mass * draw_curve[index]).sum())
-
-    win, draw, loss = (max(0.0, win), max(0.0, draw), max(0.0, loss))
-    total = win + draw + loss
-    if total <= 0:
-        return 0.0, 1.0, 0.0
-    return win / total, draw / total, loss / total
+    bucket = 5
+    size = max(_MIN_POSITION_BUCKETS, int((lead + LEAD_FLOOR) / bucket) + 1)
+    curves = _lead_declaration_curves(
+        pitch, _rounded(overs_remaining), _key(own_strengths),
+        _key(opposition_strengths), round(wear_start, 2), round(wear_end, 2),
+        risk_appetite, opponent_risk_appetite, bucket, size)
+    index = int(_lead_index([lead], bucket, size)[0])
+    return tuple(float(curve[index]) for curve in curves)
 
 
 def evaluate_declaration(*, pitch, fc_innings, lead, overs_remaining,
                          own_strengths, opposition_strengths,
                          wickets_in_hand, wear_start=0.4, wear_end=0.8,
                          risk_appetite=DEFAULT_RISK_APPETITE,
-                         horizons=None):
+                         horizons=None, continuation_strengths=None, follow_on_margin=200):
     """Compare declaring now against batting on, and report every option.
 
     Batting on buys runs and spends overs. The old flat-threshold check only
@@ -418,50 +484,57 @@ def evaluate_declaration(*, pitch, fc_innings, lead, overs_remaining,
     lead was to keep batting — which is why it set targets nobody could chase.
     """
     options = []
-    for horizon in (horizons if horizons is not None
-                    else horizons_for(overs_remaining)):
-        if horizon >= overs_remaining:
+    bucket = 5
+    size = max(_MIN_POSITION_BUCKETS, int((lead + 900 + LEAD_FLOOR) / bucket) + 1)
+    own_key, opp_key = _key(own_strengths), _key(opposition_strengths)
+    continuation_key = _key(continuation_strengths or own_strengths)
+    for horizon in (horizons if horizons is not None else horizons_for(overs_remaining)):
+        check_budget()
+        if horizon < 0 or horizon >= overs_remaining:
             continue
         if horizon == 0:
-            expected_lead, survival = float(lead), 1.0
+            expected_lead, survival, spent = float(lead), 1.0, 0.0
+            groups, runs = {0: np.ones(1)}, np.zeros(1)
         else:
-            # Batting on happens with the wickets actually in hand, not a
-            # fresh ten: a side eight down buys far fewer runs per over.
             continuation = _forecast(
-                pitch, _rounded(horizon), _key(own_strengths),
-                round(wear_start, 2), round(wear_end, 2), 0.5, 5, False,
-                max(1, int(wickets_in_hand)))
+                pitch, int(horizon), continuation_key, round(wear_start, 2),
+                _wear_after(wear_start, wear_end, horizon, overs_remaining),
+                0.5, bucket, True, max(1, int(wickets_in_hand)))
             expected_lead = lead + continuation["expected_runs"]
             survival = 1.0 - continuation["p_all_out"]
-
-        if fc_innings == 1:
-            win, draw, loss = innings_one_declaration_outcome(
-                pitch=pitch, score=int(expected_lead),
-                overs_remaining=overs_remaining - horizon,
-                own_strengths=own_strengths,
-                opposition_strengths=opposition_strengths,
-                wear_start=wear_start, wear_end=wear_end,
-                risk_appetite=risk_appetite)
-        elif fc_innings == 3:
-            win, draw, loss = target_defence_outcome(
-                pitch=pitch, target=int(expected_lead) + 1,
-                overs_remaining=overs_remaining - horizon,
-                opposition_strengths=opposition_strengths,
-                wear_start=wear_start, wear_end=wear_end)
-        else:
-            win, draw, loss = lead_declaration_outcome(
-                pitch=pitch, lead=int(expected_lead),
-                overs_remaining=overs_remaining - horizon,
-                opposition_strengths=opposition_strengths,
-                own_strengths=own_strengths,
-                wear_start=wear_start, wear_end=wear_end,
-                risk_appetite=risk_appetite)
-
+            spent = continuation["expected_overs"]
+            groups, runs = _ending_groups(continuation, horizon), continuation["runs_axis"]
+        outcome = np.zeros(3)
+        for elapsed, mass in groups.items():
+            check_budget()
+            if mass.sum() <= 0:
+                continue
+            remaining = _rounded(overs_remaining - elapsed)
+            if remaining <= 0:
+                outcome[1] += mass.sum()
+                continue
+            wear = _wear_after(wear_start, wear_end, elapsed, overs_remaining)
+            if fc_innings == 3:
+                curves = _best_response_curves(pitch, remaining, opp_key, wear,
+                                               round(wear_end, 2), DEFAULT_RISK_APPETITE, bucket)
+                outcome += np.array(_defence_integral(
+                    np.array([lead]), runs, mass, curves, bucket)).ravel()
+            else:
+                if fc_innings == 1:
+                    curves = _first_innings_curves(
+                        pitch, remaining, own_key, opp_key, wear, round(wear_end, 2),
+                        risk_appetite, bucket, size, follow_on_margin)
+                else:
+                    curves = _lead_declaration_curves(
+                        pitch, remaining, own_key, opp_key, wear, round(wear_end, 2),
+                        risk_appetite, DEFAULT_RISK_APPETITE, bucket, size)
+                index = _lead_index(lead + runs, bucket, size)
+                outcome += [float(curve[index] @ mass) for curve in curves]
+        win, draw, loss = map(float, _normalise_outcomes(outcome))
         options.append(dict(horizon=horizon, lead=expected_lead,
-                            win=win, draw=draw, loss=loss,
-                            survival=survival,
-                            value=value(win, loss, risk_appetite)
-                            - TIME_PREFERENCE * horizon))
+                            win=win, draw=draw, loss=loss, survival=survival,
+                            expected_overs=spent,
+                            value=value(win, loss, risk_appetite) - TIME_PREFERENCE * spent))
 
     if not options:
         return None

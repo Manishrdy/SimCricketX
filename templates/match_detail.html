@@ -127,6 +127,11 @@
         </div>
 
         <div class="controls-bar">
+            {% if match.get('match_format') == 'FC' %}
+            <span id="fc-captain-status" role="status" aria-live="polite" hidden>
+                Captain and coach are weighing up the position…
+            </span>
+            {% endif %}
             <button class="ctrl-btn" id="save-dashboard-btn" title="Save Match Center image">
                 <i class="fa fa-camera"></i>
                 <span>Save Center</span>

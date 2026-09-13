@@ -456,6 +456,7 @@ class Match:
         # engine remarks on a RUN of them rather than each one.
         self.fc_consecutive_maidens = 0
         self.fc_innings_declared = False
+        self._fc_declaration_review_over = None
         # Per-innings time budget (overs) for time-forcing declaration
         # pressure — see fc_declaration.declaration_window_open/
         # should_declare. Captured once here for innings 1, since
@@ -5004,10 +5005,10 @@ class Match:
             return None
         return max(0, first - self.fmt.follow_on_margin)
 
-    _FC_HOME_BASE_FACTOR = 0.04
-    _FC_HOME_CHARACTERISTIC_PITCH_FACTOR = 0.03
-    _FC_HOME_LATE_MATCH_FACTOR = 0.03
-    _FC_HOME_FACTOR_CAP = 1.10
+    _FC_HOME_BASE_FACTOR = 0.02
+    _FC_HOME_CHARACTERISTIC_PITCH_FACTOR = 0.015
+    _FC_HOME_LATE_MATCH_FACTOR = 0.015
+    _FC_HOME_FACTOR_CAP = 1.05
 
     def _fc_home_advantage_factor(self, team) -> float:
         """Situational FC familiarity factor for the home side's skill contest."""
@@ -5030,7 +5031,7 @@ class Match:
 
     @staticmethod
     def _fc_batter_stamina_multiplier(batter: dict, balls_faced: int) -> float:
-        """Concentration over a long innings, neutral through the first 120 balls."""
+        """Fatigue after 120 balls; stamina limits the loss, never boosts skill."""
         if balls_faced <= 120:
             return 1.0
         raw_stamina = batter.get("stamina_rating")
@@ -5038,7 +5039,7 @@ class Match:
         long_innings_progress = min(1.0, (balls_faced - 120) / 240.0)
         return max(
             0.90,
-            min(1.10, 1.0 + long_innings_progress * (stamina - 50) / 500.0),
+            min(1.0, 1.0 - long_innings_progress * (100 - stamina) / 1000.0),
         )
 
     def _fc_pick_bowler(self):
@@ -5804,6 +5805,64 @@ class Match:
             ),
         }
 
+    def _fc_continuation_strengths(self):
+        pair = [self.current_striker, self.current_non_striker]
+        active = {p["name"] for p in pair}
+        unbatted = [p for p in self.batting_team
+                    if p["name"] not in active
+                    and not self.batsman_stats.get(p["name"], {}).get("wicket_type")]
+        return fc_captain.remaining_strengths_by_wickets(pair, unbatted, self.bowling_team)
+
+    def _fc_prepare_declaration(self):
+        inputs = self._fc_declaration_inputs()
+        self._fc_declaration_snapshot = inputs
+        self._fc_declaration_started = time.monotonic()
+        self._fc_declaration_deadline = self._fc_declaration_started + fc_declaration.LIVE_DECISION_SECONDS
+        self._fc_declaration_id = f"{self.fc_day}:{self.fc_innings}:{self.current_over}:{self.score}:{self.wickets}"
+        remaining = max(0, int(inputs["overs_remaining_in_match"]))
+        position = (f"We're {self.score}/{self.wickets}." if self.fc_innings == 1 else
+                    f"We're {inputs['lead']} runs ahead." if inputs["lead"] >= 0 else
+                    f"We still trail by {-inputs['lead']} runs.")
+        conditions = ("This pitch offers little help, so our bowlers will need time."
+                      if self.pitch in ("Flat", "Dead") else
+                      "Let's balance more runs against time for our bowlers.")
+        notes = getattr(self, "_fc_captain_discussion", [])
+        notes.append({"id": self._fc_declaration_id + ":coach", "speaker": "Coach",
+                      "text": f"{position} About {remaining} overs remain. {conditions}"})
+        self._fc_captain_discussion = notes
+        return inputs
+
+    def take_fc_captain_discussion(self):
+        notes = getattr(self, "_fc_captain_discussion", [])
+        self._fc_captain_discussion = []
+        return notes
+
+    def _fc_apply_declaration_result(self, result):
+        self._fc_declaration_settled_position = (self.fc_day, self.fc_innings,
+                                                 self.current_over, self.score, self.wickets)
+        # Boolean support keeps legacy/custom decision providers compatible.
+        if isinstance(result, dict):
+            declared = bool(result["declare_now"])
+            horizon = result.get("review_after_overs")
+        else:
+            declared, horizon = bool(result), None
+        self._fc_declaration_review_over = (
+            self.current_over + max(1, int(horizon))
+            if not declared and horizon is not None else None)
+        if declared:
+            self.fc_innings_declared = True
+        decision_id = getattr(self, "_fc_declaration_id", None)
+        if decision_id:
+            text = ("We're declaring. Let's give our bowlers a chance to take those wickets."
+                    if declared else
+                    f"Bat on. We'll review the position in {max(1, int(horizon))} overs."
+                    if horizon else "Bat on. Let's keep building the total.")
+            notes = getattr(self, "_fc_captain_discussion", [])
+            notes.append({"id": decision_id + ":captain", "speaker": "Captain", "text": text})
+            self._fc_captain_discussion = notes
+            self._fc_declaration_id = None
+        return declared
+
     def _fc_declaration_inputs(self):
         """Every argument should_declare() needs, read off the current state.
 
@@ -5811,14 +5870,9 @@ class Match:
         worker thread: it is then a pure function of plain numbers and dicts,
         touching no Match attribute while the match carries on being played.
 
-        The shape is load-bearing and is NOT simply "pass everything". The
-        forward-model inputs go in for every innings, but the legacy Monte
-        Carlo ones — including pitch_wear — are supplied only for innings 2
-        and 3, exactly as before. Innings 1 must keep falling back to
-        should_declare's own pitch_wear default, because that default is what
-        the first-innings declaration behaviour was calibrated against;
-        handing it the real wear instead quietly moves every innings-1
-        declaration.
+        Both forecast paths see the actual pitch wear. Continuation strengths
+        use the surviving pair and unbatted players; future innings retain
+        full-XI strengths. All inputs are detached from live match state.
         """
         forecast_kwargs = dict(
             fc_innings=self.fc_innings,
@@ -5836,6 +5890,9 @@ class Match:
             projected_final_wear=self._fc_projected_final_wear(),
             attack_freshness=self._fc_declaring_side_freshness(),
             pitch=self.pitch,
+            pitch_wear=self._compute_pitch_wear(),
+            follow_on_margin=self.fmt.follow_on_margin,
+            continuation_strengths=self._fc_continuation_strengths(),
             # Supplied for every innings, not just 2/3: the first innings is
             # where the runaway totals are built, so it is exactly where the
             # captain most needs to be asked.
@@ -5871,11 +5928,10 @@ class Match:
     def _fc_start_declaration_decision(self):
         """Begin the AI declaration decision without waiting for it.
 
-        This is the expensive one — 45-53 s in measured production calls — and
-        it is asked at exactly the moment the interval card is due. Answering
-        the card first and settling this on the next delivery puts the whole
-        cost inside the seconds the user spends reading the scorecard, instead
-        of in front of it.
+        The live forecast has a cooperative CPU budget. The main match also
+        enforces a wall-clock deadline so a queued worker cannot stall play.
+        Interval cards can be returned while the decision runs; overdue work
+        is replaced by the quick policy before the next delivery.
 
         Only ever ONE decision is outstanding, and it is always settled before
         another ball is bowled, so the state it was computed from is still the
@@ -5883,31 +5939,50 @@ class Match:
         """
         if getattr(self, "_fc_declaration_job", None) is not None:
             return
+        # A snapshot taken while the worker is running must remember that
+        # a decision is owed. After a restart there is no worker to settle,
+        # so the normal over-boundary gate re-evaluates before any delivery.
+        self._fc_declaration_review_over = self.current_over
+        inputs = self._fc_prepare_declaration()
         self._fc_declaration_job = start_offloaded(
-            fc_declaration.should_declare, **self._fc_declaration_inputs())
+            fc_declaration.declaration_decision,
+            deadline=self._fc_declaration_started + fc_declaration.LIVE_MODEL_SECONDS, **inputs)
 
-    def _fc_settle_declaration_decision(self):
+    def _fc_settle_declaration_decision(self, wait=True):
         """Apply a deferred declaration decision, waiting for it if needed.
 
         Called before anything else in next_ball(), so no delivery is ever
-        bowled against an unsettled decision. When the captain declares, the
+        bowled against an unsettled decision. HTTP/WebSocket callers pass
+        wait=False: False means the client should poll, without consuming the
+        job or changing the match. Benchmarks may wait synchronously.
+        When the captain declares, the
         interval that was shown in the meantime is un-taken
         (_fc_undo_interval), leaving the match exactly as the synchronous
         decision left it.
         """
         job = getattr(self, "_fc_declaration_job", None)
         if job is None:
-            return
+            return True
+        expired = (getattr(self, "_fc_declaration_deadline", None) is not None
+                   and time.monotonic() >= self._fc_declaration_deadline and not job.ready())
+        if not wait and not job.ready() and not expired:
+            return False
         self._fc_declaration_job = None
         try:
-            declared = bool(job.get())
+            if expired:
+                # The worker owns only its input snapshot. Dropping this
+                # handle makes any late result harmless; its cooperative CPU
+                # deadline also prevents abandoned forecasts consuming CPU.
+                logger.warning("[FC Captain] live deadline reached; applying quick policy")
+                result = fc_declaration.quick_declaration_decision(**self._fc_declaration_snapshot)
+            else:
+                result = job.get()
+            declared = self._fc_apply_declaration_result(result)
         except Exception:
-            # A failed decision must not take the match down with it. Batting
-            # on is the status quo, and the check runs again at the next
-            # eligible boundary.
             logger.exception("[FC] Deferred declaration decision failed")
-            self._fc_interval_rollback = None
-            return
+            inputs = getattr(self, "_fc_declaration_snapshot", None) or self._fc_declaration_inputs()
+            declared = self._fc_apply_declaration_result(
+                fc_declaration.quick_declaration_decision(**inputs))
         if declared:
             self.fc_innings_declared = True
             self._fc_undo_interval()
@@ -5916,6 +5991,8 @@ class Match:
             # the break will not fire again, so nothing is owed.
             self._fc_interval_rollback = None
             self._fc_deferred_card_break = None
+
+        return True
 
     def _fc_undo_interval(self):
         """Put back an interval that a deferred declaration means was never
@@ -5936,7 +6013,7 @@ class Match:
         self.fc_session_start = rollback["fc_session_start"]
         self._fc_interval_rollback = None
 
-    def _fc_pre_ball_checks(self):
+    def _fc_pre_ball_checks(self, wait_for_decision=True):
         """
         Called at an over boundary (current_ball == 0), and also mid-over
         whenever fc_force_day_end is set — that is what lets a washout or a
@@ -6005,22 +6082,13 @@ class Match:
                 and self.fc_day_overs_bowled_today >= _bounds[self.fc_sessions_taken_today]
             )
 
-        # Captains declare at an interval — Lunch, Tea, or overnight — not
-        # three overs into a session. The standing exception is the tail
-        # being exposed, where the call is about protecting the last pair
-        # and can't wait for the next break.
+        # Intervals and an exposed last pair trigger a fresh decision. A
+        # previously chosen batting horizon also triggers a review within
+        # the session, so "bat ten more overs" is actually actionable.
         #
-        # Of those, a Lunch/Tea break is the one case where the answer can
-        # wait. The
-        # decision costs tens of seconds, the card is due right now, and no
-        # ball is bowled between the two — so the card goes out first and the
-        # decision settles on the next next_ball() (see
-        # _fc_start_declaration_decision). Stumps and the nine-down check stay
-        # synchronous: stumps advances the day and the innings-change
-        # bookkeeping that the minimum-overs model reads, and nine-down has no
-        # card to answer with, so deferring either would buy nothing and risk
-        # a great deal. User-captained mode also stays synchronous — it has a
-        # human to ask, not a model to run.
+        # Lunch/Tea can show its card while the bounded decision runs.
+        # Other boundaries return a pending response to live clients until
+        # the decision settles; synchronous engine callers may wait.
         _defer_declaration = (
             _at_session_break and not _day_over
             and self.wickets < 9 and not self._is_manual_mode()
@@ -6028,8 +6096,11 @@ class Match:
             and not self.fc_innings_declared
         )
 
-        if (_day_over or _at_session_break or self.wickets >= 9) and not _defer_declaration:
-            _decl = self._fc_check_declaration_and_follow_on()
+        review_over = getattr(self, "_fc_declaration_review_over", None)
+        _review_due = (not self._is_manual_mode() and review_over is not None
+                       and self.current_over >= review_over)
+        if (_day_over or _at_session_break or self.wickets >= 9 or _review_due) and not _defer_declaration:
+            _decl = self._fc_check_declaration_and_follow_on(wait_for_decision=wait_for_decision)
             if _decl is not None:
                 return _decl                 # user-captained: pause and ask
             if self.fc_innings_declared:
@@ -6064,18 +6135,18 @@ class Match:
 
         return None
 
-    def _fc_check_declaration_and_follow_on(self):
+    def _fc_check_declaration_and_follow_on(self, wait_for_decision=True):
         """
         Declaration check. NOT run at every over boundary, despite what this
         said for a long time — the caller (_fc_pre_ball_checks) only reaches
-        it at a session break, at stumps, or with nine down. That matters
-        because should_declare() runs a forward model that costs tens of
-        seconds on a small host, so where it is invoked from is the whole
-        performance story; see utils/cpu_offload and
-        tests/test_fc_declaration_stall.py.
+        it at a session break, at stumps, with nine down, or when a saved
+        batting horizon is due for review. That matters
+        because the full forward model can be expensive. Live decisions
+        run off-thread with a budget and a quick-policy fallback; see
+        utils/cpu_offload and tests/test_fc_live_budget.py.
 
         AI mode decides automatically via engine/fc_declaration.py's
-        should_declare().
+        declaration_decision().
         User-captained mode instead pauses with a decision once
         declaration_window_open() says the moment is live, and leaves the
         actual call to the human (see _create_fc_declare_decision).
@@ -6088,6 +6159,9 @@ class Match:
         """
         if self.fc_innings not in (1, 2, 3) or self.follow_on_enforced:
             return None
+        position = (self.fc_day, self.fc_innings, self.current_over, self.score, self.wickets)
+        if getattr(self, "_fc_declaration_settled_position", None) == position:
+            return None  # Resume this boundary after its asynchronous decision.
         if self.wickets >= 10 or self.fc_innings_declared:
             # Innings already over (all out) or already decided (declared,
             # AI or user-captained) — nothing left to ask or auto-decide.
@@ -6120,9 +6194,15 @@ class Match:
         # this decision must never run on the gevent hub whichever boundary
         # asks for it, or it stops the Socket.IO heartbeat for its whole
         # duration. See utils/cpu_offload and _fc_start_declaration_decision.
-        if run_offloaded(fc_declaration.should_declare,
-                         **self._fc_declaration_inputs()):
-            self.fc_innings_declared = True
+        if wait_for_decision:
+            inputs = self._fc_prepare_declaration()
+            self._fc_apply_declaration_result(run_offloaded(
+                fc_declaration.declaration_decision,
+                deadline=self._fc_declaration_started + fc_declaration.LIVE_MODEL_SECONDS, **inputs))
+        else:
+            self._fc_start_declaration_decision()
+            if not self._fc_settle_declaration_decision(wait=False):
+                return self._fc_declaration_pending_response()
         return None
 
     def _create_fc_declare_decision(self, lead, days_remaining):
@@ -6264,6 +6344,7 @@ class Match:
         self._reset_innings_state()
         self.fc_innings = next_fc_innings
         self.fc_innings_declared = False
+        self._fc_declaration_review_over = None
         # Ten minutes between innings, charged to the day's minimum rather
         # than to the clock. Every innings 2/3/4 start funnels through here,
         # and _fc_day_break_response zeroes it, so a declaration taken AT
@@ -6617,13 +6698,19 @@ class Match:
             "bowler": "",
         }
 
-    def next_ball(self):
+    @staticmethod
+    def _fc_declaration_pending_response():
+        return {"fc_decision_pending": True, "decision_type": "declaration",
+                "retry_after": 0.5}
+
+    def next_ball(self, wait_for_decision=True):
         # A declaration decision deferred at the last interval is settled
         # before anything else happens, so no delivery is ever bowled against
         # an unsettled one and the state it was computed from is still the
         # state it applies to. Cheap and a no-op in every other case.
         if self.is_fc and getattr(self, "_fc_declaration_job", None) is not None:
-            self._fc_settle_declaration_decision()
+            if not self._fc_settle_declaration_decision(wait=wait_for_decision):
+                return self._fc_declaration_pending_response()
 
         # Super Over guard: once a tie pushes the match into super-over state
         # (innings 4 = super over pending/in progress, 5 = decided), the normal
@@ -6692,7 +6779,7 @@ class Match:
         if self.is_fc and (
             self.current_ball == 0 or getattr(self, "fc_force_day_end", False)
         ):
-            _fc_pre = self._fc_pre_ball_checks()
+            _fc_pre = self._fc_pre_ball_checks(wait_for_decision=wait_for_decision)
             if _fc_pre is not None:
                 return _fc_pre
 
@@ -9355,6 +9442,7 @@ class Match:
             "fc_force_day_end": self.fc_force_day_end,
             "fc_ball_overs_bowled": self.fc_ball_overs_bowled,
             "fc_innings_declared": self.fc_innings_declared,
+            "fc_declaration_review_over": self._fc_declaration_review_over,
             "fc_innings_time_budget_overs": self.fc_innings_time_budget_overs,
             "follow_on_enforced": self.follow_on_enforced,
             "fc_innings_totals": self.fc_innings_totals,
@@ -9502,6 +9590,7 @@ class Match:
         }
         self.fc_ball_overs_bowled = snap.get("fc_ball_overs_bowled", 0)
         self.fc_innings_declared = snap.get("fc_innings_declared", False)
+        self._fc_declaration_review_over = snap.get("fc_declaration_review_over")
         # Must be the exact frozen value captured when the CURRENT innings
         # started, not recomputed from post-restore state — fc_day/
         # fc_day_overs_bowled_today above already reflect "now", which is

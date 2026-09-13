@@ -1320,23 +1320,23 @@ def test_batter_stamina_only_separates_players_in_a_long_innings(app):
     assert match_module.Match._fc_batter_stamina_multiplier(low, 100) == 1.0
     assert match_module.Match._fc_batter_stamina_multiplier(high, 100) == 1.0
     assert match_module.Match._fc_batter_stamina_multiplier(low, 360) == pytest.approx(0.90)
-    assert match_module.Match._fc_batter_stamina_multiplier(high, 360) == pytest.approx(1.10)
+    assert match_module.Match._fc_batter_stamina_multiplier(high, 360) == pytest.approx(1.0)
 
 
 def test_fc_home_factor_is_situational_capped_and_non_mutating(app):
     m = _fc_match(days=5, pitch="Hard")
     original = m.home_xi[0]["batting_rating"]
-    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.04)
+    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.02)
     assert m._fc_home_advantage_factor(m.away_xi) == 1.0
 
     m.pitch = "Green"
-    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.07)
+    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.035)
     m.fc_innings = 3
-    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.07)
+    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.035)
     m.fc_day = 4
-    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.10)
-    assert m._fc_home_advantage_factor(m.home_xi) <= 1.10
-    assert m._fc_home_skill_multiplier(m.home_xi) == pytest.approx(1.10)
+    assert m._fc_home_advantage_factor(m.home_xi) == pytest.approx(1.05)
+    assert m._fc_home_advantage_factor(m.home_xi) <= 1.05
+    assert m._fc_home_skill_multiplier(m.home_xi) == pytest.approx(1.05)
     assert m.home_xi[0]["batting_rating"] == original
 
 
@@ -1356,7 +1356,7 @@ def test_fc_home_factor_reaches_effective_rating_not_stored_player(monkeypatch, 
     raw_batting = m.current_striker["batting_rating"]
     m.next_ball()
 
-    assert captured["batting_rating"] == pytest.approx(raw_batting * 1.04)
+    assert captured["batting_rating"] == pytest.approx(raw_batting * 1.02)
     assert m.current_striker["batting_rating"] == raw_batting
 
 
