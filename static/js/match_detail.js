@@ -1349,10 +1349,31 @@ let _wsEverConnected = false;
     }
 }());
 
+// These are scripted match comments, not a transcript of model reasoning.
+const captainDiscussionSeen = new Set();
+function renderCaptainDiscussion(data) {
+    for (const line of (data.fc_captain_discussion || [])) {
+        if (!line.id || captainDiscussionSeen.has(line.id)) continue;
+        captainDiscussionSeen.add(line.id);
+        if (captainDiscussionSeen.size > 200) {
+            captainDiscussionSeen.delete(captainDiscussionSeen.values().next().value);
+        }
+        appendLog(`<strong>${escapeHtml(line.speaker)} (simulated):</strong> ${escapeHtml(line.text)}`);
+    }
+}
+
 // All ball-result processing lives here — called by both the WS listener
 // above AND the HTTP fetch path below. Zero logic change vs the original.
 async function _processBallResult(data) {
     ballInFlight = false;
+    renderCaptainDiscussion(data);
+    const captainStatus = document.getElementById('fc-captain-status');
+    if (data.fc_decision_pending) {
+        if (captainStatus) captainStatus.hidden = false;
+        scheduleNextBall(Math.max(250, Math.min(2000, (data.retry_after || 0.5) * 1000)));
+        return;
+    }
+    if (captainStatus && !data.rate_limited) captainStatus.hidden = true;
     // Rate limited, not broken. FC drives the loop with no delay between
     // deliveries, so the HTTP fallback trips the per-user limit routinely;
     // treating that as a fatal error stopped the match dead. Wait out the

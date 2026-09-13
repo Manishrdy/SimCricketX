@@ -111,28 +111,26 @@ def test_every_declaration_path_stays_off_the_hub():
         "engine", "match.py")
     source = open(source_path, encoding="utf-8").read()
 
-    assert "run_offloaded(fc_declaration.should_declare" in source, (
+    assert "run_offloaded(\n                fc_declaration.declaration_decision" in source, (
         "the synchronous declaration check (stumps / nine down / manual) calls "
         "should_declare inline again")
-    assert "start_offloaded(\n            fc_declaration.should_declare" in source or \
-           "start_offloaded(fc_declaration.should_declare" in source, (
+    assert "start_offloaded(\n            fc_declaration.declaration_decision" in source or \
+           "start_offloaded(fc_declaration.declaration_decision" in source, (
         "the deferred declaration check no longer offloads")
-    assert "fc_declaration.should_declare(" not in source, (
+    assert "fc_declaration.declaration_decision(" not in source, (
         "some path calls should_declare directly, on the gevent hub")
 
 
-def test_declaration_inputs_withhold_pitch_wear_in_innings_one():
-    """pitch_wear is a Monte-Carlo-path input and is supplied for innings 2
-    and 3 only. Innings 1 must keep falling back to should_declare's own
-    default, because that default is what first-innings declaration behaviour
-    was calibrated against — handing it the real wear silently moves every
-    innings-1 declaration."""
+def test_declaration_inputs_use_actual_pitch_wear_in_every_innings():
+    """The captain and delivery engine must see the same current surface."""
     match = _fc_match()
-    assert match.fc_innings == 1
-    assert "pitch_wear" not in match._fc_declaration_inputs()
-    for key in ("pitch", "own_strengths", "opposition_strengths",
-                "overs_remaining_in_match", "risk_appetite"):
-        assert key in match._fc_declaration_inputs(), key
+    match.fc_day = 4
+    for innings in (1, 2, 3):
+        match.fc_innings = innings
+        assert match._fc_declaration_inputs()["pitch_wear"] == match._compute_pitch_wear()
+        for key in ("pitch", "own_strengths", "opposition_strengths",
+                    "overs_remaining_in_match", "risk_appetite"):
+            assert key in match._fc_declaration_inputs(), key
 
 
 # --------------------------------------------------------------------------
@@ -354,6 +352,12 @@ def test_interval_card_does_not_wait_for_the_declaration_model():
 
     MODEL_SECONDS = 2.0
     match = _fc_match()
+    # Measure the boundary itself, not the unrelated cost of simulating
+    # thirty overs (which fluctuates with logging and machine load).
+    match.fc_weather_v2 = False
+    match.current_over = 30
+    match.fc_day_overs_bowled_today = 30
+    match.fc_day_balls_bowled_today = 180
     original = fc_declaration.should_declare
 
     def slow(**kwargs):
@@ -363,7 +367,7 @@ def test_interval_card_does_not_wait_for_the_declaration_model():
     fc_declaration.should_declare = slow
     try:
         started = time.perf_counter()
-        card = _play_to_first_interval(match)
+        card = match._fc_pre_ball_checks()
         card_seconds = time.perf_counter() - started
 
         assert card is not None, "no interval reached"
