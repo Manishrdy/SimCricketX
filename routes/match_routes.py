@@ -1348,7 +1348,20 @@ def register_match_routes(
         if match.data.get("created_by") != user_id:
             return None, (jsonify({"error": "Unauthorized"}), 403)
 
-        outcome = match.next_ball()
+        outcome = (match.next_ball(wait_for_decision=False)
+                   if match.is_fc else match.next_ball())
+        if match.is_fc:
+            discussion = match.take_fc_captain_discussion()
+            if discussion:
+                outcome["fc_captain_discussion"] = discussion
+        # A poll is not a delivery or a new interval. Its pending decision
+        # marker was checkpointed by the request that started the worker.
+        if outcome.get("fc_decision_pending"):
+            marker = (match.fc_innings, match.current_over)
+            if getattr(match, "_fc_pending_checkpoint", None) != marker:
+                _persist_fc_snapshot(match, match_id)
+                match._fc_pending_checkpoint = marker
+            return outcome, None
         if match.is_fc and getattr(match, "fc_weather_v2", False):
             outcome.setdefault("fc_weather_status", match._fc_weather_status())
 
@@ -1414,6 +1427,8 @@ def register_match_routes(
                 "wickets":         outcome.get("wickets",  match.wickets),
                 "result":          outcome.get("result",  "Match ended"),
                 "fc_weather_status": outcome.get("fc_weather_status"),
+                **({"fc_captain_discussion": outcome["fc_captain_discussion"]}
+                   if outcome.get("fc_captain_discussion") else {}),
             }, None
 
         return outcome, None

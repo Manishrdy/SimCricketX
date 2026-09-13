@@ -132,7 +132,8 @@ def test_wickets_in_hand_change_what_batting_on_is_worth():
 
 def test_follow_on_turns_on_whether_the_attack_can_back_it_up():
     own, opposition = sides()
-    common = dict(pitch="Hard", deficit=230, overs_remaining=250,
+    # A four-day follow-on margin where fatigue changes the preferred option.
+    common = dict(pitch="Hard", deficit=150, overs_remaining=250,
                   own_strengths=own, opposition_strengths=opposition)
     fresh = evaluate_follow_on(attack_freshness=1.0, **common)
     spent = evaluate_follow_on(attack_freshness=0.0, **common)

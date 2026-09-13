@@ -24,6 +24,8 @@ import os
 
 import numpy as np
 
+from engine.fc_decision_budget import check_budget
+
 _MODEL_PATH = os.path.join(os.path.dirname(__file__), "data", "fc_frontier.json")
 
 with open(_MODEL_PATH) as _handle:
@@ -215,6 +217,7 @@ def innings_forecast(*, pitch, overs_available, wickets_in_hand,
 
     expected_overs = 0.0
     for over in range(overs_available):
+        check_budget()
         progress = over / max(1, overs_available - 1) if overs_available > 1 else 1.0
         wear = wear_start + (wear_end - wear_start) * progress
         age = (ball_age_start + over) % max(1, new_ball_overs)
