@@ -1165,21 +1165,34 @@ function updateScoreBanner(data) {
     }
 
     // --- Top Row: Batsmen ---
+    const strikeRate = (runs, balls) => (balls > 0 ? ((runs / balls) * 100).toFixed(1) : '0.0');
+    const batStatsHtml = (runs, balls, fours, sixes) => `
+        <div class="sb-bat-stats">
+            <span class="sb-bat-fig">${runs} (${balls})</span>
+            <span class="sb-bat-boundaries"><b class="sb-bat-fours">${fours}</b>x4 <b class="sb-bat-sixes">${sixes}</b>x6</span>
+            <span class="sb-bat-sr">SR <b>${strikeRate(runs, balls)}</b></span>
+        </div>
+    `;
+
     const strikerEl = document.getElementById('sb-striker');
     if (strikerEl && data.striker) {
+        const runs = data.striker_runs ?? 0;
+        const balls = data.striker_balls ?? 0;
         strikerEl.className = 'sb-bat-row sb-on-strike';
         strikerEl.innerHTML = `
             <span class="sb-bat-name">${escapeHtml(data.striker)}*</span>
-            <span class="sb-bat-fig">${data.striker_runs ?? 0} (${data.striker_balls ?? 0})</span>
+            ${batStatsHtml(runs, balls, data.striker_fours ?? 0, data.striker_sixes ?? 0)}
         `;
     }
 
     const nsEl = document.getElementById('sb-nonstriker');
     if (nsEl && data.non_striker) {
+        const runs = data.nonstriker_runs ?? 0;
+        const balls = data.nonstriker_balls ?? 0;
         nsEl.className = 'sb-bat-row';
         nsEl.innerHTML = `
             <span class="sb-bat-name">${escapeHtml(data.non_striker)}</span>
-            <span class="sb-bat-fig">${data.nonstriker_runs ?? 0} (${data.nonstriker_balls ?? 0})</span>
+            ${batStatsHtml(runs, balls, data.nonstriker_fours ?? 0, data.nonstriker_sixes ?? 0)}
         `;
     }
 
@@ -2650,24 +2663,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 // updateScoreBanner()'s phase_name === undefined fallback
                 // would misread FC's raw over count as T20 powerplay/death.
                 phase_name: getMatchFormat() === 'FC' ? null : undefined,
-                striker: state.striker.name ? {
-                    name: state.striker.name,
-                    runs: state.striker.runs,
-                    balls: state.striker.balls,
-                    fours: state.striker.fours,
-                    sixes: state.striker.sixes,
-                } : null,
-                non_striker: state.non_striker.name ? {
-                    name: state.non_striker.name,
-                    runs: state.non_striker.runs,
-                    balls: state.non_striker.balls,
-                } : null,
-                bowler: state.current_bowler.name ? {
-                    name: state.current_bowler.name,
-                    overs: state.current_bowler.overs,
-                    runs: state.current_bowler.runs,
-                    wickets: state.current_bowler.wickets,
-                } : null,
+                // updateScoreBanner() reads these as flat name strings + flat
+                // stat fields (striker_runs, bowler_overs, etc.) — mirroring
+                // the shape the live ball_result payload sends. Nesting them
+                // under striker/non_striker/bowler objects here (as this used
+                // to) left every field it actually reads undefined, so a
+                // resume after refresh rendered "[object Object]" for names
+                // and blanked-out figures until the next ball arrived.
+                striker: state.striker.name || null,
+                striker_runs: state.striker.runs,
+                striker_balls: state.striker.balls,
+                striker_fours: state.striker.fours,
+                striker_sixes: state.striker.sixes,
+                non_striker: state.non_striker.name || null,
+                nonstriker_runs: state.non_striker.runs,
+                nonstriker_balls: state.non_striker.balls,
+                nonstriker_fours: state.non_striker.fours,
+                nonstriker_sixes: state.non_striker.sixes,
+                bowler: state.current_bowler.name || null,
+                bowler_runs: state.current_bowler.runs,
+                bowler_wickets: state.current_bowler.wickets,
+                bowler_overs: state.current_bowler.overs,
             };
             updateScoreBanner(bannerData);
 
