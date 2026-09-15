@@ -673,6 +673,8 @@ def register_match_routes(
                 "name": non_striker.get("name", ""),
                 "runs": non_striker_stats.get("runs", 0),
                 "balls": non_striker_stats.get("balls", 0),
+                "fours": non_striker_stats.get("fours", 0),
+                "sixes": non_striker_stats.get("sixes", 0),
             },
             "current_bowler": {
                 "name": current_bowler.get("name", ""),
