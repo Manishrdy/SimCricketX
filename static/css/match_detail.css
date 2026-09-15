@@ -348,7 +348,7 @@
     display: flex;
     align-items: center;
     padding: 0.6rem 1.3rem;
-    gap: 0;
+    gap: 1.5rem;
 }
 
 .sb-team {
@@ -439,7 +439,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
-    padding-left: 1rem;
     min-width: 0;
 }
 
@@ -463,14 +462,55 @@
     max-width: 140px;
 }
 
-.sb-bat-fig {
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
+/* Runs(balls) + boundaries + strike rate, clustered and pinned to the
+   right edge so the batsmen column's width is put to use instead of
+   sitting empty between the name and the figures. */
+.sb-bat-stats {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
     margin-left: auto;
     white-space: nowrap;
 }
 
+.sb-bat-fig {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
 .sb-bat-row.sb-on-strike .sb-bat-fig {
+    color: #ffffff;
+}
+
+.sb-bat-boundaries {
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.sb-bat-boundaries b {
+    font-weight: 700;
+}
+
+.sb-bat-boundaries .sb-bat-fours { color: #6ee7b7; }
+.sb-bat-boundaries .sb-bat-sixes { color: #fde68a; }
+
+.sb-bat-sr {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.sb-bat-sr b {
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    margin-left: 0.2rem;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.sb-bat-row.sb-on-strike .sb-bat-sr b {
     color: #ffffff;
 }
 
@@ -725,7 +765,6 @@
 @media (max-width: 900px) {
     .sb-top { flex-wrap: wrap; gap: 0.5rem; }
     .sb-center-col { border: none; padding: 0 0.75rem; min-width: auto; }
-    .sb-batsmen { padding-left: 0; }
     .sb-score { font-size: 1.5rem; }
     .sb-strip { gap: 0.4rem; font-size: 0.65rem; }
     .controls-bar { flex-wrap: wrap; }
@@ -735,6 +774,7 @@
     .sb-over-flow { display: none; }
     .sb-partnership { display: none; }
     .sb-bat-name { max-width: 90px; }
+    .sb-bat-boundaries, .sb-bat-sr { display: none; }
     .ctrl-btn span { display: none; }
 }
 
