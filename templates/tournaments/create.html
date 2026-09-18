@@ -21,6 +21,7 @@
     <form action="{{ url_for('create_tournament_route') }}" method="POST" id="tournamentForm"
         onsubmit="return validateForm()">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="creation_token" value="{{ creation_token }}">
 
         <!-- Tournament Name -->
         <div class="form-section">
@@ -227,6 +228,7 @@
 
     let selectedMode = null;
     let selectedFormat = 'T20';
+    let isSubmitting = false;
 
     function filterTeamsByFormat(format) {
         selectedFormat = format;
@@ -425,7 +427,7 @@
         }
 
         // Enable submit button
-        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitBtn').disabled = isSubmitting;
 
         // Show/hide custom series options
         updateCustomSeriesVisibility();
@@ -462,6 +464,10 @@
     }
 
     function validateForm() {
+        if (isSubmitting) {
+            return false;
+        }
+
         const checked = document.querySelectorAll('input[name="team_ids"]:checked').length;
         const mode = document.getElementById('selectedMode').value;
         const name = document.getElementById('tournament-name').value.trim();
@@ -493,6 +499,10 @@
             return false;
         }
 
+        isSubmitting = true;
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Tournament…';
         return true;
     }
 

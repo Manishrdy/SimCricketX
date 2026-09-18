@@ -56,6 +56,8 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("fix_db_schema",            _load_ensure_schema),
     ("add_team_profiles",        _loader("migrations.add_team_profiles")),
     ("add_tournament_format",    _loader("migrations.add_tournament_format")),
+    ("add_tournament_creation_token",
+     _loader("migrations.add_tournament_creation_token")),
     ("add_account_lockout",      _loader("migrations.add_account_lockout")),
     ("add_pending_email",        _loader("migrations.add_pending_email")),
     ("add_exception_log",        _loader("migrations.add_exception_log")),
