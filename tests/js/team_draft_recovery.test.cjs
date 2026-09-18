@@ -29,6 +29,7 @@ test('successful redirect cleanup removes the actual draft key; ordinary visits 
  const manage=fs.readFileSync(path.join(__dirname,'../../templates/manage_teams.html'),'utf8');
  const start=manage.indexOf('        function clearTeamCreateDraftIfNeeded()');const fn=manage.slice(start,manage.indexOf('\n        }',start)+10);
  const removed=[];const c={shouldClearTeamDraft:false,localStorage:{removeItem:k=>removed.push(k)},URL,window:{location:{href:'https://example.test/teams/manage?clear_team_draft=1'},history:{replaceState(){}}},document:{title:'Teams'}};
+ c.window.scxStorage=c.localStorage;
  vm.createContext(c);vm.runInContext(fn,c);c.clearTeamCreateDraftIfNeeded();assert.equal(removed.length,0);
  c.shouldClearTeamDraft=true;c.clearTeamCreateDraftIfNeeded();assert(removed.includes('team_create_draft_v1'));
 });

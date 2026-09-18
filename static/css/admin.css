@@ -869,7 +869,8 @@ body.admin-page footer {
     background: var(--card-bg);
     border:     none;
     color:      var(--fg-secondary);
-    padding:    .34rem .55rem;
+    padding:    .6rem .85rem;
+    min-height: 40px;
     font-size:  .72rem;
     cursor:     pointer;
     transition: all .12s;

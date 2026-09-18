@@ -193,7 +193,7 @@
                             <label class="gc-label-sm">Run Factor (Scoring Pace)</label>
                             <div class="gc-rf-control">
                                 <i class="fa-solid fa-gauge-high"></i>
-                                <input type="range" class="gc-rf-range" step="0.05" min="0.5" max="2.0"
+                                <input type="range" class="gc-rf-range" step="0.01" min="0" max="3"
                                     value="{{ profile.get('run_factor', 1.0) }}"
                                     oninput="this.nextElementSibling.value = parseFloat(this.value).toFixed(2); this.parentElement.querySelector('.gc-factor-input').value = this.value;">
                                 <output>{{ "%.2f"|format(profile.get('run_factor', 1.0)) }}</output>
@@ -279,14 +279,14 @@
 </section>
 
 <!-- Pitch Editor Modal -->
-<div class="gc-pitch-modal-overlay" id="gcPitchEditorModal">
+<div class="gc-pitch-modal-overlay" id="gcPitchEditorModal" data-focus-dialog data-viewport-dialog data-dialog-open-class="show" data-dialog-close=".gc-pitch-modal-close" aria-labelledby="gcPitchModalName">
     <div class="gc-pitch-modal" data-pitch="">
         <div class="gc-pitch-modal-header">
             <div class="gc-pitch-modal-title">
                 <span class="gc-pitch-dot"></span>
                 <span id="gcPitchModalName"></span>
             </div>
-            <button class="gc-pitch-modal-close" onclick="closePitchEditor()">
+            <button class="gc-pitch-modal-close" aria-label="Close pitch editor" onclick="closePitchEditor()">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
@@ -400,7 +400,7 @@
                     {% endfor %}
                     <div class="gc-la-row">
                         <label>Run factor</label>
-                        <input type="number" class="gc-fc-factor-input" step="0.01" min="0.1" max="2"
+                        <input type="number" class="gc-fc-factor-input" step="0.01" min="0" max="2"
                             value="{{ profile.get('run_factor', 1.0) }}" data-pitch="{{ pitch_name }}"
                             data-field="run_factor">
                     </div>
@@ -796,7 +796,7 @@
 <div class="gc-toast" id="gcToast"></div>
 
 <!-- Reset Confirmation Modal -->
-<div class="gc-modal-overlay" id="gcResetModal">
+<div class="gc-modal-overlay" id="gcResetModal" data-focus-dialog data-viewport-dialog data-dialog-open-class="show" data-dialog-close="[onclick='closeResetModal()']" aria-label="Reset ground conditions">
     <div class="gc-modal">
         <div class="gc-modal-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
         <h3>Reset to Defaults?</h3>
@@ -811,7 +811,7 @@
     </div>
 </div>
 
-<div class="gc-modal-overlay" id="gcUnsavedModal" role="dialog" aria-modal="true"
+<div class="gc-modal-overlay" id="gcUnsavedModal" data-focus-dialog data-viewport-dialog data-dialog-open-class="show" data-dialog-close="#gcKeepEditing" role="dialog" aria-modal="true"
     aria-labelledby="gcUnsavedTitle" aria-hidden="true">
     <div class="gc-modal">
         <div class="gc-modal-icon"><i class="fa-solid fa-floppy-disk"></i></div>
@@ -850,7 +850,6 @@
         let isRestoringDraft = false;
         let hasUnsavedChanges = false;
         let pendingNavigation = '';
-        let pendingNavigationTrigger = null;
         let committedSnapshot = '';
 
         function draftControls() {
@@ -1076,19 +1075,19 @@
                 const dEnd = death.overs_end != null ? death.overs_end : 19;
                 const batting = ['Flat', 'Dead', 'Hard'].includes(pitch);
                 const dBnd = batting
-                    ? (death.boundary_boost_batting_pitch || 2.2)
-                    : (death.boundary_boost_bowling_pitch || 1.8);
+                    ? (death.boundary_boost_batting_pitch ?? 2.2)
+                    : (death.boundary_boost_bowling_pitch ?? 1.8);
 
                 let runs = 0, wkts = 0;
                 for (let ball = 0; ball < 120 && wkts < 10; ball++) {
                     const over = Math.floor(ball / 6);
                     let m = Object.assign({}, base);
                     if (over <= ppEnd) {
-                        const b = pp.boundary_multiplier || 1.25;
+                        const b = pp.boundary_multiplier ?? 1.25;
                         m.Four *= b; m.Six *= b;
                     } else if (over >= dStart && over <= dEnd) {
                         m.Four *= dBnd; m.Six *= dBnd;
-                        m.Wicket = (m.Wicket || 0) * (death.wicket_boost || 1.6);
+                        m.Wicket = (m.Wicket || 0) * (death.wicket_boost ?? 1.6);
                     }
                     m = normalise(m);
                     runs += rpb(m);
@@ -1115,7 +1114,7 @@
                     if (!src) continue;
                     const m = {};
                     for (const k in src) {
-                        m[k] = src[k] * (RUN_KEYS.includes(k) ? rf : 1) * (fine[k] || 1);
+                        m[k] = src[k] * (RUN_KEYS.includes(k) ? rf : 1) * (fine[k] ?? 1);
                     }
                     m.Wicket = (m.Wicket || 0) * wm;
                     const n = normalise(m);
@@ -1276,7 +1275,7 @@
         function updateTotal(pitch) {
             const inputs = document.querySelectorAll(`.gc-matrix-input[data-pitch="${pitch}"]`);
             let total = 0;
-            inputs.forEach(inp => total += parseFloat(inp.value) || 0);
+            inputs.forEach(inp => total += numericValue(inp.value, 0));
             const el = document.getElementById('total-' + pitch);
             if (el) {
                 // Find the value span inside if it exists, or just set text content
@@ -1299,18 +1298,18 @@
         function readProfileFromDom(pitch) {
             const matrix = {};
             document.querySelectorAll(`.gc-matrix-input[data-pitch="${pitch}"]`).forEach(inp => {
-                matrix[inp.dataset.outcome] = parseFloat(inp.value) || 0;
+                matrix[inp.dataset.outcome] = numericValue(inp.value, 0);
             });
             const factors = {};
             document.querySelectorAll(`.gc-wf-input[data-pitch="${pitch}"]`).forEach(inp => {
-                factors[inp.dataset.wf] = parseFloat(inp.value) || 1.0;
+                factors[inp.dataset.wf] = numericValue(inp.value, 1.0);
             });
             const rfInp = document.querySelector(
                 `.gc-factor-input[data-pitch="${pitch}"][data-field="run_factor"]`);
             return {
                 scoring_matrix: matrix,
                 wicket_factors: factors,
-                run_factor: rfInp ? (parseFloat(rfInp.value) || 1.0) : 1.0,
+                run_factor: rfInp ? (numericValue(rfInp.value, 1.0)) : 1.0,
             };
         }
 
@@ -1368,7 +1367,7 @@
         function getIntent(pitch, intent) {
             const el = document.querySelector(
                 `.gc-intent[data-pitch="${pitch}"][data-intent="${intent}"]`);
-            return el ? (parseFloat(el.value) || 0) / 100 : 0.5;
+            return el ? (numericValue(el.value, 0)) / 100 : 0.5;
         }
 
         window.onIntentChange = function (input) {
@@ -1410,8 +1409,7 @@
         function readPhaseBoostsFromDom() {
             const num = (id, fallback) => {
                 const el = document.getElementById(id);
-                const v = el ? parseFloat(el.value) : NaN;
-                return isNaN(v) ? fallback : v;
+                return numericValue(el ? el.value : null, fallback);
             };
             const stored = CONFIG.phase_boosts || {};
             return {
@@ -1430,7 +1428,7 @@
             const box = document.getElementById('est-' + pitch);
             if (!box) return;
             const blendEl = document.getElementById('blendPitch');
-            const pitchW = blendEl ? (parseInt(blendEl.value) || 60) / 100 : 0.6;
+            const pitchW = blendEl ? (numericValue(blendEl.value, 60)) / 100 : 0.6;
             const est = IS_LISTA
                 ? PITCH.estimateListA(buildListAConfig(), pitch)
                 : PITCH.estimateT20(readProfileFromDom(pitch), readPhaseBoostsFromDom(),
@@ -1449,7 +1447,7 @@
         function readListAPhaseMatrix(phase) {
             const m = {};
             document.querySelectorAll(`.gc-la-matrix-input[data-phase="${phase}"]`).forEach(inp => {
-                m[inp.dataset.outcome] = parseFloat(inp.value) || 0;
+                m[inp.dataset.outcome] = numericValue(inp.value, 0);
             });
             return m;
         }
@@ -1466,7 +1464,7 @@
             const get = intent => {
                 const el = document.querySelector(
                     `.gc-intent[data-phase="${phase}"][data-intent="${intent}"]`);
-                return el ? (parseFloat(el.value) || 0) / 100 : 0.5;
+                return el ? (numericValue(el.value, 0)) / 100 : 0.5;
             };
             writeListAPhaseMatrix(phase, PITCH.deriveMatrix(get('scoring'), get('bowler_help')));
             updateListATotal(phase);
@@ -1508,7 +1506,7 @@
         function syncListAPitchSliders(pitch) {
             const num = sel => {
                 const el = document.querySelector(sel);
-                return el ? (parseFloat(el.value) || 0) : null;
+                return el ? (numericValue(el.value, 0)) : null;
             };
             const four = num(`input[data-pitch="${pitch}"][data-la-ft="Four"]`);
             if (four != null) {
@@ -1559,7 +1557,7 @@
         // ── Wicket Factor Adjust ──
         window.adjustWF = function (btn, delta) {
             const input = btn.parentElement.querySelector('input');
-            let val = parseFloat(input.value) || 0;
+            let val = numericValue(input.value, 0);
             val = Math.max(0, Math.min(3, val + delta));
             input.value = val.toFixed(2);
             // Editing a raw factor moves the Favours slider back in step.
@@ -1575,11 +1573,11 @@
         window.normalizePitch = function (pitch) {
             const inputs = document.querySelectorAll(`.gc-matrix-input[data-pitch="${pitch}"]`);
             let total = 0;
-            inputs.forEach(inp => total += parseFloat(inp.value) || 0);
+            inputs.forEach(inp => total += numericValue(inp.value, 0));
             if (total <= 0) return;
 
             inputs.forEach(inp => {
-                const normalized = (parseFloat(inp.value) || 0) / total;
+                const normalized = (numericValue(inp.value, 0)) / total;
                 inp.value = normalized.toFixed(4);
 
                 // Update UI
@@ -1645,11 +1643,18 @@
             if (!el) return;
             let total = 0;
             document.querySelectorAll(`.gc-la-matrix-input[data-phase="${phase}"]`)
-                .forEach(inp => total += parseFloat(inp.value) || 0);
+                .forEach(inp => total += numericValue(inp.value, 0));
             const valSpan = el.querySelector('.val');
             if (valSpan) valSpan.textContent = total.toFixed(3);
             el.classList.toggle('valid', Math.abs(total - 1.0) <= 0.02);
             el.classList.toggle('invalid', Math.abs(total - 1.0) > 0.02);
+        }
+
+        // Zero is a valid multiplier; only missing or non-finite values default.
+        function numericValue(value, fallback) {
+            if (value == null || String(value).trim() === '') return fallback;
+            const number = Number(value);
+            return Number.isFinite(number) ? number : fallback;
         }
 
         // ── Build config from UI ──
@@ -1663,7 +1668,7 @@
             const pitch = inp.dataset.pitch;
             let total = 0;
             document.querySelectorAll(`.gc-fc-matrix-input[data-pitch="${pitch}"]`)
-                .forEach(i => { total += parseFloat(i.value) || 0; });
+                .forEach(i => { total += numericValue(i.value, 0); });
             const el = document.getElementById(`fc-total-${pitch}`);
             if (!el) return;
             el.querySelector('.val').textContent = total.toFixed(3);
@@ -1682,45 +1687,45 @@
 
                 profile.scoring_matrix = {};
                 document.querySelectorAll(`.gc-fc-matrix-input[data-pitch="${pName}"]`)
-                    .forEach(i => { profile.scoring_matrix[i.dataset.outcome] = parseFloat(i.value) || 0; });
+                    .forEach(i => { profile.scoring_matrix[i.dataset.outcome] = numericValue(i.value, 0); });
 
                 const rf = document.querySelector(
                     `.gc-fc-factor-input[data-pitch="${pName}"][data-field="run_factor"]`);
-                if (rf) profile.run_factor = parseFloat(rf.value) || 1.0;
+                if (rf) profile.run_factor = numericValue(rf.value, 1.0);
 
                 ['wicket_factors_start', 'wicket_factors_end'].forEach(tbl => {
                     const inputs = document.querySelectorAll(
                         `.gc-fc-wf-input[data-pitch="${pName}"][data-table="${tbl}"]`);
                     if (!inputs.length) return;
                     profile[tbl] = {};
-                    inputs.forEach(i => { profile[tbl][i.dataset.style] = parseFloat(i.value) || 0; });
+                    inputs.forEach(i => { profile[tbl][i.dataset.style] = numericValue(i.value, 0); });
                 });
 
                 const rough = document.querySelector(`.gc-fc-rough-input[data-pitch="${pName}"]`);
-                if (rough) cfg.rough_targeting[pName] = parseFloat(rough.value) || 0;
+                if (rough) cfg.rough_targeting[pName] = numericValue(rough.value, 0);
             });
 
             cfg.ball_condition = cfg.ball_condition || {};
             document.querySelectorAll('.gc-fc-ball-input').forEach(i => {
-                cfg.ball_condition[i.dataset.field] = parseInt(i.value) || 0;
+                cfg.ball_condition[i.dataset.field] = numericValue(parseInt(i.value, 10), 0);
             });
             ['new_ball_wicket_factors', 'reverse_swing_wicket_factors'].forEach(tbl => {
                 const inputs = document.querySelectorAll(`.gc-fc-ballwf-input[data-table="${tbl}"]`);
                 if (!inputs.length) return;
                 cfg.ball_condition[tbl] = {};
-                inputs.forEach(i => { cfg.ball_condition[tbl][i.dataset.style] = parseFloat(i.value) || 0; });
+                inputs.forEach(i => { cfg.ball_condition[tbl][i.dataset.style] = numericValue(i.value, 0); });
             });
 
             cfg.ball_condition.pink_ball = cfg.ball_condition.pink_ball || {};
             document.querySelectorAll('.gc-fc-pink-input').forEach(i => {
-                cfg.ball_condition.pink_ball[i.dataset.field] = parseInt(i.value) || 0;
+                cfg.ball_condition.pink_ball[i.dataset.field] = numericValue(parseInt(i.value, 10), 0);
             });
             ['new_ball_wicket_factors', 'under_lights_wicket_factors'].forEach(tbl => {
                 const inputs = document.querySelectorAll(`.gc-fc-pink-wf-input[data-table="${tbl}"]`);
                 if (!inputs.length) return;
                 cfg.ball_condition.pink_ball[tbl] = {};
                 inputs.forEach(i => {
-                    cfg.ball_condition.pink_ball[tbl][i.dataset.style] = parseFloat(i.value) || 0;
+                    cfg.ball_condition.pink_ball[tbl][i.dataset.style] = numericValue(i.value, 0);
                 });
             });
             ['new_ball_scoring_factors', 'under_lights_scoring_factors'].forEach(tbl => {
@@ -1728,7 +1733,7 @@
                 if (!inputs.length) return;
                 cfg.ball_condition.pink_ball[tbl] = {};
                 inputs.forEach(i => {
-                    cfg.ball_condition.pink_ball[tbl][i.dataset.outcome] = parseFloat(i.value) || 0;
+                    cfg.ball_condition.pink_ball[tbl][i.dataset.outcome] = numericValue(i.value, 0);
                 });
             });
 
@@ -1745,7 +1750,7 @@
                 const phase = card.dataset.phase;
                 const matrix = {};
                 document.querySelectorAll(`.gc-la-matrix-input[data-phase="${phase}"]`).forEach(inp => {
-                    matrix[inp.dataset.outcome] = parseFloat(inp.value) || 0;
+                    matrix[inp.dataset.outcome] = numericValue(inp.value, 0);
                 });
                 cfg.scoring_matrices[phase] = matrix;
             });
@@ -1757,12 +1762,12 @@
                 const profile = cfg.pitch_profiles[pitch] || (cfg.pitch_profiles[pitch] = {});
 
                 document.querySelectorAll(`input[data-pitch="${pitch}"][data-la-field]`).forEach(inp => {
-                    profile[inp.dataset.laField] = parseFloat(inp.value) || 0;
+                    profile[inp.dataset.laField] = numericValue(inp.value, 0);
                 });
 
                 profile.dot_single = {};
                 document.querySelectorAll(`input[data-pitch="${pitch}"][data-la-ds]`).forEach(inp => {
-                    profile.dot_single[inp.dataset.laDs] = parseFloat(inp.value) || 1.0;
+                    profile.dot_single[inp.dataset.laDs] = numericValue(inp.value, 1.0);
                 });
 
                 // Identity multipliers are dropped so the stored blob stays a
@@ -1790,8 +1795,8 @@
 
             // Dew
             cfg.dew = cfg.dew || {};
-            cfg.dew.start_over = parseInt(document.getElementById('la-dew-start').value) || 0;
-            cfg.dew.peak_over = parseInt(document.getElementById('la-dew-peak').value) || 0;
+            cfg.dew.start_over = numericValue(parseInt(document.getElementById('la-dew-start').value, 10), 0);
+            cfg.dew.peak_over = numericValue(parseInt(document.getElementById('la-dew-peak').value, 10), 0);
             cfg.dew.factors = {};
             document.querySelectorAll('input[data-la-dew]').forEach(inp => {
                 const val = parseFloat(inp.value);
@@ -1803,7 +1808,7 @@
         }
 
         function applyBlending(cfg) {
-            const pitchW = parseInt(document.getElementById('blendPitch').value) / 100;
+            const pitchW = numericValue(document.getElementById('blendPitch').value, 60) / 100;
             cfg.blending = { pitch_weight: pitchW, skill_weight: 1 - pitchW };
         }
 
@@ -1820,37 +1825,37 @@
                 // Scoring matrix
                 profile.scoring_matrix = {};
                 document.querySelectorAll(`.gc-matrix-input[data-pitch="${pName}"]`).forEach(inp => {
-                    profile.scoring_matrix[inp.dataset.outcome] = parseFloat(inp.value) || 0;
+                    profile.scoring_matrix[inp.dataset.outcome] = numericValue(inp.value, 0);
                 });
 
                 // Run factor
                 const rfInp = document.querySelector(`.gc-factor-input[data-pitch="${pName}"][data-field="run_factor"]`);
-                if (rfInp) profile.run_factor = parseFloat(rfInp.value) || 1.0;
+                if (rfInp) profile.run_factor = numericValue(rfInp.value, 1.0);
 
                 // Wicket factors
                 profile.wicket_factors = {};
                 document.querySelectorAll(`.gc-wf-input[data-pitch="${pName}"]`).forEach(inp => {
-                    profile.wicket_factors[inp.dataset.wf] = parseFloat(inp.value) || 1.0;
+                    profile.wicket_factors[inp.dataset.wf] = numericValue(inp.value, 1.0);
                 });
             });
 
             // Phase boosts
             cfg.phase_boosts = cfg.phase_boosts || {};
             cfg.phase_boosts.powerplay = cfg.phase_boosts.powerplay || {};
-            cfg.phase_boosts.powerplay.boundary_multiplier = parseFloat(document.getElementById('pp-boundary').value) || 1.25;
+            cfg.phase_boosts.powerplay.boundary_multiplier = numericValue(document.getElementById('pp-boundary').value, 1.25);
             cfg.phase_boosts.powerplay.overs_start = 0;
             cfg.phase_boosts.powerplay.overs_end = 5;
 
             cfg.phase_boosts.death_overs = cfg.phase_boosts.death_overs || {};
-            cfg.phase_boosts.death_overs.boundary_boost_batting_pitch = parseFloat(document.getElementById('death-bat-boundary').value) || 2.2;
-            cfg.phase_boosts.death_overs.boundary_boost_bowling_pitch = parseFloat(document.getElementById('death-bowl-boundary').value) || 1.8;
-            cfg.phase_boosts.death_overs.wicket_boost = parseFloat(document.getElementById('death-wicket').value) || 1.6;
+            cfg.phase_boosts.death_overs.boundary_boost_batting_pitch = numericValue(document.getElementById('death-bat-boundary').value, 2.2);
+            cfg.phase_boosts.death_overs.boundary_boost_bowling_pitch = numericValue(document.getElementById('death-bowl-boundary').value, 1.8);
+            cfg.phase_boosts.death_overs.wicket_boost = numericValue(document.getElementById('death-wicket').value, 1.6);
             cfg.phase_boosts.death_overs.overs_start = 16;
             cfg.phase_boosts.death_overs.overs_end = 19;
 
             cfg.phase_boosts.second_innings_death = cfg.phase_boosts.second_innings_death || {};
-            cfg.phase_boosts.second_innings_death.scoring_boost = parseFloat(document.getElementById('inn2-scoring').value) || 1.15;
-            cfg.phase_boosts.second_innings_death.wicket_boost = parseFloat(document.getElementById('inn2-wicket').value) || 1.1;
+            cfg.phase_boosts.second_innings_death.scoring_boost = numericValue(document.getElementById('inn2-scoring').value, 1.15);
+            cfg.phase_boosts.second_innings_death.wicket_boost = numericValue(document.getElementById('inn2-wicket').value, 1.1);
 
             applyBlending(cfg);
             return cfg;
@@ -1935,8 +1940,6 @@
             unsavedModal.classList.remove('show');
             unsavedModal.setAttribute('aria-hidden', 'true');
             pendingNavigation = '';
-            if (pendingNavigationTrigger) pendingNavigationTrigger.focus();
-            pendingNavigationTrigger = null;
         }
 
         document.querySelectorAll('.gc-format-tab').forEach(tab => {
@@ -1945,10 +1948,8 @@
                 e.preventDefault();
                 persistDraftNow();
                 pendingNavigation = tab.href;
-                pendingNavigationTrigger = tab;
                 unsavedModal.classList.add('show');
                 unsavedModal.setAttribute('aria-hidden', 'false');
-                document.getElementById('gcSaveAndSwitch').focus();
             });
         });
 

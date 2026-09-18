@@ -697,6 +697,7 @@
     font-size: 0.7rem;
     color: var(--fg-secondary);
 }
+.sb-draft-ts.error { color: #dc2626; font-weight: 700; cursor: pointer; }
 
 .sb-pool-loading {
     min-width: 100%;
@@ -1434,7 +1435,13 @@
     };
 
     // ── LocalStorage draft ─────────────────────────────────────────────────
+    // Every add/remove/reorder calls this in the background, not just the
+    // explicit "Save Draft" button — so failure has to be reported here, once,
+    // rather than trusted to whichever caller happens to be the last one that
+    // was actually clicked. A swallowed exception here previously meant the
+    // "Draft saved" toast could fire even when nothing reached storage.
     function saveDraftToStorage() {
+        var tsEl = document.getElementById('draftTs');
         try {
             localStorage.setItem(DRAFT_KEY, JSON.stringify({
                 players:      draft.players,
@@ -1442,8 +1449,23 @@
                 wk_name:      draft.wk_name,
                 saved_at:     new Date().toISOString(),
             }));
-        } catch (e) { /* quota exceeded */ }
+            if (tsEl) {
+                tsEl.classList.remove('error');
+                tsEl.textContent = 'Draft saved at ' + new Date().toLocaleTimeString();
+            }
+            return true;
+        } catch (e) {
+            if (tsEl) {
+                tsEl.classList.add('error');
+                tsEl.textContent = 'Not saved — browser storage is full or blocked. Tap to retry.';
+            }
+            return false;
+        }
     }
+
+    document.getElementById('draftTs').addEventListener('click', function (e) {
+        if (e.currentTarget.classList.contains('error')) saveDraftToStorage();
+    });
 
     function loadDraftFromStorage() {
         try {
@@ -1453,11 +1475,13 @@
     }
 
     window.saveDraftExplicit = function () {
-        saveDraftToStorage();
-        var now = new Date();
-        document.getElementById('draftTs').textContent =
-            'Draft saved at ' + now.toLocaleTimeString();
-        showFeedback('Draft saved to browser.', 'ok');
+        // draftTs is updated by saveDraftToStorage() itself (success timestamp
+        // or persistent error) — this toast is just the explicit-click echo.
+        if (saveDraftToStorage()) {
+            showFeedback('Draft saved to browser.', 'ok');
+        } else {
+            showFeedback('Could not save draft — browser storage is full or blocked.', 'error');
+        }
     };
 
     // ── Restore banner ─────────────────────────────────────────────────────

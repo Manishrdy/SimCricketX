@@ -218,13 +218,21 @@
 
     /* Search Bar */
     .search-box {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 360px;
+    }
+
+    .search-field {
         position: relative;
-        width: 260px;
+        flex: 1;
+        min-width: 0;
     }
 
     .search-box input {
         width: 100%;
-        padding: 0.55rem 0.9rem 0.55rem 2.3rem;
+        padding: 0.55rem 2rem 0.55rem 2.3rem;
         border: 2px solid var(--card-border);
         border-radius: 11px;
         background: var(--card-bg);
@@ -1391,12 +1399,15 @@
             Manage
         </button>
 
-        <div class="search-box" id="search-box">
-            <i class="fa-solid fa-magnifying-glass search-icon"></i>
-            <input type="text" id="search-input" placeholder="Search by team name..." autocomplete="off"
-                spellcheck="false">
-            <button class="clear-search" id="clear-search" type="button" title="Clear"><i
-                    class="fa-solid fa-xmark"></i></button>
+        <div class="search-box{{ ' has-query' if filter_query else '' }}" id="search-box">
+            <div class="search-field">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="search-input" name="q" form="filter-bar" value="{{ filter_query|default('') }}" placeholder="Search all matches by team..." aria-label="Search all matches by team name" autocomplete="off"
+                    spellcheck="false">
+                <button class="clear-search" id="clear-search" type="button" title="Clear"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <button type="submit" form="filter-bar" class="filter-apply-btn">Search</button>
         </div>
     </div>
 </div>
@@ -1542,8 +1553,8 @@
         <div class="empty-icon">
             <i class="fa-solid fa-cricket-bat-ball"></i>
         </div>
-        <h3>No matches yet</h3>
-        <p>Complete a non-tournament match to see your history here.</p>
+        <h3>{{ 'No matches found' if filter_query else 'No matches yet' }}</h3>
+        <p>{{ 'Try another team name or clear your filters.' if filter_query else 'Complete a match to see your history here.' }}</p>
         <a href="{{ url_for('match_setup') }}" class="empty-cta">
             <i class="fa-solid fa-play"></i>
             Simulate a Match
@@ -1628,7 +1639,7 @@
 </div>
 
 <!-- Delete Modal (Shared) -->
-<div id="delete-modal" class="modal-overlay" role="dialog" aria-modal="true">
+<div id="delete-modal" data-focus-dialog data-viewport-dialog data-dialog-open-class="show" data-dialog-close="[onclick='closeDeleteModal()']" aria-labelledby="delete-modal-title" class="modal-overlay" role="dialog" aria-modal="true">
     <div class="modal-box">
         <div class="modal-icon">
             <i class="fa-solid fa-triangle-exclamation"></i>
@@ -1791,7 +1802,6 @@
             searchInput.addEventListener('input', function () {
                 var query = this.value.toLowerCase().trim();
                 searchBox.classList.toggle('has-query', query.length > 0);
-                filterCards(query);
             });
         }
 
@@ -1799,26 +1809,9 @@
             clearBtn.addEventListener('click', function () {
                 searchInput.value = '';
                 searchBox.classList.remove('has-query');
-                filterCards('');
+                document.getElementById('filter-bar').requestSubmit();
                 searchInput.focus();
             });
-        }
-
-        function filterCards(query) {
-            var cards = document.querySelectorAll('.match-card');
-            var noResults = document.getElementById('no-filter-results');
-            var visibleCount = 0;
-
-            cards.forEach(function (card) {
-                var teams = card.getAttribute('data-teams') || '';
-                var visible = !query || teams.indexOf(query) !== -1;
-                card.style.display = visible ? '' : 'none';
-                if (visible) visibleCount++;
-            });
-
-            if (noResults) {
-                noResults.style.display = (cards.length > 0 && visibleCount === 0) ? 'block' : 'none';
-            }
         }
 
         // ============ Expiry Bars & Countdown ============
@@ -2023,10 +2016,10 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
-                currentPage++;
+                var nextPage = currentPage + 1;
                 // Build URL preserving current filters
                 var params = new URLSearchParams(window.location.search);
-                params.set('page', currentPage);
+                params.set('page', nextPage);
 
                 try {
                     var resp = await fetch('{{ url_for("my_matches") }}?' + params.toString());
@@ -2054,6 +2047,8 @@
                             card.classList.add('manage-mode');
                         }
                     });
+
+                    currentPage = nextPage;
 
                     // Check if more pages exist
                     var hasMore = doc.getElementById('load-more-btn');

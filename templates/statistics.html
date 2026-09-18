@@ -1221,8 +1221,8 @@
                     </select>
                     <span class="tbl-count" id="batting-count">{{ batting_stats|length }} players</span>
                     <div class="export-grp">
-                        <button class="btn-exp" onclick="exportFiltered('batting','csv')"><i class="fas fa-file-csv"></i> CSV</button>
-                        <button class="btn-exp" onclick="exportFiltered('batting','txt')"><i class="fas fa-file-alt"></i> TXT</button>
+                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('batting','csv')"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('batting','txt')"><i class="fas fa-file-alt"></i> TXT</button>
                         <button class="btn-exp" onclick="exportImage('batting','png',this)"><i class="fas fa-image"></i> PNG</button>
                     </div>
                 </div>
@@ -1308,8 +1308,8 @@
                     </select>
                     <span class="tbl-count" id="bowling-count">{{ bowling_stats|length }} bowlers</span>
                     <div class="export-grp">
-                        <button class="btn-exp" onclick="exportFiltered('bowling','csv')"><i class="fas fa-file-csv"></i> CSV</button>
-                        <button class="btn-exp" onclick="exportFiltered('bowling','txt')"><i class="fas fa-file-alt"></i> TXT</button>
+                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('bowling','csv')"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('bowling','txt')"><i class="fas fa-file-alt"></i> TXT</button>
                         <button class="btn-exp" onclick="exportImage('bowling','png',this)"><i class="fas fa-image"></i> PNG</button>
                     </div>
                 </div>
@@ -1402,8 +1402,8 @@
                     </select>
                     <span class="tbl-count" id="fielding-count">{{ fielding_stats|length }} players</span>
                     <div class="export-grp">
-                        <button class="btn-exp" onclick="exportFiltered('fielding','csv')"><i class="fas fa-file-csv"></i> CSV</button>
-                        <button class="btn-exp" onclick="exportFiltered('fielding','txt')"><i class="fas fa-file-alt"></i> TXT</button>
+                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('fielding','csv')"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('fielding','txt')"><i class="fas fa-file-alt"></i> TXT</button>
                         <button class="btn-exp" onclick="exportImage('fielding','png',this)"><i class="fas fa-image"></i> PNG</button>
                     </div>
                 </div>
@@ -1445,8 +1445,8 @@
                     <input class="tbl-search" type="text" placeholder="Search batsmen…" oninput="filterPartnerships()">
                     <span class="tbl-count" id="partnerships-count"></span>
                     <div class="export-grp">
-                        <button class="btn-exp" onclick="exportFiltered('partnerships','csv')"><i class="fas fa-file-csv"></i> CSV</button>
-                        <button class="btn-exp" onclick="exportFiltered('partnerships','txt')"><i class="fas fa-file-alt"></i> TXT</button>
+                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('partnerships','csv')"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn-exp" title="Export all filtered rows" onclick="exportFiltered('partnerships','txt')"><i class="fas fa-file-alt"></i> TXT</button>
                     </div>
                 </div>
                 <div class="tbl-wrap">
@@ -1479,6 +1479,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/image_export.js') }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
 <script>
 // ===== URL / VIEW NAVIGATION =====
@@ -1668,7 +1669,7 @@ function exportFiltered(type, format) {
     const headers = Array.from(table.querySelectorAll('thead tr th'))
         .map(th => th.textContent.replace(/[⇕↑↓]/g, '').trim());
     const rows = Array.from(table.querySelectorAll('tbody tr'))
-        .filter(r => r.style.display !== 'none')
+        .filter(r => r.dataset.filtered !== 'out')
         .map(r => Array.from(r.querySelectorAll('td')).map(td => td.textContent.trim()));
     if (format === 'csv') {
         let csv = headers.map(h => '"' + h.replace(/"/g, '""') + '"').join(',') + '\n';
@@ -1697,25 +1698,26 @@ function dlBlob(content, filename, mime) {
     URL.revokeObjectURL(a.href);
 }
 
-function exportImage(type, format, btn) {
-    const wrap = document.getElementById(type)?.querySelector('.tbl-wrap');
-    if (!wrap || typeof html2canvas === 'undefined') {
-        alert('Image export unavailable. Please try CSV or TXT.'); return;
-    }
+async function exportImage(type, format, btn) {
+    if (btn.disabled) return;
     const orig = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    btn.disabled = true;
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    html2canvas(wrap, { backgroundColor: isDark ? '#21252b' : '#ffffff', scale: 2, logging: false, useCORS: true })
-        .then(canvas => {
-            const a = document.createElement('a');
-            const mf = new URLSearchParams(window.location.search).get('match_format') || 'T20';
-            a.download = mf + '_' + type + '_stats_' + new Date().toISOString().slice(0, 10) + '.' + format;
-            a.href = canvas.toDataURL('image/png');
-            a.click();
-        })
-        .catch(() => alert('Image export failed. Please try CSV or TXT.'))
-        .finally(() => { btn.innerHTML = orig; btn.disabled = false; });
+    try {
+        const wrap = document.getElementById(type)?.querySelector('.tbl-wrap');
+        if (!wrap || typeof window.html2canvas !== 'function') throw new Error('Image export unavailable');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const blob = await window.scxImageExport.capturePng(wrap, {
+            backgroundColor: isDark ? '#21252b' : '#ffffff', scale: 2
+        });
+        const mf = new URLSearchParams(window.location.search).get('match_format') || 'T20';
+        window.scxImageExport.downloadBlob(blob, mf + '_' + type + '_stats_' + new Date().toISOString().slice(0, 10) + '.png');
+    } catch (error) {
+        alert('Image export failed. Reload to retry, or use CSV or TXT for all filtered rows.');
+    } finally {
+        btn.innerHTML = orig;
+        btn.disabled = false;
+    }
 }
 
 // ===== KPI COMPUTATION (from rendered table data) =====
@@ -1864,7 +1866,7 @@ function filterPlayersByRole(role) {
     const filtered = allPlayers.filter(p => {
         const r = (p.role || '').toLowerCase();
         return role === 'batsman'
-            ? r.includes('batsman') || r.includes('all-rounder')
+            ? r.includes('batsman') || r.includes('all-rounder') || r.includes('wicketkeeper')
             : r.includes('bowler') || r.includes('all-rounder');
     });
     ['player1-select', 'player2-select'].forEach((id, idx) => {

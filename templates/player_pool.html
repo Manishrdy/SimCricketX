@@ -307,7 +307,19 @@
     }
     .pp-bulk-bar.visible { display: flex; }
     .pp-bulk-count { font-weight: 600; color: var(--text-primary); }
-    .pp-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--brand-primary, #0f766e); }
+    .pp-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: var(--brand-primary, #0f766e); }
+    /* A bare 16-18px native checkbox is a tiny tap target in a dense table —
+       this wraps it in a padded label (clicking anywhere in a label toggles
+       its checkbox natively) and pulls the added space back with a matching
+       negative margin so surrounding cells don't visibly shift. ~44px total. */
+    .pp-checkbox-wrap {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 13px;
+        margin: -13px;
+        cursor: pointer;
+    }
     .pp-col-check { display: none; }
     .pp-select-mode .pp-col-check { display: table-cell; }
     .pp-select-toggle.active { background: var(--brand-primary, #0f766e); color: #fff; border-color: var(--brand-primary, #0f766e); }
@@ -338,6 +350,7 @@
     }
     .pp-modal-title { font-size: 1.08rem; font-weight: 700; margin: 0 0 8px; color: var(--text-primary); letter-spacing: -.01em; }
     .pp-modal-msg { font-size: .9rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.55; }
+    .pp-modal-msg.error { color: #dc2626; font-weight: 600; }
     .pp-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
     @keyframes pp-fade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes pp-pop { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -406,7 +419,7 @@
         <table class="pp-table">
             <thead>
                 <tr>
-                    <th class="pp-col-check" style="width:36px;"><input type="checkbox" class="pp-checkbox" id="selectAll"></th>
+                    <th class="pp-col-check" style="width:36px;"><label class="pp-checkbox-wrap"><input type="checkbox" class="pp-checkbox" id="selectAll"></label></th>
                     <th>Name</th>
                     <th>Source</th>
                     <th>Role</th>
@@ -426,7 +439,7 @@
                 <tr data-source="{{ p.source }}" data-user-player-id="{{ p.user_player_id or '' }}">
                     <td class="pp-col-check">
                         {% if p.source in ('override', 'custom') %}
-                        <input type="checkbox" class="pp-checkbox pp-row-check" value="{{ p.user_player_id }}">
+                        <label class="pp-checkbox-wrap"><input type="checkbox" class="pp-checkbox pp-row-check" value="{{ p.user_player_id }}"></label>
                         {% endif %}
                     </td>
                     <td class="pp-name">{{ p.name }}</td>
@@ -565,9 +578,30 @@
         confirmSingleDelete(parseInt(btn.dataset.playerId, 10), btn.dataset.playerName, btn.dataset.override === 'true');
     });
 
+    // Wraps fetch+JSON parsing so a network failure or a non-JSON response
+    // (e.g. an HTML login page after the session expires) never becomes a
+    // totally silent, unhandled rejection — always resolves with
+    // { ok, data, error }.
+    function fetchJson(url, options) {
+        return fetch(url, options)
+            .catch(function(){
+                return Promise.reject(new Error('Network error — check your connection and try again.'));
+            })
+            .then(function(res){
+                return res.json()
+                    .catch(function(){
+                        return Promise.reject(new Error(res.ok
+                            ? 'Your session may have expired — please refresh and sign in again.'
+                            : ('Request failed (' + res.status + ').')));
+                    })
+                    .then(function(data){ return { ok: res.ok, data: data }; });
+            });
+    }
+
     // Single delete with inline confirm
     window.confirmSingleDelete = function(playerId, name, isOverride) {
         modalTitle.textContent = isOverride ? 'Remove Override' : 'Delete Player';
+        modalMsg.classList.remove('error');
         modalMsg.textContent = isOverride
             ? 'Remove your override for "' + name + '"? This will revert to the global pool values.'
             : 'Delete "' + name + '" from your pool? This action cannot be undone.';
@@ -591,30 +625,49 @@
         checked.forEach(function(cb){ ids.push(parseInt(cb.value)); });
         if (!ids.length) return;
         modalTitle.textContent = 'Delete ' + ids.length + ' Player' + (ids.length > 1 ? 's' : '');
+        modalMsg.classList.remove('error');
         modalMsg.textContent = 'Delete ' + ids.length + ' selected player' + (ids.length > 1 ? 's' : '') + ' from your pool? This action cannot be undone. Overrides will revert to global values.';
+        // Returns a promise so the confirm button (below) can wait for the real
+        // outcome before closing — this used to fire-and-forget, closing the
+        // dialog immediately regardless of whether the delete actually happened.
         pendingAction = function(){
-            fetch('/player-pool/bulk-delete', {
+            return fetchJson('/player-pool/bulk-delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
                 body: JSON.stringify({ ids: ids }),
-            })
-            .then(function(r){ return r.json(); })
-            .then(function(d){
-                if (d.error) { alert(d.error); return; }
+            }).then(function(result){
+                if (!result.ok || result.data.error) throw new Error((result.data && result.data.error) || 'Delete failed');
                 location.reload();
             });
         };
         modal.classList.add('open');
     };
 
-    // Modal controls
+    // Async so a bulk delete's request can be awaited: the dialog now stays
+    // open (with the confirm button disabled) until the request resolves,
+    // and shows the real error inline instead of closing as if it succeeded.
     modalBtn.addEventListener('click', function(){
-        if (pendingAction) pendingAction();
-        closeModal();
+        if (!pendingAction) { closeModal(); return; }
+        var action = pendingAction;
+        var result = action();
+        if (!result || typeof result.then !== 'function') { closeModal(); return; }
+        var originalLabel = modalBtn.textContent;
+        modalBtn.disabled = true;
+        modalBtn.textContent = 'Deleting…';
+        result.then(function(){
+            closeModal();
+        }).catch(function(err){
+            modalMsg.classList.add('error');
+            modalMsg.textContent = (err && err.message) || 'Something went wrong — please try again.';
+        }).finally(function(){
+            modalBtn.disabled = false;
+            modalBtn.textContent = originalLabel;
+        });
     });
 
     window.closeModal = function() {
         modal.classList.remove('open');
+        modalMsg.classList.remove('error');
         pendingAction = null;
     };
 
@@ -636,6 +689,12 @@
     var roleSelect = document.getElementById('liveRole');
     var clearBtn = document.getElementById('clearFilters');
     var searchDebounce;
+    // Every fetch (search or load-more) gets the next sequence number; a response
+    // only applies if it's still the latest one issued. A search additionally
+    // aborts whatever search it superseded — see team_squad.html's fetchPool for
+    // the same pattern.
+    var requestSeq = 0;
+    var searchInFlight = null;
 
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     // HTML-attribute escaping (distinct from `esc`, which only handles text-node context).
@@ -665,7 +724,7 @@
         else { badgeClass = 'pp-badge-custom'; badgeIcon = 'fa-user-plus'; badgeLabel = 'Custom'; }
         var checkbox = '';
         if (source === 'override' || source === 'custom') {
-            checkbox = '<input type="checkbox" class="pp-checkbox pp-row-check" value="' + p.user_player_id + '">';
+            checkbox = '<label class="pp-checkbox-wrap"><input type="checkbox" class="pp-checkbox pp-row-check" value="' + p.user_player_id + '"></label>';
         }
         var safeNameAttr = escAttr(p.name);
         var actions = '';
@@ -707,11 +766,17 @@
     }
 
     function fetchAndReplace() {
+        if (searchInFlight) { searchInFlight.abort(); searchInFlight = null; }
+        var seq = ++requestSeq;
+        var controller = ('AbortController' in window) ? new AbortController() : null;
+        searchInFlight = controller;
         loading = true;
         loadedOffset = 0;
-        fetch(buildApiUrl(0))
+        fetch(buildApiUrl(0), { signal: controller ? controller.signal : undefined })
         .then(function(r){ return r.json(); })
         .then(function(d){
+            if (seq !== requestSeq) return; // a newer search/load-more already won
+            if (searchInFlight === controller) searchInFlight = null;
             var tbody = document.getElementById('poolBody');
             tbody.innerHTML = '';
             if (d.players.length === 0) {
@@ -726,15 +791,27 @@
             if (sentinel) sentinel.style.display = d.has_more ? '' : 'none';
             loading = false;
         })
-        .catch(function(){ loading = false; });
+        .catch(function(err){
+            if (err && err.name === 'AbortError') return; // superseded by a newer search
+            if (seq !== requestSeq) return;
+            if (searchInFlight === controller) searchInFlight = null;
+            loading = false;
+            var tbody = document.getElementById('poolBody');
+            tbody.innerHTML = '<tr><td colspan="10" class="pp-empty">'
+                + '<i class="fas fa-triangle-exclamation pp-empty-icon"></i>Couldn’t load players. '
+                + '<button type="button" class="pp-btn pp-btn-secondary pp-btn-sm" onclick="fetchAndReplace()">Retry</button></td></tr>';
+        });
     }
+    window.fetchAndReplace = fetchAndReplace;
 
     function loadMore() {
         if (loading || loadedOffset >= totalPlayers) return;
+        var seq = ++requestSeq;
         loading = true;
         fetch(buildApiUrl(loadedOffset))
         .then(function(r){ return r.json(); })
         .then(function(d){
+            if (seq !== requestSeq) return; // a newer search superseded this page
             var tbody = document.getElementById('poolBody');
             d.players.forEach(function(p){ tbody.appendChild(buildRow(p)); });
             loadedOffset += d.players.length;
@@ -742,8 +819,14 @@
             if (!d.has_more && sentinel) sentinel.style.display = 'none';
             loading = false;
         })
-        .catch(function(){ loading = false; });
+        .catch(function(){
+            if (seq !== requestSeq) return;
+            loading = false;
+            if (sentinel) sentinel.innerHTML = '<span class="pp-spinner-error">Couldn’t load more. '
+                + '<button type="button" class="pp-btn pp-btn-secondary pp-btn-sm" onclick="loadMore()">Retry</button></span>';
+        });
     }
+    window.loadMore = loadMore;
 
     searchInput.addEventListener('input', function(){
         clearTimeout(searchDebounce);

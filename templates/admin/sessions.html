@@ -166,17 +166,15 @@ function showAlert(msg, type) {
 
 async function terminateSession(id) {
     if (!confirm('Terminate this session? The user will be logged out.')) return;
-    const res = await fetch(`/admin/sessions/${id}/terminate`, { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) { document.getElementById('session-' + id)?.remove(); showAlert(data.message, 'success'); }
-    else showAlert(data.error, 'error');
+    const { ok, data, error } = await adminFetchJson(`/admin/sessions/${id}/terminate`, { method: 'POST' });
+    if (ok) { document.getElementById('session-' + id)?.remove(); showAlert(data.message, 'success'); }
+    else showAlert(error, 'error');
 }
 
 async function cleanupSessions() {
-    const res = await fetch('/admin/sessions/cleanup', { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
-    else showAlert(data.error, 'error');
+    const { ok, data, error } = await adminFetchJson('/admin/sessions/cleanup', { method: 'POST' });
+    if (ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+    else showAlert(error, 'error');
 }
 
 (function parseUAs() {
