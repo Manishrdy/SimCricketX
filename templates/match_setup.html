@@ -142,6 +142,11 @@
         .ms-main { padding: 1.25rem 1.1rem 1.5rem; }
     }
 
+    @media (max-width: 400px) {
+        .ms-shell { padding-left: 0.65rem; padding-right: 0.65rem; }
+        .ms-main { padding: 1rem 0.7rem 1.25rem; }
+    }
+
     .ms-step-header {
         margin-bottom: 1.5rem;
     }
@@ -171,12 +176,15 @@
     /* ─── Step 1: Teams ──────────────────────────────────────── */
     .teams-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
         gap: 0.9rem;
         max-height: 58vh;
         overflow-y: auto;
         padding: 0.25rem 0.25rem 0.5rem;
+        min-width: 0;
     }
+
+    .teams-grid > * { min-width: 0; }
 
     .team-card {
         background: var(--bg-surface, var(--bg-secondary));
@@ -190,6 +198,8 @@
         align-items: center;
         gap: 0.9rem;
         overflow: hidden;
+        min-width: 0;
+        max-width: 100%;
     }
 
     .team-card::before {
@@ -256,9 +266,14 @@
         font-size: 1.02rem;
         font-weight: 700;
         color: var(--fg);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow-wrap: anywhere;
+    }
+    @media (min-width: 641px) {
+        .team-info h3 {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
     }
 
     .team-meta {
@@ -267,6 +282,7 @@
         display: flex;
         align-items: center;
         gap: 0.4rem;
+        overflow-wrap: anywhere;
     }
 
     .team-meta i { font-size: 0.7rem; color: var(--fg-secondary); opacity: 0.8; }
@@ -287,6 +303,11 @@
         color: #fff;
         text-shadow: 0 1px 3px rgba(0,0,0,0.35);
         box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    @media (max-width: 400px) {
+        .team-card { padding: 0.85rem 0.8rem; gap: 0.65rem; }
+        .color-dot { width: 40px; height: 40px; font-size: 0.7rem; }
     }
 
     .team-format-badges {
@@ -330,7 +351,16 @@
         font-weight: 700;
         padding: 4px 12px;
         border-radius: var(--radius-full, 999px);
-        white-space: nowrap;
+        white-space: normal;
+        max-width: calc(100% - 1.5rem);
+        text-align: center;
+        line-height: 1.3;
+    }
+    @media (min-width: 641px) {
+        .team-card.no-squad-for-format::after {
+            white-space: nowrap;
+            max-width: none;
+        }
     }
 
     .ms-empty-state {

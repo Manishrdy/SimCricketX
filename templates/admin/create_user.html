@@ -178,14 +178,13 @@ function showAlert(msg, type) {
 async function createUser(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const res = await fetch('/admin/users/create', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (res.ok) {
+    const { ok, data, error } = await adminFetchJson('/admin/users/create', { method: 'POST', body: fd });
+    if (ok) {
         showAlert(data.message, 'success');
         e.target.reset();
         setTimeout(() => window.location.href = '/admin/users', 2000);
     } else {
-        showAlert(data.error || 'Failed to create user', 'error');
+        showAlert(error || 'Failed to create user', 'error');
     }
 }
 </script>

@@ -15,6 +15,7 @@ from engine.format_config import get_any_format as _get_any_format
 from engine.toss import decide_toss, home_bats_first
 from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
 from utils.exception_tracker import log_exception
 from werkzeug.utils import secure_filename
@@ -1990,6 +1991,7 @@ def register_match_routes(
         filter_tournament = request.args.get("tournament_id", "", type=str).strip()
         filter_date_from = request.args.get("date_from", "").strip()
         filter_date_to = request.args.get("date_to", "").strip()
+        filter_query = request.args.get("q", "").strip()
         total_matches = 0
 
         try:
@@ -1998,6 +2000,20 @@ def register_match_routes(
                 .outerjoin(Tournament, DBMatch.tournament_id == Tournament.id)
                 .filter(DBMatch.user_id == current_user.id)
             )
+
+            # Search the complete history before counting or paginating. Escape
+            # LIKE wildcards so team names containing % or _ are literal queries.
+            if filter_query:
+                matching_teams = db.session.query(DBTeam.id).filter(
+                    DBTeam.name.ilike(
+                        "%" + filter_query.replace("/", "//").replace("%", "/%").replace("_", "/_") + "%",
+                        escape="/",
+                    )
+                )
+                query = query.filter(or_(
+                    DBMatch.home_team_id.in_(matching_teams),
+                    DBMatch.away_team_id.in_(matching_teams),
+                ))
 
             # Apply filters
             if filter_format:
@@ -2026,7 +2042,7 @@ def register_match_routes(
 
             total_matches = query.count()
             all_matches = (
-                query.order_by(DBMatch.date.desc())
+                query.order_by(DBMatch.date.desc(), DBMatch.id.desc())
                 .offset((page - 1) * PAGE_SIZE)
                 .limit(PAGE_SIZE)
                 .all()
@@ -2091,6 +2107,7 @@ def register_match_routes(
             page=page,
             has_more=has_more,
             total_matches=total_matches,
+            filter_query=filter_query,
             filter_format=filter_format,
             filter_type=filter_type,
             filter_tournament=filter_tournament,

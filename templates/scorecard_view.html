@@ -396,6 +396,9 @@ Match Scorecard - SimCricketX
             <button id="saveScorecard" class="btn-save" title="Save scorecard as PNG">
                 <i class="fas fa-download"></i> Save as PNG
             </button>
+            <button id="saveScorecardText" class="btn-save" title="Download the full scorecard as text">
+                <i class="fas fa-file-alt"></i> Download TXT
+            </button>
         </div>
     </div>
 
@@ -537,64 +540,43 @@ Match Scorecard - SimCricketX
     {% endif %}
 </div>
 
+<script src="{{ url_for('static', filename='js/image_export.js') }}"></script>
 <!-- html2canvas library for capturing screenshot -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <script>
-document.getElementById('saveScorecard').addEventListener('click', function() {
+const scorecardFilename = {{ ('Scorecard_' ~ match.team_home ~ '_vs_' ~ match.team_away)|tojson }};
+document.getElementById('saveScorecard').addEventListener('click', async function() {
     const button = this;
+    if (button.disabled) return;
     const originalText = button.innerHTML;
-    
-    // Show loading state
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
-    button.disabled = true;
-    
-    // Hide the save button wrapper for the screenshot
-    const saveWrapper = document.querySelector('.save-button-wrapper');
-    saveWrapper.style.display = 'none';
-    
-    // Wait a moment for the button to disappear
-    setTimeout(() => {
-        const element = document.getElementById('scorecard-content');
-        
-        html2canvas(element, {
-            scale: 2.5, // Higher quality
-            useCORS: true,
+    try {
+        if (typeof window.html2canvas !== 'function') {
+            throw new Error('Image library unavailable');
+        }
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+        button.disabled = true;
+        const blob = await window.scxImageExport.capturePng(document.getElementById('scorecard-content'), {
+            scale: 2.5,
             backgroundColor: '#f8fafc',
-            logging: false,
-            windowWidth: element.scrollWidth,
-            windowHeight: element.scrollHeight,
-            onclone: function(clonedDoc) {
-                // Ensure proper rendering in cloned document
-                const clonedElement = clonedDoc.getElementById('scorecard-content');
-                if (clonedElement) {
-                    clonedElement.style.padding = '1.5rem';
-                }
-            }
-        }).then(function(canvas) {
-            // Create download link
-            const link = document.createElement('a');
-            const timestamp = new Date().toISOString().slice(0,19).replace(/:/g,'-');
-            const fileName = 'Scorecard_{{ match.team_home }}_vs_{{ match.team_away }}_' + timestamp + '.png';
-            
-            link.download = fileName;
-            link.href = canvas.toDataURL('image/png', 1.0);
-            link.click();
-            
-            // Restore button
-            saveWrapper.style.display = '';
-            button.innerHTML = originalText;
-            button.disabled = false;
-        }).catch(function(error) {
-            console.error('Error generating image:', error);
-            alert('Failed to generate image. Please try again.');
-            
-            // Restore button
-            saveWrapper.style.display = '';
-            button.innerHTML = originalText;
-            button.disabled = false;
+            // Exclude controls from the clone without hiding the working UI.
+            ignoreElements: element => element.classList.contains('save-button-wrapper')
         });
-    }, 150);
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        window.scxImageExport.downloadBlob(blob, scorecardFilename + '_' + timestamp + '.png');
+    } catch (error) {
+        console.error('Error generating image:', error);
+        alert('Could not export the image. Reload the page to retry, or use Download TXT for the full scorecard.');
+    } finally {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }
+});
+
+document.getElementById('saveScorecardText').addEventListener('click', function() {
+    const sections = document.querySelectorAll('#scorecard-content .result-banner > :not(.save-button-wrapper), #scorecard-content .innings-card, #scorecard-content .scorecard-footer');
+    const text = Array.from(sections, section => section.innerText.trim()).filter(Boolean).join('\n\n');
+    window.scxImageExport.downloadBlob(new Blob([text + '\n'], { type: 'text/plain;charset=utf-8' }), scorecardFilename + '.txt');
 });
 </script>
 {% endblock %}

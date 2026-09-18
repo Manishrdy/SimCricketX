@@ -480,7 +480,8 @@
         <div class="cmp-grid">
             <div>
                 <div class="cmp-search">
-                    <i class="fas fa-search"></i>
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <label for="cmp-search-input" class="sr-only">Search players</label>
                     <input id="cmp-search-input" type="text" placeholder="Search players…" autocomplete="off">
                 </div>
                 <div id="cmp-list" class="cmp-list">
@@ -501,7 +502,7 @@
 
             <div class="cmp-side">
                 <div class="cmp-field">
-                    <label>Format</label>
+                    <label for="cmp-format">Format</label>
                     <select id="cmp-format">
                         <option value="T20" selected>T20</option>
                         <option value="ListA">List A</option>
@@ -509,7 +510,7 @@
                     </select>
                 </div>
                 <div class="cmp-field">
-                    <label>Tournament (optional)</label>
+                    <label for="cmp-tournament">Tournament (optional)</label>
                     <select id="cmp-tournament">
                         <option value="">All tournaments</option>
                         {% for t in tournaments %}

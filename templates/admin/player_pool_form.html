@@ -32,13 +32,13 @@
 
         <div class="player-identity-grid">
             <div class="a-form-group">
-                <label class="a-label">Player name <span style="color:var(--danger)">*</span></label>
+                <label class="a-label" for="nameInput">Player name <span style="color:var(--danger)">*</span></label>
                 <input type="text" name="name" id="nameInput" class="a-input" required maxlength="100"
                        value="{{ player.name if player else '' }}" autocomplete="off" placeholder="Enter full name">
                 <div id="nameWarn" style="font-size:.82rem;font-weight:600;margin-top:6px;min-height:1.2em;"></div>
             </div>
             <div class="a-form-group">
-                <label class="a-label">Role <span style="color:var(--danger)">*</span></label>
+                <label class="a-label" for="roleSelect">Role <span style="color:var(--danger)">*</span></label>
                 <select name="role" class="a-select" required id="roleSelect">
                     <option value="">Select role</option>
                     {% for r in roles %}
@@ -47,8 +47,8 @@
                 </select>
             </div>
             <div class="a-form-group">
-                <label class="a-label">Batting Hand</label>
-                <select name="batting_hand" class="a-select">
+                <label class="a-label" for="battingHandSelect">Batting Hand</label>
+                <select name="batting_hand" class="a-select" id="battingHandSelect">
                     <option value="">—</option>
                     {% for h in batting_hands %}
                     <option value="{{ h }}" {{ 'selected' if player and player.batting_hand == h }}>{{ h }}</option>
@@ -59,7 +59,7 @@
 
         <div class="player-bowling-grid" id="bowlingFields">
             <div class="a-form-group">
-                <label class="a-label">Bowling Type</label>
+                <label class="a-label" for="bowlingType">Bowling Type</label>
                 <select name="bowling_type" class="a-select" id="bowlingType">
                     <option value="">—</option>
                     {% for bt in bowling_types %}
@@ -68,7 +68,7 @@
                 </select>
             </div>
             <div class="a-form-group">
-                <label class="a-label">Bowling Hand</label>
+                <label class="a-label" for="bowlingHand">Bowling Hand</label>
                 <select name="bowling_hand" class="a-select" id="bowlingHand">
                     <option value="">—</option>
                     {% for bh in bowling_hands %}
@@ -133,11 +133,20 @@
     var nameWarn = document.getElementById('nameWarn');
     var submitBtn = document.getElementById('submitBtn');
     var debounce;
+    var nameCheckGeneration = 0;
 
     if (!isEdit) {
         nameInput.addEventListener('input', function(){
             clearTimeout(debounce);
+            // Invalidate pending results even when the input is cleared.
+            var generation = ++nameCheckGeneration;
             var val = nameInput.value.trim();
+            var normalizedName = val.toLowerCase();
+            function isCurrentCheck() {
+                return generation === nameCheckGeneration &&
+                    nameInput.value.trim().toLowerCase() === normalizedName;
+            }
+            submitBtn.disabled = false;
             if (!val || val.length < 2) {
                 nameWarn.textContent = '';
                 nameWarn.style.color = '';
@@ -150,6 +159,7 @@
                 fetch('/api/player-pool/check-name?name=' + encodeURIComponent(val))
                 .then(function(r){ return r.json(); })
                 .then(function(d){
+                    if (!isCurrentCheck()) return;
                     if (d.exists) {
                         nameWarn.innerHTML = '<i class="fas fa-exclamation-circle"></i> "' + d.name + '" already exists.';
                         nameWarn.style.color = '#dc2626';
@@ -161,6 +171,7 @@
                     }
                 })
                 .catch(function(){
+                    if (!isCurrentCheck()) return;
                     nameWarn.textContent = '';
                     submitBtn.disabled = false;
                 });

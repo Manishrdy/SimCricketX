@@ -2,9 +2,13 @@
 <html lang="en">
 
 <head>
+    <script src="{{ url_for('static', filename='js/safe_storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/dialog_focus.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/usable_viewport.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/usable_viewport.css') }}">
     <script>
         const root = document.documentElement;
-        const saved = localStorage.getItem('theme');
+        const saved = window.scxStorage.getItem('theme');
         if (saved) root.setAttribute('data-theme', saved);
     </script>
 
@@ -104,7 +108,6 @@
             padding: 0;
             line-height: 1.6;
             transition: background-color 0.3s ease, color 0.3s ease;
-            overflow-x: hidden;
         }
 
         body::before {
@@ -264,7 +267,7 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
             gap: 1.5rem;
             margin-bottom: 4rem;
         }
@@ -325,8 +328,13 @@
 
         .teams-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
             gap: 2rem;
+        }
+
+        .stats-grid > *,
+        .teams-grid > * {
+            min-width: 0;
         }
 
         .glass-card {
@@ -338,6 +346,8 @@
             position: relative;
             display: flex;
             flex-direction: column;
+            min-width: 0;
+            max-width: 100%;
             box-shadow: var(--shadow-xs);
             animation: floatIn 0.5s ease-out both;
             animation-delay: calc(var(--i, 0) * 70ms);
@@ -441,6 +451,7 @@
             font-size: 0.96rem;
             font-weight: 600;
             color: var(--text-main);
+            overflow-wrap: anywhere;
         }
 
         .info-accent {
@@ -467,7 +478,9 @@
 
         .card-actions {
             display: flex;
+            flex-wrap: wrap;
             gap: 0.5rem;
+            flex-shrink: 0;
         }
 
         .action-btn {
@@ -661,9 +674,20 @@
                 grid-template-columns: 1fr;
             }
 
+            .card-header,
+            .card-body {
+                padding: 1rem;
+            }
+
             .card-footer {
                 flex-direction: column;
                 align-items: flex-start;
+                padding: 0.85rem 1rem;
+            }
+
+            .action-btn {
+                width: 44px;
+                height: 44px;
             }
         }
     </style>
@@ -817,7 +841,7 @@
         </div>
     </main>
 
-    <div class="modal" id="confirmModal">
+    <div class="modal" id="confirmModal" data-focus-dialog data-viewport-dialog data-dialog-open-class="active" data-dialog-close="[onclick='closeModal()']" aria-label="Delete team">
         <div class="modal-content">
             <div class="modal-icon">
                 <i class="fa-solid fa-circle-exclamation"></i>
@@ -852,9 +876,9 @@
         function clearTeamCreateDraftIfNeeded() {
             if (!shouldClearTeamDraft) return;
             try {
-                localStorage.removeItem('team_create_draft_v1');
-                localStorage.removeItem('team_create_draft_v2');
-                localStorage.removeItem('team_create_draft'); // Legacy key cleanup.
+                window.scxStorage.removeItem('team_create_draft_v1');
+                window.scxStorage.removeItem('team_create_draft_v2');
+                window.scxStorage.removeItem('team_create_draft'); // Legacy key cleanup.
             } catch (_) { /* Storage may be unavailable. */ }
 
             const url = new URL(window.location.href);
@@ -868,7 +892,7 @@
             const url = new URL(window.location.href);
             const code = url.searchParams.get('clear_team_edit_draft');
             if (!code) return;
-            try { localStorage.removeItem('team_edit_draft_v1:' + code); } catch (_) {}
+            try { window.scxStorage.removeItem('team_edit_draft_v1:' + code); } catch (_) {}
             url.searchParams.delete('clear_team_edit_draft');
             window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
         }
@@ -878,14 +902,14 @@
         const docRoot = document.documentElement;
         const icon = toggle.querySelector('i');
 
-        const savedTheme = localStorage.getItem('theme') || 'light';
+        const savedTheme = window.scxStorage.getItem('theme') || 'light';
         docRoot.setAttribute('data-theme', savedTheme);
         updateIcon(savedTheme);
 
         toggle.onclick = () => {
             const next = docRoot.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
             docRoot.setAttribute('data-theme', next);
-            localStorage.setItem('theme', next);
+            window.scxStorage.setItem('theme', next);
             updateIcon(next);
         };
 

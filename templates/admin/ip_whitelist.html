@@ -97,27 +97,24 @@ function showAlert(msg, type) {
     setTimeout(() => c.innerHTML = '', 5000);
 }
 async function toggleWhitelist() {
-    const res = await fetch('/admin/ip-whitelist/toggle', { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1200); }
-    else showAlert(data.error || 'Failed', 'error');
+    const { ok, data, error } = await adminFetchJson('/admin/ip-whitelist/toggle', { method: 'POST' });
+    if (ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1200); }
+    else showAlert(error || 'Failed', 'error');
 }
 async function addIP(e) {
     e.preventDefault();
     const fd = new FormData();
     fd.append('ip_address', document.getElementById('addIp').value);
     fd.append('label', document.getElementById('addLabel').value);
-    const res = await fetch('/admin/ip-whitelist/add', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (res.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1200); }
-    else showAlert(data.error || 'Failed', 'error');
+    const { ok, data, error } = await adminFetchJson('/admin/ip-whitelist/add', { method: 'POST', body: fd });
+    if (ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1200); }
+    else showAlert(error || 'Failed', 'error');
 }
 async function removeIP(id, ip) {
     if (!confirm(`Remove ${ip} from whitelist?`)) return;
-    const res = await fetch(`/admin/ip-whitelist/${id}/remove`, { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) { document.getElementById('wl-' + id)?.remove(); showAlert(data.message, 'success'); }
-    else showAlert(data.error || 'Failed', 'error');
+    const { ok, data, error } = await adminFetchJson(`/admin/ip-whitelist/${id}/remove`, { method: 'POST' });
+    if (ok) { document.getElementById('wl-' + id)?.remove(); showAlert(data.message, 'success'); }
+    else showAlert(error || 'Failed', 'error');
 }
 </script>
 {% endblock %}

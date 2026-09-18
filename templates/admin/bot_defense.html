@@ -29,52 +29,52 @@
 
         <div class="a-grid-3">
             <div class="a-form-group">
-                <label class="a-form-label">Base Difficulty</label>
+                <label class="a-form-label" for="base_difficulty">Base Difficulty</label>
                 <input type="number" id="base_difficulty" name="base_difficulty" class="a-form-input" min="1" max="7" value="{{ settings.base_difficulty }}">
             </div>
             <div class="a-form-group">
-                <label class="a-form-label">Elevated Difficulty</label>
+                <label class="a-form-label" for="elevated_difficulty">Elevated Difficulty</label>
                 <input type="number" id="elevated_difficulty" name="elevated_difficulty" class="a-form-input" min="1" max="8" value="{{ settings.elevated_difficulty }}">
             </div>
             <div class="a-form-group">
-                <label class="a-form-label">High Difficulty</label>
+                <label class="a-form-label" for="high_difficulty">High Difficulty</label>
                 <input type="number" id="high_difficulty" name="high_difficulty" class="a-form-input" min="1" max="9" value="{{ settings.high_difficulty }}">
             </div>
         </div>
 
         <div class="a-grid-3">
             <div class="a-form-group">
-                <label class="a-form-label">Elevated Threshold (fails/window)</label>
-                <input type="number" name="elevated_threshold" class="a-form-input" min="1" value="{{ settings.elevated_threshold }}">
+                <label class="a-form-label" for="elevated_threshold">Elevated Threshold (fails/window)</label>
+                <input type="number" id="elevated_threshold" name="elevated_threshold" class="a-form-input" min="1" value="{{ settings.elevated_threshold }}">
             </div>
             <div class="a-form-group">
-                <label class="a-form-label">High Threshold (fails/window)</label>
-                <input type="number" name="high_threshold" class="a-form-input" min="1" value="{{ settings.high_threshold }}">
+                <label class="a-form-label" for="high_threshold">High Threshold (fails/window)</label>
+                <input type="number" id="high_threshold" name="high_threshold" class="a-form-input" min="1" value="{{ settings.high_threshold }}">
             </div>
             <div class="a-form-group">
-                <label class="a-form-label">Window Minutes</label>
-                <input type="number" name="window_minutes" class="a-form-input" min="1" max="120" value="{{ settings.window_minutes }}">
+                <label class="a-form-label" for="window_minutes">Window Minutes</label>
+                <input type="number" id="window_minutes" name="window_minutes" class="a-form-input" min="1" max="120" value="{{ settings.window_minutes }}">
             </div>
         </div>
 
         <div class="a-grid-3">
             <div class="a-form-group">
-                <label class="a-form-label">Challenge TTL (seconds)</label>
-                <input type="number" name="ttl_seconds" class="a-form-input" min="30" max="900" value="{{ settings.ttl_seconds }}">
+                <label class="a-form-label" for="ttl_seconds">Challenge TTL (seconds)</label>
+                <input type="number" id="ttl_seconds" name="ttl_seconds" class="a-form-input" min="30" max="900" value="{{ settings.ttl_seconds }}">
             </div>
             <div class="a-form-group">
-                <label class="a-form-label">Max Counter</label>
-                <input type="number" name="max_counter" class="a-form-input" min="10000" max="100000000" value="{{ settings.max_counter }}">
+                <label class="a-form-label" for="max_counter">Max Counter</label>
+                <input type="number" id="max_counter" name="max_counter" class="a-form-input" min="10000" max="100000000" value="{{ settings.max_counter }}">
             </div>
             <div class="a-form-group">
-                <label class="a-form-label">Client Max Iterations</label>
+                <label class="a-form-label" for="max_iterations">Client Max Iterations</label>
                 <input type="number" id="max_iterations" name="max_iterations" class="a-form-input" min="10000" max="5000000" value="{{ settings.max_iterations }}">
             </div>
         </div>
 
         <div class="a-form-group">
-            <label class="a-form-label">Trusted IP Rules (bypass challenge)</label>
-            <input type="text" name="trusted_ip_prefixes" class="a-form-input" style="max-width: 100%;"
+            <label class="a-form-label" for="trusted_ip_prefixes">Trusted IP Rules (bypass challenge)</label>
+            <input type="text" id="trusted_ip_prefixes" name="trusted_ip_prefixes" class="a-form-input" style="max-width: 100%;"
                    value="{{ settings.trusted_ip_prefixes or '' }}"
                    placeholder="Examples: 127.0.0.1, 192.168., 10.0.0.0/8">
             <p class="a-form-hint">Comma-separated entries. Supports exact IP, prefix ending with dot, or CIDR blocks.</p>
@@ -92,20 +92,20 @@
 
     <div class="a-grid-3">
         <div class="a-form-group">
-            <label class="a-form-label">Device Hash Rate (hash/sec)</label>
+            <label class="a-form-label" for="hash_rate">Device Hash Rate (hash/sec)</label>
             <input type="number" id="hash_rate" class="a-form-input" min="1000" max="5000000" step="1000" value="150000">
         </div>
         <div class="a-form-group">
-            <label class="a-form-label">Quick Presets</label>
-            <div style="display:flex; gap:.4rem; flex-wrap:wrap;">
+            <span class="a-form-label" id="quickPresetsLabel">Quick Presets</span>
+            <div style="display:flex; gap:.4rem; flex-wrap:wrap;" role="group" aria-labelledby="quickPresetsLabel">
                 <button type="button" class="a-btn a-btn-secondary a-btn-sm" onclick="setHashRate(60000)">Low-End</button>
                 <button type="button" class="a-btn a-btn-secondary a-btn-sm" onclick="setHashRate(150000)">Mid</button>
                 <button type="button" class="a-btn a-btn-secondary a-btn-sm" onclick="setHashRate(350000)">High</button>
             </div>
         </div>
         <div class="a-form-group">
-            <label class="a-form-label">Average Attempts Formula</label>
-            <div class="a-form-input" style="display:flex; align-items:center; background:var(--bg-secondary);">
+            <span class="a-form-label" id="attemptsFormulaLabel">Average Attempts Formula</span>
+            <div class="a-form-input" style="display:flex; align-items:center; background:var(--bg-secondary);" aria-labelledby="attemptsFormulaLabel">
                 16<sup>difficulty</sup>
             </div>
         </div>
@@ -158,10 +158,9 @@ function showAlert(msg, type) {
 
 async function saveBotDefense(e) {
     e.preventDefault();
-    const res = await fetch('/admin/bot-defense/update', { method: 'POST', body: new FormData(e.target) });
-    const data = await res.json();
-    if (res.ok) showAlert(data.message, 'success');
-    else showAlert(data.error || 'Failed to update bot defense', 'error');
+    const { ok, data, error } = await adminFetchJson('/admin/bot-defense/update', { method: 'POST', body: new FormData(e.target) });
+    if (ok) showAlert(data.message, 'success');
+    else showAlert(error || 'Failed to update bot defense', 'error');
 }
 
 function setHashRate(v) {

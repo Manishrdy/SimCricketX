@@ -67,20 +67,23 @@
 
 .scx-support-panel {
     position: fixed;
-    right: 22px;
-    bottom: 86px;
+    --support-gap: 86px;
+    right: calc(var(--scx-vv-right, 0px) + max(12px, env(safe-area-inset-right)));
+    bottom: calc(var(--scx-vv-bottom, 0px) + var(--support-gap) + env(safe-area-inset-bottom));
     z-index: 2200;
-    width: min(380px, calc(100vw - 28px));
-    height: min(560px, calc(100vh - 112px));
-    min-height: 400px;
+    width: min(380px, calc(var(--scx-vv-width, 100vw) - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    height: min(560px, calc(var(--scx-vv-height, 100vh) - var(--support-gap) - 12px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+    min-height: 0;
+    box-sizing: border-box;
     display: none;
-    grid-template-rows: auto auto 1fr auto auto;
+    grid-template-rows: auto auto minmax(48px, 1fr) auto auto;
     background: var(--card-bg, #fff);
     color: var(--fg, #1a1a1a);
     border: 1px solid var(--card-border, #e2e4e8);
     border-radius: 14px;
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
-    overflow: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .scx-support-panel.is-open {
@@ -405,10 +408,10 @@
     }
 
     .scx-support-panel {
-        right: 12px;
-        bottom: 78px;
-        width: calc(100vw - 24px);
-        height: min(560px, calc(100vh - 96px));
+        --support-gap: 78px;
         border-radius: 14px;
     }
 }
+
+/* Keyboard-open and short landscape screens use all available vertical space. */
+[data-compact-viewport] .scx-support-panel { --support-gap: 12px; }

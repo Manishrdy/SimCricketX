@@ -170,15 +170,15 @@
         isOpen = true;
         panel.classList.add('is-open');
         panel.setAttribute('aria-hidden', 'false');
-        loadCurrent().then(function () {
-            setTimeout(function () { input.focus(); }, 30);
-        });
+        trigger.setAttribute('aria-expanded', 'true');
+        loadCurrent();
     }
 
     function closePanel() {
         isOpen = false;
         panel.classList.remove('is-open');
         panel.setAttribute('aria-hidden', 'true');
+        trigger.setAttribute('aria-expanded', 'false');
     }
 
     function formatRemaining(ms) {
