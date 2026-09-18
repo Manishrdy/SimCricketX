@@ -930,3 +930,11 @@
         max-width: 86%;
     }
 }
+
+/* Delivery feedback must remain readable when it wraps on a phone. */
+#support-send-status {
+    font-size: 0.82rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+#support-send-status:empty { display: none; }

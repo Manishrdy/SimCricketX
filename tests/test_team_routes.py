@@ -802,3 +802,70 @@ class TestSquadHistoryPreservation:
         assert len(reused) == 1
         assert reused[0].id == legacy_id
         assert reused[0].profile_id == profile.id
+
+
+class TestTeamDraftRecovery:
+    """A failed create must be recoverable; only a committed save clears the draft."""
+
+    @staticmethod
+    def profiles():
+        players = [
+            {
+                "name": f"Draft Player {i}",
+                "role": "Wicketkeeper" if i == 0 else "All-rounder",
+                "batting_rating": 60,
+                "bowling_rating": 0 if i == 0 else 60,
+                "fielding_rating": 60,
+                "batting_hand": "right",
+                "bowling_type": "" if i == 0 else "medium",
+                "bowling_hand": "" if i == 0 else "right",
+            }
+            for i in range(12)
+        ]
+        return {
+            fmt: {"players": players, "captain": players[1]["name"], "wicketkeeper": players[0]["name"]}
+            for fmt in ("T20", "ListA", "FC")
+        }
+
+    def test_rejected_create_echoes_identity_all_profiles_and_active_format(self, authenticated_client, test_team):
+        import re
+
+        profiles = self.profiles()
+        form = {
+            "team_name": "O'Brien </script> XI",
+            "short_code": test_team.short_code,
+            "home_ground": "Draft Ground",
+            "pitch_preference": "Flat",
+            "team_color": "#123456",
+            "active_format": "FC",
+            "profiles_payload": json.dumps(profiles),
+        }
+        response = authenticated_client.post("/team/create", data=form)
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        match = re.search(r'<script id="tc-submitted-data" type="application/json">(.*?)</script>', html, re.S)
+        assert match is not None
+        recovered = json.loads(match.group(1))
+        assert recovered == form
+        assert json.loads(recovered["profiles_payload"]) == profiles
+        assert "</script>" not in match.group(1)
+        assert b"already have a team" in response.data.lower()
+
+    def test_committed_create_redirects_to_confirmed_draft_cleanup(self, authenticated_client, regular_user):
+        from urllib.parse import urlparse, parse_qs
+
+        response = authenticated_client.post("/team/create", data={
+            "team_name": "Saved Draft XI",
+            "short_code": "SDXI",
+            "home_ground": "Draft Ground",
+            "pitch_preference": "Flat",
+            "team_color": "#123456",
+            "active_format": "FC",
+            "profiles_payload": json.dumps(self.profiles()),
+        })
+        assert response.status_code == 302
+        target = urlparse(response.headers["Location"])
+        assert target.path == "/teams/manage"
+        assert parse_qs(target.query)["clear_team_draft"] == ["1"]
+        team = DBTeam.query.filter_by(user_id=regular_user.id, short_code="SDXI").one()
+        assert {profile.format_type for profile in team.profiles} == {"T20", "ListA", "FC"}

@@ -329,6 +329,9 @@
     border-color: var(--tc-panel-border);
     background: var(--tc-input-bg);
 }
+.tc-player-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.tc-player-actions button, .player-touch-handle { padding: 6px 9px; cursor: pointer; }
+.player-touch-handle { touch-action: none; user-select: none; cursor: grab; }
 /* Drag-to-reorder states */
 .tc-player[draggable="true"] { cursor: grab; }
 .tc-player[draggable="true"]:active { cursor: grabbing; }
@@ -745,10 +748,14 @@
   </script>
   {% endif %}
 
+  {% if request.method == 'POST' %}
+  <script id="tc-submitted-data" type="application/json">{{ request.form.to_dict() | tojson }}</script>
+  {% endif %}
   <form id="tc-form" method="POST" action="{% if edit %}{{ url_for('edit_team', short_code=team.short_code) }}{% else %}{{ url_for('create_team') }}{% endif %}" autocomplete="off">
     {% if edit %}<input type="hidden" name="action" value="publish">{% endif %}
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="profiles_payload" id="tc-profiles-payload">
+    <input type="hidden" name="active_format" id="tc-active-format">
 
     <!-- Identity -->
     <section class="tc-identity">
@@ -797,7 +804,7 @@
       <section class="tc-panel">
         <div class="tc-panel-head">
           <div class="tc-panel-title">Player Pool</div>
-          <div class="tc-panel-sub">Double-click a player to add to the active roster.</div>
+          <div class="tc-panel-sub">Use Add or drag the grip to add a player to the active roster.</div>
           <div class="tc-filter-row">
             <input id="tc-pool-search" class="tc-input" type="search" placeholder="Search by name…">
             <select id="tc-pool-role" class="tc-select">
@@ -816,7 +823,7 @@
       <section class="tc-panel">
         <div class="tc-panel-head">
           <div class="tc-panel-title">Team Roster</div>
-          <div class="tc-panel-sub">Double-click a player to remove. Each profile: {{ SQUAD_MIN_PLAYERS }}–{{ SQUAD_MAX_PLAYERS }} players, ≥{{ SQUAD_MIN_WICKETKEEPERS }} WK, ≥{{ SQUAD_MIN_BOWLING_OPTIONS }} Bowl/AR.</div>
+          <div class="tc-panel-sub">Use arrows to reorder or Remove to remove a player. Each profile: {{ SQUAD_MIN_PLAYERS }}–{{ SQUAD_MAX_PLAYERS }} players, ≥{{ SQUAD_MIN_WICKETKEEPERS }} WK, ≥{{ SQUAD_MIN_BOWLING_OPTIONS }} Bowl/AR.</div>
           <div class="tc-tabs" role="tablist">
             <button type="button" class="tc-tab active" data-fmt="T20" role="tab">
               <span class="tc-tab-status" id="tc-tab-status-T20" aria-hidden="true"></span>
@@ -878,6 +885,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/player_touch_drag.js') }}"></script>
 <script>
 (function () {
   'use strict';
@@ -1126,12 +1134,14 @@
         <div class="tc-player ${inRoster ? 'in-roster' : ''}"
              draggable="${inRoster ? 'false' : 'true'}"
              data-pool-id="${escHtml(p.id)}"
-             title="${inRoster ? 'Already in roster' : 'Double-click or drag to add'}">
+             title="${inRoster ? 'Already in roster' : 'Add using the button or drag handle'}">
+          ${inRoster ? '' : '<span class="player-touch-handle" title="Drag player" aria-hidden="true">⠿</span>'}
           <div class="tc-player-main">
             <div class="tc-player-name">${escHtml(p.name)}</div>
             ${meta ? `<div class="tc-player-meta">${escHtml(meta)}</div>` : ''}
           </div>
           <span class="tc-role-pill ${roleClass(p.role)}">${escHtml(shortRole(p.role))}</span>
+          ${inRoster ? '' : '<span class="tc-player-actions"><button type="button" data-add-player>Add</button></span>'}
         </div>`;
     }).join('');
 
@@ -1151,6 +1161,13 @@
     if (poolList.scrollTop + poolList.clientHeight >= poolList.scrollHeight - threshold) {
       fetchPool(false);
     }
+  });
+
+  poolList.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-add-player]')) return;
+    const row = e.target.closest('[data-pool-id]');
+    const p = state.pool.items.find(x => String(x.id) === row.dataset.poolId);
+    if (p) addToRoster(p);
   });
 
   // Double-click to add
@@ -1248,7 +1265,7 @@
     const list = state.rosters[state.activeFmt];
     if (!list.length) {
       rosterList.innerHTML = `
-        <div class="tc-empty">No players selected for ${state.activeFmt}. Double-click from the pool to add.</div>`;
+        <div class="tc-empty">No players selected for ${state.activeFmt}. Use Add in the pool to select players.</div>`;
       renderCounter(list);
       return;
     }
@@ -1275,13 +1292,18 @@
              data-roster-idx="${idx}"
              data-roster-name="${escHtml(p.name)}"
              title="Drag to reorder · double-click to remove">
-          <span class="tc-grip" aria-hidden="true"><i class="fa-solid fa-grip-vertical"></i></span>
+          <span class="tc-grip player-touch-handle" aria-hidden="true"><i class="fa-solid fa-grip-vertical"></i></span>
           <span class="tc-player-order">${idx + 1}</span>
           <div class="tc-player-main">
             <div class="tc-player-name">${escHtml(p.name)}</div>
             ${meta ? `<div class="tc-player-meta">${escHtml(meta)}</div>` : ''}
           </div>
           ${fcRatings}
+          <span class="tc-player-actions">
+            <button type="button" data-roster-action="up" aria-label="Move ${escHtml(p.name)} up" ${idx === 0 ? 'disabled' : ''}>↑</button>
+            <button type="button" data-roster-action="down" aria-label="Move ${escHtml(p.name)} down" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
+            <button type="button" data-roster-action="remove">Remove</button>
+          </span>
           <span class="tc-role-pill ${roleClass(p.role)}">${escHtml(shortRole(p.role))}</span>
         </div>`;
     }).join('');
@@ -1289,8 +1311,23 @@
     renderCounter(list);
   }
 
+  rosterList.addEventListener('click', (e) => {
+    const button = e.target.closest('[data-roster-action]');
+    if (!button) return;
+    const row = button.closest('[data-roster-idx]');
+    const idx = Number(row.dataset.rosterIdx);
+    const list = state.rosters[state.activeFmt];
+    if (button.dataset.rosterAction === 'remove') return removeFromRoster(list[idx].name);
+    const next = idx + (button.dataset.rosterAction === 'up' ? -1 : 1);
+    if (next < 0 || next >= list.length) return;
+    [list[idx], list[next]] = [list[next], list[idx]];
+    renderRoster();
+    scheduleAutoSave();
+    rosterList.querySelector(`[data-roster-idx="${next}"] [data-roster-action="${button.dataset.rosterAction}"]`).focus();
+  });
+
   rosterList.addEventListener('dblclick', (e) => {
-    if (e.target.closest('.tc-fc-ratings')) return; // don't remove the player while editing FC ratings
+    if (e.target.closest('.tc-fc-ratings, button')) return; // don't remove the player while editing FC ratings
     const row = e.target.closest('[data-roster-name]');
     if (!row) return;
     removeFromRoster(row.getAttribute('data-roster-name'));
@@ -1414,10 +1451,9 @@
 
     // roster reorder
     const row = e.target.closest('[data-roster-idx]');
-    if (!row) { clearDropMarkers(); return; }
-    const targetIdx = parseInt(row.getAttribute('data-roster-idx'), 10);
-    const rect = row.getBoundingClientRect();
-    const above = (e.clientY - rect.top) < rect.height / 2;
+    const targetIdx = row ? Number(row.dataset.rosterIdx) : state.rosters[state.activeFmt].length;
+    const rect = row && row.getBoundingClientRect();
+    const above = !row || (e.clientY - rect.top) < rect.height / 2;
     let insertAt = above ? targetIdx : targetIdx + 1;
     clearDropMarkers();
 
@@ -1760,6 +1796,22 @@
     }, 400);
   }
 
+  function loadSubmittedDraft() {
+    const el = document.getElementById('tc-submitted-data');
+    if (!el) return false;
+    try {
+      const posted = JSON.parse(el.textContent);
+      const profiles = JSON.parse(posted.profiles_payload || '{}');
+      const restored = { v: 1, identity: posted, activeFmt: posted.active_format, rosters: {}, leaders: {} };
+      VALID_FORMATS.forEach(fmt => {
+        const profile = profiles[fmt] || {};
+        restored.rosters[fmt] = profile.players || [];
+        restored.leaders[fmt] = { captain: profile.captain || '', wicketkeeper: profile.wicketkeeper || '' };
+      });
+      return loadDraft(JSON.stringify(restored));
+    } catch (_) { return false; }
+  }
+
   function loadEdit() {
     const id = EDIT_DATA.identity || {};
     state.identity = {
@@ -1795,9 +1847,9 @@
     tabButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-fmt') === state.activeFmt));
   }
 
-  function loadDraft() {
+  function loadDraft(submittedSnapshot) {
     try {
-      const raw = localStorage.getItem(LS_KEY);
+      const raw = submittedSnapshot || localStorage.getItem(LS_KEY);
       if (!raw) return false;
       const parsed = JSON.parse(raw);
       if (!parsed || parsed.v !== 1) return false;
@@ -1888,20 +1940,28 @@
     state.submitting = true;
     saveBtn.disabled = true;
     saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
-    // Clear localStorage optimistically; if server rejects, user is re-rendered with error
-    // and can refill (identity fields are preserved via form POST echo, rosters must be rebuilt).
-    // To protect against loss on server error, keep the draft until server confirms success —
-    // which we detect via the redirect (this page unloads).
-    window.addEventListener('beforeunload', () => {
-      if (!IS_EDIT) clearDraft();
-    }, { once: true });
+    // Persist the final changes even when Submit beats the autosave debounce.
+    // Only the successful server redirect may clear this draft.
+    state.identity = { team_name: nameInput.value, short_code: shortInput.value, home_ground: groundInput.value, pitch_preference: pitchSelect.value, team_color: colorInput.value };
+    $('tc-active-format').value = state.activeFmt;
+    saveDraftNow();
   });
 
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    state.submitting = false;
+    saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Team';
+    updateValidation();
+  });
   // ── Init ─────────────────────────────────────────────────────────────
   bindIdentity();
   colorSwatch.style.background = colorInput.value;
   let restored = false;
-  if (IS_EDIT) {
+  const submittedRestored = loadSubmittedDraft();
+  if (submittedRestored) {
+    // Server validation failed: prefer the submitted values over any older draft.
+    saveDraftNow();
+  } else if (IS_EDIT) {
     loadEdit();
   } else {
     restored = loadDraft();
@@ -1912,7 +1972,7 @@
   updateTabCounts();
   updateValidation();
   fetchPool(true);
-  setSaveStatus(IS_EDIT ? 'idle' : (restored ? 'saved' : 'idle'));
+  if (!submittedRestored) setSaveStatus(IS_EDIT ? 'idle' : (restored ? 'saved' : 'idle'));
 })();
 </script>
 {% endblock %}

@@ -192,11 +192,6 @@ def create_message(
     if not body:
         raise ValueError("message body is required")
 
-    if sender_type == "user":
-        rate = check_user_message_rate_limit(sender_id or "", conversation.id)
-        if not rate["allowed"]:
-            raise RateLimited(rate)
-
     if client_nonce and sender_id:
         existing = (
             SupportMessage.query
@@ -205,6 +200,11 @@ def create_message(
         )
         if existing:
             return existing, {"duplicate": True, "rate": check_user_message_rate_limit(sender_id, conversation.id)}
+
+    if sender_type == "user":
+        rate = check_user_message_rate_limit(sender_id or "", conversation.id)
+        if not rate["allowed"]:
+            raise RateLimited(rate)
 
     now = _now()
     msg = SupportMessage(
