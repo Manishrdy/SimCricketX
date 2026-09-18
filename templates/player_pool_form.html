@@ -178,13 +178,13 @@
 
             <div class="player-identity-grid">
                 <div class="ppf-group">
-                    <label class="ppf-label">Player name <span style="color:var(--danger,#dc2626)">*</span></label>
+                    <label class="ppf-label" for="nameInput">Player name <span style="color:var(--danger,#dc2626)">*</span></label>
                     <input type="text" name="name" id="nameInput" class="ppf-input" required maxlength="100"
                            value="{{ player.name if player else '' }}" autocomplete="off" placeholder="Enter full name">
                     <div class="ppf-name-warn" id="nameWarn"></div>
                 </div>
                 <div class="ppf-group">
-                    <label class="ppf-label">Role <span style="color:var(--danger,#dc2626)">*</span></label>
+                    <label class="ppf-label" for="roleSelect">Role <span style="color:var(--danger,#dc2626)">*</span></label>
                     <select name="role" class="ppf-select" required id="roleSelect">
                         <option value="">Select role</option>
                         {% for r in roles %}
@@ -193,8 +193,8 @@
                     </select>
                 </div>
                 <div class="ppf-group">
-                    <label class="ppf-label">Batting Hand</label>
-                    <select name="batting_hand" class="ppf-select">
+                    <label class="ppf-label" for="battingHandSelect">Batting Hand</label>
+                    <select name="batting_hand" class="ppf-select" id="battingHandSelect">
                         <option value="">—</option>
                         {% for h in batting_hands %}
                         <option value="{{ h }}" {{ 'selected' if player and player.batting_hand == h }}>{{ h }}</option>
@@ -205,7 +205,7 @@
 
             <div class="player-bowling-grid" id="bowlingFields">
                 <div class="ppf-group">
-                    <label class="ppf-label">Bowling Type</label>
+                    <label class="ppf-label" for="bowlingType">Bowling Type</label>
                     <select name="bowling_type" class="ppf-select" id="bowlingType">
                         <option value="">—</option>
                         {% for bt in bowling_types %}
@@ -214,7 +214,7 @@
                     </select>
                 </div>
                 <div class="ppf-group">
-                    <label class="ppf-label">Bowling Hand</label>
+                    <label class="ppf-label" for="bowlingHand">Bowling Hand</label>
                     <select name="bowling_hand" class="ppf-select" id="bowlingHand">
                         <option value="">—</option>
                         {% for bh in bowling_hands %}
@@ -276,22 +276,28 @@
     // Real-time duplicate name check
     var isEdit = {{ 'true' if edit else 'false' }};
     var isOverride = {{ 'true' if override else 'false' }};
-    var originalName = '{{ (player.name if player else '')|e }}'.toLowerCase();
     var nameInput = document.getElementById('nameInput');
     var nameWarn = document.getElementById('nameWarn');
     var submitBtn = document.getElementById('submitBtn');
     var debounce;
-    var dupFound = false;
+    var nameCheckGeneration = 0;
 
     if (!isEdit && !isOverride) {
         nameInput.addEventListener('input', function(){
             clearTimeout(debounce);
+            // Invalidate pending results even when the input is cleared.
+            var generation = ++nameCheckGeneration;
             var val = nameInput.value.trim();
+            var normalizedName = val.toLowerCase();
+            function isCurrentCheck() {
+                return generation === nameCheckGeneration &&
+                    nameInput.value.trim().toLowerCase() === normalizedName;
+            }
+            submitBtn.disabled = false;
             if (!val || val.length < 2) {
                 nameWarn.textContent = '';
                 nameWarn.className = 'ppf-name-warn';
                 submitBtn.disabled = false;
-                dupFound = false;
                 return;
             }
             nameWarn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
@@ -300,24 +306,23 @@
                 fetch('/api/player-pool/check-name?name=' + encodeURIComponent(val))
                 .then(function(r){ return r.json(); })
                 .then(function(d){
+                    if (!isCurrentCheck()) return;
                     if (d.exists) {
-                        dupFound = true;
                         var src = d.source === 'global' ? 'global pool' : 'your custom pool';
                         nameWarn.innerHTML = '<i class="fas fa-exclamation-circle"></i> "' + d.name + '" already exists in the ' + src + '.';
                         nameWarn.className = 'ppf-name-warn error';
                         submitBtn.disabled = true;
                     } else {
-                        dupFound = false;
                         nameWarn.innerHTML = '<i class="fas fa-check-circle"></i> Name available';
                         nameWarn.className = 'ppf-name-warn ok';
                         submitBtn.disabled = false;
                     }
                 })
                 .catch(function(){
+                    if (!isCurrentCheck()) return;
                     nameWarn.textContent = '';
                     nameWarn.className = 'ppf-name-warn';
                     submitBtn.disabled = false;
-                    dupFound = false;
                 });
             }, 300);
         });

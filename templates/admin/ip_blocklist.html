@@ -73,17 +73,15 @@ function showAlert(msg, type) {
 }
 async function addBlock(e) {
     e.preventDefault();
-    const res = await fetch('/admin/ip-blocklist/add', { method: 'POST', body: new FormData(e.target) });
-    const data = await res.json();
-    if (res.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1000); }
-    else showAlert(data.error, 'error');
+    const { ok, data, error } = await adminFetchJson('/admin/ip-blocklist/add', { method: 'POST', body: new FormData(e.target) });
+    if (ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1000); }
+    else showAlert(error, 'error');
 }
 async function unblock(id, ip) {
     if (!confirm(`Unblock IP ${ip}?`)) return;
-    const res = await fetch(`/admin/ip-blocklist/${id}/remove`, { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) { document.getElementById('block-' + id)?.remove(); showAlert(data.message, 'success'); }
-    else showAlert(data.error, 'error');
+    const { ok, data, error } = await adminFetchJson(`/admin/ip-blocklist/${id}/remove`, { method: 'POST' });
+    if (ok) { document.getElementById('block-' + id)?.remove(); showAlert(data.message, 'success'); }
+    else showAlert(error, 'error');
 }
 </script>
 {% endblock %}

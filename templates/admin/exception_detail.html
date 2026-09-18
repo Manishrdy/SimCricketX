@@ -36,7 +36,7 @@
             <i class="fab fa-github"></i> Issue #{{ row.github_issue_number }}
         </a>
         {% elif row.github_sync_status == 'failed' %}
-        <button type="button" class="a-btn a-btn-secondary" onclick="retryExcSync({{ row.id }})">
+        <button type="button" class="a-btn a-btn-secondary" onclick="retryExcSync(this, {{ row.id }})">
             <i class="fas fa-redo"></i> Retry GitHub sync
         </button>
         {% endif %}
@@ -135,8 +135,7 @@
 {% endif %}
 
 <script>
-function retryExcSync(rowId) {
-    const btn = event.currentTarget;
+function retryExcSync(btn, rowId) {
     btn.disabled = true;
     fetch('/admin/issues/exceptions/' + rowId + '/retry', { method: 'POST', credentials: 'same-origin' })
         .then(r => r.json())

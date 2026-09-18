@@ -2,6 +2,10 @@
 <html lang="en" data-theme="light">
 
 <head>
+    <script src="{{ url_for('static', filename='js/safe_storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/dialog_focus.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/usable_viewport.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/usable_viewport.css') }}">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -139,8 +143,8 @@
         .theme-toggle {
             background: var(--bg);
             border: 1px solid var(--card-border);
-            width: 36px;
-            height: 36px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -226,7 +230,17 @@
             transform: translateY(-10px);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 1000;
-            overflow: hidden;
+            /* Content grows with ongoing-matches count plus admin/account
+               options — on a short viewport (landscape phone, 200% zoom) that
+               can exceed the visible screen. Cap it below the trigger and let
+               it scroll internally instead of letting lower items land off-
+               screen with no way to reach them. overflow-y:auto still clips
+               to the border-radius, same as overflow:hidden did. */
+            max-height: calc(100vh - var(--nav-height) - 40px);
+            max-height: calc(100dvh - var(--nav-height) - 40px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
         }
 
         .profile-dropdown.active {
@@ -310,6 +324,14 @@
 
         .profile-actions {
             padding: 0.75rem 0.5rem;
+        }
+
+        /* Mirrors the icon-buttons that are hidden from the navbar on narrow
+           screens (see the max-width: 768px block below) so those actions
+           stay reachable from the profile dropdown instead of overflowing. */
+        .profile-mobile-nav {
+            display: none;
+            padding: 0.5rem 0.5rem 0;
         }
 
         .profile-action-item {
@@ -458,6 +480,27 @@
 
         /* Responsive */
         @media (max-width: 768px) {
+            .navbar {
+                padding: 0 1rem;
+            }
+
+            .nav-items {
+                gap: 0.5rem;
+            }
+
+            /* Redundant with the brand logo link, or reachable via the
+               profile dropdown's mobile nav — drop them so the header
+               doesn't overflow narrow viewports. */
+            .nav-home-link,
+            .admin-nav-shield,
+            .nav-db-download {
+                display: none;
+            }
+
+            .profile-mobile-nav {
+                display: block;
+            }
+
             .profile-name {
                 display: none;
             }
@@ -1194,14 +1237,14 @@
         <div class="nav-items">
             {% block navbar_items %}
             {% if current_user.is_authenticated %}
-            <a href="{{ url_for('home') }}" class="theme-toggle" title="Home"><i class="fas fa-home"></i></a>
+            <a href="{{ url_for('home') }}" class="theme-toggle nav-home-link" title="Home"><i class="fas fa-home"></i></a>
             {% if current_user.is_admin %}
             <a href="{{ url_for('admin_dashboard') }}" class="theme-toggle admin-nav-shield" id="adminNavShield" title="Admin Panel"
                 style="background: var(--accent-light); color: var(--accent); border-color: var(--accent); position: relative;">
                 <i class="fas fa-shield-alt"></i>
                 <span class="admin-nav-shield__dot" id="adminNavShieldDot" hidden aria-hidden="true"></span>
             </a>
-            <button onclick="downloadDatabase()" class="theme-toggle" title="Download Database Backup"
+            <button onclick="downloadDatabase()" class="theme-toggle nav-db-download" title="Download Database Backup"
                 style="background: var(--accent-light); color: var(--accent); border-color: var(--accent);">
                 <i class="fas fa-database"></i>
             </button>
@@ -1220,6 +1263,15 @@
 
                 <!-- Dropdown Menu -->
                 <div class="profile-dropdown" id="profileDropdown">
+                    <!-- Mobile-only nav: mirrors the icon-buttons hidden on narrow screens -->
+                    <div class="profile-mobile-nav">
+                        <a href="{{ url_for('home') }}" class="profile-action-item"><i class="fas fa-home"></i><span>Home</span></a>
+                        {% if current_user.is_admin %}
+                        <a href="{{ url_for('admin_dashboard') }}" class="profile-action-item"><i class="fas fa-shield-alt"></i><span>Admin Panel</span></a>
+                        <button type="button" class="profile-action-item" onclick="downloadDatabase()"><i class="fas fa-database"></i><span>Download Database Backup</span></button>
+                        {% endif %}
+                        <div class="profile-divider"></div>
+                    </div>
                     <!-- Ongoing Matches -->
                     {% if user_stats.active_matches %}
                     <div class="active-matches-section">
@@ -1590,11 +1642,11 @@
             const html = document.documentElement;
 
             // Load saved theme
-            const savedTheme = localStorage.getItem('theme') || 'light';
+            const savedTheme = window.scxStorage.getItem('theme') || 'light';
 
             function applyTheme(theme) {
                 html.setAttribute('data-theme', theme);
-                localStorage.setItem('theme', theme);
+                window.scxStorage.setItem('theme', theme);
                 const iconClass = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
                 icon.className = iconClass;
                 // Also update dropdown icon if it exists

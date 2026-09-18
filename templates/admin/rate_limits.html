@@ -60,10 +60,9 @@ function showAlert(msg, type) {
 }
 async function saveRateLimits(e) {
     e.preventDefault();
-    const res = await fetch('/admin/rate-limits/update', { method: 'POST', body: new FormData(e.target) });
-    const data = await res.json();
-    if (res.ok) showAlert(data.message, 'success');
-    else showAlert(data.error, 'error');
+    const { ok, data, error } = await adminFetchJson('/admin/rate-limits/update', { method: 'POST', body: new FormData(e.target) });
+    if (ok) showAlert(data.message, 'success');
+    else showAlert(error, 'error');
 }
 </script>
 {% endblock %}

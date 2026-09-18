@@ -5,7 +5,12 @@
     .ap-bulk-bar { display:none; align-items:center; gap:12px; padding:10px 16px; background:var(--surface-alt,#f9fafb); border:1px solid var(--border-light,#e5e7eb); border-radius:10px; margin-bottom:12px; font-size:.85rem; }
     .ap-bulk-bar.visible { display:flex; }
     .ap-bulk-count { font-weight:600; }
-    .ap-checkbox { width:16px; height:16px; cursor:pointer; accent-color:var(--brand-primary,#0f766e); }
+    .ap-checkbox { width:18px; height:18px; cursor:pointer; accent-color:var(--brand-primary,#0f766e); }
+    /* A bare 16-18px native checkbox is a tiny tap target in a dense table —
+       this wraps it in a padded label (clicking anywhere in a label toggles
+       its checkbox natively) and pulls the added space back with a matching
+       negative margin so surrounding cells don't visibly shift. ~44px total. */
+    .ap-checkbox-wrap { display:inline-flex; align-items:center; justify-content:center; padding:13px; margin:-13px; cursor:pointer; }
     .ap-col-check { display:none; }
     .ap-select-mode .ap-col-check { display:table-cell; }
     .ap-select-toggle.active { background:var(--brand-primary,#0f766e)!important; color:#fff!important; border-color:var(--brand-primary,#0f766e)!important; }
@@ -14,6 +19,7 @@
     .ap-modal { background:var(--bg-raised,#fff); border-radius:14px; padding:28px; max-width:420px; width:90%; box-shadow:0 20px 40px rgba(0,0,0,.15); }
     .ap-modal-title { font-size:1.1rem; font-weight:700; margin:0 0 8px; }
     .ap-modal-msg { font-size:.9rem; color:var(--text-secondary); margin-bottom:20px; line-height:1.5; }
+    .ap-modal-msg.error { color:#dc2626; font-weight:600; }
     .ap-modal-actions { display:flex; gap:10px; justify-content:flex-end; }
 </style>
 
@@ -76,7 +82,7 @@
     <table class="a-table a-table-pro">
         <thead>
             <tr>
-                <th class="ap-col-check" style="width:36px;"><input type="checkbox" class="ap-checkbox" id="selectAll"></th>
+                <th class="ap-col-check" style="width:36px;"><label class="ap-checkbox-wrap"><input type="checkbox" class="ap-checkbox" id="selectAll"></label></th>
                 <th>Name</th>
                 <th>Role</th>
                 <th>Bat</th>
@@ -90,7 +96,7 @@
         <tbody>
             {% for p in players %}
             <tr>
-                <td class="ap-col-check"><input type="checkbox" class="ap-checkbox ap-row-check" value="{{ p.id }}"></td>
+                <td class="ap-col-check"><label class="ap-checkbox-wrap"><input type="checkbox" class="ap-checkbox ap-row-check" value="{{ p.id }}"></label></td>
                 <td><strong>{{ p.name }}</strong></td>
                 <td><span class="a-badge a-badge-user">{{ p.role or '—' }}</span></td>
                 <td>{{ p.batting_rating }}</td>
@@ -191,6 +197,7 @@
 
     window.confirmSingleDelete = function(playerId, name) {
         modalTitle.textContent = 'Delete Player';
+        modalMsg.classList.remove('error');
         modalMsg.textContent = 'Delete "' + name + '" from the global pool? This will also remove all user overrides for this player. This action cannot be undone.';
         pendingAction = function(){
             var form = document.createElement('form');
@@ -211,29 +218,49 @@
         checked.forEach(function(cb){ ids.push(parseInt(cb.value)); });
         if (!ids.length) return;
         modalTitle.textContent = 'Delete ' + ids.length + ' Player' + (ids.length > 1 ? 's' : '');
+        modalMsg.classList.remove('error');
         modalMsg.textContent = 'Delete ' + ids.length + ' selected player' + (ids.length > 1 ? 's' : '') + ' from the global pool? All user overrides for these players will also be removed. This action cannot be undone.';
+        // Returns a promise so the confirm button (below) can wait for the real
+        // outcome before closing — this used to fire-and-forget, closing the
+        // dialog immediately regardless of whether the delete actually happened.
         pendingAction = function(){
-            fetch('/admin/player-pool/bulk-delete', {
+            return adminFetchJson('/admin/player-pool/bulk-delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
                 body: JSON.stringify({ ids: ids }),
-            })
-            .then(function(r){ return r.json(); })
-            .then(function(d){
-                if (d.error) { alert(d.error); return; }
+            }).then(function(result){
+                if (!result.ok) throw new Error(result.error || 'Delete failed');
                 location.reload();
             });
         };
         modal.classList.add('open');
     };
 
+    // Async so a bulk delete's request can be awaited: the dialog now stays
+    // open (with the confirm button disabled) until the request resolves,
+    // and shows the real error inline instead of closing as if it succeeded.
     modalBtn.addEventListener('click', function(){
-        if (pendingAction) pendingAction();
-        closeModal();
+        if (!pendingAction) { closeModal(); return; }
+        var action = pendingAction;
+        var result = action();
+        if (!result || typeof result.then !== 'function') { closeModal(); return; }
+        var originalLabel = modalBtn.textContent;
+        modalBtn.disabled = true;
+        modalBtn.textContent = 'Deleting…';
+        result.then(function(){
+            closeModal();
+        }).catch(function(err){
+            modalMsg.classList.add('error');
+            modalMsg.textContent = (err && err.message) || 'Something went wrong — please try again.';
+        }).finally(function(){
+            modalBtn.disabled = false;
+            modalBtn.textContent = originalLabel;
+        });
     });
 
     window.closeModal = function() {
         modal.classList.remove('open');
+        modalMsg.classList.remove('error');
         pendingAction = null;
     };
 
@@ -255,6 +282,12 @@
     var roleSelect = document.getElementById('liveRole');
     var clearBtn = document.getElementById('clearFilters');
     var searchDebounce;
+    // Every fetch (search or load-more) gets the next sequence number; a response
+    // only applies if it's still the latest one issued. A search additionally
+    // aborts whatever search it superseded — see team_squad.html's fetchPool for
+    // the same pattern.
+    var requestSeq = 0;
+    var searchInFlight = null;
 
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     // HTML-attribute escaping (distinct from `esc`, which only handles text-node context).
@@ -264,7 +297,7 @@
 
     function buildAdminRow(p) {
         var tr = document.createElement('tr');
-        tr.innerHTML = '<td class="ap-col-check"><input type="checkbox" class="ap-checkbox ap-row-check" value="' + p.id + '"></td>'
+        tr.innerHTML = '<td class="ap-col-check"><label class="ap-checkbox-wrap"><input type="checkbox" class="ap-checkbox ap-row-check" value="' + p.id + '"></label></td>'
             + '<td><strong>' + esc(p.name) + '</strong></td>'
             + '<td><span class="a-badge a-badge-user">' + esc(p.role || '—') + '</span></td>'
             + '<td>' + p.batting_rating + '</td>'
@@ -291,11 +324,17 @@
     }
 
     function fetchAndReplace() {
+        if (searchInFlight) { searchInFlight.abort(); searchInFlight = null; }
+        var seq = ++requestSeq;
+        var controller = ('AbortController' in window) ? new AbortController() : null;
+        searchInFlight = controller;
         loading = true;
         loadedOffset = 0;
-        fetch(buildApiUrl(0))
+        fetch(buildApiUrl(0), { signal: controller ? controller.signal : undefined })
         .then(function(r){ return r.json(); })
         .then(function(d){
+            if (seq !== requestSeq) return; // a newer search/load-more already won
+            if (searchInFlight === controller) searchInFlight = null;
             var tbody = document.querySelector('.a-table tbody');
             tbody.innerHTML = '';
             if (d.players.length === 0) {
@@ -310,15 +349,27 @@
             if (sentinel) sentinel.style.display = d.has_more ? '' : 'none';
             loading = false;
         })
-        .catch(function(){ loading = false; });
+        .catch(function(err){
+            if (err && err.name === 'AbortError') return; // superseded by a newer search
+            if (seq !== requestSeq) return;
+            if (searchInFlight === controller) searchInFlight = null;
+            loading = false;
+            var tbody = document.querySelector('.a-table tbody');
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-secondary);">'
+                + 'Couldn’t load players. '
+                + '<button type="button" class="a-btn a-btn-sm a-btn-secondary" onclick="fetchAndReplace()">Retry</button></td></tr>';
+        });
     }
+    window.fetchAndReplace = fetchAndReplace;
 
     function loadMore() {
         if (loading || loadedOffset >= totalFiltered) return;
+        var seq = ++requestSeq;
         loading = true;
         fetch(buildApiUrl(loadedOffset))
         .then(function(r){ return r.json(); })
         .then(function(d){
+            if (seq !== requestSeq) return; // a newer search superseded this page
             var tbody = document.querySelector('.a-table tbody');
             d.players.forEach(function(p){ tbody.appendChild(buildAdminRow(p)); });
             loadedOffset += d.players.length;
@@ -326,8 +377,14 @@
             if (!d.has_more && sentinel) sentinel.style.display = 'none';
             loading = false;
         })
-        .catch(function(){ loading = false; });
+        .catch(function(){
+            if (seq !== requestSeq) return;
+            loading = false;
+            if (sentinel) sentinel.innerHTML = '<span>Couldn’t load more. '
+                + '<button type="button" class="a-btn a-btn-sm a-btn-secondary" onclick="loadMore()">Retry</button></span>';
+        });
     }
+    window.loadMore = loadMore;
 
     searchInput.addEventListener('input', function(){
         clearTimeout(searchDebounce);

@@ -181,7 +181,7 @@
 </div>
 {% endif %}
 
-<div id="notesModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9999; align-items:center; justify-content:center;">
+<div id="notesModal" data-focus-dialog data-viewport-dialog data-dialog-close="[onclick='closeNotes()']" aria-label="Admin notes" style="display:none; position:fixed; background:rgba(0,0,0,0.45); z-index:9999; align-items:center; justify-content:center;">
     <div style="background:var(--card-bg); border:1px solid var(--card-border); border-radius: var(--a-r-lg); padding:1.25rem; width:min(480px, 92vw); box-shadow: var(--a-shadow-floating);">
         <h3 style="margin:0 0 .85rem; font-size:1rem;">Admin Notes</h3>
         <input type="hidden" id="notesEventId">
@@ -210,9 +210,8 @@ async function updateEvent(id, status, notes) {
     const fd = new FormData();
     fd.append('status', status);
     if (notes !== undefined) fd.append('admin_notes', notes);
-    const res = await fetch(`/admin/auth-events/${id}/update`, { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) { showAlert(data.error || 'Error', 'error'); return; }
+    const { ok, error } = await adminFetchJson(`/admin/auth-events/${id}/update`, { method: 'POST', body: fd });
+    if (!ok) { showAlert(error || 'Error', 'error'); return; }
 
     const row = document.getElementById(`row-${id}`);
     const badge = document.getElementById(`badge-${id}`);
@@ -258,10 +257,9 @@ function filterType(t) {
 
 async function clearResolved() {
     if (!confirm('Delete all resolved auth event records?')) return;
-    const res = await fetch('/admin/auth-events/clear-resolved', { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) { showAlert(`Deleted ${data.deleted} record(s)`, 'success'); setTimeout(() => location.reload(), 1200); }
-    else showAlert(data.error, 'error');
+    const { ok, data, error } = await adminFetchJson('/admin/auth-events/clear-resolved', { method: 'POST' });
+    if (ok) { showAlert(`Deleted ${data.deleted} record(s)`, 'success'); setTimeout(() => location.reload(), 1200); }
+    else showAlert(error, 'error');
 }
 </script>
 {% endblock %}

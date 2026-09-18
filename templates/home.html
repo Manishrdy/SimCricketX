@@ -897,8 +897,8 @@
 {% endif %}
 
 {% if changelog_entries %}
-<div id="changelog-backdrop" class="changelog-backdrop" aria-hidden="true">
-    <div class="changelog-modal" role="dialog" aria-modal="true" aria-labelledby="changelog-title">
+<div id="changelog-backdrop" data-focus-dialog data-viewport-dialog data-dialog-close="#changelog-icon-close-btn" role="dialog" aria-modal="true" aria-labelledby="changelog-title" class="changelog-backdrop" aria-hidden="true">
+    <div class="changelog-modal">
         <div class="changelog-top">
             <div>
                 <div class="changelog-kicker">
@@ -933,9 +933,9 @@
     function clearTeamCreateDraftIfNeeded() {
         if (!shouldClearTeamDraft) return;
         try {
-            localStorage.removeItem('team_create_draft_v1');
-            localStorage.removeItem('team_create_draft_v2');
-            localStorage.removeItem('team_create_draft'); // Legacy key cleanup.
+            window.scxStorage.removeItem('team_create_draft_v1');
+            window.scxStorage.removeItem('team_create_draft_v2');
+            window.scxStorage.removeItem('team_create_draft'); // Legacy key cleanup.
         } catch (_) { /* Storage may be unavailable. */ }
 
         const url = new URL(window.location.href);
@@ -1018,12 +1018,12 @@
         {% if changelog_entries %}
         const CURRENT_VERSION = "{{ app_version }}";
         const SEEN_KEY = "scx_seen_version";
-        if (localStorage.getItem(SEEN_KEY) !== CURRENT_VERSION) {
+        if (window.scxStorage.getItem(SEEN_KEY) !== CURRENT_VERSION) {
             const backdrop = document.getElementById('changelog-backdrop');
             const closeBtn = document.getElementById('changelog-close-btn');
             const iconCloseBtn = document.getElementById('changelog-icon-close-btn');
             const closeChangelog = () => {
-                localStorage.setItem(SEEN_KEY, CURRENT_VERSION);
+                window.scxStorage.setItem(SEEN_KEY, CURRENT_VERSION);
                 backdrop.style.display = 'none';
                 backdrop.setAttribute('aria-hidden', 'true');
             };

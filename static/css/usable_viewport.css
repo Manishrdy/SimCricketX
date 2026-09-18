@@ -1,0 +1,32 @@
+:root {
+    --scx-vv-height: 100vh;
+    --scx-vv-width: 100vw;
+    --scx-vv-top: 0px;
+    --scx-vv-left: 0px;
+    --scx-vv-bottom: 0px;
+    --scx-vv-right: 0px;
+}
+@supports (height: 100dvh) {
+    :root { --scx-vv-height: 100dvh; }
+}
+/* Opt in only overlay containers, not the support panel or sidebar itself. */
+[data-focus-dialog][data-viewport-dialog] {
+    top: var(--scx-vv-top);
+    left: var(--scx-vv-left);
+    right: auto;
+    bottom: auto;
+    width: var(--scx-vv-width);
+    height: var(--scx-vv-height);
+    box-sizing: border-box;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+             max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+[data-focus-dialog][data-viewport-dialog] > div {
+    box-sizing: border-box;
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}

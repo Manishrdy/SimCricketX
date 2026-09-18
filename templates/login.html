@@ -192,9 +192,10 @@
                 {% endif %}
 
                 <button type="submit" class="auth-btn" id="submitBtn">
-                    <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+                    <i class="fas fa-sign-in-alt" id="btnIcon" aria-hidden="true"></i>
                     <span id="btnText">Sign In</span>
                 </button>
+                <button type="button" class="auth-cancel-link" id="cancelCheckBtn">Cancel</button>
             </form>
 
             <div class="auth-link-row" style="margin-top:14px;">
@@ -264,12 +265,22 @@
     /* ── Proof-of-Work challenge ─────────────────────────────── */
     var loginForm            = document.getElementById('loginForm');
     var submitBtn            = document.getElementById('submitBtn');
+    var btnIcon               = document.getElementById('btnIcon');
     var btnText              = document.getElementById('btnText');
+    var cancelBtn             = document.getElementById('cancelCheckBtn');
     var challengeIdInput     = document.getElementById('challenge_id');
     var challengeCounterInput= document.getElementById('challenge_counter');
     var challengeDigestInput = document.getElementById('challenge_digest');
-    var powChallenge         = null;
+    var powChallenge          = null;
+    var powChallengeFetchedAt = 0;
     var submittingWithPow    = false;
+    var solveCancelled        = false;
+    // Headroom under the server's TTL (default 180s) for solve time + network
+    // latency. A challenge inside this margin of expiring is treated as unusable
+    // and silently refetched — otherwise a slow typist, a mobile user switching
+    // apps to fetch a password, or a changed IP gets a valid submission rejected
+    // as "expired"/"source mismatch" with no warning until after they've waited.
+    var CHALLENGE_SAFETY_MARGIN_MS = 20000;
 
     async function sha256Hex(input) {
         var data       = new TextEncoder().encode(input);
@@ -282,6 +293,14 @@
         var res = await fetch('/auth/challenge', { method: 'GET', cache: 'no-store' });
         if (!res.ok) throw new Error('Could not start security check');
         powChallenge = await res.json();
+        powChallengeFetchedAt = Date.now();
+    }
+
+    function challengeIsFresh() {
+        if (!powChallenge) return false;
+        if (powChallenge.enabled === false) return true;
+        var ttlMs = Math.max(30, Number(powChallenge.ttl_seconds) || 180) * 1000;
+        return (Date.now() - powChallengeFetchedAt) < (ttlMs - CHALLENGE_SAFETY_MARGIN_MS);
     }
 
     async function solveChallenge(challenge) {
@@ -290,43 +309,76 @@
         }
         var prefix        = '0'.repeat(challenge.difficulty || 3);
         var maxIterations = Math.max(10000, Number(challenge.max_iterations || 1500000));
+        var startedAt      = Date.now();
         for (var counter = 0; counter < maxIterations; counter++) {
+            if (solveCancelled) throw new DOMException('Cancelled', 'AbortError');
             var digest = await sha256Hex(challenge.nonce + ':' + counter);
             if (digest.startsWith(prefix)) {
                 return { counter: counter, digest: digest };
             }
             if (counter % 250 === 0) {
+                var elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+                btnText.textContent = elapsedSec > 0
+                    ? 'Running Security Check… (' + elapsedSec + 's)'
+                    : 'Running Security Check…';
                 await new Promise(function (resolve) { setTimeout(resolve, 0); });
             }
         }
         throw new Error('Security check timed out');
     }
 
+    function beginCheckUi() {
+        submitBtn.disabled = true;
+        btnIcon.className  = 'fas fa-shield-halved fa-spin';
+        btnText.textContent = 'Running Security Check…';
+        document.body.style.pointerEvents = 'none';
+        cancelBtn.style.pointerEvents = 'auto'; // stay clickable despite the line above
+        cancelBtn.classList.add('visible');
+    }
+
+    function endCheckUi() {
+        submitBtn.disabled = false;
+        btnIcon.className  = 'fas fa-sign-in-alt';
+        btnText.textContent = 'Sign In';
+        document.body.style.pointerEvents = '';
+        cancelBtn.classList.remove('visible');
+    }
+
+    cancelBtn.addEventListener('click', function () {
+        solveCancelled = true;
+    });
+
     loginForm.addEventListener('submit', async function (e) {
         if (submittingWithPow) return;
         e.preventDefault();
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-shield-halved fa-spin"></i> Running Security Check…';
-        document.body.style.pointerEvents = 'none';
+        solveCancelled = false;
+        beginCheckUi();
 
         try {
-            if (!powChallenge) await fetchChallenge();
+            if (!challengeIsFresh()) await fetchChallenge();
             if (powChallenge.enabled === false) {
                 submittingWithPow = true;
                 loginForm.submit();
                 return;
             }
             var solved = await solveChallenge(powChallenge);
+            // The grind itself can take a while at elevated difficulty — if the
+            // challenge would now land outside the server's TTL, solve a fresh
+            // one instead of submitting a solution that's about to be rejected.
+            if (!challengeIsFresh()) {
+                await fetchChallenge();
+                solved = await solveChallenge(powChallenge);
+            }
             challengeIdInput.value      = powChallenge.challenge_id;
             challengeCounterInput.value = String(solved.counter);
             challengeDigestInput.value  = solved.digest;
             submittingWithPow = true;
             loginForm.submit();
         } catch (err) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> <span>Sign In</span>';
-            document.body.style.pointerEvents = '';
-            alert(err.message || 'Security check failed');
+            endCheckUi();
+            if (!err || err.name !== 'AbortError') {
+                alert((err && err.message) || 'Security check failed');
+            }
             try { await fetchChallenge(); } catch (_) {}
         }
     });

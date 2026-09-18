@@ -8,7 +8,8 @@
 <div class="admin-layout">
 
     {# ── Sidebar ───────────────────────────────────────────────────── #}
-    <aside class="admin-sidebar">
+    <aside class="admin-sidebar" id="admin-sidebar" aria-label="Admin navigation">
+        <button type="button" class="admin-menu-toggle" onclick="toggleAdminNav(false)">Close menu</button>
 
         {# Brand #}
         <div class="admin-sidebar-header">
@@ -210,7 +211,7 @@
 
     {# ── Main content ─────────────────────────────────────────────── #}
     <main class="admin-content">
-        <button type="button" class="admin-menu-toggle" onclick="toggleAdminNav()" aria-label="Toggle menu">
+        <button type="button" class="admin-menu-toggle" onclick="toggleAdminNav()" aria-label="Toggle menu" aria-controls="admin-sidebar" aria-expanded="false">
             <i class="fas fa-bars"></i> Menu
         </button>
         {% block admin_content %}{% endblock %}
@@ -221,13 +222,76 @@
 
 {% block extra_js %}
 <script>
+/* ── Shared admin fetch/error handling ──────────────────────────────
+ * Every admin action page used to hand-roll its own
+ *   const res = await fetch(...); const data = await res.json(); if (res.ok) ...
+ * with no try/catch at all. A network failure (offline, DNS) or a non-JSON
+ * body (most commonly an HTML login page returned after the session expired
+ * mid-visit, sometimes even with a 200 status) threw inside an unhandled
+ * async function and produced total silence: no alert, no console message
+ * a normal admin would notice, nothing. This wraps that pattern once so
+ * every page gets the same behavior instead of the same gap repeated N times.
+ * Always resolves (never throws) with { ok, status, data, error, expired }.
+ */
+async function adminFetchJson(url, options) {
+    let res;
+    try {
+        res = await fetch(url, options);
+    } catch (err) {
+        return { ok: false, status: 0, data: null, expired: false,
+                 error: 'Network error — check your connection and try again.' };
+    }
+    if (res.status === 401 || res.status === 403) {
+        return { ok: false, status: res.status, data: null, expired: true,
+                 error: 'Your session has expired. Please sign in again.' };
+    }
+    let data = null;
+    try {
+        data = await res.json();
+    } catch (err) {
+        // Non-JSON body — almost always an HTML page (login form, proxy error
+        // page) instead of the JSON the caller expected.
+        return {
+            ok: false, status: res.status, data: null, expired: res.ok,
+            error: res.ok
+                ? 'Your session may have expired — please refresh and sign in again.'
+                : ('Request failed (' + res.status + ').'),
+        };
+    }
+    return {
+        ok: res.ok, status: res.status, data: data, expired: false,
+        error: res.ok ? null : ((data && (data.error || data.message)) || ('Request failed (' + res.status + ').')),
+    };
+}
+
+/* Disables `btn` for the duration of `fn()` and always restores it
+ * afterward — including on a thrown/rejected error — so a failed request
+ * never leaves a button stuck in a disabled "pending" state. */
+async function adminWithButton(btn, fn) {
+    if (!btn) return fn();
+    const prevDisabled = btn.disabled;
+    btn.disabled = true;
+    try {
+        return await fn();
+    } finally {
+        btn.disabled = prevDisabled;
+    }
+}
+
 /* ── Sidebar toggle (mobile) ──────────────────────────────────────── */
 function toggleAdminNav(force) {
     const layout = document.querySelector('.admin-layout');
     if (!layout) return;
-    if (force === false) { layout.classList.remove('nav-open'); return; }
-    layout.classList.toggle('nav-open');
+    const sidebar = document.getElementById('admin-sidebar');
+    const button = document.querySelector('[aria-controls="admin-sidebar"]');
+    const open = force === undefined ? !layout.classList.contains('nav-open') : force;
+    layout.classList.toggle('nav-open', open);
+    button.setAttribute('aria-expanded', String(open));
+    if (open) window.scxDialogs.open(sidebar, { close: () => toggleAdminNav(false) });
+    else window.scxDialogs.close(sidebar);
 }
+
+window.matchMedia('(max-width: 900px)').addEventListener('change', () => toggleAdminNav(false));
 
 /* ── Preserve sidebar scroll position across navigation ──────────── */
 (function setupSidebarScrollMemory() {

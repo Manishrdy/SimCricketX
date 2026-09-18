@@ -85,18 +85,17 @@ function showAlert(msg, type) {
 
 async function saveBanner(e) {
     e.preventDefault();
-    const res = await fetch('/admin/banner/update', {
+    const { ok, data, error } = await adminFetchJson('/admin/banner/update', {
         method: 'POST',
         body: new FormData(e.target),
     });
-    const data = await res.json();
-    if (res.ok) {
+    if (ok) {
         if (typeof data.version !== 'undefined') {
             document.getElementById('banner-version').textContent = String(data.version);
         }
         showAlert(data.message || 'Banner updated', 'success');
     } else {
-        showAlert(data.error || 'Failed to update banner', 'error');
+        showAlert(error || 'Failed to update banner', 'error');
     }
 }
 </script>

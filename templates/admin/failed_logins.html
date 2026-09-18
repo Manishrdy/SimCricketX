@@ -92,20 +92,18 @@ function showAlert(msg, type) {
 }
 async function clearAll() {
     if (!confirm('Clear all failed login records?')) return;
-    const res = await fetch('/admin/failed-logins/clear', { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
-    else showAlert(data.error, 'error');
+    const { ok, data, error } = await adminFetchJson('/admin/failed-logins/clear', { method: 'POST' });
+    if (ok) { showAlert(data.message, 'success'); setTimeout(() => location.reload(), 1500); }
+    else showAlert(error, 'error');
 }
 async function blockIP(ip) {
     if (!confirm(`Block IP ${ip}?`)) return;
     const fd = new FormData();
     fd.append('ip_address', ip);
     fd.append('reason', 'Blocked from failed login tracker');
-    const res = await fetch('/admin/ip-blocklist/add', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (res.ok) showAlert(data.message, 'success');
-    else showAlert(data.error, 'error');
+    const { ok, data, error } = await adminFetchJson('/admin/ip-blocklist/add', { method: 'POST', body: fd });
+    if (ok) showAlert(data.message, 'success');
+    else showAlert(error, 'error');
 }
 </script>
 {% endblock %}

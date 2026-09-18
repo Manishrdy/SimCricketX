@@ -73,21 +73,21 @@
     <div class="h2h-sel-card">
         <div class="h2h-sel-row">
             <div class="fg">
-                <label>Team 1</label>
+                <label for="h2h-team1">Team 1</label>
                 <select id="h2h-team1">
                     <option value="">Select team…</option>
                     {% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
                 </select>
             </div>
             <div class="fg">
-                <label>Team 2</label>
+                <label for="h2h-team2">Team 2</label>
                 <select id="h2h-team2">
                     <option value="">Select team…</option>
                     {% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
                 </select>
             </div>
             <div class="fg">
-                <label>Format</label>
+                <label for="h2h-format">Format</label>
                 <select id="h2h-format">
                     <option value="T20" selected>T20</option>
                     <option value="ListA">List A</option>

@@ -19,10 +19,11 @@
     }
     .scenario-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
         gap: 1.5rem;
         margin: 1.5rem 0 3rem;
     }
+    .scenario-grid > * { min-width: 0; }
     .scenario-card {
         border: 1px solid var(--border-color, #2a2a2a);
         border-radius: 16px;
@@ -31,10 +32,13 @@
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
+        min-width: 0;
+        max-width: 100%;
     }
     .scenario-card h2 {
         font-size: 1.35rem;
         margin: 0;
+        overflow-wrap: anywhere;
     }
     .scenario-sub {
         font-size: 0.85rem;
@@ -84,6 +88,11 @@
         transition: opacity 0.15s ease;
     }
     .scenario-play-btn:hover { opacity: 0.88; }
+    .scenario-story, .scenario-sub, .scenario-tagline { overflow-wrap: anywhere; }
+    @media (max-width: 480px) {
+        .scenario-card { padding: 1.1rem; }
+        .scenario-hero h1 { font-size: 1.55rem; }
+    }
     .scenario-empty {
         text-align: center;
         color: var(--text-secondary, #888);

@@ -440,6 +440,24 @@ body {
 [data-theme="dark"] .auth-btn       { box-shadow: 0 4px 16px rgba(63,182,168,0.26); }
 [data-theme="dark"] .auth-btn:hover { box-shadow: 0 8px 24px rgba(63,182,168,0.36); }
 
+/* Cancel link shown only while the PoW security check is running */
+.auth-cancel-link {
+    display: none;
+    width: 100%;
+    text-align: center;
+    margin-top: 0.6rem;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.auth-cancel-link:hover { color: var(--brand); }
+.auth-cancel-link.visible { display: block; }
+
 /* Divider */
 .auth-divider {
     height: 1px;

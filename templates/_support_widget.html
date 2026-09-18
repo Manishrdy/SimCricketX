@@ -17,7 +17,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/support_widget.css') }}">
 
 <button type="button"
-        id="scx-support-trigger"
+        id="scx-support-trigger" aria-controls="scx-support-panel" aria-expanded="false"
         class="scx-support-trigger"
         aria-label="Message admins"
         title="Message admins">
@@ -28,7 +28,7 @@
     <span id="scx-support-unread" class="scx-support-trigger__badge" hidden>0</span>
 </button>
 
-<section id="scx-support-panel"
+<section id="scx-support-panel" data-focus-dialog data-dialog-open-class="is-open" data-dialog-close="#scx-support-close"
          class="scx-support-panel"
          aria-hidden="true"
          aria-labelledby="scx-support-title"
