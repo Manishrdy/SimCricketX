@@ -84,7 +84,8 @@
             const data = await res.json();
             renderFiles(data);
         } catch (error) {
-            tbody.innerHTML = `<tr><td colspan="4"><div class="a-empty"><i class="fas fa-exclamation-circle"></i><p>${error.message}</p></div></td></tr>`;
+            tbody.innerHTML = '<tr><td colspan="4"><div class="a-empty"><i class="fas fa-exclamation-circle"></i><p></p></div></td></tr>';
+            tbody.querySelector('.a-empty p').textContent = error.message;
         }
     }
 
@@ -95,51 +96,119 @@
 
         currentPath = data.current_path;
 
+        // Filenames and paths come straight from the server's filesystem listing —
+        // never trust them as HTML. Everything below is built with createElement /
+        // textContent (or dataset for click targets) so a crafted filename like
+        // `<img src=x onerror=...>` can only ever render as inert text.
+        breadcrumb.innerHTML = '';
         if (!data.current_path) {
-            breadcrumb.innerHTML = '<span style="font-weight:bold;">Root</span>';
+            const root = document.createElement('span');
+            root.style.fontWeight = 'bold';
+            root.textContent = 'Root';
+            breadcrumb.appendChild(root);
             upBtn.disabled = true;
             upBtn.style.opacity = '0.5';
         } else {
+            const rootLink = document.createElement('span');
+            rootLink.className = 'breadcrumb-link';
+            rootLink.style.cursor = 'pointer';
+            rootLink.style.color = 'var(--accent)';
+            rootLink.textContent = 'Root';
+            rootLink.addEventListener('click', () => loadpath(''));
+            breadcrumb.appendChild(rootLink);
+
             const parts = data.current_path.split('/');
-            let html = '<span class="breadcrumb-link" onclick="loadpath(\'\')" style="cursor:pointer; color:var(--accent);">Root</span>';
             let builtPath = '';
             parts.forEach((part, index) => {
                 builtPath += (builtPath ? '/' : '') + part;
+                const sep = document.createElement('i');
+                sep.className = 'fas fa-chevron-right';
+                sep.style.cssText = 'font-size:.68em; opacity:.5; margin:0 .28rem;';
+                breadcrumb.appendChild(document.createTextNode(' '));
+                breadcrumb.appendChild(sep);
+                breadcrumb.appendChild(document.createTextNode(' '));
+
                 if (index === parts.length - 1) {
-                    html += ` <i class="fas fa-chevron-right" style="font-size:.68em; opacity:.5; margin:0 .28rem;"></i> <span>${part}</span>`;
+                    const span = document.createElement('span');
+                    span.textContent = part;
+                    breadcrumb.appendChild(span);
                 } else {
-                    html += ` <i class="fas fa-chevron-right" style="font-size:.68em; opacity:.5; margin:0 .28rem;"></i> <span class="breadcrumb-link" onclick="loadpath('${builtPath}')" style="cursor:pointer; color:var(--accent);">${part}</span>`;
+                    const link = document.createElement('span');
+                    link.className = 'breadcrumb-link';
+                    link.style.cursor = 'pointer';
+                    link.style.color = 'var(--accent)';
+                    link.textContent = part;
+                    const targetPath = builtPath;
+                    link.addEventListener('click', () => loadpath(targetPath));
+                    breadcrumb.appendChild(link);
                 }
             });
-            breadcrumb.innerHTML = html;
             upBtn.disabled = false;
             upBtn.style.opacity = '1';
             upBtn.onclick = () => loadpath(data.parent_path);
         }
 
+        tbody.innerHTML = '';
         if (data.items.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4"><div class="a-empty"><i class="fas fa-folder-open"></i><p>This folder is empty</p></div></td></tr>';
             return;
         }
 
-        tbody.innerHTML = data.items.map(item => {
+        data.items.forEach(item => {
             const iconClass = item.is_dir ? 'fa-folder' : getFileIcon(item.name);
             const iconColor = item.is_dir ? '#fbbf24' : 'var(--fg-secondary)';
-            const nameStyle = item.is_dir ? 'font-weight:600; cursor:pointer; color:var(--fg);' : 'color:var(--fg);';
-            const clickAction = item.is_dir ? `onclick="loadpath('${item.path}')"` : '';
 
-            return `
-                <tr ${item.is_dir ? 'style="cursor:pointer;" class="folder-row"' : ''} ${clickAction}>
-                    <td style="text-align:center;"><i class="fas ${iconClass}" style="color:${iconColor}; font-size:1rem;"></i></td>
-                    <td><div style="${nameStyle}">${item.name}</div></td>
-                    <td class="a-cell-mono a-cell-dim" data-sort="${item.size}">${formatSize(item.size)}</td>
-                    <td class="a-cell-dim" style="display:flex; justify-content:space-between; align-items:center;">
-                        <span>${item.modified}</span>
-                        ${!item.is_dir ? `<button onclick="deleteFile('${item.path}', '${item.name}', event)" class="a-btn a-btn-ghost a-btn-sm" style="color:#dc2626; padding:.1rem .4rem;" title="Delete File"><i class="fas fa-trash-alt"></i></button>` : ''}
-                    </td>
-                </tr>
-            `;
-        }).join('');
+            const tr = document.createElement('tr');
+            if (item.is_dir) {
+                tr.style.cursor = 'pointer';
+                tr.className = 'folder-row';
+                tr.addEventListener('click', () => loadpath(item.path));
+            }
+
+            const iconTd = document.createElement('td');
+            iconTd.style.textAlign = 'center';
+            const icon = document.createElement('i');
+            icon.className = `fas ${iconClass}`;
+            icon.style.color = iconColor;
+            icon.style.fontSize = '1rem';
+            iconTd.appendChild(icon);
+
+            const nameTd = document.createElement('td');
+            const nameDiv = document.createElement('div');
+            nameDiv.style.cssText = item.is_dir
+                ? 'font-weight:600; cursor:pointer; color:var(--fg);'
+                : 'color:var(--fg);';
+            nameDiv.textContent = item.name;
+            nameTd.appendChild(nameDiv);
+
+            const sizeTd = document.createElement('td');
+            sizeTd.className = 'a-cell-mono a-cell-dim';
+            sizeTd.dataset.sort = item.size;
+            sizeTd.textContent = formatSize(item.size);
+
+            const modTd = document.createElement('td');
+            modTd.className = 'a-cell-dim';
+            modTd.style.cssText = 'display:flex; justify-content:space-between; align-items:center;';
+            const modSpan = document.createElement('span');
+            modSpan.textContent = item.modified;
+            modTd.appendChild(modSpan);
+
+            if (!item.is_dir) {
+                const delBtn = document.createElement('button');
+                delBtn.className = 'a-btn a-btn-ghost a-btn-sm';
+                delBtn.style.cssText = 'color:#dc2626; padding:.1rem .4rem;';
+                delBtn.title = 'Delete File';
+                delBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+                delBtn.addEventListener('click', (event) => deleteFile(item.path, item.name, event));
+                modTd.appendChild(delBtn);
+            }
+
+            tr.appendChild(iconTd);
+            tr.appendChild(nameTd);
+            tr.appendChild(sizeTd);
+            tr.appendChild(modTd);
+            tbody.appendChild(tr);
+        });
     }
 
     async function deleteFile(path, name, event) {

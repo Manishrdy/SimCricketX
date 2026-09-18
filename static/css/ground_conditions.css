@@ -134,6 +134,7 @@
 
 .gc-mode-card:hover .gc-mode-glow { opacity: 0.06; }
 .gc-mode-card.active .gc-mode-glow { opacity: 0.12; }
+.gc-mode-card:focus-visible { outline: 2px solid var(--mode-color, #61afef); outline-offset: 2px; }
 
 .gc-mode-card::before {
     content: '';
@@ -394,6 +395,11 @@
     cursor: pointer;
     position: relative;
     user-select: none;
+}
+
+.gc-pitch-summary:focus-visible {
+    outline: 2px solid var(--accent, #61afef);
+    outline-offset: -2px;
 }
 
 .gc-pitch-top {

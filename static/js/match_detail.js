@@ -2339,7 +2339,7 @@ function soPopulatePlayerCards(battingPlayers, bowlingPlayers) {
             <span class="so-pc-role">${escapeHtml(p.role || '')}</span>
             <span class="so-pc-rating">${p.batting_rating}</span>
         `;
-        card.onclick = () => soToggleBatsman(p.name, card);
+        makeSoCardActivatable(card, 'checkbox', () => soToggleBatsman(p.name, card));
         batList.appendChild(card);
     });
 
@@ -2351,8 +2351,33 @@ function soPopulatePlayerCards(battingPlayers, bowlingPlayers) {
             <span class="so-pc-role">${escapeHtml(p.role || '')}</span>
             <span class="so-pc-rating">${p.bowling_rating}</span>
         `;
-        card.onclick = () => soToggleBowler(p.name, card);
+        makeSoCardActivatable(card, 'radio', () => soToggleBowler(p.name, card));
         bowlList.appendChild(card);
+    });
+}
+
+// Super-over player cards are plain divs (built dynamically per squad), so they
+// need explicit checkbox/radio semantics and Enter/Space handling — a mouse-only
+// onclick leaves keyboard and screen-reader users unable to pick batsmen/bowler.
+// Batsmen (up to 3) use role="checkbox"; the single bowler pick uses role="radio".
+function makeSoCardActivatable(card, role, onActivate) {
+    card.setAttribute('role', role);
+    card.setAttribute('aria-checked', 'false');
+    card.setAttribute('tabindex', '0');
+    card.onclick = () => {
+        onActivate();
+        // Re-sync every card in this list, not just the one clicked — a radio
+        // pick (bowler) silently deselects a sibling card via its own class,
+        // and that sibling's aria-checked needs to follow it back to false.
+        card.parentElement.querySelectorAll('.so-player-card').forEach(c => {
+            c.setAttribute('aria-checked', String(c.classList.contains('selected')));
+        });
+    };
+    card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+            e.preventDefault();
+            card.click();
+        }
     });
 }
 
