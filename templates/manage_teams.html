@@ -851,8 +851,11 @@
 
         function clearTeamCreateDraftIfNeeded() {
             if (!shouldClearTeamDraft) return;
-            localStorage.removeItem('team_create_draft_v2');
-            localStorage.removeItem('team_create_draft'); // Legacy key cleanup.
+            try {
+                localStorage.removeItem('team_create_draft_v1');
+                localStorage.removeItem('team_create_draft_v2');
+                localStorage.removeItem('team_create_draft'); // Legacy key cleanup.
+            } catch (_) { /* Storage may be unavailable. */ }
 
             const url = new URL(window.location.href);
             if (!url.searchParams.has('clear_team_draft')) return;

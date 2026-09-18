@@ -1306,55 +1306,182 @@ function ackCard(cardId) {
     }).catch(() => { /* best effort — a re-offer on resume is harmless */ });
 }
 
-// Returns true when a card was owed and has been handed to the normal result
-// path, which then owns whether the loop resumes.
-async function replayPendingCard() {
-    if (matchOver) return false;
-    try {
-        const res = await fetch(`${window.location.pathname}/live-state`);
-        const state = await res.json();
-        const card = state && state.pending_card;
-        if (card && card.payload) {
-            await _processBallResult(card.payload);
-            return true;
-        }
-    } catch (e) {
-        /* fall through and resume normally */
-    }
-    return false;
-}
-
-// ---- WebSocket Setup ----
-// Connects once; falls back to HTTP fetch transparently if socket is
-// unavailable or disconnected. Zero changes to simulation logic.
+// Each request consumes a server-issued token. Both transports replay that
+// token's result, so a lost response cannot turn a retry into a second ball.
+let deliveryToken = null;
+let pendingDelivery = null;
+let deliveryWatchdog = null;
+let recoveryTimer = null;
+let recoveryAttempts = 0;
+let recoveryRunning = false;
+let recoveryEpoch = 0;
+let recoveryBlocked = false;
 let _wsSocket = null;
 let _wsReady = false;
-let _wsEverConnected = false;
+
+function showDeliveryStatus(text, reload = false) {
+    let box = document.getElementById('match-delivery-status');
+    if (!text && !box) return;
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'match-delivery-status';
+        box.setAttribute('role', 'status');
+        box.style.cssText = 'position:fixed;bottom:16px;left:16px;right:16px;z-index:10000;padding:12px;background:#182336;color:white;border:1px solid #8393a9;border-radius:8px;display:flex;flex-wrap:wrap;gap:12px;align-items:center';
+        const label = document.createElement('span');
+        label.className = 'delivery-status-text';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.style.cssText = 'min-height:44px;padding:8px 16px';
+        box.append(label, button);
+        document.body.appendChild(box);
+    }
+    box.hidden = !text;
+    box.style.display = text ? 'flex' : 'none';
+    box.querySelector('span').textContent = text;
+    const button = box.querySelector('button');
+    button.textContent = reload ? 'Reload to resume' : 'Reconnect / resume';
+    button.onclick = reload ? () => window.location.reload() : () => {
+        if (recoveryRunning) return;
+        recoveryAttempts = 0;
+        clearTimeout(recoveryTimer);
+        recoveryTimer = null;
+        recoverDelivery();
+    };
+}
+
+async function fetchDeliveryState() {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+        const query = pendingDelivery ? '&request_id=' + encodeURIComponent(pendingDelivery) : '';
+        const response = await fetch(`${window.location.pathname}/live-state?delivery=1${query}`, {
+            signal: controller.signal, cache: 'no-store'
+        });
+        if (response.status === 409) {
+            const error = new Error('Match state changed. Reload to resume safely.');
+            error.reloadRequired = true;
+            throw error;
+        }
+        if (!response.ok) throw new Error('Connection unavailable');
+        return await response.json();
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+function queueDeliveryRecovery() {
+    if (matchOver || recoveryBlocked) return;
+    clearTimeout(deliveryWatchdog);
+    if (simTimerId) clearTimeout(simTimerId);
+    simTimerId = null;
+    if (recoveryRunning || recoveryTimer) return;
+    showDeliveryStatus('Connection interrupted. Checking the saved delivery…');
+    if (recoveryAttempts >= 4) {
+        showDeliveryStatus('Match paused. Check your connection, then tap Reconnect / resume.');
+        return;
+    }
+    recoveryTimer = setTimeout(() => {
+        recoveryTimer = null;
+        recoverDelivery();
+    }, Math.min(8000, 1000 * (2 ** recoveryAttempts)));
+}
+
+async function recoverDelivery() {
+    if (recoveryRunning || recoveryBlocked || matchOver) return;
+    recoveryRunning = true;
+    const epoch = recoveryEpoch;
+    recoveryAttempts++;
+    try {
+        const state = await fetchDeliveryState();
+        if (epoch !== recoveryEpoch) return; // a late socket response already won
+        if (state.status === 'delivery_recovery' && state.delivery) {
+            recoveryRunning = false;
+            await acceptDelivery(state.delivery);
+            return;
+        }
+        if (state.status === 'delivery_ready') {
+            deliveryToken = state.delivery_token;
+            pendingDelivery = pendingDelivery || deliveryToken;
+            recoveryRunning = false;
+            sendDelivery(true); // HTTP works even if the socket never reconnects
+            return;
+        }
+        if (state.status === 'completed') {
+            window.location.href = `/match/${matchData.match_id}/scoreboard`;
+            return;
+        }
+        const error = new Error('Live match state is unavailable. Reload to resume.');
+        error.reloadRequired = true;
+        throw error;
+    } catch (error) {
+        if (epoch !== recoveryEpoch) return;
+        recoveryRunning = false;
+        if (error.reloadRequired) {
+            recoveryBlocked = true;
+            showDeliveryStatus(error.message, true);
+        } else queueDeliveryRecovery();
+    } finally {
+        if (epoch === recoveryEpoch) recoveryRunning = false;
+    }
+}
+
+async function acceptDelivery(data) {
+    // Ignore duplicates and responses to a request already consumed by recovery.
+    if (!pendingDelivery || data.delivery_request !== pendingDelivery) return;
+    clearTimeout(deliveryWatchdog);
+    clearTimeout(recoveryTimer);
+    recoveryTimer = null;
+    recoveryEpoch++;
+    recoveryRunning = false;
+    deliveryToken = data.delivery_token;
+    pendingDelivery = null;
+    recoveryAttempts = 0;
+    showDeliveryStatus('');
+    await _processBallResult(data);
+}
+
+function sendDelivery(forceHttp = false) {
+    if (!pendingDelivery || recoveryBlocked) return;
+    const token = pendingDelivery;
+    ballInFlight = true;
+    clearTimeout(deliveryWatchdog);
+    deliveryWatchdog = setTimeout(queueDeliveryRecovery, 15000);
+    if (!forceHttp && _wsReady && _wsSocket) {
+        _wsSocket.emit('next_ball', { match_id: matchData.match_id, delivery_token: token });
+        return;
+    }
+    fetch(window.location.pathname + '/next-ball', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delivery_token: token })
+    }).then(async response => {
+        const data = await response.json();
+        if (token !== pendingDelivery) return;
+        if (!response.ok || !data.delivery_request) {
+            queueDeliveryRecovery();
+            return;
+        }
+        await acceptDelivery(data);
+    }).catch(() => { if (token === pendingDelivery) queueDeliveryRecovery(); });
+}
 
 (function _initWebSocket() {
-    if (typeof io === 'undefined') return; // socket.io CDN not loaded
+    if (typeof io === 'undefined') return;
     try {
         _wsSocket = io({ transports: ['websocket', 'polling'] });
-        _wsSocket.on('connect', async () => {
-            const reconnected = _wsEverConnected;
-            _wsReady = true;
-            _wsEverConnected = true;
-            if (!reconnected) return;
-            // The drop may have swallowed a response. If it was a card, draw
-            // it now — it will never be offered again otherwise. If it was an
-            // ordinary ball, the loop is sitting waiting for a reply that is
-            // never coming, so restart it.
-            const replayed = await replayPendingCard();
-            if (!replayed && ballInFlight && !matchOver && !scorecardIsVisible()) {
-                ballInFlight = false;
-                scheduleNextBall(delay);
-            }
+        _wsSocket.on('connect', () => { _wsReady = true; });
+        _wsSocket.on('disconnect', () => {
+            _wsReady = false;
+            if (pendingDelivery) queueDeliveryRecovery();
         });
-        _wsSocket.on('disconnect',    () => { _wsReady = false; });
-        _wsSocket.on('connect_error', () => { _wsReady = false; });
-        _wsSocket.on('ball_result',   (data) => _processBallResult(data));
-        _wsSocket.on('ws_error',      (data) => {
-            appendLog(`[system_error] ${data.message || 'WebSocket error'}`, 'error');
+        _wsSocket.on('connect_error', () => {
+            _wsReady = false;
+            if (pendingDelivery) queueDeliveryRecovery();
+        });
+        _wsSocket.on('ball_result', acceptDelivery);
+        _wsSocket.on('ws_error', () => {
+            _wsReady = false;
+            if (pendingDelivery) queueDeliveryRecovery();
         });
     } catch (e) {
         _wsSocket = null;
@@ -1694,22 +1821,14 @@ async function _processBallResult(data) {
 
 function startMatch() {
     simTimerId = null;
-    if (matchOver) return;
-    // Lets a reconnect tell "waiting on a reply" apart from "idle", so a
-    // response lost with the socket restarts the loop instead of stalling it.
+    if (matchOver || ballInFlight || recoveryRunning || recoveryBlocked || scorecardIsVisible()) return;
     ballInFlight = true;
-
-    // WebSocket path — emit event, _processBallResult handles the response
-    if (_wsReady && _wsSocket) {
-        _wsSocket.emit('next_ball', { match_id: matchData.match_id });
+    if (!deliveryToken) {
+        recoverDelivery();
         return;
     }
-
-    // HTTP fallback — original fetch path, unchanged
-    fetch(window.location.pathname + "/next-ball", { method: 'POST' })
-        .then(res => res.json())
-        .then(data => _processBallResult(data))
-        .catch(err => { ballInFlight = false; appendLog(`[system_error] ${err}`, 'error'); });
+    pendingDelivery = deliveryToken;
+    sendDelivery();
 }
 
 

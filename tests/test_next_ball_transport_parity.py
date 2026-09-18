@@ -64,7 +64,8 @@ def test_http_route_delegates_to_shared_helper():
     src = _match_routes_source()
     route = src[src.index('@app.route("/match/<match_id>/next-ball"'):]
     route = route[:route.index("@app.route", 10)]
-    assert "_advance_one_ball(match_id, current_user.id)" in route
+    assert "payload, err = _advance_one_ball(" in route
+    assert 'get("delivery_token")' in route
 
 
 def test_shared_helper_persists_fc_snapshot_and_weather_status():

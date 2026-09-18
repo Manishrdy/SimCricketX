@@ -756,6 +756,14 @@
 
     .bowl-check { accent-color: var(--brand-primary, var(--accent)); width: 14px; height: 14px; cursor: pointer; }
 
+    .player-pill { flex-wrap: wrap; }
+    .player-pill-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; flex-basis: 100%; }
+    .player-pill-actions button {
+        min-height: 44px; padding: 0.4rem 0.65rem; border: 1px solid var(--card-border);
+        border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit;
+    }
+    .player-pill-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .bowl-toggle { min-height: 44px; }
     .role-icon { display: none; }
 
     /* ─── Controls ───────────────────────────────────────────── */
@@ -1208,7 +1216,7 @@
                 <div class="ms-step-header">
                     <h2>Finalize Playing XIs</h2>
                     <p class="ms-step-sub">
-                        Drag players to organize the lineup, double-click to add to Playing XI, or press Enter to cycle zones. Ensure 5 bowlers + 1 Keeper per side.
+                        Use Add to XI or Move to reserve, then Up/Down to set batting order. You can also drag players or press Enter on a player to move between zones. Ensure 5 bowlers + 1 Keeper per side.
                     </p>
                 </div>
 
@@ -1229,15 +1237,15 @@
                         <div class="drop-zones">
                             <div>
                                 <div class="zone-header"><i class="fa-solid fa-list-ol"></i> Playing XI</div>
-                                <div class="drop-zone" id="home-selected" role="listbox" aria-label="Home Playing XI"></div>
+                                <div class="drop-zone" id="home-selected" role="list" aria-label="Home Playing XI"></div>
                             </div>
                             <div style="display:none" aria-hidden="true">
                                 <div class="zone-header"><i class="fa-solid fa-user-clock"></i> Bench</div>
-                                <div class="drop-zone" id="home-substitutes" role="listbox" aria-label="Home Bench"></div>
+                                <div class="drop-zone" id="home-substitutes" role="list" aria-label="Home Bench"></div>
                             </div>
                             <div>
                                 <div class="zone-header"><i class="fa-solid fa-boxes-stacked"></i> Reserve</div>
-                                <div class="drop-zone reserve-zone" id="home-available" role="listbox" aria-label="Home Reserve"></div>
+                                <div class="drop-zone reserve-zone" id="home-available" role="list" aria-label="Home Reserve"></div>
                             </div>
                         </div>
                     </div>
@@ -1254,15 +1262,15 @@
                         <div class="drop-zones">
                             <div>
                                 <div class="zone-header"><i class="fa-solid fa-list-ol"></i> Playing XI</div>
-                                <div class="drop-zone" id="away-selected" role="listbox" aria-label="Away Playing XI"></div>
+                                <div class="drop-zone" id="away-selected" role="list" aria-label="Away Playing XI"></div>
                             </div>
                             <div style="display:none" aria-hidden="true">
                                 <div class="zone-header"><i class="fa-solid fa-user-clock"></i> Bench</div>
-                                <div class="drop-zone" id="away-substitutes" role="listbox" aria-label="Away Bench"></div>
+                                <div class="drop-zone" id="away-substitutes" role="list" aria-label="Away Bench"></div>
                             </div>
                             <div>
                                 <div class="zone-header"><i class="fa-solid fa-boxes-stacked"></i> Reserve</div>
-                                <div class="drop-zone reserve-zone" id="away-available" role="listbox" aria-label="Away Reserve"></div>
+                                <div class="drop-zone reserve-zone" id="away-available" role="list" aria-label="Away Reserve"></div>
                             </div>
                         </div>
                     </div>
@@ -2223,7 +2231,7 @@
         div.className = 'player-pill';
         div.draggable = true;
         div.tabIndex = 0;
-        div.setAttribute('role', 'option');
+        div.setAttribute('role', 'listitem');
         div.setAttribute('aria-label', `${player.name}, ${player.role}. Press Enter to move between zones.`);
         div.dataset.name = player.name;
         div.dataset.role = player.role;
@@ -2231,20 +2239,36 @@
 
         const meta = ROLE_META[player.role] || { abbr: '—', cls: '' };
 
+        const safeName = player.name.replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+
         // Checkbox for bowlers
         const isBowler = ['Bowler', 'All-rounder'].includes(player.role);
         const bowlCheck = isBowler ?
-            `<label class="bowl-toggle" title="Include ${player.name} in the bowling attack">
-        <input type="checkbox" class="bowl-check" ${willBowl === false ? '' : 'checked'} aria-label="Include ${player.name} as bowler"> Bowls
+            `<label class="bowl-toggle" title="Include ${safeName} in the bowling attack">
+        <input type="checkbox" class="bowl-check" ${willBowl === false ? '' : 'checked'} aria-label="Include ${safeName} as bowler"> Bowls
     </label>` : '';
 
         div.innerHTML = `
     <span class="role-chip ${meta.cls}">${meta.abbr}</span>
-    <span class="player-pill-name">${player.name}</span>
+    <span class="player-pill-name">${safeName}</span>
     ${bowlCheck}
+    <div class="player-pill-actions">
+        <button type="button" data-lineup-action="move">Add to XI</button>
+        <button type="button" data-lineup-action="up" aria-label="Move ${safeName} up">Up</button>
+        <button type="button" data-lineup-action="down" aria-label="Move ${safeName} down">Down</button>
+    </div>
     `;
+        div.querySelectorAll('[data-lineup-action]').forEach(button => {
+            button.addEventListener('click', () => {
+                const action = button.dataset.lineupAction;
+                if (action === 'move') cyclePlayerZone(div, side);
+                else reorderLineupPlayer(div, side, action === 'up' ? -1 : 1);
+            });
+        });
+        div.querySelector('.bowl-check')?.addEventListener('change', validateSquads);
 
         div.ondragstart = e => {
+            if (e.target.closest('button, input, label')) { e.preventDefault(); return; }
             div.classList.add('dragging');
             e.dataTransfer.setData('text/plain', player.name); // Required for FF
         };
@@ -2252,18 +2276,19 @@
             div.classList.remove('dragging');
             const zones = document.querySelectorAll('.drop-zone');
             zones.forEach(z => z.classList.remove('active'));
+            updateCounts(side);
             validateSquads();
         };
 
         // Keyboard accessibility: Enter/Space cycles pill between zones
         div.onkeydown = e => {
-            if (e.key === 'Enter' || e.key === ' ') {
+            if (e.target === div && (e.key === 'Enter' || e.key === ' ')) {
                 e.preventDefault();
                 cyclePlayerZone(div, side);
             }
         };
         div.ondblclick = e => {
-            if (e.target.closest('.bowl-check')) return;
+            if (e.target.closest('button, input, label')) return;
             movePlayerToZone(div, side, 'selected', 'Playing XI');
         };
         return div;
@@ -2369,18 +2394,38 @@
         if (currentIdx === -1) return;
 
         const nextIdx = (currentIdx + 1) % zones.length;
-        const targetZone = document.getElementById(`${side}-${zones[nextIdx]}`);
-        targetZone.appendChild(pill);
-        pill.focus();
+        movePlayerToZone(pill, side, zones[nextIdx], zoneLabels[nextIdx]);
+    }
 
+    function reorderLineupPlayer(pill, side, direction) {
+        if (!pill || pill.dataset.side !== side) return;
+        const zone = document.getElementById(`${side}-selected`);
+        if (pill.parentElement !== zone) return;
+        const neighbour = direction < 0 ? pill.previousElementSibling : pill.nextElementSibling;
+        if (!neighbour) return;
+        if (direction < 0) zone.insertBefore(pill, neighbour);
+        else zone.insertBefore(neighbour, pill);
         updateCounts(side);
-        validateSquads();
+        pill.focus();
+        const position = Array.from(zone.children).indexOf(pill) + 1;
+        document.getElementById('squad-announce').textContent = `${pill.dataset.name} is now number ${position} in the batting order`;
+    }
 
-        // Announce move to screen readers
-        const announce = document.getElementById('squad-announce');
-        if (announce) {
-            announce.textContent = `${pill.dataset.name} moved to ${zoneLabels[nextIdx]}`;
-        }
+    function updateLineupControls(side) {
+        ['selected', 'available', 'substitutes'].forEach(suffix => {
+            const zone = document.getElementById(`${side}-${suffix}`);
+            Array.from(zone.children).forEach((pill, index, players) => {
+                const inXI = suffix === 'selected';
+                const move = pill.querySelector('[data-lineup-action="move"]');
+                move.textContent = inXI ? 'Move to reserve' : 'Add to XI';
+                move.setAttribute('aria-label', `${move.textContent}: ${pill.dataset.name}`);
+                ['up', 'down'].forEach(action => {
+                    const button = pill.querySelector(`[data-lineup-action="${action}"]`);
+                    button.hidden = !inXI;
+                    button.disabled = !inXI || (action === 'up' ? index === 0 : index === players.length - 1);
+                });
+            });
+        });
     }
 
     function movePlayerToZone(pill, side, zoneSuffix, zoneLabel) {
@@ -2390,6 +2435,7 @@
         if (!targetZone || pill.parentElement === targetZone) return;
 
         targetZone.appendChild(pill);
+        pill.focus();
         updateCounts(side);
         validateSquads();
 
@@ -2430,6 +2476,7 @@
     }
 
     function updateCounts(side) {
+        updateLineupControls(side);
         const xi = document.getElementById(`${side}-selected`).children.length;
         const sub = document.getElementById(`${side}-substitutes`).children.length;
 

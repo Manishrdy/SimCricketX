@@ -574,7 +574,7 @@ def register_team_routes(
                         flash("Team saved as draft.", "success")
                     else:
                         flash(f"Team '{new_team.name}' saved. Ready to play!", "success")
-                    return redirect(url_for("manage_teams"))
+                    return redirect(url_for("manage_teams", clear_team_draft=1))
 
                 # Legacy flow: identity only → create draft team + default T20 profile.
                 new_team = DBTeam(

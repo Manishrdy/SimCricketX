@@ -2578,7 +2578,7 @@ def create_app():
                 # checkpointed and silently restarted at fc_innings=1
                 # whenever the instance was rebuilt.
                 payload, err = _match_route_helpers['advance_one_ball'](
-                    match_id, current_user.id)
+                    match_id, current_user.id, (data or {}).get('delivery_token'))
                 if err is not None:
                     err_response, err_status = err
                     try:

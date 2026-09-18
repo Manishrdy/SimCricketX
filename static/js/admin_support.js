@@ -21,6 +21,14 @@
 
     var socket = null;
     var selectedId = null;
+    // A selected inbox row is not a safe reply target until its view has loaded.
+    // The generation also distinguishes A -> B -> A from the original A request.
+    var conversationRequest = 0;
+    var conversationReady = false;
+    var composerDrafts = {};
+    var outbox = {};
+    var sendStatus = document.getElementById('support-send-status');
+    var pendingThreadMessages = [];
     var conversations = {};
     var statusFilter = 'open';
     var searchTimer = null;
@@ -134,7 +142,7 @@
         if (!conv) return;
         conversations[conv.id] = conv;
         renderList(currentConversationRows());
-        if (selectedId === conv.id) updateHeader(conv);
+        if (conversationReady && selectedId === conv.id) updateHeader(conv);
     }
 
     function currentConversationRows() {
@@ -255,10 +263,15 @@
         deleteBtn.hidden = false;
         input.disabled = conv.status === 'closed';
         sendBtn.disabled = conv.status === 'closed';
+        updateSendState();
     }
 
     function resetThread() {
+        conversationRequest++;
+        conversationReady = false;
+        pendingThreadMessages = [];
         selectedId = null;
+        if (sendStatus) sendStatus.textContent = '';
         renderedMessages = [];
         seenMessageIds = {};
         titleEl.textContent = 'Select a conversation';
@@ -287,20 +300,36 @@
     }
 
     function selectConversation(id) {
+        if (selectedId && conversationReady) composerDrafts[selectedId] = input.value;
+        resetThread();
         selectedId = id;
+        var request = conversationRequest;
+        titleEl.textContent = 'Loading conversation…';
+        subtitleEl.textContent = '';
+        messagesEl.innerHTML = '<div class="support-empty"><span>Loading messages…</span></div>';
+        renderList(currentConversationRows());
         if (socket && socket.connected) socket.emit('support:conversation:join', { conversation_id: id });
-        requestJson('/api/admin/support/conversations/' + encodeURIComponent(id))
+        return requestJson('/api/admin/support/conversations/' + encodeURIComponent(id))
             .then(function (body) {
+                if (request !== conversationRequest || selectedId !== id) return;
+                if (!body.conversation || body.conversation.id !== id) throw new Error('conversation_mismatch');
                 conversations[id] = body.conversation;
-                updateHeader(body.conversation);
                 renderMessages(body.messages || []);
+                pendingThreadMessages.forEach(renderMessage);
+                pendingThreadMessages = [];
                 renderContext(body.context || {}, body.conversation);
+                input.value = composerDrafts[id] || '';
+                autosize();
+                conversationReady = true;
+                updateHeader(body.conversation);
                 markRead(id);
                 renderList(currentConversationRows());
-                input.focus();
+                if (!input.disabled) input.focus();
             })
             .catch(function () {
-                messagesEl.innerHTML = '<div class="support-empty"><i class="fas fa-triangle-exclamation"></i><span>Could not load conversation.</span></div>';
+                if (request !== conversationRequest || selectedId !== id) return;
+                titleEl.textContent = 'Conversation unavailable';
+                messagesEl.innerHTML = '<div class="support-empty"><span>Could not load conversation. Select it again to retry.</span></div>';
             });
     }
 
@@ -454,48 +483,79 @@
             }).catch(function () {});
     }
 
-    function sendMessage(body) {
-        if (!selectedId || !body) return;
-        if (socket && socket.connected) {
-            socket.emit('support:message:send', {
-                conversation_id: selectedId,
-                body: body,
-                client_nonce: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())
-            });
-            return;
+    function updateSendState() {
+        var entry = outbox[selectedId];
+        if (sendStatus) sendStatus.textContent = entry ? (entry.sending
+            ? 'Sending… Your reply is kept until delivery is confirmed.'
+            : 'Delivery not confirmed. Your reply is kept. Press Send to retry.') : '';
+        if (entry && entry.sending) {
+            input.disabled = true;
+            sendBtn.disabled = true;
         }
-        requestJson('/api/admin/support/conversations/' + encodeURIComponent(selectedId) + '/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+    }
+
+    function sendMessage(body) {
+        if (!conversationReady || !selectedId || input.disabled || !body) return;
+        var id = selectedId;
+        var entry = outbox[id];
+        if (entry && entry.sending) return;
+        if (!entry || entry.body !== body) {
+            entry = outbox[id] = {
                 body: body,
-                client_nonce: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())
+                nonce: (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+                    : String(Date.now()) + '-' + Math.random().toString(16).slice(2)
+            };
+        }
+        composerDrafts[id] = body;
+        entry.sending = true;
+        updateSendState();
+        var timeout;
+        return Promise.race([
+            requestJson('/api/admin/support/conversations/' + encodeURIComponent(id) + '/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ body: entry.body, client_nonce: entry.nonce })
+            }),
+            new Promise(function (_, reject) {
+                timeout = window.setTimeout(function () { reject(new Error('timeout')); }, 15000);
             })
-        }).then(function (payload) {
+        ]).then(function (payload) {
+            if (!payload.message) throw new Error('missing_acknowledgement');
+            delete outbox[id];
+            composerDrafts[id] = '';
+            if (conversationReady && selectedId === id) {
+                input.value = '';
+                autosize();
+                renderMessage(payload.message);
+            }
             if (payload.conversation) upsertConversation(payload.conversation);
-            renderMessage(payload.message);
         }).catch(function () {
-            input.value = body;
-            autosize();
+            composerDrafts[id] = body;
+        }).finally(function () {
+            window.clearTimeout(timeout);
+            entry.sending = false;
+            if (conversationReady && selectedId === id) updateHeader(conversations[id]);
         });
     }
 
     function mutateConversation(action, payload) {
-        if (!selectedId) return;
-        return requestJson('/api/admin/support/conversations/' + encodeURIComponent(selectedId) + '/' + action, {
+        if (!conversationReady || !selectedId) return;
+        var id = selectedId;
+        var request = conversationRequest;
+        return requestJson('/api/admin/support/conversations/' + encodeURIComponent(id) + '/' + action, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload || {})
         }).then(function (body) {
             upsertConversation(body.conversation);
-            if (body.conversation) updateHeader(body.conversation);
+            if (selectedId !== id || request !== conversationRequest) return;
             if (action === 'close') setStatusFilter('closed');
             if (action === 'reopen') setStatusFilter('open');
         });
     }
 
     function deleteConversation() {
-        if (!selectedId) return;
+        if (!conversationReady || !selectedId) return;
         var conv = conversations[selectedId] || {};
         var label = conv.user_label || conv.user_id || selectedId;
         if (!window.confirm('Delete this support conversation for ' + label + '? This removes the thread and its messages.')) {
@@ -506,7 +566,8 @@
             method: 'DELETE'
         }).then(function () {
             delete conversations[id];
-            resetThread();
+            delete composerDrafts[id];
+            if (selectedId === id) resetThread();
             renderList(currentConversationRows());
         }).catch(function () {
             window.alert('Could not delete this conversation. Please try again.');
@@ -644,8 +705,12 @@
         socket.on('support:message:new', function (payload) {
             if (payload.conversation) upsertConversation(payload.conversation);
             if (payload.conversation && payload.conversation.id === selectedId) {
-                renderMessage(payload.message);
-                markRead(selectedId);
+                if (conversationReady) {
+                    renderMessage(payload.message);
+                    markRead(selectedId);
+                } else {
+                    pendingThreadMessages.push(payload.message);
+                }
             }
             maybeShowNotification(payload);
         });
@@ -664,10 +729,9 @@
     if (notifyToggleBtn) notifyToggleBtn.addEventListener('click', toggleNotifications);
     composer.addEventListener('submit', function (e) {
         e.preventDefault();
+        if (!conversationReady || !selectedId || input.disabled) return;
         var body = input.value.trim();
         if (!body) return;
-        input.value = '';
-        autosize();
         sendMessage(body);
     });
     input.addEventListener('input', autosize);

@@ -851,6 +851,8 @@
     </div>
 </div>
 
+<style>.player-touch-handle { touch-action: none; user-select: none; cursor: grab; padding: 8px; }</style>
+<script src="{{ url_for('static', filename='js/player_touch_drag.js') }}"></script>
 <script>
 (function () {
     'use strict';
@@ -1019,6 +1021,7 @@
         var bowlBarCls = (roleClass === 'bowl') ? 'bar-bowl' : '';
 
         div.innerHTML =
+            (inSquad ? '' : '<span class="player-touch-handle" title="Drag player" aria-hidden="true">⠿</span>') +
             '<div class="sb-player-avatar sb-avatar-' + roleClass + '">' + esc(initials) + '</div>' +
             '<div class="sb-player-body">' +
             '<div class="sb-player-head">' +
