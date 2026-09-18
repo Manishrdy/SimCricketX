@@ -717,7 +717,7 @@
     <div class="tc-hero-inner">
       <span class="tc-eyebrow">{% if edit %}Edit Mode{% else %}New Franchise{% endif %}</span>
       <h1>{% if edit %}Edit Team{% else %}Create Team{% endif %}</h1>
-      <p>{% if edit %}Update team identity and squad composition. Changes replace the existing profiles on save.{% else %}Fill in team identity, then build squads for <b>T20</b> and <b>List A</b> from your player pool. Drafts are auto-saved locally.{% endif %}</p>
+      <p>{% if edit %}Update team identity and squad composition. Unsaved edits are kept as a local draft until you save.{% else %}Fill in team identity, then build squads for <b>T20</b> and <b>List A</b> from your player pool. Drafts are auto-saved locally.{% endif %}</p>
     </div>
   </div>
 
@@ -882,7 +882,6 @@
 (function () {
   'use strict';
 
-  const LS_KEY = 'team_create_draft_v1';
   const POOL_PAGE = 50;
   const VALID_FORMATS = ['T20', 'ListA', 'FC'];
   const MIN_PLAYERS = {{ SQUAD_MIN_PLAYERS }};
@@ -890,15 +889,16 @@
   const MIN_WK = {{ SQUAD_MIN_WICKETKEEPERS }};
   const MIN_BOWL = {{ SQUAD_MIN_BOWLING_OPTIONS }};
 
-  // Edit mode — hydrated from server-rendered JSON. When present, we skip
-  // localStorage draft persistence so editing one team doesn't clobber an
-  // unrelated create-team draft.
+  // Edit mode — hydrated from server-rendered JSON.
   const EDIT_DATA = (function () {
     const el = document.getElementById('tc-edit-data');
     if (!el) return null;
     try { return JSON.parse(el.textContent); } catch (_) { return null; }
   })();
   const IS_EDIT = !!EDIT_DATA;
+  const LS_KEY = IS_EDIT
+    ? `team_edit_draft_v1:${EDIT_DATA.identity.short_code}`
+    : 'team_create_draft_v1';
   const ROLE_CLASS = {
     'Batsman': 'bat',
     'Bowler': 'bowl',
@@ -1742,22 +1742,35 @@
     });
   }
 
+  function comparableSnapshot(raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      delete parsed.ts;
+      delete parsed.activeFmt;
+      return JSON.stringify(parsed);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function saveDraftNow() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = null;
+    try {
+      const json = snapshot();
+      localStorage.setItem(LS_KEY, json);
+      lastSavedJson = json;
+      setSaveStatus('saved');
+    } catch (e) {
+      saveStatus.className = 'tc-save-status';
+      saveStatusLabel.textContent = 'Draft not saved in this browser';
+    }
+  }
+
   function scheduleAutoSave() {
-    if (IS_EDIT) return; // no local draft persistence while editing
     setSaveStatus('saving');
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      try {
-        const json = snapshot();
-        if (json !== lastSavedJson) {
-          localStorage.setItem(LS_KEY, json);
-          lastSavedJson = json;
-        }
-        setSaveStatus('saved');
-      } catch (e) {
-        console.warn('autosave failed', e);
-      }
-    }, 400);
+    saveTimer = setTimeout(saveDraftNow, 400);
   }
 
   function loadEdit() {
@@ -1897,12 +1910,22 @@
     }, { once: true });
   });
 
+  if (IS_EDIT) window.addEventListener('pagehide', saveDraftNow);
+
   // ── Init ─────────────────────────────────────────────────────────────
   bindIdentity();
   colorSwatch.style.background = colorInput.value;
   let restored = false;
   if (IS_EDIT) {
     loadEdit();
+    let editDraft = '';
+    try { editDraft = localStorage.getItem(LS_KEY) || ''; } catch (_) {}
+    if (editDraft && comparableSnapshot(editDraft) !== comparableSnapshot(snapshot())) {
+      restored = loadDraft();
+      if (restored) restoredBanner.hidden = false;
+    } else if (editDraft) {
+      clearDraft();
+    }
   } else {
     restored = loadDraft();
     if (restored) restoredBanner.hidden = false;
@@ -1912,7 +1935,7 @@
   updateTabCounts();
   updateValidation();
   fetchPool(true);
-  setSaveStatus(IS_EDIT ? 'idle' : (restored ? 'saved' : 'idle'));
+  setSaveStatus(restored ? 'saved' : 'idle');
 })();
 </script>
 {% endblock %}
