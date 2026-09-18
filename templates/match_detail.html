@@ -188,9 +188,20 @@
                     <div class="window-controls">
                         <span class="window-title">simulation_log.txt</span>
                     </div>
-                    <button class="copy-action-btn" id="copy-log-btn">
+                    <button class="copy-action-btn" id="copy-log-btn" type="button"
+                        aria-controls="copy-log-fallback" aria-expanded="false">
                         <i class="fa-regular fa-clone"></i> <span>Copy</span>
                     </button>
+                </div>
+                <div class="copy-log-fallback" id="copy-log-fallback" hidden>
+                    <p id="copy-log-status" role="status">
+                        Automatic copy is unavailable. Select the log text and copy it manually.
+                    </p>
+                    <textarea id="copy-log-text" readonly aria-label="Match log text"></textarea>
+                    <div class="copy-log-fallback-actions">
+                        <button type="button" id="select-log-text">Select All</button>
+                        <button type="button" id="close-copy-fallback">Close</button>
+                    </div>
                 </div>
                 <div class="commentary-box" id="commentary-log">
                     <div class="code-line system-msg">
@@ -354,6 +365,46 @@
             .copy-action-btn:hover {
                 background: #3c3c3c;
                 color: #fff;
+            }
+
+            .copy-log-fallback {
+                padding: 0.75rem 1rem;
+                border-bottom: 1px solid #444;
+                background: #252526;
+                color: #f3f4f6;
+            }
+
+            .copy-log-fallback p {
+                margin: 0 0 0.6rem;
+                font-size: 0.82rem;
+            }
+
+            .copy-log-fallback textarea {
+                width: 100%;
+                min-height: 8rem;
+                resize: vertical;
+                padding: 0.65rem;
+                border: 1px solid #6b7280;
+                border-radius: 4px;
+                background: #1e1e1e;
+                color: #d4d4d4;
+                font: 0.8rem/1.5 var(--font-mono, monospace);
+            }
+
+            .copy-log-fallback-actions {
+                display: flex;
+                gap: 0.5rem;
+                margin-top: 0.6rem;
+            }
+
+            .copy-log-fallback-actions button {
+                min-height: 44px;
+                padding: 0.55rem 0.8rem;
+                border: 1px solid #6b7280;
+                border-radius: 4px;
+                background: #333;
+                color: #fff;
+                cursor: pointer;
             }
 
             .commentary-box {
@@ -637,28 +688,5 @@
 <script src="{{ url_for('static', filename='js/match_detail.js') }}"></script>
 <!-- Dashboard Rendering -->
 <script src="{{ url_for('static', filename='js/match_dashboard.js') }}"></script>
-
-<script>
-    // Copy Log Functionality
-    document.getElementById('copy-log-btn').addEventListener('click', function () {
-        const logContent = document.getElementById('commentary-log').innerText;
-
-        navigator.clipboard.writeText(logContent).then(() => {
-            const btn = this;
-            const originalHTML = btn.innerHTML;
-
-            btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
-            btn.style.borderColor = '#10b981';
-            btn.style.color = '#10b981';
-
-            setTimeout(() => {
-                btn.innerHTML = originalHTML;
-                btn.style.borderColor = '';
-                btn.style.color = '';
-            }, 2000);
-        }).catch(err => {
-            console.error('Failed to copy log:', err);
-        });
-    });
-</script>
+<script src="{{ url_for('static', filename='js/copy_match_log.js') }}"></script>
 {% endblock %}
