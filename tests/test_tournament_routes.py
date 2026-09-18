@@ -80,6 +80,28 @@ class TestTournamentCreationRoute:
         ).scalar_one_or_none()
         assert tournament is not None
 
+    def test_repeated_creation_token_creates_one_tournament_and_fixture_set(
+        self, authenticated_client, test_team, test_team_2
+    ):
+        """A retry of the same creation intent returns the original tournament."""
+        payload = {
+            "name": "Retry Safe Cup",
+            "mode": "round_robin",
+            "team_ids": [test_team.id, test_team_2.id],
+            "creation_token": uuid.uuid4().hex,
+        }
+
+        first = authenticated_client.post("/tournaments/create", data=payload)
+        second = authenticated_client.post("/tournaments/create", data=payload)
+
+        tournaments = Tournament.query.filter_by(name="Retry Safe Cup").all()
+        assert len(tournaments) == 1
+        assert first.status_code == second.status_code == 302
+        assert first.location == second.location
+        assert TournamentFixture.query.filter_by(
+            tournament_id=tournaments[0].id
+        ).count() == 1
+
     def test_create_tournament_insufficient_teams(self, authenticated_client, test_team):
         """Test creating a tournament with only one team shows an error."""
         response = authenticated_client.post(
