@@ -1924,8 +1924,10 @@ function displayComparison(players) {
         const value1 = isMissing(v1) ? '—' : v1, value2 = isMissing(v2) ? '—' : v2;
         const n1 = parseFloat(v1) || 0, n2 = parseFloat(v2) || 0, max = Math.max(n1, n2, 1);
         const w1 = (n1 / max * 100).toFixed(1), w2 = (n2 / max * 100).toFixed(1);
-        const p1wins = lowerBetter ? (n1 > 0 && (n2 === 0 || n1 < n2)) : n1 > n2;
-        const p2wins = lowerBetter ? (n2 > 0 && (n1 === 0 || n2 < n1)) : n2 > n1;
+        const comparable = !isMissing(v1) && !isMissing(v2)
+            && Number.isFinite(Number(v1)) && Number.isFinite(Number(v2));
+        const p1wins = comparable && (lowerBetter ? n1 < n2 : n1 > n2);
+        const p2wins = comparable && (lowerBetter ? n2 < n1 : n2 > n1);
         return '<div class="comp-row">'
              + '<div class="comp-key">' + label + '</div>'
              + '<div class="comp-val-wrap">'

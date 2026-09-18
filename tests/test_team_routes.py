@@ -869,3 +869,17 @@ class TestTeamDraftRecovery:
         assert parse_qs(target.query)["clear_team_draft"] == ["1"]
         team = DBTeam.query.filter_by(user_id=regular_user.id, short_code="SDXI").one()
         assert {profile.format_type for profile in team.profiles} == {"T20", "ListA", "FC"}
+
+    def test_committed_edit_clears_original_team_draft_after_rename(self, authenticated_client, test_team):
+        from urllib.parse import urlparse, parse_qs
+
+        original = test_team.short_code
+        response = authenticated_client.post(f'/team/{original}/edit', data={
+            'team_name': 'Renamed XI', 'short_code': 'RENAM',
+            'home_ground': 'Draft Ground', 'pitch_preference': 'Flat',
+            'team_color': '#123456', 'profiles_payload': json.dumps(self.profiles()),
+        })
+        assert response.status_code == 302
+        target = urlparse(response.headers['Location'])
+        assert target.path == '/teams/manage'
+        assert parse_qs(target.query)['clear_team_edit_draft'] == [original]
