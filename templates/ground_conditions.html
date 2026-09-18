@@ -1843,11 +1843,13 @@
         // ── Save All ──
         window.saveAll = async function () {
             const btn = document.getElementById('btnSaveAll');
+            if (btn.disabled) return false;
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
             let saved = false;
 
             try {
+                const submittedSnapshot = captureDraft();
                 const cfg = buildConfig();
                 cfg.match_format = MATCH_FORMAT;
                 const resp = await fetch('/ground-conditions/save', {
@@ -1857,10 +1859,16 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    clearGroundDraft();
-                    committedSnapshot = captureDraft();
-                    showToast(data.message, 'success');
-                    saved = true;
+                    committedSnapshot = submittedSnapshot;
+                    if (captureDraft() === submittedSnapshot) {
+                        clearGroundDraft();
+                        showToast(data.message, 'success');
+                        saved = true;
+                    } else {
+                        hasUnsavedChanges = true;
+                        persistDraftNow();
+                        showToast('Earlier changes saved. Your newer edits are still unsaved.', 'success');
+                    }
                 } else {
                     showToast(data.error || 'Save failed', 'error');
                 }

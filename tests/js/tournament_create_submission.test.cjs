@@ -11,7 +11,7 @@ const template = fs.readFileSync(
 
 test('valid tournament form enters a pending state and rejects a second submit', () => {
     const validator = template.match(
-        /function validateForm\(\) \{[\s\S]*?\r?\n    \}\r?\n\r?\n    \/\/ Initialize on page load/
+        /function validateForm\(\) \{[\s\S]*?\r?\n    \}/
     );
     assert.ok(validator, 'validateForm should exist');
 
@@ -52,4 +52,21 @@ test('tournament form sends a server idempotency token', () => {
         template,
         /<input type="hidden" name="creation_token" value="\{\{ creation_token \}\}">/
     );
+});
+
+test('Back restores submission controls while keeping the creation token', () => {
+    const listener = template.match(/window\.addEventListener\('pageshow', function \(event\) \{[\s\S]*?\n    \}\);/)[0];
+    let handler;
+    const button = {disabled: true, innerHTML: 'Creating Tournament…'};
+    const token = {value: 'same-intent'};
+    const context = {isSubmitting: true, window: {addEventListener: (_, fn) => handler = fn},
+        document: {getElementById: id => id === 'submitBtn' ? button : {value: 'round_robin'}, querySelector: () => token}};
+    vm.runInNewContext(listener, context);
+    handler({persisted: false});
+    assert(context.isSubmitting);
+    handler({persisted: true});
+    assert.equal(context.isSubmitting, false);
+    assert.equal(button.disabled, false);
+    assert.match(button.innerHTML, /Create Tournament/);
+    assert.equal(token.value, 'same-intent');
 });

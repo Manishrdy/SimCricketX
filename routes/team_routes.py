@@ -1272,7 +1272,7 @@ def register_team_routes(
                         f"{status_msg} by {user_id}"
                     )
                     flash(f"Team updated as {status_msg}.", "success")
-                    return redirect(url_for("manage_teams"))
+                    return redirect(url_for("manage_teams", clear_team_edit_draft=short_code))
 
                 except Exception as e:
                     log_exception(e)
