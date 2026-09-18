@@ -5,6 +5,7 @@ from database.models import (
     Player,
 )
 from sqlalchemy import func as sa_func, or_ as sa_or
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 import itertools
 import logging
@@ -171,7 +172,8 @@ class TournamentEngine:
 
     def create_tournament(self, name: str, user_id: str, team_ids: list,
                           mode: str = MODE_ROUND_ROBIN, playoff_teams: int = 4,
-                          series_config: dict = None, format_type: str = 'T20') -> Tournament:
+                          series_config: dict = None, format_type: str = 'T20',
+                          creation_token: str = None) -> Tournament:
         """
         Creates a new tournament with specified mode.
 
@@ -183,6 +185,7 @@ class TournamentEngine:
             playoff_teams: Number of teams qualifying for playoffs (for modes with knockouts)
             series_config: Configuration for custom series mode
             format_type: Cricket format for all matches ('T20' or 'ListA', default: 'T20')
+            creation_token: Optional idempotency token for one creation intent
 
         Returns:
             Tournament: The created tournament object
@@ -218,6 +221,14 @@ class TournamentEngine:
         if mode in [self.MODE_IPL_STYLE] and len(team_ids) < 4:
             raise ValueError("IPL-style format requires at least 4 teams.")
 
+        if creation_token:
+            existing = Tournament.query.filter_by(
+                user_id=user_id,
+                creation_token=creation_token,
+            ).first()
+            if existing:
+                return existing
+
         try:
             # 1. Create Tournament Record
             tournament = Tournament(
@@ -228,7 +239,8 @@ class TournamentEngine:
                 format_type=format_type,
                 current_stage=self.STAGE_LEAGUE if mode != self.MODE_KNOCKOUT else self._get_knockout_round_name(self._next_power_of_two(len(team_ids)), 1),
                 playoff_teams=min(playoff_teams, len(team_ids)),
-                series_config=json.dumps(series_config) if series_config else None
+                series_config=json.dumps(series_config) if series_config else None,
+                creation_token=creation_token,
             )
             db.session.add(tournament)
             db.session.flush()
@@ -263,6 +275,16 @@ class TournamentEngine:
             logger.info(f"Tournament '{name}' created with mode '{mode}' and {len(team_ids)} teams")
             return tournament
 
+        except IntegrityError:
+            db.session.rollback()
+            if creation_token:
+                existing = Tournament.query.filter_by(
+                    user_id=user_id,
+                    creation_token=creation_token,
+                ).first()
+                if existing:
+                    return existing
+            raise
         except Exception as e:
             log_exception(e)
             db.session.rollback()
