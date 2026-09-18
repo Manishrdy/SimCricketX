@@ -54,7 +54,8 @@
                 </a>
                 {% if tournament.status in ('Active', 'open', 'Completed') %}
                 <form action="{{ url_for('delete_tournament', tournament_id=tournament.id) }}" method="POST"
-                    onsubmit="return confirm('{% if tournament.status == 'Completed' %}Delete \'{{ tournament.name }}\'? This permanently removes all matches, scorecards, and stats for this tournament. This cannot be undone.{% else %}Are you sure you want to delete this tournament? All progress will be lost.{% endif %}');">
+                    class="delete-tournament-form"
+                    data-confirm-message="{% if tournament.status == 'Completed' %}Delete '{{ tournament.name }}'? This permanently removes all matches, scorecards, and stats for this tournament. This cannot be undone.{% else %}Are you sure you want to delete this tournament? All progress will be lost.{% endif %}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="delete-btn">
                         <i class="fas fa-trash"></i> Delete
@@ -1228,6 +1229,18 @@
         }
     </style>
     <script>
+        // The confirmation text lives in a data attribute (safely HTML-escaped by
+        // Jinja) instead of being interpolated into an inline onsubmit="confirm(...)"
+        // string — a tournament name with a quote or backslash could otherwise break
+        // the handler's JS and let the form submit with no confirmation at all.
+        document.querySelectorAll('.delete-tournament-form').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                if (!confirm(form.dataset.confirmMessage)) {
+                    e.preventDefault();
+                }
+            });
+        });
+
         function toggleRenameForm() {
             var nameEl = document.getElementById('tournament-name');
             var formEl = document.getElementById('rename-form');

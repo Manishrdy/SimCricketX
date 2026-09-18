@@ -1436,6 +1436,11 @@
     background: rgba(59,130,246,0.05);
 }
 
+.so-player-card:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
 .so-player-card.selected {
     border-color: var(--accent);
     background: rgba(59,130,246,0.12);

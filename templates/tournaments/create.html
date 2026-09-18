@@ -141,7 +141,7 @@
             </div>
             <p class="section-desc">Choose how matches will be structured. Some modes require minimum team counts.</p>
 
-            <div class="mode-selection-grid" id="modeGrid">
+            <div class="mode-selection-grid" id="modeGrid" role="radiogroup" aria-label="Tournament format">
                 <!-- Modes will be dynamically populated -->
                 <div class="mode-placeholder">
                     <i class="fas fa-hand-pointer"></i>
@@ -382,7 +382,9 @@
             const config = modeConfig[mode.id] || { icon: 'fa-trophy', color: '#61afef' };
             const isSelected = selectedMode === mode.id;
             html += `
-                <div class="mode-card ${isSelected ? 'selected' : ''}" onclick="selectMode('${mode.id}')" data-mode="${mode.id}">
+                <div class="mode-card ${isSelected ? 'selected' : ''}" onclick="selectMode('${mode.id}')"
+                     onkeydown="handleCardKeydown(event, () => selectMode('${mode.id}'))"
+                     data-mode="${mode.id}" role="radio" tabindex="0" aria-checked="${isSelected}">
                     <div class="mode-icon" style="background: ${config.color}20; color: ${config.color};">
                         <i class="fas ${config.icon}"></i>
                     </div>
@@ -413,6 +415,17 @@
         updateCustomSeriesVisibility();
     }
 
+    // Shared keyboard-activation handler for card-shaped radio/button controls:
+    // native <button>/<input> elements get Enter+Space activation for free, but a
+    // clickable <div> does not, so this makes the two keys invoke the same action
+    // a mouse click would. Space is prevented from also scrolling the page.
+    function handleCardKeydown(event, action) {
+        if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+            event.preventDefault();
+            action();
+        }
+    }
+
     function selectMode(modeId) {
         selectedMode = modeId;
         document.getElementById('selectedMode').value = modeId;
@@ -420,10 +433,12 @@
         // Update UI
         document.querySelectorAll('.mode-card').forEach(card => {
             card.classList.remove('selected');
+            card.setAttribute('aria-checked', 'false');
         });
         const selectedCard = document.querySelector(`[data-mode="${modeId}"]`);
         if (selectedCard) {
             selectedCard.classList.add('selected');
+            selectedCard.setAttribute('aria-checked', 'true');
         }
 
         // Enable submit button
@@ -852,6 +867,11 @@
     .mode-card:hover {
         border-color: var(--accent);
         background: var(--accent-light);
+    }
+
+    .mode-card:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
     }
 
     .mode-card.selected {
