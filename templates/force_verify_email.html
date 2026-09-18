@@ -48,6 +48,11 @@
             gap: 0.85rem;
             cursor: pointer;
         }
+        .fv-card-header:focus-visible {
+            outline: 2px solid var(--accent, #0f766e);
+            outline-offset: 2px;
+            border-radius: 8px;
+        }
         .fv-card-icon {
             width: 42px;
             height: 42px;
@@ -284,7 +289,8 @@
 
             <!-- Option 1: Verify existing email -->
             <div class="fv-card" id="card1">
-                <div class="fv-card-header" onclick="toggleCard('card1', 'card2')">
+                <div class="fv-card-header" onclick="toggleCard('card1', 'card2')" onkeydown="handleAccordionKeydown(event, 'card1', 'card2')"
+                     role="button" tabindex="0" aria-expanded="false" aria-controls="card1-body">
                     <div class="fv-card-icon fv-card-icon--green">
                         <i class="fas fa-envelope-circle-check"></i>
                     </div>
@@ -295,7 +301,7 @@
                     <i class="fas fa-chevron-right fv-card-arrow"></i>
                 </div>
 
-                <div class="fv-card-body">
+                <div class="fv-card-body" id="card1-body">
                     <p style="font-size:0.83rem;color:var(--fg-secondary);margin:0 0 0.75rem;">
                         A verification link will be sent to:
                     </p>
@@ -318,7 +324,8 @@
 
             <!-- Option 2: Change email -->
             <div class="fv-card" id="card2">
-                <div class="fv-card-header" onclick="toggleCard('card2', 'card1')">
+                <div class="fv-card-header" onclick="toggleCard('card2', 'card1')" onkeydown="handleAccordionKeydown(event, 'card2', 'card1')"
+                     role="button" tabindex="0" aria-expanded="false" aria-controls="card2-body">
                     <div class="fv-card-icon fv-card-icon--blue">
                         <i class="fas fa-pen-to-square"></i>
                     </div>
@@ -329,7 +336,7 @@
                     <i class="fas fa-chevron-right fv-card-arrow"></i>
                 </div>
 
-                <div class="fv-card-body">
+                <div class="fv-card-body" id="card2-body">
 
                     <!-- Step 1: Email input -->
                     <div id="changeInputSection">
@@ -439,7 +446,19 @@ function toggleCard(activeId, otherId) {
     var other  = document.getElementById(otherId);
     var isOpen = active.classList.contains('fv-card--active');
     active.classList.toggle('fv-card--active', !isOpen);
-    if (other) other.classList.remove('fv-card--active');
+    active.querySelector('.fv-card-header').setAttribute('aria-expanded', String(!isOpen));
+    if (other) {
+        other.classList.remove('fv-card--active');
+        other.querySelector('.fv-card-header').setAttribute('aria-expanded', 'false');
+    }
+}
+
+// The accordion headers are plain divs, not <button>s, so they need an explicit
+// Enter/Space handler to be operable without a mouse.
+function handleAccordionKeydown(event, activeId, otherId) {
+    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+    event.preventDefault();
+    toggleCard(activeId, otherId);
 }
 
 /* Inline email-change confirmation */

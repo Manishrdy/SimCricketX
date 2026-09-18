@@ -237,6 +237,7 @@
 }
 .cmp-player-row:first-child { border-top: none; }
 .cmp-player-row:hover { background: var(--card-bg); }
+.cmp-player-row:focus-visible { outline: 2px solid var(--c1); outline-offset: -2px; }
 .cmp-player-row.selected {
     background: linear-gradient(90deg, rgba(99,102,241,.12), transparent);
     color: var(--c1);
@@ -487,7 +488,8 @@
                     <div class="cmp-team-group" data-team="{{ team.name|lower }}">
                         <div class="cmp-team-head">{{ team.name }}</div>
                         {% for player in team.players %}
-                        <div class="cmp-player-row" data-id="{{ player.id }}" data-name="{{ player.name|lower }}" data-display="{{ player.name }}" data-format="{{ player.profile.format_type if player.profile else 'T20' }}">
+                        <div class="cmp-player-row" data-id="{{ player.id }}" data-name="{{ player.name|lower }}" data-display="{{ player.name }}" data-format="{{ player.profile.format_type if player.profile else 'T20' }}"
+                             role="checkbox" aria-checked="false" tabindex="0">
                             <span class="cmp-check"></span>
                             <span>{{ player.name }}</span>
                         </div>
@@ -577,22 +579,38 @@
         $('cmp-btn').disabled = selected.size < MIN;
     }
 
+    // Keeps the visual `.selected` class and the `aria-checked` state that
+    // assistive tech reads in sync — the two were only ever set together via CSS
+    // class before, which is invisible to a screen reader.
+    function setRowSelected(rowEl, isSelected) {
+        if (!rowEl) return;
+        rowEl.classList.toggle('selected', isSelected);
+        rowEl.setAttribute('aria-checked', String(isSelected));
+    }
+
     function toggle(id, name, rowEl) {
         if (selected.has(id)) {
             selected.delete(id);
-            rowEl && rowEl.classList.remove('selected');
+            setRowSelected(rowEl, false);
         } else {
             if (selected.size >= MAX) { alert(`You can compare up to ${MAX} players at a time.`); return; }
             selected.set(id, name);
-            rowEl && rowEl.classList.add('selected');
+            setRowSelected(rowEl, true);
         }
         renderChips();
     }
 
-    // Row click
+    // Row click / keyboard activation (Enter and Space, matching native
+    // checkbox behavior, since these are plain divs rather than <input>s)
     document.querySelectorAll('.cmp-player-row').forEach(row => {
         row.addEventListener('click', () => {
             toggle(row.dataset.id, row.dataset.display, row);
+        });
+        row.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();
+                toggle(row.dataset.id, row.dataset.display, row);
+            }
         });
     });
 

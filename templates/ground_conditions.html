@@ -36,10 +36,11 @@
 <!-- Game Mode Selector (T20 only — List A uses its own phase model) -->
 <section class="gc-modes">
     <div class="gc-modes-label"><i class="fa-solid fa-gamepad"></i> Game Mode</div>
-    <div class="gc-modes-row" id="gcModesRow">
+    <div class="gc-modes-row" id="gcModesRow" role="radiogroup" aria-label="Game mode">
         {% set active_mode = config.get('active_game_mode', 'auto') %}
         <div class="gc-mode-card{% if active_mode == 'auto' %} active{% endif %}" data-mode="auto"
-            onclick="setGameMode('auto')">
+            onclick="setGameMode('auto')" onkeydown="handleModeCardKeydown(event, 'auto')"
+            role="radio" tabindex="0" aria-checked="{{ 'true' if active_mode == 'auto' else 'false' }}">
             <div class="gc-mode-glow"></div>
             <div class="gc-mode-check"><i class="fa-solid fa-check"></i></div>
             <div class="gc-mode-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
@@ -51,7 +52,8 @@
         </div>
         {% for key, mode in (config.get('game_modes') or {}).items() %}
         <div class="gc-mode-card{% if key == active_mode %} active{% endif %}" data-mode="{{ key }}"
-            onclick="setGameMode('{{ key }}')">
+            onclick="setGameMode('{{ key }}')" onkeydown="handleModeCardKeydown(event, '{{ key }}')"
+            role="radio" tabindex="0" aria-checked="{{ 'true' if key == active_mode else 'false' }}">
             <div class="gc-mode-glow"></div>
             <div class="gc-mode-check"><i class="fa-solid fa-check"></i></div>
             <div class="gc-mode-icon"><i class="fa-solid {{ mode.get('icon', 'fa-circle') }}"></i></div>
@@ -92,7 +94,9 @@
         {% set sm = profile.get('scoring_matrix', {}) %}
         <div class="gc-pitch-card" data-pitch="{{ pitch_name }}">
             <!-- ── Compact Tile (always visible) ── -->
-            <div class="gc-pitch-summary" onclick="openPitchEditor('{{ pitch_name }}')">
+            <div class="gc-pitch-summary" onclick="openPitchEditor('{{ pitch_name }}')"
+                onkeydown="handleModeCardKeydown(event, null, () => openPitchEditor('{{ pitch_name }}'))"
+                role="button" tabindex="0" aria-label="Configure {{ pitch_name }} pitch">
                 <div class="gc-pitch-top">
                     <div class="gc-pitch-identity">
                         <span class="gc-pitch-dot"></span>
@@ -1145,6 +1149,16 @@
             setTimeout(() => t.classList.remove('show'), 3000);
         }
 
+        // Mode/pitch cards are plain divs (not <button>/<input type="radio">), so
+        // they need an explicit Enter/Space handler to be reachable without a
+        // mouse — a native control gets this for free, a div does not.
+        window.handleModeCardKeydown = function (event, mode, customAction) {
+            if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+            event.preventDefault();
+            if (customAction) customAction();
+            else setGameMode(mode);
+        };
+
         // ── Game Mode ──
         window.setGameMode = async function (mode) {
             try {
@@ -1156,7 +1170,9 @@
                 const data = await resp.json();
                 if (resp.ok) {
                     document.querySelectorAll('.gc-mode-card').forEach(c => {
-                        c.classList.toggle('active', c.dataset.mode === mode);
+                        const isActive = c.dataset.mode === mode;
+                        c.classList.toggle('active', isActive);
+                        c.setAttribute('aria-checked', String(isActive));
                     });
                     CONFIG.active_game_mode = mode;
                     // Pulse animation on the newly active card

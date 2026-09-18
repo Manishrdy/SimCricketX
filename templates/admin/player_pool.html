@@ -102,7 +102,8 @@
                     <a href="{{ url_for('admin_player_pool_edit', player_id=p.id) }}" class="a-btn a-btn-sm a-btn-secondary" title="Edit">
                         <i class="fas fa-pen"></i>
                     </a>
-                    <button class="a-btn a-btn-sm a-btn-danger" title="Delete" onclick="confirmSingleDelete({{ p.id }}, '{{ p.name }}')">
+                    <button class="a-btn a-btn-sm a-btn-danger" title="Delete"
+                            data-action="single-delete" data-player-id="{{ p.id }}" data-player-name="{{ p.name }}">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -179,6 +180,15 @@
         updateBulkBar();
     };
 
+    // Delegated click handler for row action buttons (initial + lazy-loaded rows).
+    // Data attributes carry the player id/name as data only; nothing here is ever
+    // re-parsed as JS, so names with quotes/backslashes/unicode can't break or hijack it.
+    tableWrap.addEventListener('click', function(e){
+        var btn = e.target.closest('[data-action="single-delete"]');
+        if (!btn) return;
+        confirmSingleDelete(parseInt(btn.dataset.playerId, 10), btn.dataset.playerName);
+    });
+
     window.confirmSingleDelete = function(playerId, name) {
         modalTitle.textContent = 'Delete Player';
         modalMsg.textContent = 'Delete "' + name + '" from the global pool? This will also remove all user overrides for this player. This action cannot be undone.';
@@ -247,6 +257,10 @@
     var searchDebounce;
 
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    // HTML-attribute escaping (distinct from `esc`, which only handles text-node context).
+    function escAttr(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
 
     function buildAdminRow(p) {
         var tr = document.createElement('tr');
@@ -260,7 +274,7 @@
             + '<td>' + esc(p.bowling_type || '—') + '</td>'
             + '<td style="text-align:right;">'
             + '<a href="/admin/player-pool/' + p.id + '/edit" class="a-btn a-btn-sm a-btn-secondary" title="Edit"><i class="fas fa-pen"></i></a> '
-            + '<button class="a-btn a-btn-sm a-btn-danger" title="Delete" onclick="confirmSingleDelete(' + p.id + ',\'' + esc(p.name).replace(/'/g, "\\'") + '\')"><i class="fas fa-trash"></i></button>'
+            + '<button class="a-btn a-btn-sm a-btn-danger" title="Delete" data-action="single-delete" data-player-id="' + p.id + '" data-player-name="' + escAttr(p.name) + '"><i class="fas fa-trash"></i></button>'
             + '</td>';
         var cb = tr.querySelector('.ap-row-check');
         if (cb) cb.addEventListener('change', updateBulkBar);
