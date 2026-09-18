@@ -1920,6 +1920,8 @@ function displayComparison(players) {
     const res = document.getElementById('comparison-results');
 
     const buildRow = (key, label, v1, v2, lowerBetter) => {
+        const isMissing = value => value === null || value === undefined || value === '';
+        const value1 = isMissing(v1) ? '—' : v1, value2 = isMissing(v2) ? '—' : v2;
         const n1 = parseFloat(v1) || 0, n2 = parseFloat(v2) || 0, max = Math.max(n1, n2, 1);
         const w1 = (n1 / max * 100).toFixed(1), w2 = (n2 / max * 100).toFixed(1);
         const p1wins = lowerBetter ? (n1 > 0 && (n2 === 0 || n1 < n2)) : n1 > n2;
@@ -1927,11 +1929,11 @@ function displayComparison(players) {
         return '<div class="comp-row">'
              + '<div class="comp-key">' + label + '</div>'
              + '<div class="comp-val-wrap">'
-             +   '<span class="comp-val' + (p1wins ? ' winner' : '') + '">' + (v1 || '—') + '</span>'
+             +   '<span class="comp-val' + (p1wins ? ' winner' : '') + '">' + value1 + '</span>'
              +   '<div class="comp-bar-bg"><div class="comp-bar-fill" style="width:' + w1 + '%"></div></div>'
              + '</div>'
              + '<div class="comp-val-wrap">'
-             +   '<span class="comp-val' + (p2wins ? ' winner p2' : '') + '">' + (v2 || '—') + '</span>'
+             +   '<span class="comp-val' + (p2wins ? ' winner p2' : '') + '">' + value2 + '</span>'
              +   '<div class="comp-bar-bg"><div class="comp-bar-fill alt" style="width:' + w2 + '%"></div></div>'
              + '</div>'
              + '</div>';
@@ -1948,7 +1950,7 @@ function displayComparison(players) {
         const battingKeys = [['innings','Inn',false],['runs','Runs',false],['average','Avg',false],['strike_rate','SR',false],['fifties','50s',false],['hundreds','100s',false]];
         if ((new URLSearchParams(window.location.search).get('match_format') || 'T20') === 'FC') battingKeys.push(['double_centuries','200s',false],['triple_centuries','300s',false]);
         battingKeys.forEach(([k, lbl, lb]) => {
-            html += buildRow(k, lbl, p1.batting?.[k] ?? '—', p2.batting?.[k] ?? '—', lb);
+            html += buildRow(k, lbl, p1.batting?.[k], p2.batting?.[k], lb);
         });
     }
     if (p1.bowling || p2.bowling) {
@@ -1956,7 +1958,7 @@ function displayComparison(players) {
         const bowlingKeys = [['wickets','Wkts',false],['average','Avg',true],['economy','Eco',true]];
         if ((new URLSearchParams(window.location.search).get('match_format') || 'T20') === 'FC') bowlingKeys.push(['five_wicket_hauls','5WI',false],['ten_wicket_matches','10WM',false]);
         bowlingKeys.forEach(([k, lbl, lb]) => {
-            html += buildRow(k, lbl, p1.bowling?.[k] ?? '—', p2.bowling?.[k] ?? '—', lb);
+            html += buildRow(k, lbl, p1.bowling?.[k], p2.bowling?.[k], lb);
         });
     }
     res.innerHTML = html;
