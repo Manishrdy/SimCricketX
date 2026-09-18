@@ -1753,6 +1753,7 @@
   // ── LocalStorage auto-save ───────────────────────────────────────────
   let saveTimer = null;
   let lastSavedJson = '';
+  let editBaseline = '';
 
   function setSaveStatus(mode) {
     if (mode === 'saving') {
@@ -1794,6 +1795,11 @@
     saveTimer = null;
     try {
       const json = snapshot();
+      if (IS_EDIT && comparableSnapshot(json) === editBaseline) {
+        clearDraft();
+        setSaveStatus('idle');
+        return;
+      }
       localStorage.setItem(LS_KEY, json);
       lastSavedJson = json;
       setSaveStatus('saved');
@@ -1972,6 +1978,10 @@
   bindIdentity();
   colorSwatch.style.background = colorInput.value;
   let restored = false;
+  if (IS_EDIT) {
+    loadEdit();
+    editBaseline = comparableSnapshot(snapshot());
+  }
   const submittedRestored = loadSubmittedDraft();
   if (submittedRestored) {
     // Server validation failed: prefer the submitted values over any older draft.

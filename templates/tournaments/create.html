@@ -506,6 +506,16 @@
         return true;
     }
 
+    window.addEventListener('pageshow', function (event) {
+        if (!event.persisted) return;
+        isSubmitting = false;
+        const submitBtn = document.getElementById('submitBtn');
+        if (!submitBtn) return;
+        submitBtn.disabled = !document.getElementById('selectedMode').value;
+        submitBtn.innerHTML = '<i class="fas fa-trophy"></i> Create Tournament';
+        // Preserve the token: Back after a lost response retries the same intent.
+    });
+
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function () {
         // Apply team colors from data attributes (to avoid linting errors)

@@ -49,3 +49,16 @@ test('comparison preserves real zeros and uses dashes for missing statistics', (
     assert.match(html, /<div class="comp-key">100s<\/div>[\s\S]*?<span class="comp-val">0<\/span>[\s\S]*?<span class="comp-val">—<\/span>/);
     assert.match(html, /<div class="comp-key">Wkts<\/div>[\s\S]*?<span class="comp-val">0<\/span>[\s\S]*?<span class="comp-val">—<\/span>/);
 });
+
+test('zero economy wins against a higher economy and missing values never win', () => {
+    const html = renderComparison([
+        {name: 'Maiden', bowling: {economy: 0}},
+        {name: 'Expensive', bowling: {economy: 8, average: 12}},
+    ]);
+    assert.match(html, /<div class="comp-key">Eco<\/div>[\s\S]*?<span class="comp-val winner">0<\/span>[\s\S]*?<span class="comp-val">8<\/span>/);
+    assert.match(html, /<div class="comp-key">Avg<\/div>[\s\S]*?<span class="comp-val">—<\/span>[\s\S]*?<span class="comp-val">12<\/span>/);
+});
+test('equal zeros are a tie', () => {
+    const html = renderComparison([{name:'One',bowling:{economy:0}},{name:'Two',bowling:{economy:0}}]);
+    assert(!html.includes('comp-val winner'));
+});

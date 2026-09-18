@@ -864,6 +864,16 @@
             window.history.replaceState({}, document.title, next);
         }
 
+        function clearTeamEditDraftIfNeeded() {
+            const url = new URL(window.location.href);
+            const code = url.searchParams.get('clear_team_edit_draft');
+            if (!code) return;
+            try { localStorage.removeItem('team_edit_draft_v1:' + code); } catch (_) {}
+            url.searchParams.delete('clear_team_edit_draft');
+            window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+        }
+        clearTeamEditDraftIfNeeded();
+
         const toggle = document.getElementById('theme-toggle');
         const docRoot = document.documentElement;
         const icon = toggle.querySelector('i');
