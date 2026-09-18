@@ -2,6 +2,7 @@
 
 import json
 import os
+import secrets
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -163,6 +164,11 @@ def register_tournament_routes(
             team_ids = request.form.getlist("team_ids")
             mode = request.form.get("mode", "round_robin")
             match_format = request.form.get("match_format", "T20").strip()
+            creation_token = request.form.get("creation_token", "").strip() or None
+
+            if creation_token and len(creation_token) > 64:
+                flash("Invalid tournament creation request.", "error")
+                return redirect(url_for("create_tournament_route"))
 
             if match_format not in VALID_TOURNAMENT_FORMATS:
                 flash("Invalid match format selected.", "error")
@@ -224,6 +230,7 @@ def register_tournament_routes(
                     mode=mode,
                     series_config=series_config,
                     format_type=match_format,
+                    creation_token=creation_token,
                 )
                 flash(f"Tournament '{name}' created successfully!", "success")
                 return redirect(url_for("tournament_dashboard", tournament_id=t.id))
@@ -253,6 +260,7 @@ def register_tournament_routes(
             teams=teams,
             available_modes=available_modes,
             team_formats_json=json.dumps(team_formats),
+            creation_token=secrets.token_urlsafe(32),
         )
 
     @app.route("/tournaments/<int:tournament_id>")
