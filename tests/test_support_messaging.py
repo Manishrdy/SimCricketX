@@ -207,3 +207,38 @@ def test_exception_logging_still_works(app):
         row = db.session.get(ExceptionLog, row_id)
         assert row is not None
         assert row.exception_message == "support-migration-exception-check"
+
+
+def test_lost_acknowledgement_retry_succeeds_even_at_user_rate_limit(client, app, regular_user):
+    _login(client, regular_user)
+    responses = []
+    for i in range(5):
+        response = client.post('/api/support/messages', json={
+            'body': f'message {i}', 'client_nonce': f'delivery-{i}'})
+        assert response.status_code == 201
+        responses.append(response.get_json())
+    # The fifth response was lost. Retrying it must acknowledge the existing
+    # row even though a sixth *new* message would be rate limited.
+    retry = client.post('/api/support/messages', json={
+        'body': 'message 4', 'client_nonce': 'delivery-4'})
+    assert retry.status_code == 201
+    assert retry.get_json()['message']['id'] == responses[-1]['message']['id']
+    with app.app_context():
+        conv = support_service.get_conversation(responses[-1]['conversation']['id'])
+        assert SupportMessage.query.filter_by(conversation_id=conv.id).count() == 5
+    assert client.post('/api/support/messages', json={
+        'body': 'new message', 'client_nonce': 'new-delivery'}).status_code == 429
+
+
+def test_admin_retry_uses_existing_message(client, app, regular_user, admin_user):
+    conv = support_service.get_or_create_user_conversation(regular_user.id, {})
+    support_service.create_message(conv, sender_type='user', sender_id=regular_user.id, body='help')
+    db.session.commit()
+    conversation = conv.public_id
+    _login(client, admin_user)
+    url = f'/api/admin/support/conversations/{conversation}/messages'
+    first = client.post(url, json={'body': 'reply', 'client_nonce': 'admin-retry'})
+    retry = client.post(url, json={'body': 'reply', 'client_nonce': 'admin-retry'})
+    assert first.status_code == retry.status_code == 201
+    assert first.get_json()['message']['id'] == retry.get_json()['message']['id']
+    assert retry.get_json()['duplicate'] is True

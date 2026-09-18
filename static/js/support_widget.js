@@ -14,6 +14,8 @@
     var connectionEl = document.getElementById('scx-support-connection');
     var unreadEl = document.getElementById('scx-support-unread');
 
+    var outbox = null;
+    var sending = false;
     var socket = null;
     var conversationId = null;
     var seenMessageIds = {};
@@ -190,8 +192,7 @@
         cooldownUntil = 0;
         if (cooldownTimer) window.clearInterval(cooldownTimer);
         cooldownTimer = null;
-        input.disabled = lockedUntilAdminReply;
-        sendBtn.disabled = lockedUntilAdminReply;
+        updateSendAvailability();
         if (statusEl.textContent.indexOf('another message in') !== -1) {
             setStatus('');
         }
@@ -205,8 +206,7 @@
 
     function startCooldown(seconds) {
         cooldownUntil = Date.now() + (Number(seconds || 60) * 1000);
-        input.disabled = true;
-        sendBtn.disabled = true;
+        updateSendAvailability();
         if (cooldownTimer) window.clearInterval(cooldownTimer);
         function tick() {
             var remaining = cooldownUntil - Date.now();
@@ -229,8 +229,7 @@
         if (rate.blocked_until_admin_reply || rate.mode === 'until_admin_reply') {
             lockedUntilAdminReply = true;
             clearCooldown();
-            input.disabled = true;
-            sendBtn.disabled = true;
+            updateSendAvailability();
             setStatus('Message limit reached. You can send again after admin replies.');
             return;
         }
@@ -257,47 +256,53 @@
             return resp.json().then(function (payload) {
                 return { status: resp.status, payload: payload };
             });
-        }).then(function (result) {
-            if (result.status === 429) {
-                applyRateState(result.payload.rate || { allowed: false, retry_after: result.payload.retry_after || 60 });
-                return { blocked: true };
-            }
-            if (result.status >= 300) {
-                throw new Error(result.payload.error || 'send_failed');
-            }
-            conversationId = result.payload.conversation.id;
-            renderMessage(result.payload.message);
-            applyRateState(result.payload.rate);
-            markRead();
-            return { blocked: result.payload.rate && result.payload.rate.allowed === false };
         });
     }
 
+    function updateSendAvailability() {
+        var retrying = outbox && outbox.uncertain;
+        input.disabled = sending || (!retrying && (!!cooldownUntil || lockedUntilAdminReply));
+        sendBtn.disabled = input.disabled;
+    }
+
     function sendMessage(body) {
-        var nonce = makeNonce();
-        setStatus('Sending...');
+        if (sending) return;
+        // HTTP is the acknowledgement channel; sockets still deliver live updates.
+        // Keep the same nonce after an uncertain failure so Retry cannot duplicate it.
+        if (!outbox || outbox.body !== body) outbox = { body: body, nonce: makeNonce() };
+        outbox.uncertain = false;
+        sending = true;
+        input.disabled = true;
         sendBtn.disabled = true;
-        var payload = {
-            body: body,
-            client_nonce: nonce,
-            page_url: window.location.href,
-            app_version: panel.getAttribute('data-app-version') || ''
-        };
-        if (conversationId) payload.conversation_id = conversationId;
-
-        if (socket && socket.connected) {
-            socket.emit('support:message:send', payload);
-            setStatus('');
-            sendBtn.disabled = false;
-            return Promise.resolve();
-        }
-
-        return sendViaHttp(body, nonce).then(function (result) {
-            if (!result || !result.blocked) setStatus('');
+        setStatus('Sending… Your text is kept until delivery is confirmed.');
+        var timeout;
+        return Promise.race([
+            sendViaHttp(outbox.body, outbox.nonce),
+            new Promise(function (_, reject) {
+                timeout = window.setTimeout(function () { reject(new Error('timeout')); }, 15000);
+            })
+        ]).then(function (result) {
+            if (result.status === 429) {
+                applyRateState(result.payload.rate || { allowed: false, retry_after: result.payload.retry_after || 60 });
+                return;
+            }
+            if (result.status >= 300 || !result.payload.message || !result.payload.conversation) {
+                throw new Error('send_failed');
+            }
+            input.value = '';
+            outbox = null;
+            applyConversation(result.payload.conversation);
+            renderMessage(result.payload.message);
+            applyRateState(result.payload.rate);
+            markRead();
+            if (!cooldownUntil && !lockedUntilAdminReply) setStatus('Message sent.');
         }).catch(function () {
-            setStatus('Could not send message. Please try again.', 'error');
+            outbox.uncertain = true;
+            setStatus('Delivery not confirmed. Your text is kept. Press Send to retry.', 'error');
         }).finally(function () {
-            if (!cooldownUntil && !lockedUntilAdminReply) sendBtn.disabled = false;
+            window.clearTimeout(timeout);
+            sending = false;
+            updateSendAvailability();
         });
     }
 
@@ -391,8 +396,7 @@
     form.addEventListener('submit', function (e) {
         e.preventDefault();
         var body = (input.value || '').trim();
-        if (!body || cooldownUntil || lockedUntilAdminReply) return;
-        input.value = '';
+        if (!body || sending || ((cooldownUntil || lockedUntilAdminReply) && !(outbox && outbox.uncertain))) return;
         sendMessage(body);
     });
 

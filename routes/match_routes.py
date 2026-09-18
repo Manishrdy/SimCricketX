@@ -9,6 +9,8 @@ import uuid
 import zipfile
 from datetime import datetime, timedelta
 
+from services.match_delivery import MatchDelivery, DeliveryConflict
+
 from engine.format_config import get_any_format as _get_any_format
 from engine.toss import decide_toss, home_bats_first
 from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
@@ -615,6 +617,12 @@ def register_match_routes(
 
         if match.data.get("created_by") != current_user.id:
             return jsonify({"error": "Unauthorized"}), 403
+
+        if request.args.get("delivery") == "1":
+            try:
+                return jsonify(_delivery_for(match).recover(request.args.get("request_id")))
+            except DeliveryConflict as exc:
+                return jsonify({"error": str(exc), "reload_required": True}), 409
 
         if match.data.get("current_state") == "completed":
             return jsonify({"status": "completed"})
@@ -1326,7 +1334,25 @@ def register_match_routes(
         else:
             _persist_non_tournament_match_completion(match, match_id, outcome, app.logger)
 
-    def _advance_one_ball(match_id, user_id):
+    def _delivery_for(match):
+        with MATCH_INSTANCES_LOCK:
+            if not hasattr(match, "_delivery_guard"):
+                match._delivery_guard = MatchDelivery()
+            return match._delivery_guard
+
+    def _advance_one_ball(match_id, user_id, delivery_token=None):
+        match, err = _get_or_restore_match_instance(match_id)
+        if err:
+            return None, err
+        if match.data.get("created_by") != user_id:
+            return None, (jsonify({"error": "Unauthorized"}), 403)
+        try:
+            return _delivery_for(match).advance(
+                delivery_token, lambda: _advance_one_ball_unlocked(match_id, user_id))
+        except DeliveryConflict as exc:
+            return None, (jsonify({"error": str(exc), "reload_required": True}), 409)
+
+    def _advance_one_ball_unlocked(match_id, user_id):
         """Advance a match by one ball. Transport-agnostic.
 
         Shared by the HTTP POST /next-ball route below AND app.py's
@@ -1440,7 +1466,9 @@ def register_match_routes(
     @rate_limit(max_requests=60, window_seconds=10)  # C3: Rate limit to prevent DoS
     def next_ball(match_id):
         try:
-            payload, err = _advance_one_ball(match_id, current_user.id)
+            payload, err = _advance_one_ball(
+                match_id, current_user.id,
+                (request.get_json(silent=True) or {}).get("delivery_token"))
             if err is not None:
                 return err
             return jsonify(payload)
