@@ -798,6 +798,7 @@ class Tournament(db.Model):
     name = db.Column(db.String(100), nullable=False)
     status = db.Column(db.String(20), default='Active')  # Active, Completed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    creation_token = db.Column(db.String(64), nullable=True)
 
     # Tournament Mode Configuration
     # Modes: 'round_robin', 'double_round_robin', 'knockout',
@@ -823,6 +824,10 @@ class Tournament(db.Model):
     participating_teams = relationship('TournamentTeam', backref='tournament', cascade="all, delete-orphan")
     fixtures = relationship('TournamentFixture', backref='tournament', cascade="all, delete-orphan")
     player_stats_cache = relationship('TournamentPlayerStatsCache', backref='tournament', cascade="all, delete-orphan")
+
+    __table_args__ = (
+        db.Index('uq_tournament_user_creation_token', 'user_id', 'creation_token', unique=True),
+    )
 
 class MatchPartnership(db.Model):
     """Batting partnership records for each innings"""
