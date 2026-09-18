@@ -806,6 +806,26 @@
         </div>
     </div>
 </div>
+
+<div class="gc-modal-overlay" id="gcUnsavedModal" role="dialog" aria-modal="true"
+    aria-labelledby="gcUnsavedTitle" aria-hidden="true">
+    <div class="gc-modal">
+        <div class="gc-modal-icon"><i class="fa-solid fa-floppy-disk"></i></div>
+        <h3 id="gcUnsavedTitle">Save ground changes?</h3>
+        <p>This format has unsaved changes. Save them before switching formats, or discard them.</p>
+        <div class="gc-modal-actions">
+            <button class="gc-btn gc-btn-reset" type="button" id="gcKeepEditing">
+                Keep Editing
+            </button>
+            <button class="gc-btn gc-btn-reset" type="button" id="gcDiscardChanges">
+                Discard
+            </button>
+            <button class="gc-btn gc-btn-save" type="button" id="gcSaveAndSwitch">
+                <i class="fa-solid fa-floppy-disk"></i> Save &amp; Switch
+            </button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -821,6 +841,107 @@
         const MATCH_FORMAT = {{ match_format | tojson | safe }};
         const IS_LISTA = MATCH_FORMAT === 'ListA';
         const IS_FC = MATCH_FORMAT === 'FC';
+        const DRAFT_KEY = 'ground_conditions_draft_v1:' + MATCH_FORMAT;
+        let draftTimer = null;
+        let isRestoringDraft = false;
+        let hasUnsavedChanges = false;
+        let pendingNavigation = '';
+        let pendingNavigationTrigger = null;
+        let committedSnapshot = '';
+
+        function draftControls() {
+            return Array.from(document.querySelectorAll(
+                'input:not([type="hidden"]):not([type="button"]):not([type="submit"]), select, textarea'
+            ));
+        }
+
+        function controlKey(control, index) {
+            if (control.id) return 'id:' + control.id;
+            return [
+                control.tagName,
+                control.type || '',
+                control.dataset.pitch || '',
+                control.dataset.phase || '',
+                control.dataset.outcome || '',
+                control.dataset.wf || '',
+                control.dataset.field || '',
+                index,
+            ].join(':');
+        }
+
+        function captureDraft() {
+            const values = {};
+            draftControls().forEach((control, index) => {
+                values[controlKey(control, index)] = {
+                    value: control.value,
+                    checked: control.checked,
+                };
+            });
+            return JSON.stringify({ v: 1, matchFormat: MATCH_FORMAT, values });
+        }
+
+        function persistDraftNow() {
+            if (!hasUnsavedChanges) return;
+            if (draftTimer) clearTimeout(draftTimer);
+            draftTimer = null;
+            try {
+                localStorage.setItem(DRAFT_KEY, captureDraft());
+            } catch (_) {}
+        }
+
+        function scheduleDraftSave() {
+            if (isRestoringDraft) return;
+            if (committedSnapshot && captureDraft() === committedSnapshot) {
+                clearGroundDraft();
+                return;
+            }
+            hasUnsavedChanges = true;
+            if (draftTimer) clearTimeout(draftTimer);
+            draftTimer = setTimeout(persistDraftNow, 250);
+        }
+
+        function clearGroundDraft() {
+            if (draftTimer) clearTimeout(draftTimer);
+            draftTimer = null;
+            hasUnsavedChanges = false;
+            try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
+        }
+
+        function restoreGroundDraft() {
+            let draft;
+            try {
+                draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+            } catch (_) {
+                return;
+            }
+            if (!draft || draft.v !== 1 || draft.matchFormat !== MATCH_FORMAT) return;
+
+            isRestoringDraft = true;
+            const restored = [];
+            const applySavedValue = (control, saved) => {
+                if (control.type === 'checkbox' || control.type === 'radio') {
+                    control.checked = !!saved.checked;
+                } else {
+                    control.value = saved.value;
+                }
+            };
+            draftControls().forEach((control, index) => {
+                const saved = draft.values[controlKey(control, index)];
+                if (!saved) return;
+                applySavedValue(control, saved);
+                restored.push({ control, saved });
+            });
+            restored.forEach(({ control }) => {
+                control.dispatchEvent(new Event('input', { bubbles: true }));
+                control.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            // Derived sliders may update raw fields while their events run.
+            // Reapply the stored values so buildConfig() receives the exact draft.
+            restored.forEach(({ control, saved }) => applySavedValue(control, saved));
+            isRestoringDraft = false;
+            hasUnsavedChanges = true;
+            showToast('Restored unsaved ' + MATCH_FORMAT + ' ground changes.', 'success');
+        }
 
         /* ────────────────────────────────────────────────────────────────
            Pitch character model
@@ -1724,6 +1845,7 @@
             const btn = document.getElementById('btnSaveAll');
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+            let saved = false;
 
             try {
                 const cfg = buildConfig();
@@ -1735,7 +1857,10 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
+                    clearGroundDraft();
+                    committedSnapshot = captureDraft();
                     showToast(data.message, 'success');
+                    saved = true;
                 } else {
                     showToast(data.error || 'Save failed', 'error');
                 }
@@ -1745,6 +1870,7 @@
 
             btn.disabled = false;
             btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save All';
+            return saved;
         };
 
         // ── Reset ──
@@ -1764,6 +1890,7 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
+                    clearGroundDraft();
                     showToast('Reset to defaults — reloading...', 'success');
                     setTimeout(() => location.reload(), 800);
                 } else {
@@ -1778,14 +1905,66 @@
         document.getElementById('gcResetModal').addEventListener('click', function (e) {
             if (e.target === this) closeResetModal();
         });
+
+        const unsavedModal = document.getElementById('gcUnsavedModal');
+        function closeUnsavedModal() {
+            unsavedModal.classList.remove('show');
+            unsavedModal.setAttribute('aria-hidden', 'true');
+            pendingNavigation = '';
+            if (pendingNavigationTrigger) pendingNavigationTrigger.focus();
+            pendingNavigationTrigger = null;
+        }
+
+        document.querySelectorAll('.gc-format-tab').forEach(tab => {
+            tab.addEventListener('click', function (e) {
+                if (!hasUnsavedChanges || tab.classList.contains('active')) return;
+                e.preventDefault();
+                persistDraftNow();
+                pendingNavigation = tab.href;
+                pendingNavigationTrigger = tab;
+                unsavedModal.classList.add('show');
+                unsavedModal.setAttribute('aria-hidden', 'false');
+                document.getElementById('gcSaveAndSwitch').focus();
+            });
+        });
+
+        document.getElementById('gcKeepEditing').addEventListener('click', closeUnsavedModal);
+        document.getElementById('gcDiscardChanges').addEventListener('click', function () {
+            const destination = pendingNavigation;
+            clearGroundDraft();
+            location.href = destination;
+        });
+        document.getElementById('gcSaveAndSwitch').addEventListener('click', async function () {
+            const destination = pendingNavigation;
+            if (await saveAll()) location.href = destination;
+        });
+        unsavedModal.addEventListener('click', function (e) {
+            if (e.target === this) closeUnsavedModal();
+        });
+
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
-                if (pitchModal && pitchModal.classList.contains('show')) {
+                if (unsavedModal.classList.contains('show')) {
+                    closeUnsavedModal();
+                } else if (pitchModal && pitchModal.classList.contains('show')) {
                     closePitchEditor();
                 } else {
                     closeResetModal();
                 }
             }
+        });
+
+        document.addEventListener('input', scheduleDraftSave, true);
+        document.addEventListener('change', scheduleDraftSave, true);
+        document.addEventListener('click', function () {
+            setTimeout(scheduleDraftSave, 0);
+        }, true);
+        window.addEventListener('pagehide', persistDraftNow);
+        window.addEventListener('beforeunload', function (e) {
+            if (!hasUnsavedChanges) return;
+            persistDraftNow();
+            e.preventDefault();
+            e.returnValue = '';
         });
 
         // ── Init: Set bar widths and update totals ──
@@ -1799,6 +1978,8 @@
             updateListATotal(card.dataset.phase);
         });
         initIntentSliders();
+        committedSnapshot = captureDraft();
+        restoreGroundDraft();
     })();
 </script>
 {% endblock %}
