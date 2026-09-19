@@ -13,6 +13,8 @@ Environment variable:
 
 import logging
 import os
+import time
+from requests.exceptions import Timeout, ConnectionError as RequestsConnectionError
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -73,40 +75,45 @@ def _render(template_name: str, **kwargs) -> str:
 
 # ── Core send ─────────────────────────────────────────────────────────────────
 
+MAX_RETRIES = 3
+
 def send_email(to: str, subject: str, html: str) -> bool:
     """Send a transactional email via Resend. Returns True on success."""
     api_key = _api_key()
     if not api_key:
         log.error("[Email] RESEND_API_KEY not set — email not sent to %s", to)
         return False
-    try:
-        resend.api_key = api_key
-        resend.Emails.send({
-            "from": _from_addr(),
-            "to": [to],
-            "subject": subject,
-            "html": html,
-        })
-        log.info("[Email] '%s' sent to %s", subject, to)
-        return True
-    except Exception as exc:
-        # Resend rejects recipients on known-undeliverable domains (RFC 2606
-        # reserved domains like example.com, or its own denylist) with this
-        # "Invalid `to` field" message. That's a garbage/placeholder address
-        # the sender was never going to reach, not a bug in this app — file it
-        # as a data anomaly like other bad-upstream-data cases instead of an
-        # actionable GitHub issue, which otherwise floods the tracker every
-        # time someone types a fake email into the registration form.
-        if "Invalid `to` field" in str(exc):
-            log_data_anomaly(
-                "undeliverable_email_recipient",
-                str(exc),
-                payload={"to": to, "subject": subject},
-            )
-        else:
+    resend.api_key = api_key
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            resend.Emails.send({
+                "from": _from_addr(),
+                "to": [to],
+                "subject": subject,
+                "html": html,
+            })
+            log.info("[Email] '%s' sent to %s", subject, to)
+            return True
+        except (Timeout, RequestsConnectionError) as exc:
+            if attempt < MAX_RETRIES:
+                log.warning("[Email] Attempt %d failed due to timeout/connection error: %s. Retrying...", attempt, exc)
+                time.sleep(2 ** attempt)  # 2, 4, 8 seconds backoff
+                continue
             log_exception(exc)
-        log.error("[Email] Failed to send '%s' to %s: %s", subject, to, exc)
-        return False
+            log.error("[Email] Failed to send '%s' to %s after %d attempts: %s", subject, to, MAX_RETRIES, exc)
+            return False
+        except Exception as exc:
+            if "Invalid `to` field" in str(exc):
+                log_data_anomaly(
+                    "undeliverable_email_recipient",
+                    str(exc),
+                    payload={"to": to, "subject": subject},
+                )
+            else:
+                log_exception(exc)
+            log.error("[Email] Failed to send '%s' to %s: %s", subject, to, exc)
+            return False
 
 
 # ── Public helpers ─────────────────────────────────────────────────────────────
