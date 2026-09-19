@@ -2,6 +2,7 @@
 
 import json
 import re
+from datetime import datetime
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -33,6 +34,15 @@ def register_team_routes(
     Tournament=None,
 ):
     # ── Internal helpers ──────────────────────────────────────────────────────
+
+    def _touch_team(team):
+        """Stamp the team as edited. Caller commits.
+
+        Only real user edits call this — identity changes, squad changes and
+        publishes. Lazily creating an empty profile on a GET is not an edit,
+        so /teams/manage keeps saying "Created ..." for untouched teams.
+        """
+        team.updated_at = datetime.utcnow()
 
     def _extract_player_list(raw_list):
         """
@@ -754,6 +764,7 @@ def register_team_routes(
         player.batting_hand = entry["batting_hand"]
         player.bowling_type = entry["bowling_type"]
         player.bowling_hand = entry["bowling_hand"]
+        _touch_team(team)
         db.session.commit()
         return json.dumps({
             "ok": True,
@@ -781,6 +792,7 @@ def register_team_routes(
             return json.dumps({"error": "Player not found."}), 404, {"Content-Type": "application/json"}
         name = player.name
         _detach_player_from_squad(player)
+        _touch_team(team)
         db.session.commit()
         return json.dumps({"ok": True, "name": name}), 200, {"Content-Type": "application/json"}
 
@@ -797,6 +809,7 @@ def register_team_routes(
         player_id = data.get("player_id")
         for p in DBPlayer.query.filter_by(profile_id=profile.id).all():
             p.is_captain = (p.id == player_id)
+        _touch_team(team)
         db.session.commit()
         return json.dumps({"ok": True}), 200, {"Content-Type": "application/json"}
 
@@ -818,6 +831,7 @@ def register_team_routes(
             return json.dumps({"error": "Only Wicketkeeper-role players can be designated."}), 400, {"Content-Type": "application/json"}
         for p in DBPlayer.query.filter_by(profile_id=profile.id).all():
             p.is_wicketkeeper = (p.id == player_id)
+        _touch_team(team)
         db.session.commit()
         return json.dumps({"ok": True}), 200, {"Content-Type": "application/json"}
 
@@ -840,6 +854,7 @@ def register_team_routes(
         if error:
             return json.dumps({"error": error}), 400, {"Content-Type": "application/json"}
         team.is_draft = False
+        _touch_team(team)
         db.session.commit()
         return json.dumps({"ok": True}), 200, {"Content-Type": "application/json"}
 
@@ -945,6 +960,7 @@ def register_team_routes(
         if not is_draft:
             team.is_draft = False
 
+        _touch_team(team)
         db.session.commit()
         return json.dumps({"ok": True}), 200, {"Content-Type": "application/json"}
 
@@ -1057,6 +1073,7 @@ def register_team_routes(
                     "profiles": profiles_info,
                     "is_draft": getattr(t, "is_draft", False),
                     "created_at": t.created_at,
+                    "updated_at": getattr(t, "updated_at", None),
                 })
         except Exception as e:
             log_exception(e)
@@ -1265,6 +1282,7 @@ def register_team_routes(
                         if DBPlayer.query.filter_by(profile_id=prof.id).count() == 0:
                             db.session.delete(prof)
 
+                    _touch_team(team)
                     db.session.commit()
                     status_msg = "Draft" if is_draft else "Active"
                     app.logger.info(

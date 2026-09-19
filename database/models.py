@@ -85,6 +85,10 @@ class Team(db.Model):
     pitch_preference = db.Column(db.String(50))
     team_color = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Set only when the team is actually changed after creation (identity edit,
+    # squad edit, publish). Stays NULL for a team nobody has touched since it
+    # was created, so "Created ..." remains the honest label for those.
+    updated_at = db.Column(db.DateTime)
     is_draft = db.Column(db.Boolean, default=False)
     is_placeholder = db.Column(db.Boolean, default=False)  # True for BYE/TBD teams
     season_id = db.Column(db.Integer, db.ForeignKey('seasons.id', ondelete='CASCADE'), nullable=True, index=True)
@@ -789,6 +793,24 @@ class MatchScorecard(db.Model):
     wickets_run_out = db.Column(db.Integer, default=0)
     wickets_hit_wicket = db.Column(db.Integer, default=0)
 
+class Tour(db.Model):
+    """Ordered bilateral series; match statistics remain on child tournaments."""
+    __tablename__ = 'tours'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    host_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='SET NULL'))
+    visiting_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='SET NULL'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    creation_token = db.Column(db.String(64), nullable=True)
+    status = db.Column(db.String(20), default='Active', nullable=False)
+    host_team = relationship('Team', foreign_keys=[host_team_id])
+    visiting_team = relationship('Team', foreign_keys=[visiting_team_id])
+    series = relationship('Tournament', backref='tour', order_by='Tournament.tour_order',
+                          cascade='all, delete-orphan')
+    __table_args__ = (db.Index('uq_tour_user_creation_token', 'user_id', 'creation_token', unique=True),)
+
+
 class Tournament(db.Model):
     """Tournament / League Container"""
     __tablename__ = 'tournaments'
@@ -799,6 +821,10 @@ class Tournament(db.Model):
     status = db.Column(db.String(20), default='Active')  # Active, Completed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     creation_token = db.Column(db.String(64), nullable=True)
+
+    tour_id = db.Column(db.Integer, db.ForeignKey('tours.id'), nullable=True, index=True)
+    tour_order = db.Column(db.Integer, nullable=True)
+    tour_started_at = db.Column(db.DateTime, nullable=True)
 
     # Tournament Mode Configuration
     # Modes: 'round_robin', 'double_round_robin', 'knockout',

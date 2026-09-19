@@ -58,6 +58,7 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     ("add_tournament_format",    _loader("migrations.add_tournament_format")),
     ("add_tournament_creation_token",
      _loader("migrations.add_tournament_creation_token")),
+    ("add_tours", _loader("migrations.add_tours")),
     ("add_account_lockout",      _loader("migrations.add_account_lockout")),
     ("add_pending_email",        _loader("migrations.add_pending_email")),
     ("add_exception_log",        _loader("migrations.add_exception_log")),
@@ -165,6 +166,9 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
     # detailed cache parity with direct scorecard aggregation).
     ("extend_fc_statistics_cache",
      _loader("migrations.extend_fc_statistics_cache")),
+    # teams.updated_at — last-edit timestamp so /teams/manage can show
+    # "Last updated ..." instead of the creation date for teams that changed.
+    ("add_team_updated_at",      _loader("migrations.add_team_updated_at")),
 ]
 
 

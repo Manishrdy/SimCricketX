@@ -33,25 +33,27 @@ function teamCard(name) {
         <div class="team-name">${name}</div></div><div class="team-code">LONG</div></div>
         <div class="card-body"><div class="info-grid"><div class="info-item"><span class="info-label">Captain</span>
         <span class="info-value">${name}</span></div></div></div>
-        <div class="card-footer"><div class="card-meta">Created Sep 18, 2026</div>
+        <div class="card-footer"><div class="card-meta">Last updated Sep 18, 2026 14:07 UTC</div>
         <div class="card-actions"><button class="action-btn edit">Edit</button><button class="action-btn delete">Del</button></div></div></div>`;
 }
+// Mirrors renderRoster() in templates/team_create.html: the slim card keeps
+// grip/order/name/role/actions on one identity row, FC ratings underneath.
 function fcRow(idx, name) {
     return `<div class="tc-player" draggable="true"><div class="tc-player-top">
         <span class="tc-grip player-touch-handle">⠿</span><span class="tc-player-order">${idx}</span>
         <div class="tc-player-main"><div class="tc-player-name">${name}</div>
         <div class="tc-player-meta">Right hand bat · Fast-medium</div></div>
-        <span class="tc-role-pill bat">BAT</span></div>
+        <span class="tc-role-pill bat">BAT</span>
+        <span class="tc-player-actions">
+          <button type="button" data-roster-action="up">↑</button>
+          <button type="button" data-roster-action="down">↓</button>
+          <button type="button" data-roster-action="remove">✕</button>
+        </span></div>
         <div class="tc-fc-ratings">
           <div class="tc-fc-rating"><label>TEC</label><input type="number" value="50"></div>
           <div class="tc-fc-rating"><label>TMP</label><input type="number" value="50"></div>
           <div class="tc-fc-rating"><label>STA</label><input type="number" value="50"></div>
-        </div>
-        <span class="tc-player-actions">
-          <button type="button" data-roster-action="up">↑</button>
-          <button type="button" data-roster-action="down">↓</button>
-          <button type="button" data-roster-action="remove">Remove</button>
-        </span></div>`;
+        </div></div>`;
 }
 
 test('team, story, analytics and match-setup cards stay within 320px, including 200% text', () => browserTest(async page => {

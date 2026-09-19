@@ -559,6 +559,43 @@ def register_match_routes(
             "away": {"valid": away_valid, "invalid": away_invalid},
         }), 200
 
+    def _normalize_match_format(raw_format):
+        """(canonical_code, display_label) for any stored/legacy format string."""
+        normalized = (
+            str(raw_format or "")
+            .strip()
+            .lower()
+            .replace(" ", "")
+            .replace("_", "")
+            .replace("-", "")
+        )
+        format_map = {
+            "t20": ("T20", "T20"),
+            "lista": ("ListA", "List A"),
+            "odi": ("ListA", "List A"),
+            "fc": ("FC", "First-Class"),
+        }
+        return format_map.get(normalized, ("T20", "T20"))
+
+    def _match_header_meta(match_data):
+        """Display-only labels for the match page's meta chips.
+
+        Both come from code that already owns the naming — the shared format
+        normaliser and engine.weather's forecast tiers — so the template never
+        carries a second copy of either mapping.
+        """
+        from engine.weather import forecast_label
+
+        fmt_code, fmt_label = _normalize_match_format(match_data.get("match_format"))
+        if fmt_code == "FC" and match_data.get("days"):
+            fmt_label = f"{fmt_label} \u00b7 {match_data['days']} days"
+
+        forecast = match_data.get("weather_forecast")
+        return {
+            "format_label": fmt_label,
+            "weather_label": forecast_label(forecast) if forecast else None,
+        }
+
     @app.route("/match/<match_id>")
     @login_required
     def match_detail(match_id):
@@ -576,7 +613,9 @@ def register_match_routes(
                 # Match is live — render page with resume flag so JS can restore state
                 match_data, _path, _err = _load_match_file_for_user(match_id)
                 if match_data:
-                    return render_template("match_detail.html", match=match_data, resume_mode=True)
+                    return render_template(
+                        "match_detail.html", match=match_data, resume_mode=True,
+                        **_match_header_meta(match_data))
 
         match_data, _path, _err = _load_match_file_for_user(match_id)
 
@@ -591,7 +630,8 @@ def register_match_routes(
         if match_data.get("current_state") == "completed":
             return redirect(url_for("view_scoreboard", match_id=match_id))
 
-        return render_template("match_detail.html", match=match_data)
+        return render_template(
+            "match_detail.html", match=match_data, **_match_header_meta(match_data))
 
     @app.route("/match/<match_id>/live-state", methods=["GET"])
     @login_required
@@ -599,6 +639,8 @@ def register_match_routes(
         """Return a snapshot of the current in-memory match state for resume detection."""
         with MATCH_INSTANCES_LOCK:
             match = MATCH_INSTANCES.get(match_id)
+
+        wants_delivery = request.args.get("delivery") == "1"
 
         if not match:
             db_match = DBMatch.query.filter_by(id=match_id, user_id=current_user.id).first()
@@ -608,8 +650,21 @@ def register_match_routes(
             # this match CAN be rebuilt. Restore it so the frontend resumes
             # play instead of offering a fresh toss (which would silently
             # restart the match).
+            #
+            # A delivery request rebuilds regardless of any snapshot: the
+            # client is asking to bowl, and set-toss/spin-toss deliberately
+            # evict the cached instance so every toss-derived field is rebuilt
+            # by Match.__init__. That makes "nothing in memory" the NORMAL
+            # state for the first ball of every match, and startMatch() asks
+            # for it here because it has no delivery token yet. Reporting
+            # not_in_memory stranded those matches: recoverDelivery() cannot
+            # act on that status and stops with a reload prompt.
             match_data, _path, _err = _load_match_file_for_user(match_id)
-            if match_data and (match_data.get("super_over_snapshot") or match_data.get("fc_snapshot")):
+            has_snapshot = bool(
+                match_data
+                and (match_data.get("super_over_snapshot") or match_data.get("fc_snapshot"))
+            )
+            if match_data and (has_snapshot or wants_delivery):
                 match, err = _get_or_restore_match_instance(match_id)
                 if err:
                     return jsonify({"status": "not_in_memory"})
@@ -619,7 +674,7 @@ def register_match_routes(
         if match.data.get("created_by") != current_user.id:
             return jsonify({"error": "Unauthorized"}), 403
 
-        if request.args.get("delivery") == "1":
+        if wants_delivery:
             try:
                 return jsonify(_delivery_for(match).recover(request.args.get("request_id")))
             except DeliveryConflict as exc:
@@ -749,8 +804,8 @@ def register_match_routes(
         innings_data = {}
         for card in scorecards:
             # Super-over rows exist only for career-stat aggregation/reversal —
-            # they are not part of the displayed innings.
-            if card.is_super_over:
+            # they are not part of the displayed innings. FC matches do not have super overs.
+            if card.is_super_over and getattr(db_match, "match_format", None) != "FC":
                 continue
             entry = innings_data.setdefault(
                 card.innings_number,
@@ -1882,24 +1937,6 @@ def register_match_routes(
         Display all ZIP archives in data/files/ matching current_user.id,
         regardless of subfolders. Only show files up to 7 days old.
         """
-        def _normalize_match_format(raw_format):
-            normalized = (
-                str(raw_format or "")
-                .strip()
-                .lower()
-                .replace(" ", "")
-                .replace("_", "")
-                .replace("-", "")
-            )
-            format_map = {
-                "t20": ("T20", "T20"),
-                "lista": ("ListA", "List A"),
-                "odi": ("ListA", "List A"),
-                "fc": ("FC", "First-Class"),
-
-            }
-            return format_map.get(normalized, ("T20", "T20"))
-
         _FMT_TAG_RE = re.compile(r'_fmt-(\w+)')
 
         def _get_archive_format(zip_path):
@@ -2067,18 +2104,27 @@ def register_match_routes(
                 away_name = teams_by_id.get(m.away_team_id).name if m.away_team_id in teams_by_id else "Away"
                 format_code, format_label = _normalize_match_format(getattr(m, "match_format", None))
 
+                if format_code == "FC":
+                    home_inn1 = f"{m.home_team_score or 0}/{m.home_team_wickets or 0}"
+                    home_inn2 = f" & {m.home_team_score_innings2}/{m.home_team_wickets_innings2}" if m.home_team_score_innings2 is not None else ""
+                    away_inn1 = f"{m.away_team_score or 0}/{m.away_team_wickets or 0}"
+                    away_inn2 = f" & {m.away_team_score_innings2}/{m.away_team_wickets_innings2}" if m.away_team_score_innings2 is not None else ""
+                    match_scoreline = f"{home_name} {home_inn1}{home_inn2} vs {away_name} {away_inn1}{away_inn2}"
+                else:
+                    match_scoreline = (
+                        f"{home_name} {m.home_team_score or 0}/{m.home_team_wickets or 0} "
+                        f"({m.home_team_overs or '0.0'}) vs "
+                        f"{away_name} {m.away_team_score or 0}/{m.away_team_wickets or 0} "
+                        f"({m.away_team_overs or '0.0'})"
+                    )
+
                 match_history.append({
                     "match_id": m.id,
                     "home_team": home_name,
                     "away_team": away_name,
                     "result_description": m.result_description or "Match Completed",
                     "played_at": m.date,
-                    "scoreline": (
-                        f"{home_name} {m.home_team_score or 0}/{m.home_team_wickets or 0} "
-                        f"({m.home_team_overs or '0.0'}) vs "
-                        f"{away_name} {m.away_team_score or 0}/{m.away_team_wickets or 0} "
-                        f"({m.away_team_overs or '0.0'})"
-                    ),
+                    "scoreline": match_scoreline,
                     "scoreboard_url": url_for("view_scoreboard", match_id=m.id),
                     "is_tournament": m.tournament_id is not None,
                     "tournament_name": tour_name if tour_name else None,

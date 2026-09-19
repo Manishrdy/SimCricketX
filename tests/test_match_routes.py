@@ -10,7 +10,8 @@ import uuid
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
-from database.models import Match as DBMatch, MatchScorecard
+from database import db
+from database.models import Match as DBMatch, MatchScorecard, Player as DBPlayer
 
 
 class TestMatchSetupRoute:
@@ -116,6 +117,89 @@ class TestMatchScoreboardRoute:
         """Test accessing scoreboard for a non-existent match returns 404 or redirects."""
         response = authenticated_client.get("/match/nonexistent/scoreboard")
         assert response.status_code in [404, 302]
+
+    def test_fc_scoreboard_displays_all_innings_and_back_link(self, authenticated_client, regular_user, test_team, test_team_2):
+        """Test accessing scoreboard for a 4-innings FC match displays all innings and back link."""
+        match_id = str(uuid.uuid4())
+        fc_match = DBMatch(
+            id=match_id,
+            user_id=regular_user.id,
+            home_team_id=test_team.id,
+            away_team_id=test_team_2.id,
+            match_format="FC",
+            venue="Lord's",
+            result_description="Team 1 won by 50 runs",
+            home_team_score=300,
+            home_team_wickets=10,
+            home_team_overs="85.0",
+            away_team_score=250,
+            away_team_wickets=10,
+            away_team_overs="72.0",
+            home_team_score_innings2=200,
+            home_team_wickets_innings2=10,
+            home_team_overs_innings2="60.0",
+            away_team_score_innings2=200,
+            away_team_wickets_innings2=10,
+            away_team_overs_innings2="55.0",
+        )
+        db.session.add(fc_match)
+
+        p1 = DBPlayer(name="Batter One", team_id=test_team.id)
+        p2 = DBPlayer(name="Bowler One", team_id=test_team_2.id)
+        db.session.add_all([p1, p2])
+        db.session.flush()
+
+        cards = []
+        for inn in [1, 2, 3, 4]:
+            bat_team = test_team.id if inn in [1, 3] else test_team_2.id
+            bowl_team = test_team_2.id if inn in [1, 3] else test_team.id
+            cards.append(MatchScorecard(
+                match_id=match_id, player_id=p1.id, team_id=bat_team,
+                innings_number=inn, record_type="batting", runs=50, balls=40, is_out=True,
+            ))
+            cards.append(MatchScorecard(
+                match_id=match_id, player_id=p2.id, team_id=bowl_team,
+                innings_number=inn, record_type="bowling", overs="10.0", runs_conceded=30, wickets=2,
+            ))
+        db.session.add_all(cards)
+        db.session.commit()
+
+        response = authenticated_client.get(f"/match/{match_id}/scoreboard")
+        assert response.status_code == 200
+        content = response.data.decode("utf-8")
+        assert "1st Innings" in content
+        assert "2nd Innings" in content
+        assert "3rd Innings" in content
+        assert "4th Innings" in content
+        assert "Back to Matches" in content
+        assert "/my-matches" in content
+
+    def test_fc_scoreline_in_my_matches(self, authenticated_client, regular_user, test_team, test_team_2):
+        """Test that /my-matches displays multi-innings scores for FC matches."""
+        match_id = str(uuid.uuid4())
+        fc_match = DBMatch(
+            id=match_id,
+            user_id=regular_user.id,
+            home_team_id=test_team.id,
+            away_team_id=test_team_2.id,
+            match_format="FC",
+            venue="MCG",
+            result_description="Match drawn",
+            home_team_score=400,
+            home_team_wickets=8,
+            away_team_score=350,
+            away_team_wickets=10,
+            home_team_score_innings2=250,
+            home_team_wickets_innings2=4,
+        )
+        db.session.add(fc_match)
+        db.session.commit()
+
+        response = authenticated_client.get("/my-matches")
+        assert response.status_code == 200
+        content = response.data.decode("utf-8")
+        assert "400/8 &amp; 250/4" in content or "400/8 & 250/4" in content
+        assert "350/10" in content
 
 
 class TestTossRoutes:

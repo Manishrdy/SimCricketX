@@ -15,20 +15,19 @@
     <!-- Sidebar: Match Info & Toss -->
     <div class="info-card">
         <div class="match-meta-grid">
-            <div class="meta-item" title="{{ match.match_id }}">
-                <span class="meta-icon"><i class="fa fa-fingerprint"></i></span>
-                <span class="meta-value meta-mono">{{ match.match_id[:8] }}&hellip;</span>
+            {# Chips ellipsize in this narrow sidebar, so the full value goes
+               in the title — same as the stadium and pitch chips below. #}
+            {% set weather_text = weather_label ~ (' · Day/Night' if match.get('is_day_night') else '') %}
+            <div class="meta-item" title="Format: {{ format_label }}">
+                <span class="meta-icon"><i class="fa-solid fa-stopwatch"></i></span>
+                <span class="meta-value">{{ format_label }}</span>
             </div>
-            <div class="meta-item">
-                <span class="meta-icon"><i class="fa fa-calendar-alt"></i></span>
-                <span class="meta-value">
-                    {% if match.timestamp and match.timestamp|length >= 8 %}
-                    {{ match.timestamp[4:6] }}-{{ match.timestamp[6:8] }}-{{ match.timestamp[0:4] }}
-                    {% else %}
-                    {{ match.timestamp }}
-                    {% endif %}
-                </span>
+            {% if weather_label %}
+            <div class="meta-item" title="Forecast: {{ weather_text }}">
+                <span class="meta-icon"><i class="fa-solid fa-cloud-sun"></i></span>
+                <span class="meta-value">{{ weather_label }}{% if match.get('is_day_night') %} &middot; D/N{% endif %}</span>
             </div>
+            {% endif %}
             <div class="meta-item" title="{{ match.stadium }}">
                 <span class="meta-icon"><i class="fa-solid fa-map-location-dot"></i></span>
                 <span class="meta-value">{{ match.stadium }}</span>
