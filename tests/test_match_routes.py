@@ -11,7 +11,14 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from database import db
-from database.models import Match as DBMatch, MatchScorecard, Player as DBPlayer
+from database.models import (
+    Match as DBMatch,
+    MatchScorecard,
+    Player as DBPlayer,
+    Team as DBTeam,
+    TournamentFixture,
+    TournamentTeam,
+)
 
 
 class TestMatchSetupRoute:
@@ -561,3 +568,193 @@ class TestMatchValidation:
             follow_redirects=True,
         )
         assert response.status_code in [200, 400]
+
+
+class TestTournamentMatchCompletionOnVoidedFixture:
+    """A match whose fixture was voided mid-play must not record a result.
+
+    Re-simulating an earlier knockout round runs the downstream fixtures
+    through `_reset_knockout_bracket()`, which puts the TBD placeholder back
+    in both team slots and sets the fixture to 'Locked'. The engine layer
+    cannot delete match files, so a Final that was already being played keeps
+    its match JSON and stays resumable — and used to be recorded on the way
+    out, marking the voided pairing 'Completed' with "TBD" as its winner.
+    """
+
+    OVERS = 5  # long enough for a legal 5-bowler attack, short enough to play out
+
+    @staticmethod
+    def _filler_team(regular_user, name, code):
+        team = DBTeam(
+            name=name, short_code=code,
+            user_id=regular_user.id, is_placeholder=False,
+        )
+        db.session.add(team)
+        db.session.flush()
+        return team
+
+    @staticmethod
+    def _rate(team):
+        """The shared team fixtures are created without ratings, and a whole
+        XI on 0 fielding makes the engine's weighted fielder pick undefined.
+        Give them ordinary numbers so the match can actually be played."""
+        for i, player in enumerate(team.players):
+            player.batting_rating = 70 - i
+            player.bowling_rating = 68 if player.role in ("Bowler", "All-rounder") else 20
+            player.fielding_rating = 60
+            player.technique_rating = 60
+            player.temperament_rating = 60
+            player.stamina_rating = 60
+        db.session.commit()
+
+    def _knockout_with_playable_final(self, regular_user, home, away):
+        """A 4-team knockout whose Final is 'Scheduled' between two squads
+        that can actually take the field — the state the bracket is in once
+        both semi-finals have been played."""
+        from engine.tournament_engine import TournamentEngine
+
+        self._rate(home)
+        self._rate(away)
+
+        filler_a = self._filler_team(regular_user, "Filler A", "FLA")
+        filler_b = self._filler_team(regular_user, "Filler B", "FLB")
+        db.session.commit()
+
+        engine = TournamentEngine()
+        tournament = engine.create_tournament(
+            name="Voided Final KO", user_id=regular_user.id,
+            team_ids=[home.id, away.id, filler_a.id, filler_b.id],
+            mode="knockout",
+        )
+
+        fixtures = (
+            TournamentFixture.query
+            .filter_by(tournament_id=tournament.id)
+            .order_by(TournamentFixture.bracket_position)
+            .all()
+        )
+        assert len(fixtures) == 3, "4-team knockout should be 2 semis + a final"
+        semi, final = fixtures[0], fixtures[-1]
+
+        final.home_team_id = home.id
+        final.away_team_id = away.id
+        final.status = "Scheduled"
+        db.session.commit()
+
+        return engine, tournament, semi, final
+
+    def _start_final(self, client, fixture, home, away):
+        response = client.post(
+            "/match/setup",
+            json={
+                "team_home": home.id,
+                "team_away": away.id,
+                "fixture_id": fixture.id,
+                "tournament_id": fixture.tournament_id,
+                "overs": self.OVERS,
+                "match_format": "T20",
+                "stadium": "Test Oval",
+                "pitch": "Hard",
+                "toss_winner": home.short_code,
+                "toss_decision": "Bat",
+                "simulation_mode": "auto",
+                "weather_forecast": "clear",
+            },
+        )
+        assert response.status_code == 200, response.get_data(as_text=True)[:500]
+        return response.get_json()["match_id"]
+
+    @staticmethod
+    def _play_out(client, match_id, seed):
+        """Bowl until the match reports it is over. The per-user limiter is
+        cleared between calls rather than raised, so the decorator still runs.
+
+        The engine bowls off the global RNG, so seeding here pins the sample
+        match: an unseeded one ties every so often, and a tie returns
+        `super_over_required` instead of `match_over` — the match then waits
+        on the super-over routes, which is neither what these tests are about
+        nor something the loop below would ever exit from.
+        """
+        import random
+
+        import app as app_module
+
+        random.seed(seed)
+        last = None
+        for _ in range(4000):
+            app_module._rate_limit_store.clear()
+            response = client.post(f"/match/{match_id}/next-ball")
+            assert response.status_code == 200, response.get_data(as_text=True)[:300]
+            payload = response.get_json()
+            assert "error" not in payload, payload.get("error")
+            if payload.get("super_over_required"):
+                pytest.fail(
+                    f"the seeded sample match tied (seed={seed}); pick a seed "
+                    "that produces an outright result"
+                )
+            if payload.get("match_over"):
+                return payload
+            last = payload
+        pytest.fail(f"match did not finish within 4000 deliveries: {last}")
+
+    def test_result_is_discarded_when_the_fixture_was_reset_to_locked(
+        self, app, authenticated_client, regular_user, test_team, test_team_2
+    ):
+        engine, tournament, semi, final = self._knockout_with_playable_final(
+            regular_user, test_team, test_team_2
+        )
+        final_id, tournament_id = final.id, tournament.id
+
+        match_id = self._start_final(authenticated_client, final, test_team, test_team_2)
+
+        # The user now re-simulates a semi-final. This is the production
+        # reset path reverse_standings() takes for a non-league fixture.
+        engine._reset_knockout_bracket(tournament_id, semi.bracket_position)
+        db.session.commit()
+
+        final = db.session.get(TournamentFixture, final_id)
+        tbd_id = final.home_team_id
+        assert final.status == "Locked"
+        assert final.away_team_id == tbd_id
+        assert tbd_id not in (test_team.id, test_team_2.id)
+
+        # The match JSON survived the reset, so the orphan plays to a result.
+        payload = self._play_out(authenticated_client, match_id, seed=20260919)
+        assert payload.get("match_over") is True
+
+        db.session.expire_all()
+        final = db.session.get(TournamentFixture, final_id)
+
+        assert final.status == "Locked", (
+            "a result was recorded onto a pairing that had been voided"
+        )
+        assert final.match_id is None
+        assert final.winner_team_id is None
+        assert final.standings_applied is False
+        assert final.home_team_id == tbd_id and final.away_team_id == tbd_id
+        assert db.session.get(DBMatch, match_id) is None, (
+            "the orphaned match was persisted against a Locked fixture"
+        )
+        assert TournamentTeam.query.filter_by(
+            tournament_id=tournament_id, team_id=tbd_id
+        ).first() is None, "standings gained a row for the TBD placeholder"
+
+    def test_the_same_final_records_normally_while_it_is_still_scheduled(
+        self, app, authenticated_client, regular_user, test_team, test_team_2
+    ):
+        """The guard is about 'Locked', not about being strict at completion
+        time: an untouched Scheduled fixture must still record its result."""
+        _engine, _tournament, _semi, final = self._knockout_with_playable_final(
+            regular_user, test_team, test_team_2
+        )
+        final_id = final.id
+
+        match_id = self._start_final(authenticated_client, final, test_team, test_team_2)
+        self._play_out(authenticated_client, match_id, seed=8675309)
+
+        db.session.expire_all()
+        final = db.session.get(TournamentFixture, final_id)
+
+        assert final.status == "Completed"
+        assert final.match_id == match_id
+        assert db.session.get(DBMatch, match_id) is not None
