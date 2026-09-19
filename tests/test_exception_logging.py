@@ -242,3 +242,95 @@ def test_log_data_anomaly_does_not_enqueue_github_issue(app, monkeypatch):
         )
 
     assert calls == [], "log_data_anomaly should not enqueue GitHub issues"
+
+
+def test_log_data_anomaly_never_commits_the_callers_session(app):
+    """Anomalies get the same session isolation as exceptions.
+
+    app.py's _handle_tournament_match_completion reports OversExceedQuota
+    from inside calculate_innings_stats while the re-simulate cleanup
+    (reverse_standings + partnership/scorecard deletes + the old match
+    delete) is still pending and uncommitted on db.session. If logging the
+    anomaly commits that session, the cleanup is pushed through mid-flight
+    and the outer handler's rollback is left with nothing to undo.
+    """
+    from utils.exception_tracker import log_data_anomaly
+
+    with app.app_context():
+        # A committed row the "caller" then deletes, plus an insert — both
+        # pending on the shared session when the anomaly fires.
+        doomed = ExceptionLog(
+            exception_type="CallerDoomed",
+            exception_message="delete-must-not-be-committed",
+            severity="error",
+            source="backend",
+            fingerprint="caller-doomed-fingerprint",
+        )
+        db.session.add(doomed)
+        db.session.commit()
+
+        db.session.delete(doomed)
+        db.session.add(ExceptionLog(
+            exception_type="CallerPendingAnomaly",
+            exception_message="insert-must-not-be-committed",
+            severity="error",
+            source="backend",
+            fingerprint="caller-pending-anomaly-fingerprint",
+        ))
+
+        row_id = log_data_anomaly(
+            "OversExceedQuota",
+            "innings 1 reported 121 legal balls in a 20-over match",
+            payload={"match_id": "caller-session-check"},
+        )
+
+        # The caller's rollback must still have something to undo.
+        db.session.rollback()
+
+        assert ExceptionLog.query.filter_by(
+            fingerprint="caller-pending-anomaly-fingerprint").first() is None, (
+            "logging a data anomaly committed the caller's pending insert")
+        assert ExceptionLog.query.filter_by(
+            fingerprint="caller-doomed-fingerprint").first() is not None, (
+            "logging a data anomaly committed the caller's pending delete")
+
+        # ...while the anomaly's own record did land.
+        assert row_id is not None
+        assert ExceptionLog.query.get(row_id) is not None
+
+
+def test_log_data_anomaly_records_even_when_caller_holds_the_write_lock(app):
+    """The archiver reports ScorecardPlayerLookupMiss mid-archive, with its
+    own inserts already flushed — which on SQLite means db.session holds the
+    single writer lock. Our isolated session cannot get in there, so the
+    anomaly has to fall back to the caller's transaction rather than be
+    silently dropped: these records exist to be loud.
+    """
+    from utils.exception_tracker import log_data_anomaly
+
+    with app.app_context():
+        holder = ExceptionLog(
+            exception_type="CallerLockHolder",
+            exception_message="flushed-not-committed",
+            severity="error",
+            source="backend",
+            fingerprint="caller-lock-holder-fingerprint",
+        )
+        db.session.add(holder)
+        db.session.flush()  # takes SQLite's writer lock, still uncommitted
+
+        before = ExceptionLog.query.filter_by(
+            exception_type="LockedWriterAnomaly").count()
+
+        log_data_anomaly(
+            "LockedWriterAnomaly",
+            "recorded even though the caller held the writer lock",
+            payload={"match_id": "locked-writer-check"},
+        )
+
+        # The caller finishes its own transaction, as the archiver does.
+        db.session.commit()
+
+        assert ExceptionLog.query.filter_by(
+            exception_type="LockedWriterAnomaly").count() == before + 1, (
+            "anomaly was dropped because the caller held the writer lock")
