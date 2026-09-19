@@ -214,12 +214,11 @@ def register_stats_routes(
     def compare_players_page():
         """Render player comparison page."""
         try:
-            teams = DBTeam.query.filter_by(user_id=current_user.id).filter(DBTeam.is_placeholder != True).all()
             tournaments = Tournament.query.filter_by(user_id=current_user.id).all()
 
             return render_template(
                 "compare_players.html",
-                teams=teams,
+                comparison_players=StatsService(app.logger).comparison_identities(current_user.id),
                 tournaments=tournaments,
             )
         except Exception as e:
@@ -271,6 +270,19 @@ def register_stats_routes(
     def api_compare_players():
         """API endpoint for player comparison."""
         try:
+            if request.args.get("mode") == "cross-format":
+                service = StatsService(app.logger)
+                if "identity_ids" not in request.args:
+                    return jsonify(success=True, available_players=service.comparison_identities(current_user.id))
+                identity_ids = [key.strip() for key in request.args.get("identity_ids", "").split(",") if key.strip()]
+                try:
+                    raw_tournament = request.args.get("tournament_id")
+                    tournament_id = int(raw_tournament) if raw_tournament else None
+                    data = service.compare_players_cross_format(current_user.id, identity_ids, tournament_id)
+                except ValueError as exc:
+                    return jsonify(error=str(exc)), 400
+                return jsonify(success=True, data=data)
+
             player_ids_str = request.args.get("player_ids", "")
             player_ids = [int(x.strip()) for x in player_ids_str.split(",") if x.strip().isdigit()]
             tournament_id = request.args.get("tournament_id", type=int)

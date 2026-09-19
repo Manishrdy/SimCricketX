@@ -32,7 +32,7 @@
             <div class="form-group">
                 <label for="tournament-name">Tournament Name</label>
                 <input type="text" id="tournament-name" name="name" class="form-input"
-                    placeholder="e.g. IPL 2026, World Cup, Ashes Series..." required>
+                    placeholder="e.g. IPL 2026, World Cup, Ashes Series..." required maxlength="100">
                 <span class="input-hint">Give your tournament a memorable name</span>
             </div>
 
@@ -489,6 +489,11 @@
 
         if (!name) {
             alert("Please enter a tournament name.");
+            return false;
+        }
+
+        if (name.length > 100) {
+            alert("Tournament name must be 100 characters or less.");
             return false;
         }
 

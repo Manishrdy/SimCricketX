@@ -1,543 +1,84 @@
 {% extends "layout.html" %}
-
+{% macro format_label(format) -%}{{ 'List A' if format == 'ListA' else format }}{%- endmacro %}
+{% macro progress(played, total) %}
+<div class="ch-progress">
+    <div><span>Match progress</span><strong>{{ played }} / {{ total }}</strong></div>
+    <progress value="{{ played }}" max="{{ total if total else 1 }}" aria-label="{{ played }} of {{ total }} matches completed"></progress>
+</div>
+{% endmacro %}
 {% block content %}
-<div class="tournaments-list-container">
+<div class="competition-hub">
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+    <div class="ch-notice" role="{{ 'alert' if category in ['error', 'danger'] else 'status' }}">{{ message }}</div>
+    {% endfor %}
+    <header class="ch-header">
+        <span class="ch-eyebrow"><span aria-hidden="true"></span> COMPETITION HUB</span>
+        <h1>Tours &amp; tournaments</h1>
+        <p>Build the schedule. Set the challenge. Let the cricket unfold.</p>
+    </header>
 
-    <div class="page-header">
-        <div class="header-content">
-            <div class="header-icon">
-                <i class="fas fa-trophy"></i>
-            </div>
-            <div class="header-text">
-                <span class="page-eyebrow">Competition Hub</span>
-                <h1>My Tournaments</h1>
-                <p class="subtitle">Manage your leagues and cups</p>
-            </div>
-        </div>
-    </div>
-
-    {% if tournaments %}
-    <div class="tournaments-grid">
-
-        <!-- Create New Card (only shown when there are existing tournaments) -->
-        <a href="{{ url_for('create_tournament_route') }}" class="tournament-card create-card">
-            <div class="create-content">
-                <div class="icon-circle">
-                    <i class="fas fa-plus"></i>
-                </div>
-                <h3>New Tournament</h3>
-                <p>Create a fresh league or cup</p>
-            </div>
-        </a>
-
-        <!-- Existing Tournaments -->
-        {% for t in tournaments %}
-        <a href="{{ url_for('tournament_dashboard', tournament_id=t.id) }}" class="tournament-card">
-            <div class="card-status-bar {{ t.status|lower }}"></div>
-            <div class="card-content">
-                <div class="card-header">
-                    <h3 class="t-name">{{ t.name }}</h3>
-                    <span class="status-badge {{ t.status|lower }}">{{ t.status }}</span>
-                </div>
-
-                <div class="t-meta">
-                    <div class="meta-item">
-                        <i class="fas fa-calendar"></i>
-                        <span>{{ t.created_at.strftime('%b %d, %Y') }}</span>
-                    </div>
-                    <div class="meta-item">
-                        <i class="fas fa-users"></i>
-                        <span>{{ t.participating_teams|length }} Teams</span>
-                    </div>
-                    <div class="meta-item format-meta-badge">
-                        <i class="fas fa-bolt"></i>
-                        <span>{{ 'T20' if t.format_type == 'T20' else 'List A' }}</span>
-                    </div>
-                </div>
-
-                <div class="t-progress">
-                    {% set total = t.fixtures|length %}
-                    {% set played = t.fixtures|selectattr('status', 'equalto', 'Completed')|list|length %}
-                    {% set percent = (played / total * 100) if total > 0 else 0 %}
-
-                    <div class="progress-header">
-                        <span class="progress-label">Progress</span>
-                        <span class="progress-text">{{ played }}/{{ total }} Matches</span>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill"
-                            style="--progress: {{ percent|default(0) }}%; width: var(--progress);"></div>
-                    </div>
-                </div>
-
-                <div class="card-footer">
-                    <span class="view-details">
-                        View Details <i class="fas fa-arrow-right"></i>
-                    </span>
-                </div>
-            </div>
-        </a>
-        {% endfor %}
-
-    </div>
-    {% else %}
-    <!-- Empty State when no tournaments -->
-    <div class="empty-state-container">
-        <div class="empty-state">
-            <div class="empty-icon">
-                <i class="fas fa-trophy"></i>
-            </div>
-            <h3>No Tournaments Yet</h3>
-            <p>Create your first tournament to get started</p>
-            <a href="{{ url_for('create_tournament_route') }}" class="create-first-btn">
-                <i class="fas fa-plus"></i> Create Tournament
+    <section aria-labelledby="ch-create-title" class="ch-create-section">
+        <div class="ch-section-heading"><h2 id="ch-create-title">What would you like to create?</h2><span>Two ways to play</span></div>
+        <div class="ch-choices">
+            <a class="ch-choice ch-choice-tour" href="{{ url_for('create_tour_route') }}" aria-labelledby="ch-tour-title" aria-describedby="ch-tour-description">
+                <div class="ch-choice-top"><span class="ch-choice-icon" aria-hidden="true"><i class="fas fa-route"></i></span><span class="ch-choice-kicker">THE COMPLETE JOURNEY</span></div>
+                <h3 id="ch-tour-title">Create a Tour</h3>
+                <p id="ch-tour-description">Two teams. Multiple formats. Bring a collection of series together into one tour.</p>
+                <div class="ch-format-route" aria-label="Choose any combination of FC, List A and T20"><span>FC</span><i aria-hidden="true"></i><span>List A</span><i aria-hidden="true"></i><span>T20</span></div>
+                <ul class="ch-features"><li><i class="fas fa-check" aria-hidden="true"></i>Your match counts &amp; series order</li><li><i class="fas fa-check" aria-hidden="true"></i>Series results &amp; overall tour stats</li></ul>
+                <div class="ch-choice-bottom"><span>Set up your tour <i class="fas fa-arrow-right" aria-hidden="true"></i></span><small>Skip any format with 0 matches</small></div>
+            </a>
+            <a class="ch-choice ch-choice-tournament" href="{{ url_for('create_tournament_route') }}" aria-labelledby="ch-tournament-title" aria-describedby="ch-tournament-description">
+                <div class="ch-choice-top"><span class="ch-choice-icon" aria-hidden="true"><i class="fas fa-trophy"></i></span><span class="ch-choice-kicker">ONE COMPETITION, YOUR RULES</span></div>
+                <h3 id="ch-tournament-title">Create a Tournament</h3>
+                <p id="ch-tournament-description">Choose one cricket format and compete in a league, knockout, or two-team series.</p>
+                <div class="ch-mode-options" aria-label="Competition types"><span><i class="fas fa-table-list" aria-hidden="true"></i>League</span><span><i class="fas fa-sitemap" aria-hidden="true"></i>Knockout</span><span><i class="fas fa-repeat" aria-hidden="true"></i>Series</span></div>
+                <ul class="ch-features"><li><i class="fas fa-check" aria-hidden="true"></i>Flexible teams &amp; competition structure</li><li><i class="fas fa-check" aria-hidden="true"></i>Fixtures, standings &amp; player stats</li></ul>
+                <div class="ch-choice-bottom"><span>Set up your tournament <i class="fas fa-arrow-right" aria-hidden="true"></i></span><small>Choose FC, List A, or T20</small></div>
             </a>
         </div>
-    </div>
-    {% endif %}
+    </section>
+
+    <section class="ch-library" aria-labelledby="ch-library-title">
+        <div class="ch-section-heading ch-library-heading"><div><h2 id="ch-library-title">Your competitions</h2><p>Pick up where you left off.</p></div><span class="ch-count">{{ (tours|length) + (tournaments|length) }} total</span></div>
+        {% if tours or tournaments %}
+        {% if tours %}
+        <h3 class="ch-group-title"><i class="fas fa-route" aria-hidden="true"></i>Tours <span>{{ tours|length }}</span></h3>
+        <div class="ch-library-grid">
+        {% for tour in tours %}
+            {% set totals = namespace(played=0, matches=0) %}
+            {% for series in tour.series %}{% set totals.matches = totals.matches + series.fixtures|length %}{% set totals.played = totals.played + (series.fixtures|selectattr('status', 'equalto', 'Completed')|list|length) %}{% endfor %}
+            <a class="ch-competition ch-tour" href="{{ url_for('tour_dashboard', tour_id=tour.id) }}">
+                <div class="ch-card-top"><span class="ch-type">TOUR</span><span class="ch-status {% if tour.status == 'Completed' %}is-completed{% endif %}"><span aria-hidden="true"></span>{{ tour.status }}</span></div>
+                <h4>{{ tour.name }}</h4>
+                <p class="ch-card-description">{{ tour.series|length }} {{ 'series' }} · {{ totals.matches }} matches</p>
+                <div class="ch-tags">{% for series in tour.series %}<span>{{ format_label(series.format_type) }}</span>{% endfor %}</div>
+                {{ progress(totals.played, totals.matches) }}
+                <div class="ch-card-footer"><span>View tour <i class="fas fa-arrow-right" aria-hidden="true"></i></span><time datetime="{{ tour.created_at.strftime('%Y-%m-%d') }}">{{ tour.created_at.strftime('%b %d, %Y') }}</time></div>
+            </a>
+        {% endfor %}
+        </div>
+        {% endif %}
+        {% if tournaments %}
+        <h3 class="ch-group-title"><i class="fas fa-trophy" aria-hidden="true"></i>Tournaments <span>{{ tournaments|length }}</span></h3>
+        <div class="ch-library-grid">
+        {% for t in tournaments %}
+            {% set played = t.fixtures|selectattr('status', 'equalto', 'Completed')|list|length %}
+            <a class="ch-competition ch-tournament" href="{{ url_for('tournament_dashboard', tournament_id=t.id) }}">
+                <div class="ch-card-top"><span class="ch-type">TOURNAMENT</span><span class="ch-status {% if t.status == 'Completed' %}is-completed{% endif %}"><span aria-hidden="true"></span>{{ t.status }}</span></div>
+                <h4>{{ t.name }}</h4>
+                <p class="ch-card-description">{{ t.participating_teams|length }} teams · {{ t.mode|replace('_', ' ')|title }}</p>
+                <div class="ch-tags"><span>{{ format_label(t.format_type) }}</span></div>
+                {{ progress(played, t.fixtures|length) }}
+                <div class="ch-card-footer"><span>View tournament <i class="fas fa-arrow-right" aria-hidden="true"></i></span><time datetime="{{ t.created_at.strftime('%Y-%m-%d') }}">{{ t.created_at.strftime('%b %d, %Y') }}</time></div>
+            </a>
+        {% endfor %}
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="ch-empty"><span class="ch-empty-icon" aria-hidden="true"><i class="fas fa-calendar-plus"></i></span><div><h3>A fresh scorecard awaits</h3><p>Create a tour or tournament above. Your fixtures, results, and progress will live here.</p></div></div>
+        {% endif %}
+    </section>
 </div>
-
-<style>
-    /* ========================================
-       Tournament List - One Dark Pro Theme
-       ======================================== */
-
-    .tournaments-list-container {
-        --success: #98c379;
-        --danger: #e06c75;
-        --warning: #e5c07b;
-        --info: #61afef;
-        --purple: #c678dd;
-
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 2rem;
-    }
-
-    /* --- Page Header --- */
-    .page-header {
-        position: relative;
-        padding: 2.25rem 1.25rem 1.75rem;
-        margin: 0 0 2.25rem;
-        border-radius: 18px;
-        overflow: hidden;
-    }
-
-    .page-header::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background:
-            radial-gradient(circle at 12% 0%, rgba(15, 118, 110, .08), transparent 55%),
-            radial-gradient(circle at 90% 100%, rgba(59, 130, 246, .06), transparent 55%);
-        pointer-events: none;
-    }
-
-    [data-theme="dark"] .page-header::before {
-        background:
-            radial-gradient(circle at 12% 0%, rgba(45, 212, 191, .10), transparent 55%),
-            radial-gradient(circle at 90% 100%, rgba(96, 165, 250, .07), transparent 55%);
-    }
-
-    .header-content {
-        position: relative;
-        display: flex;
-        align-items: center;
-        gap: 1.25rem;
-    }
-
-    .header-icon {
-        width: 56px;
-        height: 56px;
-        background: linear-gradient(135deg, var(--accent), var(--purple));
-        border-radius: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        color: #fff;
-        box-shadow: 0 4px 12px rgba(97, 175, 239, 0.3);
-        flex-shrink: 0;
-    }
-
-    .page-eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: .7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .08em;
-        color: var(--accent);
-        margin-bottom: .4rem;
-    }
-
-    .page-eyebrow::before {
-        content: "";
-        width: 6px; height: 6px;
-        background: var(--accent);
-        border-radius: 50%;
-        box-shadow: 0 0 0 3px rgba(97, 175, 239, .18);
-    }
-
-    .header-text h1 {
-        font-size: 2rem;
-        font-weight: 800;
-        letter-spacing: -0.02em;
-        line-height: 1.1;
-        margin: 0;
-        color: var(--fg);
-    }
-
-    .subtitle {
-        color: var(--fg-secondary);
-        font-size: 0.95rem;
-        margin-top: 0.3rem;
-    }
-
-    @media (max-width: 640px) {
-        .page-header { padding: 1.75rem 1rem 1.25rem; }
-        .header-text h1 { font-size: 1.55rem; }
-        .header-icon { width: 48px; height: 48px; font-size: 1.25rem; }
-    }
-
-    /* --- Grid Layout --- */
-    .tournaments-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-        gap: 1.5rem;
-    }
-
-    /* --- Tournament Card --- */
-    .tournament-card {
-        position: relative;
-        border-radius: 16px;
-        overflow: hidden;
-        text-decoration: none;
-        color: var(--fg);
-        transition: all 0.3s ease;
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        display: flex;
-        flex-direction: column;
-    }
-
-    .tournament-card:hover {
-        transform: translateY(-4px);
-        border-color: var(--accent);
-        box-shadow: 0 8px 24px var(--shadow);
-    }
-
-    /* --- Create Card --- */
-    .create-card {
-        background: var(--bg);
-        border: 2px dashed var(--card-border);
-        min-height: 280px;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .create-card:hover {
-        border-color: var(--accent);
-        background: var(--accent-light);
-    }
-
-    .create-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1rem;
-        padding: 2rem;
-        text-align: center;
-    }
-
-    .icon-circle {
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        background: var(--card-bg);
-        border: 2px solid var(--card-border);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        color: var(--accent);
-        transition: all 0.3s ease;
-    }
-
-    .create-card:hover .icon-circle {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #fff;
-        transform: scale(1.1);
-    }
-
-    .create-content h3 {
-        font-size: 1.25rem;
-        font-weight: 600;
-        margin: 0;
-        color: var(--fg);
-    }
-
-    .create-content p {
-        font-size: 0.9rem;
-        color: var(--fg-secondary);
-        margin: 0;
-    }
-
-    /* --- Status Bar --- */
-    .card-status-bar {
-        height: 4px;
-        width: 100%;
-    }
-
-    .card-status-bar.active,
-    .card-status-bar.open {
-        background: linear-gradient(90deg, var(--success), #7cb367);
-    }
-
-    .card-status-bar.completed {
-        background: linear-gradient(90deg, var(--info), var(--purple));
-    }
-
-    /* --- Card Content --- */
-    .card-content {
-        padding: 1.5rem;
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 1rem;
-    }
-
-    .t-name {
-        font-size: 1.25rem;
-        font-weight: 600;
-        margin: 0;
-        line-height: 1.3;
-        color: var(--fg);
-        flex: 1;
-    }
-
-    .status-badge {
-        font-size: 0.7rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        padding: 0.25rem 0.625rem;
-        border-radius: 6px;
-        letter-spacing: 0.5px;
-        flex-shrink: 0;
-    }
-
-    .status-badge.active,
-    .status-badge.open {
-        background: rgba(152, 195, 121, 0.15);
-        color: var(--success);
-        border: 1px solid rgba(152, 195, 121, 0.3);
-    }
-
-    .status-badge.completed {
-        background: rgba(97, 175, 239, 0.15);
-        color: var(--info);
-        border: 1px solid rgba(97, 175, 239, 0.3);
-    }
-
-    /* --- Meta Info --- */
-    .t-meta {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .meta-item {
-        display: flex;
-        align-items: center;
-        gap: 0.625rem;
-        font-size: 0.875rem;
-        color: var(--fg-secondary);
-    }
-
-    .meta-item i {
-        width: 16px;
-        text-align: center;
-        color: var(--accent);
-        opacity: 0.7;
-    }
-
-    .format-meta-badge {
-        color: var(--warning);
-        font-weight: 600;
-    }
-
-    .format-meta-badge i {
-        color: var(--warning);
-        opacity: 1;
-    }
-
-    /* --- Progress Bar --- */
-    .t-progress {
-        margin-top: auto;
-        padding-top: 0.5rem;
-    }
-
-    .progress-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.5rem;
-    }
-
-    .progress-label {
-        font-size: 0.75rem;
-        color: var(--fg-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .progress-text {
-        font-size: 0.8rem;
-        color: var(--fg);
-        font-weight: 500;
-    }
-
-    .progress-bar {
-        height: 6px;
-        background: var(--bg);
-        border: 1px solid var(--card-border);
-        border-radius: 3px;
-        overflow: hidden;
-    }
-
-    .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, var(--accent), var(--purple));
-        border-radius: 3px;
-        transition: width 0.3s ease;
-        box-shadow: 0 0 8px rgba(97, 175, 239, 0.3);
-    }
-
-    /* --- Card Footer --- */
-    .card-footer {
-        padding-top: 1rem;
-        border-top: 1px solid var(--card-border);
-        margin-top: 0.5rem;
-    }
-
-    .view-details {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: var(--accent);
-        transition: gap 0.2s ease;
-    }
-
-    .tournament-card:hover .view-details {
-        gap: 0.75rem;
-    }
-
-    .view-details i {
-        font-size: 0.75rem;
-        transition: transform 0.2s ease;
-    }
-
-    .tournament-card:hover .view-details i {
-        transform: translateX(4px);
-    }
-
-    /* --- Empty State --- */
-    .empty-state-container {
-        display: flex;
-        justify-content: center;
-        padding: 3rem 1rem;
-    }
-
-    .empty-state {
-        text-align: center;
-        max-width: 400px;
-    }
-
-    .empty-icon {
-        width: 80px;
-        height: 80px;
-        margin: 0 auto 1.5rem;
-        background: var(--card-bg);
-        border: 2px solid var(--card-border);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 2rem;
-        color: var(--fg-secondary);
-    }
-
-    .empty-state h3 {
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin: 0 0 0.5rem;
-        color: var(--fg);
-    }
-
-    .empty-state p {
-        color: var(--fg-secondary);
-        margin: 0 0 1.5rem;
-    }
-
-    .create-first-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.875rem 1.5rem;
-        background: linear-gradient(135deg, var(--accent), var(--purple));
-        color: #fff;
-        border-radius: 10px;
-        font-weight: 600;
-        text-decoration: none;
-        transition: all 0.2s ease;
-        box-shadow: 0 4px 12px rgba(97, 175, 239, 0.3);
-    }
-
-    .create-first-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(97, 175, 239, 0.4);
-    }
-
-    /* --- Responsive --- */
-    @media (max-width: 768px) {
-        .tournaments-list-container {
-            padding: 1.5rem 1rem;
-        }
-
-        .header-content {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 1rem;
-        }
-
-        .header-icon {
-            width: 48px;
-            height: 48px;
-            font-size: 1.25rem;
-        }
-
-        .header-text h1 {
-            font-size: 1.75rem;
-        }
-
-        .tournaments-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .create-card {
-            min-height: 200px;
-        }
-    }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/competition_hub.css') }}">
 {% endblock %}

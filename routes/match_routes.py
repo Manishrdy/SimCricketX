@@ -67,27 +67,30 @@ def register_match_routes(
         if fixture_id:
             fixture = db.session.get(TournamentFixture, fixture_id)
             if fixture and fixture.tournament.user_id == current_user.id:
-                # Prevent starting locked or completed matches
-                if fixture.status == 'Locked':
-                    flash("Cannot start a locked match. Wait for previous rounds to complete.", "error")
+                # Startability rules live in utils.fixture_rules so this page
+                # and the POST that actually creates the match can never
+                # disagree about them again — see that module's docstring.
+                from utils.fixture_rules import fixture_start_block, SCOPE_TOUR
+                block = fixture_start_block(fixture)
+                if block:
+                    flash(block.reason, block.category)
+                    if block.scope == SCOPE_TOUR:
+                        return redirect(url_for('tour_dashboard', tour_id=fixture.tournament.tour_id))
                     return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament.id))
 
-                if fixture.status == 'Completed':
-                    flash("This match is already completed.", "info")
-                    return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament.id))
-
-                # 'Scheduled' is not on its own proof the pairing was earned:
-                # a historical bracket bug could fabricate one, and playing it
-                # would cement teams that never qualified into a real result.
-                # Verify against the fixture's own feeders before allowing it.
-                from engine.tournament_engine import TournamentEngine
-                if not TournamentEngine().feeders_decided(fixture.tournament, fixture):
+                # A fixture can only have one match running at a time. If one
+                # already does, resuming it is what the user wants far more
+                # often than silently setting up a second, competing match.
+                from utils.fixture_rules import active_match
+                live_match_id = active_match(fixture, _match_is_live)
+                if live_match_id:
                     flash(
-                        "This fixture's teams haven't been decided by the previous "
-                        "round yet. Play the earlier rounds first.",
-                        "error",
+                        "A match is already in progress for this fixture. "
+                        "Resume it here, or abandon it from the tournament "
+                        "dashboard to set it up again.",
+                        "info",
                     )
-                    return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament.id))
+                    return redirect(url_for("match_detail", match_id=live_match_id))
 
                 preselect_home = fixture.home_team_id
                 preselect_away = fixture.away_team_id
@@ -195,6 +198,15 @@ def register_match_routes(
                 fixture = db.session.get(TournamentFixture, req_fixture_id)
                 if not fixture or fixture.tournament.user_id != current_user.id:
                     return jsonify({"error": "Invalid tournament fixture"}), 403
+                # Same canonical rules as the GET branch above. They matter
+                # more here: this is the call that actually mints a match id,
+                # and the setup page bakes its fixtureId in at render time, so
+                # a stale tab can re-POST a fixture that has since been played.
+                from utils.fixture_rules import fixture_start_block
+                block = fixture_start_block(fixture)
+                if block:
+                    return jsonify({"error": block.reason}), 409
+
                 if req_tournament_id and fixture.tournament_id != int(req_tournament_id):
                     return jsonify({"error": "Fixture does not match tournament"}), 400
                 if fixture.home_team_id != home_id or fixture.away_team_id != away_id:
@@ -204,6 +216,12 @@ def register_match_routes(
                 tournament = db.session.get(Tournament, int(req_tournament_id))
                 if not tournament or tournament.user_id != current_user.id:
                     return jsonify({"error": "Invalid tournament"}), 403
+
+                if tournament.tour_id:
+                    return jsonify({"error": "Choose a scheduled tour fixture."}), 400
+                # Completion applies standings through the fixture; without
+                # one, a tournament match would never contribute its result.
+                return jsonify({"error": "Choose a scheduled tournament fixture."}), 400
 
             # Enforce tournament format: override any client-supplied format with the
             # tournament's locked format to prevent inconsistency across fixtures.
@@ -463,8 +481,46 @@ def register_match_routes(
             # Transient setup flag: do not persist beyond match creation.
             data.pop("make_match_interesting", None)
 
-            with open(path, "w") as f:
-                json.dump(data, f, indent=2)
+            # Reserve the fixture before anything is written. A conditional
+            # UPDATE, so two concurrent setups for one fixture cannot both
+            # see it free — the loser is told which match already has it
+            # instead of being handed a second, competing match id.
+            if req_fixture_id:
+                from utils.fixture_rules import (
+                    active_match, claim_fixture, release_fixture,
+                )
+                # Resolves (and clears) a claim left behind by a match that no
+                # longer exists, so an abandoned setup can't lock the fixture.
+                existing_match_id = active_match(fixture, _match_is_live)
+                if existing_match_id or not claim_fixture(fixture, match_id):
+                    return jsonify({
+                        "error": (
+                            "A match is already in progress for this fixture. "
+                            "Resume it, or abandon it from the tournament "
+                            "dashboard to start over."
+                        ),
+                        "active_match_id": fixture.active_match_id or existing_match_id,
+                    }), 409
+
+            try:
+                with open(path, "w") as f:
+                    json.dump(data, f, indent=2)
+            except Exception:
+                # Never leave the fixture reserved for a match whose file was
+                # never written — that would lock it with nothing to resume.
+                if req_fixture_id:
+                    release_fixture(fixture, match_id)
+                raise
+
+            if req_fixture_id and fixture.tournament.tour_id:
+                try:
+                    fixture.tournament.tour_started_at = fixture.tournament.tour_started_at or datetime.utcnow()
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                    release_fixture(fixture, match_id)
+                    os.remove(path)
+                    raise
 
             app.logger.info(f"[MatchSetup] Saved {fname} for {user}")
             return jsonify(match_id=match_id), 200
@@ -1374,6 +1430,34 @@ def register_match_routes(
             match.last_accessed = time.time()
             MATCH_INSTANCES[match_id] = match
             return match, None
+
+    def _match_is_live(match_id):
+        """Whether `match_id` is an in-flight match that can still be resumed.
+
+        Answers the question utils.fixture_rules.active_match() asks before
+        trusting a fixture's claim. Deliberately free of current_user: the
+        completion path needs the same answer with no request user in scope,
+        and the claim's owner is already implied by the fixture's tournament.
+        """
+        if not _is_valid_match_id(match_id):
+            return False
+        with MATCH_INSTANCES_LOCK:
+            instance = MATCH_INSTANCES.get(match_id)
+        if instance is not None:
+            return instance.data.get("current_state") != "completed"
+        path = os.path.join(PROJECT_ROOT, "data", "matches", f"match_{match_id}.json")
+        if not os.path.isfile(path):
+            # The archiver deletes the JSON when a match finishes, so a
+            # missing file means finished or discarded — either way the claim
+            # is stale and the fixture must not stay locked to it.
+            return False
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except Exception:
+            log_exception(source="backend")
+            return False
+        return data.get("current_state") != "completed"
 
     def _finalize_completed_match(match, match_id, outcome):
         """One-time completion side effects for a finished match: simulated-
@@ -2464,4 +2548,7 @@ def register_match_routes(
         "persist_fc_snapshot": _persist_fc_snapshot,
         "persist_super_over_snapshot": _persist_super_over_snapshot,
         "finalize_completed_match": _finalize_completed_match,
+        # Shared with the tournament dashboard so it and /match/setup agree on
+        # whether a fixture's claimed match is still resumable.
+        "match_is_live": _match_is_live,
     }

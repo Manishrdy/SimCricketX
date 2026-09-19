@@ -402,6 +402,27 @@ def test_team_2(app, regular_user):
 
 # ==================== Tournament Fixtures ====================
 
+@pytest.fixture
+def ready_tournament_teams(test_team, test_team_2):
+    """Two published teams with legal squads in every competition format."""
+    from database.models import TeamProfile
+
+    for team in (test_team, test_team_2):
+        for fmt in ("T20", "ListA", "FC"):
+            profile = TeamProfile(team_id=team.id, format_type=fmt)
+            db.session.add(profile)
+            db.session.flush()
+            for index in range(11):
+                db.session.add(DBPlayer(
+                    team_id=team.id, profile_id=profile.id,
+                    name=f"{fmt} Player {index}",
+                    role="Wicketkeeper" if index == 0 else "All-rounder",
+                    is_captain=index == 0, is_wicketkeeper=index == 0,
+                ))
+        db.session.expire(team, ["profiles", "players"])
+    db.session.commit()
+    return test_team, test_team_2
+
 @pytest.fixture(scope="function")
 def test_tournament(app, regular_user, test_team, test_team_2):
     """Create a test tournament with fixtures."""

@@ -47,6 +47,7 @@ class TestTournamentListRoute:
         assert response.status_code == 200
 
 
+@pytest.mark.usefixtures("ready_tournament_teams")
 class TestTournamentCreationRoute:
     """Tests for tournament creation."""
 
@@ -216,6 +217,96 @@ class TestTournamentCreationRoute:
             db.select(Tournament).filter_by(name="Bogus Mode Tournament")
         ).scalar_one_or_none()
         assert tournament is None
+
+    def test_create_tournament_whitespace_name_rejected(self, authenticated_client, test_team, test_team_2):
+        """A whitespace-only tournament name must be rejected with an error and no tournament created."""
+        initial_count = Tournament.query.count()
+        response = authenticated_client.post(
+            "/tournaments/create",
+            data={
+                "name": "   ",
+                "mode": "round_robin",
+                "team_ids": [test_team.id, test_team_2.id],
+            },
+        )
+        assert response.status_code == 302
+        assert response.location.endswith("/tournaments/create")
+
+        with authenticated_client.session_transaction() as session:
+            errors = [msg for cat, msg in session.get("_flashes", []) if cat == "error"]
+        assert "Tournament name cannot be empty." in errors
+        assert Tournament.query.count() == initial_count
+
+    def test_create_tournament_empty_name_rejected(self, authenticated_client, test_team, test_team_2):
+        """An empty tournament name must be rejected with an error and no tournament created."""
+        initial_count = Tournament.query.count()
+        response = authenticated_client.post(
+            "/tournaments/create",
+            data={
+                "name": "",
+                "mode": "round_robin",
+                "team_ids": [test_team.id, test_team_2.id],
+            },
+        )
+        assert response.status_code == 302
+        assert response.location.endswith("/tournaments/create")
+
+        with authenticated_client.session_transaction() as session:
+            errors = [msg for cat, msg in session.get("_flashes", []) if cat == "error"]
+        assert "Tournament name cannot be empty." in errors
+        assert Tournament.query.count() == initial_count
+
+    def test_create_tournament_name_longer_than_100_chars_rejected(self, authenticated_client, test_team, test_team_2):
+        """A tournament name longer than 100 characters must be rejected with an error and no tournament created."""
+        initial_count = Tournament.query.count()
+        response = authenticated_client.post(
+            "/tournaments/create",
+            data={
+                "name": "A" * 101,
+                "mode": "round_robin",
+                "team_ids": [test_team.id, test_team_2.id],
+            },
+        )
+        assert response.status_code == 302
+        assert response.location.endswith("/tournaments/create")
+
+        with authenticated_client.session_transaction() as session:
+            errors = [msg for cat, msg in session.get("_flashes", []) if cat == "error"]
+        assert "Tournament name must be 100 characters or less." in errors
+        assert Tournament.query.count() == initial_count
+
+    def test_create_tournament_name_100_chars_accepted(self, authenticated_client, test_team, test_team_2):
+        """A tournament name of exactly 100 characters should be accepted."""
+        name_100 = "T" * 100
+        response = authenticated_client.post(
+            "/tournaments/create",
+            data={
+                "name": name_100,
+                "mode": "round_robin",
+                "team_ids": [test_team.id, test_team_2.id],
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        t = Tournament.query.filter_by(name=name_100).first()
+        assert t is not None
+        assert t.name == name_100
+
+    def test_create_tournament_name_trimmed(self, authenticated_client, test_team, test_team_2):
+        """Leading and trailing whitespace should be trimmed from the tournament name on creation."""
+        response = authenticated_client.post(
+            "/tournaments/create",
+            data={
+                "name": "  Trimmed Premier League  ",
+                "mode": "round_robin",
+                "team_ids": [test_team.id, test_team_2.id],
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        t = Tournament.query.filter_by(name="Trimmed Premier League").first()
+        assert t is not None
+        assert t.name == "Trimmed Premier League"
 
 
 class TestTournamentDetailRoute:
@@ -401,6 +492,84 @@ class TestTournamentDashboardLeaders:
         body = response.data.decode()
         assert "Most Runs" in body
         assert batter.name in body
+
+
+class TestTournamentRenameRoute:
+    """Tests for tournament renaming."""
+
+    def test_rename_tournament_success(self, authenticated_client, test_tournament):
+        """Test renaming a tournament to a valid new name."""
+        response = authenticated_client.post(
+            f"/tournaments/{test_tournament.id}/rename",
+            data={"name": "Renamed Tournament"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        db.session.refresh(test_tournament)
+        assert test_tournament.name == "Renamed Tournament"
+
+    def test_rename_tournament_whitespace_rejected(self, authenticated_client, test_tournament):
+        """Whitespace-only name should be rejected on rename."""
+        original_name = test_tournament.name
+        response = authenticated_client.post(
+            f"/tournaments/{test_tournament.id}/rename",
+            data={"name": "   "},
+        )
+        assert response.status_code == 302
+        with authenticated_client.session_transaction() as session:
+            errors = [msg for cat, msg in session.get("_flashes", []) if cat == "error"]
+        assert "Tournament name cannot be empty." in errors
+        db.session.refresh(test_tournament)
+        assert test_tournament.name == original_name
+
+    def test_rename_tournament_empty_rejected(self, authenticated_client, test_tournament):
+        """Empty name should be rejected on rename."""
+        original_name = test_tournament.name
+        response = authenticated_client.post(
+            f"/tournaments/{test_tournament.id}/rename",
+            data={"name": ""},
+        )
+        assert response.status_code == 302
+        with authenticated_client.session_transaction() as session:
+            errors = [msg for cat, msg in session.get("_flashes", []) if cat == "error"]
+        assert "Tournament name cannot be empty." in errors
+        db.session.refresh(test_tournament)
+        assert test_tournament.name == original_name
+
+    def test_rename_tournament_too_long_rejected(self, authenticated_client, test_tournament):
+        """Name longer than 100 characters should be rejected on rename."""
+        original_name = test_tournament.name
+        response = authenticated_client.post(
+            f"/tournaments/{test_tournament.id}/rename",
+            data={"name": "R" * 101},
+        )
+        assert response.status_code == 302
+        with authenticated_client.session_transaction() as session:
+            errors = [msg for cat, msg in session.get("_flashes", []) if cat == "error"]
+        assert "Tournament name must be 100 characters or less." in errors
+        db.session.refresh(test_tournament)
+        assert test_tournament.name == original_name
+
+    def test_rename_tournament_exact_100_chars_accepted(self, authenticated_client, test_tournament):
+        """Name of exactly 100 characters should be accepted on rename."""
+        name_100 = "R" * 100
+        response = authenticated_client.post(
+            f"/tournaments/{test_tournament.id}/rename",
+            data={"name": name_100},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        db.session.refresh(test_tournament)
+        assert test_tournament.name == name_100
+
+    def test_rename_tournament_unauthenticated(self, client, test_tournament):
+        """Unauthenticated user cannot rename tournament."""
+        response = client.post(
+            f"/tournaments/{test_tournament.id}/rename",
+            data={"name": "Hacked Tournament"},
+        )
+        assert response.status_code == 302
+        assert "/login" in response.location
 
 
 class TestTournamentDeletionRoute:
@@ -838,6 +1007,7 @@ class TestResimulateStatsReversal:
         assert bowler.name in body
 
 
+@pytest.mark.usefixtures("ready_tournament_teams")
 class TestTournamentModes:
     """Tests for different tournament modes."""
 
