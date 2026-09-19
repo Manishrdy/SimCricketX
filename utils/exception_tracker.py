@@ -289,7 +289,14 @@ def log_data_anomaly(
     Dedup is keyed on (kind, source) so repeated occurrences of the same
     anomaly type roll up into one row with an incremented occurrence_count.
 
-    Returns the row id, or None if recording was skipped (no app context).
+    Writes on a short-lived session of its own so that logging an anomaly
+    can never commit the caller's half-finished transaction; if that write
+    is locked out it degrades to staging the row on the caller's session
+    (still without committing it) rather than losing the record.
+
+    Returns the row id, or None if recording was skipped (no app context),
+    failed, or could only be staged on the caller's not-yet-flushed
+    transaction.
     """
     try:
         if not has_app_context():
@@ -341,41 +348,160 @@ def log_data_anomaly(
             source=source_name,
         )
 
-        entry = ExceptionLog.query.filter_by(fingerprint=fingerprint).first()
-        if entry:
-            entry.occurrence_count = int(entry.occurrence_count or 1) + 1
-            entry.last_seen_at = now
-            entry.timestamp = now
-            entry.exception_message = message[:65535] if message else ''
-            if context_json:
-                entry.context_json = context_json
-            if user_email:
-                entry.user_email = user_email
-            db.session.commit()
-            return entry.id
-
-        entry = ExceptionLog(
-            exception_type=kind_name,
-            exception_message=(message or '')[:65535],
-            severity=(severity or "warning")[:10],
-            source=source_name,
-            user_email=user_email,
-            context_json=context_json,
-            handled=True,
-            fingerprint=fingerprint,
-            occurrence_count=1,
-            first_seen_at=now,
-            last_seen_at=now,
-            timestamp=now,
-            github_sync_status="skipped",
-        )
-        db.session.add(entry)
-        db.session.commit()
-        return entry.id
-    except Exception:
-        if has_app_context():
+        # Persist on a SHORT-LIVED SESSION OF OUR OWN — never db.session,
+        # for the same reason log_exception does (see the comment there).
+        #
+        # Anomalies are reported from the middle of multi-step write
+        # sequences, not just from except-handlers: calculate_innings_stats
+        # reports "OversExceedQuota" while a tournament re-simulate still
+        # has its cleanup (reverse_standings, partnership/scorecard deletes,
+        # the old match delete) pending and uncommitted on the shared
+        # session. Committing db.session here would push that half-finished
+        # cleanup through, and the caller's own rollback would then have
+        # nothing left to undo.
+        from sqlalchemy.orm import Session as _SASession
+        _sess = _SASession(bind=db.engine, expire_on_commit=False)
+        try:
+            _fail_fast_on_locked_sqlite(_sess)
+            row_id = _persist_anomaly_entry(
+                _sess, fingerprint, now, kind_name, message, severity,
+                source_name, user_email, context_json,
+            )
+        finally:
             try:
-                db.session.rollback()
+                _sess.close()
             except Exception:
                 pass
+
+        if row_id is not None:
+            return row_id
+
+        # The independent write did not get through — on SQLite that is
+        # normally the caller's own open write transaction holding the
+        # single writer lock. Fall back rather than lose the record.
+        return _stage_anomaly_on_shared_session(
+            fingerprint, now, kind_name, message, severity, source_name,
+            user_email, context_json,
+        )
+    except Exception:
+        # Deliberately does not touch db.session: this function no longer
+        # commits the shared session, so rolling it back here would
+        # re-introduce the very caller coupling the isolated session exists
+        # to remove.
+        return None
+
+
+def _fail_fast_on_locked_sqlite(session, millis: int = 250) -> None:
+    """Shorten the busy timeout on our own SQLite connection.
+
+    SQLite takes one writer at a time, and the lock we can collide with is
+    held by the caller we are about to return to — so it cannot be released
+    while we wait. Blocking out the 5s default would stall the worker (and,
+    under gevent, the hub) for a lock that will never come free in time; a
+    quick failure lets us fall back instead. Non-SQLite binds are untouched.
+    """
+    try:
+        bind = session.get_bind()
+        if bind is not None and bind.dialect.name == "sqlite":
+            from sqlalchemy import text as _text
+            session.execute(_text("PRAGMA busy_timeout = %d" % int(millis)))
+    except Exception:
+        pass
+
+
+def _anomaly_row_kwargs(fingerprint, now, kind_name, message, severity,
+                        source_name, user_email, context_json) -> dict:
+    """The row shape for a new anomaly — one definition, two writers."""
+    return dict(
+        exception_type=kind_name,
+        exception_message=(message or '')[:65535],
+        severity=(severity or "warning")[:10],
+        source=source_name,
+        user_email=user_email,
+        context_json=context_json,
+        handled=True,
+        fingerprint=fingerprint,
+        occurrence_count=1,
+        first_seen_at=now,
+        last_seen_at=now,
+        timestamp=now,
+        github_sync_status="skipped",
+    )
+
+
+def _bump_anomaly_row(entry, now, message, context_json, user_email) -> None:
+    """Roll a repeat occurrence into the existing row — one definition."""
+    entry.occurrence_count = int(entry.occurrence_count or 1) + 1
+    entry.last_seen_at = now
+    entry.timestamp = now
+    entry.exception_message = message[:65535] if message else ''
+    if context_json:
+        entry.context_json = context_json
+    if user_email:
+        entry.user_email = user_email
+
+
+def _persist_anomaly_entry(session, fingerprint, now, kind_name, message,
+                           severity, source_name, user_email, context_json):
+    """Write (or bump) the anomaly's ExceptionLog row on *session*.
+
+    Split out of log_data_anomaly so the isolated-session lifetime is
+    obvious at the call site, mirroring _persist_exception_entry.
+    """
+    try:
+        entry = session.query(ExceptionLog).filter_by(fingerprint=fingerprint).first()
+        if entry:
+            _bump_anomaly_row(entry, now, message, context_json, user_email)
+            session.commit()
+            return entry.id
+
+        entry = ExceptionLog(**_anomaly_row_kwargs(
+            fingerprint, now, kind_name, message, severity, source_name,
+            user_email, context_json,
+        ))
+        session.add(entry)
+        session.commit()
+        return entry.id
+    except Exception:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        return None
+
+
+def _stage_anomaly_on_shared_session(fingerprint, now, kind_name, message,
+                                     severity, source_name, user_email,
+                                     context_json):
+    """Last resort when the anomaly could not be written independently.
+
+    These records exist to be loud, so dropping one because SQLite would
+    not give us a second writer is the wrong trade. Stage it on the shared
+    session instead: it reaches disk with the caller's own commit, and
+    disappears with their rollback. What it must never do — and does not
+    do — is commit on their behalf, which is the whole point of the
+    isolated session above.
+
+    Returns the id of a row we bumped, else None: a brand-new row has no id
+    until it is flushed, and flushing the caller's session here would push
+    out their half-finished work along with ours.
+    """
+    try:
+        with db.session.no_autoflush:
+            entry = db.session.query(ExceptionLog).filter_by(
+                fingerprint=fingerprint).first()
+        if entry:
+            _bump_anomaly_row(entry, now, message, context_json, user_email)
+            return entry.id
+
+        db.session.add(ExceptionLog(**_anomaly_row_kwargs(
+            fingerprint, now, kind_name, message, severity, source_name,
+            user_email, context_json,
+        )))
+        return None
+    except Exception:
+        sys.stderr.write(
+            f"[exception_tracker] could not record data anomaly "
+            f"{kind_name}: {message}\n"
+        )
         return None
