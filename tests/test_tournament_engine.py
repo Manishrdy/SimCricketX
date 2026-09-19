@@ -1264,6 +1264,65 @@ class TestMinTeamValidation:
         assert Tournament.query.filter_by(name="Bogus").first() is None
 
 
+class TestTournamentNameValidation:
+    """Test tournament name validation and trimming in TournamentEngine."""
+
+    def test_whitespace_name_rejected(self, app, engine, regular_user, four_teams):
+        with pytest.raises(ValueError, match="Tournament name cannot be empty."):
+            engine.create_tournament(
+                name="   ",
+                user_id=regular_user.id,
+                team_ids=[four_teams[0].id, four_teams[1].id],
+                mode="round_robin",
+            )
+
+    def test_empty_name_rejected(self, app, engine, regular_user, four_teams):
+        with pytest.raises(ValueError, match="Tournament name cannot be empty."):
+            engine.create_tournament(
+                name="",
+                user_id=regular_user.id,
+                team_ids=[four_teams[0].id, four_teams[1].id],
+                mode="round_robin",
+            )
+
+    def test_none_name_rejected(self, app, engine, regular_user, four_teams):
+        with pytest.raises(ValueError, match="Tournament name cannot be empty."):
+            engine.create_tournament(
+                name=None,
+                user_id=regular_user.id,
+                team_ids=[four_teams[0].id, four_teams[1].id],
+                mode="round_robin",
+            )
+
+    def test_name_too_long_rejected(self, app, engine, regular_user, four_teams):
+        with pytest.raises(ValueError, match="Tournament name must be 100 characters or less."):
+            engine.create_tournament(
+                name="A" * 101,
+                user_id=regular_user.id,
+                team_ids=[four_teams[0].id, four_teams[1].id],
+                mode="round_robin",
+            )
+
+    def test_name_exact_100_chars_accepted(self, app, engine, regular_user, four_teams):
+        name_100 = "Z" * 100
+        t = engine.create_tournament(
+            name=name_100,
+            user_id=regular_user.id,
+            team_ids=[four_teams[0].id, four_teams[1].id],
+            mode="round_robin",
+        )
+        assert t.name == name_100
+
+    def test_name_is_trimmed(self, app, engine, regular_user, four_teams):
+        t = engine.create_tournament(
+            name="   Clean Engine Name   ",
+            user_id=regular_user.id,
+            team_ids=[four_teams[0].id, four_teams[1].id],
+            mode="round_robin",
+        )
+        assert t.name == "Clean Engine Name"
+
+
 class TestAvailableModes:
     """Test mode availability based on team count."""
 
@@ -1456,3 +1515,233 @@ def _create_tournament(user, teams, engine):
         mode="round_robin",
     )
     return t.id
+
+
+class TestReverseUnappliedStandings:
+    """reverse_standings must only ever subtract what was actually added.
+
+    update_standings refuses to add twice (its standings_applied early
+    return); reverse_standings had no mirror of that guard. The counters are
+    shared per team across every fixture, so subtracting for a fixture that
+    never contributed does not zero that fixture out — it eats a *different*
+    fixture's contribution, leaving rows like played=0 / won=1 that no
+    legitimate path produces.
+
+    No current caller can reach this: every writer that sets
+    standings_applied=False also clears match_id, so the
+    filter_by(match_id=...) lookup finds nothing. The one exception —
+    update_standings's unresolved-knockout branch, which leaves match_id set
+    — is saved only by never being league stage. These tests pin the guard
+    so that stays true by construction rather than by coincidence.
+    """
+
+    @staticmethod
+    def _link(user_id, tournament_id, fixture, winner_id):
+        match = DBMatch(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            tournament_id=tournament_id,
+            home_team_id=fixture.home_team_id,
+            away_team_id=fixture.away_team_id,
+            winner_team_id=winner_id,
+            match_format="T20",
+            home_team_score=160, home_team_wickets=5, home_team_overs="20.0",
+            away_team_score=150, away_team_wickets=8, away_team_overs="20.0",
+        )
+        db.session.add(match)
+        db.session.flush()
+        fixture.match_id = match.id
+        db.session.commit()
+        return match
+
+    @staticmethod
+    def _stats(tournament_id, team_id):
+        return TournamentTeam.query.filter_by(
+            tournament_id=tournament_id, team_id=team_id
+        ).first()
+
+    def _two_fixtures_sharing_a_team(self, engine, regular_user, four_teams, name):
+        tournament = engine.create_tournament(
+            name=name, user_id=regular_user.id,
+            team_ids=[t.id for t in four_teams], mode="round_robin",
+        )
+        fixtures = TournamentFixture.query.filter_by(
+            tournament_id=tournament.id, stage=engine.STAGE_LEAGUE
+        ).all()
+        played, shared = fixtures[0], fixtures[0].home_team_id
+        other = next(
+            f for f in fixtures[1:]
+            if shared in (f.home_team_id, f.away_team_id)
+        )
+        return tournament, played, other, shared
+
+    def test_unapplied_reversal_does_not_eat_another_fixtures_result(
+        self, app, engine, regular_user, four_teams
+    ):
+        tournament, played_fixture, unapplied_fixture, shared = (
+            self._two_fixtures_sharing_a_team(
+                engine, regular_user, four_teams, "Unapplied Reverse"
+            )
+        )
+
+        # One genuinely played, applied fixture.
+        first = self._link(
+            regular_user.id, tournament.id, played_fixture,
+            played_fixture.home_team_id,
+        )
+        engine.update_standings(first, commit=True)
+        stats = self._stats(tournament.id, shared)
+        assert (stats.played, stats.won, stats.points) == (1, 1, 2)
+
+        # A second league fixture linked to a match whose result was never
+        # applied to the table.
+        second = self._link(
+            regular_user.id, tournament.id, unapplied_fixture,
+            unapplied_fixture.home_team_id,
+        )
+        unapplied_fixture.standings_applied = False
+        db.session.commit()
+
+        engine.reverse_standings(second, commit=True)
+
+        stats = self._stats(tournament.id, shared)
+        assert (stats.played, stats.won, stats.points) == (1, 1, 2), (
+            "reversing a fixture that never contributed subtracted from the "
+            f"shared counters anyway: played={stats.played} won={stats.won} "
+            f"points={stats.points}"
+        )
+        assert stats.won <= stats.played, "standings row is self-contradictory"
+
+    def test_unapplied_reversal_still_resets_the_fixture(
+        self, app, engine, regular_user, four_teams
+    ):
+        """Skipping the subtraction must not skip the reset.
+
+        The caller (re-simulation) depends on reverse_standings putting the
+        fixture back to a playable state; only the arithmetic is in doubt.
+        """
+        tournament, _played, unapplied_fixture, _shared = (
+            self._two_fixtures_sharing_a_team(
+                engine, regular_user, four_teams, "Unapplied Reset"
+            )
+        )
+        match = self._link(
+            regular_user.id, tournament.id, unapplied_fixture,
+            unapplied_fixture.home_team_id,
+        )
+        unapplied_fixture.standings_applied = False
+        db.session.commit()
+
+        assert engine.reverse_standings(match, commit=True) is True
+
+        db.session.refresh(unapplied_fixture)
+        assert unapplied_fixture.match_id is None
+        assert unapplied_fixture.status == "Scheduled"
+        assert unapplied_fixture.winner_team_id is None
+
+    def test_applied_reversal_still_subtracts(
+        self, app, engine, regular_user, four_teams
+    ):
+        """The guard must not break ordinary re-simulation."""
+        tournament, played_fixture, _other, shared = (
+            self._two_fixtures_sharing_a_team(
+                engine, regular_user, four_teams, "Applied Reverse"
+            )
+        )
+        match = self._link(
+            regular_user.id, tournament.id, played_fixture,
+            played_fixture.home_team_id,
+        )
+        engine.update_standings(match, commit=True)
+        db.session.refresh(played_fixture)
+        assert played_fixture.standings_applied is True
+
+        engine.reverse_standings(match, commit=True)
+
+        stats = self._stats(tournament.id, shared)
+        assert (stats.played, stats.won, stats.points) == (0, 0, 0)
+
+
+@pytest.mark.parametrize("mode,team_count", [
+    ("round_robin", 2),
+    ("double_round_robin", 2),
+    ("custom_series", 2),
+    ("round_robin_knockout", 4),
+    ("ipl_style", 4),
+    ("knockout", 2),
+])
+def test_reversal_never_leaves_a_completed_stage_on_a_live_tournament(
+    app, engine, regular_user, four_teams, mode, team_count
+):
+    """Re-simulating must not leave current_stage claiming 'completed'.
+
+    _check_tournament_completion writes status='Completed' AND
+    current_stage='completed' together, but the reversal only ever put
+    current_stage back for knockout-stage fixtures and the three league+
+    playoff hybrid modes. round_robin, double_round_robin and standalone
+    custom_series fell off the end of that mode list, so status returned to
+    'Active' while the stage still read 'completed' — a tournament holding a
+    Scheduled fixture inside a stage that claimed to be finished.
+
+    The invariant asserted here is mode-independent on purpose: whatever the
+    mode, a tournament with an unplayed fixture is not completed.
+    """
+    teams = four_teams[:team_count]
+    tournament = engine.create_tournament(
+        name=f"Stage reset {mode}", user_id=regular_user.id,
+        team_ids=[t.id for t in teams], mode=mode,
+        series_config=(
+            {"matches": [{"home": 0, "match_num": 1}]}
+            if mode == "custom_series" else None
+        ),
+    )
+
+    def playable():
+        return (
+            TournamentFixture.query
+            .filter_by(tournament_id=tournament.id, status="Scheduled")
+            .order_by(TournamentFixture.id)
+            .all()
+        )
+
+    # Play the tournament out. Knockout brackets unlock a round at a time, so
+    # keep going until nothing is playable rather than assuming one pass.
+    played = []
+    while True:
+        pending = playable()
+        if not pending:
+            break
+        for fixture in pending:
+            match = DBMatch(
+                id=str(uuid.uuid4()), user_id=regular_user.id,
+                tournament_id=tournament.id,
+                home_team_id=fixture.home_team_id,
+                away_team_id=fixture.away_team_id,
+                winner_team_id=fixture.home_team_id,
+                match_format="T20",
+                home_team_score=160, home_team_wickets=5, home_team_overs="20.0",
+                away_team_score=150, away_team_wickets=8, away_team_overs="20.0",
+            )
+            db.session.add(match)
+            db.session.flush()
+            fixture.match_id = match.id
+            db.session.commit()
+            engine.update_standings(match, commit=True)
+            played.append(match)
+
+    assert played, f"{mode}: nothing was playable, so the test proves nothing"
+
+    engine.reverse_standings(played[-1], commit=True)
+    db.session.refresh(tournament)
+
+    unplayed = TournamentFixture.query.filter(
+        TournamentFixture.tournament_id == tournament.id,
+        TournamentFixture.status.in_(["Scheduled", "Locked"]),
+    ).count()
+    assert unplayed, f"{mode}: the reversal left no fixture to play"
+
+    assert tournament.status == "Active"
+    assert tournament.current_stage != "completed", (
+        f"{mode}: tournament has {unplayed} unplayed fixture(s) but "
+        f"current_stage is {tournament.current_stage!r}"
+    )

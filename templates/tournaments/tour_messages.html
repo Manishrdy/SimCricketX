@@ -1,0 +1,3 @@
+{% for category, message in get_flashed_messages(with_categories=true) %}
+<div class="tour-card" role="{{ 'alert' if category in ['error', 'danger'] else 'status' }}">{{ message }}</div>
+{% endfor %}

@@ -8,6 +8,7 @@ from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func as sa_func
 from utils.exception_tracker import log_exception
+from utils.squad_rules import team_squad_readiness_error
 
 
 _KNOCKOUT_STAGE_LABELS = {
@@ -49,6 +50,7 @@ def register_tournament_routes(
     MATCH_INSTANCES,
     MATCH_INSTANCES_LOCK,
     PROJECT_ROOT,
+    match_is_live,
 ):
     # ── Shared helper ─────────────────────────────────────────────────────
 
@@ -141,17 +143,57 @@ def register_tournament_routes(
                 log_exception(source="backend")
                 continue
 
+    def _discard_in_flight_match(fixture, *, commit=True):
+        """Void a fixture's reservation and throw away the unfinished match.
+
+        Shared by Abandon and Re-simulate: both mean "this fixture is free
+        again", and both have to remove the match file as well as the claim,
+        or the discarded match stays resumable by direct URL and can still
+        come back later to claim a result.
+
+        Returns the discarded match id, or None if nothing was in flight.
+        """
+        from utils.fixture_rules import release_fixture
+
+        match_id = fixture.active_match_id
+        release_fixture(fixture, commit=commit)
+        if not match_id:
+            return None
+
+        with MATCH_INSTANCES_LOCK:
+            MATCH_INSTANCES.pop(match_id, None)
+
+        json_path = os.path.join(
+            PROJECT_ROOT, "data", "matches", f"match_{match_id}.json"
+        )
+        if os.path.isfile(json_path):
+            try:
+                os.remove(json_path)
+            except Exception as e:
+                # Harmless on its own: the claim is already gone, so the
+                # fixture is playable and the stray file ages out.
+                log_exception(e)
+                app.logger.warning(
+                    f"Could not remove in-flight match file {json_path}: {e}"
+                )
+        return match_id
+
     # ── Routes ────────────────────────────────────────────────────────────
+
+    from database.models import Tour
+    from routes.tour_routes import register_tour_routes
+    register_tour_routes(app, limiter, _cleanup_match_artifacts, _delete_match_json)
 
     @app.route("/tournaments")
     @login_required
     def tournaments():
         user_tournaments = (
-            Tournament.query.filter_by(user_id=current_user.id)
+            Tournament.query.filter_by(user_id=current_user.id, tour_id=None)
             .order_by(Tournament.created_at.desc())
             .all()
         )
-        return render_template("tournaments/dashboard_list.html", tournaments=user_tournaments)
+        return render_template("tournaments/dashboard_list.html", tournaments=user_tournaments,
+                               tours=Tour.query.filter_by(user_id=current_user.id).order_by(Tour.created_at.desc()).all())
 
     @app.route("/tournaments/create", methods=["GET", "POST"])
     @login_required
@@ -160,7 +202,7 @@ def register_tournament_routes(
         VALID_TOURNAMENT_FORMATS = {"T20", "ListA", "FC"}
 
         if request.method == "POST":
-            name = request.form.get("name")
+            name = (request.form.get("name") or "").strip()
             team_ids = request.form.getlist("team_ids")
             mode = request.form.get("mode", "round_robin")
             match_format = request.form.get("match_format", "T20").strip()
@@ -178,22 +220,35 @@ def register_tournament_routes(
                 flash("Invalid tournament format selected.", "error")
                 return redirect(url_for("create_tournament_route"))
 
-            if not name or len(team_ids) < 2:
+            if not name:
+                flash("Tournament name cannot be empty.", "error")
+                return redirect(url_for("create_tournament_route"))
+
+            if len(name) > 100:
+                flash("Tournament name must be 100 characters or less.", "error")
+                return redirect(url_for("create_tournament_route"))
+
+            if len(team_ids) < 2:
                 flash("Please provide a tournament name and select at least 2 teams.", "error")
                 return redirect(url_for("create_tournament_route"))
 
             try:
                 team_ids = [int(tid) for tid in team_ids]
 
-                owned_team_ids = {
-                    team.id
-                    for team in DBTeam.query.filter_by(user_id=current_user.id)
+                owned_teams = (
+                    DBTeam.query.filter_by(user_id=current_user.id)
                     .filter(DBTeam.id.in_(team_ids), DBTeam.is_placeholder != True)
                     .all()
-                }
-                if len(owned_team_ids) != len(team_ids):
+                )
+                if len(owned_teams) != len(team_ids):
                     flash("One or more selected teams are not owned by you.", "error")
                     return redirect(url_for("create_tournament_route"))
+
+                for team in owned_teams:
+                    reason = team_squad_readiness_error(team, match_format)
+                    if reason:
+                        flash(f"{team.name} — {match_format}: {reason}", "error")
+                        return redirect(url_for("create_tournament_route"))
 
                 series_config = None
                 if mode == "custom_series":
@@ -201,7 +256,15 @@ def register_tournament_routes(
                         flash("Custom series requires exactly 2 teams.", "error")
                         return redirect(url_for("create_tournament_route"))
 
-                    num_matches = int(request.form.get("series_matches", 3))
+                    try:
+                        num_matches = int(request.form.get("series_matches", 3))
+                    except (TypeError, ValueError):
+                        num_matches = 0
+                    # Bound the request before allocating the match definitions
+                    # or passing them to fixture generation.
+                    if not 1 <= num_matches <= 7:
+                        flash("Custom series must contain between 1 and 7 matches.", "error")
+                        return redirect(url_for("create_tournament_route"))
                     series_config = {
                         "series_name": name,
                         "matches": [],
@@ -280,10 +343,30 @@ def register_tournament_routes(
             .all()
         )
 
+        from engine.tour_engine import fixture_block_reason
+        tour_blocked = {f.id: fixture_block_reason(f) for f in fixtures if f.status == "Scheduled"}
+
+        # Fixtures currently held by an unfinished match. Resolved through
+        # active_match() rather than read straight off the column so a claim
+        # left by a match that no longer exists is cleared here too, instead
+        # of showing the user a Resume button for a match that can't load.
+        from utils.fixture_rules import active_match
+        active_matches = {}
+        for f in fixtures:
+            if f.status != "Scheduled" or not f.active_match_id:
+                continue
+            live_id = active_match(f, match_is_live)
+            if live_id:
+                active_matches[f.id] = live_id
+
         # Identify the next scheduled fixture for highlighting
         next_fixture_id = None
         for f in fixtures:
-            if f.status == "Scheduled":
+            if (
+                f.status == "Scheduled"
+                and not tour_blocked.get(f.id)
+                and f.id not in active_matches
+            ):
                 next_fixture_id = f.id
                 break
 
@@ -416,6 +499,8 @@ def register_tournament_routes(
             standings=standings,
             fixtures=fixtures,
             next_fixture_id=next_fixture_id,
+            tour_blocked=tour_blocked,
+            active_matches=active_matches,
             motm_leaderboard=motm_leaderboard,
             top_run_scorers=top_run_scorers,
             top_wicket_takers=top_wicket_takers,
@@ -454,6 +539,10 @@ def register_tournament_routes(
         if not t or t.user_id != current_user.id:
             flash("Tournament not found or you don't have permission.", "danger")
             return redirect(url_for("tournaments"))
+
+        if t.tour_id:
+            flash("Delete this series through its tour.", "error")
+            return redirect(url_for("tour_dashboard", tour_id=t.tour_id))
 
         try:
             tournament_matches = DBMatch.query.filter_by(tournament_id=tournament_id).all()
@@ -495,6 +584,49 @@ def register_tournament_routes(
             )
         return redirect(url_for("tournaments"))
 
+    @app.route("/fixture/<fixture_id>/abandon", methods=["POST"])
+    @login_required
+    @limiter.limit("10 per minute")
+    def abandon_fixture_match(fixture_id):
+        """Discard the in-flight match holding a fixture, freeing it to be set
+        up again.
+
+        The counterpart to the reservation /match/setup takes: without a way
+        to give a claim back, a match the user started and never finished
+        would lock its fixture out of play for good. Only ever touches an
+        unfinished match — a completed one is Re-simulate's job, which has
+        the stats reversal this deliberately doesn't need.
+        """
+        fixture = db.session.get(TournamentFixture, fixture_id)
+        if not fixture:
+            flash("Fixture not found.", "danger")
+            return redirect(url_for("tournaments"))
+
+        if fixture.tournament.user_id != current_user.id:
+            flash("Unauthorized to modify this fixture.", "danger")
+            return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament_id))
+
+        match_id = fixture.active_match_id
+        if not match_id:
+            flash("No match is in progress for this fixture.", "warning")
+            return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament_id))
+
+        try:
+            _discard_in_flight_match(fixture)
+            app.logger.info(
+                f"[Fixture] Abandoned in-progress match {match_id} on fixture {fixture_id}"
+            )
+            flash("Match abandoned. The fixture is ready to play again.", "success")
+        except Exception as e:
+            log_exception(e)
+            db.session.rollback()
+            app.logger.error(
+                f"Failed to abandon match on fixture {fixture_id}: {e}", exc_info=True
+            )
+            flash("Could not abandon that match. Please try again.", "danger")
+
+        return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament_id))
+
     @app.route("/fixture/<fixture_id>/resimulate", methods=["POST"])
     @login_required
     @limiter.limit("10 per minute")
@@ -514,9 +646,18 @@ def register_tournament_routes(
                 flash("Unauthorized to modify this fixture.", "danger")
                 return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament_id))
 
+            # A fixture being reset holds no valid in-flight match, whether
+            # or not one ever completed. Discard it before the early return
+            # below, or an abandoned setup keeps the fixture locked.
+            discarded = _discard_in_flight_match(fixture, commit=False)
+
             match_id = fixture.match_id
             if not match_id:
-                flash("No match data found to reset.", "warning")
+                db.session.commit()
+                if discarded:
+                    flash("In-progress match discarded. The fixture is ready to play again.", "success")
+                else:
+                    flash("No match data found to reset.", "warning")
                 return redirect(url_for("tournament_dashboard", tournament_id=fixture.tournament_id))
 
             db_match = db.session.get(DBMatch, match_id)
@@ -537,6 +678,9 @@ def register_tournament_routes(
                 fixture.match_id = None
                 fixture.standings_applied = False
 
+            if fixture.tournament.tour_id:
+                from engine.tour_engine import refresh_tour
+                refresh_tour(fixture.tournament.tour)
             db.session.commit()
             if db_match:
                 _delete_match_json(db_match)

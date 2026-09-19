@@ -19,6 +19,21 @@ MIN_BOWLING_OPTIONS = 5
 BOWLING_ROLES = ("Bowler", "All-rounder")
 
 
+def team_squad_readiness_error(team, format_type):
+    """Return why a team cannot enter a competition in the given format."""
+    if team.is_draft:
+        return "Team is a draft. Publish its squads first."
+    profile = next((p for p in team.profiles if p.format_type == format_type), None)
+    if profile is None:
+        return "Squad not created."
+    players = list(profile.players)
+    return validate_squad_composition(
+        [p.role for p in players],
+        any(p.is_captain for p in players),
+        any(p.is_wicketkeeper for p in players),
+    )
+
+
 def validate_squad_composition(roles, has_captain, has_wicketkeeper, is_draft=False):
     """
     Validate squad composition given the list of player role strings.

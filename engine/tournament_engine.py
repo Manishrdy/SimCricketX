@@ -186,6 +186,7 @@ class TournamentEngine:
             series_config: Configuration for custom series mode
             format_type: Cricket format for all matches ('T20' or 'ListA', default: 'T20')
             creation_token: Optional idempotency token for one creation intent
+            commit: False lets the tour caller commit all series atomically
 
         Returns:
             Tournament: The created tournament object
@@ -193,6 +194,12 @@ class TournamentEngine:
         Raises:
             ValueError: If validation fails
         """
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("Tournament name cannot be empty.")
+        if len(name) > 100:
+            raise ValueError("Tournament name must be 100 characters or less.")
+
         # Reject unknown modes outright — MIN_TEAMS.get(mode, 2) would
         # otherwise silently default an unrecognized mode to "2 teams
         # required," and _generate_fixtures_for_mode's if/elif chain
@@ -232,7 +239,7 @@ class TournamentEngine:
         try:
             # 1. Create Tournament Record
             tournament = Tournament(
-                name=name.strip(),
+                name=name,
                 user_id=user_id,
                 status='Active',
                 mode=mode,
@@ -1970,8 +1977,50 @@ class TournamentEngine:
         home_team_stats = self._ensure_team_stats(match.tournament_id, match.home_team_id)
         away_team_stats = self._ensure_team_stats(match.tournament_id, match.away_team_id)
 
-        # Only reverse league standings
-        if fixture and fixture.stage == self.STAGE_LEAGUE:
+        # Only reverse league standings, and only what was actually applied.
+        #
+        # standings_applied is the mirror of the guard update_standings uses
+        # before adding (see its "Standings already applied" early return).
+        # Subtracting from a fixture that never contributed does not zero out
+        # that fixture — it eats some *other* fixture's contribution, because
+        # these counters are shared per team. A team with one real win
+        # reversed this way ends up played=0 / won=1, a row no code path
+        # produces legitimately and nothing downstream detects.
+        #
+        # Today every writer that sets standings_applied=False also clears
+        # match_id in the same breath, so reverse_standings cannot find such
+        # a fixture and the asymmetry is unreachable — except for the
+        # unresolved-knockout branch of update_standings, which leaves
+        # match_id set and is saved only by not being league stage. That is a
+        # coincidence of the current call sites, not an invariant, so the
+        # guard belongs here next to the subtraction it protects.
+        reverse_league_points = bool(fixture and fixture.stage == self.STAGE_LEAGUE)
+        if reverse_league_points and not fixture.standings_applied:
+            reverse_league_points = False
+            skip_reason = (
+                f"fixture {fixture.id} was never applied to the standings "
+                f"(standings_applied=False), so match {match.id} has nothing "
+                "to subtract"
+            )
+            logger.warning("[Standings] Skipping reversal: %s", skip_reason)
+            try:
+                from utils.exception_tracker import log_data_anomaly
+                log_data_anomaly(
+                    "ReverseUnappliedStandings",
+                    skip_reason,
+                    payload={
+                        "match_id": match.id,
+                        "tournament_id": match.tournament_id,
+                        "fixture_id": fixture.id,
+                        "stage": fixture.stage,
+                        "writer": "TournamentEngine.reverse_standings",
+                    },
+                )
+            except Exception:
+                # Never let the audit trail block the reset below.
+                pass
+
+        if reverse_league_points:
             home_team_stats.played = max(0, home_team_stats.played - 1)
             away_team_stats.played = max(0, away_team_stats.played - 1)
 
@@ -2025,21 +2074,33 @@ class TournamentEngine:
         if tournament and fixture:
             if fixture.stage != self.STAGE_LEAGUE:
                 tournament.current_stage = fixture.stage
-            elif tournament.mode in [self.MODE_ROUND_ROBIN_KNOCKOUT,
-                                     self.MODE_DOUBLE_ROUND_ROBIN_KNOCKOUT,
-                                     self.MODE_IPL_STYLE]:
-                if tournament.current_stage != self.STAGE_LEAGUE:
+            elif tournament.current_stage != self.STAGE_LEAGUE:
+                # A league fixture just went back to 'Scheduled', so the
+                # tournament is in its league stage again whatever it had
+                # advanced (or completed) to.
+                #
+                # The mode list below governs only the extra playoff cleanup,
+                # NOT whether current_stage gets corrected. It used to gate
+                # both, so the pure-league modes — round_robin,
+                # double_round_robin and standalone custom_series, none of
+                # which are on it — kept the literal 'completed' that
+                # _check_tournament_completion writes, while status went back
+                # to 'Active'. That left a Scheduled fixture sitting in a
+                # tournament whose stage claimed it was finished. (Tour
+                # series escaped it only because refresh_tour recomputes
+                # current_stage below; standalone ones had nothing to.)
+                if tournament.mode in [self.MODE_ROUND_ROBIN_KNOCKOUT,
+                                       self.MODE_DOUBLE_ROUND_ROBIN_KNOCKOUT,
+                                       self.MODE_IPL_STYLE]:
                     self._reset_post_league_fixtures(match.tournament_id)
-                    tournament.current_stage = self.STAGE_LEAGUE
-
-        if commit:
-            db.session.commit()
+                tournament.current_stage = self.STAGE_LEAGUE
 
         if tournament and tournament.tour_id:
             from engine.tour_engine import refresh_tour
             refresh_tour(tournament.tour)
-            if commit:
-                db.session.commit()
+
+        if commit:
+            db.session.commit()
 
         logger.info(f"Reversed standings for match {match.id}")
         return True
@@ -2144,6 +2205,7 @@ class TournamentEngine:
             fixture.away_team_id = tbd_id
             fixture.winner_team_id = None
             fixture.match_id = None
+            fixture.active_match_id = None
             fixture.status = 'Locked'
             fixture.standings_applied = False
 
@@ -2227,6 +2289,7 @@ class TournamentEngine:
             fixture.away_team_id = tbd_id
             fixture.winner_team_id = None
             fixture.match_id = None
+            fixture.active_match_id = None
             fixture.status = 'Locked'
             fixture.standings_applied = False
 

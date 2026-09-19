@@ -1005,6 +1005,13 @@ class TournamentFixture(db.Model):
     winner_team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='SET NULL'), nullable=True)
     series_match_number = db.Column(db.Integer, nullable=True)
     standings_applied = db.Column(db.Boolean, default=False, nullable=False)
+    # The in-flight match currently holding this fixture, if any. Claimed by
+    # /match/setup and released on completion, re-simulation or abandonment,
+    # so one fixture can never have two competing matches running at once.
+    # Deliberately NOT a FK to matches.id: for a tournament fixture the Match
+    # row isn't written until the match finishes, so the id is live on disk
+    # (data/matches/match_<id>.json) long before any row exists to point at.
+    active_match_id = db.Column(db.String(36), nullable=True)
 
     # Relationships
     home_team = relationship('Team', foreign_keys=[home_team_id])
