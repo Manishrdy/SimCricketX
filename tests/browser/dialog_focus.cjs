@@ -96,6 +96,7 @@ test('reported dialog markup binds to its actual close control', () => browserTe
         ['templates/ground_conditions.html', 'gcPitchEditorModal', '<button class="gc-pitch-modal-close" onclick="closePitchEditor()">Close</button>', 'closePitchEditor'],
         ['templates/ground_conditions.html', 'gcResetModal', '<button onclick="closeResetModal()">Cancel</button>', 'closeResetModal'],
         ['templates/ground_conditions.html', 'gcUnsavedModal', '<button id="gcKeepEditing" onclick="closeTestDialog()">Keep editing</button>', 'closeTestDialog'],
+        ['templates/tournaments/dashboard.html', 'delete-tournament-dialog', '<button onclick="closeDeleteTournamentDialog()">Cancel</button>', 'closeDeleteTournamentDialog'],
         ['templates/_support_widget.html', 'scx-support-panel', '<button id="scx-support-close" onclick="closeTestDialog()">Close support</button>', 'closeTestDialog'],
     ];
     for (const [file, id, button, closeName] of cases) {

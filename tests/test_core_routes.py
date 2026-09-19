@@ -161,9 +161,41 @@ class TestGroundConditionsRoutes:
             # Phase matrices are List A only; game modes are T20 only.
             assert "Phase Scoring Matrices" in body
             assert 'id="gcModesRow"' not in body
+            assert 'id="gcListAPhaseSection"' in body
+            assert 'id="gcListAPhaseBody"' in body
+            assert 'id="gcListADewSection"' in body
+            assert 'id="gcListADewBody"' in body
+            assert 'id="la-pb-pp1-all-wicket"' in body
+            assert 'data-la-pb="pp1"' in body
         else:
             assert 'id="gcModesRow"' in body
             assert "Phase Scoring Matrices" not in body
+
+    def test_save_and_reload_lista_phase_boosts(self, authenticated_client, regular_user):
+        """List A phase boosts persist through save and reload, including 1.0 overrides."""
+        from engine.ground_config import get_defaults, get_effective_config
+        cfg = get_defaults("ListA", mutable=True)
+        # Override default Wicket boost (1.05) to 1.0 (neutral) and Dot to custom 1.25
+        cfg["phase_boosts"]["pp1"]["all"]["Wicket"] = 1.0
+        cfg["phase_boosts"]["middle"]["all"]["Dot"] = 1.25
+
+        response = authenticated_client.post(
+            "/ground-conditions/save",
+            json={**cfg, "match_format": "ListA"},
+        )
+        assert response.status_code == 200
+
+        # Verify effective config reflects changes
+        effective = get_effective_config(regular_user.id, "ListA")
+        assert effective["phase_boosts"]["pp1"]["all"]["Wicket"] == 1.0
+        assert effective["phase_boosts"]["middle"]["all"]["Dot"] == 1.25
+
+        # Verify page reloads with values populated
+        page_resp = authenticated_client.get("/ground-conditions?format=ListA")
+        assert page_resp.status_code == 200
+        page_html = page_resp.get_data(as_text=True)
+        assert 'id="la-pb-pp1-all-wicket"' in page_html
+        assert 'value="1.0"' in page_html or 'value="1"' in page_html
 
     def test_ground_conditions_page_bad_format_falls_back(self, authenticated_client):
         """An unknown ?format= shows the default editor rather than erroring."""

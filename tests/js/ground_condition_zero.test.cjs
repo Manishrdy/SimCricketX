@@ -58,3 +58,9 @@ for (const value of ['', ' ', 'invalid', 'Infinity']) test(`invalid or missing i
     assert.equal(cfg.pitch_profiles.Hard.run_factor, 1);
     assert.equal(cfg.phase_boosts.powerplay.boundary_multiplier, 1.25);
 });
+test('List A preserves 1.0 and custom phase boosts', () => {
+    const cfg1 = setup('1.0').buildListAConfig();
+    assert.equal(cfg1.phase_boosts.pp1.all.Four, 1.0);
+    const cfgCustom = setup('1.35').buildListAConfig();
+    assert.equal(cfgCustom.phase_boosts.pp1.all.Four, 1.35);
+});

@@ -86,12 +86,6 @@
     min-width: 0;
 }
 
-.meta-value.meta-mono {
-    font-family: var(--font-mono);
-    font-weight: 500;
-    color: var(--fg-secondary);
-    letter-spacing: -0.01em;
-}
 
 /* Toss Section */
 .toss-section {

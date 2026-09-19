@@ -327,6 +327,40 @@ class TestTeamEditRoute:
             or b"different team name" in response.data.lower()
         )
 
+    def test_edit_team_stamps_updated_at(self, authenticated_client, test_team, app):
+        """Editing a team records when it was last changed."""
+        team_id = test_team.id
+        short_code = test_team.short_code
+        assert test_team.updated_at is None  # never edited since creation
+
+        form = _valid_team_form(name="Freshly Edited", short_code=short_code)
+        response = authenticated_client.post(
+            f"/team/{short_code}/edit", data=form, follow_redirects=True
+        )
+        assert response.status_code == 200
+
+        with app.app_context():
+            team = db.session.get(DBTeam, team_id)
+            assert team.updated_at is not None
+            assert team.updated_at >= team.created_at
+
+    def test_manage_teams_prefers_last_updated_over_created(
+        self, authenticated_client, test_team
+    ):
+        """/teams/manage shows the creation date until the team is edited."""
+        response = authenticated_client.get("/teams/manage")
+        assert b"Created" in response.data
+        assert b"Last updated" not in response.data
+
+        # Same session the route will read from: commit() expires the instance
+        # so the route's query reloads it rather than serving the stale copy.
+        test_team.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        response = authenticated_client.get("/teams/manage")
+        assert b"Last updated" in response.data
+        assert b"Created" not in response.data
+
     def test_edit_nonexistent_team(self, authenticated_client):
         """Test editing a non-existent team redirects (no such team for this user)."""
         response = authenticated_client.get("/team/NONEXIST/edit")

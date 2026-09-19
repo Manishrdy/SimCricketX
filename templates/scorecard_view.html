@@ -225,12 +225,22 @@ Match Scorecard - SimCricketX
         font-weight: 600;
     }
 
+    .scorecard-top-bar {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 1.25rem 1rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
     .nav-actions {
         margin-top: 1.5rem;
         margin-bottom: 1rem;
         display: flex;
         justify-content: center;
         gap: 1rem;
+        flex-wrap: wrap;
     }
 
     .btn {
@@ -312,6 +322,10 @@ Match Scorecard - SimCricketX
     }
 
     @media (max-width: 768px) {
+        .scorecard-top-bar {
+            padding: 0.75rem 0.75rem 0;
+        }
+
         .scorecard-container {
             padding: 1rem 0.75rem;
         }
@@ -368,6 +382,17 @@ Match Scorecard - SimCricketX
 {% endblock %}
 
 {% block content %}
+<div class="scorecard-top-bar">
+    <a href="{{ url_for('my_matches') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Matches
+    </a>
+    {% if match.tournament_id %}
+    <a href="{{ url_for('tournament_dashboard', tournament_id=match.tournament_id) }}" class="btn btn-secondary">
+        <i class="fas fa-trophy"></i> Back to Tournament
+    </a>
+    {% endif %}
+</div>
+
 <div class="scorecard-container" id="scorecard-content">
     <div class="result-banner">
         <div class="trophy-icon">🏆</div>
@@ -529,15 +554,17 @@ Match Scorecard - SimCricketX
 
 <!-- Navigation - Outside screenshot area -->
 <div class="nav-actions">
+    <a href="{{ url_for('my_matches') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Matches
+    </a>
     {% if match.tournament_id %}
     <a href="{{ url_for('tournament_dashboard', tournament_id=match.tournament_id) }}" class="btn btn-secondary">
-        <i class="fas fa-arrow-left"></i> Back to Tournament
+        <i class="fas fa-trophy"></i> Back to Tournament
     </a>
-    {% else %}
+    {% endif %}
     <a href="{{ url_for('home') }}" class="btn btn-secondary">
         <i class="fas fa-home"></i> Back Home
     </a>
-    {% endif %}
 </div>
 
 <script src="{{ url_for('static', filename='js/image_export.js') }}"></script>

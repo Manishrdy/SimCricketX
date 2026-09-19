@@ -582,8 +582,30 @@ class TestTournamentDeletionRoute:
 
         response = authenticated_client.get(f"/tournaments/{test_tournament.id}")
         assert response.status_code == 200
-        expected_action = f'/tournaments/{test_tournament.id}/delete'.encode()
-        assert expected_action in response.data
+        body = response.get_data(as_text=True)
+        expected_action = f'/tournaments/{test_tournament.id}/delete'
+        assert expected_action in body
+        assert 'id="delete-tournament-dialog"' in body
+        assert "This permanently removes all matches, scorecards, and stats for this tournament." in body
+        assert "This cannot be undone." in body
+        assert "data-confirm-message" not in body
+        assert "confirm(form.dataset.confirmMessage)" not in body
+
+    def test_delete_uses_in_page_caution_dialog(
+        self, authenticated_client, test_tournament
+    ):
+        """Delete must open an in-page caution dialog instead of window.confirm."""
+        response = authenticated_client.get(f"/tournaments/{test_tournament.id}")
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert 'id="delete-tournament-dialog"' in body
+        assert 'id="delete-tournament-cautions"' in body
+        assert "All tournament progress will be lost." in body
+        assert "This cannot be undone." in body
+        assert 'onclick="openDeleteTournamentDialog()"' in body
+        assert 'onclick="closeDeleteTournamentDialog()"' in body
+        assert "data-confirm-message" not in body
+        assert "confirm(form.dataset.confirmMessage)" not in body
 
 
 class TestFixtureResimulationRoute:
