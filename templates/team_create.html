@@ -246,7 +246,10 @@
 .tc-builder {
     margin-top: 1rem;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    /* Pool leans wider than the roster: its rows are pure identity, so the
+       extra width goes to names, while the roster's narrower column still
+       clears its order number, actions and FC rating strip. */
+    grid-template-columns: 1.18fr 1fr;
     gap: 1rem;
 }
 @media (max-width: 900px) {
@@ -306,18 +309,20 @@
     border-radius: 4px;
 }
 
-/* Player card: identity on the first row, FC ratings and actions below */
+/* Player card: one slim identity row (actions inline), FC ratings below.
+   The outer card stays a column so narrow viewports can stack without the
+   row wrapping into a taller block than the content needs. */
 .tc-player {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 0.45rem;
-    padding: 0.55rem 0.8rem;
-    margin-bottom: 0.35rem;
+    gap: 0.3rem;
+    padding: 0.3rem 0.5rem;
+    margin-bottom: 0.25rem;
     border: 1px solid var(--tc-panel-border);
-    border-radius: 8px;
+    border-radius: 7px;
     background: var(--bg);
-    font-size: 0.87rem;
+    font-size: 0.82rem;
     min-width: 0;
     max-width: 100%;
     user-select: none;
@@ -342,39 +347,64 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.3rem 0.4rem;
     min-width: 0;
 }
+/* Actions sit at the end of the identity row and only drop to their own
+   line when the row genuinely runs out of width (narrow phones, 200% text). */
 .tc-player-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
+    gap: 0.2rem;
     justify-content: flex-end;
+    margin-left: auto;
     min-width: 0;
 }
 .tc-player-actions button {
-    padding: 6px 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.6rem;
+    height: 1.6rem;
+    padding: 0 0.35rem;
     border: 1px solid var(--tc-panel-border);
-    border-radius: 6px;
+    border-radius: 5px;
     background: var(--bg);
-    color: var(--fg);
-    font-size: 0.75rem;
+    color: var(--fg-secondary);
+    font-size: 0.72rem;
     font-weight: 600;
+    line-height: 1;
     font-family: inherit;
     cursor: pointer;
+    transition: color .12s ease, border-color .12s ease, background .12s ease;
+}
+.tc-player-actions button:hover:not(:disabled) {
+    color: var(--fg);
+    border-color: var(--tc-accent);
 }
 .tc-player-actions button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
 }
+.tc-player-actions button[data-add-player] {
+    padding: 0 0.55rem;
+    color: var(--tc-accent);
+    border-color: var(--tc-accent);
+    font-weight: 700;
+}
 .tc-player-actions button[data-roster-action="remove"] {
     color: var(--tc-danger-fg);
+}
+.tc-player-actions button[data-roster-action="remove"]:hover:not(:disabled) {
+    color: var(--tc-danger-fg);
+    border-color: var(--tc-danger-fg);
+    background: var(--tc-danger-bg);
 }
 .player-touch-handle {
     touch-action: none;
     user-select: none;
     cursor: grab;
-    padding: 6px 9px;
+    padding: 4px 3px;
     flex-shrink: 0;
 }
 /* Drag-to-reorder states */
@@ -390,17 +420,16 @@
 }
 .tc-grip {
     color: var(--fg-secondary);
-    font-size: 0.8rem;
-    margin-right: 0.1rem;
+    font-size: 0.72rem;
     flex-shrink: 0;
-    opacity: 0.6;
+    opacity: 0.5;
 }
 .tc-player:hover .tc-grip { opacity: 1; }
 .tc-player-order {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
     color: var(--fg-secondary);
-    min-width: 1.3rem;
+    min-width: 1.1rem;
     text-align: right;
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
@@ -408,26 +437,29 @@
 .tc-player-main {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0;
     min-width: 0;
     flex: 1 1 6rem;
 }
 .tc-player-name {
     font-weight: 600;
+    line-height: 1.25;
     color: var(--fg);
     overflow-wrap: anywhere;
 }
 .tc-player-meta {
-    font-size: 0.72rem;
+    font-size: 0.66rem;
+    line-height: 1.3;
     color: var(--fg-secondary);
     overflow-wrap: anywhere;
 }
 .tc-role-pill {
     display: inline-flex;
     align-items: center;
-    padding: 0.15rem 0.55rem;
+    padding: 0.05rem 0.4rem;
     border-radius: 999px;
-    font-size: 0.68rem;
+    font-size: 0.62rem;
+    line-height: 1.5;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -442,33 +474,35 @@
 .tc-fc-ratings {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.6rem 0.9rem;
+    align-items: center;
+    gap: 0.25rem 0.7rem;
+    padding-left: 1.4rem;
     min-width: 0;
 }
 .tc-fc-rating {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 0.1rem;
+    gap: 0.25rem;
     min-width: 0;
 }
 .tc-fc-rating label {
-    font-size: 0.6rem;
+    font-size: 0.58rem;
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
     color: var(--fg-secondary);
 }
 .tc-fc-rating input[type="number"] {
-    width: 2.9rem;
+    width: 2.5rem;
     max-width: 100%;
-    padding: 0.3rem 0.3rem;
+    height: 1.5rem;
+    padding: 0 0.2rem;
     border: 1px solid var(--tc-panel-border);
     border-radius: 5px;
     background: var(--tc-input-bg);
     color: var(--fg);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     text-align: center;
     font-variant-numeric: tabular-nums;
 }
@@ -606,10 +640,18 @@
         align-items: center;
         justify-content: center;
     }
-    .tc-player-actions { justify-content: stretch; }
+    /* Thumb-sized targets need the whole width, so the action group drops to
+       its own full-width row instead of riding the identity row. */
+    .tc-player-actions {
+        flex: 1 1 100%;
+        margin-left: 0;
+        justify-content: stretch;
+    }
     .tc-player-actions button { flex: 1 1 auto; }
+    .tc-fc-ratings { padding-left: 0; }
     .tc-fc-rating input[type="number"] {
         width: 3.2rem;
+        height: auto;
         min-height: 44px;
         font-size: 1rem;
     }
@@ -617,8 +659,14 @@
 }
 
 @media (max-width: 390px) {
-    .tc-player { padding: 0.65rem 0.7rem; }
-    .tc-role-pill { padding: 0.15rem 0.4rem; letter-spacing: 0.02em; }
+    .tc-player { padding: 0.45rem 0.5rem; }
+    .tc-role-pill { padding: 0.1rem 0.35rem; letter-spacing: 0.02em; }
+}
+
+/* Below ~380px three side-by-side label+input pairs no longer fit one row,
+   and letting them wrap costs more height than stacking each pair does. */
+@media (max-width: 380px) {
+    .tc-fc-rating { flex-direction: column; gap: 0.1rem; }
 }
 
 /* ── Actions ── */
@@ -739,6 +787,69 @@
 .tc-btn-ghost:hover {
     color: var(--fg);
     border-color: var(--tc-accent);
+}
+.tc-btn-danger {
+    background: var(--tc-danger-fg);
+    color: #fff;
+    border-color: var(--tc-danger-fg);
+}
+.tc-btn-danger:hover { filter: brightness(1.08); }
+
+/* ── In-page confirm dialog (replaces window.confirm for Clear Draft) ── */
+.tc-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(6, 10, 11, 0.62);
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease;
+}
+.tc-modal.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+.tc-modal-card {
+    width: min(100%, 420px);
+    padding: 1.6rem;
+    text-align: center;
+    background: var(--tc-panel);
+    border: 1px solid var(--tc-panel-border);
+    border-radius: 14px;
+    box-shadow: var(--tc-panel-shadow);
+    transform: scale(0.96);
+    transition: transform .2s ease;
+}
+.tc-modal.show .tc-modal-card { transform: scale(1); }
+.tc-modal-icon {
+    font-size: 1.8rem;
+    color: var(--tc-danger-fg);
+    margin-bottom: 0.6rem;
+}
+.tc-modal-title {
+    margin: 0 0 0.45rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--fg);
+}
+.tc-modal-text {
+    margin: 0 0 1.3rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--fg-secondary);
+}
+.tc-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    justify-content: center;
+}
+@media (prefers-reduced-motion: reduce) {
+    .tc-modal, .tc-modal-card { transition: none; }
 }
 
 .tc-restored-banner {
@@ -950,7 +1061,8 @@
       </div>
       <div style="display:flex;gap:0.5rem;">
         {% if not edit %}
-        <button type="button" id="tc-clear" class="tc-btn tc-btn-ghost">
+        <button type="button" id="tc-clear" class="tc-btn tc-btn-ghost"
+                aria-haspopup="dialog" aria-controls="tc-clear-dialog">
           <i class="fa-solid fa-rotate-left"></i> Clear Draft
         </button>
         {% endif %}
@@ -960,6 +1072,29 @@
       </div>
     </div>
   </form>
+
+  {% if not edit %}
+  <!-- In-page confirm for Clear Draft (replaces window.confirm) -->
+  <div id="tc-clear-dialog" class="tc-modal" data-focus-dialog data-viewport-dialog
+       data-dialog-open-class="show" data-dialog-close="[data-clear-cancel]"
+       role="dialog" aria-modal="true"
+       aria-labelledby="tc-clear-title" aria-describedby="tc-clear-text">
+    <div class="tc-modal-card">
+      <div class="tc-modal-icon" aria-hidden="true"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <h2 id="tc-clear-title" class="tc-modal-title">Clear your draft?</h2>
+      <p id="tc-clear-text" class="tc-modal-text">
+        Team identity, every T20, List A and First-Class squad you have picked,
+        and the captain and wicketkeeper choices will be removed. This cannot be undone.
+      </p>
+      <div class="tc-modal-actions">
+        <button type="button" class="tc-btn tc-btn-ghost" data-clear-cancel data-dialog-initial>Cancel</button>
+        <button type="button" class="tc-btn tc-btn-danger" data-clear-confirm>
+          <i class="fa-solid fa-rotate-left"></i> Clear Draft
+        </button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
 
@@ -1215,14 +1350,14 @@
              data-pool-id="${escHtml(p.id)}"
              title="${inRoster ? 'Already in roster' : 'Add using the button or drag handle'}">
           <div class="tc-player-top">
-            ${inRoster ? '' : '<span class="player-touch-handle" title="Drag player" aria-hidden="true">⠿</span>'}
+            ${inRoster ? '' : '<span class="tc-grip player-touch-handle" title="Drag player" aria-hidden="true">⠿</span>'}
             <div class="tc-player-main">
               <div class="tc-player-name">${escHtml(p.name)}</div>
               ${meta ? `<div class="tc-player-meta">${escHtml(meta)}</div>` : ''}
             </div>
             <span class="tc-role-pill ${roleClass(p.role)}">${escHtml(shortRole(p.role))}</span>
+            ${inRoster ? '' : `<span class="tc-player-actions"><button type="button" data-add-player aria-label="Add ${escHtml(p.name)} to roster">Add</button></span>`}
           </div>
-          ${inRoster ? '' : '<span class="tc-player-actions"><button type="button" data-add-player>Add</button></span>'}
         </div>`;
     }).join('');
 
@@ -1381,13 +1516,13 @@
               ${meta ? `<div class="tc-player-meta">${escHtml(meta)}</div>` : ''}
             </div>
             <span class="tc-role-pill ${roleClass(p.role)}">${escHtml(shortRole(p.role))}</span>
+            <span class="tc-player-actions">
+              <button type="button" data-roster-action="up" aria-label="Move ${escHtml(p.name)} up" title="Move up" ${idx === 0 ? 'disabled' : ''}>↑</button>
+              <button type="button" data-roster-action="down" aria-label="Move ${escHtml(p.name)} down" title="Move down" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
+              <button type="button" data-roster-action="remove" aria-label="Remove ${escHtml(p.name)}" title="Remove">✕</button>
+            </span>
           </div>
           ${fcRatings}
-          <span class="tc-player-actions">
-            <button type="button" data-roster-action="up" aria-label="Move ${escHtml(p.name)} up" ${idx === 0 ? 'disabled' : ''}>↑</button>
-            <button type="button" data-roster-action="down" aria-label="Move ${escHtml(p.name)} down" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
-            <button type="button" data-roster-action="remove" aria-label="Remove ${escHtml(p.name)}">Remove</button>
-          </span>
         </div>`;
     }).join('');
     rosterList.innerHTML = rows;
@@ -2001,27 +2136,48 @@
     lastSavedJson = '';
   }
 
-  if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      if (!confirm('Clear your unsaved draft? This cannot be undone.')) return;
-      clearDraft();
-      state.identity = { team_name: '', short_code: '', home_ground: '', pitch_preference: '', team_color: '#4f46e5' };
-      state.rosters = {}; state.leaders = {};
-      VALID_FORMATS.forEach(fmt => {
-        state.rosters[fmt] = [];
-        state.leaders[fmt] = { captain: '', wicketkeeper: '' };
-      });
-      state.activeFmt = 'T20';
-      nameInput.value = ''; shortInput.value = ''; groundInput.value = '';
-      pitchSelect.value = ''; colorInput.value = '#4f46e5';
-      colorSwatch.style.background = '#4f46e5';
-      tabButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-fmt') === 'T20'));
-      renderRoster();
-      renderLeaders();
-      updateTabCounts();
-      updateValidation();
-      renderPool();
-      setSaveStatus('idle');
+  function resetDraftState() {
+    clearDraft();
+    state.identity = { team_name: '', short_code: '', home_ground: '', pitch_preference: '', team_color: '#4f46e5' };
+    state.rosters = {}; state.leaders = {};
+    VALID_FORMATS.forEach(fmt => {
+      state.rosters[fmt] = [];
+      state.leaders[fmt] = { captain: '', wicketkeeper: '' };
+    });
+    state.activeFmt = 'T20';
+    nameInput.value = ''; shortInput.value = ''; groundInput.value = '';
+    pitchSelect.value = ''; colorInput.value = '#4f46e5';
+    colorSwatch.style.background = '#4f46e5';
+    tabButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-fmt') === 'T20'));
+    renderRoster();
+    renderLeaders();
+    updateTabCounts();
+    updateValidation();
+    renderPool();
+    setSaveStatus('idle');
+  }
+
+  // In-page confirm. dialog_focus.js watches the open class and owns focus,
+  // the Escape key and the inert background; visibility stays ours.
+  const clearDialog = $('tc-clear-dialog');
+
+  function openClearDialog() {
+    if (clearDialog) clearDialog.classList.add('show');
+  }
+
+  function closeClearDialog() {
+    if (clearDialog) clearDialog.classList.remove('show');
+  }
+
+  if (clearBtn && clearDialog) {
+    clearBtn.addEventListener('click', openClearDialog);
+    clearDialog.addEventListener('click', (e) => {
+      if (e.target === clearDialog) return closeClearDialog();
+      if (e.target.closest('[data-clear-cancel]')) return closeClearDialog();
+      if (e.target.closest('[data-clear-confirm]')) {
+        closeClearDialog();
+        resetDraftState();
+      }
     });
   }
 

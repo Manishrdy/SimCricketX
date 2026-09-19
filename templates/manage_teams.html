@@ -470,10 +470,12 @@
 
         .card-meta {
             display: flex;
-            gap: 0.5rem;
+            flex-wrap: wrap;
+            gap: 0.35rem 0.5rem;
             font-size: 0.8rem;
             color: var(--text-muted);
             align-items: center;
+            min-width: 0;
         }
 
         .card-actions {
@@ -813,9 +815,15 @@
                 </div>
 
                 <div class="card-footer">
+                    {% set edited = t.updated_at and (not t.created_at or t.updated_at >= t.created_at) %}
                     <div class="card-meta">
+                        {% if edited %}
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                        <span>Last updated {{ t.updated_at.strftime('%b %d, %Y %H:%M') }} UTC</span>
+                        {% else %}
                         <i class="fa-solid fa-calendar"></i>
                         <span>Created {{ t.created_at.strftime('%b %d, %Y') if t.created_at else 'N/A' }}</span>
+                        {% endif %}
                     </div>
                     <div class="card-actions">
                         <button class="action-btn edit" onclick="editTeam('{{ t.short_code }}')" title="Edit Team">

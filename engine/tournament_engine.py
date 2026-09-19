@@ -173,7 +173,7 @@ class TournamentEngine:
     def create_tournament(self, name: str, user_id: str, team_ids: list,
                           mode: str = MODE_ROUND_ROBIN, playoff_teams: int = 4,
                           series_config: dict = None, format_type: str = 'T20',
-                          creation_token: str = None) -> Tournament:
+                          creation_token: str = None, commit: bool = True) -> Tournament:
         """
         Creates a new tournament with specified mode.
 
@@ -271,7 +271,10 @@ class TournamentEngine:
             # 3. Generate Fixtures based on mode
             self._generate_fixtures_for_mode(tournament, team_ids, mode, series_config)
 
-            db.session.commit()
+            if commit:
+                db.session.commit()
+            else:
+                db.session.flush()
             logger.info(f"Tournament '{name}' created with mode '{mode}' and {len(team_ids)} teams")
             return tournament
 
@@ -1578,6 +1581,11 @@ class TournamentEngine:
                 tournament.current_stage = 'completed'
                 logger.info(f"Tournament {tournament_id} marked as Completed")
 
+        tournament = db.session.get(Tournament, tournament_id)
+        if tournament and tournament.tour_id:
+            from engine.tour_engine import refresh_tour
+            refresh_tour(tournament.tour)
+
     def _add_overs(self, o1, o2):
         """Add two cricket overs values."""
         balls1 = self.overs_to_balls(o1 or '0.0')
@@ -2026,6 +2034,12 @@ class TournamentEngine:
 
         if commit:
             db.session.commit()
+
+        if tournament and tournament.tour_id:
+            from engine.tour_engine import refresh_tour
+            refresh_tour(tournament.tour)
+            if commit:
+                db.session.commit()
 
         logger.info(f"Reversed standings for match {match.id}")
         return True

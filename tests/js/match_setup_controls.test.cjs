@@ -24,8 +24,8 @@ function setup(){
 }
 test('tap action adds/removes players, updates controls/counts, and preserves bowling choice',()=>{
  const s=setup(),p=s.player('Keeper');p.willBowl=false;s.nodes['home-available'].appendChild(p);s.c.updateLineupControls('home');
- assert.equal(p.controls.move.textContent,'Add to XI');assert.equal(p.controls.up.hidden,true);
- s.c.cyclePlayerZone(p,'home');assert.equal(p.parentElement.id,'home-selected');assert.equal(p.controls.move.textContent,'Move to reserve');assert.equal(p.controls.up.disabled,true);
+ assert.equal(p.controls.move.textContent,'To XI');assert.equal(p.controls.move['aria-label'],'Add to XI: Keeper');assert.equal(p.controls.up.hidden,true);
+ s.c.cyclePlayerZone(p,'home');assert.equal(p.parentElement.id,'home-selected');assert.equal(p.controls.move.textContent,'To reserve');assert.equal(p.controls.move['aria-label'],'Move to reserve: Keeper');assert.equal(p.controls.up.disabled,true);
  s.c.cyclePlayerZone(p,'home');assert.equal(p.parentElement.id,'home-available');assert.equal(p.willBowl,false);assert.equal(s.validations,2);assert.equal(p.focused,true);
 });
 test('reordering changes the submitted DOM order and stops at boundaries',()=>{

@@ -53,14 +53,11 @@
                     <i class="fas fa-arrow-left"></i> Back
                 </a>
                 {% if tournament.status in ('Active', 'open', 'Completed') %}
-                <form action="{{ url_for('delete_tournament', tournament_id=tournament.id) }}" method="POST"
-                    class="delete-tournament-form"
-                    data-confirm-message="{% if tournament.status == 'Completed' %}Delete '{{ tournament.name }}'? This permanently removes all matches, scorecards, and stats for this tournament. This cannot be undone.{% else %}Are you sure you want to delete this tournament? All progress will be lost.{% endif %}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="delete-btn">
-                        <i class="fas fa-trash"></i> Delete
-                    </button>
-                </form>
+                <button type="button" class="delete-btn" id="delete-tournament-open"
+                    aria-haspopup="dialog" aria-controls="delete-tournament-dialog"
+                    onclick="openDeleteTournamentDialog()">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
                 {% endif %}
             </div>
         </div>
@@ -397,8 +394,38 @@
 
     </div>
 
-
-
+    {% if tournament.status in ('Active', 'open', 'Completed') %}
+    <div id="delete-tournament-dialog" class="delete-tournament-overlay" data-focus-dialog
+        data-viewport-dialog data-dialog-open-class="show"
+        data-dialog-close="[onclick='closeDeleteTournamentDialog()']" role="dialog" aria-modal="true"
+        aria-labelledby="delete-tournament-title" aria-describedby="delete-tournament-cautions">
+        <div class="delete-tournament-dialog">
+            <div class="delete-tournament-dialog-icon" aria-hidden="true">
+                <i class="fas fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="delete-tournament-title">Delete {{ tournament.name }}?</h3>
+            <ul id="delete-tournament-cautions" class="delete-tournament-cautions">
+                {% if tournament.status == 'Completed' %}
+                <li>This permanently removes all matches, scorecards, and stats for this tournament.</li>
+                {% else %}
+                <li>All tournament progress will be lost.</li>
+                {% endif %}
+                <li>This cannot be undone.</li>
+            </ul>
+            <form action="{{ url_for('delete_tournament', tournament_id=tournament.id) }}" method="POST"
+                class="delete-tournament-form" id="delete-tournament-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="delete-tournament-dialog-actions">
+                    <button type="button" class="delete-tournament-cancel" data-dialog-initial
+                        onclick="closeDeleteTournamentDialog()">Cancel</button>
+                    <button type="submit" class="delete-tournament-confirm">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 
     <style>
         /* Leaderboards Grid Styles */
@@ -1195,6 +1222,141 @@
             background: rgba(224, 108, 117, 0.2);
         }
 
+        .delete-tournament-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(6px);
+            z-index: 2000;
+            padding: 1rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .delete-tournament-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .delete-tournament-dialog {
+            width: min(440px, 100%);
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.96);
+            transition: transform 0.2s ease;
+        }
+
+        .delete-tournament-overlay.show .delete-tournament-dialog {
+            transform: scale(1);
+        }
+
+        .delete-tournament-dialog-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(224, 108, 117, 0.12);
+            color: var(--one-dark-red, #e06c75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            margin-bottom: 0.9rem;
+        }
+
+        .delete-tournament-dialog h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--fg);
+            margin-bottom: 0.75rem;
+            line-height: 1.4;
+        }
+
+        .delete-tournament-cautions {
+            margin: 0 0 1.5rem;
+            padding-left: 1.2rem;
+            color: var(--fg-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .delete-tournament-cautions li + li {
+            margin-top: 0.4rem;
+        }
+
+        .delete-tournament-dialog-actions {
+            display: flex;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .delete-tournament-cancel,
+        .delete-tournament-confirm {
+            min-height: 44px;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
+        }
+
+        .delete-tournament-cancel {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--fg);
+        }
+
+        .delete-tournament-cancel:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .delete-tournament-confirm {
+            background: var(--one-dark-red, #e06c75);
+            color: #fff;
+            border: 1px solid transparent;
+        }
+
+        .delete-tournament-confirm:hover {
+            filter: brightness(0.95);
+        }
+
+        .delete-tournament-confirm:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .delete-tournament-cancel:focus-visible,
+        .delete-tournament-confirm:focus-visible,
+        .delete-btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .delete-tournament-overlay,
+            .delete-tournament-dialog {
+                transition: none;
+            }
+
+            .delete-tournament-overlay.show .delete-tournament-dialog {
+                transform: none;
+            }
+        }
+
         /* --- Responsive --- */
         @media (max-width: 768px) {
             .tournament-hub {
@@ -1229,17 +1391,30 @@
         }
     </style>
     <script>
-        // The confirmation text lives in a data attribute (safely HTML-escaped by
-        // Jinja) instead of being interpolated into an inline onsubmit="confirm(...)"
-        // string — a tournament name with a quote or backslash could otherwise break
-        // the handler's JS and let the form submit with no confirmation at all.
-        document.querySelectorAll('.delete-tournament-form').forEach(function (form) {
-            form.addEventListener('submit', function (e) {
-                if (!confirm(form.dataset.confirmMessage)) {
-                    e.preventDefault();
+        function openDeleteTournamentDialog() {
+            var dialog = document.getElementById('delete-tournament-dialog');
+            if (dialog) dialog.classList.add('show');
+        }
+        function closeDeleteTournamentDialog() {
+            var dialog = document.getElementById('delete-tournament-dialog');
+            if (dialog) dialog.classList.remove('show');
+        }
+        (function () {
+            var dialog = document.getElementById('delete-tournament-dialog');
+            if (!dialog) return;
+            dialog.addEventListener('click', function (e) {
+                if (e.target === dialog) closeDeleteTournamentDialog();
+            });
+            var form = document.getElementById('delete-tournament-form');
+            if (!form) return;
+            form.addEventListener('submit', function () {
+                var btn = form.querySelector('.delete-tournament-confirm');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.setAttribute('aria-busy', 'true');
                 }
             });
-        });
+        })();
 
         function toggleRenameForm() {
             var nameEl = document.getElementById('tournament-name');

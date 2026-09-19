@@ -55,12 +55,19 @@ def run_migration(db, app):
                     "ALTER TABLE match_scorecards ADD COLUMN is_super_over BOOLEAN DEFAULT 0"
                 ))
             # Backfill rows written before the flag existed (legacy convention:
-            # super-over rows live at innings_number 3). Idempotent — safe to
-            # re-run even when the column was already present (e.g. added by a
-            # schema guard without the backfill).
+            # super-over rows live at innings_number 3 for non-FC matches).
+            # Exclude First-Class (FC) matches since innings 3 and 4 are real innings.
             conn.execute(text(
                 "UPDATE match_scorecards SET is_super_over = 1 "
-                "WHERE innings_number > 2 AND (is_super_over IS NULL OR is_super_over = 0)"
+                "WHERE innings_number > 2 AND (is_super_over IS NULL OR is_super_over = 0) "
+                "AND match_id NOT IN (SELECT id FROM matches WHERE match_format = 'FC')"
+            ))
+            # Repair step: reset any First-Class scorecards that were incorrectly
+            # flagged as super-over rows by the legacy migration backfill.
+            conn.execute(text(
+                "UPDATE match_scorecards SET is_super_over = 0 "
+                "WHERE is_super_over = 1 "
+                "AND match_id IN (SELECT id FROM matches WHERE match_format = 'FC')"
             ))
             conn.commit()
             print(
