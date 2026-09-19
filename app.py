@@ -1888,7 +1888,71 @@ def create_app():
                 fixture = db.session.get(TournamentFixture, fixture_id)
                 if not fixture:
                     raise ValueError(f"Tournament fixture {fixture_id} not found; cannot proceed safely.")
-                
+
+                # Step 3a: Refuse to record a result onto a voided pairing.
+                #
+                # 'Locked' means this fixture's teams have not been decided
+                # yet — and for a match that is only now finishing, it means
+                # they were UN-decided while it was being played. Re-simulating
+                # an earlier knockout round sends _reset_knockout_bracket()
+                # (or _reset_post_league_fixtures() after a league resim)
+                # through every downstream fixture, putting the TBD
+                # placeholder back in both team slots and clearing match_id.
+                # The engine layer cannot delete match files, so the orphaned
+                # in-flight match JSON survives, stays resumable via
+                # /match/<match_id>, and arrives here at its last ball.
+                #
+                # Without this check it is recorded: the team-assignment guard
+                # below passes (the TBD placeholder ids ARE set), and
+                # update_standings then marks the Locked fixture 'Completed'
+                # with "TBD" as its winner, on a pairing that was explicitly
+                # voided.
+                #
+                # Deliberately narrower than the checks /match/setup runs
+                # before a fixture may be STARTED (squad legality,
+                # feeders_decided). Those are preconditions for beginning a
+                # match; re-applying them here would throw away a legitimately
+                # completed match whose squad merely became illegal while it
+                # was in progress. Only the Locked check is safe at completion
+                # time — a normal in-progress match's fixture is still
+                # 'Scheduled' when it finishes.
+                if fixture.status == 'Locked':
+                    anomaly_payload = {
+                        "match_id": match_id,
+                        "tournament_id": tournament_id,
+                        "fixture_id": fixture_id,
+                        "fixture_stage": fixture.stage,
+                        "fixture_home_team_id": fixture.home_team_id,
+                        "fixture_away_team_id": fixture.away_team_id,
+                        "writer": "app._handle_tournament_match_completion",
+                    }
+                    # Roll back BEFORE logging: Step 2a's resimulation cleanup
+                    # is still pending in this session, and log_data_anomaly()
+                    # writes through db.session and commits it, which would
+                    # otherwise commit that half-finished work.
+                    db.session.rollback()
+                    logger.error(
+                        f"[Tournament] Match {match_id} completed against fixture "
+                        f"{fixture_id}, whose pairing was reset to 'Locked' after the "
+                        "match started (an earlier round was re-simulated). Discarding "
+                        "the result instead of recording it."
+                    )
+                    try:
+                        from utils.exception_tracker import log_data_anomaly
+                        log_data_anomaly(
+                            "VoidedFixtureResult",
+                            f"match {match_id} finished against fixture {fixture_id}, "
+                            "whose pairing had been reset to 'Locked' with placeholder "
+                            "teams; result discarded",
+                            payload=anomaly_payload,
+                        )
+                    except Exception:
+                        pass
+                    # Stop it being replayable — the match is over, it just
+                    # has nowhere legitimate to be recorded.
+                    match.data["current_state"] = "completed"
+                    return
+
                 if not fixture.home_team_id or not fixture.away_team_id:
                     raise ValueError(f"Fixture {fixture_id} missing team assignments")
                 
