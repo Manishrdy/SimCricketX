@@ -70,3 +70,85 @@ test('Back restores submission controls while keeping the creation token', () =>
     assert.match(button.innerHTML, /Create Tournament/);
     assert.equal(token.value, 'same-intent');
 });
+
+test('tournament form input has maxlength 100', () => {
+    assert.match(
+        template,
+        /<input[^>]*id="tournament-name"[^>]*maxlength="100"/
+    );
+});
+
+test('validateForm rejects whitespace-only tournament name', () => {
+    const validator = template.match(
+        /function validateForm\(\) \{[\s\S]*?\r?\n    \}/
+    );
+    assert.ok(validator, 'validateForm should exist');
+
+    let alertedMessage = null;
+    const submitBtn = { disabled: false, innerHTML: '' };
+    const elements = {
+        selectedMode: { value: 'round_robin' },
+        'tournament-name': { value: '   ' },
+        submitBtn,
+    };
+    const context = {
+        alert(msg) {
+            alertedMessage = msg;
+        },
+        document: {
+            getElementById(id) {
+                return elements[id];
+            },
+            querySelectorAll(selector) {
+                return { length: 2 };
+            },
+        },
+    };
+
+    vm.runInNewContext(
+        `let isSubmitting = false;\n${validator[0].replace(/\r?\n\r?\n    \/\/ Initialize on page load$/, '')}`,
+        context
+    );
+
+    assert.equal(vm.runInNewContext('validateForm()', context), false);
+    assert.equal(alertedMessage, 'Please enter a tournament name.');
+    assert.equal(submitBtn.disabled, false);
+});
+
+test('validateForm rejects tournament name longer than 100 characters', () => {
+    const validator = template.match(
+        /function validateForm\(\) \{[\s\S]*?\r?\n    \}/
+    );
+    assert.ok(validator, 'validateForm should exist');
+
+    let alertedMessage = null;
+    const submitBtn = { disabled: false, innerHTML: '' };
+    const elements = {
+        selectedMode: { value: 'round_robin' },
+        'tournament-name': { value: 'A'.repeat(101) },
+        submitBtn,
+    };
+    const context = {
+        alert(msg) {
+            alertedMessage = msg;
+        },
+        document: {
+            getElementById(id) {
+                return elements[id];
+            },
+            querySelectorAll(selector) {
+                return { length: 2 };
+            },
+        },
+    };
+
+    vm.runInNewContext(
+        `let isSubmitting = false;\n${validator[0].replace(/\r?\n\r?\n    \/\/ Initialize on page load$/, '')}`,
+        context
+    );
+
+    assert.equal(vm.runInNewContext('validateForm()', context), false);
+    assert.equal(alertedMessage, 'Tournament name must be 100 characters or less.');
+    assert.equal(submitBtn.disabled, false);
+});
+

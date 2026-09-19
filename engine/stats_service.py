@@ -1138,6 +1138,14 @@ class StatsService:
     # NEW FEATURE: Player Comparison Tool
     # ============================================================================
     
+    def comparison_identities(self, user_id):
+        from engine.player_comparison import identities
+        return identities(user_id)
+
+    def compare_players_cross_format(self, user_id, identity_ids, tournament_id=None):
+        from engine.player_comparison import compare
+        return compare(self, user_id, identity_ids, tournament_id)
+
     def compare_players(self, user_id, player_ids, tournament_id=None, match_format=None):
         """
         Compare multiple players across all metrics.

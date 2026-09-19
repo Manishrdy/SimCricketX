@@ -2,6 +2,9 @@
 
 {% block content %}
 <div class="tournament-hub">
+    {% if tournament.tour_id %}
+    <p><a href="{{ url_for('tour_dashboard', tour_id=tournament.tour_id) }}">← {{ tournament.tour.name }}</a> · Complete earlier tour series before starting this series.</p>
+    {% endif %}
 
     <!-- Hero Header -->
     <div class="tournament-hero">
@@ -52,7 +55,7 @@
                 <a href="{{ url_for('tournaments') }}" class="back-btn">
                     <i class="fas fa-arrow-left"></i> Back
                 </a>
-                {% if tournament.status in ('Active', 'open', 'Completed') %}
+                {% if not tournament.tour_id and tournament.status in ('Active', 'open', 'Completed') %}
                 <button type="button" class="delete-btn" id="delete-tournament-open"
                     aria-haspopup="dialog" aria-controls="delete-tournament-dialog"
                     onclick="openDeleteTournamentDialog()">
@@ -249,10 +252,28 @@
                     {% endif %}
 
                     <div class="fixture-footer">
-                        {% if fixture.status == 'Locked' %}
+                        {% if fixture.status == 'Locked' or tour_blocked.get(fixture.id) %}
                         <button class="action-btn outline-btn" disabled style="opacity: 0.6; cursor: not-allowed;">
                             <i class="fas fa-lock"></i> Awaiting Previous Results
                         </button>
+                        {% elif active_matches.get(fixture.id) %}
+                        {# A match is already running on this fixture. Starting a
+                           second one would produce two competing results, so the
+                           only ways forward are to finish this one or drop it. #}
+                        <div class="completed-actions">
+                            <a href="{{ url_for('match_detail', match_id=active_matches[fixture.id]) }}"
+                                class="action-btn play-btn">
+                                <i class="fas fa-play"></i> Resume Match
+                            </a>
+                            <form action="{{ url_for('abandon_fixture_match', fixture_id=fixture.id) }}" method="POST"
+                                class="inline-form"
+                                onsubmit="return confirm('Abandoning will discard this in-progress match and its scorecard. Continue?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="action-btn resimulate-btn">
+                                    <i class="fas fa-times"></i> Abandon
+                                </button>
+                            </form>
+                        </div>
                         {% elif fixture.status != 'Completed' %}
                         <form action="{{ url_for('match_setup') }}" method="GET" class="full-width-form">
                             <input type="hidden" name="fixture_id" value="{{ fixture.id }}">
@@ -394,7 +415,7 @@
 
     </div>
 
-    {% if tournament.status in ('Active', 'open', 'Completed') %}
+    {% if not tournament.tour_id and tournament.status in ('Active', 'open', 'Completed') %}
     <div id="delete-tournament-dialog" class="delete-tournament-overlay" data-focus-dialog
         data-viewport-dialog data-dialog-open-class="show"
         data-dialog-close="[onclick='closeDeleteTournamentDialog()']" role="dialog" aria-modal="true"

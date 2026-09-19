@@ -6,10 +6,36 @@ import re
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from database import db
-from database.models import Tour, Tournament, Team, Match, MatchScorecard, Player
+from database.models import Tour, Team, Match, MatchScorecard, Player
 from engine.tournament_engine import TournamentEngine
 
 FORMATS = ('FC', 'ListA', 'T20')
+
+
+def team_format_availability(team):
+    """Use actual format profiles and the same legality rules as squad publishing."""
+    from utils.squad_rules import team_squad_readiness_error
+    result = {}
+    profiles = {p.format_type: p for p in team.profiles}
+    for fmt in FORMATS:
+        profile = profiles.get(fmt)
+        players = list(profile.players) if profile else []
+        reason = team_squad_readiness_error(team, fmt)
+        result[fmt] = {'available': not reason, 'reason': reason or 'Squad ready.',
+                       'players': len(players)}
+    return result
+
+
+def validate_tour_squads(teams, formats):
+    for team in teams:
+        if not team:
+            raise ValueError('A tour team is no longer available.')
+        availability = team_format_availability(team)
+        for fmt in FORMATS:
+            if fmt in formats and not availability[fmt]['available']:
+                label = 'List A' if fmt == 'ListA' else fmt
+                raise ValueError(f"{team.name} — {label}: {availability[fmt]['reason']}")
+
 
 
 def create_tour(name, user_id, host_id, visitor_id, counts, order, creation_token=None):
@@ -27,8 +53,8 @@ def create_tour(name, user_id, host_id, visitor_id, counts, order, creation_toke
     included = {fmt for fmt, count in parsed.items() if count > 0}
     if not included:
         raise ValueError('Choose at least one format with a positive match count.')
-    if len(order) != len(set(order)) or set(order) != set(FORMATS):
-        raise ValueError('Choose each format exactly once in the series order.')
+    if len(order) != len(set(order)) or set(order) != included:
+        raise ValueError('Arrange every included format exactly once in the series order.')
     host_id, visitor_id = int(host_id), int(visitor_id)
     if host_id == visitor_id:
         raise ValueError('Choose two different teams.')
@@ -36,6 +62,7 @@ def create_tour(name, user_id, host_id, visitor_id, counts, order, creation_toke
                               Team.is_placeholder.isnot(True)).all()
     if len(teams) != 2:
         raise ValueError('Choose two teams owned by you.')
+    validate_tour_squads(teams, included)
     if creation_token:
         existing = Tour.query.filter_by(user_id=user_id, creation_token=creation_token).first()
         if existing:
@@ -82,6 +109,8 @@ def has_started(series):
 
 def refresh_tour(tour):
     for series in tour.series:
+        if has_started(series) and not series.tour_started_at:
+            series.tour_started_at = datetime.utcnow()
         series.status = 'Completed' if is_complete(series) else 'Active'
         series.current_stage = 'completed' if is_complete(series) else 'league'
     tour.status = 'Completed' if tour.series and all(is_complete(s) for s in tour.series) else 'Active'
@@ -93,6 +122,10 @@ def fixture_block_reason(fixture):
         return None
     if fixture.status != 'Scheduled':
         return 'This fixture is not available to start.'
+    try:
+        validate_tour_squads([fixture.home_team, fixture.away_team], {series.format_type})
+    except ValueError as exc:
+        return str(exc)
     for earlier in ordered_series(series.tour):
         if earlier.id == series.id:
             break

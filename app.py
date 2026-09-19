@@ -260,6 +260,30 @@ def _is_pytest_runtime() -> bool:
     """Best-effort detection of pytest runtime for side-effect-safe app startup."""
     return bool(os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_VERSION"))
 
+
+def _should_run_precheck(test_db_uri: str) -> bool:
+    """Whether create_app should run the schema migration precheck.
+
+    Keyed on the ephemeral test DB, NOT on SIMCRICKETX_TEST_MODE. That
+    variable is set by two unrelated things: pytest (always paired with
+    SIMCRICKETX_TEST_DB_URI, schema built by db.create_all), and the local
+    dev launcher (.claude/launch.json), which sets it alone purely so
+    utils/turnstile.py bypasses the CAPTCHA during browser-preview sessions.
+    With no TEST_DB_URI the dev launcher still opens the real, persistent
+    cricket_sim.db — so gating on test_mode meant no migration ever ran on a
+    dev machine whose only startup path is that launcher, and newly
+    registered migrations silently never applied. Production was never
+    affected: it sets neither variable.
+
+    SIMCRICKETX_PRECHECK_RUNNING is set by migrations/precheck.py's own CLI,
+    which calls run_all itself and must not be re-entered from create_app.
+    """
+    if test_db_uri:
+        return False
+    if _is_pytest_runtime():
+        return False
+    return os.getenv("SIMCRICKETX_PRECHECK_RUNNING", "0") != "1"
+
 def get_matches_simulated():
     from database.models import SiteCounter
     try:
@@ -1256,8 +1280,9 @@ def create_app():
     db.init_app(app)
 
     # Unified schema migration precheck — runs every idempotent migration in
-    # order. See migrations/precheck.py for the registry and docs.
-    if not test_mode and os.getenv("SIMCRICKETX_PRECHECK_RUNNING", "0") != "1":
+    # order. See migrations/precheck.py for the registry and docs, and
+    # _should_run_precheck for why this is not gated on test_mode.
+    if _should_run_precheck(test_db_uri):
         try:
             from migrations.precheck import run_all as _run_precheck
             _run_precheck(db, app)
@@ -1955,6 +1980,44 @@ def create_app():
 
                 if not fixture.home_team_id or not fixture.away_team_id:
                     raise ValueError(f"Fixture {fixture_id} missing team assignments")
+
+                # Another match already settled this fixture. Recording this
+                # one would repoint fixture.match_id/winner_team_id at it
+                # (Step 9) while update_standings no-ops on standings_applied
+                # (Step 10) — leaving the first match orphaned but still
+                # counted in career and tournament totals, and unreachable by
+                # Re-simulate. /match/setup's fixture reservation makes this
+                # unreachable for new matches; this catches one that was
+                # already in flight when that reservation shipped.
+                from utils.fixture_rules import settled_by_other_match
+                settled_by = settled_by_other_match(fixture, match_id)
+                if settled_by:
+                    try:
+                        from utils.exception_tracker import log_data_anomaly
+                        log_data_anomaly(
+                            "CompetingFixtureResult",
+                            f"match {match_id} finished for fixture {fixture_id}, "
+                            f"which match {settled_by} had already completed",
+                            payload={
+                                "match_id": match_id,
+                                "tournament_id": tournament_id,
+                                "fixture_id": fixture_id,
+                                "settled_by_match_id": settled_by,
+                                "writer": "app._handle_tournament_match_completion",
+                            },
+                        )
+                    except Exception:
+                        log_exception(source="backend")
+                    logger.error(
+                        "[Tournament] Discarding match %s: fixture %s was already "
+                        "completed by match %s. Re-simulate the fixture to replace "
+                        "that result.",
+                        match_id, fixture_id, settled_by,
+                    )
+                    db.session.rollback()
+                    # Stop it being resumed and replayed into this same branch.
+                    match.data["current_state"] = "completed"
+                    return
                 
                 logger.info(f"[Tournament] Validated fixture {fixture_id}: {fixture.home_team.name} vs {fixture.away_team.name}")
                 
@@ -2125,6 +2188,20 @@ def create_app():
                     f"[Tournament] ✓ Match {match_id} fixture linked and standings committed. "
                     f"Tournament {tournament_id}."
                 )
+
+                # Step 11b: the match is no longer in flight, so drop its
+                # hold on the fixture. Scoped to this match id so a straggler
+                # finishing late cannot clear a claim some other match has
+                # since taken (e.g. after a re-simulation).
+                try:
+                    from utils.fixture_rules import release_fixture
+                    release_fixture(fixture, match_id)
+                except Exception as release_err:
+                    log_exception(release_err)
+                    logger.error(
+                        "[Tournament] Failed to release fixture %s claim for match %s: %s",
+                        fixture_id, match_id, release_err, exc_info=True,
+                    )
 
                 # Step 12: Mark match as completed ONLY after commit succeeded (Fix 2).
                 # Setting this earlier would permanently block retry if the commit failed.
@@ -2576,6 +2653,7 @@ def create_app():
         MATCH_INSTANCES=MATCH_INSTANCES,
         MATCH_INSTANCES_LOCK=MATCH_INSTANCES_LOCK,
         PROJECT_ROOT=PROJECT_ROOT,
+        match_is_live=_match_route_helpers["match_is_live"],
     )
 
     # ===== Statistics / Comparison / Stats APIs (Phase 1 extraction) =====
