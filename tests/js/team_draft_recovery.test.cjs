@@ -4,11 +4,13 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,'../../templates/team_create.html'),'utf8');
 function extract(name){const start=source.indexOf(`  function ${name}(`);return source.slice(start,source.indexOf('\n  }',start)+4);}
 function setup(){
- const saved=new Map(),nodes={};const c={IS_EDIT:false,LS_KEY:'team_create_draft_v1',VALID_FORMATS:['T20','ListA','FC'],state:{identity:{team_name:'Latest'},activeFmt:'FC',rosters:{T20:[],ListA:[],FC:[{name:'Keeper',role:'Wicketkeeper'}]},leaders:{FC:{captain:'Keeper',wicketkeeper:'Keeper'}}},saveTimer:1,lastSavedJson:'',clearTimeout(){c.cancelled=true},setSaveStatus:mode=>c.status=mode,
+ const saved=new Map(),nodes={};const c={IS_EDIT:false,LS_KEY:'team_create_draft_v1',VALID_FORMATS:['T20','ListA','FC'],state:{identity:{team_name:'Latest'},activeFmt:'FC',rosters:{T20:[],ListA:[],FC:[{name:'Keeper',role:'Wicketkeeper'}]},leaders:{FC:{captain:'Keeper',wicketkeeper:'Keeper'}}},saveTimer:1,lastSavedJson:'',clearTimeout(){c.cancelled=true},
  localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},document:{getElementById:id=>nodes[id]},console,
  colorSwatch:{style:{}},tabButtons:[],saveStatus:{},saveStatusLabel:{}};
  for(const key of ['nameInput','shortInput','groundInput','pitchSelect','colorInput'])c[key]={value:''};
- vm.createContext(c);for(const name of ['snapshot','saveDraftNow','loadDraft','loadSubmittedDraft'])vm.runInContext(extract(name),c);
+ vm.createContext(c);for(const name of ['snapshot','setSaveStatus','saveDraftNow','loadDraft','loadSubmittedDraft'])vm.runInContext(extract(name),c);
+ // Record the mode but still run the real indicator, so label assertions read the page's own text.
+ const setSaveStatus=c.setSaveStatus;c.setSaveStatus=mode=>{c.status=mode;setSaveStatus(mode)};
  return {c,saved,nodes};
 }
 test('final draft snapshot is flushed synchronously before leaving, including latest order and leaders',()=>{

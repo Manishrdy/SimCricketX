@@ -36,6 +36,7 @@ test('clean team visits and reverting edits do not leave drafts; real edits pers
 test('successful edit cleanup removes only the original team draft, even after renaming',()=>{
  const source=read('templates/manage_teams.html'),removed=[];
  const c={URL,window:{location:{href:'https://example.test/teams/manage?clear_team_edit_draft=OLD&search=keep'},history:{replaceState:(_,__,url)=>c.url=url}},document:{title:'Teams'},localStorage:{removeItem:k=>removed.push(k)}};
+ c.window.scxStorage=c.localStorage;
  vm.createContext(c);vm.runInContext(extract(source,'clearTeamEditDraftIfNeeded','        '),c);c.clearTeamEditDraftIfNeeded();
  assert.deepEqual(removed,['team_edit_draft_v1:OLD']);assert.equal(c.url,'/teams/manage?search=keep');
 });
