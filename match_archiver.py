@@ -174,6 +174,12 @@ class MatchArchiver:
         self.logger = logging.getLogger(__name__)
         self.match_data = self._validate_match_data(match_data)
         self.match = match_instance
+        from engine.format_config import resolve_scheduled_overs, format_label
+        self.match_data["scheduled_overs"] = resolve_scheduled_overs(
+            self.match_data.get("match_format", "T20"), self.match_data.get("scheduled_overs"))
+        self.format_label = format_label(self.match_data.get("match_format", "T20"), self.match_data["scheduled_overs"])
+        if self.match_data.get("match_format") != "FC":
+            self.match_data["overs"] = self.match_data["scheduled_overs"]
         
         # Extract core identifiers
         self.match_id = self.match_data.get('match_id')
@@ -545,7 +551,7 @@ class MatchArchiver:
                 fielder = DBPlayer.query.filter_by(
                     name=fielder_name, profile_id=_fld_profile.id
                 ).first()
-            if not fielder:
+            if not fielder and _fmt != 'T10':
                 # Legacy fallback: only accept unassigned (pre-migration) rows.
                 # Falling back to any team-wide match would bind this match's
                 # fielding stats to a Player row in a *different* format profile.
@@ -739,6 +745,7 @@ class MatchArchiver:
                 
                 # NEW: Match format
                 db_match.match_format = self.match_data.get('match_format', 'T20')
+                db_match.scheduled_overs = self.match_data.get('scheduled_overs')
                 db_match.overs_per_side = self.match_data.get('overs', 20)
                 db_match.is_day_night = bool(self.match_data.get('is_day_night', False))
                 db_match.weather_forecast = self.match_data.get('weather_forecast', 'clear')
@@ -798,6 +805,7 @@ class MatchArchiver:
                     toss_decision=self.match_data.get('toss_decision'),
                     # NEW: Match format
                     match_format=self.match_data.get('match_format', 'T20'),
+                    scheduled_overs=self.match_data.get('scheduled_overs'),
                     overs_per_side=self.match_data.get('overs', 20),
                     is_day_night=bool(self.match_data.get('is_day_night', False)),
                     weather_forecast=self.match_data.get('weather_forecast', 'clear'),
@@ -921,7 +929,9 @@ class MatchArchiver:
                 """
                 if player_id:
                     player = DBPlayer.query.get(player_id)
-                    if player and player.team_id == team_id:
+                    if (player and player.team_id == team_id and
+                            (_match_format != 'T10' or
+                             (player.profile is not None and player.profile.format_type == 'T10'))):
                         return player
                     # id present but stale/mismatched (e.g. player moved teams,
                     # or a spoofed/garbage value) — fall through to name lookup.
@@ -942,6 +952,8 @@ class MatchArchiver:
                     if player:
                         return player
                 # Legacy fallback: only accept an unassigned (pre-migration) row.
+                if _match_format == 'T10':
+                    return None
                 return DBPlayer.query.filter_by(
                     name=p_name, team_id=team_id, profile_id=None
                 ).first()
@@ -1228,6 +1240,8 @@ class MatchArchiver:
                     return p
             # Legacy fallback: only accept unassigned (pre-migration) rows so
             # partnerships are never attached to a different-format Player row.
+            if _pfmt == 'T10':
+                return None
             return DBPlayer.query.filter_by(
                 name=name, team_id=batting_team_id, profile_id=None
             ).first()
@@ -1352,7 +1366,7 @@ class MatchArchiver:
         is_fc = str(self.match_data.get('match_format', '')).strip().upper() == 'FC'
         if is_fc:
             return "Day/Night · Pink ball" if is_day_night else "Day · Red ball"
-        return "Day/Night" if is_day_night else "Day"
+        return self.format_label + " · " + ("Day/Night" if is_day_night else "Day")
 
     def _generate_text_header(self) -> str:
         """Generate formatted header for text file"""
@@ -1709,7 +1723,7 @@ class MatchArchiver:
                     'Player Name', 'Team Name', 'Runs', 'Balls', '1s', '2s', '3s', 'Fours', 'Sixes', 
                     'Dots', 'Strike Rate', 'Status', 'Bowler Out', 'Fielder Out'
                 ]
-                writer.writerow(headers)
+                writer.writerow(headers + ['Match Format', 'Scheduled Overs'])
                 
                 # Write data for ALL players in the lineup
                 for player in full_lineup:
@@ -1739,7 +1753,7 @@ class MatchArchiver:
                             status,
                             player_stats.get('bowler_out', ''),
                             player_stats.get('fielder_out', '')
-                        ])
+                        ] + [self.format_label, self.match_data.get("scheduled_overs")])
                     else:
                         # Player didn't bat - include only name and team, rest empty
                         writer.writerow([
@@ -1757,7 +1771,7 @@ class MatchArchiver:
                             '',  # Empty status
                             '',  # Empty bowler out
                             ''   # Empty fielder out
-                        ])
+                        ] + [self.format_label, self.match_data.get("scheduled_overs")])
             
             self.created_files.append(csv_path)
             self.logger.debug(f"Batting CSV created: {filename}")
@@ -1779,7 +1793,7 @@ class MatchArchiver:
                     'Bowler Name', 'Team Name', 'Overs', 'Maidens', 'Runs', 'Wickets', 
                     'Economy', 'Wides', 'No Balls', 'Byes', 'Leg Byes'
                 ]
-                writer.writerow(headers)
+                writer.writerow(headers + ['Match Format', 'Scheduled Overs'])
                 
                 # Write bowler data
                 for bowler_name, bowler_stats in stats.items():
@@ -1800,7 +1814,7 @@ class MatchArchiver:
                             bowler_stats.get('noballs', 0),
                             bowler_stats.get('byes', 0),
                             bowler_stats.get('legbyes', 0)
-                        ])
+                        ] + [self.format_label, self.match_data.get("scheduled_overs")])
             
             self.created_files.append(csv_path)
             self.logger.debug(f"Bowling CSV created: {filename}")

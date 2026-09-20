@@ -3,7 +3,7 @@
     'use strict';
     const $ = id => document.getElementById(id);
     const COLORS = ['#7161ef', '#0598a6', '#df6b36', '#d2478b', '#50862c', '#3376d5'];
-    const FORMATS = {T20: 'T20', ListA: 'List A', FC: 'First-Class'};
+    const FORMATS = window.CRICKET_FORMAT_LABELS;
     const METRICS = {
         'batting.runs': ['Batting · Runs', false], 'batting.average': ['Batting · Average', false],
         'batting.strike_rate': ['Batting · Strike rate', false], 'bowling.wickets': ['Bowling · Wickets', false],
@@ -151,7 +151,7 @@
         const params=new URLSearchParams({mode:'cross-format',identity_ids:[...selected].join(',')});
         if($('cmp-tournament').value)params.set('tournament_id',$('cmp-tournament').value);
         try{
-            const response=await fetch(`/api/compare-players?${params}`,{credentials:'same-origin',signal:controller.signal});
+            const response=await fetch(withListALength(`/api/compare-players?${params}`),{credentials:'same-origin',signal:controller.signal});
             const result=await response.json();if(version!==generation)return;
             if(!response.ok||!result.success)throw new Error(result.error||'Unable to load comparison');
             payload=result.data;render();status('Comparison ready. Highlight a player using the legend.');

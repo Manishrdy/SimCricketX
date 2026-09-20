@@ -27,17 +27,25 @@ def register_tour_routes(app, limiter, cleanup_match, delete_match_json):
                     'name': request.form.get('name', '').strip(),
                     'host': request.form.get('host_team_id', ''),
                     'visitor': request.form.get('visiting_team_id', ''),
+                    'scheduled_overs': request.form.get('scheduled_overs', '50'),
                     'counts': {f: request.form.get(f'count_{f}', '0') for f in FORMATS},
                     'order': request.form.getlist('format_order'),
                 }
+                if 'scheduled_overs' not in request.form:
+                    snapshot.pop('scheduled_overs')
+                confirmed = json.loads(request.form.get('schedule_confirmation') or 'null')
+                if isinstance(confirmed, dict) and isinstance(confirmed.get('counts'), dict):
+                    for fmt in FORMATS:
+                        confirmed['counts'].setdefault(fmt, '0')
                 if (request.form.get('confirm_schedule') != 'yes'
-                        or json.loads(request.form.get('schedule_confirmation') or 'null') != snapshot):
+                        or confirmed != snapshot):
                     raise ValueError('Review and confirm the current teams, match counts, and series order before creating your tour.')
                 tour = create_tour(request.form.get('name'), current_user.id,
                                    request.form.get('host_team_id'), request.form.get('visiting_team_id'),
                                    {f: request.form.get(f'count_{f}', '0') for f in FORMATS},
                                    request.form.getlist('format_order'),
-                                   request.form.get('creation_token') or None)
+                                   request.form.get('creation_token') or None,
+                                   scheduled_overs=request.form.get('scheduled_overs'))
                 return redirect(url_for('tour_dashboard', tour_id=tour.id))
             except (ValueError, TypeError) as exc:
                 db.session.rollback()

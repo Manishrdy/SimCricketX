@@ -297,6 +297,9 @@ def compute_game_state_vector(
     _total_overs = _fmt.overs if _fmt is not None else 20
     _total_balls = _total_overs * 6       # 120 for T20, 300 for ListA
 
+    if _fmt is not None:
+        history = history[-getattr(_fmt, "momentum_window", BALL_HISTORY_WINDOW):]
+
     # ── 1. Momentum ──────────────────────────────────────────────────────────
     momentum = _compute_momentum(history)
 
@@ -391,6 +394,8 @@ def compute_game_state_vector(
 
         # Format flag — drives ListA-specific thresholds in apply_game_state_to_probs
         "_is_lista":              _is_lista,
+        "_dot_thresholds": getattr(_fmt, "dot_thresholds", (2, 4, 6, 8)),
+        "_partnership_thresholds": getattr(_fmt, "partnership_thresholds", (25, 50, 75, 100)),
     }
 
     logger.debug(
@@ -559,7 +564,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     if _is_lista:
         _dot_t1, _dot_t2, _dot_t3, _dot_t4 = 4, 7, 10, 14
     else:
-        _dot_t1, _dot_t2, _dot_t3, _dot_t4 = 2, 4,  6,  8
+        _dot_t1, _dot_t2, _dot_t3, _dot_t4 = state.get("_dot_thresholds", (2, 4, 6, 8))
 
     if consecutive_dots >= _dot_t4:
         # Extended dot-ball siege → desperate wild swing
@@ -658,7 +663,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     if _is_lista:
         _p_growing, _p_established, _p_strong, _p_dominant = 50, 100, 150, 200
     else:
-        _p_growing, _p_established, _p_strong, _p_dominant = 25,  50,  75, 100
+        _p_growing, _p_established, _p_strong, _p_dominant = state.get("_partnership_thresholds", (25, 50, 75, 100))
 
     if p_balls <= 3 and p_runs < 4:
         # NEW PARTNERSHIP — danger zone: both batters still reading conditions,

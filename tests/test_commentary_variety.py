@@ -165,3 +165,57 @@ def test_a_seeded_match_still_produces_the_same_commentary():
                 for r in (0, 1, 0, 0, 1)]
 
     assert run() == run()
+
+
+def test_fielding_events_reach_their_own_pools():
+    """Dropped catches and misfields now map to their dedicated rich pools."""
+    engine = CommentaryEngine()
+    drop_ctx = _context(1, PACE)
+    drop_ctx.update({"dropped_catch": True, "fielder_name": "Smith"})
+    assert engine._map_context_to_key(drop_ctx) == "dropped_catch"
+    counts = Counter(engine.get_commentary(dict(drop_ctx), dict(STATE)) for _ in range(200))
+    assert len(counts) >= 12, f"dropped_catch: only {len(counts)} distinct lines"
+    assert any("DROPPED!" in line for line in counts)
+
+    misfield_ctx = _context(1, PACE)
+    misfield_ctx.update({"misfield": True, "fielder_name": "Warner"})
+    assert engine._map_context_to_key(misfield_ctx) == "misfield"
+    counts = Counter(engine.get_commentary(dict(misfield_ctx), dict(STATE)) for _ in range(200))
+    assert len(counts) >= 12, f"misfield: only {len(counts)} distinct lines"
+    assert any("MISFIELD!" in line for line in counts)
+
+
+def test_free_hit_event_reached():
+    """Free hit dot/survival delivery maps to free_hit template pool."""
+    engine = CommentaryEngine()
+    ctx = _context(0, PACE)
+    ctx.update({"free_hit": True})
+    assert engine._map_context_to_key(ctx) == "free_hit"
+    counts = Counter(engine.get_commentary(dict(ctx), dict(STATE)) for _ in range(200))
+    assert len(counts) >= 10, f"free_hit: only {len(counts)} distinct lines"
+
+
+def test_bowler_milestone_and_close_finish_narratives():
+    """Bowler milestones (3-fer, 5-fer) and close finishes trigger their narratives."""
+    engine = CommentaryEngine()
+    ctx = _context(0, PACE)
+    ctx.update({"type": "wicket", "wicket_type": "Bowled", "batter_out": True})
+    
+    # 3-fer trigger
+    state_3fer = dict(STATE)
+    state_3fer.update({"bowler_wickets": 2})
+    narrative_3fer = engine._check_narratives(ctx, state_3fer)
+    assert narrative_3fer and ("three wickets" in narrative_3fer.lower() or "3-wicket" in narrative_3fer.lower() or "third" in narrative_3fer.lower() or "three" in narrative_3fer.lower())
+
+    # 5-fer trigger
+    eng2 = CommentaryEngine()
+    state_5fer = dict(STATE)
+    state_5fer.update({"bowler_wickets": 4})
+    narrative_5fer = eng2._check_narratives(ctx, state_5fer)
+    assert narrative_5fer and ("five" in narrative_5fer.lower() or "fifer" in narrative_5fer.lower())
+
+    # Close finish trigger
+    eng3 = CommentaryEngine()
+    close_state = {"innings": 2, "current_over": 19, "current_ball": 2, "_fmt_last_over": 19, "runs_needed": 4, "is_fc": False}
+    narrative_close = eng3._check_narratives(_context(1, PACE), close_state)
+    assert narrative_close and any(w in narrative_close.lower() for w in ("finish", "wire", "drama", "nerves", "knife", "edge", "scenes", "tension"))

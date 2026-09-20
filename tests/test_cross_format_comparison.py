@@ -139,7 +139,7 @@ def test_incomplete_and_wicket_threshold():
 def test_new_api_and_legacy_contract(authenticated_client, comparison_data):
     client=authenticated_client
     response=client.get('/api/compare-players',query_string={'mode':'cross-format','identity_ids':','.join(comparison_data['ids'])})
-    assert response.status_code==200 and response.json['data']['formats']==['T20','ListA','FC']
+    assert response.status_code==200 and response.json['data']['formats']==['T20','T10','ListA','FC']
     for query in ({'identity_ids':''},{'identity_ids':','.join(comparison_data['ids']),'tournament_id':'oops'}):
         assert client.get('/api/compare-players',query_string={'mode':'cross-format',**query}).status_code==400
     legacy=client.get('/api/compare-players',query_string={'player_ids':','.join(str(p.id) for p in comparison_data['players'][:2]),'match_format':'T20'})

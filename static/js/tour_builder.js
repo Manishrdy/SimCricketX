@@ -1,11 +1,11 @@
 (function (root) {
     'use strict';
-    const FORMATS = ['FC', 'ListA', 'T20'];
+    const FORMATS = typeof window !== 'undefined' && window.CRICKET_TOUR_FORMATS || ['FC', 'ListA', 'T20', 'T10'];
     const label = fmt => fmt === 'ListA' ? 'List A' : fmt;
     function availability(teams, host, visitor) {
         const selected = Boolean(teams[host] && teams[visitor] && host !== visitor);
         return Object.fromEntries(FORMATS.map(fmt => [fmt, selected &&
-            teams[host].formats[fmt].available && teams[visitor].formats[fmt].available]));
+            Boolean(teams[host].formats?.[fmt]?.available && teams[visitor].formats?.[fmt]?.available)]));
     }
     function syncTeamChoices(home, away, changed) {
         // Also repair restored/stale form state before calculating availability.
@@ -41,7 +41,7 @@
     let order = JSON.parse(doc.getElementById('tour-initial-order').textContent), dragged = null, pending = false;
     const counts = () => Object.fromEntries(FORMATS.map(fmt => [fmt, inputs[fmt].value]));
     const currentSnapshot = () => JSON.stringify({name: name.value.trim(), host: host.value,
-        visitor: visitor.value, counts: counts(), order});
+        visitor: visitor.value, counts: counts(), order, scheduled_overs: doc.getElementById('tour-scheduled-overs').value});
     function validation() {
         if (!teams[host.value] || !teams[visitor.value]) return 'Select both teams to continue.';
         if (host.value === visitor.value) return 'Choose two different teams.';
@@ -108,7 +108,8 @@
             doc.getElementById('availability-' + fmt).textContent = allowed[fmt] ? 'Ready to play' : 'Unavailable';
             const statuses = doc.getElementById('squads-' + fmt); statuses.replaceChildren();
             const reasons = [];
-            [host, visitor].forEach(select => {
+            doc.getElementById('tour-scheduled-overs').addEventListener('change', update);
+    [host, visitor].forEach(select => {
                 const team = teams[select.value]; if (!team) return;
                 const status = team.formats[fmt], item = doc.createElement('li');
                 item.className = status.available ? 'is-ready' : 'is-missing';
@@ -122,7 +123,7 @@
         order = activeOrder(order, counts()); renderOrder();
         const namedTeams = teams[host.value] && teams[visitor.value];
         doc.getElementById('review-teams').textContent = namedTeams ? teams[visitor.value].name + ' visiting ' + teams[host.value].name : 'Your selected teams will appear here.';
-        doc.getElementById('review-schedule').textContent = order.length ? order.map(fmt => label(fmt) + ' (' + inputs[fmt].value + ' matches)').join(' → ') : 'No series selected.';
+        doc.getElementById('review-schedule').textContent = order.length ? order.map(fmt => label(fmt) + (fmt === 'ListA' ? ' · ' + doc.getElementById('tour-scheduled-overs').value + ' overs' : '') + ' (' + inputs[fmt].value + ' matches)').join(' → ') : 'No series selected.';
         doc.getElementById('review-total').textContent = order.reduce((sum, fmt) => sum + Number(inputs[fmt].value), 0) + ' matches · ' + order.length + ' series';
         // The required confirmation checkbox is deliberately unchecked here;
         // validate the schedule fields without making confirmation circular.
@@ -134,6 +135,7 @@
             host.value === visitor.value ? 'Choose two different teams.' : Object.values(allowed).some(Boolean) ?
                 'Only formats with ready squads on both teams are enabled.' : 'No playable formats in common. Complete a squad or choose another team.';
     }
+    doc.getElementById('tour-scheduled-overs').addEventListener('change', update);
     [host, visitor].forEach(select => select.addEventListener('change', update));
     [name, ...Object.values(inputs)].forEach(input => input.addEventListener('input', update));
     confirm.addEventListener('change', () => {

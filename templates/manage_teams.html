@@ -775,9 +775,9 @@
                     <!-- Profile badges -->
                     <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1rem;">
                         {% for prof in t.profiles %}
-                            {% if prof.format_type == 'T20' %}
+                            {% if prof.format_type in ('T20', 'T10') %}
                                 <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(16,185,129,0.12);color:#059669;border:1px solid rgba(16,185,129,0.3);">
-                                    <i class="fa-solid fa-bolt" style="font-size:0.65rem;"></i> T20 &middot; {{ prof.player_count }}
+                                    <i class="fa-solid fa-bolt" style="font-size:0.65rem;"></i> {{ prof.format_type }} &middot; {{ prof.player_count }}
                                 </span>
                             {% elif prof.format_type == 'ListA' %}
                                 <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:rgba(59,130,246,0.12);color:#2563eb;border:1px solid rgba(59,130,246,0.3);">

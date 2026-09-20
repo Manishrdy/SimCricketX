@@ -109,3 +109,29 @@ test('simulated coach and captain dialogue is escaped and shown once per decisio
     assert.match(logs[0], /&lt;script&gt;/);
     assert.match(logs[1], /We're declaring/);
 });
+
+test('scorecard images upload without a page heading', async () => {
+    const fields = [];
+    const pending = new Set();
+    const context = vm.createContext({
+        document: { querySelector: () => null },
+        matchData: { match_id: 'match-40' },
+        FormData: class { append(...args) { fields.push(args); } },
+        window: { location: { pathname: '/match/match-40' } },
+        AbortSignal: { timeout: () => undefined },
+        pendingScorecardImageUploads: pending,
+        fetch: async (url, options) => {
+            assert.equal(url, '/match/match-40/save-scorecard-images');
+            assert.equal(options.method, 'POST');
+            return { ok: true };
+        },
+        console,
+    });
+    vm.runInContext(functionSource('sendScorecardImagesToBackend'), context);
+    assert.equal(await context.sendScorecardImagesToBackend('first', 'second'), true);
+    assert.deepEqual(fields, [
+        ['first_innings_image', 'first', 'match_40_1st.png'],
+        ['second_innings_image', 'second', 'match_40_2nd.png'],
+    ]);
+    assert.equal(pending.size, 0);
+});

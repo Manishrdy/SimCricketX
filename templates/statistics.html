@@ -757,6 +757,7 @@
 
 {% block content %}
 <div class="stats-page">
+{% include '_lista_length_filter.html' %}
 
     <!-- HERO -->
     <section class="stats-hero">
@@ -793,6 +794,7 @@
 
         <div class="pill-group">
             <button class="pill-btn {% if match_format == 'T20' %}active{% endif %}" onclick="selectFormat('T20')">T20</button>
+            <button class="pill-btn {% if match_format == 'T10' %}active{% endif %}" onclick="selectFormat('T10')">T10</button>
             <button class="pill-btn {% if match_format == 'ListA' %}active{% endif %}" onclick="selectFormat('ListA')">List A</button>
             <button class="pill-btn {% if match_format == 'FC' %}active{% endif %}" onclick="selectFormat('FC')">First-Class</button>
         </div>
@@ -1675,7 +1677,7 @@ function exportFiltered(type, format) {
         let csv = headers.map(h => '"' + h.replace(/"/g, '""') + '"').join(',') + '\n';
         rows.forEach(r => { csv += r.map(c => '"' + c.replace(/"/g, '""') + '"').join(',') + '\n'; });
         const mf = new URLSearchParams(window.location.search).get('match_format') || 'T20';
-        dlBlob(csv, mf + '_' + type + '_stats.csv', 'text/csv');
+        dlBlob(csv, mf + (mf === 'ListA' ? '_' + (new URLSearchParams(location.search).get('scheduled_overs') || 'all') : '') + '_' + type + '_stats.csv', 'text/csv');
     } else {
         const w = headers.map((h, i) => Math.max(h.length, ...rows.map(r => (r[i] || '').length)) + 2);
         const sep = w.map(n => '-'.repeat(n)).join('+');
@@ -1685,7 +1687,7 @@ function exportFiltered(type, format) {
         rows.forEach(r => { txt += fmt(r) + '\n'; });
         txt += sep + '\n';
         const mf = new URLSearchParams(window.location.search).get('match_format') || 'T20';
-        dlBlob(txt, mf + '_' + type + '_stats.txt', 'text/plain');
+        dlBlob(txt, mf + (mf === 'ListA' ? '_' + (new URLSearchParams(location.search).get('scheduled_overs') || 'all') : '') + '_' + type + '_stats.txt', 'text/plain');
     }
 }
 
@@ -1711,7 +1713,7 @@ async function exportImage(type, format, btn) {
             backgroundColor: isDark ? '#21252b' : '#ffffff', scale: 2
         });
         const mf = new URLSearchParams(window.location.search).get('match_format') || 'T20';
-        window.scxImageExport.downloadBlob(blob, mf + '_' + type + '_stats_' + new Date().toISOString().slice(0, 10) + '.png');
+        window.scxImageExport.downloadBlob(blob, mf + (mf === 'ListA' ? '_' + (new URLSearchParams(location.search).get('scheduled_overs') || 'all') : '') + '_' + type + '_stats_' + new Date().toISOString().slice(0, 10) + '.png');
     } catch (error) {
         alert('Image export failed. Reload to retry, or use CSV or TXT for all filtered rows.');
     } finally {
@@ -1760,7 +1762,7 @@ function loadPartnerships() {
     const empty = document.getElementById('partnerships-empty');
     const oldC  = document.getElementById('partnerships-container');
 
-    fetch(url).then(r => r.json()).then(data => {
+    fetch(withListALength(url)).then(r => r.json()).then(data => {
         // Also populate legacy container if it exists
         if (oldC) {
             if (!data.success || !data.data?.length) {
@@ -1857,7 +1859,7 @@ let allPlayers = [], currentRole = 'batsman';
 
 function loadPlayersForComparison() {
     const mf = new URLSearchParams(window.location.search).get('match_format') || 'T20';
-    fetch('/api/compare-players?player_ids=&match_format=' + encodeURIComponent(mf)).then(r => r.json()).then(data => {
+    fetch(withListALength('/api/compare-players?player_ids=&match_format=' + encodeURIComponent(mf))).then(r => r.json()).then(data => {
         if (data.success) { allPlayers = data.available_players || []; filterPlayersByRole(currentRole); }
     }).catch(() => {});
 }
@@ -1909,7 +1911,7 @@ function comparePlayers() {
     if (params.get('view') === 'tournament' && params.get('tournament_id'))
         url += '&tournament_id=' + params.get('tournament_id');
     url += '&match_format=' + encodeURIComponent(params.get('match_format') || 'T20');
-    fetch(url).then(r => r.json()).then(data => {
+    fetch(withListALength(url)).then(r => r.json()).then(data => {
         if (data.success && data.data?.length >= 2) displayComparison(data.data);
         else res.innerHTML = '<div class="no-data"><i class="fas fa-exclamation-triangle"></i>Could not compare players</div>';
     }).catch(() => {
