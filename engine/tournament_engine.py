@@ -173,7 +173,7 @@ class TournamentEngine:
     def create_tournament(self, name: str, user_id: str, team_ids: list,
                           mode: str = MODE_ROUND_ROBIN, playoff_teams: int = 4,
                           series_config: dict = None, format_type: str = 'T20',
-                          creation_token: str = None, commit: bool = True) -> Tournament:
+                          creation_token: str = None, commit: bool = True, scheduled_overs=None) -> Tournament:
         """
         Creates a new tournament with specified mode.
 
@@ -194,6 +194,11 @@ class TournamentEngine:
         Raises:
             ValueError: If validation fails
         """
+        from engine.format_config import resolve_scheduled_overs
+        from engine.format_catalog import SUPPORTED_FORMATS
+        if format_type not in SUPPORTED_FORMATS:
+            raise ValueError("Invalid or unsupported match format")
+        scheduled_overs = resolve_scheduled_overs(format_type, scheduled_overs)
         name = (name or "").strip()
         if not name:
             raise ValueError("Tournament name cannot be empty.")
@@ -244,6 +249,7 @@ class TournamentEngine:
                 status='Active',
                 mode=mode,
                 format_type=format_type,
+                scheduled_overs=scheduled_overs,
                 current_stage=self.STAGE_LEAGUE if mode != self.MODE_KNOCKOUT else self._get_knockout_round_name(self._next_power_of_two(len(team_ids)), 1),
                 playoff_teams=min(playoff_teams, len(team_ids)),
                 series_config=json.dumps(series_config) if series_config else None,

@@ -4,14 +4,15 @@ import json
 import re
 from datetime import datetime
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, redirect, render_template, request, url_for, jsonify
 from flask_login import current_user, login_required
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from utils.exception_tracker import log_exception
 from utils.squad_rules import validate_squad_composition
 
-VALID_FORMATS = ("T20", "ListA", "FC")
+from engine.format_catalog import SUPPORTED_FORMATS
+VALID_FORMATS = SUPPORTED_FORMATS
 SHORT_CODE_RE = re.compile(r'^[A-Z0-9]{2,5}$')
 
 
@@ -685,6 +686,35 @@ def register_team_routes(
             "bowling_hand": obj.bowling_hand or "",
         }
 
+    @app.route("/api/team/<int:team_id>/squad/T10/copy-t20", methods=["POST"])
+    @login_required
+    def copy_t20_squad_to_t10(team_id):
+        team = DBTeam.query.get_or_404(team_id)
+        if team.user_id != current_user.id:
+            return jsonify(error="Forbidden"), 403
+        if DBTeamProfile.query.filter_by(team_id=team_id, format_type="T10").first():
+            return jsonify(error="A T10 profile already exists; it will not be overwritten"), 409
+        source = DBTeamProfile.query.filter_by(team_id=team_id, format_type="T20").first()
+        if source is None or not source.players:
+            return jsonify(error="Create a T20 squad before copying it"), 400
+        fields = ("name", "role", "batting_rating", "bowling_rating", "fielding_rating",
+                  "technique_rating", "temperament_rating", "stamina_rating",
+                  "batting_hand", "bowling_hand", "bowling_type", "batting_style", "bowling_style",
+                  "is_captain", "is_wicketkeeper", "master_player_id", "user_player_id")
+        try:
+            profile = DBTeamProfile(team_id=team_id, format_type="T10")
+            db.session.add(profile)
+            db.session.flush()
+            for player in source.players:
+                db.session.add(DBPlayer(team_id=team_id, profile_id=profile.id,
+                                        **{key: getattr(player, key) for key in fields}))
+            _touch_team(team)
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify(error="A T10 profile already exists; it will not be overwritten"), 409
+        return jsonify(ok=True, format="T10"), 201
+
     @app.route("/team/<int:team_id>/squad")
     @app.route("/team/<int:team_id>/squad/<fmt>")
     @login_required
@@ -696,11 +726,11 @@ def register_team_routes(
         if fmt not in VALID_FORMATS:
             fmt = "T20"
         profile = DBTeamProfile.query.filter_by(team_id=team_id, format_type=fmt).first()
-        if not profile:
+        if not profile and fmt != "T10":
             profile = DBTeamProfile(team_id=team_id, format_type=fmt)
             db.session.add(profile)
             db.session.commit()
-        squad = DBPlayer.query.filter_by(profile_id=profile.id).order_by(DBPlayer.name).all()
+        squad = DBPlayer.query.filter_by(profile_id=profile.id).order_by(DBPlayer.name).all() if profile else []
         squad_json = json.dumps([{
             "pool_id": None, "source": None,
             "name": p.name, "role": p.role,

@@ -2096,9 +2096,10 @@ async function sendScorecardImagesToBackend(firstBlob, secondBlob) {
     if (!firstBlob && !secondBlob) return;
 
     const formData = new FormData();
-    const teams = document.querySelector('h1').textContent;
-    // We assume h1 exists as per layout
-    const safeTeams = teams.replace(/[^a-zA-Z0-9]/g, '_');
+    // The live match layout has no h1. Export names must not depend on
+    // optional presentation elements.
+    const matchId = typeof matchData !== 'undefined' ? matchData.match_id : null;
+    const safeTeams = String(matchId || 'match').replace(/[^a-zA-Z0-9]/g, '_');
 
     if (firstBlob) formData.append('first_innings_image', firstBlob, `${safeTeams}_1st.png`);
     if (secondBlob) formData.append('second_innings_image', secondBlob, `${safeTeams}_2nd.png`);

@@ -17,6 +17,7 @@ for (const type of ['batting', 'bowling', 'fielding', 'partnerships']) {
         const exports = [];
         const context = { pgState: { [type]: { page: 1, size: 25 } }, URLSearchParams,
             window: { location: { search: '?match_format=ListA' } },
+            location: { search: '?match_format=ListA' },
             document: { getElementById: id => id === type + '-table' ? table : id === type ? panel : {} },
             dlBlob: (content, filename) => exports.push({ content, filename }) };
         vm.createContext(context);
@@ -25,7 +26,7 @@ for (const type of ['batting', 'bowling', 'fielding', 'partnerships']) {
             context.exportFiltered(type, 'csv'); context.exportFiltered(type, 'txt');
             assert.equal(exports.at(-2).content.trimEnd().split('\n').length, count + 1);
             assert.match(exports.at(-1).content, new RegExp(`Records: ${count}\\n`));
-            assert.equal(exports.at(-2).filename, `ListA_${type}_stats.csv`);
+            assert.equal(exports.at(-2).filename, `ListA_all_${type}_stats.csv`);
         };
         context.applyPagination(type); assert.equal(rows.filter(r => r.style.display === '').length, 25); verify(100);
         context.pgState[type].page = 3; context.applyPagination(type); verify(100);

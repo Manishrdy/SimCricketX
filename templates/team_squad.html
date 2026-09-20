@@ -728,6 +728,10 @@
             </div>
         </div>
         <div class="sb-hero-actions">
+            {% if fmt == 'T10' and not profile %}
+            <button class="sb-btn sb-btn-ghost" type="button" id="copyT20Btn">Copy T20 squad</button>
+            <span id="copyT20Status" role="status"></span>
+            {% endif %}
             <button class="sb-btn sb-btn-ghost" id="saveDraftBtn" onclick="saveDraftExplicit()">
                 <i class="fas fa-floppy-disk"></i> Save Draft
             </button>
@@ -862,6 +866,21 @@
     var TEAM_ID  = {{ team.id }};
     var FMT      = '{{ fmt }}';
     var CSRF     = '{{ csrf_token() }}';
+    var copyT20Btn = document.getElementById('copyT20Btn');
+    if (copyT20Btn) copyT20Btn.addEventListener('click', async function () {
+        copyT20Btn.disabled = true;
+        try {
+            const response = await fetch('/api/team/' + TEAM_ID + '/squad/T10/copy-t20', {
+                method: 'POST', headers: {'X-CSRFToken': CSRF}
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Could not copy squad');
+            location.reload();
+        } catch (error) {
+            document.getElementById('copyT20Status').textContent = error.message;
+            copyT20Btn.disabled = false;
+        }
+    });
     var DRAFT_KEY = 'simcx_squad_' + TEAM_ID + '_' + FMT;
     var MIN_PLAYERS = {{ SQUAD_MIN_PLAYERS }}, MAX_PLAYERS = {{ SQUAD_MAX_PLAYERS }}, MIN_BOWL = {{ SQUAD_MIN_BOWLING_OPTIONS }}, MIN_WK = {{ SQUAD_MIN_WICKETKEEPERS }};
 

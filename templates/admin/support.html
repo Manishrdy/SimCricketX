@@ -6,25 +6,28 @@
 {% endblock %}
 
 {% block admin_content %}
-<div class="support-shell">
-    <aside class="support-inbox">
+<div class="support-shell" id="support-shell">
+    {# ── Left Rail: Inbox & Conversations ────────────────────────────── #}
+    <aside class="support-inbox" aria-label="Support conversations">
         <div class="support-inbox__head">
-            <div>
+            <div class="support-inbox__branding">
                 <div class="a-breadcrumb">
                     <a href="/admin/dashboard"><i class="fas fa-shield-alt"></i> Admin</a>
                     <span class="sep">/</span>
                     <span class="current">Support</span>
                 </div>
-                <h1>
-                    Inbox
-                    <span class="support-inbox__count" id="support-inbox-count" hidden></span>
-                </h1>
+                <div class="support-inbox__title-wrap">
+                    <h1>
+                        <span>Inbox</span>
+                        <span class="support-inbox__count" id="support-inbox-count" hidden></span>
+                    </h1>
+                </div>
             </div>
             <div class="support-inbox__head-actions">
-                <button type="button" id="support-notify-toggle" title="Enable browser notifications" aria-label="Enable browser notifications" aria-pressed="false">
+                <button type="button" id="support-notify-toggle" class="support-icon-btn" title="Enable browser notifications" aria-label="Enable browser notifications" aria-pressed="false">
                     <i class="fas fa-bell-slash"></i>
                 </button>
-                <button type="button" id="support-refresh" title="Refresh" aria-label="Refresh">
+                <button type="button" id="support-refresh" class="support-icon-btn" title="Refresh conversations" aria-label="Refresh">
                     <i class="fas fa-rotate"></i>
                 </button>
             </div>
@@ -33,79 +36,121 @@
         <div class="support-filters">
             <div class="support-search-wrap">
                 <i class="fas fa-search"></i>
-                <input type="search" id="support-search" placeholder="Search conversations" aria-label="Search conversations">
+                <input type="search" id="support-search" placeholder="Search by name, ID, or text…" aria-label="Search conversations" autocomplete="off">
             </div>
-            <div class="support-segments" role="tablist">
-                <button type="button" data-filter-status="open" class="active" role="tab">Active</button>
-                <button type="button" data-filter-status="closed" role="tab">Closed</button>
+            <div class="support-segments" role="tablist" aria-label="Filter conversations by status">
+                <button type="button" data-filter-status="open" class="active" role="tab" aria-selected="true">
+                    <i class="fas fa-inbox"></i> Active
+                </button>
+                <button type="button" data-filter-status="closed" role="tab" aria-selected="false">
+                    <i class="fas fa-box-archive"></i> Closed
+                </button>
             </div>
         </div>
 
-        <div id="support-conversation-list" class="support-conversation-list">
+        <div id="support-conversation-list" class="support-conversation-list" role="feed" aria-busy="false">
             <div class="support-empty">
-                <i class="fas fa-inbox"></i>
-                <span>Loading conversations…</span>
+                <div class="support-empty__icon"><i class="fas fa-spinner fa-spin"></i></div>
+                <strong>Loading inbox…</strong>
+                <span>Fetching conversations and user tickets.</span>
             </div>
         </div>
     </aside>
 
-    <main class="support-thread">
+    {# ── Center Pane: Thread & Messages ──────────────────────────────── #}
+    <main class="support-thread" aria-label="Active conversation thread">
         <header class="support-thread__head">
             <div class="support-thread__identity">
-                <div class="support-thread__avatar is-empty" id="support-thread-avatar">
+                <div class="support-thread__avatar is-empty" id="support-thread-avatar" aria-hidden="true">
                     <i class="fas fa-comment-dots"></i>
                 </div>
                 <div class="support-thread__id">
-                    <h2>
-                        <span id="support-thread-title">Select a conversation</span>
+                    <div class="support-thread__name-row">
+                        <h2 id="support-thread-title">Select a conversation</h2>
                         <span class="support-status-pill" id="support-thread-status" hidden></span>
-                    </h2>
-                    <p id="support-thread-subtitle">Live user messages appear in the inbox.</p>
+                    </div>
+                    <div class="support-thread__meta-row">
+                        <p id="support-thread-subtitle">Live user messages appear in the inbox.</p>
+                    </div>
                 </div>
             </div>
+
             <div class="support-thread__actions">
-                <button type="button" id="support-close" class="a-btn a-btn-secondary a-btn-sm" disabled hidden>
-                    <i class="fas fa-check"></i> Close
+                <a href="#" id="support-user-link" class="a-btn a-btn-secondary a-btn-sm support-action-btn" title="View user in Admin Console" target="_blank" rel="noopener" hidden>
+                    <i class="fas fa-user-circle"></i> <span class="support-btn-label">User 360</span>
+                </a>
+                <button type="button" id="support-close" class="a-btn a-btn-secondary a-btn-sm support-action-btn" title="Mark conversation as resolved" disabled hidden>
+                    <i class="fas fa-check"></i> <span class="support-btn-label">Close</span>
                 </button>
-                <button type="button" id="support-reopen" class="a-btn a-btn-secondary a-btn-sm" disabled hidden>
-                    <i class="fas fa-lock-open"></i> Reopen
+                <button type="button" id="support-reopen" class="a-btn a-btn-secondary a-btn-sm support-action-btn" title="Reopen this conversation" disabled hidden>
+                    <i class="fas fa-lock-open"></i> <span class="support-btn-label">Reopen</span>
                 </button>
-                <button type="button" id="support-delete" class="a-btn a-btn-danger a-btn-sm" disabled hidden>
-                    <i class="fas fa-trash"></i> Delete
+                <button type="button" id="support-delete" class="a-btn a-btn-danger a-btn-sm support-action-btn" title="Permanently delete conversation" disabled hidden>
+                    <i class="fas fa-trash"></i> <span class="support-btn-label">Delete</span>
+                </button>
+                <button type="button" id="support-context-toggle" class="support-icon-btn support-context-toggle-btn" title="Toggle user context details" aria-label="Toggle user context details" aria-expanded="false">
+                    <i class="fas fa-circle-info"></i>
                 </button>
             </div>
         </header>
 
-        <div id="support-thread-messages" class="support-thread__messages">
+        <div id="support-thread-messages" class="support-thread__messages" tabindex="0" aria-label="Message history">
             <div class="support-empty">
-                <i class="fas fa-comments"></i>
+                <div class="support-empty__icon"><i class="fas fa-comments"></i></div>
                 <strong>No conversation selected</strong>
-                <span>Choose a user from the inbox to read and respond to their messages.</span>
+                <span>Choose a user from the inbox on the left to read messages and reply in real time.</span>
             </div>
         </div>
 
-        <form id="support-admin-composer" class="support-admin-composer">
-            <div class="support-admin-composer__field">
-                <textarea id="support-admin-input" rows="1" placeholder="Reply to user…" disabled></textarea>
+        <div class="support-thread__composer-wrap">
+            {# Quick canned replies bar #}
+            <div class="support-quick-replies" id="support-quick-replies" aria-label="Quick canned responses">
+                <span class="support-quick-replies__label"><i class="fas fa-bolt"></i> Quick replies:</span>
+                <div class="support-quick-replies__scroll">
+                    <button type="button" class="support-canned-btn" data-reply="Hello! How can we assist you today?">👋 How can we help?</button>
+                    <button type="button" class="support-canned-btn" data-reply="We are investigating this issue right now and will update you shortly.">🔍 Investigating</button>
+                    <button type="button" class="support-canned-btn" data-reply="Could you please provide more details or steps to reproduce what you saw?">❓ Need details</button>
+                    <button type="button" class="support-canned-btn" data-reply="This issue has been resolved. Please refresh and let us know if anything persists!">✅ Resolved</button>
+                    <button type="button" class="support-canned-btn" data-reply="Thank you for your patience while we resolved this!">🙏 Thank you</button>
+                </div>
             </div>
-            <button type="submit" id="support-admin-send" title="Send" aria-label="Send" disabled>
-                <i class="fas fa-paper-plane"></i>
-            </button>
-            <p id="support-send-status" class="support-admin-composer__hint" role="status" aria-live="polite"></p>
-            <p class="support-admin-composer__hint">
-                <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for new line
-            </p>
-        </form>
+
+            <form id="support-admin-composer" class="support-admin-composer">
+                <div class="support-admin-composer__field">
+                    <textarea id="support-admin-input" rows="1" placeholder="Type a reply… (Press Enter to send, Shift+Enter for new line)" aria-label="Type a reply" disabled></textarea>
+                </div>
+                <div class="support-admin-composer__actions">
+                    <button type="submit" id="support-admin-send" class="support-send-btn" title="Send message (Enter)" aria-label="Send" disabled>
+                        <i class="fas fa-paper-plane"></i>
+                        <span class="support-send-btn__text">Send</span>
+                    </button>
+                </div>
+                <div class="support-admin-composer__footer">
+                    <p id="support-send-status" class="support-admin-composer__status" role="status" aria-live="polite"></p>
+                    <p class="support-admin-composer__hint">
+                        <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for new line
+                    </p>
+                </div>
+            </form>
+        </div>
     </main>
 
-    <aside class="support-context">
+    {# ── Right Rail: User Context & Intelligence ─────────────────────── #}
+    <aside class="support-context" id="support-context" aria-label="User context and diagnostic information">
         <div class="support-context__head">
-            <h3><i class="fas fa-circle-info"></i> User Context</h3>
+            <div class="support-context__head-title">
+                <i class="fas fa-id-card"></i>
+                <h3>User & Session Context</h3>
+            </div>
+            <button type="button" id="support-context-close" class="support-icon-btn support-context-close-btn" title="Close context panel" aria-label="Close context panel">
+                <i class="fas fa-xmark"></i>
+            </button>
         </div>
         <div id="support-context-body" class="support-context__body">
             <div class="support-empty">
-                <i class="fas fa-user"></i>
-                <span>No conversation selected.</span>
+                <div class="support-empty__icon"><i class="fas fa-user-gear"></i></div>
+                <strong>No user selected</strong>
+                <span>Select a conversation to inspect account details, session status, and recent errors.</span>
             </div>
         </div>
     </aside>

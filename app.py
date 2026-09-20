@@ -826,7 +826,10 @@ def create_app():
     def inject_route_helpers():
         def has_endpoint(endpoint_name):
             return endpoint_name in app.view_functions
-        return {"has_endpoint": has_endpoint, "maintenance_mode": MAINTENANCE_MODE}
+        from engine.format_catalog import FORMAT_CATALOG, FORMAT_LABELS, SUPPORTED_FORMATS, TOUR_FORMATS
+        return {"has_endpoint": has_endpoint, "maintenance_mode": MAINTENANCE_MODE,
+                "cricket_formats": FORMAT_CATALOG, "format_labels": FORMAT_LABELS,
+                "supported_formats": SUPPORTED_FORMATS, "tour_formats": TOUR_FORMATS}
 
     @app.context_processor
     def inject_user_stats():
@@ -2040,6 +2043,7 @@ def create_app():
                     result_description=final_result,
                     date=datetime.now(),
                     match_format=match.data.get('match_format', 'T20'),
+                    scheduled_overs=match.data.get('scheduled_overs'),
                     overs_per_side=match.data.get('overs', 20)
                 )
 

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 from services.match_delivery import MatchDelivery, DeliveryConflict
 
-from engine.format_config import get_any_format as _get_any_format
+from engine.format_config import get_any_format as _get_any_format, resolve_scheduled_overs, format_label as cricket_format_label
 from engine.toss import decide_toss, home_bats_first
 from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
@@ -52,7 +52,9 @@ def register_match_routes(
     _is_valid_match_id,
     reverse_player_aggregates,
 ):
-    MATCH_SETUP_FORMATS = {"T20", "ListA", "FC"}
+    app.jinja_env.globals["cricket_format_label"] = cricket_format_label
+    from engine.format_catalog import SUPPORTED_FORMATS
+    MATCH_SETUP_FORMATS = set(SUPPORTED_FORMATS)
 
     @app.route("/match/setup", methods=["GET", "POST"])
     @login_required
@@ -229,6 +231,14 @@ def register_match_routes(
                 _tournament = db.session.get(Tournament, int(req_tournament_id))
                 if _tournament and _tournament.format_type:
                     data["match_format"] = _tournament.format_type
+                    data["scheduled_overs"] = _tournament.scheduled_overs
+
+            try:
+                data["scheduled_overs"] = resolve_scheduled_overs(data["match_format"], data.get("scheduled_overs"))
+                if data["scheduled_overs"] is not None:
+                    data["overs"] = data["scheduled_overs"]
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
 
             # Story mode: a named story arc (historical scenario pack) takes
             # precedence over the random "interesting" drama modes. Validated
@@ -239,7 +249,8 @@ def register_match_routes(
                 story_pack = get_scenario_pack(str(story_id))
                 if not story_pack:
                     return jsonify({"error": "Unknown story"}), 400
-                if story_pack.get("format", "T20") != data["match_format"]:
+                if (story_pack.get("format", "T20") != data["match_format"] or
+                    resolve_scheduled_overs(story_pack.get("format", "T20"), story_pack.get("scheduled_overs")) != data["scheduled_overs"]):
                     return jsonify({
                         "error": (
                             f"The story '{story_pack.get('title', story_id)}' is a "
@@ -270,7 +281,7 @@ def register_match_routes(
                 # attached to TeamProfile rows (profile_id is NULL in older data/tests).
                 if profile_obj:
                     return list(profile_obj.players)
-                legacy_players = [p for p in team_obj.players if p.profile_id is None]
+                legacy_players = [p for p in team_obj.players if p.profile_id is None] if _fmt != "T10" else []
                 if legacy_players:
                     return legacy_players
                 return []
@@ -436,6 +447,17 @@ def register_match_routes(
 
             from engine.ground_config import get_effective_config as _get_gc
 
+            if data["match_format"] == "T10":
+                from engine.short_bowler_manager import ShortBowlerManager
+                for side in ("home", "away"):
+                    xi = data["playing_xi"][side]
+                    if len(xi) != 11 or len({p["name"] for p in xi}) != 11:
+                        return jsonify(error="T10 requires eleven distinct players per XI"), 400
+                    try:
+                        ShortBowlerManager(xi, _get_any_format("T10")).validate_attack()
+                    except ValueError as exc:
+                        return jsonify(error=str(exc)), 400
+
             # Weather: sanitize the forecast tier and roll the hidden rain
             # script once, here, so it persists in the match JSON and a
             # resumed match replays identically.
@@ -450,7 +472,7 @@ def register_match_routes(
             # and silently falls back to T20's FormatConfig for "FC", which
             # would mislabel the ground_config lookup and desync the rolled
             # weather script from what the engine actually simulates.
-            _fmt_cfg = _get_fmt(data.get("match_format", "T20"), days=data.get("days"))
+            _fmt_cfg = _get_fmt(data.get("match_format", "T20"), days=data.get("days"), scheduled_overs=data.get("scheduled_overs"))
 
             data.update({
                 "match_id": match_id,
@@ -547,6 +569,7 @@ def register_match_routes(
                 "title": p.get("title", p["id"]),
                 "tagline": p.get("tagline", ""),
                 "format": p.get("format", "T20"),
+                "scheduled_overs": resolve_scheduled_overs(p.get("format", "T20"), p.get("scheduled_overs")),
             }
             for p in list_scenario_packs()
         ]
@@ -558,6 +581,7 @@ def register_match_routes(
                                tournament_id=tournament_id,
                                fixture_id=fixture_id,
                                tournament_format=tournament_format,
+                               tournament_scheduled_overs=fixture.tournament.scheduled_overs if tournament_format else None,
                                active_game_mode_label=active_mode_label,
                                pitch_conditions_by_format=pitch_conditions_by_format,
                                story_packs=story_packs,
@@ -627,6 +651,7 @@ def register_match_routes(
         )
         format_map = {
             "t20": ("T20", "T20"),
+            "t10": ("T10", "T10"),
             "lista": ("ListA", "List A"),
             "odi": ("ListA", "List A"),
             "fc": ("FC", "First-Class"),
@@ -643,6 +668,7 @@ def register_match_routes(
         from engine.weather import forecast_label
 
         fmt_code, fmt_label = _normalize_match_format(match_data.get("match_format"))
+        fmt_label = cricket_format_label(fmt_code, match_data.get("scheduled_overs"))
         if fmt_code == "FC" and match_data.get("days"):
             fmt_label = f"{fmt_label} \u00b7 {match_data['days']} days"
 
@@ -814,6 +840,10 @@ def register_match_routes(
             "pending_card": getattr(match, "pending_interval_card", None),
             "total_overs": getattr(match, "overs", None),
             "original_overs": getattr(match, "original_overs", None),
+            "scheduled_overs": match.data.get("scheduled_overs"),
+            "phase_name": None if match.is_fc else match.fmt.phase_key(match.current_over),
+            "bowler_max_overs": getattr(match.fmt, "max_bowler_overs", None),
+            "bowling_eligibility": match.get_bowling_eligibility(),
             "rain_affected": getattr(match, "rain_affected", False),
             "dls_par": match._current_dls_par() if hasattr(match, "_current_dls_par") else None,
             "rain_events": getattr(match, "rain_events_log", []),
@@ -973,6 +1003,7 @@ def register_match_routes(
 
         _result_text = db_match.result_description or ""
         match_summary = {
+            "format_label": cricket_format_label(db_match.match_format, db_match.scheduled_overs),
             "result_description": db_match.result_description or "Match Completed",
             "team_home": teams.get(db_match.home_team_id).name if db_match.home_team_id in teams else "Home",
             "team_away": teams.get(db_match.away_team_id).name if db_match.away_team_id in teams else "Away",
@@ -1086,7 +1117,7 @@ def register_match_routes(
             # not get_format: the latter only knows T20/ListA and silently
             # returns T20's config for "FC", whose pitch table is different.
             _toss_fmt = _get_any_format(
-                match_data.get("match_format", "T20"), days=match_data.get("days")
+                match_data.get("match_format", "T20"), days=match_data.get("days"), scheduled_overs=match_data.get("scheduled_overs")
             )
             toss_decision = decide_toss(
                 _toss_fmt,
@@ -2107,6 +2138,11 @@ def register_match_routes(
         # ── Pagination & filter params ──────────────────────────────────
         PAGE_SIZE = 12
         page = max(1, request.args.get("page", 1, type=int))
+        from engine.length_filter import parse_length_filter, length_predicate
+        try:
+            filter_length = parse_length_filter(request.args.get("scheduled_overs"))
+        except ValueError:
+            return "Invalid scheduled overs filter", 400
         filter_format = request.args.get("format", "").strip()
         filter_type = request.args.get("type", "").strip()        # "tournament" | "exhibition"
         filter_tournament = request.args.get("tournament_id", "", type=str).strip()
@@ -2136,6 +2172,7 @@ def register_match_routes(
                     DBMatch.away_team_id.in_(matching_teams),
                 ))
 
+            query = query.filter(length_predicate(DBMatch, filter_length))
             # Apply filters
             if filter_format:
                 query = query.filter(DBMatch.match_format == filter_format)
@@ -2187,6 +2224,7 @@ def register_match_routes(
                 home_name = teams_by_id.get(m.home_team_id).name if m.home_team_id in teams_by_id else "Home"
                 away_name = teams_by_id.get(m.away_team_id).name if m.away_team_id in teams_by_id else "Away"
                 format_code, format_label = _normalize_match_format(getattr(m, "match_format", None))
+                format_label = cricket_format_label(format_code, m.scheduled_overs)
 
                 if format_code == "FC":
                     home_inn1 = f"{m.home_team_score or 0}/{m.home_team_wickets or 0}"

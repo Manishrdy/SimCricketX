@@ -2,14 +2,14 @@
 Scenario-Based Simulation Engine
 ================================
 Steers matches toward dramatic finishes by:
-  1. Free Play (overs 0-14): Light probability nudges to keep match on trajectory
-  2. Convergence (overs 15-17): Stronger nudges to reach target state for finale
-  3. Finale (overs 18-19): Scripted ball-by-ball sequences for maximum drama
+  1. Free Play (before the final five overs): Light probability nudges to keep match on trajectory
+  2. Convergence (until the final two overs): Stronger nudges to reach target state for finale
+  3. Finale (final two overs): Scripted ball-by-ball sequences for maximum drama
 
 Supported scenarios:
   - last_ball_six: Chasing team wins by hitting a 6 on the final ball
   - win_by_1_run: Defending team wins; chasing team falls 1 run short
-  - super_over_thriller: Match ties after 20 overs, triggers super over
+  - super_over_thriller: Match ties after the allocated overs, triggers super over
 """
 
 import random
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 SCENARIO_CONFIG = {
     "last_ball_six": {
         "label": "Last-Ball Six",
-        # Ideal state at start of over 18 (12 balls left)
+        # Ideal state at the start of the final two overs (12 balls left)
         "convergence_target": {
             "runs_needed_range": (20, 28),
             "wickets_range": (3, 6),
@@ -649,6 +649,7 @@ class ScenarioEngine:
         self.finale_script = None
         self.finale_ball_index = 0
         self.active = True
+        self._chase_context = None
         self._convergence_logged = False
         self._endgame_checked_overs = set()  # tracks which overs have been checked
 
@@ -703,7 +704,7 @@ class ScenarioEngine:
     def _evaluate_endgame_feasibility_if_needed(self):
         """
         Per-over feasibility check at the start of each of the last 3 overs
-        (overs 17, 18, 19 in 0-indexed terms). Disables scenario mode when
+        of the active allocation. Disables scenario mode when
         forcing the scripted path would look unnatural.
 
         Runs once per over so it catches situations that become too easy *during*
@@ -716,7 +717,7 @@ class ScenarioEngine:
             return
 
         current_over = self.match.current_over
-        if current_over < 17:
+        if current_over < self.match.fmt.overs - 3:
             return
 
         # Only check once per over (not on every ball)
@@ -751,16 +752,26 @@ class ScenarioEngine:
         if self.match.innings == 1:
             return "first_innings"
 
-        # Per-over realism gate: re-evaluates at the start of each of overs 17/18/19.
+        # Rain can change both the deadline and the target. Discard any script
+        # authored for the previous chase, but preserve feasibility fallbacks.
+        context = (self.match.fmt.overs, self.match.target)
+        if context != getattr(self, "_chase_context", None):
+            self.finale_script = None
+            self.finale_ball_index = 0
+            self._endgame_checked_overs = set()
+            self._convergence_logged = False
+            self._chase_context = context
+
+        # Re-evaluate realism in each of the last three overs.
         self._evaluate_endgame_feasibility_if_needed()
 
         if not self.active:
             return "inactive"
 
         over = self.match.current_over
-        if over < 15:
+        if over < self.match.fmt.overs - 5:
             return "free_play"
-        elif over < 18:
+        elif over < self.match.fmt.overs - 2:
             return "convergence"
         else:
             return "finale"
@@ -794,20 +805,20 @@ class ScenarioEngine:
         ideal_rn_low, ideal_rn_high = target.get("runs_needed_range", (20, 28))
         ideal_wk_low, ideal_wk_high = target.get("wickets_range", (3, 6))
 
-        # Calculate how many balls until finale (over 18)
-        balls_to_finale = max(1, (18 - self.match.current_over) * 6 - self.match.current_ball)
+        # Calculate how many balls until the final two overs
+        balls_to_finale = max(1, (self.match.fmt.overs - 2 - self.match.current_over) * 6 - self.match.current_ball)
 
         # Ideal runs needed at start of finale
         ideal_runs_needed = (ideal_rn_low + ideal_rn_high) / 2
         ideal_wickets_in_hand = 10 - (ideal_wk_low + ideal_wk_high) / 2
 
-        # Current trajectory: where will we be at over 18 at current rate?
+        # Current trajectory: where will we be at the finale at the current rate?
         if balls_remaining > balls_to_finale:
             current_rr = self.match.score / max(1, self.match.current_over * 6 + self.match.current_ball)
-            projected_score_at_18 = self.match.score + current_rr * balls_to_finale
-            projected_rn_at_18 = self.match.target - projected_score_at_18
+            projected_finale_score = self.match.score + current_rr * balls_to_finale
+            projected_finale_runs_needed = self.match.target - projected_finale_score
         else:
-            projected_rn_at_18 = runs_needed
+            projected_finale_runs_needed = runs_needed
 
         bias = {}
 
@@ -822,11 +833,11 @@ class ScenarioEngine:
                 self._convergence_logged = True
 
         # Scoring bias: if team is too far ahead, slow them; if behind, speed up
-        if projected_rn_at_18 < ideal_rn_low:
+        if projected_finale_runs_needed < ideal_rn_low:
             # Team scoring too fast — reduce boundaries, boost dots
             bias["boundary_modifier"] = 1 - strength
             bias["dot_bonus"] = 0.03 * (strength / 0.15)
-        elif projected_rn_at_18 > ideal_rn_high:
+        elif projected_finale_runs_needed > ideal_rn_high:
             # Team scoring too slow — boost boundaries, reduce dots
             bias["boundary_modifier"] = 1 + strength
             bias["dot_bonus"] = -0.02 * (strength / 0.15)

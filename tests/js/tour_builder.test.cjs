@@ -1,14 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {availability, activeOrder, move, syncTeamChoices} = require('../../static/js/tour_builder.js');
-const formats = included => Object.fromEntries(['FC', 'ListA', 'T20'].map(f => [f, {available: included.includes(f)}]));
+const formats = included => Object.fromEntries(['FC', 'ListA', 'T20', 'T10'].map(f => [f, {available: included.includes(f)}]));
 const teams = {A:{formats:formats(['T20'])}, B:{formats:formats(['T20','ListA'])},
     C:{formats:formats(['ListA'])}, D:{formats:formats(['FC','ListA','T20'])}, India:{formats:formats(['FC'])}};
 test('only shared playable squads enable counts', () => {
-    assert.deepEqual(availability(teams,'A','B'),{FC:false,ListA:false,T20:true});
-    assert.deepEqual(availability(teams,'B','C'),{FC:false,ListA:true,T20:false});
-    assert.deepEqual(availability(teams,'A','C'),{FC:false,ListA:false,T20:false});
-    assert.deepEqual(availability(teams,'D','India'),{FC:true,ListA:false,T20:false});
+    assert.deepEqual(availability(teams,'A','B'),{FC:false,ListA:false,T20:true,T10:false});
+    assert.deepEqual(availability(teams,'B','C'),{FC:false,ListA:true,T20:false,T10:false});
+    assert.deepEqual(availability(teams,'A','C'),{FC:false,ListA:false,T20:false,T10:false});
+    assert.deepEqual(availability(teams,'D','India'),{FC:true,ListA:false,T20:false,T10:false});
 });
 test('incomplete selection and same-team selection disable every format', () => {
     assert.ok(Object.values(availability(teams,'A','')).every(v => !v));

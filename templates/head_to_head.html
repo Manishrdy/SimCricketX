@@ -65,6 +65,7 @@
 </style>
 
 <div class="h2h-page">
+{% include '_lista_length_filter.html' %}
     <div class="h2h-header">
         <h1><i class="fas fa-exchange-alt"></i> Head-to-Head</h1>
         <a href="{{ url_for('statistics') }}" class="back-btn"><i class="fas fa-arrow-left"></i> Statistics</a>
@@ -90,6 +91,7 @@
                 <label for="h2h-format">Format</label>
                 <select id="h2h-format">
                     <option value="T20" selected>T20</option>
+                    <option value="T10">T10</option>
                     <option value="ListA">List A</option>
                     <option value="FC">First-Class</option>
                 </select>
@@ -148,7 +150,7 @@ async function loadH2H() {
     if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
 
     try {
-        const r = await fetch(url, { credentials: 'same-origin' });
+        const r = await fetch(withListALength(url), { credentials: 'same-origin' });
         const res = await r.json();
         console.log('[H2H] response', res);
         if (!res.success) { alert(res.error || 'Error'); return; }

@@ -75,6 +75,8 @@ def run_schema_migration(app, db):
         # Run migrations
         db.create_all()
         ensure_schema(db.engine, db)
+        from migrations.add_scheduled_overs import run_migration as migrate_scheduled_overs
+        migrate_scheduled_overs(db, app)
 
         # Report changes
         inspector = inspect(db.engine)

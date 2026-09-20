@@ -171,7 +171,7 @@ def test_aggregate_fc_innings_and_super_over(make_tour, test_team, regular_user)
 
 def test_create_pages_and_zero_section(authenticated_client, test_team, test_team_2):
     page = authenticated_client.get('/tournaments/tours/create')
-    assert page.status_code == 200 and page.data.count(b'value="0"') == 3
+    assert page.status_code == 200 and page.data.count(b'value="0"') == 4
     response = authenticated_client.post('/tournaments/tours/create', data=confirmed_payload({
         'name': 'India tour', 'host_team_id': test_team.id, 'visiting_team_id': test_team_2.id,
         'count_FC': '3', 'count_ListA': '3', 'count_T20': '0',
@@ -179,7 +179,7 @@ def test_create_pages_and_zero_section(authenticated_client, test_team, test_tea
     assert response.status_code == 302
     page = authenticated_client.get(response.location)
     assert page.status_code == 200 and b'T20' not in page.data
-    assert b'List A series' in page.data
+    assert 'List A · 50 overs series' in page.get_data(as_text=True)
     assert authenticated_client.get(response.location + '?format=T20').status_code == 404
     assert b'India tour' in authenticated_client.get('/tournaments').data
 

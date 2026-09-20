@@ -30,7 +30,8 @@ _DEFAULTS_PATH = Path(__file__).parent.parent / "config" / "ground_conditions_de
 
 # Formats that have a ground-conditions profile. Mirrors MATCH_SETUP_FORMATS
 # in routes/match_routes.py and VALID_FORMATS in routes/team_routes.py.
-VALID_FORMATS = ("T20", "ListA", "FC")
+from engine.format_catalog import SUPPORTED_FORMATS
+VALID_FORMATS = SUPPORTED_FORMATS
 DEFAULT_FORMAT = "T20"
 
 # Game mode value meaning "let the engine pick per delivery from match state".
@@ -301,17 +302,17 @@ def _block(config, match_format):
     return config if config is not None else get_defaults(match_format)
 
 
-def get_pitch_profile(pitch_type, config=None):
+def get_pitch_profile(pitch_type, config=None, match_format=DEFAULT_FORMAT):
     """Return the T20 profile dict for a pitch type, or None."""
-    return (_block(config, "T20").get("pitch_profiles") or {}).get(pitch_type)
+    return (_block(config, match_format).get("pitch_profiles") or {}).get(pitch_type)
 
 
-def get_active_game_mode_name(config=None):
+def get_active_game_mode_name(config=None, match_format=DEFAULT_FORMAT):
     """Return the configured game mode, or "auto" to let the engine choose."""
-    return _block(config, "T20").get("active_game_mode", AUTO_GAME_MODE)
+    return _block(config, match_format).get("active_game_mode", AUTO_GAME_MODE)
 
 
-def get_scoring_matrix(pitch_type, mode_override=None, config=None):
+def get_scoring_matrix(pitch_type, mode_override=None, config=None, match_format=DEFAULT_FORMAT):
     """
     Return the T20 scoring matrix for a pitch with game-mode modifiers applied,
     re-normalized to sum to 1.0. Returns None when the pitch is unknown.
@@ -321,12 +322,12 @@ def get_scoring_matrix(pitch_type, mode_override=None, config=None):
     (Match._resolve_game_mode) is responsible for turning "auto" into a
     concrete mode per delivery.
     """
-    profile = get_pitch_profile(pitch_type, config=config)
+    profile = get_pitch_profile(pitch_type, config=config, match_format=match_format)
     if not profile or "scoring_matrix" not in profile:
         return None
 
     base_matrix = dict(profile["scoring_matrix"])
-    block = _block(config, "T20")
+    block = _block(config, match_format)
 
     mode_name = mode_override or block.get("active_game_mode", AUTO_GAME_MODE)
     mode = None
@@ -346,26 +347,26 @@ def get_scoring_matrix(pitch_type, mode_override=None, config=None):
     return base_matrix
 
 
-def get_game_modes(config=None):
+def get_game_modes(config=None, match_format=DEFAULT_FORMAT):
     """Return the T20 game modes dict (for UI rendering and mode pinning)."""
-    return _block(config, "T20").get("game_modes") or {}
+    return _block(config, match_format).get("game_modes") or {}
 
 
-def get_run_factor(pitch_type, config=None):
+def get_run_factor(pitch_type, config=None, match_format=DEFAULT_FORMAT):
     """Return the T20 run-factor multiplier for a pitch. None if unknown."""
-    profile = get_pitch_profile(pitch_type, config=config)
+    profile = get_pitch_profile(pitch_type, config=config, match_format=match_format)
     return profile.get("run_factor") if profile else None
 
 
-def get_wicket_factors(pitch_type, config=None):
+def get_wicket_factors(pitch_type, config=None, match_format=DEFAULT_FORMAT):
     """Return the T20 bowling-style-keyed wicket factors. None if unknown."""
-    profile = get_pitch_profile(pitch_type, config=config)
+    profile = get_pitch_profile(pitch_type, config=config, match_format=match_format)
     return profile.get("wicket_factors") if profile else None
 
 
-def get_phase_boosts(config=None):
+def get_phase_boosts(config=None, match_format=DEFAULT_FORMAT):
     """Return the T20 phase boosts dict. None if absent."""
-    return _block(config, "T20").get("phase_boosts")
+    return _block(config, match_format).get("phase_boosts")
 
 
 def get_blending_weights(config=None, match_format=DEFAULT_FORMAT):
@@ -686,8 +687,8 @@ def get_rrr_baseline(pitch, fmt, config=None):
         user_factor = get_lista_run_factor(pitch, config=config)
         default_factor = get_lista_run_factor(pitch)
     else:
-        user_factor = get_run_factor(pitch, config=config)
-        default_factor = get_run_factor(pitch)
+        user_factor = get_run_factor(pitch, config=config, match_format=fmt_name)
+        default_factor = get_run_factor(pitch, match_format=fmt_name)
 
     if not user_factor or not default_factor:
         return baseline

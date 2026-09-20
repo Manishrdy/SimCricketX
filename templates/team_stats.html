@@ -52,6 +52,7 @@
 </style>
 
 <div class="ts-page">
+{% include '_lista_length_filter.html' %}
     <div class="ts-header">
         <h1>
             <span class="team-dot" style="background:{{ stats.team_color }}"></span>
@@ -65,6 +66,7 @@
             </select>
             <select id="ts-format" onchange="switchFormat(this.value)">
                 <option value="T20" {% if match_format == 'T20' %}selected{% endif %}>T20</option>
+                <option value="T10" {% if match_format == 'T10' %}selected{% endif %}>T10</option>
                 <option value="ListA" {% if match_format == 'ListA' %}selected{% endif %}>List A</option>
                 <option value="FC" {% if match_format == 'FC' %}selected{% endif %}>First-Class</option>
             </select>
@@ -153,7 +155,7 @@
                         <td><b>{{ m.score }}</b></td>
                         <td>{{ m.opp_score }}</td>
                         <td>{{ m.venue }}</td>
-                        <td>{{ m.format }}</td>
+                        <td>{{ cricket_format_label(m.format, m.scheduled_overs) }}</td>
                         <td><span class="result-badge result-{{ m.result|lower }}">{{ m.result }}</span></td>
                     </tr>
                     {% endfor %}
@@ -170,12 +172,12 @@
 function switchTeam(teamId) {
     const fmt = document.getElementById('ts-format').value || 'T20';
     const url = '/team-stats/' + teamId + '?match_format=' + encodeURIComponent(fmt);
-    window.location.href = url;
+    window.location.href = withListALength(url);
 }
 function switchFormat(fmt) {
     const teamId = document.getElementById('ts-team-select').value;
     const url = '/team-stats/' + teamId + '?match_format=' + encodeURIComponent(fmt || 'T20');
-    window.location.href = url;
+    window.location.href = withListALength(url);
 }
 </script>
 {% endblock %}

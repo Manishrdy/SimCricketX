@@ -40,43 +40,40 @@
                 <label>Match Format</label>
                 <span class="input-hint">All matches in this tournament will use this format.</span>
                 <div class="match-format-selector">
-                    <label class="match-format-card selected" id="fmt-card-T20">
-                        <input type="radio" name="match_format_radio" value="T20" checked>
-                        <div class="match-format-icon" style="background: rgba(97,175,239,0.15); color: #61afef;">
-                            <i class="fas fa-bolt"></i>
-                        </div>
+                    {% for fmt, spec in cricket_formats.items() %}
+                    <label class="match-format-card {{ 'selected' if fmt == 'T20' }}" id="fmt-card-{{ fmt }}">
+                        <input type="radio" name="match_format_radio" value="{{ fmt }}" {% if fmt == 'T20' %}checked{% endif %}>
+                        <div class="match-format-icon"><i class="fas fa-bolt"></i></div>
                         <div class="match-format-info">
-                            <span class="match-format-name">T20</span>
-                            <span class="match-format-desc">20 overs &middot; Max 4 per bowler</span>
+                            <span class="match-format-name">{{ spec.label }}</span>
+                            <span class="match-format-desc">{% if spec.lengths %}{{ spec.lengths|max }} overs &middot; Max {{ (spec.lengths|max) // 5 }} per bowler{% else %}Multi-day &middot; Up to 2 innings per side{% endif %}</span>
                         </div>
                         <div class="match-format-check"><i class="fas fa-check-circle"></i></div>
                     </label>
-                    <label class="match-format-card" id="fmt-card-ListA">
-                        <input type="radio" name="match_format_radio" value="ListA">
-                        <div class="match-format-icon" style="background: rgba(152,195,121,0.15); color: #98c379;">
-                            <i class="fas fa-circle-dot"></i>
-                        </div>
-                        <div class="match-format-info">
-                            <span class="match-format-name">List A</span>
-                            <span class="match-format-desc">50 overs &middot; Max 10 per bowler</span>
-                        </div>
-                        <div class="match-format-check"><i class="fas fa-check-circle"></i></div>
-                    </label>
-                    <label class="match-format-card" id="fmt-card-FC">
-                        <input type="radio" name="match_format_radio" value="FC">
-                        <div class="match-format-icon" style="background: rgba(217,119,6,0.15); color: #b45309;">
-                            <i class="fas fa-hourglass-half"></i>
-                        </div>
-                        <div class="match-format-info">
-                            <span class="match-format-name">First-Class</span>
-                            <span class="match-format-desc">Multi-day &middot; Up to 2 innings per side</span>
-                        </div>
-                        <div class="match-format-check"><i class="fas fa-check-circle"></i></div>
-                    </label>
+                    {% endfor %}
                 </div>
             </div>
         </div>
 
+        <div class="form-section" id="lista-length-setting">
+            <label for="scheduled-overs">List A innings length</label>
+            <select id="scheduled-overs" name="scheduled_overs">
+                <option value="50">50 overs · 10 per bowler</option>
+                <option value="40">40 overs · 8 per bowler</option>
+            </select>
+        </div>
+        <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const selector = document.getElementById('scheduled-overs');
+            const sync = () => {
+                const active = document.querySelector('input[name="match_format_radio"]:checked')?.value === 'ListA';
+                selector.disabled = !active;
+                document.getElementById('lista-length-setting').hidden = !active;
+            };
+            document.querySelectorAll('input[name="match_format_radio"]').forEach(input => input.addEventListener('change', sync));
+            sync();
+        });
+        </script>
         <!-- Team Selection -->
         <div class="form-section">
             <div class="section-header">
@@ -234,7 +231,7 @@
         selectedFormat = format;
         document.getElementById('selectedMatchFormat').value = format;
 
-        const FORMAT_LABELS = { T20: 'T20', ListA: 'List A', FC: 'First-Class' };
+        const FORMAT_LABELS = {{ format_labels | tojson }};
         const formatLabel = FORMAT_LABELS[format] || format;
         const noTeamsDiv = document.getElementById('noTeamsForFormat');
         const noTeamsLabel = document.getElementById('noTeamsFormatLabel');

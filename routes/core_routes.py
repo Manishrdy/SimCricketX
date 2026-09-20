@@ -165,6 +165,11 @@ def register_core_routes(
         raw = request.args.get("format")
         if raw is None and payload is not None:
             raw = payload.get("match_format")
+        if request.method == "POST":
+            from engine.format_catalog import SUPPORTED_FORMATS
+            if raw is not None and raw not in SUPPORTED_FORMATS:
+                from flask import abort
+                abort(400, "Invalid or unsupported match format")
         return normalise_format(raw)
 
     @app.route("/ground-conditions")

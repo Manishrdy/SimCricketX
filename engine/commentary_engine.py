@@ -80,6 +80,12 @@ class CommentaryEngine:
         runs = context.get("runs", 0)
         is_extra = context.get("is_extra", False)
 
+        if context.get("dropped_catch"):
+            return "dropped_catch"
+
+        if context.get("misfield"):
+            return "misfield"
+
         if outcome_type == "wicket":
             # ball_outcome.py emits "Run Out" and "Hit Wicket" with a space,
             # so the naive f"wicket_{lower}" produced "wicket_run out" — a key
@@ -87,6 +93,10 @@ class CommentaryEngine:
             # fallback pool ("Taken at slip!" for a run-out).
             wkt_type = "_".join(context.get("wicket_type", "caught").lower().split())
             return f"wicket_{wkt_type}"
+
+        if context.get("free_hit"):
+            if runs == 0 and not is_extra:
+                return "free_hit"
 
         if is_extra:
             extra_type = context.get("extra_type", "").lower()
@@ -104,17 +114,17 @@ class CommentaryEngine:
                 return "byes"
             return "dot"
 
+        if runs >= 6:
+            return "boundary_six"
         if runs == 4:
             return "boundary_four"
-        if runs == 6:
-            return "boundary_six"
         if runs == 0:
             return "dot"
         if runs == 1:
             return "single"
         if runs == 2:
             return "double"
-        if runs == 3:
+        if runs in (3, 5):
             return "three"
 
         return "dot"
@@ -197,13 +207,22 @@ class CommentaryEngine:
             return context.get("description", "Play continues.")
         text = template_obj.get("text", "")
 
-        return text.format(
-            batter=context.get("batter", "The batter"),
-            bowler=context.get("bowler", "The bowler"),
-            runs=context.get("runs", 0),
-            team=context.get("batting_team", "The batting side"),
-            fielding_team=context.get("bowling_team", "The fielding side"),
-        )
+        format_kwargs = {
+            "batter": context.get("batter", "The batter"),
+            "bowler": context.get("bowler", "The bowler"),
+            "runs": context.get("runs", 0),
+            "team": context.get("batting_team", "The batting side"),
+            "fielding_team": context.get("bowling_team", "The fielding side"),
+            "fielder": context.get("fielder_name") or "the fielder",
+            "fielder_name": context.get("fielder_name") or "the fielder",
+        }
+        try:
+            return text.format(**format_kwargs)
+        except (KeyError, IndexError):
+            class _SafeDict(dict):
+                def __missing__(self, k):
+                    return ""
+            return text.format_map(_SafeDict(format_kwargs))
 
     # ------------------------------------------------------------------ #
     #  Narrative triggers (macro commentary)
@@ -326,6 +345,30 @@ class CommentaryEngine:
                                                      team=batting_team,
                                                      fielding_team=bowling_team))
 
+        # --- 12. Bowler milestones (3-fer, 5-fer) ---
+        bowler_wkts_before = state.get("bowler_wickets", 0)
+        is_bowler_wkt = context.get("type") == "wicket" and context.get("wicket_type") != "Run Out"
+        bowler_wkts_after = bowler_wkts_before + (1 if is_bowler_wkt else 0)
+        if bowler_wkts_before < 5 <= bowler_wkts_after and self._announce_once(("bowler_5fer", bowler, innings)):
+            triggers.extend(self._format_narratives("bowler_5fer",
+                                                     batter=batter, bowler=bowler,
+                                                     team=batting_team,
+                                                     fielding_team=bowling_team))
+        elif bowler_wkts_before < 3 <= bowler_wkts_after and self._announce_once(("bowler_3fer", bowler, innings)):
+            triggers.extend(self._format_narratives("bowler_3fer",
+                                                     batter=batter, bowler=bowler,
+                                                     team=batting_team,
+                                                     fielding_team=bowling_team))
+
+        # --- 13. Close finish (2nd innings, close to target in the final over) ---
+        if innings == 2 and not state.get("is_fc"):
+            runs_needed = state.get("runs_needed", 999)
+            if current_over >= _last_over and 1 <= runs_needed <= 6 and self._announce_once("close_finish"):
+                triggers.extend(self._format_narratives("close_finish",
+                                                         batter=batter, bowler=bowler,
+                                                         team=batting_team,
+                                                         fielding_team=bowling_team))
+
         # --- First-class narratives -------------------------------------
         # Everything above is shaped by limited-overs cricket: powerplays,
         # death overs, run chases, a maiden being a rarity. A first-class
@@ -403,11 +446,13 @@ class CommentaryEngine:
                 and self._announce_once(("nightwatchman", day, inns))):
             out.extend(self._format_narratives("fc_nightwatchman", **who))
 
-        # A big hundred, and a century stand.
+        # A big hundred, double hundred, and a century stand.
         before = state.get("batter_runs", 0)
         after = before + (0 if context.get("batter_out") else runs)
         if before < self._FC_BIG_HUNDRED <= after:
             out.extend(self._format_narratives("fc_milestone_150", **who))
+        if before < 200 <= after:
+            out.extend(self._format_narratives("fc_milestone_200", **who))
         p_before = state.get("partnership_runs", 0)
         if p_before < 100 <= p_before + runs:
             out.extend(self._format_narratives("fc_partnership_100", **who))

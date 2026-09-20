@@ -5,6 +5,7 @@ Handles all statistics calculations and queries for the SimCricketX application.
 """
 
 from sqlalchemy import func
+from engine.length_filter import parse_length_filter, length_predicate
 from sqlalchemy.orm import aliased
 from datetime import datetime
 from database.models import Match, MatchScorecard, Tournament, Player, Team, TeamProfile, TournamentPlayerStatsCache
@@ -17,14 +18,20 @@ from tabulate import tabulate
 from utils.exception_tracker import log_exception
 from engine.cricket_math import balls_to_overs_float
 
-SUPPORTED_STATS_FORMATS = frozenset({"T20", "ListA", "FC"})
+from engine.format_catalog import SUPPORTED_FORMATS, default_scheduled_overs
+SUPPORTED_STATS_FORMATS = frozenset(SUPPORTED_FORMATS)
 
 
 class StatsService:
     """Service class for calculating and exporting cricket statistics"""
     
-    def __init__(self, logger=None):
+    def __init__(self, logger=None, scheduled_overs=None):
         self.logger = logger
+        self.scheduled_overs = parse_length_filter(scheduled_overs)
+
+    def _filter_length(self, query, scheduled_overs=None):
+        length = self.scheduled_overs if scheduled_overs is None else parse_length_filter(scheduled_overs)
+        return query.filter(length_predicate(Match, length))
     
     def _log(self, message, level='info'):
         """Safely log messages if logger is available"""
@@ -36,7 +43,7 @@ class StatsService:
             else:
                 self.logger.info(message)
     
-    def get_overall_stats(self, user_id, match_format=None):
+    def get_overall_stats(self, user_id, match_format=None, scheduled_overs=None):
         """
         Get overall statistics for a user (all tournaments + individual matches).
 
@@ -63,7 +70,7 @@ class StatsService:
         if match_format:
             query = query.filter(Match.match_format == match_format)
 
-        records = query.all()
+        records = self._filter_length(query, scheduled_overs).all()
         self._log(f"Found {len(records)} scorecard records for user {user_id}")
         
         if not records:
@@ -71,7 +78,7 @@ class StatsService:
         
         return self._calculate_stats_from_records(records, match_format=match_format)
     
-    def get_tournament_stats(self, user_id, tournament_id, match_format=None):
+    def get_tournament_stats(self, user_id, tournament_id, match_format=None, scheduled_overs=None):
         """
         Get statistics for a specific tournament.
 
@@ -94,6 +101,9 @@ class StatsService:
         # there are zero matches to aggregate — short-circuit to empty.
         # When it does match, the cache is correct by construction.
         tournament = db.session.get(Tournament, tournament_id)
+        length = self.scheduled_overs if scheduled_overs is None else parse_length_filter(scheduled_overs)
+        if tournament and tournament.format_type == "ListA" and length and (tournament.scheduled_overs or 50) != length:
+            return self._empty_stats()
         if tournament and match_format and tournament.format_type != match_format:
             self._log(
                 f"Tournament {tournament_id} format={tournament.format_type} "
@@ -102,7 +112,7 @@ class StatsService:
             return self._empty_stats()
 
         cached = self._try_cache_tournament_stats(
-            tournament_id, user_id, match_format=match_format or (tournament.format_type if tournament else None)
+            tournament_id, user_id, match_format=match_format or (tournament.format_type if tournament else None), scheduled_overs=scheduled_overs
         )
         if cached:
             return cached
@@ -121,7 +131,7 @@ class StatsService:
         if match_format:
             query = query.filter(Match.match_format == match_format)
 
-        records = query.all()
+        records = self._filter_length(query, scheduled_overs).all()
         self._log(f"Found {len(records)} scorecard records for tournament {tournament_id}")
 
         if not records:
@@ -129,13 +139,17 @@ class StatsService:
 
         return self._calculate_stats_from_records(records, match_format=match_format)
 
-    def _try_cache_tournament_stats(self, tournament_id, user_id, match_format=None):
+    def _try_cache_tournament_stats(self, tournament_id, user_id, match_format=None, scheduled_overs=None):
         """Attempt to serve tournament stats from TournamentPlayerStatsCache.
 
         Returns the same dict shape as _calculate_stats_from_records() on
         cache hit, or None on cache miss so the caller can fall back to the
         full computation path.
         """
+        tournament = db.session.get(Tournament, tournament_id)
+        length = self.scheduled_overs if scheduled_overs is None else parse_length_filter(scheduled_overs)
+        if tournament and tournament.format_type == 'ListA' and length and (tournament.scheduled_overs or 50) != length:
+            return None
         cached = (
             db.session.query(TournamentPlayerStatsCache, Player, Team)
             .join(Player, TournamentPlayerStatsCache.player_id == Player.id)
@@ -243,7 +257,7 @@ class StatsService:
             'leaderboards': leaderboards,
         }
 
-    def get_insights(self, user_id, tournament_id=None, match_format=None):
+    def get_insights(self, user_id, tournament_id=None, match_format=None, scheduled_overs=None):
         """
         Build advanced insights for the Statistics Hub.
 
@@ -271,7 +285,7 @@ class StatsService:
         venue_agg = {}
         pitch_agg = {}
 
-        for match in match_query.all():
+        for match in self._filter_length(match_query, scheduled_overs).all():
             if match.home_team_score is None or match.away_team_score is None:
                 continue
             total_runs = sum(value or 0 for value in (
@@ -329,7 +343,7 @@ class StatsService:
         batting_forms = {}
         bowling_forms = {}
 
-        for card, match, player, team in record_query.all():
+        for card, match, player, team in self._filter_length(record_query, scheduled_overs).all():
             pid = player.id
             match_date = match.date or datetime.min
             entry = impact.setdefault(pid, {
@@ -1034,7 +1048,7 @@ class StatsService:
     # NEW FEATURE: Best Bowling Figures Tracking
     # ============================================================================
     
-    def get_bowling_figures_leaderboard(self, user_id, tournament_id=None, limit=10, match_format=None):
+    def get_bowling_figures_leaderboard(self, user_id, tournament_id=None, limit=10, match_format=None, scheduled_overs=None):
         """
         Get best bowling figures (wickets/runs) leaderboard.
         
@@ -1067,7 +1081,7 @@ class StatsService:
             if match_format:
                 query = query.filter(Match.match_format == match_format)
 
-            records = query.all()
+            records = self._filter_length(query, scheduled_overs).all()
             self._log(f"Found {len(records)} bowling records with wickets")
             
             if not records:
@@ -1142,11 +1156,11 @@ class StatsService:
         from engine.player_comparison import identities
         return identities(user_id)
 
-    def compare_players_cross_format(self, user_id, identity_ids, tournament_id=None):
+    def compare_players_cross_format(self, user_id, identity_ids, tournament_id=None, scheduled_overs=None):
         from engine.player_comparison import compare
-        return compare(self, user_id, identity_ids, tournament_id)
+        return compare(self, user_id, identity_ids, tournament_id, scheduled_overs)
 
-    def compare_players(self, user_id, player_ids, tournament_id=None, match_format=None):
+    def compare_players(self, user_id, player_ids, tournament_id=None, match_format=None, scheduled_overs=None):
         """
         Compare multiple players across all metrics.
         
@@ -1174,7 +1188,7 @@ class StatsService:
         
         try:
             for player_id in player_ids:
-                player_stats = self._get_player_detailed_stats(player_id, user_id, tournament_id, match_format)
+                player_stats = self._get_player_detailed_stats(player_id, user_id, tournament_id, match_format, scheduled_overs)
                 if player_stats:
                     comparison['players'].append(player_stats)
             
@@ -1191,7 +1205,7 @@ class StatsService:
             self._log(f"Error in player comparison: {e}", level='error')
             return {'error': str(e)}
     
-    def _get_player_detailed_stats(self, player_id, user_id, tournament_id=None, match_format=None):
+    def _get_player_detailed_stats(self, player_id, user_id, tournament_id=None, match_format=None, scheduled_overs=None):
         """
         Get comprehensive stats for a single player.
         
@@ -1237,7 +1251,7 @@ class StatsService:
             if effective_format:
                 query = query.filter(Match.match_format == effective_format)
 
-            records = query.all()
+            records = self._filter_length(query, scheduled_overs).all()
 
             # Aggregate stats
             batting_data = []
@@ -1421,7 +1435,7 @@ class StatsService:
     # NEW FEATURE: Partnership Statistics
     # ============================================================================
     
-    def get_player_partnership_stats(self, player_id, user_id, tournament_id=None, match_format=None):
+    def get_player_partnership_stats(self, player_id, user_id, tournament_id=None, match_format=None, scheduled_overs=None):
         """
         Get comprehensive partnership statistics for a specific player.
         
@@ -1462,7 +1476,7 @@ class StatsService:
             if match_format:
                 query = query.filter(Match.match_format == match_format)
 
-            partnerships = query.all()
+            partnerships = self._filter_length(query, scheduled_overs).all()
             
             if not partnerships:
                 return {
@@ -1594,7 +1608,7 @@ class StatsService:
         
         return stats
     
-    def get_tournament_partnership_leaderboard(self, user_id, tournament_id, limit=10, match_format=None):
+    def get_tournament_partnership_leaderboard(self, user_id, tournament_id, limit=10, match_format=None, scheduled_overs=None):
         """
         Get best partnerships in a tournament.
         
@@ -1625,7 +1639,7 @@ class StatsService:
             if match_format:
                 partnerships = partnerships.filter(Match.match_format == match_format)
             partnerships = (
-                partnerships
+                self._filter_length(partnerships, scheduled_overs)
                 .order_by(MatchPartnership.runs.desc())
                 .limit(limit)
                 .all()
@@ -1687,7 +1701,7 @@ class StatsService:
             return "NR"
         return "T"
 
-    def get_head_to_head(self, user_id, team1_id, team2_id, match_format=None):
+    def get_head_to_head(self, user_id, team1_id, team2_id, match_format=None, scheduled_overs=None):
         """Compare two teams' records against each other."""
         try:
             team1 = Team.query.get(team1_id)
@@ -1707,7 +1721,7 @@ class StatsService:
             if match_format:
                 query = query.filter(Match.match_format == match_format)
 
-            matches = query.order_by(Match.date.desc()).all()
+            matches = self._filter_length(query, scheduled_overs).order_by(Match.date.desc()).all()
             if not matches:
                 return {
                     "team1": team1.name, "team2": team2.name,
@@ -1744,6 +1758,7 @@ class StatsService:
                     "home_score": " & ".join(home_innings) or "-",
                     "away_score": " & ".join(away_innings) or "-",
                     "format": m.match_format or "T20",
+                    "scheduled_overs": m.scheduled_overs or default_scheduled_overs(m.match_format),
                 })
 
             # Top performers in these H2H matches
@@ -1791,7 +1806,7 @@ class StatsService:
     # Player Profile
     # ========================================================================
 
-    def get_player_profile(self, player_id, user_id, match_format=None):
+    def get_player_profile(self, player_id, user_id, match_format=None, scheduled_overs=None):
         """Get full career stats + match log for a single player."""
         try:
             player = Player.query.get(player_id)
@@ -1821,7 +1836,7 @@ class StatsService:
             if effective_format:
                 query = query.filter(Match.match_format == effective_format)
 
-            records = query.order_by(
+            records = self._filter_length(query, scheduled_overs).order_by(
                 Match.date.desc(), MatchScorecard.innings_number.asc()
             ).all()
 
@@ -1841,6 +1856,7 @@ class StatsService:
                     "date": match.date.strftime("%Y-%m-%d") if match.date else "",
                     "venue": match.venue or "",
                     "format": match.match_format or "T20",
+                    "scheduled_overs": match.scheduled_overs or default_scheduled_overs(match.match_format),
                     "result": match.result_description or "",
                     "bat_runs": None, "bat_balls": None, "bat_out": None,
                     "bowl_wkts": None, "bowl_runs": None, "bowl_overs": None,
@@ -1939,7 +1955,7 @@ class StatsService:
     # Team Statistics Dashboard
     # ========================================================================
 
-    def get_team_stats(self, user_id, team_id, match_format=None):
+    def get_team_stats(self, user_id, team_id, match_format=None, scheduled_overs=None):
         """Get aggregate team-level statistics."""
         try:
             team = Team.query.get(team_id)
@@ -1953,7 +1969,7 @@ class StatsService:
             if match_format:
                 query = query.filter(Match.match_format == match_format)
 
-            matches = query.order_by(Match.date.desc()).all()
+            matches = self._filter_length(query, scheduled_overs).order_by(Match.date.desc()).all()
             if not matches:
                 return {"team": team.name, "matches": 0, "summary": {}, "recent": [], "batting_first": {}, "chasing": {}}
 
@@ -2020,6 +2036,7 @@ class StatsService:
                         "opp_score": " & ".join(opp_innings) or "-",
                         "venue": m.venue or "",
                         "format": m.match_format or "T20",
+                        "scheduled_overs": m.scheduled_overs or default_scheduled_overs(m.match_format),
                     })
 
             played = len(matches)

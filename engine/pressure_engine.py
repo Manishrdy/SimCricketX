@@ -40,6 +40,13 @@ class PressureEngine:
         required_rr = match_state.get('required_run_rate', 0)
         overs_remaining = match_state.get('overs_remaining', 0)
         
+        if self.fmt.strict_short_bowling:
+            baseline = self.fmt.rrr_baseline.get(match_state.get('pitch', 'Hard'), 11.3)
+            urgency = max(0.0, required_rr / baseline - 1.0)
+            # A normal T10 asking rate must not trigger T20's 12-RPO crisis.
+            phase_risk = .20 if self.fmt.is_death(current_over) else 0.0
+            return 1.0 + phase_risk + min(.8, urgency * .6)
+
         risk_factor = 1.0
         risk_components = []
         
@@ -79,8 +86,8 @@ class PressureEngine:
         _pre_death   = _death_start - 1             # T20: 15, ListA: 39
 
         # ListA: gradual slog-overs window before death (overs 35–39)
-        if self.fmt.name == "ListA" and 35 <= current_over < _death_start:
-            slog_boost = 0.05 + (current_over - 35) * 0.02  # 0.05 → 0.13
+        if self.fmt.name == "ListA" and int(0.7 * (self.fmt.scheduled_overs or 50)) <= current_over < _death_start:
+            slog_boost = 0.05 + (current_over - int(0.7 * (self.fmt.scheduled_overs or 50))) * 0.02  # 0.05 → 0.13
             return min(1.0 + slog_boost, 1.25)
 
         # Only accelerate from the over before death onwards
@@ -267,7 +274,7 @@ class PressureEngine:
         effects = {
             'risk_active': True,
             'risk_factor': risk_factor,
-            'boundary_boost': 1.0 + (risk_multiplier * 2.0),  # 🔧 INCREASED from 1.8
+            'boundary_boost': 1.0 + (risk_multiplier * (1.2 if self.fmt.strict_short_bowling else 2.0)),  # 🔧 INCREASED from 1.8
             'wicket_boost': wicket_multiplier,
             'dot_increase': max(0, (risk_multiplier - 0.5) * 0.3),  # 🔧 ONLY for extreme risk
             'strike_rotation_penalty': min(risk_multiplier * 0.4, 0.5),  # Capped at 50%
@@ -479,7 +486,7 @@ class PressureEngine:
 
         # ListA: remove blanket chase buff. Long chases carry scoreboard pressure,
         # so keep boundaries neutral and add a slight wicket-pressure bias.
-        if self.fmt.name == "ListA":
+        if self.fmt.name == "ListA" or self.fmt.strict_short_bowling:
             return {
                 'boundary_boost': 1.00,
                 'wicket_reduction': 1.02,  # >1.0 means slightly higher wicket risk

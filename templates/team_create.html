@@ -909,7 +909,7 @@
     <div class="tc-hero-inner">
       <span class="tc-eyebrow">{% if edit %}Edit Mode{% else %}New Franchise{% endif %}</span>
       <h1>{% if edit %}Edit Team{% else %}Create Team{% endif %}</h1>
-      <p>{% if edit %}Update team identity and squad composition. Unsaved edits are kept as a local draft until you save.{% else %}Fill in team identity, then build squads for <b>T20</b> and <b>List A</b> from your player pool. Drafts are auto-saved locally.{% endif %}</p>
+      <p>{% if edit %}Update team identity and squad composition. Unsaved edits are kept as a local draft until you save.{% else %}Fill in team identity, then build format-specific squads from your player pool. Drafts are auto-saved locally.{% endif %}</p>
     </div>
   </div>
 
@@ -1014,19 +1014,12 @@
           <div class="tc-panel-title">Team Roster</div>
           <div class="tc-panel-sub">Use arrows to reorder or Remove to remove a player. Each profile: {{ SQUAD_MIN_PLAYERS }}–{{ SQUAD_MAX_PLAYERS }} players, ≥{{ SQUAD_MIN_WICKETKEEPERS }} WK, ≥{{ SQUAD_MIN_BOWLING_OPTIONS }} Bowl/AR.</div>
           <div class="tc-tabs" role="tablist">
-            <button type="button" class="tc-tab active" data-fmt="T20" role="tab">
-              <span class="tc-tab-status" id="tc-tab-status-T20" aria-hidden="true"></span>
-              T20 <span class="tc-tab-count" id="tc-count-T20">0</span>
+            {% for fmt, label in format_labels.items() %}
+            <button type="button" class="tc-tab {{ 'active' if fmt == 'T20' }}" data-fmt="{{ fmt }}" role="tab">
+              <span class="tc-tab-status" id="tc-tab-status-{{ fmt }}" aria-hidden="true"></span>
+              {{ label }} <span class="tc-tab-count" id="tc-count-{{ fmt }}">0</span>
             </button>
-            <button type="button" class="tc-tab" data-fmt="ListA" role="tab">
-              <span class="tc-tab-status" id="tc-tab-status-ListA" aria-hidden="true"></span>
-              List A <span class="tc-tab-count" id="tc-count-ListA">0</span>
-            </button>
-            <button type="button" class="tc-tab" data-fmt="FC" role="tab">
-              <span class="tc-tab-status" id="tc-tab-status-FC" aria-hidden="true"></span>
-              <span class="tc-tab-full">First-Class</span><span class="tc-tab-short">FC</span>
-              <span class="tc-tab-count" id="tc-count-FC">0</span>
-            </button>
+            {% endfor %}
           </div>
         </div>
         <div id="tc-copy-bar" class="tc-copy-bar" hidden>
@@ -1083,7 +1076,7 @@
       <div class="tc-modal-icon" aria-hidden="true"><i class="fa-solid fa-triangle-exclamation"></i></div>
       <h2 id="tc-clear-title" class="tc-modal-title">Clear your draft?</h2>
       <p id="tc-clear-text" class="tc-modal-text">
-        Team identity, every T20, List A and First-Class squad you have picked,
+        Team identity, every T20, T10, List A and First-Class squad you have picked,
         and the captain and wicketkeeper choices will be removed. This cannot be undone.
       </p>
       <div class="tc-modal-actions">
@@ -1105,7 +1098,7 @@
   'use strict';
 
   const POOL_PAGE = 50;
-  const VALID_FORMATS = ['T20', 'ListA', 'FC'];
+  const VALID_FORMATS = {{ supported_formats | tojson }};
   const MIN_PLAYERS = {{ SQUAD_MIN_PLAYERS }};
   const MAX_PLAYERS = {{ SQUAD_MAX_PLAYERS }};
   const MIN_WK = {{ SQUAD_MIN_WICKETKEEPERS }};
@@ -1138,8 +1131,9 @@
       team_color: '#4f46e5',
     },
     activeFmt: 'T20',
-    rosters: { T20: [], ListA: [], FC: [] },
+    rosters: Object.fromEntries(VALID_FORMATS.map(fmt => [fmt, []])),
     leaders: {
+      T10: { captain: '', wicketkeeper: '' },
       T20: { captain: '', wicketkeeper: '' },
       ListA: { captain: '', wicketkeeper: '' },
       FC: { captain: '', wicketkeeper: '' },
@@ -1744,7 +1738,7 @@
     });
   }
 
-  const FMT_LABEL = { T20: 'T20', ListA: 'List A', FC: 'First-Class' };
+  const FMT_LABEL = {{ format_labels | tojson }};
   function otherFmt(fmt) {
     // Prefer a populated format other than the current one so the copy bar
     // offers something useful; renderCopyBar() hides itself if the result

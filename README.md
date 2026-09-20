@@ -20,6 +20,35 @@ SimCricketX demonstrates end-to-end engineering across the full stack — probab
 
 ---
 
+## List A match lengths
+
+List A supports **40 or 50 overs per side** in standalone matches, tournaments,
+custom series, and tours. Choose the innings length during setup; 50 remains the
+default. Forty-over matches allow eight overs per bowler and use fielding phases
+of 8/24/8 overs. Both lengths share List A squads, ratings, ground settings, and
+career totals. List A statistics offer All / 40 / 50 filters based on the original
+scheduled length, even when rain shortens play.
+
+This variant retains the existing List A Super Over and rain policies, including
+the 20-over minimum for a rain-affected result. It is not the complete ECB
+recreational competition ruleset.
+
+Before deploying, run `python -m migrations.precheck` (or the usual `python migrate.py`).
+The idempotent scheduled-length migration also runs during normal startup. Legacy
+List A matches/tournaments become 50-over records; existing scores and career
+aggregates are preserved.
+
+Reproduce the 320-match, 16-seed comparison across five pitches and day/day-night:
+
+```sh
+python scripts/bench_lista_lengths.py --out reports/lista_lengths.json
+```
+
+The compact baseline is saved in `tests/fixtures/lista_length_baseline.json`.
+The detailed generated report includes both innings, phase scoring, boundaries,
+and each bowler's legal-ball usage. Forty-over par targets are scaled from the
+50-over model; simulated totals remain dependent on squads, pitch, and match state.
+
 ## Contributing
 
 Contributions are welcome — start with the [Contributing Guide](CONTRIBUTING.md) for setup, test, and code-style instructions, then pick up a [good first issue](https://github.com/ManishYelam/SimCricketX/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
@@ -394,6 +423,8 @@ Token permissions:
 - **Data Engineering**: Probabilistic simulation, time-series momentum tracking, NRR computation
 
 ---
+
+T10 setup, rules, calibration and extension notes: [T10 preset](docs/t10.md).
 
 ## License
 

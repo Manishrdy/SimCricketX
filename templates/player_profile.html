@@ -45,6 +45,7 @@
 </style>
 
 <div class="pp-page">
+{% include '_lista_length_filter.html' %}
     <div class="pp-header">
         <div class="pp-info">
             <h1>
@@ -63,6 +64,7 @@
             <div class="pp-format-filter">
                 <select id="pp-fmt">
                     <option value="T20" {% if match_format == 'T20' %}selected{% endif %}>T20</option>
+                    <option value="T10" {% if match_format == 'T10' %}selected{% endif %}>T10</option>
                     <option value="ListA" {% if match_format == 'ListA' %}selected{% endif %}>List A</option>
                     <option value="FC" {% if match_format == 'FC' %}selected{% endif %}>First-Class</option>
                 </select>
@@ -170,7 +172,7 @@
                     <tr>
                         <td>{{ m.date }}</td>
                         <td>{{ m.venue }}</td>
-                        <td>{{ m.format }}</td>
+                        <td>{{ cricket_format_label(m.format, m.scheduled_overs) }}</td>
                         {% if match_format == 'FC' %}
                         <td class="kc">{% for i in m.batting_innings %}<div title="Innings {{ i.innings_number }}">{{ i.runs }}</div>{% else %}-{% endfor %}</td>
                         <td>{% for i in m.batting_innings %}<div>{{ i.balls }}</div>{% else %}-{% endfor %}</td>
@@ -200,7 +202,7 @@
 <script>
 document.getElementById('pp-fmt')?.addEventListener('change', function() {
     const url = '/player/{{ profile.player_id }}?match_format=' + encodeURIComponent(this.value || 'T20');
-    window.location.href = url;
+    window.location.href = withListALength(url);
 });
 </script>
 {% endblock %}
