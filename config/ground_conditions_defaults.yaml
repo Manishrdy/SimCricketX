@@ -737,13 +737,13 @@ formats:
         description: Seamer-friendly surface with lateral movement — pace bowlers dominate,
           low scoring
         scoring_matrix:
-          Dot: 0.29513092
+          Dot: 0.27612
           Single: 0.37376343
           Double: 0.09140954
           Three: 0.00507831
-          Four: 0.0987223
-          Six: 0.03717321
-          Wicket: 0.05809584
+          Four: 0.115
+          Six: 0.0455
+          Wicket: 0.0525
           Extras: 0.04062646
         run_factor: 0.85
         wicket_factors:
@@ -756,13 +756,13 @@ formats:
         description: Spin-friendly surface with variable bounce — spinners thrive, tough
           to score
         scoring_matrix:
-          Dot: 0.28670946
+          Dot: 0.26082
           Single: 0.37315325
           Double: 0.09328831
           Three: 0.00811203
-          Four: 0.10221154
-          Six: 0.03958669
-          Wicket: 0.05130857
+          Four: 0.12421
+          Six: 0.04829
+          Wicket: 0.0465
           Extras: 0.04563015
         run_factor: 0.85
         wicket_factors:
@@ -770,7 +770,13 @@ formats:
           Wrist spin: 1.56
           Off spin: 1.5
           Finger spin: 1.38
-          default: 0.34
+          # A T10 XI has five bowlers and the phases are 3/4/3, so the two
+          # spinners are used up in the middle overs and the death is bowled
+          # by seam whatever the captain would prefer. At 0.34 that made the
+          # last three overs the safest place to bat on a turner. Spin still
+          # takes wickets at 2.1-2.5x the rate of seam here; seam is simply no
+          # longer inert on the one surface where the game ends.
+          default: 0.65
       Hard:
         description: True bounce with carry — balanced contest with slight batting edge
         scoring_matrix:
@@ -793,13 +799,13 @@ formats:
         description: True surface with even bounce — batting paradise, bowlers need
           skill
         scoring_matrix:
-          Dot: 0.22998489
+          Dot: 0.22498489
           Single: 0.33789156
           Double: 0.13913182
           Three: 0.00795039
           Four: 0.12879631
           Six: 0.08002067
-          Wicket: 0.05137939
+          Wicket: 0.05637939
           Extras: 0.02484497
         run_factor: 1.08
         wicket_factors:
@@ -807,13 +813,13 @@ formats:
       Dead:
         description: Lifeless track with nothing for bowlers — batting festival guaranteed
         scoring_matrix:
-          Dot: 0.21009314
+          Dot: 0.20169314
           Single: 0.32526736
           Double: 0.14292051
           Three: 0.00492829
           Four: 0.15849391
           Six: 0.09018777
-          Wicket: 0.03361096
+          Wicket: 0.04201096
           Extras: 0.03449805
         run_factor: 1.3
         wicket_factors:
@@ -828,18 +834,28 @@ formats:
           default: 0.6
     phase_boosts:
       powerplay:
-        boundary_multiplier: 1.25
+        # Three of ten overs, with no new-ball watchfulness to justify a T20
+        # rate: the powerplay is meant to be the second-fastest phase of a T10.
+        boundary_multiplier: 1.35
         overs_start: 0
         overs_end: 2
       death_overs:
         overs_start: 7
         overs_end: 9
         boundary_boost_batting_pitch: 1.9
-        boundary_boost_bowling_pitch: 1.8
-        wicket_boost: 1.6
+        boundary_boost_bowling_pitch: 2.0
+        # Wickets in a T10 should read as the price of the hitting in overs
+        # 8-10, not as a collapse spread through the innings. This is the
+        # lever that concentrates them there; the base Wicket weight in each
+        # scoring_matrix sets how many there are in total.
+        wicket_boost: 2.3
       second_innings_death:
-        scoring_boost: 1.15
-        wicket_boost: 1.1
+        # Exactly neutral. A 15% death-overs scoring boost that the side
+        # batting first never gets is a thumb on the scale in a format whose
+        # whole point here is that both innings play alike — it was worth
+        # roughly ten percentage points of chase win rate on its own.
+        scoring_boost: 1.0
+        wicket_boost: 1.0
     game_modes:
       natural_game:
         label: Natural Game

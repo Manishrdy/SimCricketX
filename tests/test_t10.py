@@ -36,6 +36,10 @@ def test_rules_and_isolation():
     a, b = make_match(), make_match()
     a.ground_config['pitch_profiles']['Hard']['run_factor'] = 99
     assert b.ground_config['pitch_profiles']['Hard']['run_factor'] != 99
+    supplied = get_format_ground()
+    a, b = make_match(ground_config=supplied), make_match(ground_config=supplied)
+    a.ground_config['pitch_profiles']['Hard']['run_factor'] = 99
+    assert b.ground_config == supplied
 
 
 @pytest.mark.parametrize('length', [5, 20, True, 10.0, 'nonsense'])
@@ -247,3 +251,154 @@ def test_ten_wickets_and_final_ball_wicket(monkeypatch, final_ball):
         if response.get('innings_end'): break
     else: pytest.fail('Ten wickets did not end innings')
     assert sum(s['balls_bowled'] for s in m.first_innings_bowling_stats.values()) == (60 if final_ball else 10)
+
+
+def test_rain_below_three_overs_is_no_result(monkeypatch):
+    m = make_match(weather_script={'forecast': 'storm_warning', 'events': [
+        {'at_global_over': 0, 'overs_lost': 8}]})
+    monkeypatch.setattr(m, '_create_match_archive', lambda: None)
+    response = m.next_ball()
+    assert response.get('match_over') and m.match_status == 'no_result'
+    assert m.original_overs == 10
+
+
+def test_repeated_super_overs_use_t10_and_finish(monkeypatch):
+    m = make_match()
+    monkeypatch.setattr(m, '_create_match_archive', lambda: None)
+    dot = {'runs': 0, 'batter_out': False, 'is_extra': False, 'description': 'Dot'}
+    monkeypatch.setattr(match_module, 'calculate_outcome', lambda **kw: dict(dot))
+    for _ in range(125):
+        if m.next_ball().get('super_over_required'): break
+    else: pytest.fail('Expected a tied main match')
+    monkeypatch.setattr(match_module, 'calculate_super_over_outcome', lambda **kw: dict(
+        dot, runs=int(m.super_over_round >= 3 and m.super_over_innings == 2)))
+    for _ in range(70):
+        if m.super_over_phase == 'complete': break
+        if m.super_over_phase == 'awaiting_innings1_selection':
+            response = m.start_super_over(getattr(m, '_super_over_next_first_batting', None) or 'home')
+        elif m.super_over_phase == 'awaiting_innings2_selection':
+            response = m.start_super_over_innings2()
+        else:
+            response = m.next_super_over_ball()
+        assert not response.get('error'), response
+    else: pytest.fail('Third Super Over did not produce a result')
+    assert m.super_over_round == 3 and len(m.super_over_history) == 3
+    assert m.fmt.name == 'T10' and m.original_overs == 10
+
+
+# ---------------------------------------------------------------------------
+# Innings parity
+#
+# A T10 is meant to read the same in both halves: if the side batting first
+# hits big, the chase hits big back, and wickets fall in the last three overs
+# as the price of that hitting rather than as a collapse. Before this, six
+# separate chase-only wicket amplifiers stacked while the boundary payoff was
+# capped, and a T10 chase lost 27-88% more wickets per ball than the first
+# innings while scoring no faster. These pin the shape so it cannot drift back;
+# the measured behaviour is gated separately by scripts/bench_t10.py.
+# ---------------------------------------------------------------------------
+
+def _pressure(fmt_name):
+    from engine.pressure_engine import PressureEngine
+    return PressureEngine(format_config=get_format(fmt_name))
+
+
+def _chase_state(**over):
+    state = {'innings': 2, 'current_over': 8, 'wickets': 7, 'overs_remaining': 2,
+             'pitch': 'Hard', 'required_run_rate': 18.0, 'runs_needed': 36,
+             'current_run_rate': 11.0, 'score': 90}
+    state.update(over)
+    return state
+
+
+def test_no_defensive_shutdown_in_a_short_chase():
+    # Death overs, 8 down: T20 switches to blocking (boundaries x0.7, dots
+    # +0.3). There is no draw to bat out in a 10-over game.
+    state = _chase_state(wickets=8)
+    assert _pressure('T10').calculate_defensive_factor(state) is None
+    t20 = _pressure('T20').calculate_defensive_factor(dict(state, current_over=18))
+    assert t20 and t20['defensive_active']
+
+
+def test_chasing_advantage_is_exactly_neutral_for_short_formats():
+    t10 = _pressure('T10').get_chasing_advantage(_chase_state())
+    assert (t10['boundary_boost'], t10['wicket_reduction'],
+            t10['strike_rotation_boost']) == (1.00, 1.00, 1.00)
+    # List A keeps its scoreboard-pressure bias; the branches are separate.
+    lista = _pressure('ListA').get_chasing_advantage(
+        {'innings': 2, 'current_over': 34, 'wickets': 3})
+    assert lista['wicket_reduction'] > 1.0
+
+
+def test_risk_pays_the_same_in_both_innings_of_a_short_format():
+    engine = _pressure('T10')
+    first = engine.get_risk_based_effects(
+        {'innings': 1, 'current_over': 8, 'wickets': 2, 'score': 80,
+         'pitch': 'Hard', 'overs_remaining': 2})
+    second = engine.get_risk_based_effects(_chase_state())
+    for effects in (first, second):
+        assert effects and effects['risk_active']
+        # Aggression must buy more runs than wickets, or hitting is a losing
+        # trade and the innings shuts down instead.
+        assert effects['boundary_boost'] > effects['wicket_boost']
+        assert effects['dot_increase'] == 0
+    # The two innings read different situations, so their risk FACTORS differ.
+    # What has to match is the mapping from risk to reward and to cost — that
+    # is what made second-innings aggression a worse trade than first-innings
+    # aggression (boundaries x1.2 either way, wickets x1.0 then x1.5).
+    for effects in (first, second):
+        risk = effects['risk_factor'] - 1.0
+        assert round((effects['boundary_boost'] - 1) / risk, 6) == 1.6
+        assert round((effects['wicket_boost'] - 1) / risk, 6) == 1.0
+    for key in ('dot_increase', 'single_floor'):
+        assert first[key] == second[key], key
+    # T20 keeps the asymmetric model its bands were calibrated on.
+    t20 = _pressure('T20')
+    t20_second = t20.get_risk_based_effects(dict(_chase_state(), current_over=18))
+    assert t20_second['wicket_boost'] > t20_second['boundary_boost'] / 2
+
+
+def test_short_chase_keeps_its_shots_when_wickets_fall():
+    m = make_match()
+    m.innings, m.target, m.score, m.wickets = 2, 130, 70, 8
+    m.current_over, m.current_ball = 7, 0
+    assert m._get_dynamic_game_mode() == 'aggressive'
+    # ...and a first innings seven down is not handed "bowlers_day" either.
+    m.innings, m.target, m.wickets = 1, None, 8
+    assert m._get_dynamic_game_mode() == 'natural_game'
+
+
+def test_game_state_vector_publishes_short_format_flags():
+    from engine.game_state_engine import compute_game_state_vector
+    fmt = get_format('T10')
+    death = compute_game_state_vector([], 90, 8, 0, 3, 2, target=130,
+                                      pitch='Hard', format_config=fmt)
+    assert death['_is_short'] and death['_in_death']
+    assert not compute_game_state_vector([], 40, 3, 0, 1, 1, pitch='Hard',
+                                         format_config=fmt)['_in_death']
+    t20 = compute_game_state_vector([], 90, 8, 0, 3, 1, pitch='Hard',
+                                    format_config=get_format('T20'))
+    assert not t20['_is_short']
+
+
+def test_new_batter_at_the_death_still_swings():
+    from engine.game_state_engine import apply_game_state_to_probs
+    probs = {'Dot': .25, 'Single': .34, 'Double': .12, 'Three': .01,
+             'Four': .13, 'Six': .08, 'Wicket': .05, 'Extras': .02}
+    fresh = dict(partnership_balls=1, partnership_runs=0, innings=1,
+                 _is_short=True, _partnership_thresholds=(15, 30, 45, 60))
+    at_death = apply_game_state_to_probs(dict(probs), dict(fresh, _in_death=True))
+    mid_innings = apply_game_state_to_probs(dict(probs), dict(fresh, _in_death=False))
+    assert at_death['Four'] > mid_innings['Four']
+    assert at_death['Six'] > mid_innings['Six']
+    # The wicket bump survives either way — a new batter is still the easier out.
+    assert at_death['Wicket'] > probs['Wicket'] / sum(probs.values())
+
+
+def test_t10_par_curve_matches_its_targets():
+    fmt = get_format('T10')
+    assert fmt.par_scores[10] == fmt.target_scores['Hard'] == 125
+    assert fmt.pitch_par_factors['Hard'] == 1.0
+    assert fmt.rrr_baseline == {p: t / 10 for p, t in fmt.target_scores.items()}
+    # Derived from expected_rr, not hand-written: 3x12.0 + 4x11.0 + 3x15.0.
+    assert fmt.expected_rr == {'Powerplay': 12.0, 'Middle': 11.0, 'Death': 15.0}

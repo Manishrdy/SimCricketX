@@ -399,12 +399,18 @@ _T10.strict_short_bowling = True
 _T10.momentum_window = 12
 _T10.dot_thresholds = (2, 3, 5, 6)
 _T10.partnership_thresholds = (15, 30, 45, 60)
+# Par shape measured from the engine, not assumed: the powerplay is the
+# highest-scoring phase of a T10, the middle overs dip, and the death is the
+# spike. par_scores/pitch_par_factors/rrr_baseline below are all DERIVED from
+# these two dicts, so they must move whenever the scoring matrices move —
+# otherwise every first innings reads as ahead of par (and bats conservatively)
+# while every chase sits permanently above required_aggression 1.0.
+_T10.expected_rr = {"Powerplay": 12.0, "Middle": 11.0, "Death": 15.0}
 _T10.revise_short_innings(10)
-_T10.expected_rr = {"Powerplay": 10.5, "Middle": 10.5, "Death": 13.0}
 _T10.par_scores = {0: 0.0}
 for _over in range(10):
     _T10.par_scores[_over + 1] = _T10.par_scores[_over] + _T10.expected_rr[_T10.phase_key(_over)]
-_T10.target_scores = {"Green": 83, "Dry": 88, "Hard": 113, "Flat": 130, "Dead": 148}
+_T10.target_scores = {"Green": 95, "Dry": 100, "Hard": 125, "Flat": 137, "Dead": 155}
 _T10.pitch_par_factors = {pitch: total / _T10.par_scores[10] for pitch, total in _T10.target_scores.items()}
 _T10.rrr_baseline = {pitch: total / 10 for pitch, total in _T10.target_scores.items()}
 _T10.extras_per_innings = 3

@@ -356,6 +356,9 @@ def compute_game_state_vector(
     dot_ratio    = dot_count / window_size if window_size > 0 else 0.0
 
     _is_lista = (_fmt is not None and _fmt.name == "ListA")
+    _is_short = bool(_fmt is not None and getattr(_fmt, "strict_short_bowling", False))
+    _is_death_fn = getattr(_fmt, "is_death", None)
+    _in_death = bool(callable(_is_death_fn) and _is_death_fn(current_over))
 
     state = {
         # Core momentum
@@ -394,6 +397,12 @@ def compute_game_state_vector(
 
         # Format flag — drives ListA-specific thresholds in apply_game_state_to_probs
         "_is_lista":              _is_lista,
+        # Short-format (T10) flags. The collapse and partnership layers below
+        # suppress boundaries as well as raising wicket risk, over windows
+        # sized for a 120/300-ball innings; across 60 balls that reads as a
+        # side that stops playing shots rather than one under pressure.
+        "_is_short":              _is_short,
+        "_in_death":              _in_death,
         "_dot_thresholds": getattr(_fmt, "dot_thresholds", (2, 4, 6, 8)),
         "_partnership_thresholds": getattr(_fmt, "partnership_thresholds", (25, 50, 75, 100)),
     }
@@ -453,6 +462,8 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     rrr                   = state.get("rrr",                   0.0)
     scenario_phase        = state.get("scenario_phase",        "inactive")
     _is_lista             = state.get("_is_lista",             False)
+    _is_short             = state.get("_is_short",             False)
+    _in_death             = state.get("_in_death",             False)
 
     # ── A. MOMENTUM ──────────────────────────────────────────────────────────
     _apply_momentum_multipliers(mults, momentum)
@@ -466,24 +477,39 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     if _effective_cm > 1.0:
         excess = _effective_cm - 1.0             # 0.0 → 0.85 range
         mults["Wicket"] *= _effective_cm
-        mults["Dot"]    *= 1.0 + excess * 0.40
-        mults["Four"]   *= _clamp(1.0 - excess * 0.32, 0.50, 1.0)
-        mults["Six"]    *= _clamp(1.0 - excess * 0.38, 0.45, 1.0)
+        if _is_short:
+            # Wickets still cluster — that part is real — but a T10 side does
+            # not stop hitting because it lost two. The window here is 12
+            # balls, a fifth of the innings, so the full T20 suppression
+            # (Four to 0.50, Six to 0.45) was flattening whole phases.
+            mults["Dot"]    *= 1.0 + excess * 0.15
+            mults["Four"]   *= _clamp(1.0 - excess * 0.12, 0.80, 1.0)
+            mults["Six"]    *= _clamp(1.0 - excess * 0.14, 0.78, 1.0)
+        else:
+            mults["Dot"]    *= 1.0 + excess * 0.40
+            mults["Four"]   *= _clamp(1.0 - excess * 0.32, 0.50, 1.0)
+            mults["Six"]    *= _clamp(1.0 - excess * 0.38, 0.45, 1.0)
 
     # ── C. RUN-RATE PRESSURE — FIRST INNINGS ─────────────────────────────────
+    # _agg_w (defined with section D below) damps the wicket cost of
+    # acceleration for short formats. It is applied in BOTH sections on
+    # purpose: if only the chase got cheap acceleration, a side batting
+    # second could push whenever it fell behind for less risk than the side
+    # batting first, which showed up as a 68% chase win rate on Flat.
+    _agg_w = (lambda m: 1.0 + (m - 1.0) * 0.40) if _is_short else (lambda m: m)
     if innings == 1:
         if rr_ratio < 0.72:
             # Well behind par — desperate acceleration
             mults["Four"]   *= 1.28
             mults["Six"]    *= 1.40
-            mults["Wicket"] *= 1.14   # Risk being taken
+            mults["Wicket"] *= _agg_w(1.14)   # Risk being taken
             mults["Dot"]    *= 0.83
             mults["Single"] *= 0.92   # Fewer dot-and-a-single, go big
         elif rr_ratio < 0.88:
             # Slightly behind — nudge the rate up
             mults["Four"]   *= 1.14
             mults["Six"]    *= 1.20
-            mults["Wicket"] *= 1.07
+            mults["Wicket"] *= _agg_w(1.07)
             mults["Dot"]    *= 0.91
         elif rr_ratio > 1.30:
             # Comfortably ahead — bat conservatively, keep wickets
@@ -500,6 +526,15 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
             mults["Dot"]    *= 1.04
 
     # ── D. REQUIRED AGGRESSION — SECOND INNINGS ──────────────────────────────
+    #
+    # Short formats damp the WICKET side of these bands to 40% of its excess,
+    # leaving every boundary/dot/single term untouched. Section C above is the
+    # first innings' equivalent and tops out at Wicket x1.14; this one reaches
+    # x1.55, so over 60 balls the two innings were paying very different
+    # prices for the same shot. Measured on Hard, a T10 chase was losing 74%
+    # more wickets than the first innings in overs 4-7 — the middle-over bleed
+    # that left it with no batting for a death surge. The chase still takes
+    # more risk than a side setting a total; it no longer gets out for it.
     if innings == 2:
         if required_aggression < 0.67:
             # Very comfortable chase (rrr < ~6) — rotate and grind
@@ -523,7 +558,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
             # Moderate pressure (rrr ~10–12) — step on the gas
             mults["Four"]   *= 1.12
             mults["Six"]    *= 1.18
-            mults["Wicket"] *= 1.10
+            mults["Wicket"] *= _agg_w(1.10)
             mults["Dot"]    *= 0.90
             mults["Single"] *= 0.94
 
@@ -531,7 +566,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
             # High pressure (rrr ~12–15) — full aggression
             mults["Four"]   *= 1.26
             mults["Six"]    *= 1.38
-            mults["Wicket"] *= 1.22
+            mults["Wicket"] *= _agg_w(1.22)
             mults["Dot"]    *= 0.80
             mults["Single"] *= 0.85
             mults["Double"] *= 0.92
@@ -540,7 +575,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
             # Near-impossible (rrr ~15–18) — swinging for the fences
             mults["Six"]    *= 1.60
             mults["Four"]   *= 1.38
-            mults["Wicket"] *= 1.38
+            mults["Wicket"] *= _agg_w(1.38)
             mults["Dot"]    *= 0.70
             mults["Single"] *= 0.76
             mults["Double"] *= 0.88
@@ -549,7 +584,7 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
             # Absolutely impossible (rrr 18+) — last-gasp slog-fest
             mults["Six"]    *= 1.90
             mults["Four"]   *= 1.50
-            mults["Wicket"] *= 1.55
+            mults["Wicket"] *= _agg_w(1.55)
             mults["Dot"]    *= 0.62
             mults["Single"] *= 0.68
 
@@ -611,21 +646,27 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
     # During scenario convergence, halve the excess so scenario steering can steer
     # wicket count without being overwhelmed by the cascade.
     _cw_dampen = 0.5 if scenario_phase == "convergence" else 1.0
+    # Short formats keep the full wicket escalation but almost none of the
+    # shot suppression: in a 10-over game the reply to losing a couple is the
+    # next batter coming out swinging, not four overs of rebuilding that the
+    # innings has no room for.
+    _cw_dot, _cw_four, _cw_six = (
+        (1.00, 0.92, 0.90) if _is_short else (1.32, 0.68, 0.62))
     if consecutive_wickets >= 4:
         mults["Wicket"] *= 1.0 + 0.495 * _cw_dampen   # normal: 1.495 | convergence: 1.248
-        mults["Dot"]    *= 1.32
-        mults["Four"]   *= 0.68
-        mults["Six"]    *= 0.62
+        mults["Dot"]    *= _cw_dot
+        mults["Four"]   *= _cw_four
+        mults["Six"]    *= _cw_six
     elif consecutive_wickets >= 3:
         mults["Wicket"] *= 1.0 + 0.405 * _cw_dampen   # normal: 1.405 | convergence: 1.203
-        mults["Dot"]    *= 1.25
-        mults["Four"]   *= 0.74
-        mults["Six"]    *= 0.70
+        mults["Dot"]    *= 1.00 if _is_short else 1.25
+        mults["Four"]   *= 0.90 if _is_short else 0.74
+        mults["Six"]    *= 0.88 if _is_short else 0.70
     elif consecutive_wickets >= 2:
         mults["Wicket"] *= 1.0 + 0.270 * _cw_dampen   # normal: 1.270 | convergence: 1.135
-        mults["Dot"]    *= 1.16
-        mults["Four"]   *= 0.82
-        mults["Six"]    *= 0.78
+        mults["Dot"]    *= 1.00 if _is_short else 1.16
+        mults["Four"]   *= 0.94 if _is_short else 0.82
+        mults["Six"]    *= 0.92 if _is_short else 0.78
     elif consecutive_wickets == 1:
         # New batsman just in — small additional collapse-fear on top of
         # the new-batter vulnerability already in compute_weighted_prob()
@@ -669,9 +710,16 @@ def apply_game_state_to_probs(raw_weights: dict, state: dict) -> dict:
         # NEW PARTNERSHIP — danger zone: both batters still reading conditions,
         # one uncertain end, increased wicket risk and cautious shot selection.
         mults["Wicket"] *= 1.12
-        mults["Four"]   *= 0.90
-        mults["Six"]    *= 0.88
-        mults["Dot"]    *= 1.08
+        if not (_is_short and _in_death):
+            mults["Four"]   *= 0.90
+            mults["Six"]    *= 0.88
+            mults["Dot"]    *= 1.08
+        # A No. 7 walking in at over 9 of a T10 is swinging from the first
+        # ball he faces; he is not reading conditions. Keeping the caution
+        # here is what flattened overs 9-10 relative to over 8 in BOTH
+        # innings — every death wicket quietly cost the next 3-4 balls of
+        # scoring, which is the opposite of what the last overs should look
+        # like. The wicket bump stays: a new batter is still the easier out.
 
     elif p_runs >= _p_dominant:
         # DOMINANT PARTNERSHIP — batters completely in control, reading every

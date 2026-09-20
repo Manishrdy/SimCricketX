@@ -215,6 +215,16 @@ def test_t10_http_socket_replay_and_live_refresh(app, authenticated_client, regu
     socket = app_module.socketio.test_client(app, flask_test_client=authenticated_client)
     try:
         url = f'/match/{mid}'
+        invalid_xi = [dict(p) for p in m.home_xi]
+        invalid_xi[-1] = invalid_xi[0]
+        rejected = authenticated_client.post(url + '/update-final-lineups', json={'home_final_xi': invalid_xi})
+        assert rejected.status_code == 400
+        original_ratings = {p['name']: p['bowling_rating'] for p in m.home_xi}
+        reordered = [dict(p, bowling_rating=0, will_bowl=False) for p in reversed(m.home_xi)]
+        accepted = authenticated_client.post(url + '/update-final-lineups', json={'home_final_xi': reordered})
+        assert accepted.status_code == 200, accepted.json
+        assert {p['name']: p['bowling_rating'] for p in m.home_xi} == original_ratings
+        assert sum(bool(p['will_bowl']) for p in m.home_xi) == 5
         token = authenticated_client.get(url + '/live-state?delivery=1').json['delivery_token']
         response = authenticated_client.post(url + '/next-ball', json={'delivery_token': token})
         assert response.status_code == 200 and not response.json.get('error'), response.json

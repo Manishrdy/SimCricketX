@@ -1133,12 +1133,16 @@ def calculate_outcome(
 
             # Second innings death-over boosts (mild — chasing advantage already helps)
             if innings == 2 and in_death:
+                # Fallbacks match the shipped YAML (scoring 1.15 / wicket 1.1).
+                # They used to be inverted (1.05 / 1.15), so any path that lost
+                # the ground config silently made the chase HARDER than the
+                # configured values say it should be.
                 if outcome in ("Single", "Double", "Three", "Four", "Six"):
-                    scoring_boost = _inn2_cfg.get("scoring_boost", 1.05)
+                    scoring_boost = _inn2_cfg.get("scoring_boost", 1.15)
                     weight *= scoring_boost
 
                 if outcome == "Wicket":
-                    wicket_boost_2nd = _inn2_cfg.get("wicket_boost", 1.15)
+                    wicket_boost_2nd = _inn2_cfg.get("wicket_boost", 1.1)
                     weight *= wicket_boost_2nd
 
         # Ensure no negative weights
