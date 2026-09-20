@@ -131,6 +131,13 @@ MIGRATIONS: List[Tuple[str, Callable]] = [
      _loader("migrations.reset_stale_t20_pitch_tuning")),
     ("reset_stale_fc_pitch_tuning",
      _loader("migrations.reset_stale_fc_pitch_tuning")),
+    # T10 aggression pass: the Green/Dry/Flat/Dead scoring matrices, Dry's
+    # wicket_factors and every T10 phase boost moved. Same shadowing trap as
+    # the entry above — a user who so much as picked a game mode on the T10
+    # ground-conditions page is carrying a full snapshot of the old numbers
+    # that deep-merges over the new defaults.
+    ("reset_stale_t10_pitch_tuning",
+     _loader("migrations.reset_stale_t10_pitch_tuning")),
     # 2026-08-30 FC scoring acceleration: the FC scoring matrices moved again
     # (~12% more scoring mass, ~5% more wicket) to lift the run rate from
     # ~3.10 to ~3.40. Same shadowing trap as above — strip the involuntary

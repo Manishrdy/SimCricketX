@@ -161,6 +161,8 @@ class Match:
         if getattr(self.fmt, "strict_short_bowling", False):
             if self.ground_config is None:
                 self.ground_config = ground_config_engine.get_defaults(self.fmt.name, mutable=True)
+            else:
+                self.ground_config = copy.deepcopy(self.ground_config)
             for xi in (self.home_xi, self.away_xi):
                 if len(xi) != 11 or len({p["name"] for p in xi}) != 11:
                     raise ValueError("Short-format matches require eleven distinct players per XI")
@@ -2797,8 +2799,14 @@ class Match:
         if pitch in ("Dead", "Flat") and wickets < 3 and over < (self.fmt.overs / 2 if getattr(self.fmt, "strict_short_bowling", False) else 10):
             return "flat_track_bully"
 
-        # Heavy wicket loss in 1st innings → bowlers have the upper hand
-        if innings == 1 and wickets >= 7:
+        # Heavy wicket loss in 1st innings → bowlers have the upper hand.
+        # Not in short formats: this is a first-innings-ONLY mode, and it is
+        # savage (Four x0.65, Six x0.50, Wicket x1.50, Dot x1.30). Seven down
+        # in a 10-over innings usually means over 8 or 9, i.e. exactly when
+        # the side should be swinging — and since the chase has no equivalent
+        # penalty, it was a one-sided tax that showed up as a 64% chase win
+        # rate on Dry, the surface where first innings lose most wickets.
+        if innings == 1 and wickets >= 7 and not getattr(self.fmt, "strict_short_bowling", False):
             return "bowlers_day"
 
         # 2nd innings: adapt to required run rate
@@ -2806,12 +2814,18 @@ class Match:
             balls_remaining = max(1, (self.overs - over) * 6 - self.current_ball)
             runs_needed     = max(0, self.target - self.score)
             rrr             = (runs_needed * 6) / balls_remaining
-            if wickets >= 7:
-                return "defensive"
+            _short = getattr(self.fmt, "strict_short_bowling", False)
             baseline = getattr(self.fmt, "rrr_baseline", {}).get(pitch, 8.5)
-            if rrr > (baseline * 1.4 if getattr(self.fmt, "strict_short_bowling", False) else 12):
+            # Seven down is a reason to shut up shop over 20 overs; over 10 it
+            # is a routine position with runs still to get. Short formats fall
+            # through to the rate checks below, so a chase 7 down and behind
+            # keeps its shots instead of switching to "defensive" — which is
+            # Four x0.75 / Six x0.60 and ends the match as a formality.
+            if wickets >= 7 and not _short:
+                return "defensive"
+            if rrr > (baseline * 1.4 if _short else 12):
                 return "aggressive"
-            if rrr < (baseline * .7 if getattr(self.fmt, "strict_short_bowling", False) else 6):
+            if rrr < (baseline * .7 if _short else 6):
                 return "defensive"
 
         return "natural_game"
@@ -2819,6 +2833,20 @@ class Match:
     def _get_preferred_bowler_type(self, over_number):
         """Get the preferred bowler type for a specific over based on pattern"""
         pattern = self.bowling_pattern
+
+        # Every pattern below hands the death overs to pace. On a Dry surface,
+        # where seam carries a 0.5 wicket factor against spin's 1.38-1.62,
+        # that made the last three overs the SAFEST phase to bat in — all the
+        # wickets piled into the middle overs where the spinners bowled, which
+        # is the opposite of how a captain uses a turner. Short formats only:
+        # T20 and List A keep the bowling shape their bands were pinned on.
+        # NOTE: with the minimum five bowlers on two overs each, over-
+        # utilisation control leaves the middle overs to the two spinners and
+        # the death to seam whatever is preferred here, so this only bites for
+        # a squad that designates six or more.
+        if (getattr(self.fmt, "strict_short_bowling", False)
+                and self.pitch == "Dry" and self.fmt.is_death(over_number)):
+            return "spin"
         
         if pattern == "traditional":
             if self.fmt.is_powerplay(over_number):  # Powerplay
@@ -7042,7 +7070,18 @@ class Match:
             _batting_has_toss_adv = (
                 (self.batting_team is self._toss_winner_xi) == self._toss_choice_correct
             )
-            _toss_mult = 1.03 if _batting_has_toss_adv else 0.97
+            # Which innings receives this is fixed by the pitch, not by the
+            # call: with adv = (batting side is the toss winner) == (the call
+            # suited the pitch), a surface where bowling first is right always
+            # hands the +3% to the chase and the -3% to the side batting
+            # first, whatever either captain does. Over 120 balls a standing
+            # 6% boundary swing is a nudge; over 60 it was worth about fifteen
+            # points of chase win rate on Green, Flat and Dead, which is not
+            # a toss advantage so much as a decided match. Short formats keep
+            # the effect at a third of the size; T20 and List A are unchanged.
+            _toss_mult = ((1.01 if _batting_has_toss_adv else 0.99)
+                          if getattr(self.fmt, "strict_short_bowling", False)
+                          else (1.03 if _batting_has_toss_adv else 0.97))
             pressure_effects['boundary_modifier'] = (
                 pressure_effects.get('boundary_modifier', 1.0) * _toss_mult
             )

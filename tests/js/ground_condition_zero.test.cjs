@@ -9,9 +9,9 @@ function extract(name) {
     assert(start >= 0, name);
     return source.slice(start, source.indexOf('\n        }', start) + 10);
 }
-function setup(value = '0') {
+function setup(value = '0', isT10 = false) {
     const input = dataset => ({ value, dataset });
-    const context = { CONFIG: { pitch_profiles: { Hard: {} } }, document: {
+    const context = { IS_T10: isT10, CONFIG: { pitch_profiles: { Hard: {} } }, document: {
         getElementById: () => input({}), querySelector: () => input({}),
         querySelectorAll(selector) {
             if (selector.includes('pitch-card')) return [{ dataset: { pitch: 'Hard' } }];
@@ -63,4 +63,12 @@ test('List A preserves 1.0 and custom phase boosts', () => {
     assert.equal(cfg1.phase_boosts.pp1.all.Four, 1.0);
     const cfgCustom = setup('1.35').buildListAConfig();
     assert.equal(cfgCustom.phase_boosts.pp1.all.Four, 1.35);
+});
+test('T10 preserves zero settings with its own phase boundaries', () => {
+    const cfg = setup('0', true).buildT20Config();
+    assert.equal(cfg.pitch_profiles.Hard.run_factor, 0);
+    assert.equal(cfg.phase_boosts.powerplay.boundary_multiplier, 0);
+    assert.equal(cfg.phase_boosts.powerplay.overs_end, 2);
+    assert.equal(cfg.phase_boosts.death_overs.overs_start, 7);
+    assert.equal(cfg.phase_boosts.death_overs.overs_end, 9);
 });
