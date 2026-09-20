@@ -1251,6 +1251,25 @@ def register_match_routes(
             home_final_xi = lineup_data.get("home_final_xi")
             away_final_xi = lineup_data.get("away_final_xi")
 
+            if getattr(match_instance.fmt, "strict_short_bowling", False):
+                # Short-format reorder requests cannot substitute players or
+                # change bowling designations after the attack was validated.
+                def canonical_order(submitted, existing):
+                    if submitted is None:
+                        return None
+                    if not isinstance(submitted, list) or not all(isinstance(p, dict) for p in submitted):
+                        raise ValueError("Lineup must contain the existing eleven players")
+                    names = [p.get("name") for p in submitted]
+                    by_name = {p["name"]: p for p in existing}
+                    if len(names) != 11 or len(set(names)) != 11 or set(names) != set(by_name):
+                        raise ValueError("T10 permits reordering only; player substitutions are unavailable")
+                    return [by_name[name] for name in names]
+                try:
+                    home_final_xi = canonical_order(home_final_xi, match_instance.home_xi)
+                    away_final_xi = canonical_order(away_final_xi, match_instance.away_xi)
+                except (ValueError, TypeError) as exc:
+                    return jsonify({"error": str(exc)}), 400
+
             # Update the master XI lists in the instance
             if home_final_xi:
                 match_instance.home_xi = home_final_xi

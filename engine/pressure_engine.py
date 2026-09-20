@@ -29,7 +29,20 @@ class PressureEngine:
 
         # Recent events for momentum (last 3 balls)
         self.recent_events = []
-    
+
+    # ── Short-format (T10) helpers ──────────────────────────────────────────
+    # Every raw run-rate threshold in this class (12 / 14 / 16 / 18 / 20 RPO)
+    # was written against a 20-over game where par is ~8.5 RPO. A T10 chase
+    # asks 9.5-15.5 from the first ball depending on the surface, so those
+    # constants fire permanently rather than in a crisis. Short formats read
+    # them relative to the pitch's own neutral rate instead.
+    @property
+    def _is_short(self):
+        return bool(getattr(self.fmt, "strict_short_bowling", False))
+
+    def _rate_baseline(self, pitch):
+        """Neutral RPO for this pitch in this format (T10 Hard ~12.5)."""
+        return (getattr(self.fmt, "rrr_baseline", None) or {}).get(pitch, 12.5)
 
     def calculate_unified_risk_factor(self, match_state):
         """Calculate unified risk factor based on death overs and required rate"""
@@ -41,7 +54,7 @@ class PressureEngine:
         overs_remaining = match_state.get('overs_remaining', 0)
         
         if self.fmt.strict_short_bowling:
-            baseline = self.fmt.rrr_baseline.get(match_state.get('pitch', 'Hard'), 11.3)
+            baseline = self._rate_baseline(match_state.get('pitch', 'Hard'))
             urgency = max(0.0, required_rr / baseline - 1.0)
             # A normal T10 asking rate must not trigger T20's 12-RPO crisis.
             phase_risk = .20 if self.fmt.is_death(current_over) else 0.0
@@ -90,15 +103,24 @@ class PressureEngine:
             slog_boost = 0.05 + (current_over - int(0.7 * (self.fmt.scheduled_overs or 50))) * 0.02  # 0.05 → 0.13
             return min(1.0 + slog_boost, 1.25)
 
-        # Only accelerate from the over before death onwards
-        if current_over < _pre_death:
+        # Only accelerate from the over before death onwards.
+        #
+        # Short formats start at the middle overs instead. Over 7 of 10 is far
+        # too late for a side batting first to answer being behind its own par,
+        # and the chase has had an equivalent urgency term from the first ball
+        # (calculate_unified_risk_factor). That one-sided timing is why the
+        # chase could match the first innings' run rate through overs 4-7 while
+        # paying more in wickets for it: only one of the two innings had a way
+        # to trade risk for rate there.
+        _accel_from = self.fmt.middle_phase.start if self._is_short else _pre_death
+        if current_over < _accel_from:
             return 1.0
 
         risk_factor     = 1.0
         wickets_in_hand = 10 - wickets
 
         # Death/pre-death base acceleration
-        death_boost  = 0.1 + (current_over - _pre_death) * 0.05
+        death_boost  = max(0.0, 0.1 + (current_over - _pre_death) * 0.05)
         risk_factor += death_boost
 
         # Wickets-in-hand multiplier
@@ -109,11 +131,17 @@ class PressureEngine:
         elif wickets_in_hand <= 2:
             risk_factor -= 0.15   # Protect wickets, reduce aggression
 
-        # Score-based urgency: use format par scores instead of T20 lookup
+        # Score-based urgency: use format par scores instead of T20 lookup.
+        # par_scores is the neutral (Hard) curve, so short formats scale it by
+        # the surface — otherwise a Green T10 side on 45 after 5 is judged
+        # against a Hard par of 58 and told to panic on a pitch where 45 is fine.
         par = self.fmt.par_scores.get(
             current_over,
             self.fmt.par_scores.get(self.fmt.overs, 0)
         )
+        if self._is_short:
+            par *= (getattr(self.fmt, "pitch_par_factors", None) or {}).get(
+                match_state.get('pitch', 'Hard'), 1.0) or 1.0
         if par > 0:
             if score < par - 15:
                 risk_factor += 0.15   # Well behind par — desperate
@@ -135,7 +163,20 @@ class PressureEngine:
         """Calculate defensive factor when team is protecting wickets in death overs"""
         if match_state['innings'] != 2:
             return None
-        
+
+        # Short formats have no defensive mode at all. This block is an
+        # if/else against get_risk_based_effects() in match.py, so whenever it
+        # fires it REPLACES aggression with blocking (boundaries x0.70, dots
+        # +0.30, singles x1.8) — and its gate, death overs with 6 down, is a
+        # routine T10 position rather than a lost cause. There is no draw to
+        # bat out in a 10-over game: a side 6 down in over 8 still has to
+        # score. The cases this legitimately covered are already handled
+        # elsewhere and stay — an easy chase by the required-aggression bands
+        # in game_state_engine (< 0.67 / < 0.89), and a genuinely exposed tail
+        # by that module's resource-conservatism section.
+        if self._is_short:
+            return None
+
         current_over = match_state.get('current_over', 0)
         wickets_fallen = match_state.get('wickets', 0)
         overs_remaining = match_state.get('overs_remaining', 0)
@@ -197,8 +238,18 @@ class PressureEngine:
 
         required_rr = match_state.get('required_run_rate', 0)
 
-        # Second innings: death overs with extreme required rate
-        if self.fmt.is_death(current_over) and required_rr >= 14:
+        # Second innings: death overs with extreme required rate.
+        # 14 RPO is a crisis in a T20 chase and a par asking rate in a T10 one,
+        # so short formats scale the gate to the surface (T10 Hard: 20.0) and
+        # halve the per-ball chance — 60 balls cannot absorb a T20 cluster rate.
+        _short = self._is_short
+        if _short:
+            _gate = self._rate_baseline(match_state.get('pitch', 'Hard')) * 1.6
+            _span = _gate * 0.43          # same gate-relative width as 14 -> 20
+        else:
+            _gate, _span = 14, 6
+
+        if self.fmt.is_death(current_over) and required_rr >= _gate:
             
             # Higher chance if already under pressure
             if wickets_fallen >= 5:
@@ -209,8 +260,11 @@ class PressureEngine:
                 cluster_chance = 0.08  # 8% chance per ball
             
             # Increase chance based on how impossible the chase is
-            impossibility_factor = min((required_rr - 14) / 6, 1.0)  # 0-1 scale
+            impossibility_factor = min((required_rr - _gate) / _span, 1.0)  # 0-1 scale
             cluster_chance += impossibility_factor * 0.1
+
+            if _short:
+                cluster_chance *= 0.5
             
             # Reduce chance if wickets already fell recently (avoid unrealistic collapses)
             if recent_wickets >= 2:
@@ -231,6 +285,56 @@ class PressureEngine:
 
         risk_multiplier = risk_factor - 1.0
         innings = match_state.get('innings', 1)
+
+        # Short formats (T10): ONE shape for both innings, and a boundary
+        # coefficient above the wicket one so risk actually buys runs.
+        #
+        # The T20 model below hands the chase the same boundary payoff as the
+        # first innings (1.2x, or 2.0x for T20 itself) but 1.5x the wicket
+        # cost, plus a dot bonus and double the strike-rotation penalty. Over
+        # 60 balls that made second-innings aggression strictly worse than
+        # first-innings aggression: measured T10 chases lost 27-88% more
+        # wickets per ball than the side batting first while scoring no
+        # faster. Equal coefficients in both innings are what keep the two
+        # halves of a T10 match reading alike.
+        if self._is_short:
+            effects = {
+                'risk_active': True,
+                'risk_factor': risk_factor,
+                'boundary_boost': 1.0 + (risk_multiplier * 1.6),
+                'wicket_boost': 1.0 + (risk_multiplier * 1.0),
+                'dot_increase': 0,
+                'strike_rotation_penalty': min(risk_multiplier * 0.2, 0.3),
+                'single_floor': 0.08,
+                'mode': 'FIRST_INNINGS_PUSH' if innings == 1 else 'SHORT_CHASE_PUSH',
+            }
+            if innings == 2:
+                # No extra desperation ladder here. The T20 path below multiplies
+                # wickets by a further 1.5-2.5x once RRR passes 16/18/20, and
+                # over 60 balls that landed almost entirely in the final over:
+                # measured, a T10 chase was losing 88% more wickets than the
+                # first innings in over 10 alone, which is most of what was
+                # left of the parity gap. game_state_engine's required-
+                # aggression bands already reach Six x1.90 / Wicket x1.55 at
+                # the same required rate on the same delivery, so this layer
+                # was only ever counting the same desperation a second time.
+                # It is named here rather than deleted because the mode label
+                # still reads correctly in commentary and logs.
+                _rrr = match_state.get('required_run_rate', 0)
+                _base = self._rate_baseline(match_state.get('pitch', 'Hard'))
+                if match_state.get('current_over', 0) >= self.fmt.death_phase.start:
+                    if _rrr >= _base * 2.00:
+                        effects['mode'] = 'ABSOLUTE_CHAOS'
+                    elif _rrr >= _base * 1.75:
+                        effects['mode'] = 'RECKLESS_HITTING'
+                    elif _rrr >= _base * 1.50:
+                        effects['mode'] = 'DESPERATE_SWINGING'
+            logger.info(
+                f"{effects['mode']}: risk={risk_factor:.2f}, "
+                f"boundaries={effects['boundary_boost']:.2f}x, "
+                f"wickets={effects['wicket_boost']:.2f}x"
+            )
+            return effects
 
         # First innings: moderate acceleration (setting a total, not chasing)
         if innings == 1:
@@ -274,7 +378,7 @@ class PressureEngine:
         effects = {
             'risk_active': True,
             'risk_factor': risk_factor,
-            'boundary_boost': 1.0 + (risk_multiplier * (1.2 if self.fmt.strict_short_bowling else 2.0)),  # 🔧 INCREASED from 1.8
+            'boundary_boost': 1.0 + (risk_multiplier * 2.0),  # 🔧 INCREASED from 1.8
             'wicket_boost': wicket_multiplier,
             'dot_increase': max(0, (risk_multiplier - 0.5) * 0.3),  # 🔧 ONLY for extreme risk
             'strike_rotation_penalty': min(risk_multiplier * 0.4, 0.5),  # Capped at 50%
@@ -357,17 +461,30 @@ class PressureEngine:
         current_over = state['current_over']
         current_rr = state['current_run_rate']
         wickets = state['wickets']
-        
+
+        # expected_rr_first_innings is one format-wide number per phase. For
+        # short formats scale it to the surface, exactly as the chase side of
+        # this class now does: T10's death expectation is 15.0 RPO, which no
+        # Green first innings (par 9.5) can ever reach, so every death
+        # delivery there scored the full "well behind acceleration" +30 and
+        # pushed the side batting first into the >70 band — boundary x0.95,
+        # wicket x1.35. That is first-innings suppression of exactly the kind
+        # the chase was just freed from, and it is why Green under-scored.
+        _scale = 1.0
+        if self._is_short:
+            _scale = (getattr(self.fmt, "pitch_par_factors", None) or {}).get(
+                state.get('pitch', 'Hard'), 1.0) or 1.0
+
         # Phase-specific pressure
         if self.fmt.is_powerplay(current_over):
-            expected_rr = self.expected_rr_first_innings['powerplay']
+            expected_rr = self.expected_rr_first_innings['powerplay'] * _scale
             if current_rr < expected_rr - 1.5:   # Significantly behind
                 pressure += 25
             elif current_rr < expected_rr - 0.5:  # Slightly behind
                 pressure += 15
 
         elif self.fmt.is_death(current_over):     # Death overs - acceleration pressure
-            expected_rr = self.expected_rr_first_innings['death']
+            expected_rr = self.expected_rr_first_innings['death'] * _scale
             if current_rr < expected_rr - 2.0:   # Well behind acceleration
                 pressure += 30
             elif current_rr < expected_rr - 1.0:  # Behind acceleration
@@ -395,9 +512,30 @@ class PressureEngine:
         wickets_left = 10 - state['wickets']
         required_rr = state['required_run_rate']
         current_rr = state['current_run_rate']
-        
-        # High pressure in last 5 overs
-        if overs_left <= 5:
+
+        # Thresholds below are T20 constants: "last 5 overs" is a quarter of a
+        # T20 innings but HALF a T10 one, and "RRR above 12" is a crisis at a
+        # T20 par of 8.5 RPO and merely par at a T10 one of 12.5. Left as-is a
+        # T10 chase sat permanently in the high-pressure band, which returns a
+        # boundary PENALTY (0.95x) and 1.35x wickets from get_pressure_effects
+        # — pressure that suppressed hitting for the entire second innings.
+        # Short formats read the same shape relative to the format and pitch;
+        # T20 and List A keep the exact numbers they were calibrated on.
+        if self._is_short:
+            _base = self._rate_baseline(state.get('pitch', 'Hard'))
+            _late_overs = max(2, self.fmt.overs // 4)
+            # A required rate drifts above the pitch baseline as soon as a
+            # chase is even slightly behind, so thresholds close to 1.0 put
+            # the second innings under standing pressure (and its wicket
+            # multiplier) for most of the match with nothing equivalent on
+            # the other side. These sit far enough out to mean real trouble.
+            _rrr_high, _rrr_mid = _base * 1.50, _base * 1.25
+            _endgame_runs = max(1.0, min(2.0, overs_left)) * _base * 1.3
+        else:
+            _late_overs, _rrr_high, _rrr_mid, _endgame_runs = 5, 12, 10, 15
+
+        # High pressure in the closing overs
+        if overs_left <= _late_overs:
             # Required run rate pressure
             rr_gap = required_rr - current_rr
             if rr_gap > 3.0:
@@ -414,13 +552,13 @@ class PressureEngine:
                 pressure += 15
             
             # Overs pressure (very few overs left)
-            if overs_left <= 2 and runs_needed > 15:
+            if overs_left <= 2 and runs_needed > _endgame_runs:
                 pressure += 20
         
         # General chase pressure (throughout innings)
-        if required_rr > 12:
+        if required_rr > _rrr_high:
             pressure += 15
-        elif required_rr > 10:
+        elif required_rr > _rrr_mid:
             pressure += 10
         
         # Add momentum pressure
@@ -484,9 +622,21 @@ class PressureEngine:
         current_over = match_state.get('current_over', 0)
         wickets_remaining = 10 - match_state.get('wickets', 0)
 
+        # Short formats: exactly neutral. The 1.02 wicket bias List A carries
+        # below is a scoreboard-pressure tax that makes sense over 300 balls
+        # and not over 60 — it was a standing 2% wicket penalty applied to
+        # every chase delivery, on top of every other second-innings
+        # multiplier. Parity between the innings here is structural, not tuned.
+        if self.fmt.strict_short_bowling:
+            return {
+                'boundary_boost': 1.00,
+                'wicket_reduction': 1.00,
+                'strike_rotation_boost': 1.00
+            }
+
         # ListA: remove blanket chase buff. Long chases carry scoreboard pressure,
         # so keep boundaries neutral and add a slight wicket-pressure bias.
-        if self.fmt.name == "ListA" or self.fmt.strict_short_bowling:
+        if self.fmt.name == "ListA":
             return {
                 'boundary_boost': 1.00,
                 'wicket_reduction': 1.02,  # >1.0 means slightly higher wicket risk
@@ -537,6 +687,21 @@ class PressureEngine:
                 'strike_rotation_penalty': 0.05  # Minimal penalty
             }
         else:  # High pressure - boom-or-bust, more wickets
+            if self._is_short:
+                # No boundary penalty in a short format. Both halves of the
+                # T10 match are meant to be hitting; "pressure makes clean
+                # hitting harder" is the one term here that says otherwise,
+                # and because the chase reaches this band far more often than
+                # the side batting first (its score stacks required-rate,
+                # wickets-left and overs-left bonuses the first innings has no
+                # counterpart for), a symmetric-looking rule was in practice a
+                # standing tax on the second innings.
+                return {
+                    'dot_bonus': 0.0,
+                    'boundary_modifier': 1.0,
+                    'wicket_modifier': 1.20,
+                    'strike_rotation_penalty': 0.1
+                }
             return {
                 'dot_bonus': 0.03,
                 'boundary_modifier': 0.95,  # Pressure makes clean hitting harder
