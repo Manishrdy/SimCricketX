@@ -28,7 +28,9 @@
 <div class="tour-grid tb-formats">
 {% for fmt in formats %}
 <div class="tb-format is-unavailable" data-format="{{ fmt }}">
-<div class="tb-format-heading"><h3>{{ 'First Class' if fmt == 'FC' else ('List A' if fmt == 'ListA' else 'T20') }}</h3><span class="tb-availability" id="availability-{{ fmt }}">Select teams</span></div>
+<div class="tb-format-heading"><h3>{{ format_labels[fmt] }}</h3><span class="tb-availability" id="availability-{{ fmt }}">Select teams</span></div>
+{% if fmt == 'ListA' %}<label for="tour-scheduled-overs">Innings length</label>
+<select id="tour-scheduled-overs" name="scheduled_overs"><option value="50">50 overs</option><option value="40" {% if request.form.get('scheduled_overs') == '40' %}selected{% endif %}>40 overs</option></select>{% endif %}
 <ul class="tb-squad-status" id="squads-{{ fmt }}"></ul>
 <label for="count-{{ fmt }}">Number of matches</label>
 <input id="count-{{ fmt }}" name="count_{{ fmt }}" type="number" min="0" step="1" required disabled value="{{ request.form.get('count_' ~ fmt, '0') }}" aria-describedby="reason-{{ fmt }}">
@@ -59,6 +61,7 @@
 </section>
 </form></div>
 <template id="series-order-row"><li class="tb-order-row" draggable="true"><span class="tb-drag" aria-hidden="true">⠿</span><div class="tb-order-description"><span class="tb-sequence"></span><strong></strong><small></small></div><div class="tb-order-controls"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button></div></li></template>
+<script>window.CRICKET_TOUR_FORMATS = {{ tour_formats | tojson }};</script>
 <script id="tour-team-data" type="application/json">{{ team_availability|tojson }}</script>
 <script id="tour-initial-order" type="application/json">{{ request.form.getlist('format_order')|tojson }}</script>
 {% include 'tournaments/tour_styles.html' %}

@@ -3,6 +3,7 @@
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/player_comparison.css') }}">{% endblock %}
 {% block content %}
 <div class="cmp-page">
+{% include '_lista_length_filter.html' %}
   <header class="cmp-hero"><div><span class="cmp-eyebrow">THE COMPARISON LAB</span><h1>One shortlist. Every format.</h1><p>Explore performance, scoring patterns, and relative strengths across your saved matches.</p></div><a href="{{ url_for('statistics') }}">← Statistics</a></header>
   <section class="cmp-card" aria-labelledby="selection-title">
     <div class="cmp-heading"><h2 id="selection-title">Build your shortlist <span id="cmp-count">0 / 6</span></h2><button id="cmp-clear" type="button">Clear selection</button></div>
@@ -10,7 +11,7 @@
     <div class="cmp-controls"><label>Search players<input id="cmp-search" type="search" placeholder="Name or team…"></label><label>Tournament<select id="cmp-tournament"><option value="">All saved matches</option>{% for t in tournaments %}<option value="{{ t.id }}" data-format="{{ t.format_type }}">{{ t.name }}</option>{% endfor %}</select></label></div>
     <div id="cmp-picker" class="cmp-picker">{% for p in comparison_players %}<label class="cmp-choice" data-search="{{ (p.name ~ ' ' ~ p.teams|join(' '))|lower }}"><input type="checkbox" value="{{ p.id }}"><span><strong>{{ p.name }}</strong><small>{{ p.teams|join(' · ') }}{% if not p.linked %} · Unlinked #{{ p.player_ids[0] }}{% endif %}</small></span></label>{% endfor %}</div>
     <p id="cmp-search-empty" hidden>No matching players.</p>
-    <div class="cmp-toolbar"><fieldset><legend>Visible formats</legend>{% for fmt, label in [('T20', 'T20'), ('ListA', 'List A'), ('FC', 'First-Class')] %}<label><input type="checkbox" name="cmp-format" value="{{ fmt }}" checked> {{ label }}</label>{% endfor %}</fieldset><button type="button" id="cmp-refresh" disabled>↻ Refresh statistics</button></div>
+    <div class="cmp-toolbar"><fieldset><legend>Visible formats</legend>{% for fmt, label in format_labels.items() %}<label><input type="checkbox" name="cmp-format" value="{{ fmt }}" checked> {{ label }}</label>{% endfor %}</fieldset><button type="button" id="cmp-refresh" disabled>↻ Refresh statistics</button></div>
     <p id="cmp-scope" class="cmp-muted">All three formats · Saved matches only</p>
   </section>
   <div id="cmp-status" role="status" aria-live="polite">Select at least two players to begin.</div>
@@ -29,6 +30,7 @@
 </div>
 {% endblock %}
 {% block extra_js %}
+<script>window.CRICKET_FORMAT_LABELS = {{ format_labels | tojson }};</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/player_comparison.js') }}"></script>
 {% endblock %}

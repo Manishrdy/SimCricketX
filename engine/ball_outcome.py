@@ -29,7 +29,7 @@ from engine.ground_config import (
     get_fc_rough_targeting_factor as _gc_fc_rough_targeting_factor,
 )
 from engine.game_state_engine import apply_game_state_to_probs
-from engine.format_config import FormatConfig
+from engine.format_config import FormatConfig, FORMAT_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -363,6 +363,9 @@ def _apply_dew_factor(weights: dict, innings: int, over: int,
     dew = _gc_lista_dew(config=config)
     dew_start = dew.get("start_over", 24)   # 0-based over index (= over 25)
     dew_peak = dew.get("peak_over", 44)     # full effect by over 45
+    scale = (getattr(fmt, "scheduled_overs", None) or 50) / 50
+    dew_start = max(0, int((dew_start + 1) * scale) - 1)
+    dew_peak = max(dew_start, int((dew_peak + 1) * scale) - 1)
     if over < dew_start:
         return weights
 
@@ -476,6 +479,9 @@ def compute_weighted_prob(
     Includes special handling for "Hard" pitch (80/20 split), new-batter vulnerability,
     and graduated confidence curve.
     """
+    _short = getattr(FORMAT_REGISTRY.get(format_name), "strict_short_bowling", False)
+    if config is None and _short:
+        config = _gc_defaults(format_name)
     # 0) Batter innings phase modifiers
     effective_batting = batting
 
@@ -488,7 +494,12 @@ def compute_weighted_prob(
     # slip cordon waiting, before your eye is in, is the single most
     # dangerous passage in the long game — and it is what produces a
     # first-class duck rate of 10-14 per 100 innings.
-    if balls_faced <= 2:
+    if _short:
+        if balls_faced < 2:
+            effective_batting *= .90
+        elif balls_faced < 4:
+            effective_batting *= .96
+    elif balls_faced <= 2:
         effective_batting *= _FC_NEW_BATTER_EARLY if _is_fc else (0.88 if _is_lista else 0.82)
     elif balls_faced <= 5:
         effective_batting *= _FC_NEW_BATTER_LATE if _is_fc else (0.94 if _is_lista else 0.90)
@@ -510,9 +521,9 @@ def compute_weighted_prob(
         effective_batting *= 1.02 if _is_fc else (1.02 if _is_lista else 1.05)
 
     # Balls-faced confidence layer (independent of runs).
-    if balls_faced >= 20:
+    if balls_faced >= (10 if _short else 20):
         effective_batting *= 1.02 if _flat_confidence else 1.05
-    elif balls_faced >= 12:
+    elif balls_faced >= (6 if _short else 12):
         effective_batting *= 1.01 if _flat_confidence else 1.03
 
     # 1) Player-skill fraction
@@ -836,7 +847,8 @@ def _select_fielder(fielding_team, wicket_type: str = None, exclude_name: str = 
         candidates = list(fielding_team)
         weights = [p.get("fielding_rating", 60) for p in candidates]
 
-    chosen = random.choices(candidates, weights=weights)[0]
+    # Zero is a valid rating; an all-zero XI still needs a fielder.
+    chosen = random.choices(candidates, weights=weights if any(weights) else None)[0]
     return chosen["name"], chosen.get("fielding_rating", 60)
 
 
@@ -970,6 +982,9 @@ def calculate_outcome(
     #    ListA: phase-specific matrix (PP1 / Middle / Death) scaled by pitch run factor.
     #    T20 / legacy: ground_conditions.yaml → hardcoded matrix (existing path).
     _gc = ground_config_override  # shorthand; None → global config cache
+    _short = bool(format_config and format_config.strict_short_bowling) if not _fmt_is_fc else False
+    if _gc is None and _short:
+        _gc = _gc_defaults(format_config.name)
     _is_lista = (format_config is not None and format_config.name == "ListA")
     _is_fc = (format_config is not None and getattr(format_config, "format_family", None) == "multi_day")
     _fc_technique_weight = 0.30
@@ -1091,7 +1106,7 @@ def calculate_outcome(
             # Powerplay boosts
             pp_start = _pp_cfg.get("overs_start", 0)
             pp_end = _pp_cfg.get("overs_end", 5)
-            if pp_start <= over_number <= pp_end:
+            if (format_config.is_powerplay(over_number) if _short else pp_start <= over_number <= pp_end):
                 if outcome in ("Four", "Six"):
                     pp_boost = _pp_cfg.get("boundary_multiplier", 1.25)
                     logger.debug(f"  [Powerplay] Boosting {outcome} by {pp_boost}x")
@@ -1100,7 +1115,7 @@ def calculate_outcome(
             # Death-over boosts (last 4 overs: 17-20)
             death_start = _death_cfg.get("overs_start", 16)
             death_end = _death_cfg.get("overs_end", 19)
-            in_death = death_start <= over_number <= death_end
+            in_death = format_config.is_death(over_number) if _short else death_start <= over_number <= death_end
 
             if in_death:
                 if outcome in ("Four", "Six"):

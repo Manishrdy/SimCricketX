@@ -5,9 +5,8 @@ engine/format_config.py
 Single source of truth for all format-specific parameters in SimCricketX.
 Last reviewed: 2026-04-30.
 
-Every engine component that has a format-sensitive value reads from a
-FormatConfig instance rather than hardcoding T20 constants.  Adding a new
-format (e.g. Test, T10) requires only a new entry in FORMAT_REGISTRY.
+FormatConfig centralizes simulation parameters. List A supports scheduled
+40- and 50-over variants while retaining the same team and rating identity.
 
 Usage
 -----
@@ -22,8 +21,11 @@ Usage
 """
 
 import dataclasses
+import copy
+import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union
+from engine.format_catalog import FORMAT_CATALOG, default_scheduled_overs
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +100,26 @@ class FormatConfig:
     # and applies everywhere; the free hit that follows it is not, and the
     # first-class playing conditions do not provide for one.
     free_hit_after_no_ball: bool = True
+    # Original match length: rain may mutate overs, but never this value.
+    scheduled_overs: Optional[int] = None
+    strict_short_bowling: bool = False
+    momentum_window: int = 18
+    dot_thresholds: tuple = (2, 4, 6, 8)
+    partnership_thresholds: tuple = (25, 50, 75, 100)
+
+    def revise_short_innings(self, overs: int) -> None:
+        """Rebuild short-format rules; never change the scheduled length."""
+        self.overs = overs
+        self.max_bowler_overs = max(1, math.ceil(overs / 5))
+        pp = 1 if overs <= 4 else 2 if overs <= 8 else 3
+        death_start = max(pp, overs - math.ceil(overs * .3))
+        self.powerplay_phases = [Phase("Powerplay", 0, pp - 1, 2)]
+        self.middle_phase = Phase("Middle", pp, death_start - 1, 5)
+        self.death_phase = Phase("Death", death_start, overs - 1, 5)
+        if self.strict_short_bowling:
+            self.par_scores = {0: 0.0}
+            for over in range(overs):
+                self.par_scores[over + 1] = self.par_scores[over] + self.expected_rr[self.phase_key(over)]
 
     # ------------------------------------------------------------------ #
     # Phase helpers                                                        #
@@ -369,13 +391,67 @@ FORMAT_REGISTRY: Dict[str, FormatConfig] = {
     "ListA": _LISTA,
 }
 
+# Independent preset, sharing only the delivery model with T20.
+_T10 = copy.deepcopy(_T20)
+_T10.name = "T10"
+_T10.scheduled_overs = 10
+_T10.strict_short_bowling = True
+_T10.momentum_window = 12
+_T10.dot_thresholds = (2, 3, 5, 6)
+_T10.partnership_thresholds = (15, 30, 45, 60)
+_T10.revise_short_innings(10)
+_T10.expected_rr = {"Powerplay": 10.5, "Middle": 10.5, "Death": 13.0}
+_T10.par_scores = {0: 0.0}
+for _over in range(10):
+    _T10.par_scores[_over + 1] = _T10.par_scores[_over] + _T10.expected_rr[_T10.phase_key(_over)]
+_T10.target_scores = {"Green": 83, "Dry": 88, "Hard": 113, "Flat": 130, "Dead": 148}
+_T10.pitch_par_factors = {pitch: total / _T10.par_scores[10] for pitch, total in _T10.target_scores.items()}
+_T10.rrr_baseline = {pitch: total / 10 for pitch, total in _T10.target_scores.items()}
+_T10.extras_per_innings = 3
+FORMAT_REGISTRY["T10"] = _T10
 
-def get_format(match_format: Optional[str]) -> FormatConfig:
+
+def resolve_scheduled_overs(match_format, scheduled_overs=None):
+    """Validate immutable match length, independently of rain-revised overs."""
+    default = default_scheduled_overs(match_format)
+    if scheduled_overs is None or scheduled_overs == "":
+        return default
+    allowed = FORMAT_CATALOG.get(match_format, {}).get("lengths", ())
+    if isinstance(scheduled_overs, bool) or str(scheduled_overs) not in {str(n) for n in allowed}:
+        raise ValueError("Invalid scheduled overs for this format")
+    return int(scheduled_overs)
+
+
+def format_label(match_format, scheduled_overs=None):
+    if match_format == "ListA":
+        return f"List A · {resolve_scheduled_overs(match_format, scheduled_overs)} overs"
+    return "First-Class" if match_format == "FC" else match_format
+
+
+def get_format(match_format: Optional[str], scheduled_overs=None) -> FormatConfig:
     """
     Return the FormatConfig for the given match_format string.
     Defaults to T20 for None or unrecognised values (backward compat).
     """
-    return FORMAT_REGISTRY.get(match_format or "T20", FORMAT_REGISTRY["T20"])
+    base = FORMAT_REGISTRY.get(match_format or "T20", FORMAT_REGISTRY["T20"])
+    fmt = copy.deepcopy(base)
+    length = resolve_scheduled_overs(base.name, scheduled_overs)
+    fmt.scheduled_overs = length
+    if base.name == "ListA" and length == 40:
+        fmt.overs = 40
+        fmt.max_bowler_overs = 8
+        fmt.powerplay_phases = [Phase("PP1", 0, 7, 2)]
+        fmt.middle_phase = Phase("Middle", 8, 31, 4)
+        fmt.death_phase = Phase("Death", 32, 39, 5)
+        fmt.par_scores = {}
+        for over in range(41):
+            at = over * 1.25
+            lo, hi = math.floor(at), math.ceil(at)
+            fmt.par_scores[over] = 0.8 * (base.par_scores[lo] +
+                (base.par_scores[hi] - base.par_scores[lo]) * (at - lo))
+        fmt.target_scores = {pitch: round(total * 0.8) for pitch, total in base.target_scores.items()}
+        fmt.extras_per_innings = round(base.extras_per_innings * 0.8)
+    return fmt
 
 
 # ---------------------------------------------------------------------------
@@ -499,20 +575,21 @@ def get_any_format(match_format: Optional[str], **overrides) -> Union[FormatConf
     Parameters
     ----------
     match_format : "T20" | "ListA" | "FC" | None
-    overrides    : family-specific per-match overrides, for "FC":
+    overrides    : `scheduled_overs` (40/50 for ListA, 20 for T20); for "FC":
                    `days` (int, 4 or 5) and `overs_per_day` (int, Phase 2 —
                    defaults to the format's standard 90 if omitted).
 
-    Returns a fresh per-instance copy (dataclasses.replace) so per-match
+    Returns a fresh per-instance deep copy so per-match
     mutation (e.g. rain revisions, per-match `days`) never touches the
     shared registry singleton — the same discipline `get_format()` already
     relies on for T20/ListA.
     """
     if match_format in FORMAT_REGISTRY:
-        return dataclasses.replace(FORMAT_REGISTRY[match_format])
+        return get_format(match_format, overrides.get("scheduled_overs"))
 
     if match_format in MULTIDAY_FORMAT_REGISTRY:
-        base = MULTIDAY_FORMAT_REGISTRY[match_format]
+        resolve_scheduled_overs(match_format, overrides.get("scheduled_overs"))
+        base = copy.deepcopy(MULTIDAY_FORMAT_REGISTRY[match_format])
         days = overrides.get("days") or base.days
         overs_per_day = overrides.get("overs_per_day") or base.overs_per_day
         return dataclasses.replace(
@@ -522,4 +599,4 @@ def get_any_format(match_format: Optional[str], **overrides) -> Union[FormatConf
             follow_on_margin=200 if days >= 5 else 150,
         )
 
-    return dataclasses.replace(FORMAT_REGISTRY["T20"])
+    return get_format("T20", overrides.get("scheduled_overs"))

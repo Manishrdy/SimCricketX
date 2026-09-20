@@ -96,7 +96,7 @@ def test_list_a_and_first_class_get_their_real_names(
 
     grid = _meta_grid(_render(app_module, authenticated_client,
                               _match_data(regular_user.id, match_format="ListA")))
-    assert ">List A<" in grid
+    assert ">List A · 50 overs<" in grid
 
     grid = _meta_grid(_render(app_module, authenticated_client,
                               _match_data(regular_user.id, match_format="FC", days=5,

@@ -378,7 +378,7 @@ def register_player_pool_routes(app, *, db, DBMasterPlayer, DBUserPlayer):
             "batting_rating": t20["batting"],
             "bowling_rating": t20["bowling"],
             "fielding_rating": t20["fielding"],
-            "format_ratings": {"T20": t20, "ListA": list_a, "FC": fc},
+            "format_ratings": {"T20": t20, "T10": dict(t20), "ListA": list_a, "FC": fc},
             "batting_hand": obj.batting_hand or "",
             "bowling_type": obj.bowling_type or "",
             "bowling_hand": obj.bowling_hand or "",

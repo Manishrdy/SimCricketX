@@ -199,7 +199,8 @@ def register_tournament_routes(
     @login_required
     @limiter.limit("10 per minute")
     def create_tournament_route():
-        VALID_TOURNAMENT_FORMATS = {"T20", "ListA", "FC"}
+        from engine.format_catalog import SUPPORTED_FORMATS
+        VALID_TOURNAMENT_FORMATS = set(SUPPORTED_FORMATS)
 
         if request.method == "POST":
             name = (request.form.get("name") or "").strip()
@@ -293,6 +294,7 @@ def register_tournament_routes(
                     mode=mode,
                     series_config=series_config,
                     format_type=match_format,
+                    scheduled_overs=request.form.get("scheduled_overs"),
                     creation_token=creation_token,
                 )
                 flash(f"Tournament '{name}' created successfully!", "success")

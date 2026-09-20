@@ -6,7 +6,8 @@ from sqlalchemy import and_, or_
 from database import db
 from database.models import Player, Team, UserPlayer, Match, MatchScorecard, Tournament
 
-FORMATS = ('T20', 'ListA', 'FC')
+from engine.format_catalog import SUPPORTED_FORMATS
+FORMATS = SUPPORTED_FORMATS
 
 
 def identities(user_id):
@@ -81,7 +82,7 @@ def add_insights(players, formats):
                 })
 
 
-def compare(service, user_id, identity_ids, tournament_id=None):
+def compare(service, user_id, identity_ids, tournament_id=None, scheduled_overs=None):
     if len(identity_ids) != len(set(identity_ids)):
         raise ValueError('Select distinct player identities')
     if not 2 <= len(identity_ids) <= 6:
@@ -103,7 +104,7 @@ def compare(service, user_id, identity_ids, tournament_id=None):
                      Match.match_format.in_(formats), MatchScorecard.is_super_over.isnot(True)))
     if tournament_id is not None:
         query = query.filter(Match.tournament_id == tournament_id)
-    rows = query.order_by(Match.date, Match.id, MatchScorecard.innings_number, MatchScorecard.id).all()
+    rows = service._filter_length(query, scheduled_overs).order_by(Match.date, Match.id, MatchScorecard.innings_number, MatchScorecard.id).all()
     buckets = defaultdict(list)
     for card, match in rows:
         buckets[(owners[card.player_id], match.match_format)].append((card, match))

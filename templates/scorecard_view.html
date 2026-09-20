@@ -408,6 +408,7 @@ Match Scorecard - SimCricketX
         </div>
         {% endif %}
         <div class="match-info">
+            <span>{{ match.format_label }}</span> ·
             {{ match.team_home }} vs {{ match.team_away }} • {{ match.venue }}
         </div>
         {% if match.motm_player_name %}

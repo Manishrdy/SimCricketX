@@ -24,7 +24,7 @@
                 <div class="ch-choice-top"><span class="ch-choice-icon" aria-hidden="true"><i class="fas fa-route"></i></span><span class="ch-choice-kicker">THE COMPLETE JOURNEY</span></div>
                 <h3 id="ch-tour-title">Create a Tour</h3>
                 <p id="ch-tour-description">Two teams. Multiple formats. Bring a collection of series together into one tour.</p>
-                <div class="ch-format-route" aria-label="Choose any combination of FC, List A and T20"><span>FC</span><i aria-hidden="true"></i><span>List A</span><i aria-hidden="true"></i><span>T20</span></div>
+                <div class="ch-format-route" aria-label="Choose any combination of FC, List A, T20 and T10"><span>FC</span><i aria-hidden="true"></i><span>List A</span><i aria-hidden="true"></i><span>T20</span><i aria-hidden="true"></i><span>T10</span></div>
                 <ul class="ch-features"><li><i class="fas fa-check" aria-hidden="true"></i>Your match counts &amp; series order</li><li><i class="fas fa-check" aria-hidden="true"></i>Series results &amp; overall tour stats</li></ul>
                 <div class="ch-choice-bottom"><span>Set up your tour <i class="fas fa-arrow-right" aria-hidden="true"></i></span><small>Skip any format with 0 matches</small></div>
             </a>
@@ -34,7 +34,7 @@
                 <p id="ch-tournament-description">Choose one cricket format and compete in a league, knockout, or two-team series.</p>
                 <div class="ch-mode-options" aria-label="Competition types"><span><i class="fas fa-table-list" aria-hidden="true"></i>League</span><span><i class="fas fa-sitemap" aria-hidden="true"></i>Knockout</span><span><i class="fas fa-repeat" aria-hidden="true"></i>Series</span></div>
                 <ul class="ch-features"><li><i class="fas fa-check" aria-hidden="true"></i>Flexible teams &amp; competition structure</li><li><i class="fas fa-check" aria-hidden="true"></i>Fixtures, standings &amp; player stats</li></ul>
-                <div class="ch-choice-bottom"><span>Set up your tournament <i class="fas fa-arrow-right" aria-hidden="true"></i></span><small>Choose FC, List A, or T20</small></div>
+                <div class="ch-choice-bottom"><span>Set up your tournament <i class="fas fa-arrow-right" aria-hidden="true"></i></span><small>Choose FC, List A, T20, or T10</small></div>
             </a>
         </div>
     </section>
@@ -52,7 +52,7 @@
                 <div class="ch-card-top"><span class="ch-type">TOUR</span><span class="ch-status {% if tour.status == 'Completed' %}is-completed{% endif %}"><span aria-hidden="true"></span>{{ tour.status }}</span></div>
                 <h4>{{ tour.name }}</h4>
                 <p class="ch-card-description">{{ tour.series|length }} {{ 'series' }} · {{ totals.matches }} matches</p>
-                <div class="ch-tags">{% for series in tour.series %}<span>{{ format_label(series.format_type) }}</span>{% endfor %}</div>
+                <div class="ch-tags">{% for series in tour.series %}<span>{{ cricket_format_label(series.format_type, series.scheduled_overs) }}</span>{% endfor %}</div>
                 {{ progress(totals.played, totals.matches) }}
                 <div class="ch-card-footer"><span>View tour <i class="fas fa-arrow-right" aria-hidden="true"></i></span><time datetime="{{ tour.created_at.strftime('%Y-%m-%d') }}">{{ tour.created_at.strftime('%b %d, %Y') }}</time></div>
             </a>
@@ -68,7 +68,7 @@
                 <div class="ch-card-top"><span class="ch-type">TOURNAMENT</span><span class="ch-status {% if t.status == 'Completed' %}is-completed{% endif %}"><span aria-hidden="true"></span>{{ t.status }}</span></div>
                 <h4>{{ t.name }}</h4>
                 <p class="ch-card-description">{{ t.participating_teams|length }} teams · {{ t.mode|replace('_', ' ')|title }}</p>
-                <div class="ch-tags"><span>{{ format_label(t.format_type) }}</span></div>
+                <div class="ch-tags"><span>{{ cricket_format_label(t.format_type, t.scheduled_overs) }}</span></div>
                 {{ progress(played, t.fixtures|length) }}
                 <div class="ch-card-footer"><span>View tournament <i class="fas fa-arrow-right" aria-hidden="true"></i></span><time datetime="{{ t.created_at.strftime('%Y-%m-%d') }}">{{ t.created_at.strftime('%b %d, %Y') }}</time></div>
             </a>

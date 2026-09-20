@@ -32,6 +32,7 @@ from engine import fc_weather
 from engine.fc_batting_intent import ability, batting_intent, tail_protection
 from engine.fc_delivery import resolve_delivery
 from engine import ground_config as ground_config_engine
+from engine.short_bowler_manager import ShortBowlerManager
 from engine.toss import correct_decision, innings_teams
 from utils.exception_tracker import log_exception
 
@@ -150,13 +151,26 @@ class Match:
         # bowler quotas — the FORMAT_REGISTRY/MULTIDAY_FORMAT_REGISTRY
         # singletons are shared across every concurrent match and must
         # never be modified.
-        self.fmt = get_any_format(match_data.get("match_format", "T20"), days=match_data.get("days"))
+        self.fmt = get_any_format(match_data.get("match_format", "T20"), days=match_data.get("days"), scheduled_overs=match_data.get("scheduled_overs"))
         # First-Class (multi-day) matches take an entirely separate code
         # path through next_ball() — see the is_fc branches below and in
         # _innings_should_end()/_transition_to_next_innings(). self.innings
         # (1/2/3/4/5) carries overloaded super-over semantics that FC must
         # never touch; FC's own innings counter is self.fc_innings (1-4).
         self.is_fc = (self.fmt.format_family == "multi_day")
+        if getattr(self.fmt, "strict_short_bowling", False):
+            if self.ground_config is None:
+                self.ground_config = ground_config_engine.get_defaults(self.fmt.name, mutable=True)
+            for xi in (self.home_xi, self.away_xi):
+                if len(xi) != 11 or len({p["name"] for p in xi}) != 11:
+                    raise ValueError("Short-format matches require eleven distinct players per XI")
+                ShortBowlerManager(xi, self.fmt).validate_attack()
+        if match_data.get("scenario_pack"):
+            from engine.format_config import resolve_scheduled_overs
+            pack = match_data["scenario_pack"]
+            if (pack.get("format", "T20") != self.fmt.name or
+                    resolve_scheduled_overs(pack.get("format", "T20"), pack.get("scheduled_overs")) != getattr(self.fmt, "scheduled_overs", None)):
+                raise ValueError("Story duration does not match the scheduled match length")
 
         # First-class matches are auto-only. Four days of cricket is several
         # thousand deliveries, and being asked to name the next batter and
@@ -203,7 +217,7 @@ class Match:
             # declaration, all-out), which never reads self.overs.
             self.overs = self.fmt.days * self.fmt.overs_per_day
         else:
-            self.bowler_manager = BowlerManager(self.bowling_team, self.fmt)
+            self.bowler_manager = (ShortBowlerManager if getattr(self.fmt, "strict_short_bowling", False) else BowlerManager)(self.bowling_team, self.fmt)
             # Keep bowler_history as a live alias into BowlerManager's quota
             # dict so existing read-only usages remain valid without a
             # large refactor.
@@ -222,6 +236,9 @@ class Match:
         # it) — FC's own day-aware weather model is the separate
         # fc_weather_script below (engine/fc_weather.py).
         self.original_overs = self.overs
+        match_data["scheduled_overs"] = None if self.is_fc else self.original_overs
+        if not self.is_fc:
+            match_data["overs"] = self.original_overs
         self.weather_forecast = match_data.get("weather_forecast", weather_engine.DEFAULT_FORECAST)
         if self.is_fc:
             match_data.setdefault("weather_script", {"forecast": self.weather_forecast, "events": []})
@@ -563,7 +580,7 @@ class Match:
             if elapsed_days <= 3.0:
                 return 0.20 * elapsed_days / 3.0
             return min(1.0, 0.20 + 0.40 * (elapsed_days - 3.0))
-        _total_balls = self.fmt.overs * 6
+        _total_balls = (20 if getattr(self.fmt, "strict_short_bowling", False) else self.fmt.overs) * 6
         return min(1.0, self.innings_balls_bowled / _total_balls)
 
     def _ball_outcome_token(self, outcome, wicket, runs, extra):
@@ -753,6 +770,10 @@ class Match:
             "match_over": False,
             "decision_required": True,
             "decision_type": decision.get("type"),
+            "total_overs": self.overs,
+            "match_format": self.fmt.name,
+            "scheduled_overs": self.data.get("scheduled_overs"),
+            "phase_name": None if self.is_fc else self.fmt.get_phase(self.current_over).name,
             "decision_context": decision.get("context", {}),
             "decision_options": decision.get("options", []),
             "score": self.score,
@@ -768,7 +789,23 @@ class Match:
             response["ball_data"] = ball_data
         return response
 
+    def get_bowling_eligibility(self):
+        """Public short-format selection state, calculated by the same policy as play."""
+        if not getattr(self.fmt, "strict_short_bowling", False):
+            return None
+        selectable = (self.innings in (1, 2) and self.current_ball == 0
+                      and self.current_over < self.overs
+                      and self.bowler_selected_for_over != self.current_over)
+        candidates = self._get_manual_bowler_candidates() if selectable else []
+        return {"selectable": selectable, "over": self.current_over,
+                "options": [{"index": i, "name": p["name"],
+                             "overs_remaining": self.bowler_manager.overs_remaining(p["name"])}
+                            for i, p in candidates]}
+
     def _get_manual_bowler_candidates(self):
+        if getattr(self.fmt, "strict_short_bowling", False):
+            names = {p["name"] for p in self.bowler_manager.get_eligible_bowlers(self.current_over, self.overs - self.current_over)}
+            return [(i, p) for i, p in enumerate(self.bowling_team) if p["name"] in names]
         all_bowlers = [(i, p) for i, p in enumerate(self.bowling_team) if p.get("will_bowl", False)]
         previous_bowler = self.current_bowler["name"] if self.current_bowler else None
         non_consecutive = [(i, p) for i, p in all_bowlers if p["name"] != previous_bowler]
@@ -944,6 +981,8 @@ class Match:
             return {"error": "Selected player is not a valid option"}, 400
 
         if decision["type"] == "next_bowler":
+            if getattr(self.fmt, "strict_short_bowling", False) and selected_index not in {i for i, _ in self._get_manual_bowler_candidates()}:
+                return {"error": "That selection leaves no legal bowling allocation"}, 400
             selected_bowler = self.bowling_team[selected_index]
             previous_bowler = self.current_bowler["name"] if self.current_bowler else None
             if previous_bowler and selected_bowler["name"] == previous_bowler:
@@ -1069,35 +1108,56 @@ class Match:
             # Fallback for any uncommon dismissal status.
             return status if status else wicket_type
 
-        batting_rows = "".join(
-            f"<tr><td>{p.get('name','')}</td><td>{dismissal_text(p)}</td><td>{p.get('runs',0)}</td><td>{p.get('balls',0)}</td><td>{p.get('fours',0)}</td><td>{p.get('sixes',0)}</td></tr>"
-            for p in scorecard.get("players", [])
+        from html import escape
+
+        def table(headers, rows, text_columns):
+            # Inline styles also travel with archived commentary HTML.
+            def cell(value, index, tag):
+                numeric = index >= text_columns
+                alignment = "right" if numeric else "left"
+                style = (
+                    f"text-align:{alignment};padding:4px 10px;vertical-align:top;"
+                    + ("white-space:nowrap;font-variant-numeric:tabular-nums;"
+                       if numeric else "white-space:normal;overflow-wrap:anywhere;min-width:10ch;")
+                    + ("border-bottom:1px solid #444;" if tag == "th" else "")
+                )
+                scope = " scope='col'" if tag == "th" else ""
+                return f"<{tag}{scope} style='{style}'>{escape(str(value))}</{tag}>"
+
+            head = "".join(cell(value, i, "th") for i, value in enumerate(headers))
+            body = "".join(
+                "<tr>" + "".join(cell(value, i, "td") for i, value in enumerate(row)) + "</tr>"
+                for row in rows
+            )
+            return (
+                "<div style='max-width:100%;overflow-x:auto;'>"
+                "<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>"
+                f"<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
+            )
+
+        batting_table = table(
+            ("Batter", "Dismissal", "R", "B", "4s", "6s"),
+            [(p.get("name", ""), dismissal_text(p), p.get("runs", 0),
+              p.get("balls", 0), p.get("fours", 0), p.get("sixes", 0))
+             for p in scorecard.get("players", [])],
+            text_columns=2,
         )
-        bowling_rows = "".join(
-            f"<tr><td>{b.get('name','')}</td><td>{b.get('overs',0)}</td><td>{b.get('maidens',0)}</td><td>{b.get('runs',0)}</td><td>{b.get('wickets',0)}</td></tr>"
-            for b in scorecard.get("bowlers", [])
+        bowling_table = table(
+            ("Bowler", "O", "M", "R", "W"),
+            [(b.get("name", ""), b.get("overs", 0), b.get("maidens", 0),
+              b.get("runs", 0), b.get("wickets", 0))
+             for b in scorecard.get("bowlers", [])],
+            text_columns=1,
         )
         return (
-            f"<strong>{title}</strong><br>"
+            f"<strong>{escape(str(title))}</strong><br>"
             f"Total: {total}/{wkts} ({overs} ov)<br>"
-            f"<div style='margin-top:6px;font-weight:600;'>{batting_label}</div>"
-            f"<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>"
-            f"<thead><tr><th style='text-align:left;border-bottom:1px solid #444;'>Batter</th>"
-            f"<th style='text-align:left;border-bottom:1px solid #444;'>Dismissal</th>"
-            f"<th style='text-align:right;border-bottom:1px solid #444;'>R</th>"
-            f"<th style='text-align:right;border-bottom:1px solid #444;'>B</th>"
-            f"<th style='text-align:right;border-bottom:1px solid #444;'>4s</th>"
-            f"<th style='text-align:right;border-bottom:1px solid #444;'>6s</th></tr></thead>"
-            f"<tbody>{batting_rows}</tbody></table>"
-            f"<div style='margin-top:8px;font-weight:600;'>{bowling_label}</div>"
-            f"<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>"
-            f"<thead><tr><th style='text-align:left;border-bottom:1px solid #444;'>Bowler</th>"
-            f"<th style='text-align:right;border-bottom:1px solid #444;'>O</th>"
-            f"<th style='text-align:right;border-bottom:1px solid #444;'>M</th>"
-            f"<th style='text-align:right;border-bottom:1px solid #444;'>R</th>"
-            f"<th style='text-align:right;border-bottom:1px solid #444;'>W</th></tr></thead>"
-            f"<tbody>{bowling_rows}</tbody></table>"
+            f"<div style='margin-top:6px;font-weight:600;'>{escape(batting_label)}</div>"
+            f"{batting_table}"
+            f"<div style='margin-top:8px;font-weight:600;'>{escape(bowling_label)}</div>"
+            f"{bowling_table}"
         )
+
 
 
     def _calculate_current_match_state(self):
@@ -1179,7 +1239,8 @@ class Match:
         if balls_remaining <= 0:
             return 0.0
 
-        typical_rpb = self._WIN_PROB_PITCH_RPB.get(self.pitch, 1.38)
+        typical_rpb = (self.fmt.rrr_baseline[self.pitch] / 6 if getattr(self.fmt, "strict_short_bowling", False)
+                       else self._WIN_PROB_PITCH_RPB.get(self.pitch, 1.38))
         capacity = self._WIN_PROB_WICKET_CAPACITY.get(wickets_in_hand, 0.50)
 
         expected_achievable = balls_remaining * typical_rpb * capacity
@@ -2198,7 +2259,7 @@ class Match:
             weights[name] = rating * role_mult
 
         allocation = {b["name"]: 0 for b in bowlers}
-        caps = {b["name"]: (10 if self._is_lista_pure_bowler(b) else 7) for b in bowlers}
+        caps = {b["name"]: (self.fmt.max_bowler_overs if self._is_lista_pure_bowler(b) else int(0.7 * self.fmt.max_bowler_overs)) for b in bowlers}
         overs_to_assign = self.fmt.overs
 
         # Greedy weighted allocation with diminishing returns.
@@ -2218,7 +2279,7 @@ class Match:
 
         # If all-rounder caps were too strict to reach 50, relax to full quota.
         while overs_to_assign > 0:
-            candidates = [b for b in bowlers if allocation[b["name"]] < 10]
+            candidates = [b for b in bowlers if allocation[b["name"]] < self.fmt.max_bowler_overs]
             if not candidates:
                 break
             pick = max(
@@ -2241,7 +2302,7 @@ class Match:
 
             for p in top_pure:
                 p_name = p["name"]
-                while allocation[p_name] < 10:
+                while allocation[p_name] < self.fmt.max_bowler_overs:
                     support_max = max(allocation[s["name"]] for s in support)
                     if allocation[p_name] > support_max:
                         break
@@ -2331,7 +2392,7 @@ class Match:
                     score -= 4.0
 
             # Avoid front-loading one bowler too early unless they are behind plan.
-            if self.current_over < 20 and bowled >= 4 and deficit <= 0:
+            if self.current_over < int(self.original_overs * 0.4) and bowled >= int(self.original_overs * 0.08) and deficit <= 0:
                 score -= 4.0
 
             # Look-ahead guard: avoid creating a next-over dead-end where the
@@ -2733,7 +2794,7 @@ class Match:
         innings = self.innings
 
         # Flat/Dead pitch + strong batting position early on → bully mode
-        if pitch in ("Dead", "Flat") and wickets < 3 and over < 10:
+        if pitch in ("Dead", "Flat") and wickets < 3 and over < (self.fmt.overs / 2 if getattr(self.fmt, "strict_short_bowling", False) else 10):
             return "flat_track_bully"
 
         # Heavy wicket loss in 1st innings → bowlers have the upper hand
@@ -2747,9 +2808,10 @@ class Match:
             rrr             = (runs_needed * 6) / balls_remaining
             if wickets >= 7:
                 return "defensive"
-            if rrr > 12:
+            baseline = getattr(self.fmt, "rrr_baseline", {}).get(pitch, 8.5)
+            if rrr > (baseline * 1.4 if getattr(self.fmt, "strict_short_bowling", False) else 12):
                 return "aggressive"
-            if rrr < 6:
+            if rrr < (baseline * .7 if getattr(self.fmt, "strict_short_bowling", False) else 6):
                 return "defensive"
 
         return "natural_game"
@@ -2853,32 +2915,36 @@ class Match:
         bowler_name = self.current_bowler["name"]
         batsman_name = self.current_striker["name"]
         
+        desc = outcome.get('description', '')
         if wicket_type == "Caught":
             if fielder_name:
-                return f"Wicket! {batsman_name} caught by {fielder_name} off {bowler_name}! Excellent catch!"
+                extra_desc = f" {desc}" if desc else " Excellent catch!"
+                return f"Wicket! {batsman_name} caught by {fielder_name} off {bowler_name}!{extra_desc}"
             else:
-                return f"Wicket! {batsman_name} caught! {outcome['description']}"
+                return f"Wicket! {batsman_name} caught! {desc}"
                 
         elif wicket_type == "Bowled":
-            return f"Wicket! {batsman_name} bowled by {bowler_name}! {outcome['description']}"
+            return f"Wicket! {batsman_name} bowled by {bowler_name}! {desc}"
             
         elif wicket_type == "LBW":
-            return f"Wicket! {batsman_name} LBW to {bowler_name}! {outcome['description']}"
+            return f"Wicket! {batsman_name} LBW to {bowler_name}! {desc}"
             
         elif wicket_type == "Run Out":
             if fielder_name:
-                return f"Wicket! {batsman_name} run out by {fielder_name}! Brilliant fielding!"
+                extra_desc = f" {desc}" if desc else " Brilliant fielding!"
+                return f"Wicket! {batsman_name} run out by {fielder_name}!{extra_desc}"
             else:
-                return f"Wicket! {batsman_name} run out! {outcome['description']}"
+                return f"Wicket! {batsman_name} run out! {desc}"
 
         elif wicket_type == "Stumped":
             if fielder_name:
-                return f"Wicket! {batsman_name} stumped by {fielder_name} off {bowler_name}! Lightning quick work!"
+                extra_desc = f" {desc}" if desc else " Lightning quick work!"
+                return f"Wicket! {batsman_name} stumped by {fielder_name} off {bowler_name}!{extra_desc}"
             else:
-                return f"Wicket! {batsman_name} stumped! {outcome['description']}"
+                return f"Wicket! {batsman_name} stumped! {desc}"
 
         # Fallback
-        return f"Wicket! {outcome['description']}"
+        return f"Wicket! {desc}"
 
     def _apply_run_out(self, outcome, extra, commentary_line):
         """
@@ -3904,6 +3970,19 @@ class Match:
         Priority 1D: Star bowler utilization tracking (NEW)
         Priority 2: Strategy optimization (pattern, approach 1, etc.)
         """
+        if getattr(self.fmt, "strict_short_bowling", False):
+            eligible = self.bowler_manager.get_eligible_bowlers(self.current_over, self.overs - self.current_over)
+            if not eligible:
+                raise ValueError("No legal bowling allocation remains")
+            preferred = self._get_preferred_bowler_type(self.current_over)
+            def rank(b):
+                effective = self._get_effective_bowler_dict(b)["bowling_rating"]
+                # Preferences operate only inside the completion-safe pool.
+                return (effective + (3 if self._categorize_bowler(b) == preferred else 0),
+                        -self.bowler_manager.overs_bowled(b["name"]), b["name"])
+            selected = max(eligible, key=rank)
+            self._update_bowler_tracking(selected)
+            return selected
         if self.fmt.name == "ListA":
             return self._pick_bowler_lista()
 
@@ -4166,14 +4245,14 @@ class Match:
         if self.innings == 1:
             # First innings pressure commentary
             if pressure_score >= 70:
-                if self.current_over < 6:
+                if self.fmt.is_powerplay(self.current_over):
                     commentary = random.choice([
                         f"<strong>Pressure Building!</strong> {self.data['team_home'].split('_')[0] if self.batting_team == self.home_xi else self.data['team_away'].split('_')[0]} struggling to get going in the powerplay...",
                         f"The run rate is concerning early on - need to accelerate soon!",
                         f"Dot balls piling up - the asking rate keeps climbing!",
                         f"Early wickets have put the brakes on - need a partnership here."
                     ])
-                elif self.current_over >= 15:
+                elif self.fmt.is_death(self.current_over):
                     commentary = random.choice([
                         f"<strong>Death Overs Pressure!</strong> Need to find the boundary - every ball is crucial now!",
                         f"The total is looking under par - desperate need for some big hits!",
@@ -4258,7 +4337,11 @@ class Match:
         consumer (BowlerManager, GSME, pressure engine, UI payloads)."""
         self.overs = revised_overs
         self.fmt.overs = revised_overs
-        self.fmt.max_bowler_overs = weather_engine.revised_max_bowler_overs(revised_overs)
+        if getattr(self.fmt, "strict_short_bowling", False):
+            self.fmt.revise_short_innings(revised_overs)
+        else:
+            self.fmt.max_bowler_overs = weather_engine.revised_max_bowler_overs(revised_overs)
+        self.lista_bowler_plan = {}
 
     def _dls_suffix(self):
         return " (DLS method)" if getattr(self, "rain_affected", False) else ""
@@ -6800,6 +6883,9 @@ class Match:
                     decision = self.pending_decision
                     if not decision or decision.get("type") != "next_bowler":
                         decision = self._create_next_bowler_decision()
+                    if getattr(self.fmt, "strict_short_bowling", False) and not decision.get("options"):
+                        self.match_status = "aborted"
+                        return {"error": "No legal bowling allocation remains", "match_over": True, "result": "Match aborted: invalid bowling state"}
                     return self._build_decision_required_response(
                         decision,
                         commentary=f"<em>Select bowler for over {self.current_over + 1}</em>"
@@ -6810,6 +6896,9 @@ class Match:
                     log_exception(e)
                     logger.exception("Bowler selection failed at over %s.%s: %s", self.current_over, self.current_ball, e)
 
+                    if getattr(self.fmt, "strict_short_bowling", False):
+                        self.match_status = "aborted"
+                        return {"error": "No legal bowling allocation remains", "match_over": True, "result": "Match aborted: invalid bowling state"}
                     eligible = [p for p in self.bowling_team if p.get("will_bowl", False)]
                     if not eligible:
                         self.match_status = 'aborted'
@@ -7191,6 +7280,7 @@ class Match:
             outcome['batting_team'] = self._get_team_name(self.batting_team)
             outcome['bowling_team'] = self._get_team_name(self.bowling_team)
             outcome['bowling_type'] = self.current_bowler.get('bowling_type') or ''
+            outcome['free_hit'] = self.free_hit_active
             if outcome.get('batter_out'):
                 outcome['type'] = 'wicket'
 
@@ -7201,6 +7291,7 @@ class Match:
             comm_state['partnership_runs'] = self.current_partnership_runs
             comm_state['current_over_runs'] = self.current_over_runs
             comm_state['current_ball'] = self.current_ball
+            comm_state['bowler_wickets'] = self.bowler_stats.get(self.current_bowler["name"], {}).get("wickets", 0)
             # Format-aware over landmarks for commentary triggers — FC has
             # no fixed innings length or death-overs phase, so these are
             # simply omitted; commentary_engine.py's state.get(..., default)
@@ -7296,7 +7387,8 @@ class Match:
             outcome["batter_out"] = False
             outcome["runs"] = 0
             outcome["wicket_type"] = None
-            outcome["description"] = "Free hit! Batsman survives, no run."
+            if not outcome.get("description") or "Out!" in outcome.get("description", ""):
+                outcome["description"] = "Free hit! Batsman survives, no run."
 
         if self.is_fc:
             self._fc_last_delivery = outcome["delivery"]
@@ -8100,9 +8192,11 @@ class Match:
             "target": getattr(self, "target", None),
             "total_overs": self.overs,
             "match_format": self.fmt.name,
+            "scheduled_overs": self.data.get("scheduled_overs"),
             # FC has no fielding-circle phases at all — no phase_name.
             "phase_name": None if self.is_fc else self.fmt.get_phase(self.current_over).name,
             "bowler_overs_remaining": self.bowler_manager.overs_remaining(_bowler_name),
+            "bowling_eligibility": self.get_bowling_eligibility(),
             # FC has no bowling quota — no cap to report.
             "bowler_max_overs": getattr(self.fmt, "max_bowler_overs", None),
             "fc_day": self.fc_day if self.is_fc else None,
@@ -9231,6 +9325,16 @@ class Match:
             },
         }
 
+        if getattr(self.fmt, "strict_short_bowling", False):
+            snap["main_match"]["short_innings"] = {
+                "overs": self.overs,
+                "current_over": self.current_over,
+                "current_ball": self.current_ball,
+                "innings1_overs_bowled": self._innings1_overs_bowled,
+                "rain_events_log": self.rain_events_log,
+                "ledgers": [ledger.to_dict() if ledger is not None else None
+                            for ledger in (self.dls_ledger_innings1, self.dls_ledger_innings2)],
+            }
         so = snap["super_over"]
         if getattr(self, "super_over_batting_team", None) is not None:
             so["batting_side"] = _side(self.super_over_batting_team)
@@ -9289,6 +9393,16 @@ class Match:
         self.first_batting_team_name = main.get("first_batting_team_name", "")
         self.first_bowling_team_name = main.get("first_bowling_team_name", "")
         self.rain_affected = main.get("rain_affected", False)
+        short = main.get("short_innings")
+        if getattr(self.fmt, "strict_short_bowling", False) and short:
+            self._set_innings_overs(short["overs"])
+            self.current_over = short["current_over"]
+            self.current_ball = short["current_ball"]
+            self._innings1_overs_bowled = short["innings1_overs_bowled"]
+            self.rain_events_log = short["rain_events_log"]
+            self.dls_ledger_innings1, self.dls_ledger_innings2 = [
+                dls.ResourceLedger.from_dict(ledger) if ledger is not None else None
+                for ledger in short["ledgers"]]
         if main.get("original_scorecard") is not None:
             self.original_scorecard = main["original_scorecard"]
         if main.get("first_innings_scorecard") is not None:

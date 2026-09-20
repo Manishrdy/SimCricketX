@@ -1,9 +1,10 @@
 """Statistics and player-comparison route registration."""
 
-from flask import Response, flash, jsonify, redirect, render_template, request, url_for
+from flask import abort, Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from markupsafe import escape
 from engine.stats_service import SUPPORTED_STATS_FORMATS
+from engine.length_filter import parse_length_filter, length_predicate
 from utils.exception_tracker import log_exception
 
 
@@ -23,6 +24,25 @@ def register_stats_routes(
     aliased,
     func,
 ):
+    def _length_arg():
+        try:
+            return parse_length_filter(request.args.get("scheduled_overs"))
+        except ValueError:
+            abort(400, "Invalid scheduled overs filter")
+
+    def _length_suffix(match_format):
+        return "_" + str(_length_arg() or "all") if match_format == "ListA" else ""
+
+    @app.before_request
+    def _validate_stats_length():
+        if request.endpoint in {
+            "statistics", "export_statistics", "compare_players_page", "api_bowling_figures",
+            "api_compare_players", "api_player_partnerships", "api_tournament_partnerships",
+            "api_overall_partnerships", "head_to_head_page", "api_head_to_head",
+            "player_profile_page", "team_stats_page", "export_statistics_pdf",
+        } and "scheduled_overs" in request.args:
+            _length_arg()
+
     def _stats_format_arg(default="T20"):
         value = request.args.get("match_format") or default
         return value if value in SUPPORTED_STATS_FORMATS else default
@@ -40,7 +60,7 @@ def register_stats_routes(
     def statistics():
         """Display statistics dashboard with overall or tournament-specific stats."""
         try:
-            stats_service = StatsService(logger=app.logger)
+            stats_service = StatsService(logger=app.logger, scheduled_overs=_length_arg())
 
             view_type = request.args.get("view", "overall")
             tournament_id = request.args.get("tournament_id", type=int)
@@ -158,7 +178,7 @@ def register_stats_routes(
     def export_statistics(stat_type, format_type):
         """Export statistics to CSV or TXT format."""
         try:
-            stats_service = StatsService(logger=app.logger)
+            stats_service = StatsService(logger=app.logger, scheduled_overs=_length_arg())
 
             view_type = request.args.get("view", "overall")
             tournament_id = request.args.get("tournament_id", type=int)
@@ -188,7 +208,7 @@ def register_stats_routes(
                 return jsonify({"error": f"No {stat_type} data available"}), 404
 
             view_label = f"tournament_{tournament_id}" if view_type == "tournament" else "overall"
-            filename = f"{view_label}_{match_format}_{stat_type}_stats.{format_type}"
+            filename = f"{view_label}_{match_format}{_length_suffix(match_format)}_{stat_type}_stats.{format_type}"
 
             if format_type == "csv":
                 content = stats_service.export_to_csv(data, stat_type, match_format)
@@ -218,7 +238,7 @@ def register_stats_routes(
 
             return render_template(
                 "compare_players.html",
-                comparison_players=StatsService(app.logger).comparison_identities(current_user.id),
+                comparison_players=StatsService(app.logger, scheduled_overs=_length_arg()).comparison_identities(current_user.id),
                 tournaments=tournaments,
             )
         except Exception as e:
@@ -244,7 +264,7 @@ def register_stats_routes(
             if limit < 1 or limit > 100:
                 return jsonify({"error": "Limit must be between 1 and 100"}), 400
 
-            stats_service = StatsService(app.logger)
+            stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
             figures = stats_service.get_bowling_figures_leaderboard(
                 current_user.id,
                 tournament_id,
@@ -271,7 +291,7 @@ def register_stats_routes(
         """API endpoint for player comparison."""
         try:
             if request.args.get("mode") == "cross-format":
-                service = StatsService(app.logger)
+                service = StatsService(app.logger, scheduled_overs=_length_arg())
                 if "identity_ids" not in request.args:
                     return jsonify(success=True, available_players=service.comparison_identities(current_user.id))
                 identity_ids = [key.strip() for key in request.args.get("identity_ids", "").split(",") if key.strip()]
@@ -292,7 +312,7 @@ def register_stats_routes(
             match_format = _tournament_format(tournament_id, match_format)
 
             if not player_ids:
-                stats_service = StatsService(app.logger)
+                stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
                 players_with_stats = (
                     db.session.query(
                         DBPlayer.id,
@@ -306,6 +326,7 @@ def register_stats_routes(
                     .join(DBTeam, DBPlayer.team_id == DBTeam.id)
                     .filter(DBMatch.user_id == current_user.id)
                     .filter(DBMatch.match_format == match_format)
+                    .filter(length_predicate(DBMatch, _length_arg()))
                     .filter(MatchScorecard.is_super_over.isnot(True))
                     .group_by(DBPlayer.id, DBPlayer.name, DBTeam.name)
                     .all()
@@ -361,7 +382,7 @@ def register_stats_routes(
                         )
                     }), 400
 
-            stats_service = StatsService(app.logger)
+            stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
             comparison = stats_service.compare_players(current_user.id, player_ids, tournament_id, match_format)
 
             if "error" in comparison:
@@ -411,7 +432,7 @@ def register_stats_routes(
                     match_format = _player.profile.format_type
                 else:
                     match_format = "T20"
-            stats_service = StatsService(app.logger)
+            stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
             partnership_stats = stats_service.get_player_partnership_stats(
                 player_id,
                 current_user.id,
@@ -445,7 +466,7 @@ def register_stats_routes(
             if limit < 1 or limit > 50:
                 return jsonify({"error": "Limit must be between 1 and 50"}), 400
 
-            stats_service = StatsService(app.logger)
+            stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
             partnerships = stats_service.get_tournament_partnership_leaderboard(
                 current_user.id,
                 tournament_id,
@@ -495,7 +516,7 @@ def register_stats_routes(
                 .filter(DBMatch.user_id == current_user.id)
             )
             if match_format:
-                partnerships_q = partnerships_q.filter(DBMatch.match_format == match_format)
+                partnerships_q = partnerships_q.filter(DBMatch.match_format == match_format, length_predicate(DBMatch, _length_arg()))
             partnerships = (
                 partnerships_q
                 .order_by(MatchPartnership.runs.desc())
@@ -551,7 +572,7 @@ def register_stats_routes(
                 return jsonify({"error": "Select two teams"}), 400
             if team1_id == team2_id:
                 return jsonify({"error": "Select two different teams"}), 400
-            stats_service = StatsService(app.logger)
+            stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
             data = stats_service.get_head_to_head(current_user.id, team1_id, team2_id, match_format)
             if "error" in data:
                 return jsonify(data), 400
@@ -579,7 +600,7 @@ def register_stats_routes(
                     match_format = _player.profile.format_type
                 else:
                     match_format = "T20"
-            stats_service = StatsService(app.logger)
+            stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
             profile = stats_service.get_player_profile(player_id, current_user.id, match_format)
             if "error" in profile:
                 flash(profile["error"], "danger")
@@ -600,7 +621,7 @@ def register_stats_routes(
             # Cricket stats are always format-specific. Default to T20 when
             # the caller doesn't supply a format (e.g. bookmarked URL).
             match_format = _stats_format_arg()
-            stats_service = StatsService(app.logger)
+            stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
             data = stats_service.get_team_stats(current_user.id, team_id, match_format)
             if "error" in data:
                 flash(data["error"], "danger")
@@ -619,7 +640,7 @@ def register_stats_routes(
     @login_required
     def export_statistics_pdf(stat_type):
         try:
-            stats_service = StatsService(app.logger)
+            stats_service = StatsService(app.logger, scheduled_overs=_length_arg())
             view_type = request.args.get("view", "overall")
             tournament_id = request.args.get("tournament_id", type=int)
             # Cricket stats are always format-specific. Default to T20 when
@@ -668,7 +689,7 @@ pre {{ white-space: pre-wrap; word-wrap: break-word; }}
             try:
                 from weasyprint import HTML as WeasyHTML
                 pdf_bytes = WeasyHTML(string=html).write_pdf()
-                filename = f"{view_label}_{match_format}_{stat_type}_stats.pdf"
+                filename = f"{view_label}_{match_format}{_length_suffix(match_format)}_{stat_type}_stats.pdf"
                 return Response(
                     pdf_bytes,
                     mimetype="application/pdf",
@@ -677,7 +698,7 @@ pre {{ white-space: pre-wrap; word-wrap: break-word; }}
             except ImportError:
                 log_exception(source="backend")
                 # Fallback: serve as downloadable HTML
-                filename = f"{view_label}_{match_format}_{stat_type}_stats.html"
+                filename = f"{view_label}_{match_format}{_length_suffix(match_format)}_{stat_type}_stats.html"
                 return Response(
                     html,
                     mimetype="text/html",

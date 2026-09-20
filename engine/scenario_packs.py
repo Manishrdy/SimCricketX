@@ -38,6 +38,12 @@ def _validate_pack(pack):
     if not _PACK_ID_RE.match(pack["id"]):
         return "invalid pack id"
 
+    from engine.format_config import resolve_scheduled_overs
+    try:
+        resolve_scheduled_overs(pack["format"], pack.get("scheduled_overs"))
+    except ValueError:
+        return "invalid scheduled overs for story format"
+
     for innings_key, checkpoints in (pack["beats"] or {}).items():
         if innings_key not in ("1", "2"):
             return f"beats key must be '1' or '2', got '{innings_key}'"

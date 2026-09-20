@@ -1,0 +1,11 @@
+{% if match_format is not defined or match_format == "ListA" %}
+<div class="lista-length-filter" style="display:flex;align-items:center;gap:.6rem;margin:1rem 0">
+<label for="lista-stats-length">List A length</label>
+<select id="lista-stats-length" onchange="setListALength(this.value)">
+{% for value, label in [('', 'All'), ('40', '40 overs'), ('50', '50 overs')] %}
+<option value="{{ value }}" {% if request.args.get('scheduled_overs', '') == value %}selected{% endif %}>{{ label }}</option>
+{% endfor %}
+</select><small>Applies to List A matches; other formats are unchanged.</small>
+</div>
+{% endif %}
+<script src="{{ url_for('static', filename='js/lista_length.js') }}"></script>

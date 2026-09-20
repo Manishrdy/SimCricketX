@@ -1,5 +1,6 @@
 """End-to-end check that the FC Ground Conditions page renders and saves."""
 import json
+from engine.format_catalog import FORMAT_LABELS
 
 
 def test_fc_ground_conditions_page_renders(authenticated_client):
@@ -16,9 +17,9 @@ def test_fc_ground_conditions_page_renders(authenticated_client):
     assert 'id="fc-pink-ball-config"' in html
     assert 'data-table="under_lights_wicket_factors"' in html
     assert 'data-table="under_lights_scoring_factors"' in html
-    assert "First Class" in html
+    assert FORMAT_LABELS['FC'] in html
     # ...and it must not be mislabelled as List A any more.
-    assert "Editing the <strong>First Class</strong>" in html
+    assert f"Editing the <strong>{FORMAT_LABELS['FC']}</strong>" in html
 
 
 def test_fc_ground_conditions_round_trips_a_save(authenticated_client):

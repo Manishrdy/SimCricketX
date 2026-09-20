@@ -36,7 +36,7 @@
                         <span class="meta-divider">•</span>
                         <span class="format-badge-hero">
                             <i class="fas fa-bolt"></i>
-                            {{ {'T20': 'T20', 'ListA': 'List A', 'FC': 'First-Class'}.get(tournament.format_type, tournament.format_type) }}
+                            {{ cricket_format_label(tournament.format_type, tournament.scheduled_overs) }}
                         </span>
                         <span class="meta-divider">•</span>
                         <span class="meta-detail">
@@ -364,7 +364,7 @@
                                 {% for row in top_run_scorers %}
                                 <tr>
                                     <td class="player-name">
-                                        <a href="{{ url_for('player_profile_page', player_id=row.player_id, match_format=tournament.format_type) }}">{{ row.player_name }}</a>
+                                        <a href="{{ url_for('player_profile_page', player_id=row.player_id, match_format=tournament.format_type, scheduled_overs=tournament.scheduled_overs if tournament.format_type == "ListA" else None) }}">{{ row.player_name }}</a>
                                     </td>
                                     <td>{{ row.team_name }}</td>
                                     <td class="stat-highlight">{{ row.runs }}</td>
@@ -397,7 +397,7 @@
                                 {% for row in top_wicket_takers %}
                                 <tr>
                                     <td class="player-name">
-                                        <a href="{{ url_for('player_profile_page', player_id=row.player_id, match_format=tournament.format_type) }}">{{ row.player_name }}</a>
+                                        <a href="{{ url_for('player_profile_page', player_id=row.player_id, match_format=tournament.format_type, scheduled_overs=tournament.scheduled_overs if tournament.format_type == "ListA" else None) }}">{{ row.player_name }}</a>
                                     </td>
                                     <td>{{ row.team_name }}</td>
                                     <td class="stat-highlight">{{ row.wickets }}</td>

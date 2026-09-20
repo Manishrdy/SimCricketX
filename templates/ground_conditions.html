@@ -19,20 +19,20 @@
     <a class="gc-format-tab{% if fmt == match_format %} active{% endif %}"
         href="{{ url_for('ground_conditions', format=fmt) }}" role="tab"
         aria-selected="{{ 'true' if fmt == match_format else 'false' }}">
-        {% set _fmt_icon = {'T20': 'fa-bolt', 'ListA': 'fa-clock', 'FC': 'fa-calendar-days'} %}
-        {% set _fmt_label = {'T20': 'T20', 'ListA': 'List A (50 over)', 'FC': 'First Class'} %}
+        {% set _fmt_icon = {'T10': 'fa-bolt', 'T20': 'fa-bolt', 'ListA': 'fa-clock', 'FC': 'fa-calendar-days'} %}
+        {% set _fmt_label = format_labels %}
         <i class="fa-solid {{ _fmt_icon.get(fmt, 'fa-clock') }}"></i>
         {{ _fmt_label.get(fmt, fmt) }}
     </a>
     {% endfor %}
 </div>
 <p class="gc-format-note">
-    {% set _cur_label = {'T20': 'T20', 'ListA': 'List A', 'FC': 'First Class'} %}
+    {% set _cur_label = format_labels %}
     Editing the <strong>{{ _cur_label.get(match_format, match_format) }}</strong> profile.
     Each format is configured separately and only affects matches of that format.
 </p>
 
-{% if match_format == 'T20' %}
+{% if match_format in ('T20', 'T10') %}
 <!-- Game Mode Selector (T20 only — List A uses its own phase model) -->
 <section class="gc-modes">
     <div class="gc-modes-label"><i class="fa-solid fa-gamepad"></i> Game Mode</div>
@@ -82,7 +82,7 @@
 </section>
 {% endif %}
 
-{% if match_format == 'T20' %}
+{% if match_format in ('T20', 'T10') %}
 <!-- Pitch Profile Tiles -->
 <section>
     <div class="gc-section-header">
@@ -847,6 +847,7 @@
         // Which format's profile this page is editing. Every write carries it
         // so a List A save can never overwrite the T20 row, or vice versa.
         const MATCH_FORMAT = {{ match_format | tojson | safe }};
+        const IS_T10 = MATCH_FORMAT === 'T10';
         const IS_LISTA = MATCH_FORMAT === 'ListA';
         const IS_FC = MATCH_FORMAT === 'FC';
         const DRAFT_KEY = 'ground_conditions_draft_v1:' + MATCH_FORMAT;
@@ -1074,16 +1075,16 @@
 
                 const pp = (phaseBoosts && phaseBoosts.powerplay) || {};
                 const death = (phaseBoosts && phaseBoosts.death_overs) || {};
-                const ppEnd = pp.overs_end != null ? pp.overs_end : 5;
-                const dStart = death.overs_start != null ? death.overs_start : 16;
-                const dEnd = death.overs_end != null ? death.overs_end : 19;
+                const ppEnd = IS_T10 ? 2 : (pp.overs_end != null ? pp.overs_end : 5);
+                const dStart = IS_T10 ? 7 : (death.overs_start != null ? death.overs_start : 16);
+                const dEnd = IS_T10 ? 9 : (death.overs_end != null ? death.overs_end : 19);
                 const batting = ['Flat', 'Dead', 'Hard'].includes(pitch);
                 const dBnd = batting
                     ? (death.boundary_boost_batting_pitch ?? 2.2)
                     : (death.boundary_boost_bowling_pitch ?? 1.8);
 
                 let runs = 0, wkts = 0;
-                for (let ball = 0; ball < 120 && wkts < 10; ball++) {
+                for (let ball = 0; ball < (IS_T10 ? 60 : 120) && wkts < 10; ball++) {
                     const over = Math.floor(ball / 6);
                     let m = Object.assign({}, base);
                     if (over <= ppEnd) {
@@ -1855,14 +1856,14 @@
             cfg.phase_boosts.powerplay = cfg.phase_boosts.powerplay || {};
             cfg.phase_boosts.powerplay.boundary_multiplier = numericValue(document.getElementById('pp-boundary').value, 1.25);
             cfg.phase_boosts.powerplay.overs_start = 0;
-            cfg.phase_boosts.powerplay.overs_end = 5;
+            cfg.phase_boosts.powerplay.overs_end = IS_T10 ? 2 : 5;
 
             cfg.phase_boosts.death_overs = cfg.phase_boosts.death_overs || {};
             cfg.phase_boosts.death_overs.boundary_boost_batting_pitch = numericValue(document.getElementById('death-bat-boundary').value, 2.2);
             cfg.phase_boosts.death_overs.boundary_boost_bowling_pitch = numericValue(document.getElementById('death-bowl-boundary').value, 1.8);
             cfg.phase_boosts.death_overs.wicket_boost = numericValue(document.getElementById('death-wicket').value, 1.6);
-            cfg.phase_boosts.death_overs.overs_start = 16;
-            cfg.phase_boosts.death_overs.overs_end = 19;
+            cfg.phase_boosts.death_overs.overs_start = IS_T10 ? 7 : 16;
+            cfg.phase_boosts.death_overs.overs_end = IS_T10 ? 9 : 19;
 
             cfg.phase_boosts.second_innings_death = cfg.phase_boosts.second_innings_death || {};
             cfg.phase_boosts.second_innings_death.scoring_boost = numericValue(document.getElementById('inn2-scoring').value, 1.15);

@@ -1,6 +1,7 @@
 (function () {
     'use strict';
 
+    var shellEl = document.getElementById('support-shell');
     var listEl = document.getElementById('support-conversation-list');
     var searchEl = document.getElementById('support-search');
     var refreshBtn = document.getElementById('support-refresh');
@@ -12,6 +13,9 @@
     var threadStatusEl = document.getElementById('support-thread-status');
     var messagesEl = document.getElementById('support-thread-messages');
     var contextEl = document.getElementById('support-context-body');
+    var contextToggleBtn = document.getElementById('support-context-toggle');
+    var contextCloseBtn = document.getElementById('support-context-close');
+    var userLinkBtn = document.getElementById('support-user-link');
     var composer = document.getElementById('support-admin-composer');
     var input = document.getElementById('support-admin-input');
     var sendBtn = document.getElementById('support-admin-send');
@@ -36,6 +40,7 @@
     var renderedMessages = [];
 
     var GROUP_WINDOW_MS = 3 * 60 * 1000;
+    var COMPOSER_MAX_HEIGHT = 320;
 
     var NOTIFY_LS_KEY = 'scx-support-notify-enabled';
     var notifyEnabled = false;
@@ -74,7 +79,7 @@
             var then = new Date(iso).getTime();
             if (isNaN(then)) return '';
             var diff = Date.now() - then;
-            if (diff < 60 * 1000) return 'now';
+            if (diff < 60 * 1000) return 'just now';
             if (diff < 60 * 60 * 1000) return Math.floor(diff / 60000) + 'm';
             if (diff < 24 * 60 * 60 * 1000) return Math.floor(diff / 3600000) + 'h';
             if (diff < 7 * 24 * 60 * 60 * 1000) return Math.floor(diff / 86400000) + 'd';
@@ -120,11 +125,53 @@
         return { key: 'open', label: 'Open' };
     }
 
+    function escapeHtml(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function linkify(text) {
+        var escaped = escapeHtml(text);
+        var urlRegex = /https?:\/\/[^\s<]+/g;
+        return escaped.replace(urlRegex, function (url) {
+            return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+        });
+    }
+
+    function copyToClipboard(text, btn) {
+        if (!text) return;
+        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () {
+                if (btn) {
+                    var origHtml = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check" style="color:#10b981;"></i>';
+                    setTimeout(function () { btn.innerHTML = origHtml; }, 1400);
+                }
+            }).catch(function () {});
+        }
+    }
+
+    function toggleContextPanel(force) {
+        if (!shellEl) return;
+        var shouldCollapse = force !== undefined ? !force : !shellEl.classList.contains('context-collapsed');
+        shellEl.classList.toggle('context-collapsed', shouldCollapse);
+        if (contextToggleBtn) {
+            contextToggleBtn.setAttribute('aria-expanded', String(!shouldCollapse));
+            contextToggleBtn.classList.toggle('is-on', !shouldCollapse);
+        }
+    }
+
     function loadConversations() {
         var params = new URLSearchParams();
         if (statusFilter) params.set('status', statusFilter);
-        if (searchEl.value.trim()) params.set('q', searchEl.value.trim());
-        listEl.innerHTML = '<div class="support-empty"><i class="fas fa-inbox"></i><span>Loading conversations…</span></div>';
+        if (searchEl && searchEl.value.trim()) params.set('q', searchEl.value.trim());
+        if (listEl) {
+            listEl.innerHTML = '<div class="support-empty"><div class="support-empty__icon"><i class="fas fa-spinner fa-spin"></i></div><span>Loading conversations…</span></div>';
+        }
         return requestJson('/api/admin/support/conversations?' + params.toString())
             .then(function (body) {
                 conversations = {};
@@ -134,7 +181,9 @@
                 renderList(currentConversationRows());
             })
             .catch(function () {
-                listEl.innerHTML = '<div class="support-empty"><i class="fas fa-triangle-exclamation"></i><span>Could not load conversations.</span></div>';
+                if (listEl) {
+                    listEl.innerHTML = '<div class="support-empty"><div class="support-empty__icon"><i class="fas fa-triangle-exclamation"></i></div><span>Could not load conversations.</span></div>';
+                }
             });
     }
 
@@ -166,8 +215,9 @@
                 inboxCountEl.hidden = true;
             }
         }
+        if (!listEl) return;
         if (!rows.length) {
-            listEl.innerHTML = '<div class="support-empty"><i class="fas fa-inbox"></i><span>No conversations found.</span></div>';
+            listEl.innerHTML = '<div class="support-empty"><div class="support-empty__icon"><i class="fas fa-inbox"></i></div><strong>No conversations</strong><span>No messages match the current filter.</span></div>';
             return;
         }
         listEl.innerHTML = '';
@@ -210,7 +260,7 @@
             trail.style.display = 'inline-flex';
             trail.style.alignItems = 'center';
             trail.style.gap = '6px';
-            trail.style.flex = '0 0 auto';
+            trail.style.flexShrink = '0';
 
             if (conv.unread_count) {
                 var unread = document.createElement('span');
@@ -250,8 +300,8 @@
         threadStatusEl.textContent = info.label;
 
         var sub = info.label;
-        if (conv.source_page_url) sub += ' · ' + conv.source_page_url;
-        else if (conv.last_message_at) sub += ' · last message ' + fmt(conv.last_message_at);
+        if (conv.source_page_url) sub += ' · started from ' + conv.source_page_url;
+        else if (conv.last_message_at) sub += ' · last active ' + fmt(conv.last_message_at);
         subtitleEl.textContent = sub;
         subtitleEl.title = sub;
 
@@ -261,6 +311,17 @@
         closeBtn.hidden = conv.status === 'closed';
         deleteBtn.disabled = false;
         deleteBtn.hidden = false;
+
+        if (typeof userLinkBtn !== 'undefined' && userLinkBtn) {
+            var uid = conv.user_id;
+            if (uid) {
+                userLinkBtn.href = '/admin/users?q=' + encodeURIComponent(uid);
+                userLinkBtn.hidden = false;
+            } else {
+                userLinkBtn.hidden = true;
+            }
+        }
+
         input.disabled = conv.status === 'closed';
         sendBtn.disabled = conv.status === 'closed';
         updateSendState();
@@ -281,12 +342,13 @@
         threadStatusEl.hidden = true;
         threadStatusEl.textContent = '';
         threadStatusEl.className = 'support-status-pill';
+        if (typeof userLinkBtn !== 'undefined' && userLinkBtn) userLinkBtn.hidden = true;
         messagesEl.innerHTML = '<div class="support-empty">' +
-            '<i class="fas fa-comments"></i>' +
+            '<div class="support-empty__icon"><i class="fas fa-comments"></i></div>' +
             '<strong>No conversation selected</strong>' +
-            '<span>Choose a user from the inbox to read and respond to their messages.</span>' +
+            '<span>Choose a user from the inbox on the left to read and respond to their messages.</span>' +
             '</div>';
-        contextEl.innerHTML = '<div class="support-empty"><i class="fas fa-user"></i><span>No conversation selected.</span></div>';
+        contextEl.innerHTML = '<div class="support-empty"><div class="support-empty__icon"><i class="fas fa-user-gear"></i></div><strong>No user selected</strong><span>Select a conversation to view account details and diagnostic context.</span></div>';
         input.value = '';
         autosize();
         input.disabled = true;
@@ -306,7 +368,7 @@
         var request = conversationRequest;
         titleEl.textContent = 'Loading conversation…';
         subtitleEl.textContent = '';
-        messagesEl.innerHTML = '<div class="support-empty"><span>Loading messages…</span></div>';
+        messagesEl.innerHTML = '<div class="support-empty"><div class="support-empty__icon"><i class="fas fa-spinner fa-spin"></i></div><span>Loading messages…</span></div>';
         renderList(currentConversationRows());
         if (socket && socket.connected) socket.emit('support:conversation:join', { conversation_id: id });
         return requestJson('/api/admin/support/conversations/' + encodeURIComponent(id))
@@ -329,7 +391,7 @@
             .catch(function () {
                 if (request !== conversationRequest || selectedId !== id) return;
                 titleEl.textContent = 'Conversation unavailable';
-                messagesEl.innerHTML = '<div class="support-empty"><span>Could not load conversation. Select it again to retry.</span></div>';
+                messagesEl.innerHTML = '<div class="support-empty"><div class="support-empty__icon"><i class="fas fa-triangle-exclamation"></i></div><span>Could not load conversation. Select it again to retry.</span></div>';
             });
     }
 
@@ -339,7 +401,7 @@
         renderedMessages = [];
         if (!messages.length) {
             messagesEl.innerHTML = '<div class="support-empty">' +
-                '<i class="fas fa-feather-pointed"></i>' +
+                '<div class="support-empty__icon"><i class="fas fa-feather-pointed"></i></div>' +
                 '<strong>No messages yet</strong>' +
                 '<span>Be the first to reach out — your reply starts the thread.</span>' +
                 '</div>';
@@ -380,11 +442,18 @@
 
         var bubble = document.createElement('div');
         bubble.className = 'support-msg__bubble';
-        bubble.textContent = msg.body || '';
+        bubble.innerHTML = linkify(msg.body || '');
         var time = fmtTime(msg.created_at);
         if (time) bubble.setAttribute('data-time', time);
 
+        var meta = document.createElement('div');
+        meta.className = 'support-msg__meta';
+        var senderLabel = msg.sender_type === 'admin' ? 'Support' : (conversations[selectedId] ? (conversations[selectedId].user_label || 'User') : 'User');
+        meta.innerHTML = '<span class="support-msg__sender">' + escapeHtml(senderLabel) + '</span>' +
+            (time ? '<span class="support-msg__dot">·</span><time class="support-msg__time">' + escapeHtml(time) + '</time>' : '');
+
         row.appendChild(bubble);
+        row.appendChild(meta);
         messagesEl.appendChild(row);
         renderedMessages.push(msg);
         messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -398,49 +467,80 @@
         var account = document.createElement('section');
         account.className = 'support-context-card';
         account.innerHTML =
-            '<h4><i class="fas fa-user"></i> Account</h4>' +
+            '<h4><span><i class="fas fa-user"></i> Account</span></h4>' +
             '<div class="support-kv">' +
-                '<div><span>User ID</span><strong></strong></div>' +
+                '<div><span>User ID</span><strong id="ctx-user-id"></strong></div>' +
                 '<div><span>Name</span><strong></strong></div>' +
+                '<div><span>Role</span><strong></strong></div>' +
                 '<div><span>Created</span><strong></strong></div>' +
                 '<div><span>Last login</span><strong></strong></div>' +
             '</div>';
         var aStrongs = account.querySelectorAll('strong');
-        setStrong(aStrongs[0], user.id || conv.user_id || '');
+        var userIdVal = user.id || conv.user_id || '';
+        setStrong(aStrongs[0], userIdVal);
+        if (userIdVal) {
+            var copyUserBtn = document.createElement('button');
+            copyUserBtn.type = 'button';
+            copyUserBtn.className = 'support-copy-btn';
+            copyUserBtn.title = 'Copy User ID';
+            copyUserBtn.innerHTML = '<i class="fas fa-copy"></i>';
+            copyUserBtn.addEventListener('click', function () { copyToClipboard(userIdVal, copyUserBtn); });
+            aStrongs[0].appendChild(document.createTextNode(' '));
+            aStrongs[0].appendChild(copyUserBtn);
+        }
         setStrong(aStrongs[1], user.display_name || '');
-        setStrong(aStrongs[2], fmt(user.created_at));
-        setStrong(aStrongs[3], fmt(user.last_login));
+        setStrong(aStrongs[2], user.is_admin ? 'Administrator' : 'User');
+        setStrong(aStrongs[3], fmt(user.created_at));
+        setStrong(aStrongs[4], fmt(user.last_login));
         contextEl.appendChild(account);
 
         var convCard = document.createElement('section');
         convCard.className = 'support-context-card';
         convCard.innerHTML =
-            '<h4><i class="fas fa-comments"></i> Conversation</h4>' +
+            '<h4><span><i class="fas fa-comments"></i> Conversation</span></h4>' +
             '<div class="support-kv">' +
                 '<div><span>ID</span><strong></strong></div>' +
                 '<div><span>App</span><strong></strong></div>' +
                 '<div><span>Status</span><strong></strong></div>' +
+                '<div><span>Source</span><strong></strong></div>' +
                 '<div><span>Started</span><strong></strong></div>' +
             '</div>';
         var cStrongs = convCard.querySelectorAll('strong');
-        setStrong(cStrongs[0], conv.id || '');
+        var convIdVal = conv.id || '';
+        setStrong(cStrongs[0], convIdVal);
+        if (convIdVal) {
+            var copyConvBtn = document.createElement('button');
+            copyConvBtn.type = 'button';
+            copyConvBtn.className = 'support-copy-btn';
+            copyConvBtn.title = 'Copy Conversation ID';
+            copyConvBtn.innerHTML = '<i class="fas fa-copy"></i>';
+            copyConvBtn.addEventListener('click', function () { copyToClipboard(convIdVal, copyConvBtn); });
+            cStrongs[0].appendChild(document.createTextNode(' '));
+            cStrongs[0].appendChild(copyConvBtn);
+        }
         setStrong(cStrongs[1], conv.app_version || '');
         setStrong(cStrongs[2], statusInfo(conv).label);
-        setStrong(cStrongs[3], fmt(conv.created_at));
+        if (conv.source_page_url) {
+            cStrongs[3].innerHTML = '<a href="' + escapeHtml(conv.source_page_url) + '" target="_blank" rel="noopener" style="color:var(--sup-primary);text-decoration:underline;">' + escapeHtml(conv.source_page_url) + '</a>';
+            cStrongs[3].classList.remove('is-empty');
+        } else {
+            setStrong(cStrongs[3], '');
+        }
+        setStrong(cStrongs[4], fmt(conv.created_at));
         contextEl.appendChild(convCard);
 
         var exCard = document.createElement('section');
         exCard.className = 'support-context-card';
-        exCard.innerHTML = '<h4><i class="fas fa-bug"></i> Recent Exceptions</h4>';
+        exCard.innerHTML = '<h4><span><i class="fas fa-bug"></i> Recent Exceptions</span></h4>';
         if (!exceptions.length) {
             var noEx = document.createElement('div');
             noEx.className = 'support-empty';
-            noEx.style.padding = '4px 0 0';
+            noEx.style.padding = '8px 0 0';
             noEx.style.textAlign = 'left';
             noEx.style.alignItems = 'flex-start';
             noEx.style.flexDirection = 'row';
             noEx.style.gap = '6px';
-            noEx.innerHTML = '<span style="font-size:0.78rem;color:var(--fg-secondary,#6b7280);">None found.</span>';
+            noEx.innerHTML = '<span style="font-size:0.78rem;color:var(--fg-secondary,#64748b);">No recent exceptions logged for this user.</span>';
             exCard.appendChild(noEx);
         } else {
             var exList = document.createElement('div');
@@ -449,9 +549,9 @@
                 var item = document.createElement('div');
                 var label = document.createElement('span');
                 label.textContent = row.type || 'Exception';
-                label.title = label.textContent;
+                if (row.message) label.title = row.message;
                 var t = document.createElement('time');
-                t.textContent = fmt(row.timestamp);
+                t.textContent = fmtRelative(row.timestamp) || fmt(row.timestamp);
                 item.appendChild(label);
                 item.appendChild(t);
                 exList.appendChild(item);
@@ -582,12 +682,11 @@
         return loadConversations();
     }
 
-    var COMPOSER_MAX_HEIGHT = 260;
-
     function autosize() {
         if (!input) return;
         input.style.height = 'auto';
-        input.style.height = Math.min(input.scrollHeight, COMPOSER_MAX_HEIGHT) + 'px';
+        var nextHeight = Math.min(input.scrollHeight, COMPOSER_MAX_HEIGHT);
+        input.style.height = (nextHeight || 42) + 'px';
     }
 
     function notificationsSupported() {
@@ -721,6 +820,35 @@
             setStatusFilter(btn.dataset.filterStatus || 'open');
         });
     });
+
+    // Canned response quick insert
+    document.querySelectorAll('.support-canned-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!conversationReady || !selectedId || input.disabled) return;
+            var text = btn.getAttribute('data-reply') || btn.textContent.trim();
+            if (!text) return;
+            if (input.value && !input.value.endsWith('\n') && !input.value.endsWith(' ')) {
+                input.value += ' ' + text;
+            } else {
+                input.value += text;
+            }
+            autosize();
+            input.focus();
+        });
+    });
+
+    if (contextToggleBtn) {
+        contextToggleBtn.addEventListener('click', function () {
+            toggleContextPanel();
+        });
+    }
+
+    if (contextCloseBtn) {
+        contextCloseBtn.addEventListener('click', function () {
+            toggleContextPanel(false);
+        });
+    }
+
     searchEl.addEventListener('input', function () {
         window.clearTimeout(searchTimer);
         searchTimer = window.setTimeout(loadConversations, 250);

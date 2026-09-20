@@ -700,6 +700,7 @@ class Match(db.Model):
     
     # Match Format
     match_format = db.Column(db.String(20), default='T20')
+    scheduled_overs = db.Column(db.Integer, nullable=True)
     overs_per_side = db.Column(db.Integer, default=20)
     is_day_night = db.Column(db.Boolean, default=False)
     weather_forecast = db.Column(db.String(20), nullable=True)
@@ -833,6 +834,7 @@ class Tournament(db.Model):
 
     # Cricket format for all matches in this tournament (T20, ListA, FC)
     format_type = db.Column(db.String(20), default='T20', nullable=False)
+    scheduled_overs = db.Column(db.Integer, nullable=True)
 
     # Current stage for multi-stage tournaments
     # Stages: 'league', 'qualifier', 'eliminator', 'semifinal', 'final', 'completed'

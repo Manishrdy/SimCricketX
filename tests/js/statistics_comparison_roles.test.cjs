@@ -12,7 +12,7 @@ for (const format of ['T20', 'ListA', 'FC']) test(`${format}: wicketkeepers are 
     };
     const roles = ['Batsman', 'All-rounder', 'Wicketkeeper', 'Bowler'];
     const urls = [];
-    const context = { allPlayers: [], currentRole: 'batsman', URLSearchParams,
+    const context = { allPlayers: [], currentRole: 'batsman', withListALength: url => url, URLSearchParams,
         window: { location: { search: '?match_format=' + format } },
         document: { getElementById: id => nodes[id], createElement: () => ({}) },
         fetch: async url => { urls.push(url); return { json: async () => ({ success: true,

@@ -1414,6 +1414,7 @@
 
 <!-- Match History Panel -->
 <section id="panel-history" class="panel active" role="tabpanel">
+    {% include '_lista_length_filter.html' %}
     <!-- Filter Bar -->
     <form class="filter-bar" id="filter-bar" method="GET" action="{{ url_for('my_matches') }}">
         <div class="filter-group">
@@ -1421,6 +1422,7 @@
             <select name="format">
                 <option value="">All Formats</option>
                 <option value="T20" {{ 'selected' if filter_format == 'T20' }}>T20</option>
+                <option value="T10" {{ 'selected' if filter_format == 'T10' }}>T10</option>
                 <option value="ListA" {{ 'selected' if filter_format == 'ListA' }}>List A</option>
             </select>
         </div>

@@ -27,7 +27,7 @@ function setup() {
     document.getElementById('cmp-composition-mode').value='total';
     class Chart {constructor(canvas,config){Object.assign(this,config);charts.push(this);}destroy(){this.destroyed=true;}update(){}}
     vm.runInNewContext(fs.readFileSync('static/js/player_comparison.js','utf8'),{
-        document,window:{Chart},Chart,URLSearchParams,AbortController,
+        document,window:{Chart,CRICKET_FORMAT_LABELS:{T20:'T20',T10:'T10',ListA:'List A',FC:'First-Class'}},Chart,withListALength: url => url, URLSearchParams,AbortController,
         getComputedStyle:()=>({color:'rgb(240, 240, 240)'}),matchMedia:()=>({matches:true}),
         MutationObserver:class{observe(){}},
         setTimeout(fn){timers.set(++timerId,fn);return timerId;},clearTimeout(id){timers.delete(id);},

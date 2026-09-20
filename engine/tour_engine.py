@@ -9,7 +9,8 @@ from database import db
 from database.models import Tour, Team, Match, MatchScorecard, Player
 from engine.tournament_engine import TournamentEngine
 
-FORMATS = ('FC', 'ListA', 'T20')
+from engine.format_catalog import TOUR_FORMATS, FORMAT_LABELS
+FORMATS = TOUR_FORMATS
 
 
 def team_format_availability(team):
@@ -38,7 +39,9 @@ def validate_tour_squads(teams, formats):
 
 
 
-def create_tour(name, user_id, host_id, visitor_id, counts, order, creation_token=None):
+def create_tour(name, user_id, host_id, visitor_id, counts, order, creation_token=None, scheduled_overs=None):
+    from engine.format_config import resolve_scheduled_overs
+    scheduled_overs = resolve_scheduled_overs('ListA', scheduled_overs)
     name = (name or '').strip()
     if not name or len(name) > 100:
         raise ValueError('Enter a tour name of 1–100 characters.')
@@ -77,6 +80,7 @@ def create_tour(name, user_id, host_id, visitor_id, counts, order, creation_toke
             series = engine.create_tournament(
                 name=f'{name[:85]} — {fmt}', user_id=user_id,
                 team_ids=[host_id, visitor_id], mode='custom_series', format_type=fmt,
+                scheduled_overs=scheduled_overs if fmt == 'ListA' else None,
                 series_config={'matches': [{'home': 0, 'match_num': n + 1}
                                            for n in range(parsed[fmt])]}, commit=False)
             series.tour = tour
